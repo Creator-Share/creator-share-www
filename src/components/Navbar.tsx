@@ -16,6 +16,7 @@ import NextLink from "next/link";
 const Links = [
   { name: "Home", href: "/" },
   { name: "Explore", href: "/explore" },
+  { name: "Opportunities", href: "/opportunities" },
   { name: "Create", href: "/create" },
 ];
 
