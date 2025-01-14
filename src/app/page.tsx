@@ -163,9 +163,9 @@ export default function Home() {
                 borderRadius="lg"
                 border="1px"
                 _hover={{
-                  transform: "translateY(-4px)",
-                  shadow: "md",
                   transition: "all 0.2s",
+                  transform: "translateY(-4px)",
+                  shadow: "lg",
                 }}
               >
                 <HStack gap={4} align="center" mb={2}>

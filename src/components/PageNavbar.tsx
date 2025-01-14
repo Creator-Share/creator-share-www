@@ -11,6 +11,7 @@ import {
 } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { ColorModeButton } from "./ui/color-mode";
+import { useState, useEffect } from "react";
 
 const Links = [
   { name: "Lives", href: "/lives" },
@@ -21,6 +22,16 @@ const Links = [
 ];
 
 export function PageNavbar() {
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 0);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
     <Box
       borderBottom="1px"
@@ -28,6 +39,9 @@ export function PageNavbar() {
       position="sticky"
       top={0}
       zIndex={1000}
+      transition="box-shadow 0.2s"
+      boxShadow={isScrolled ? "lg" : "none"}
+      backdropFilter="blur(10px)"
     >
       <Container maxW="container.xl">
         <Flex h={16} alignItems="center" justifyContent="space-between">
