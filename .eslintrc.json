@@ -1,7 +1,11 @@
 {
-  "extends": "next/core-web-vitals",
+  "extends": ["next/core-web-vitals", "plugin:@typescript-eslint/recommended"],
+  "plugins": ["@typescript-eslint"],
   "rules": {
     "semi": ["off", "never"],
-    "comma-dangle": ["off", "never"]
+    "comma-dangle": ["off", "never"],
+    "react/no-unescaped-entities": "off",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/explicit-module-boundary-types": "off"
   }
 }
