@@ -20,9 +20,10 @@ async function initMocks() {
 }
 
 // Initialize MSW only in development
-if (process.env.NODE_ENV === "development") {
-  console.log("MSW: Development mode detected, initializing...");
-  initMocks();
-} else {
-  console.log("MSW: Production mode detected, skipping initialization");
-}
+// if (process.env.NODE_ENV === "development") {
+//   console.log("MSW: Development mode detected, initializing...");
+//   initMocks();
+// } else {
+//   console.log("MSW: Production mode detected, skipping initialization");
+// }
+initMocks();
