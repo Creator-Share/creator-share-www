@@ -13,10 +13,11 @@ import NextLink from "next/link";
 import { ColorModeButton } from "./ui/color-mode";
 
 const Links = [
-  { name: "Home", href: "/" },
-  { name: "Explore", href: "/explore" },
-  { name: "Opportunities", href: "/opportunities" },
-  { name: "Create", href: "/create" },
+  { name: "Lives", href: "/lives" },
+  { name: "Projects", href: "/projects" },
+  { name: "Causes", href: "/causes" },
+  { name: "My Community", href: "/local" },
+  { name: "Share Abundance", href: "/share" },
 ];
 
 export function PageNavbar() {
