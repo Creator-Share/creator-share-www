@@ -14,7 +14,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <ChakraProvider value={defaultSystem}>
-      <ThemeProvider attribute="class" disableTransitionOnChange>
+      <ThemeProvider
+        attribute="class"
+        disableTransitionOnChange
+        defaultTheme="light"
+      >
         <ColorModeProvider>
           <QueryClientProvider client={queryClient}>
             {children}
