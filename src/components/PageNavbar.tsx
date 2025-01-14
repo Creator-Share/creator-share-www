@@ -6,12 +6,11 @@ import {
   HStack,
   Link,
   Button,
-  useColorModeValue,
-  useColorMode,
   Image,
   Container,
 } from "@chakra-ui/react";
 import NextLink from "next/link";
+import { ColorModeButton } from "./ui/color-mode";
 
 const Links = [
   { name: "Home", href: "/" },
@@ -20,16 +19,11 @@ const Links = [
   { name: "Create", href: "/create" },
 ];
 
-export function Navbar() {
-  const { colorMode, toggleColorMode } = useColorMode();
-  const bg = useColorModeValue("white", "gray.800");
-  const borderColor = useColorModeValue("gray.200", "gray.700");
-
+export function PageNavbar() {
   return (
     <Box
-      bg={bg}
       borderBottom="1px"
-      borderColor={borderColor}
+      borderColor="gray.200"
       position="sticky"
       top={0}
       zIndex={1000}
@@ -47,29 +41,28 @@ export function Navbar() {
             </Box>
           </NextLink>
 
-          <HStack spacing={8}>
-            <HStack as="nav" spacing={4} display={{ base: "none", md: "flex" }}>
+          <HStack gap="2">
+            <HStack as="nav" gap="1" display={{ base: "none", md: "flex" }}>
               {Links.map((link) => (
-                <NextLink key={link.name} href={link.href} passHref>
-                  <Link
-                    px={2}
-                    py={1}
-                    rounded="md"
-                    _hover={{
-                      textDecoration: "none",
-                      bg: useColorModeValue("gray.100", "gray.700"),
-                    }}
-                  >
-                    {link.name}
-                  </Link>
-                </NextLink>
+                <Link
+                  as={NextLink}
+                  key={link.name}
+                  href={link.href}
+                  px={2}
+                  py={1}
+                  rounded="md"
+                  _hover={{
+                    textDecoration: "none",
+                    bg: "gray.100",
+                  }}
+                >
+                  {link.name}
+                </Link>
               ))}
             </HStack>
 
-            <HStack spacing={4}>
-              <Button size="sm" variant="ghost" onClick={toggleColorMode}>
-                {colorMode === "light" ? "🌙" : "☀️"}
-              </Button>
+            <HStack gap={4}>
+              <ColorModeButton />
               <NextLink href="/signin" passHref>
                 <Button variant="ghost" size="sm">
                   Sign In

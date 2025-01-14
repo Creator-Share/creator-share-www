@@ -1,15 +1,11 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Providers } from "@/components/Providers";
 import "./globals.css";
-import { Providers } from "./providers";
-import { Navbar } from "@/components/Navbar";
 import "./msw";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Creator Share",
-  description: "Share your creations with the world",
+  description: "",
 };
 
 export default function RootLayout({
@@ -18,12 +14,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <Providers>
-          <Navbar />
-          {children}
-        </Providers>
+    <html suppressHydrationWarning>
+      <body>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
