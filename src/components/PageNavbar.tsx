@@ -33,9 +33,9 @@ export function PageNavbar() {
           <NextLink href="/" passHref>
             <Box>
               <Image
-                src="/logo.svg"
+                src="/logo_text.svg"
                 alt="Creator Share Logo"
-                height="40px"
+                height="60px"
                 width="auto"
               />
             </Box>
