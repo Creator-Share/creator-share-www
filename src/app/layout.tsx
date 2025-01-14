@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Providers } from "@/components/Providers";
-import "./msw";
 
 export const metadata: Metadata = {
   title: "Creator Share",

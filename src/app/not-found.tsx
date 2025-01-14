@@ -17,8 +17,8 @@ export default function NotFound() {
             Page Not Found
           </Heading>
           <Text fontSize="xl" color="gray.500">
-            Oops! The page you're looking for seems to have wandered off into
-            the creative ether.
+            Oops! The page you&apos;re looking for seems to have wandered off
+            into the creative ether.
           </Text>
           <Link href="/" passHref>
             <Button colorScheme="blue" size="lg">
