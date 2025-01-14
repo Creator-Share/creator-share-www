@@ -34,8 +34,8 @@ export function PageNavbar() {
 
   return (
     <Box
-      borderBottom="1px"
-      borderColor="gray.200"
+      // borderBottom="1px"
+      // borderColor="gray.200"
       position="sticky"
       top={0}
       zIndex={1000}

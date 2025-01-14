@@ -2,44 +2,36 @@
 
 import { PageWrapper } from "@/components/PageWrapper";
 import {
+  FaBook,
+  FaHeartbeat,
+  FaTint,
+  FaAppleAlt,
+  FaHome,
+  FaBrain,
+  FaHandsHelping,
+  FaPaw,
+  FaLeaf,
+  FaPalette,
+  FaUsers,
+  FaBalanceScale,
+} from "react-icons/fa";
+import {
   Box,
   Container,
   Heading,
   HStack,
-  Icon,
   SimpleGrid,
   Text,
   VStack,
 } from "@chakra-ui/react";
 import { useQuery } from "@tanstack/react-query";
-import React, { useState, useEffect } from "react";
+import React from "react";
 
 async function fetchHello() {
   const res = await fetch("/api/hello");
   if (!res.ok) throw new Error("Network response was not ok");
   return res.json();
 }
-
-const IconComponent = ({ iconName }) => {
-  const [Icon, setIcon] = useState(null);
-
-  useEffect(() => {
-    const loadIcon = async () => {
-      try {
-        const { [iconName]: LoadedIcon } = await import("react-icons/fa");
-        setIcon(() => LoadedIcon);
-      } catch (error) {
-        console.error("Error loading icon:", error);
-      }
-    };
-
-    loadIcon();
-  }, [iconName]);
-
-  if (!Icon) return null; // Ensure a single element is returned
-
-  return <Icon w={10} />;
-};
 
 export default function Home() {
   const { data, isLoading, error } = useQuery({
@@ -93,65 +85,65 @@ export default function Home() {
             {[
               {
                 title: "Education",
-                icon: "FaBook",
+                icon: FaBook,
                 description:
                   "Support educational programs for children in need.",
               },
               {
                 title: "Healthcare",
-                icon: "FaHeartbeat",
+                icon: FaHeartbeat,
                 description:
                   "Provide medical care and supplies to underserved communities.",
               },
               {
                 title: "Clean Water",
-                icon: "FaTint",
+                icon: FaTint,
                 description: "Help build wells and water purification systems.",
               },
               {
                 title: "Food Security",
-                icon: "FaAppleAlt",
+                icon: FaAppleAlt,
                 description: "Ensure access to nutritious food for families.",
               },
               {
                 title: "Shelter",
-                icon: "FaHome",
+                icon: FaHome,
                 description: "Build safe and secure homes for those without.",
               },
               {
                 title: "Mental Health",
-                icon: "FaBrain",
+                icon: FaBrain,
                 description: "Support mental health services and counseling.",
               },
               {
                 title: "Disaster Relief",
-                icon: "FaHandsHelping",
+                icon: FaHandsHelping,
                 description:
                   "Provide aid to those affected by natural disasters.",
               },
               {
                 title: "Animal Welfare",
-                icon: "FaPaw",
+                icon: FaPaw,
                 description: "Protect and care for animals in need.",
               },
               {
                 title: "Environmental Conservation",
-                icon: "FaLeaf",
+                icon: FaLeaf,
                 description: "Support efforts to preserve our planet.",
               },
               {
                 title: "Arts and Culture",
-                icon: "FaPalette",
+                icon: FaPalette,
                 description: "Promote arts and cultural programs.",
               },
               {
                 title: "Community Development",
-                icon: "FaUsers",
+                icon: FaUsers,
                 description: "Help build strong and resilient communities.",
               },
               {
                 title: "Human Rights",
-                icon: "FaBalanceScale",
+                icon: FaBalanceScale,
                 description: "Advocate for justice and equality for all.",
               },
             ].map((cause) => (
@@ -169,7 +161,7 @@ export default function Home() {
                 }}
               >
                 <HStack gap={4} align="center" mb={2}>
-                  <IconComponent iconName={cause.icon} />
+                  <cause.icon size="1em" />
                   <Heading fontSize="xl">{cause.title}</Heading>
                 </HStack>
                 <Text mt={4}>{cause.description}</Text>
