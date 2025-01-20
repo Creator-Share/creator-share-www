@@ -8,10 +8,12 @@ import {
   Button,
   Image,
   Container,
+  Text,
 } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { ColorModeButton } from "./ui/color-mode";
 import { useState, useEffect } from "react";
+import { useAuthStore } from "@/stores/authStore";
 
 const Links = [
   { name: "Lives", href: "/lives" },
@@ -23,6 +25,8 @@ const Links = [
 
 export function PageNavbar() {
   const [isScrolled, setIsScrolled] = useState(false);
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -34,8 +38,6 @@ export function PageNavbar() {
 
   return (
     <Box
-      // borderBottom="1px"
-      // borderColor="gray.200"
       position="sticky"
       top={0}
       zIndex={1000}
@@ -78,16 +80,27 @@ export function PageNavbar() {
 
             <HStack gap={4}>
               <ColorModeButton />
-              <NextLink href="/signin" passHref>
-                <Button variant="ghost" size="sm">
-                  Sign In
-                </Button>
-              </NextLink>
-              <NextLink href="/signup" passHref>
-                <Button size="sm" colorScheme="blue">
-                  Sign Up
-                </Button>
-              </NextLink>
+              {user ? (
+                <>
+                  <Button variant="ghost" size="sm" onClick={logout}>
+                    Logout
+                  </Button>
+                  <Text fontSize="sm">{user}</Text>
+                </>
+              ) : (
+                <>
+                  <NextLink href="/signIn" passHref>
+                    <Button variant="ghost" size="sm">
+                      Sign In
+                    </Button>
+                  </NextLink>
+                  <NextLink href="/signup" passHref>
+                    <Button size="sm" colorScheme="blue">
+                      Sign Up
+                    </Button>
+                  </NextLink>
+                </>
+              )}
             </HStack>
           </HStack>
         </Flex>
