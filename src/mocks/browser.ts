@@ -1,5 +1,5 @@
 import { handlers } from "./handlers";
-const { setupWorker } = require("msw/browser");
+import { setupWorker } from "msw/browser";
 
 // Initialize the MSW worker with handlers
 export const worker = setupWorker(...handlers);
