@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
+import { useState, useEffect } from "react";
 
 interface FormValues {
   email: string;
@@ -18,10 +19,19 @@ const Login = () => {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<FormValues>();
   const login = useAuthStore((state) => state.login);
   const router = useRouter();
+
+  const [isDisabled, setIsDisabled] = useState(true);
+  const email = watch("email", "");
+  const password = watch("password", "");
+
+  useEffect(() => {
+    setIsDisabled(!email || !password);
+  }, [email, password]);
 
   const onSubmit = async (data: FormValues) => {
     const { email, password } = data;
@@ -32,8 +42,6 @@ const Login = () => {
       console.error("Login failed:", error);
       return;
     }
-
-    // Redirect to homepage on successful login
     router.push("/");
   };
 
@@ -43,20 +51,14 @@ const Login = () => {
         onSubmit={handleSubmit(onSubmit)}
         className="w-full max-w-md p-6 bg-[#FFFFFF] md:rounded-lg md:border md:shadow-sm md:px-8 md:py-12"
       >
-        {/* Logo */}
         <div className="flex justify-center">
           <Image width={200} height={200} alt="creator" src="/creator-text.svg" />
         </div>
-
-        {/* Title */}
         <div className="text-center my-8">
           <h1 className="text-[#03150E] font-semibold text-2xl">Welcome</h1>
           <p className="text-[#8D9692] text-base">Sign in to your Creator Share account</p>
         </div>
-
-        {/* Form Fields */}
         <Stack gap="4" className="text-[#8D9692]">
-          {/* Email Field */}
           <Box>
             <Field
               label="Email Address"
@@ -69,8 +71,6 @@ const Login = () => {
               />
             </Field>
           </Box>
-
-          {/* Password Field */}
           <Box>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb="1">
               <Text as="label">Password</Text>
@@ -92,19 +92,18 @@ const Login = () => {
               />
             </Field>
           </Box>
-
-          {/* Checkbox */}
           <div>
             <Checkbox className="border rounded-md mr-1 border-[#8D9692]" />
             <span>Keep me signed in</span>
           </div>
-
-          {/* Submit Button */}
-          <Button type="submit" className="bg-[#1C3C8C] text-white" width="full">
+          <Button
+            type="submit"
+            className="bg-[#1C3C8C] text-white"
+            width="full"
+            disabled={isDisabled}
+          >
             Submit
           </Button>
-
-          {/* Redirect to Signup */}
           <div className="mt-6 text-center">
             <Text fontSize="sm" color="gray.600">
               New to Creator Share?{" "}
