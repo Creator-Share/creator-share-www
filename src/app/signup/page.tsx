@@ -5,11 +5,14 @@ import { Field } from "@/components/ui/field";
 import { useForm } from "react-hook-form";
 import Image from "next/image";
 import { Checkbox } from "@/components/ui/checkbox";
+import ToS from "@/components/ui/ToS";
 import Link from "next/link";
 
 interface FormValues {
     email: string;
     password: string;
+    name: string;
+    confirmPassword: string;
 }
 
 const Login = () => {
@@ -22,7 +25,7 @@ const Login = () => {
     const onSubmit = handleSubmit((data) => console.log(data));
 
     return (
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center justify-center min-h-screen p-12">
             <form
                 onSubmit={onSubmit}
                 className="w-full max-w-md p-6 border bg-[#FFFFFF] rounded-lg shadow-sm px-8 py-12"
@@ -31,10 +34,22 @@ const Login = () => {
                     <Image width={200} height={200} alt="creator" src="/creator-text.svg" />
                 </div>
                 <div className="text-center my-8">
-                    <h1 className="text-[#03150E] font-semibold text-2xl">Welcome</h1>
-                    <p className="text-[#8D9692] text-base">Sign in to your Creator Share account</p>
+                    <h1 className="text-[#03150E] font-semibold text-2xl">Create account</h1>
+                    <p className="text-[#8D9692] text-base">Register to Creator Share</p>
                 </div>
                 <Stack gap="4" className="text-[#8D9692]">
+                    <Box>
+                        <Field
+                            label="Name"
+                            invalid={!!errors.name}
+                            errorText={errors.name?.message}
+                        >
+                            <Input
+                                {...register("name", { required: "Name is required" })}
+                                className="border border-[#8D9692] p-2"
+                            />
+                        </Field>
+                    </Box>
                     <Box>
                         <Field
                             label="Email Address"
@@ -49,15 +64,7 @@ const Login = () => {
                     </Box>
                     <Box>
                         <Box display="flex" justifyContent="space-between" alignItems="center" mb="1">
-                            <Text as="label">
-                                Password
-                            </Text>
-                            <Link
-                                className="text-[#1C3C8C] text-xs hover:underline"
-                                href="#"
-                            >
-                                Forgot Password
-                            </Link>
+                            <Text as="label">Password</Text>
                         </Box>
                         <Field
                             invalid={!!errors.password}
@@ -70,25 +77,44 @@ const Login = () => {
                             />
                         </Field>
                     </Box>
+                    <Box>
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb="1">
+                            <Text as="label">Confirm Password</Text>
+                        </Box>
+                        <Field
+                            invalid={!!errors.confirmPassword}
+                            errorText={errors.confirmPassword?.message}
+                        >
+                            <Input
+                                type="password"
+                                {...register("confirmPassword", { required: "Confirm Password is required" })}
+                                className="border border-[#8D9692] p-2"
+                            />
+                        </Field>
+                    </Box>
                     <div>
-                        <Checkbox className="border rounded-md mr-1 border-[#8D9692]" /><span>Keep me signed in</span>
+                        <Checkbox className="border rounded-md mr-1 border-[#8D9692]" />
+                        <span>Send me occasional Creator Share news.</span>
                     </div>
                     <Button type="submit" className="bg-[#1C3C8C] text-white" width="full">
                         Submit
                     </Button>
                     <div className="mt-6 text-center">
                         <Text fontSize="sm" color="gray.600">
-                            New to Creator Share?{" "}
+                            Already have an account?{" "}
                             <Link
-                                href="/signup"
+                                href="/signin"
                                 className="text-[#1C3C8C] hover:underline"
                             >
-                                Sign up here →
+                                Sign in here →
                             </Link>
                         </Text>
                     </div>
                 </Stack>
             </form>
+            <Box mt="6" className="max-w-md">
+                <ToS />
+            </Box>
         </div>
     );
 };
