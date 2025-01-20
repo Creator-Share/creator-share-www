@@ -22,10 +22,10 @@ const Login = () => {
     const onSubmit = handleSubmit((data) => console.log(data));
 
     return (
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center justify-center min-h-screen p-4">
             <form
                 onSubmit={onSubmit}
-                className="w-full max-w-md p-6 border bg-[#FFFFFF] rounded-lg shadow-sm px-8 py-12"
+                className="w-full max-w-md p-6 bg-[#FFFFFF] md:rounded-lg md:border md:shadow-sm md:px-8 md:py-12"
             >
                 <div className="flex justify-center">
                     <Image width={200} height={200} alt="creator" src="/creator-text.svg" />
