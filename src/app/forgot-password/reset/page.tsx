@@ -1,27 +1,19 @@
 "use client";
-
+import { create } from "zustand";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Field } from "@/components/ui/field";
 import { Box, Button, Input, Stack, Text } from "@chakra-ui/react";
+import { supabase } from "@/utils/supabaseClient";
+import { useForm } from "react-hook-form";
+import Image from "next/image";
 import {
     FaRegEye,
     FaRegEyeSlash
 } from "react-icons/fa";
-import { toaster } from "@/components/ui/toaster"
-import { Field } from "@/components/ui/field";
-import { useForm } from "react-hook-form";
-import Image from "next/image";
-import { Checkbox } from "@/components/ui/checkbox";
-import ToS from "@/components/ui/ToS";
-import Link from "next/link";
-import { create } from "zustand";
-import { useEffect, useState } from "react";
-import { supabase } from "@/utils/supabaseClient";
-import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/store/authStore";
 
 interface FormValues {
-    email: string;
     password: string;
-    name: string;
     confirmPassword: string;
 }
 
@@ -33,7 +25,7 @@ const useFormStore = create<{
     setIsDisabled: (value) => set({ isDisabled: value }),
 }));
 
-const Register = () => {
+const ResetPassword = () => {
     const {
         register,
         handleSubmit,
@@ -43,54 +35,31 @@ const Register = () => {
         mode: "onChange",
     });
     const router = useRouter();
-    const user = useAuthStore((state) => state.user);
-    useEffect(() => {
-        if (user) {
-            router.push("/");
-        }
-    }, [user, router]);
+    const [loading, setLoading] = useState<boolean>(false);
+    const [message, setMessage] = useState<string>("");
     const setIsDisabled = useFormStore((state) => state.setIsDisabled);
     const isDisabled = useFormStore((state) => state.isDisabled);
-    const setRegistrationEmail = useAuthStore((state) => state.setRegistrationEmail);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
     const togglePasswordVisibility = () => setShowPassword(!showPassword);
     const toggleConfirmPasswordVisibility = () => setShowConfirmPassword(!showConfirmPassword);
-    const onSubmit = async (data: FormValues) => {
-        const { email, password } = data;
+
+
+    const onSubmit = async () => {
+        setLoading(true);
+        setMessage("");
 
         try {
-            const { error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    emailRedirectTo: `http://localhost:3000/onboarding`,
-                },
-            });
+            const { error } = await supabase.auth.updateUser({ password });
 
-            if (error) {
-                toaster.create({
-                    title: "Signup Failed",
-                    description: error.message,
-                    duration: 5000,
-                });
-            } else {
-                toaster.create({
-                    title: "Signup Successful",
-                    description: "Please check your email to verify your account.",
-                    duration: 5000,
-                });
-                setRegistrationEmail(email);
-                router.push(`/verifyAccount/${encodeURIComponent(email)}`);
-            }
-        } catch (err) {
-            console.error(err);
-            toaster.create({
-                title: "Unexpected Error",
-                description: "Something went wrong. Please try again later.",
-                duration: 5000,
-            });
+            if (error) throw error;
+
+            setMessage("Password reset successful!");
+            setTimeout(() => router.push("/signin"), 2000);
+        } catch (err: unknown) {
+            setMessage((err as Error).message || "Failed to reset password.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -106,44 +75,17 @@ const Register = () => {
     }, [fields, password, confirmPassword, setIsDisabled]);
 
     return (
-        <Box className="flex flex-col items-center justify-center min-h-screen p-4 md:p-12">
-            <form
-                onSubmit={handleSubmit(onSubmit)}
-                className="w-full max-w-md p-6 md:border bg-[#FFFFFF] md:rounded-lg md:shadow-sm md:px-8 md:py-12"
-            >
+        <Box className="flex flex-col items-center justify-center min-h-screen p-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-md p-6 bg-[#FFFFFF] md:rounded-lg md:border md:shadow-sm md:px-8 md:py-12">
                 <Box className="flex justify-center">
                     <Image width={200} height={200} alt="creator" src="/creator-text.svg" />
                 </Box>
                 <Box className="text-center my-8">
-                    <Text className="text-[#03150E] font-semibold text-2xl">Create account</Text>
-                    <Text className="text-[#8D9692] text-base">Register to Creator Share</Text>
+                    <Text className="text-[#03150E] font-semibold text-2xl">New password</Text>
+                    <Text className="text-[#8D9692] text-base">Kindly enter a new password combination.</Text>
                 </Box>
                 <Stack gap="4" className="text-[#8D9692]">
-                    <Box>
-                        <Field
-                            label="Name"
-                            invalid={!!errors.name}
-                            errorText={errors.name?.message}
-                        >
-                            <Input
-                                {...register("name", { required: "Name is required" })}
-                                className="border border-[#8D9692] p-2"
-                            />
-                        </Field>
-                    </Box>
-                    <Box>
-                        <Field
-                            label="Email Address"
-                            invalid={!!errors.email}
-                            errorText={errors.email?.message}
-                        >
-                            <Input
-                                {...register("email", { required: "Email Address is required" })}
-                                className="border border-[#8D9692] p-2"
-                            />
-                        </Field>
-                    </Box>
-                    <Box>
+                <Box>
                         <Box display="flex" justifyContent="space-between" alignItems="center" mb="1">
                             <Text as="label">Password</Text>
                         </Box>
@@ -196,36 +138,18 @@ const Register = () => {
                             </Box>
                         </Field>
                     </Box>
-                    <Box>
-                        <Checkbox className="border rounded-md mr-1 border-[#8D9692]" />
-                        <span>Send me occasional Creator Share news.</span>
-                    </Box>
                     <Button
                         type="submit"
+                        disabled={isDisabled || loading}
                         className="bg-[#1C3C8C] text-white"
-                        width="full"
-                        disabled={isDisabled}
                     >
-                        Submit
+                        {loading ? "Resetting..." : "Continue"}
                     </Button>
-                    <Box className="mt-6 text-center">
-                        <Text fontSize="sm" color="gray.600">
-                            Already have an account?{" "}
-                            <Link
-                                href="/signin"
-                                className="text-[#1C3C8C] hover:underline"
-                            >
-                                Sign in here →
-                            </Link>
-                        </Text>
-                    </Box>
                 </Stack>
+                {message && <Text color="red.500" mt={4}>{message}</Text>}
             </form>
-            <Box mt="6" className="max-w-md">
-                <ToS />
-            </Box>
         </Box>
     );
 };
 
-export default Register;
+export default ResetPassword;

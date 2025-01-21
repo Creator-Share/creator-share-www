@@ -56,18 +56,18 @@ const Login = () => {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen p-4">
+        <Box className="flex items-center justify-center min-h-screen p-4">
             <form
                 onSubmit={handleSubmit(onSubmit)}
                 className="w-full max-w-md p-6 bg-[#FFFFFF] md:rounded-lg md:border md:shadow-sm md:px-8 md:py-12"
             >
-                <div className="flex justify-center">
+                <Box className="flex justify-center">
                     <Image width={200} height={200} alt="creator" src="/creator-text.svg" />
-                </div>
-                <div className="text-center my-8">
-                    <h1 className="text-[#03150E] font-semibold text-2xl">Welcome</h1>
-                    <p className="text-[#8D9692] text-base">Sign in to your Creator Share account</p>
-                </div>
+                </Box>
+                <Box className="text-center my-8">
+                    <Text className="text-[#03150E] font-semibold text-2xl">Welcome</Text>
+                    <Text className="text-[#8D9692] text-base">Sign in to your Creator Share account</Text>
+                </Box>
                 <Stack gap="4" className="text-[#8D9692]">
                     <Box>
                         <Field
@@ -86,7 +86,7 @@ const Login = () => {
                             <Text as="label">Password</Text>
                             <Link
                                 className="text-[#1C3C8C] text-xs hover:underline"
-                                href="#"
+                                href="/forgot-password"
                             >
                                 Forgot Password
                             </Link>
@@ -95,25 +95,25 @@ const Login = () => {
                             invalid={!!errors.password}
                             errorText={errors.password?.message}
                         >
-                            <div className="relative w-full">
+                            <Box className="relative w-full">
                                 <Input
                                     type={showPassword ? "text" : "password"}
                                     {...register("password", { required: "Password is required" })}
                                     className="border border-[#8D9692] p-2 w-full"
                                 />
-                                <div
+                                <Box
                                     onClick={togglePasswordVisibility}
                                     className="absolute right-[10px] top-1/2 -translate-y-1/2 cursor-pointer"
                                 >
                                     {showPassword ? <FaRegEyeSlash /> : <FaRegEye />}
-                                </div>
-                            </div>
+                                </Box>
+                            </Box>
                         </Field>
                     </Box>
-                    <div>
+                    <Box>
                         <Checkbox className="border rounded-md mr-1 border-[#8D9692]" />
                         <span>Keep me signed in</span>
-                    </div>
+                    </Box>
                     <Button
                         type="submit"
                         className="bg-[#1C3C8C] text-white"
@@ -122,7 +122,7 @@ const Login = () => {
                     >
                         Submit
                     </Button>
-                    <div className="mt-6 text-center">
+                    <Box className="mt-6 text-center">
                         <Text fontSize="sm" color="gray.600">
                             New to Creator Share?{" "}
                             <Link
@@ -132,10 +132,10 @@ const Login = () => {
                                 Sign up here →
                             </Link>
                         </Text>
-                    </div>
+                    </Box>
                 </Stack>
             </form>
-        </div>
+        </Box>
     );
 };
 
