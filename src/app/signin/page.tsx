@@ -1,6 +1,10 @@
 "use client";
 
 import { Box, Button, Input, Stack, Text } from "@chakra-ui/react";
+import {
+    FaRegEye,
+    FaRegEyeSlash
+} from "react-icons/fa";
 import { Field } from "@/components/ui/field";
 import { useForm } from "react-hook-form";
 import Image from "next/image";
@@ -25,10 +29,11 @@ const Login = () => {
     const login = useAuthStore((state) => state.login);
     const user = useAuthStore((state) => state.user);
     const router = useRouter();
-
-    const [isDisabled, setIsDisabled] = useState(true);
+    const [showPassword, setShowPassword] = useState<boolean>(false);
+    const [isDisabled, setIsDisabled] = useState<boolean>(true);
     const email = watch("email", "");
     const password = watch("password", "");
+    const togglePasswordVisibility = () => setShowPassword(!showPassword);
     useEffect(() => {
         if (user) {
             router.push("/");
@@ -90,11 +95,19 @@ const Login = () => {
                             invalid={!!errors.password}
                             errorText={errors.password?.message}
                         >
-                            <Input
-                                type="password"
-                                {...register("password", { required: "Password is required" })}
-                                className="border border-[#8D9692] p-2"
-                            />
+                            <div className="relative w-full">
+                                <Input
+                                    type={showPassword ? "text" : "password"}
+                                    {...register("password", { required: "Password is required" })}
+                                    className="border border-[#8D9692] p-2 w-full"
+                                />
+                                <div
+                                    onClick={togglePasswordVisibility}
+                                    className="absolute right-[10px] top-1/2 -translate-y-1/2 cursor-pointer"
+                                >
+                                    {showPassword ? <FaRegEyeSlash /> : <FaRegEye />}
+                                </div>
+                            </div>
                         </Field>
                     </Box>
                     <div>

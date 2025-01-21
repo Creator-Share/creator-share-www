@@ -1,6 +1,10 @@
 "use client";
 
 import { Box, Button, Input, Stack, Text } from "@chakra-ui/react";
+import {
+    FaRegEye,
+    FaRegEyeSlash
+} from "react-icons/fa";
 import { toaster } from "@/components/ui/toaster"
 import { Field } from "@/components/ui/field";
 import { useForm } from "react-hook-form";
@@ -9,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import ToS from "@/components/ui/ToS";
 import Link from "next/link";
 import { create } from "zustand";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
@@ -48,6 +52,11 @@ const Register = () => {
     const setIsDisabled = useFormStore((state) => state.setIsDisabled);
     const isDisabled = useFormStore((state) => state.isDisabled);
     const setRegistrationEmail = useAuthStore((state) => state.setRegistrationEmail);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+    const togglePasswordVisibility = () => setShowPassword(!showPassword);
+    const toggleConfirmPasswordVisibility = () => setShowConfirmPassword(!showConfirmPassword);
     const onSubmit = async (data: FormValues) => {
         const { email, password } = data;
 
@@ -142,11 +151,19 @@ const Register = () => {
                             invalid={!!errors.password}
                             errorText={errors.password?.message}
                         >
-                            <Input
-                                type="password"
-                                {...register("password", { required: "Password is required" })}
-                                className="border border-[#8D9692] p-2"
-                            />
+                            <div className="relative w-full">
+                                <Input
+                                    type={showPassword ? "text" : "password"}
+                                    {...register("password", { required: "Password is required" })}
+                                    className="border border-[#8D9692] p-2 w-full"
+                                />
+                                <div
+                                    onClick={togglePasswordVisibility}
+                                    className="absolute right-[10px] top-1/2 -translate-y-1/2 cursor-pointer"
+                                >
+                                    {showPassword ? <FaRegEyeSlash /> : <FaRegEye />}
+                                </div>
+                            </div>
                         </Field>
                     </Box>
                     <Box>
@@ -164,11 +181,19 @@ const Register = () => {
                                     : errors.confirmPassword?.message
                             }
                         >
-                            <Input
-                                type="password"
-                                {...register("confirmPassword", { required: "Confirm Password is required" })}
-                                className="border border-[#8D9692] p-2"
-                            />
+                            <div className="relative w-full">
+                                <Input
+                                    type={showConfirmPassword ? "text" : "password"}
+                                    {...register("confirmPassword", { required: "Confirm Password is required" })}
+                                    className="border border-[#8D9692] p-2 w-full"
+                                />
+                                <div
+                                    onClick={toggleConfirmPasswordVisibility}
+                                    className="absolute right-[10px] top-1/2 -translate-y-1/2 cursor-pointer"
+                                >
+                                    {showConfirmPassword ? <FaRegEyeSlash /> : <FaRegEye />}
+                                </div>
+                            </div>
                         </Field>
                     </Box>
                     <div>
