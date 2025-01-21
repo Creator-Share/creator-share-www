@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Providers } from "@/components/Providers";
 import "@/styles/globals.css";
+import { PageWrapper } from "@/components/PageWrapper";
 
 export const metadata: Metadata = {
   title: "Creator Share",
@@ -15,7 +16,8 @@ export default function RootLayout({
   return (
     <html suppressHydrationWarning>
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          <PageWrapper>{children}</PageWrapper></Providers>
       </body>
     </html>
   );
