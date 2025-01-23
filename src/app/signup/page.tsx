@@ -19,9 +19,10 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 
 interface FormValues {
+    first_name: string;
+    last_name: string;
     email: string;
     password: string;
-    name: string;
     confirmPassword: string;
 }
 
@@ -58,13 +59,17 @@ const Register = () => {
     const togglePasswordVisibility = () => setShowPassword(!showPassword);
     const toggleConfirmPasswordVisibility = () => setShowConfirmPassword(!showConfirmPassword);
     const onSubmit = async (data: FormValues) => {
-        const { email, password } = data;
+        const { email, password, first_name, last_name } = data;
 
         try {
             const { error } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
+                    data: {
+                        first_name,
+                        last_name,
+                    },
                     emailRedirectTo: `http://localhost:3000/onboarding`,
                 },
             });
@@ -121,12 +126,24 @@ const Register = () => {
                 <Stack gap="4" className="text-[#8D9692]">
                     <Box>
                         <Field
-                            label="Name"
-                            invalid={!!errors.name}
-                            errorText={errors.name?.message}
+                            label="First Name"
+                            invalid={!!errors.first_name}
+                            errorText={errors.first_name?.message}
                         >
                             <Input
-                                {...register("name", { required: "Name is required" })}
+                                {...register("first_name", { required: "First Name is required" })}
+                                className="border border-[#8D9692] p-2"
+                            />
+                        </Field>
+                    </Box>
+                    <Box>
+                        <Field
+                            label="Last Name"
+                            invalid={!!errors.last_name}
+                            errorText={errors.last_name?.message}
+                        >
+                            <Input
+                                {...register("last_name", { required: "Last Name is required" })}
                                 className="border border-[#8D9692] p-2"
                             />
                         </Field>
