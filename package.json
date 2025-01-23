@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "deploy": "curl https://api.vercel.com/v1/integrations/deploy/prj_9FjzqyQfvWZ2sOIV4y9WBO0kUk8Z/BzpyA5TQL3"
   },
   "dependencies": {
     "@chakra-ui/next-js": "^2.4.2",
