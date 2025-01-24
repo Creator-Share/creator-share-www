@@ -59,6 +59,25 @@ const SponsorChild = () => {
 
   return (
     <Box className="flex flex-col items-center justify-center" px={32} py={16}>
+      <Box className="justify-center items-center text-center px-[16rem]" mb={16}>
+        <Text
+          color="#1C3C8C"
+          fontWeight="semibold"
+          fontSize={{ base: "2xl", md: "4xl" }} // Responsive font sizes
+          mb={4}
+        >
+          Sponsoring a Child with Creator Share
+        </Text>
+        <Text fontSize="base" color="gray.700" lineHeight="1.8">
+          Sponsoring a child is a personal way to show God&apos;s love to a child in
+          need. For{" "}
+          <Text as="span" fontWeight="bold" color="black">
+            $39 a month
+          </Text>
+          , you&apos;ll help that child and other vulnerable children in their
+          community to stand tall, free from poverty.
+        </Text>
+      </Box>
       <Filters onFilterChange={handleFiltersChange} />
       <ChildListings childData={childrenData} />
     </Box>
