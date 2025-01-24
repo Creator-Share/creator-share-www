@@ -53,38 +53,38 @@ const children: Child[] = [
 
 const ChildCard: React.FC<{ child: Child }> = ({ child }) => {
     return (
-
         <Flex
-            p={6}
             mb={6}
             border="1px"
             borderColor="gray.200"
             borderRadius="md"
             boxShadow="sm"
-            align="center"
         >
             {/* Photo */}
             <Image
                 src={child.image}
                 alt={child.name}
+                p={0}
                 boxSize="120px"
                 objectFit="cover"
                 borderRadius="md"
                 mr={6}
+                width={273}
+                height={273}
             />
 
             {/* Details */}
-            <Box flex="1">
-                <Text fontWeight="bold" fontSize="xl">
+            <Box flex="1" mt={4}>
+                <Text fontSize="4xl" fontWeight="semibold" mb={4}>
                     {child.name}
                 </Text>
-                <Box display="flex" alignItems="center" gap={2}>
+                <Box display="flex" alignItems="center" gap={2} mb={4}>
                     <FaCalendar className="text-[#1C3C8C]" />
                     <Text fontSize="sm" color="gray.500">
                         {child.month} {child.day}, {2023 - child.age} | {child.age} years old
                     </Text>
                 </Box>
-                <Box display="flex" alignItems="center" gap={2}>
+                <Box display="flex" alignItems="center" gap={2} mb={2}>
                     <FaLocationDot className="text-[#1C3C8C]" />
                     <Text fontSize="sm" color="gray.500">
                         {child.location}
@@ -96,8 +96,9 @@ const ChildCard: React.FC<{ child: Child }> = ({ child }) => {
             </Box>
 
             {/* Bio */}
-            <Box flex="2" ml={6}>
-                <Text fontSize="sm">{child.bio}</Text>
+            <Box flex="2" ml={6} mt={4}>
+                <Text fontSize="4xl" fontWeight="semibold" mb={4}>Bio</Text>
+                <Text fontSize="sm" mb={4}>{child.bio}</Text>
                 <Text mt={2} fontSize="sm" color="blue.500">
                     Learn more about {child.name}
                 </Text>
@@ -109,7 +110,7 @@ const ChildCard: React.FC<{ child: Child }> = ({ child }) => {
 
 const ChildListing = () => {
     return (
-        <Box width="100%">
+        <Box width="100%" className="border" px={12} py={6} mt={4}>
             <VStack align="stretch" pt={10}>
                 {children.map((child, index) => (
                     <ChildCard key={index} child={child} />
