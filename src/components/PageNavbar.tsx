@@ -62,6 +62,21 @@ export function PageNavbar() {
             </Box>
           </NextLink>
 
+          <Link
+            as={NextLink}
+            href='/sponsor-a-child'
+            px={2}
+            py={1}
+            mt={4}
+            rounded="md"
+            _hover={{
+              textDecoration: "none",
+              bg: "gray.100",
+            }}
+          >
+            Sponsor a Child
+          </Link>
+
           <HStack gap="2">
             <HStack as="nav" gap="1" display={{ base: "none", md: "flex" }}>
               {Links.map((link) => (
@@ -71,6 +86,7 @@ export function PageNavbar() {
                   href={link.href}
                   px={2}
                   py={1}
+                  mt={4}
                   rounded="md"
                   _hover={{
                     textDecoration: "none",
@@ -82,7 +98,7 @@ export function PageNavbar() {
               ))}
             </HStack>
 
-            <HStack gap={4}>
+            <HStack gap={4} mt={4}>
               <ColorModeButton />
               {user ? (
                 <>
