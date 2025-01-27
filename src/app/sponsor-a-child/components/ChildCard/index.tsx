@@ -4,8 +4,15 @@ import { Box, Flex, Text, Image, Button } from "@chakra-ui/react";
 import { FaCalendar } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
 import { People } from "@/types";
+import { useRouter } from "next/navigation";
 
 const ChildCard: React.FC<{ people: People }> = ({ people }) => {
+  const router = useRouter();
+
+  const handleNavigateChild = () => {
+    router.push(`/sponsor-a-child/${people.id}`);
+  };
+
   return (
     <Flex
       mb={6}
@@ -13,6 +20,8 @@ const ChildCard: React.FC<{ people: People }> = ({ people }) => {
       borderColor="gray.200"
       borderRadius="md"
       boxShadow="sm"
+      onClick={handleNavigateChild}
+      cursor='pointer'
     >
       {/* Photo */}
       <Image
@@ -44,7 +53,12 @@ const ChildCard: React.FC<{ people: People }> = ({ people }) => {
             {people.country}
           </Text>
         </Box>
-        <Button mt={4} className="bg-[#1C3C8C] text-white font-semibold text-base" px={4} py={2}>
+        <Button
+          mt={4}
+          className="bg-[#1C3C8C] text-white font-semibold text-base"
+          px={4}
+          py={2}
+        >
           Sponsor
         </Button>
       </Box>
