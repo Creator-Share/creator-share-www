@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Box, Flex, Text, Spinner } from "@chakra-ui/react";
 import { People } from "@/types";
 import { calculateAge } from "@/utils/ageCalculator";
+import { formatDate } from "@/utils/dateFormatter";
 
 const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
   const { id } = React.use(params);
@@ -46,7 +47,8 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
       </Flex>
     );
   }
-  const age = child?.birth_date ? calculateAge(new Date(child.birth_date).toISOString()) : null;
+  const age = child ? calculateAge(new Date(child.birth_date).toISOString()) : null;
+  const formattedBirthDate = child ? formatDate(new Date(child.birth_date).toISOString()) : "";
   return (
     <Box px={8} py={4}>
       <Text fontSize="2xl" fontWeight="bold" mb={4}>
@@ -55,7 +57,7 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
       <Text><strong>ID:</strong> {child?.id}</Text>
       <Text><strong>Name:</strong> {child?.name}</Text>
       <Text><strong>Biography:</strong> {child?.biography}</Text>
-      <Text><strong>Birth Date:</strong> {child?.birth_date} | {age} years old</Text>
+      <Text><strong>Birth Date:</strong> {formattedBirthDate} | {age} years old</Text>
       <Text><strong>Country:</strong> {child?.country}</Text>
     </Box>
   );
