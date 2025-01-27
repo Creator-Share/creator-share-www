@@ -14,8 +14,6 @@ export const fetchUserRoles = async (userId: string): Promise<string[]> => {
       console.error("Error fetching user role assignments:", error.message);
       return [];
     }
-
-    // Handle roles data structure
     const roleNames = data.flatMap((role: { roles: { name: string } | { name: string }[] }) => {
       if (Array.isArray(role.roles)) {
         return role.roles.map((r) => r.name);
@@ -29,7 +27,7 @@ export const fetchUserRoles = async (userId: string): Promise<string[]> => {
     if (error instanceof Error) {
       console.error("Unexpected error fetching roles:", error.message);
     } else {
-      console.error("Unexpected error fetching roles:", error); // Handle non-Error cases
+      console.error("Unexpected error fetching roles:", error);
     }
     return [];
   }
@@ -49,8 +47,6 @@ export const loginAction = async (
     console.error("Login failed:", error);
     return;
   }
-
-  // Fetch the user details from authStore
   await fetchUser();
   const userId = (await supabase.auth.getUser()).data.user?.id;
 

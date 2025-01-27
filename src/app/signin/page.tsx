@@ -10,7 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { useState, useEffect } from "react";
-import { loginAction } from "../actions"; // Import the refactored actions
+import { loginAction } from "../actions";
 import { loginForm } from "@/types";
 
 const Login = () => {
@@ -44,7 +44,7 @@ const Login = () => {
   }, [email, password]);
 
   const onSubmit = async (data: loginForm) => {
-    await loginAction(data, login, fetchUser, router); // Use the refactored function
+    await loginAction(data, login, fetchUser, router);
   };
 
   return (
