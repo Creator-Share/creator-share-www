@@ -13,7 +13,7 @@ import NextLink from "next/link";
 import { ColorModeButton } from "./ui/color-mode";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
-
+import { useRouter } from "next/navigation";
 const Links = [
   { name: "Lives", href: "/lives" },
   { name: "Projects", href: "/projects" },
@@ -27,7 +27,7 @@ export function PageNavbar() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const fetchUser = useAuthStore((state) => state.fetchUser);
-
+  const router = useRouter();
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 0);
@@ -39,7 +39,11 @@ export function PageNavbar() {
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
-
+  const handleLogout = async () => {
+    await logout();
+    console.log("User logged out, redirecting to /...");
+    router.push("/");
+  };
   return (
     <Box
       position="sticky"
@@ -102,7 +106,7 @@ export function PageNavbar() {
               <ColorModeButton />
               {user ? (
                 <>
-                  <Button variant="ghost" size="sm" onClick={logout}>
+                  <Button variant="ghost" size="sm" onClick={handleLogout}>
                     Logout
                   </Button>
                   <Text fontSize="sm">{user}</Text>

@@ -13,3 +13,8 @@ export interface People {
     status: string;
     country:string;
   }
+
+export interface loginForm {
+    email: string;
+    password: string;
+  }

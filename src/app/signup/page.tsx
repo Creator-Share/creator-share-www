@@ -70,7 +70,7 @@ const Register = () => {
                         first_name,
                         last_name,
                     },
-                    emailRedirectTo: `http://localhost:3000/onboarding`,
+                    emailRedirectTo: `http://localhost:3000/main/onboarding`,
                 },
             });
 
