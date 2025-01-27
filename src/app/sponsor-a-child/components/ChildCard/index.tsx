@@ -5,6 +5,7 @@ import { FaCalendar } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
 import { People } from "@/types";
 import { useRouter } from "next/navigation";
+import { calculateAge } from "@/utils/ageCalculator"; // Import the reusable function
 
 const ChildCard: React.FC<{ people: People }> = ({ people }) => {
   const router = useRouter();
@@ -12,6 +13,8 @@ const ChildCard: React.FC<{ people: People }> = ({ people }) => {
   const handleNavigateChild = () => {
     router.push(`/sponsor-a-child/${people.id}`);
   };
+
+  const age = calculateAge(new Date(people.birth_date).toISOString());
 
   return (
     <Flex
@@ -21,7 +24,7 @@ const ChildCard: React.FC<{ people: People }> = ({ people }) => {
       borderRadius="md"
       boxShadow="sm"
       onClick={handleNavigateChild}
-      cursor='pointer'
+      cursor="pointer"
     >
       {/* Photo */}
       <Image
@@ -44,7 +47,7 @@ const ChildCard: React.FC<{ people: People }> = ({ people }) => {
         <Box display="flex" alignItems="center" gap={2} mb={4}>
           <FaCalendar className="text-[#1C3C8C]" />
           <Text fontSize="sm" color="gray.500">
-            {people.birth_date}
+            {people.birth_date} | {age} years old
           </Text>
         </Box>
         <Box display="flex" alignItems="center" gap={2} mb={2}>
