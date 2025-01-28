@@ -10,8 +10,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { useState, useEffect } from "react";
-import { loginAction } from "../actions";
 import { loginForm } from "@/types";
+import ToS from "@/components/ui/ToS";
 
 const Login = () => {
   const {
@@ -20,9 +20,6 @@ const Login = () => {
     watch,
     formState: { errors },
   } = useForm<loginForm>();
-
-  const login = useAuthStore((state) => state.login);
-  const fetchUser = useAuthStore((state) => state.fetchUser);
   const user = useAuthStore((state) => state.user);
   const router = useRouter();
 
@@ -44,14 +41,31 @@ const Login = () => {
   }, [email, password]);
 
   const onSubmit = async (data: loginForm) => {
-    await loginAction(data, login, fetchUser, router);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        alert(errorData.error || "An unexpected error occurred");
+        return;
+      }
+      router.push("/");
+    } catch (error) {
+      alert("An unexpected error occurred. Please try again.");
+      console.error(error);
+    }
   };
 
+
   return (
-    <Box className="flex items-center justify-center min-h-screen p-4">
+    <Box className="flex flex-col items-center justify-center min-h-screen p-4">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="w-full max-w-md p-6 bg-[#FFFFFF] md:rounded-lg md:border md:shadow-sm md:px-8 md:py-12"
+        className="w-full max-w-md p-6 md:border bg-[#FFFFFF] md:rounded-lg md:shadow-sm md:px-8 md:py-12"
       >
         <Box className="flex justify-center">
           <Image width={200} height={200} alt="creator" src="/creator-text.svg" />
@@ -118,7 +132,7 @@ const Login = () => {
             <Text fontSize="sm" color="gray.600">
               New to Creator Share?{" "}
               <Link
-                href="/signup"
+                href="/registration"
                 className="text-[#1C3C8C] hover:underline"
               >
                 Sign up here →
@@ -127,6 +141,9 @@ const Login = () => {
           </Box>
         </Stack>
       </form>
+      <Box mt="6" className="max-w-md">
+        <ToS />
+      </Box>
     </Box>
   );
 };

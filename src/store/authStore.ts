@@ -1,37 +1,34 @@
 import { create } from "zustand";
-import { supabase } from "@/utils/supabaseClient";
+import { createClient } from "@/utils/supabase/client";
 
 interface AuthState {
   user: string | null;
   registrationEmail: string | null;
-  login: (email: string, password: string) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
   setRegistrationEmail: (email: string) => void;
   clearRegistrationEmail: () => void;
   fetchUser: () => Promise<void>;
 }
+const supabase = createClient()
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   registrationEmail: null,
-  login: async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+logout: async () => {
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+      });
 
-    if (error) {
-      console.error("Login Error:", error.message);
-      return { error: error.message };
+      if (!response.ok) {
+        const result = await response.json();
+        console.error("Logout API Error:", result.error);
+        return;
+      }
+      set({ user: null });
+    } catch (error) {
+      console.error("Unexpected logout error:", error);
     }
-
-    set({ user: data.user?.email || null });
-    return {};
-  },
-
-  logout: async () => {
-    await supabase.auth.signOut();
-    set({ user: null });
   },
 
   fetchUser: async () => {

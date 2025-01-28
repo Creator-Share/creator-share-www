@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/utils/supabaseClient';
+import { createClient } from '@/utils/supabase/server';
 
 export async function GET(request: Request) {
+  const supabase = await createClient()
   const url = new URL(request.url);
   const id = url.pathname.split('/').pop();
 
