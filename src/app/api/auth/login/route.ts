@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { NextResponse } from "next/server";
+import { createClient } from "@/utils/supabase/server";
+import { RoleAssignment } from "@/types";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -7,37 +8,61 @@ export async function POST(request: Request) {
   const { email, password } = body;
 
   if (!email || !password) {
-    return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
+    return NextResponse.json(
+      { error: "Email and password are required." },
+      { status: 400 }
+    );
   }
 
   try {
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (signInError || !signInData) {
-      return NextResponse.json({ error: signInError?.message || 'Invalid credentials' }, { status: 401 });
+    if (signInError) {
+      return NextResponse.json(
+        { error: signInError.message || "Invalid credentials." },
+        { status: 401 }
+      );
     }
 
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    const userId = signInData.user?.id;
 
-    if (userError || !userData) {
-      return NextResponse.json({ error: userError?.message || 'Failed to validate user' }, { status: 401 });
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID not found after login." },
+        { status: 500 }
+      );
+    }
+    const { data: roleData } = await supabase
+      .from("role_assignments")
+      .select(`
+        roles:roles!role_assignments_role_id_fkey(name)
+      `)
+      .eq("user_id", userId) as unknown as { data: RoleAssignment[]; };
+
+    const roleName = roleData[0]?.roles?.name;
+    console.log("User Role Fetched:", roleName);
+
+    if (roleName === "SUPER_ADMIN") {
+      return NextResponse.json(
+        {
+          message: "Login successful. Redirecting to /choose-dashboard.",
+          redirect: "/admin-panel/choose-dashboard",
+        },
+        { status: 200 }
+      );
     }
 
     return NextResponse.json(
-      {
-        user: userData.user,
-        session: signInData.session,
-      },
+      { message: "Login successful.", redirect: "/" },
       { status: 200 }
     );
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Unexpected error occurred';
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    const errorMessage =
+      err instanceof Error ? err.message : "Unexpected error occurred.";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

@@ -12,7 +12,7 @@ const VerifyAccount = () => {
 
   useEffect(() => {
     if (!registrationEmail) {
-      router.push("/signin");
+      router.push("/registration");
     }
   }, [registrationEmail, router]);
 

@@ -53,13 +53,15 @@ const Login = () => {
         alert(errorData.error || "An unexpected error occurred");
         return;
       }
-      router.push("/");
+
+      const result = await response.json();
+      const redirectUrl = result.redirect;
+      router.push(redirectUrl);
     } catch (error) {
       alert("An unexpected error occurred. Please try again.");
       console.error(error);
     }
   };
-
 
   return (
     <Box className="flex flex-col items-center justify-center min-h-screen p-4">
