@@ -68,11 +68,6 @@ const SponsorChild = () => {
     if (selectedPerson) {
       setSelectedCountry(selectedPerson.country);
     }
-
-    const element = document.getElementById(`child-${id}`);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
   };
 
   const retryFetch = () => {

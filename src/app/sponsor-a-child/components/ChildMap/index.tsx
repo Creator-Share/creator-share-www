@@ -24,6 +24,7 @@ const ChildMap: React.FC<ChildMapProps> = ({
   onViewportChange,
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<mapboxgl.Map | null>(null);
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -32,9 +33,12 @@ const ChildMap: React.FC<ChildMapProps> = ({
 
     const map = new mapboxgl.Map({
       container: mapContainer.current,
-      style: "mapbox://styles/mapbox/streets-v10",
-      zoom: 5,
+      style: "mapbox://styles/mapbox/streets-v11", // Updated style
+      center: [0, 0],
+      zoom: 2,
     });
+
+    mapInstance.current = map;
 
     const countries = childData.reduce((acc, child) => {
       if (!acc[child.country]) {
@@ -42,6 +46,7 @@ const ChildMap: React.FC<ChildMapProps> = ({
       }
       return acc;
     }, {} as Record<string, typeof childData[0]>);
+
     Object.values(countries).forEach((countryRepresentative) => {
       const coordinates = countryRepresentative.location_geo.coordinates;
 
@@ -63,17 +68,28 @@ const ChildMap: React.FC<ChildMapProps> = ({
       markerElement.style.cursor = "pointer";
       markerElement.style.backgroundRepeat = "no-repeat";
 
-      markerElement.addEventListener("click", () => {
+
+      markerElement.addEventListener("click", (event) => {
+        event.stopPropagation();
         onMarkerClick(countryRepresentative.id);
       });
 
-      new mapboxgl.Marker(markerElement)
+      new mapboxgl.Marker({ element: markerElement })
         .setLngLat([lng, lat])
         .addTo(map);
     });
 
+    if (childData.length > 0) {
+      const bounds = new mapboxgl.LngLatBounds();
+      childData.forEach((child) => {
+        bounds.extend(child.location_geo.coordinates);
+      });
+      map.fitBounds(bounds, { padding: 50 });
+    }
+
     return () => {
       map.remove();
+      mapInstance.current = null;
     };
   }, [childData, onMarkerClick, onViewportChange]);
 
