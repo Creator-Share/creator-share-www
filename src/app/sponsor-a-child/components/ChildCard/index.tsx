@@ -7,8 +7,13 @@ import { People } from "@/types";
 import { useRouter } from "next/navigation";
 import { calculateAge } from "@/utils/ageCalculator";
 import { formatDate } from "@/utils/dateFormatter";
-
-const ChildCard: React.FC<{ people: People }> = ({ people }) => {
+interface ChildCardProps {
+    people: People;
+    isSelected: boolean;
+    id: string;
+  }
+  
+const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const router = useRouter();
 
     const handleNavigateChild = () => {
@@ -22,7 +27,8 @@ const ChildCard: React.FC<{ people: People }> = ({ people }) => {
         <Flex
             mb={6}
             border="1px"
-            borderColor="gray.200"
+            borderColor={isSelected ? "blue.500" : "gray.200"}
+            borderWidth={isSelected ? "2px" : "1px"}
             borderRadius="md"
             boxShadow="sm"
             onClick={handleNavigateChild}

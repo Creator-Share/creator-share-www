@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Box, Flex, Text, Spinner } from "@chakra-ui/react";
+import React, { useEffect, useState, useCallback } from "react";
+import { Box, Flex, Text, Spinner, Button } from "@chakra-ui/react";
 import Filters from "@/app/sponsor-a-child/components/Filters";
 import ChildListings from "./components/ChildListings";
+import ChildMap from "./components/ChildMap";
 import { People } from "@/types";
 
 interface Filters {
@@ -11,35 +12,66 @@ interface Filters {
   gender: string;
 }
 
+interface ViewportBounds {
+  ne: number[];
+  sw: number[];
+}
+
 const SponsorChild = () => {
   const [childrenData, setChildrenData] = useState<People[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewportBounds, setViewportBounds] = useState<ViewportBounds | null>(null);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
 
-  const handleFiltersChange = (filters: Filters) => {
-    console.log("Applied Filters:", filters);
-  };
+  const [filters, setFilters] = useState<Filters>({ location: "", gender: "" });
 
-  useEffect(() => {
-    const fetchChildren = async () => {
+  const fetchChildren = useCallback(
+    async (bounds?: ViewportBounds) => {
+      setLoading(true);
+      setError(null);
+
       try {
-        const res = await fetch("/api/children/get");
+        const queryParams = new URLSearchParams();
+
+        if (bounds) {
+          queryParams.append("ne", JSON.stringify(bounds.ne));
+          queryParams.append("sw", JSON.stringify(bounds.sw));
+        }
+
+        if (filters.location) queryParams.append("location", filters.location);
+        if (filters.gender) queryParams.append("gender", filters.gender);
+
+        const res = await fetch(`/api/children/get?${queryParams.toString()}`);
         if (!res.ok) throw new Error("Failed to fetch children data");
+
         const data = await res.json();
         setChildrenData(data.people || []);
       } catch (err: unknown) {
-        if (err instanceof Error) {
-          setError(err.message || "Unexpected error occurred");
-        } else {
-          setError("Unexpected error occurred");
-        }
+        const errorMsg = err instanceof Error ? err.message : "Unexpected error occurred";
+        setError(errorMsg);
       } finally {
         setLoading(false);
       }
-    };
+    },
+    [filters]
+  );
 
-    fetchChildren();
-  }, []);
+  useEffect(() => {
+    fetchChildren(viewportBounds || undefined);
+  }, [viewportBounds, filters, fetchChildren]);
+
+  const handleMarkerClick = (id: string) => {
+    setSelectedChildId(id);
+    const element = document.getElementById(`child-${id}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
+
+  const retryFetch = () => {
+    fetchChildren(viewportBounds || undefined);
+  };
 
   if (loading) {
     return (
@@ -51,8 +83,13 @@ const SponsorChild = () => {
 
   if (error) {
     return (
-      <Flex justify="center" align="center" minH="100vh">
-        <Text color="red.500">{error}</Text>
+      <Flex direction="column" justify="center" align="center" minH="100vh">
+        <Text color="red.500" mb={4}>
+          {error}
+        </Text>
+        <Button colorScheme="blue" onClick={retryFetch}>
+          Retry
+        </Button>
       </Flex>
     );
   }
@@ -78,8 +115,22 @@ const SponsorChild = () => {
           community to stand tall, free from poverty.
         </Text>
       </Box>
-      <Filters onFilterChange={handleFiltersChange} />
-      <ChildListings peopleData={childrenData} />
+      <ChildMap
+        childData={childrenData}
+        onViewportChange={setViewportBounds}
+        onMarkerClick={handleMarkerClick}
+      />
+
+      <Filters
+        onFilterChange={(newFilters) => {
+          setFilters(newFilters);
+        }}
+      />
+
+      <ChildListings
+        peopleData={childrenData}
+        selectedChildId={selectedChildId}
+      />
     </Box>
   );
 };

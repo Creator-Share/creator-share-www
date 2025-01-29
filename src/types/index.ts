@@ -1,3 +1,7 @@
+type Geography = {
+  coordinates: [number, number];
+  type: 'Point';
+};
 export interface People {
     id: string;
     name: string;
@@ -12,6 +16,7 @@ export interface People {
     budget_raised: number;
     status: string;
     country:string;
+    location_geo: Geography;
   }
 
 export interface loginForm {

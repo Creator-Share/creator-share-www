@@ -7,9 +7,13 @@ import { People } from "@/types";
 
 interface ChildListingsProps {
   peopleData: People[];
+  selectedChildId: string | null;
 }
 
-const ChildListings: React.FC<ChildListingsProps> = ({ peopleData }) => {
+const ChildListings: React.FC<ChildListingsProps> = ({ 
+  peopleData,
+  selectedChildId
+}) => {
   const [visiblePeople, setVisiblePeople] = useState<People[]>([]);
   const [loadedCount, setLoadedCount] = useState(2);
 
@@ -51,7 +55,12 @@ const ChildListings: React.FC<ChildListingsProps> = ({ peopleData }) => {
     >
       <VStack align="stretch" pt={10}>
         {visiblePeople.map((people) => (
-          <ChildCard key={people.id} people={people} />
+          <ChildCard 
+            key={people.id}
+            people={people}
+            isSelected={selectedChildId === people.id}
+            id={`child-${people.id}`}
+          />
         ))}
       </VStack>
     </Box>
