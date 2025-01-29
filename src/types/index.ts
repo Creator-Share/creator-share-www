@@ -5,6 +5,7 @@ type Geography = {
 export interface People {
     id: string;
     name: string;
+    gender:string;
     // location: string;
     // age: number;
     birth_date: number;

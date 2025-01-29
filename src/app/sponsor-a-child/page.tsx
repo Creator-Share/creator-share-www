@@ -63,7 +63,7 @@ const SponsorChild = () => {
 
   const handleMarkerClick = (id: string) => {
     setSelectedChildId(id);
-    
+
     const selectedPerson = childrenData.find(child => child.id === id);
     if (selectedPerson) {
       setSelectedCountry(selectedPerson.country);
@@ -121,7 +121,20 @@ const SponsorChild = () => {
         onViewportChange={setViewportBounds}
         onMarkerClick={handleMarkerClick}
       />
-
+      {selectedCountry && (
+        <Box width="100%">
+          <Text
+            mb={8}
+            mt={5}
+            fontSize="4xl"
+            color="#1C3C8C"
+            fontWeight="semibold"
+            textAlign="left"
+          >
+            Showing results from {selectedCountry}
+          </Text>
+        </Box>
+      )}
       <Filters
         onFilterChange={(newFilters) => {
           setFilters(newFilters);

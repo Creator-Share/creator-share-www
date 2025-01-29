@@ -9,7 +9,7 @@ import { calculateAge } from "@/utils/ageCalculator";
 import { formatDate } from "@/utils/dateFormatter";
 interface ChildCardProps {
     people: People;
-    isSelected: boolean;
+    isSelected?: boolean;
     id: string;
   }
   
@@ -30,7 +30,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
             borderColor={isSelected ? "blue.500" : "gray.200"}
             borderWidth={isSelected ? "2px" : "1px"}
             borderRadius="md"
-            boxShadow="sm"
+            boxShadow="xs"
             onClick={handleNavigateChild}
             cursor="pointer"
         >
