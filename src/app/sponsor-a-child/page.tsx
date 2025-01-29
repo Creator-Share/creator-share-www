@@ -1,5 +1,4 @@
-"use client";
-
+"use client"
 import React, { useEffect, useState, useCallback } from "react";
 import { Box, Flex, Text, Spinner, Button } from "@chakra-ui/react";
 import Filters from "@/app/sponsor-a-child/components/Filters";
@@ -8,8 +7,8 @@ import ChildMap from "./components/ChildMap";
 import { People } from "@/types";
 
 interface Filters {
-  location: string;
   gender: string;
+  age: string;
 }
 
 interface ViewportBounds {
@@ -23,8 +22,9 @@ const SponsorChild = () => {
   const [error, setError] = useState<string | null>(null);
   const [viewportBounds, setViewportBounds] = useState<ViewportBounds | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
-  const [filters, setFilters] = useState<Filters>({ location: "", gender: "" });
+  const [filters, setFilters] = useState<Filters>({ age: "", gender: "" });
 
   const fetchChildren = useCallback(
     async (bounds?: ViewportBounds) => {
@@ -39,7 +39,7 @@ const SponsorChild = () => {
           queryParams.append("sw", JSON.stringify(bounds.sw));
         }
 
-        if (filters.location) queryParams.append("location", filters.location);
+        if (filters.age) queryParams.append("location", filters.age);
         if (filters.gender) queryParams.append("gender", filters.gender);
 
         const res = await fetch(`/api/children/get?${queryParams.toString()}`);
@@ -63,6 +63,12 @@ const SponsorChild = () => {
 
   const handleMarkerClick = (id: string) => {
     setSelectedChildId(id);
+    
+    const selectedPerson = childrenData.find(child => child.id === id);
+    if (selectedPerson) {
+      setSelectedCountry(selectedPerson.country);
+    }
+
     const element = document.getElementById(`child-${id}`);
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -130,6 +136,7 @@ const SponsorChild = () => {
       <ChildListings
         peopleData={childrenData}
         selectedChildId={selectedChildId}
+        selectedCountry={selectedCountry}
       />
     </Box>
   );

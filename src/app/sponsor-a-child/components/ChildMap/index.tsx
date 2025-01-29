@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import mapboxgl from 'mapbox-gl';
-import { Box } from '@chakra-ui/react';
-import 'mapbox-gl/dist/mapbox-gl.css';
+"use client";
+import React, { useEffect, useRef } from "react";
+import mapboxgl from "mapbox-gl";
+import { Box } from "@chakra-ui/react";
+import "mapbox-gl/dist/mapbox-gl.css";
 
 interface ChildMapProps {
   childData: {
@@ -17,7 +18,11 @@ interface ChildMapProps {
   onMarkerClick: (id: string) => void;
 }
 
-const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onViewportChange }) => {
+const ChildMap: React.FC<ChildMapProps> = ({
+  childData,
+  onMarkerClick,
+  onViewportChange,
+}) => {
   const mapContainer = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,40 +32,52 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onViewpor
 
     const map = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v8',
-      center: [105.8342, 21.0278],
+      style: "mapbox://styles/mapbox/streets-v10",
       zoom: 5,
     });
 
+    const countries = childData.reduce((acc, child) => {
+      if (!acc[child.country]) {
+        acc[child.country] = child;
+      }
+      return acc;
+    }, {} as Record<string, typeof childData[0]>);
+    Object.values(countries).forEach((countryRepresentative) => {
+      const coordinates = countryRepresentative.location_geo.coordinates;
 
+      if (!Array.isArray(coordinates) || coordinates.length < 2) {
+        console.error(
+          `Invalid coordinates for ${countryRepresentative.country}:`,
+          coordinates
+        );
+        return;
+      }
 
-    childData.forEach((child) => {
-        const [lng, lat] = child.location_geo.coordinates; 
+      const [lng, lat] = coordinates;
 
-        const el = document.createElement('div');
-        el.style.width = '50px';
-        el.style.height = '50px';
-        el.style.backgroundImage = `url(${child.image})`;
-        el.style.backgroundPosition = 'center';
-        el.style.borderRadius = '50%'; // Make it round
-        el.style.cursor = 'pointer';
+      const markerElement = document.createElement("div");
+      markerElement.style.backgroundImage = "url('/CreatorSharePin.svg')";
+      markerElement.style.backgroundSize = "contain";
+      markerElement.style.width = "40px";
+      markerElement.style.height = "40px";
+      markerElement.style.cursor = "pointer";
+      markerElement.style.backgroundRepeat = "no-repeat";
 
-        const marker = new mapboxgl.Marker({ element: el })
-          .setLngLat([lng, lat])
-          .addTo(map);
-
-        marker.getElement().addEventListener('click', () => {
-          onMarkerClick(child.id);
-        });
+      markerElement.addEventListener("click", () => {
+        onMarkerClick(countryRepresentative.id);
       });
-      
+
+      new mapboxgl.Marker(markerElement)
+        .setLngLat([lng, lat])
+        .addTo(map);
+    });
 
     return () => {
       map.remove();
     };
   }, [childData, onMarkerClick, onViewportChange]);
 
-  return <Box ref={mapContainer} className="h-[400px] w-full mb-10 rounded-lg" />;
+  return <Box ref={mapContainer} className="h-[571px] w-full mb-8 rounded-2xl" />;
 };
 
 export default ChildMap;

@@ -1,5 +1,4 @@
-"use client";
-
+"use client"
 import { Box, VStack } from "@chakra-ui/react";
 import React, { useState, useEffect, useCallback } from "react";
 import ChildCard from "../ChildCard";
@@ -8,11 +7,13 @@ import { People } from "@/types";
 interface ChildListingsProps {
   peopleData: People[];
   selectedChildId: string | null;
+  selectedCountry: string | null;
 }
 
 const ChildListings: React.FC<ChildListingsProps> = ({ 
   peopleData,
-  selectedChildId
+  selectedChildId,
+  selectedCountry
 }) => {
   const [visiblePeople, setVisiblePeople] = useState<People[]>([]);
   const [loadedCount, setLoadedCount] = useState(2);
@@ -28,8 +29,13 @@ const ChildListings: React.FC<ChildListingsProps> = ({
   }, [peopleData.length]);
 
   useEffect(() => {
-    setVisiblePeople(peopleData.slice(0, loadedCount));
-  }, [peopleData, loadedCount]);
+    if (selectedCountry) {
+      const filteredPeople = peopleData.filter(person => person.country === selectedCountry);
+      setVisiblePeople(filteredPeople.slice(0, loadedCount));
+    } else {
+      setVisiblePeople([]);
+    }
+  }, [peopleData, selectedCountry, loadedCount]);
 
   useEffect(() => {
     const scrollableDiv = document.getElementById("scrollable-box");
@@ -43,6 +49,8 @@ const ChildListings: React.FC<ChildListingsProps> = ({
     };
   }, [handleScroll]);
 
+  if (!selectedCountry) return null;
+
   return (
     <Box
       id="scrollable-box"
@@ -50,7 +58,6 @@ const ChildListings: React.FC<ChildListingsProps> = ({
       className="border"
       px={12}
       mt={4}
-      maxH="300px"
       overflowY="auto"
     >
       <VStack align="stretch" pt={10}>
