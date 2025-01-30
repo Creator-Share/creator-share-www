@@ -11,7 +11,6 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
   const [child, setChild] = useState<People | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const router = useRouter();
 
   useEffect(() => {

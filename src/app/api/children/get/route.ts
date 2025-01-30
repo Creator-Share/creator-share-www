@@ -1,54 +1,77 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { NextResponse } from "next/server";
+import { createClient } from "@/utils/supabase/server";
 
 export async function GET(req: Request) {
-    const supabase = await createClient();
-    const { searchParams } = new URL(req.url);
+  const supabase = await createClient();
+  const { searchParams } = new URL(req.url);
 
-    try {
-        let query = supabase
-            .from('people')
-            .select('id, name, image, location_geo, birth_date, country, location_str');
-        const ne = searchParams.get('ne');
-        const sw = searchParams.get('sw');
-        
-        if (ne && sw) {
-            try {
-                const neCoords = JSON.parse(ne);
-                const swCoords = JSON.parse(sw);
-                
-                query = query.filter(
-                  'location_geo',
-                  'st_within',
-                  `SRID=4326;POLYGON((
-                    ${swCoords[0]} ${swCoords[1]},
-                    ${neCoords[0]} ${swCoords[1]},
-                    ${neCoords[0]} ${neCoords[1]},
-                    ${swCoords[0]} ${neCoords[1]},
-                    ${swCoords[0]} ${swCoords[1]}
-                  ))`
-                );
-            } catch (e) {
-                console.error('Error parsing coordinates:', e);
-            }
-        }
+  try {
+    const query = supabase
+      .from("people")
+      .select(
+        "id, name, image, location_geo, birth_date, country, location_str"
+      );
 
-        const { data, error } = await query;
+    const ne = searchParams.get("ne");
+    const sw = searchParams.get("sw");
+
+    if (ne && sw) {
+      try {
+        const neCoords = JSON.parse(ne);
+        const swCoords = JSON.parse(sw);
+
+        const clamp = (value: number, min: number, max: number): number =>
+          Math.max(min, Math.min(max, value));
+
+        const clampLat = (lat: number): number => clamp(lat, -90, 90);
+        const clampLng = (lng: number): number => clamp(lng, -180, 180);
+
+        const clampedNeCoords = [
+          clampLat(neCoords[0]),
+          clampLng(neCoords[1]),
+        ];
+        const clampedSwCoords = [
+          clampLat(swCoords[0]),
+          clampLng(swCoords[1]),
+        ];
+        const { data, error } = await supabase.rpc("filter_by_polygon", {
+          sw_lng: clampedSwCoords[1],
+          sw_lat: clampedSwCoords[0],
+          ne_lng: clampedNeCoords[1],
+          ne_lat: clampedNeCoords[0],
+        });
 
         if (error) {
-            console.error('Supabase error:', error);
-            return NextResponse.json(
-                { error: 'Database error' }, 
-                { status: 500 }
-            );
+          console.error("Supabase error:", error);
+          return NextResponse.json(
+            { error: "Database error" },
+            { status: 500 }
+          );
         }
 
         return NextResponse.json({ people: data });
-    } catch (err) {
-        console.error('Unexpected error:', err);
+      } catch (e) {
+        console.error("Error parsing coordinates:", e);
         return NextResponse.json(
-            { error: 'Internal server error' }, 
-            { status: 500 }
+          { error: "Invalid coordinate format or out-of-range values" },
+          { status: 400 }
         );
+      }
     }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Supabase error:", error);
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+
+    return NextResponse.json({ people: data });
+  } catch (err) {
+    console.error("Unexpected error:", err);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
 }

@@ -58,6 +58,7 @@ const ChildListings: React.FC<ChildListingsProps> = ({
       className="border"
       px={12}
       mt={4}
+      height={400}
       overflowY="auto"
     >
       <VStack align="stretch" pt={10}>

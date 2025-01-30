@@ -1,99 +1,95 @@
 "use client";
-import React, { useEffect, useRef } from "react";
-import mapboxgl from "mapbox-gl";
+import React from "react";
 import { Box } from "@chakra-ui/react";
-import "mapbox-gl/dist/mapbox-gl.css";
+import { MapContainer, TileLayer, Marker, useMap, Tooltip } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+const CustomIcon = L.icon({
+    iconUrl: "/CreatorSharePin.svg",
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+});
 
 interface ChildMapProps {
-  childData: {
-    id: string;
-    name: string;
-    location_geo: {
-      coordinates: [number, number];
-    };
-    image: string;
-    country: string;
-  }[];
-  onViewportChange: (bounds: { ne: number[]; sw: number[] }) => void;
-  onMarkerClick: (id: string) => void;
+    childData: {
+        id: string;
+        name: string;
+        location_geo: {
+            coordinates: [number, number];
+        };
+        image: string;
+        country: string;
+    }[];
+    onMarkerClick: (id: string) => void;
 }
+const FitBounds = ({ childData }: { childData: ChildMapProps["childData"] }) => {
+    const map = useMap();
+
+    React.useEffect(() => {
+        if (childData.length > 0) {
+            const bounds = L.latLngBounds(
+                childData.map((child) => [
+                    child.location_geo.coordinates[1],
+                    child.location_geo.coordinates[0],
+                ])
+            );
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+    }, [childData, map]);
+
+    return null;
+};
+
 
 const ChildMap: React.FC<ChildMapProps> = ({
-  childData,
-  onMarkerClick,
-  onViewportChange,
+    childData,
+    onMarkerClick,
 }) => {
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<mapboxgl.Map | null>(null);
+    const countries = React.useMemo(() =>
+        childData.reduce((acc, child) => {
+            if (!acc[child.country]) {
+                acc[child.country] = [];
+            }
+            acc[child.country].push(child);
+            return acc;
+        }, {} as Record<string, typeof childData>)
+        , [childData]);
 
-  useEffect(() => {
-    if (!mapContainer.current) return;
+    return (
+        <Box className="h-[571px] w-full mb-8 rounded-2xl">
+            <MapContainer
+                center={[0, 0]}
+                zoom={2}
+                scrollWheelZoom={false}
+                className="h-full w-full rounded-2xl"
+            >
+                <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
 
-    mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN!;
-
-    const map = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: "mapbox://styles/mapbox/streets-v11", // Updated style
-      center: [0, 0],
-      zoom: 2,
-    });
-
-    mapInstance.current = map;
-
-    const countries = childData.reduce((acc, child) => {
-      if (!acc[child.country]) {
-        acc[child.country] = child;
-      }
-      return acc;
-    }, {} as Record<string, typeof childData[0]>);
-
-    Object.values(countries).forEach((countryRepresentative) => {
-      const coordinates = countryRepresentative.location_geo.coordinates;
-
-      if (!Array.isArray(coordinates) || coordinates.length < 2) {
-        console.error(
-          `Invalid coordinates for ${countryRepresentative.country}:`,
-          coordinates
-        );
-        return;
-      }
-
-      const [lng, lat] = coordinates;
-
-      const markerElement = document.createElement("div");
-      markerElement.style.backgroundImage = "url('/CreatorSharePin.svg')";
-      markerElement.style.backgroundSize = "contain";
-      markerElement.style.width = "40px";
-      markerElement.style.height = "40px";
-      markerElement.style.cursor = "pointer";
-      markerElement.style.backgroundRepeat = "no-repeat";
-
-
-      markerElement.addEventListener("click", (event) => {
-        event.stopPropagation();
-        onMarkerClick(countryRepresentative.id);
-      });
-
-      new mapboxgl.Marker({ element: markerElement })
-        .setLngLat([lng, lat])
-        .addTo(map);
-    });
-
-    if (childData.length > 0) {
-      const bounds = new mapboxgl.LngLatBounds();
-      childData.forEach((child) => {
-        bounds.extend(child.location_geo.coordinates);
-      });
-      map.fitBounds(bounds, { padding: 50 });
-    }
-
-    return () => {
-      map.remove();
-      mapInstance.current = null;
-    };
-  }, [childData, onMarkerClick, onViewportChange]);
-
-  return <Box ref={mapContainer} className="h-[571px] w-full mb-8 rounded-2xl" />;
+                {Object.entries(countries).map(([country, children]) => (
+                    <Marker
+                        key={children[0].id}
+                        position={[
+                            children[0].location_geo.coordinates[1],
+                            children[0].location_geo.coordinates[0],
+                        ]}
+                        icon={CustomIcon}
+                        eventHandlers={{
+                            click: () => onMarkerClick(children[0].id),
+                        }}
+                    >
+                        <Tooltip>
+                            {country} - {children.length} children
+                        </Tooltip>
+                    </Marker>
+                ))}
+                <FitBounds childData={childData} />
+            </MapContainer>
+        </Box>
+    );
 };
 
 export default ChildMap;
