@@ -9,7 +9,7 @@ export async function POST(req: Request) {
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      mode: "subscription", // Change to "payment" if it's a one-time charge
+      mode: "subscription",
       line_items: [
         {
           price_data: {
@@ -17,14 +17,14 @@ export async function POST(req: Request) {
             product_data: {
               name: `Sponsorship for ${childName}`,
             },
-            unit_amount: 3900, // $39 in cents
+            unit_amount: 3900,
             recurring: { interval: "month" },
           },
           quantity: 1,
         },
       ],
-      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/cancel`,
+      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/cancel`,
     });
 
     return NextResponse.json({ url: session.url });
