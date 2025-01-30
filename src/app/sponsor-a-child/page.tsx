@@ -74,8 +74,8 @@ const SponsorChild = () => {
   }
 
   return (
-    <Box className="flex flex-col items-center justify-center" px={32} py={16}>
-      <Box className="justify-center items-center text-center px-[16rem]" mb={16}>
+    <Box className="flex flex-col items-center justify-center" px={{base:4, md: 32}} py={{base:12, md:16}}>
+      <Box className="justify-center items-center text-center md:px-[16rem]" mb={16}>
         <Text color="#1C3C8C" fontWeight="semibold" fontSize={{ base: "2xl", md: "4xl" }} mb={4}>
           Sponsoring a Child with Creator Share
         </Text>
