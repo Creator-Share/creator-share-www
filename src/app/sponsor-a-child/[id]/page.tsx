@@ -2,16 +2,14 @@
 import React, { useEffect, useState } from "react";
 import { Box, Flex, Text, Spinner, Button, Heading } from "@chakra-ui/react";
 import { People } from "@/types";
-import { useRouter } from "next/navigation";
 import ChildCard from "../components/ChildCard";
-import { RiArrowGoBackLine } from "react-icons/ri";
+import GoBackButton from "@/components/ui/goBack";
 
 const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
   const { id } = React.use(params);
   const [child, setChild] = useState<People | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
     const fetchChild = async () => {
@@ -59,14 +57,8 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
   }
 
   return (
-    <Box px={32} py={16}>
-      <Button
-        mb={4}
-        colorScheme="blue"
-        onClick={() => router.back()}
-      >
-        <RiArrowGoBackLine /> Go Back
-      </Button>
+    <Box className="md:px-36 p-8">
+      <GoBackButton />
       <Text fontSize="2xl" fontWeight="bold" mb={4}>
         Details
       </Text>
@@ -76,7 +68,7 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
         bg="white"
         borderRadius="lg"
         mx="auto"
-        className="flex flex-row"
+        className="flex flex-col md:flex-row"
       >
         <Box mr="8">
           <Text fontSize="xl" fontWeight="semibold" mb={4} color="#1C3C8C">

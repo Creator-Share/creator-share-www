@@ -7,12 +7,13 @@ import { People } from "@/types";
 import { useRouter } from "next/navigation";
 import { calculateAge } from "@/utils/ageCalculator";
 import { formatDate } from "@/utils/dateFormatter";
+
 interface ChildCardProps {
     people: People;
     isSelected?: boolean;
     id: string;
-  }
-  
+}
+
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const router = useRouter();
 
@@ -25,66 +26,66 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
 
     return (
         <Flex
-            mb={6}
-            border="1px"
+            direction={{ base: "column", md: "row" }}
+            align={{ base: "center", md: "flex-start" }}
+            textAlign={{ base: "center", md: "left" }}
+            borderWidth="1px"
             borderColor={isSelected ? "blue.500" : "gray.200"}
-            borderWidth={isSelected ? "2px" : "1px"}
-            borderRadius="md"
-            boxShadow="xs"
+            borderRadius={{ base: 'lg', md: 'md' }}
+            boxShadow="sm"
+            className="bg-white shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-6 mb-6 md:p-0 md:mb-0 "
             onClick={handleNavigateChild}
-            cursor="pointer"
         >
-            {/* Photo */}
-            <Image
-                src={people.image}
-                alt={people.name}
-                p={0}
-                boxSize="120px"
-                objectFit="cover"
-                borderRadius="md"
-                mr={6}
-                width={273}
-                height={273}
-            />
+            <Box>
+                <Image
+                    src={people.image}
+                    alt={people.name}
+                    boxSize={{ base: "150px", md: "273px" }}
+                    objectFit="cover"
+                    borderRadius={{ base: "full", md: "md" }}
+                    className="mb-4 md:mb-0"
+                />
+            </Box>
+            <Box className="md:grid md:grid-cols-2 md:py-[20px]">
+                <Box ml={{ md: 6 }} w="full">
+                    <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">
+                        {people.name}
+                    </Text>
+                    <Box fontSize="base" className="text-[#767070]">
+                        <Flex justify={{ base: "center", md: "flex-start" }} align="center" gap={2} mb={4}>
+                            <FaCalendar/>
+                            <Text fontSize="sm" className="text-gray-500">
+                                {formattedBirthDate} | {age} years old
+                            </Text>
+                        </Flex>
+                        <Flex justify={{ base: "center", md: "flex-start" }} align="center" gap={2} mb={4}>
+                            <FaLocationDot/>
+                            <Text fontSize="sm" className="text-gray-500">
+                                {people.country}
+                            </Text>
+                        </Flex>
+                    </Box>
 
-            {/* Details */}
-            <Box flex="1" mt={4}>
-                <Text fontSize="4xl" fontWeight="semibold" mb={4}>
-                    {people.name}
-                </Text>
-                <Box display="flex" alignItems="center" gap={2} mb={4}>
-                    <FaCalendar className="text-[#1C3C8C]" />
-                    <Text fontSize="sm" color="gray.500">
-                        {formattedBirthDate} | {age} years old
-                    </Text>
                 </Box>
-                <Box display="flex" alignItems="center" gap={2} mb={2}>
-                    <FaLocationDot className="text-[#1C3C8C]" />
-                    <Text fontSize="sm" color="gray.500">
-                        {people.country}
+                <Box className="md:ml-14">
+                    <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
+                        Bio
                     </Text>
+                    <Box fontSize="base">
+                        <Text className="text-[#767070] mb-4">
+                            {people.biography}
+                        </Text>
+                        <Text fontWeight="md" className="text-[#1C3C8C] cursor-pointer hover:underline">
+                            Learn more about {people.name}
+                        </Text>
+                    </Box>
                 </Box>
                 <Button
                     mt={4}
-                    className="bg-[#1C3C8C] text-white font-semibold text-base"
-                    px={4}
-                    py={2}
+                    className="bg-[#1C3C8C] hover:bg-blue-800 text-white font-semibold text-base rounded-[4px] px-[18px] w-1/2 py-3 md:ml-6"
                 >
                     Sponsor
                 </Button>
-            </Box>
-
-            {/* Bio */}
-            <Box flex="2" ml={6} mt={4}>
-                <Text fontSize="4xl" fontWeight="semibold" mb={4}>
-                    Bio
-                </Text>
-                <Text fontSize="sm" mb={4}>
-                    {people.biography}
-                </Text>
-                <Text mt={2} fontSize="sm" color="blue.500">
-                    Learn more about {people.name}
-                </Text>
             </Box>
         </Flex>
     );
