@@ -37,8 +37,8 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
   };
 
   return (
-    <Box className="border" width="100%" py={6} px={12}>
-      <Flex align="center" gap={4}>
+    <Box className="border" width="100%" py={6} px={{base:3 ,md:12}}>
+      <Flex align="center" className="flex-col" gap={4}>
         <SelectRoot
           collection={genders}
           onValueChange={(value) =>
@@ -50,7 +50,7 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
           py={2}
         >
           <SelectTrigger>
-            <SelectValueText placeholder="Select gender" />
+            <SelectValueText placeholder="Select Gender" />
           </SelectTrigger>
           <SelectContent>
             {genders.items.map((gender) => (
@@ -81,7 +81,7 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
             ))}
           </SelectContent>
         </SelectRoot>
-        <Button onClick={handleFilterChange} className="bg-[#1C3C8C] text-base font-semibold text-[#F8FAFC]" px={4} py={6}>
+        <Button onClick={handleFilterChange} className="bg-[#1C3C8C] w-full text-base font-semibold text-[#F8FAFC]" px={4} py={6}>
           Clear Filter
         </Button>
       </Flex>
