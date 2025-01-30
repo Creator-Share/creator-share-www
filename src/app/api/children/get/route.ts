@@ -8,9 +8,7 @@ export async function GET(req: Request) {
   try {
     const query = supabase
       .from("people")
-      .select(
-        "id, name, image, location_geo, birth_date, country, location_str"
-      );
+      .select("id, name, image, location_geo, birth_date, country, location_str");
 
     const ne = searchParams.get("ne");
     const sw = searchParams.get("sw");
@@ -26,14 +24,9 @@ export async function GET(req: Request) {
         const clampLat = (lat: number): number => clamp(lat, -90, 90);
         const clampLng = (lng: number): number => clamp(lng, -180, 180);
 
-        const clampedNeCoords = [
-          clampLat(neCoords[0]),
-          clampLng(neCoords[1]),
-        ];
-        const clampedSwCoords = [
-          clampLat(swCoords[0]),
-          clampLng(swCoords[1]),
-        ];
+        const clampedNeCoords = [clampLat(neCoords[0]), clampLng(neCoords[1])];
+        const clampedSwCoords = [clampLat(swCoords[0]), clampLng(swCoords[1])];
+
         const { data, error } = await supabase.rpc("filter_by_polygon", {
           sw_lng: clampedSwCoords[1],
           sw_lat: clampedSwCoords[0],
@@ -43,10 +36,7 @@ export async function GET(req: Request) {
 
         if (error) {
           console.error("Supabase error:", error);
-          return NextResponse.json(
-            { error: "Database error" },
-            { status: 500 }
-          );
+          return NextResponse.json({ error: "Database error" }, { status: 500 });
         }
 
         return NextResponse.json({ people: data });

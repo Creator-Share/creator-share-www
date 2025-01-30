@@ -1,11 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  Box,
-  Button,
-  Flex,
-} from "@chakra-ui/react";
+import { Box, Flex, Button } from "@chakra-ui/react";
 import {
   SelectRoot,
   SelectTrigger,
@@ -13,7 +9,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import {  genders, ageOptions } from "./config";
+import { genders, ageOptions } from "./config";
 
 interface FiltersProps {
   onFilterChange: (filters: {
@@ -22,35 +18,53 @@ interface FiltersProps {
   }) => void;
 }
 
-
-
 const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
   const [selectedGender, setSelectedGender] = useState<string>("");
   const [selectedAge, setSelectedAge] = useState<string>("");
 
+  const handleFilterChange = (updatedFilters: { gender?: string; age?: string }) => {
+    setSelectedGender(updatedFilters.gender ?? selectedGender);
+    setSelectedAge(updatedFilters.age ?? selectedAge);
 
-  const handleFilterChange = () => {
-    onFilterChange({
-      gender: selectedGender,
-      age: selectedAge,
-    });
+    const filters = {
+      gender: updatedFilters.gender ?? selectedGender,
+      age: updatedFilters.age ?? selectedAge,
+    };
+
+    console.log("Filters Applied:", filters);
+    onFilterChange(filters);
+  };
+
+  const handleClearFilters = () => {
+    setSelectedGender(""); // Reset gender
+    setSelectedAge(""); // Reset age
+
+    console.log("Filters Cleared");
+    onFilterChange({ gender: "", age: "" }); // Notify parent that filters are cleared
   };
 
   return (
-    <Box className="border" width="100%" py={6} px={{base:3 ,md:12}}>
-      <Flex align="center" className="flex-col" gap={4}>
+    <Box className="border" width="100%" py={6} px={{ base: 3, md: 12 }}>
+      <Flex align="center" className="flex-col md:flex-row" gap={4}>
+        {/* Gender Selector */}
         <SelectRoot
           collection={genders}
-          onValueChange={(value) =>
-            setSelectedGender(Array.isArray(value) ? value[0] : value)
-          }
+          onValueChange={(value) => {
+            let extractedValue = "";
+            if (value && typeof value === "object" && "value" in value) {
+              extractedValue = Array.isArray(value.value) ? value.value[0] : value.value;
+            }
+            handleFilterChange({ gender: extractedValue });
+          }}
           size="sm"
           className="border rounded-lg"
           px={4}
           py={2}
         >
           <SelectTrigger>
-            <SelectValueText placeholder="Select Gender" />
+            <SelectValueText placeholder="Select Gender">
+              {() => selectedGender || "Select Gender"}
+            </SelectValueText>
           </SelectTrigger>
           <SelectContent>
             {genders.items.map((gender) => (
@@ -60,18 +74,26 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
             ))}
           </SelectContent>
         </SelectRoot>
+
+        {/* Age Selector */}
         <SelectRoot
           collection={ageOptions}
-          onValueChange={(value) =>
-            setSelectedAge(Array.isArray(value) ? value[0] : value)
-          }
+          onValueChange={(value) => {
+            let extractedValue = "";
+            if (value && typeof value === "object" && "value" in value) {
+              extractedValue = Array.isArray(value.value) ? value.value[0] : value.value;
+            }
+            handleFilterChange({ age: extractedValue });
+          }}
           size="sm"
           className="border rounded-lg"
           px={4}
           py={2}
         >
           <SelectTrigger>
-            <SelectValueText placeholder="Select Age" />
+            <SelectValueText placeholder="Select Age">
+              {() => selectedAge || "Select Age"}
+            </SelectValueText>
           </SelectTrigger>
           <SelectContent>
             {ageOptions.items.map((age) => (
@@ -81,7 +103,12 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
             ))}
           </SelectContent>
         </SelectRoot>
-        <Button onClick={handleFilterChange} className="bg-[#1C3C8C] w-full text-base font-semibold text-[#F8FAFC]" px={4} py={6}>
+        <Button
+          onClick={handleClearFilters}
+          className="bg-[#1C3C8C] text-base font-semibold text-[#F8FAFC]"
+          px={4}
+          py={6}
+        >
           Clear Filter
         </Button>
       </Flex>

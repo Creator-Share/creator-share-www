@@ -1,8 +1,9 @@
 "use client";
+
 import dynamic from "next/dynamic";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { Box, Flex, Text, Spinner } from "@chakra-ui/react";
-import Filters from "@/app/sponsor-a-child/components/Filters";
+import Filters from "./components/Filters";
 import ChildListings from "./components/ChildListings";
 import { People } from "@/types";
 
@@ -21,16 +22,23 @@ const SponsorChild = () => {
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ age: "", gender: "" });
 
-  const fetchChildren = useCallback(async () => {
+  const fetchChildren = async (filters: Filters) => {
     setLoading(true);
     setError(null);
 
     try {
+      let endpoint = "/api/children/get";
       const queryParams = new URLSearchParams();
-      if (filters.age) queryParams.append("location", filters.age);
-      if (filters.gender) queryParams.append("gender", filters.gender);
 
-      const res = await fetch(`/api/children/get?${queryParams.toString()}`);
+      if (filters.gender || filters.age) {
+        endpoint = "/api/children/getByAgeAndGender";
+        if (filters.gender) queryParams.append("gender", filters.gender);
+        if (filters.age) queryParams.append("age", filters.age);
+      }
+
+      console.log("Query params sent to API:", queryParams.toString());
+
+      const res = await fetch(`${endpoint}?${queryParams.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch children data");
 
       const data = await res.json();
@@ -41,11 +49,16 @@ const SponsorChild = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  };
+
+
 
   useEffect(() => {
-    fetchChildren();
-  }, [filters, fetchChildren]);
+    console.log("Filters state updated:", filters);
+    fetchChildren(filters);
+  }, [filters]);
+
+
 
   const handleMarkerClick = (id: string) => {
     setSelectedChildId(id);
@@ -74,7 +87,7 @@ const SponsorChild = () => {
   }
 
   return (
-    <Box className="flex flex-col items-center justify-center" px={{base:4, md: 32}} py={{base:12, md:16}}>
+    <Box className="flex flex-col items-center justify-center" px={{ base: 4, md: 32 }} py={{ base: 12, md: 16 }}>
       <Box className="justify-center items-center text-center md:px-[16rem]" mb={16}>
         <Text color="#1C3C8C" fontWeight="semibold" fontSize={{ base: "2xl", md: "4xl" }} mb={4}>
           Sponsoring a Child with Creator Share
@@ -97,7 +110,19 @@ const SponsorChild = () => {
           </Text>
         </Box>
       )}
-      <Filters onFilterChange={(newFilters) => setFilters(newFilters)} />
+      <Filters
+        onFilterChange={(newFilters) => {
+          setFilters((prev) => {
+            const updatedFilters = {
+              ...prev,
+              ...newFilters,
+            };
+
+            console.log("Updated Filters:", updatedFilters);
+            return updatedFilters;
+          });
+        }}
+      />
       <ChildListings peopleData={childrenData} selectedChildId={selectedChildId} selectedCountry={selectedCountry} />
     </Box>
   );
