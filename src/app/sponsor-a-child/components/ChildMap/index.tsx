@@ -1,6 +1,6 @@
 "use client";
-import React from "react";
-import { Box } from "@chakra-ui/react";
+import React, { useState } from "react";
+import { Box, Button } from "@chakra-ui/react";
 import { MapContainer, TileLayer, Marker, useMap, Tooltip } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -23,6 +23,7 @@ interface ChildMapProps {
     }[];
     onMarkerClick: (id: string) => void;
 }
+
 const FitBounds = ({ childData }: { childData: ChildMapProps["childData"] }) => {
     const map = useMap();
 
@@ -35,33 +36,57 @@ const FitBounds = ({ childData }: { childData: ChildMapProps["childData"] }) => 
                 ])
             );
             map.fitBounds(bounds, { padding: [50, 50] });
+        } else {
+            map.setView([0, 0], 2);
         }
     }, [childData, map]);
 
     return null;
 };
 
+const ZoomController = () => {
+    const map = useMap();
+    const [showReset, setShowReset] = useState(false);
 
-const ChildMap: React.FC<ChildMapProps> = ({
-    childData,
-    onMarkerClick,
-}) => {
-    const countries = React.useMemo(() =>
-        childData.reduce((acc, child) => {
-            if (!acc[child.country]) {
-                acc[child.country] = [];
-            }
+    React.useEffect(() => {
+        const handleZoom = () => {
+            setShowReset(map.getZoom() > 2);
+        };
+
+        map.on("zoomend", handleZoom);
+        return () => {
+            map.off("zoomend", handleZoom);
+        };
+    }, [map]);
+
+    return showReset ? (
+        <Box position="absolute" top={4} right={4} zIndex={1000}>
+            <Button
+                size="sm"
+                className="bg-white px-8"
+                onClick={() => map.setView([0, 0], 2)}
+            >
+                View All Children
+            </Button>
+        </Box>
+    ) : null;
+};
+
+const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick }) => {
+    const countries = React.useMemo(() => {
+        return childData.reduce<Record<string, typeof childData>>((acc, child) => {
+            acc[child.country] = acc[child.country] || [];
             acc[child.country].push(child);
             return acc;
-        }, {} as Record<string, typeof childData>)
-        , [childData]);
+        }, {});
+    }, [childData]);
 
     return (
-        <Box className="h-[571px] w-full mb-8 rounded-2xl">
+        <Box className="h-[571px] w-full mb-8 rounded-2xl relative">
             <MapContainer
                 center={[0, 0]}
                 zoom={2}
-                scrollWheelZoom={false}
+                scrollWheelZoom={true}
                 className="h-full w-full rounded-2xl"
             >
                 <TileLayer
@@ -81,12 +106,14 @@ const ChildMap: React.FC<ChildMapProps> = ({
                             click: () => onMarkerClick(children[0].id),
                         }}
                     >
-                        <Tooltip>
+                        <Tooltip direction="top">
                             {country} - {children.length} children
                         </Tooltip>
                     </Marker>
                 ))}
+
                 <FitBounds childData={childData} />
+                <ZoomController /> {/* Adds the zoom reset button */}
             </MapContainer>
         </Box>
     );

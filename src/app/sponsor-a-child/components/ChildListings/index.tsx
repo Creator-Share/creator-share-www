@@ -16,51 +16,33 @@ const ChildListings: React.FC<ChildListingsProps> = ({
   selectedCountry
 }) => {
   const [visiblePeople, setVisiblePeople] = useState<People[]>([]);
-  const [loadedCount, setLoadedCount] = useState(2);
+  const [loadedCount, setLoadedCount] = useState(4);
 
   const handleScroll = useCallback(() => {
-    const scrollableDiv = document.getElementById("scrollable-box");
-    if (scrollableDiv) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollableDiv;
-      if (scrollTop + clientHeight >= scrollHeight - 5) {
-        setLoadedCount((prevCount) => Math.min(prevCount + 2, peopleData.length));
-      }
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 10) {
+      setLoadedCount((prevCount) => Math.min(prevCount + 2, peopleData.length));
     }
   }, [peopleData.length]);
 
   useEffect(() => {
+    let filteredPeople = peopleData;
+
     if (selectedCountry) {
-      const filteredPeople = peopleData.filter(person => person.country === selectedCountry);
-      setVisiblePeople(filteredPeople.slice(0, loadedCount));
-    } else {
-      setVisiblePeople([]);
+      filteredPeople = peopleData.filter(person => person.country === selectedCountry);
     }
+
+    setVisiblePeople(filteredPeople.slice(0, loadedCount));
   }, [peopleData, selectedCountry, loadedCount]);
 
   useEffect(() => {
-    const scrollableDiv = document.getElementById("scrollable-box");
-    if (scrollableDiv) {
-      scrollableDiv.addEventListener("scroll", handleScroll);
-    }
+    window.addEventListener("scroll", handleScroll);
     return () => {
-      if (scrollableDiv) {
-        scrollableDiv.removeEventListener("scroll", handleScroll);
-      }
+      window.removeEventListener("scroll", handleScroll);
     };
   }, [handleScroll]);
 
-  if (!selectedCountry) return null;
-
   return (
-    <Box
-      id="scrollable-box"
-      width="100%"
-      className="border"
-      px={{ base:3, md:12}}
-      mt={4}
-      height={400}
-      overflowY="auto"
-    >
+    <Box width="100%" className="border" px={{ base:3, md:12}} mt={4}>
       <VStack align="stretch" pt={10}>
         {visiblePeople.map((people) => (
           <ChildCard 
