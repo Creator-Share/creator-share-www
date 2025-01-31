@@ -43,7 +43,6 @@ interface ChildMapProps {
   onBoundsChange: (bounds: LatLngBounds) => void;
 }
 
-// Handles map bounds updates
 const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void }> = ({ onBoundsChange }) => {
   const map = useMap();
 
@@ -64,7 +63,6 @@ const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void
   return null;
 };
 
-// Automatically fits bounds to include all markers
 const FitBounds: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childData }) => {
   const map = useMap();
 
@@ -78,14 +76,13 @@ const FitBounds: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childD
       );
       map.fitBounds(bounds, { padding: [50, 50] });
     } else {
-      map.setView([0, 0], 2); // Default view for empty data
+      map.setView([0, 0], 2);
     }
   }, [childData, map]);
 
   return null;
 };
 
-// Controls the zoom reset button
 const ZoomController: React.FC = () => {
   const map = useMap();
   const [showReset, setShowReset] = useState(false);
@@ -117,7 +114,6 @@ const ZoomController: React.FC = () => {
 const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsChange }) => {
   const [isReady, setIsReady] = useState(false);
 
-  // Ensure Leaflet logic only runs on the client
   useEffect(() => {
     if (typeof window !== "undefined") {
       setIsReady(true);
