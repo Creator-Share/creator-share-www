@@ -15,12 +15,21 @@ interface Filters {
 }
 
 const SponsorChild = () => {
+  const [L, setL] = useState<typeof import("leaflet") | null>(null); // Store Leaflet dynamically
   const [childrenData, setChildrenData] = useState<People[]>([]);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [visibleChildren, setVisibleChildren] = useState<People[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
-  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ age: "", gender: "" });
+
+  // Dynamically import Leaflet on client-side
+  useEffect(() => {
+    import("leaflet").then((module) => {
+      setL(module);
+    });
+  }, []);
 
   const fetchChildren = async (filters: Filters) => {
     setLoading(true);
@@ -36,29 +45,32 @@ const SponsorChild = () => {
         if (filters.age) queryParams.append("age", filters.age);
       }
 
-      console.log("Query params sent to API:", queryParams.toString());
-
       const res = await fetch(`${endpoint}?${queryParams.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch children data");
 
       const data = await res.json();
       setChildrenData(data.people || []);
+      setVisibleChildren(data.people || []);
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : "Unexpected error occurred";
-      setError(errorMsg);
+      setError(err instanceof Error ? err.message : "Unexpected error occurred");
     } finally {
       setLoading(false);
     }
   };
 
-
-
   useEffect(() => {
-    console.log("Filters state updated:", filters);
     fetchChildren(filters);
   }, [filters]);
 
-
+  const handleBoundsChange = (bounds: L.LatLngBounds) => {
+    if (!L) return; // Ensure Leaflet is loaded before using it
+    const filtered = childrenData.filter((child) => {
+      const [lng, lat] = child.location_geo.coordinates;
+      return bounds.contains(L.latLng(lat, lng));
+    });
+    setVisibleChildren(filtered);
+  };
+  
 
   const handleMarkerClick = (id: string) => {
     setSelectedChildId(id);
@@ -88,21 +100,11 @@ const SponsorChild = () => {
 
   return (
     <Box className="flex flex-col items-center justify-center" px={{ base: 4, md: 32 }} py={{ base: 12, md: 16 }}>
-      <Box className="justify-center items-center text-center md:px-[16rem]" mb={16}>
-        <Text color="#1C3C8C" fontWeight="semibold" fontSize={{ base: "2xl", md: "4xl" }} mb={4}>
-          Sponsoring a Child with Creator Share
-        </Text>
-        <Text fontSize="base" color="gray.700" lineHeight="1.8">
-          Sponsoring a child is a personal way to show God&apos;s love to a child in
-          need. For{" "}
-          <Text as="span" fontWeight="bold" color="black">
-            $39 a month
-          </Text>
-          , you&apos;ll help that child and other vulnerable children in their
-          community to stand tall, free from poverty.
-        </Text>
-      </Box>
-      <ChildMap childData={childrenData} onMarkerClick={handleMarkerClick} />
+      <ChildMap
+        childData={childrenData}
+        onMarkerClick={handleMarkerClick}
+        onBoundsChange={handleBoundsChange}
+      />
       {selectedCountry && (
         <Box width="100%">
           <Text mb={8} mt={5} fontSize="4xl" color="#1C3C8C" fontWeight="semibold" textAlign="left">
@@ -111,19 +113,9 @@ const SponsorChild = () => {
         </Box>
       )}
       <Filters
-        onFilterChange={(newFilters) => {
-          setFilters((prev) => {
-            const updatedFilters = {
-              ...prev,
-              ...newFilters,
-            };
-
-            console.log("Updated Filters:", updatedFilters);
-            return updatedFilters;
-          });
-        }}
+        onFilterChange={(newFilters) => setFilters((prev) => ({ ...prev, ...newFilters }))}
       />
-      <ChildListings peopleData={childrenData} selectedChildId={selectedChildId} selectedCountry={selectedCountry} />
+      <ChildListings peopleData={visibleChildren} selectedChildId={selectedChildId} selectedCountry={selectedCountry} />
     </Box>
   );
 };

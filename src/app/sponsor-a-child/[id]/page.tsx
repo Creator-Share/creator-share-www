@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { Box, Flex, Text, Spinner, Heading} from "@chakra-ui/react";
 import { People } from "@/types";
-import ChildCard from "../components/ChildCard";
+import ChildDetailsCard from "../components/ChildDetails";
 import GoBackButton from "@/components/ui/goBack";
 
 const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
@@ -62,7 +62,7 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
       <Text fontSize="2xl" fontWeight="bold" mb={4}>
         Details
       </Text>
-      <ChildCard id={child.id} people={child} />
+      <ChildDetailsCard id={child.id} people={child} />
       <Box
         p={6}
         bg="white"

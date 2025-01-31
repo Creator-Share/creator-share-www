@@ -42,7 +42,7 @@ const ChildListings: React.FC<ChildListingsProps> = ({
   }, [handleScroll]);
 
   return (
-    <Box width="100%" className="border" px={{ base:3, md:12}} mt={4}>
+    <Box width="100%" className="border" px={{ base:3, md:8}} mt={4}>
       <VStack align="stretch" pt={10}>
         {visiblePeople.map((people) => (
           <ChildCard 

@@ -1,14 +1,11 @@
 "use client";
-import { useState } from "react";
-import { Box, Flex, Text, Image, Button, Input, InputAddon } from "@chakra-ui/react";
+import { Box, Flex, Text, Image } from "@chakra-ui/react";
 import { FaCalendar } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
 import { People } from "@/types";
 import { useRouter } from "next/navigation";
 import { calculateAge } from "@/utils/ageCalculator";
 import { formatDate } from "@/utils/dateFormatter";
-import { loadStripe } from "@stripe/stripe-js";
-import { Checkbox } from "@/components/ui/checkbox";
 
 interface ChildCardProps {
     people: People;
@@ -16,55 +13,11 @@ interface ChildCardProps {
     id: string;
 }
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string);
-
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const router = useRouter();
-    const [amount, setAmount] = useState<string>("");
-    const [selectedOption, setSelectedOption] = useState<string | null>(null);
 
     const handleNavigateChild = () => {
         router.push(`/sponsor-a-child/${people.id}`);
-    };
-
-    const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        if (/^\d*\.?\d*$/.test(value)) {
-            setAmount(value);
-        }
-    };
-
-    const handleSponsor = async () => {
-        if (!people || !amount || parseFloat(amount) <= 0) {
-            alert("Please enter a valid amount.");
-            return;
-        }
-
-        try {
-            const stripe = await stripePromise;
-            const res = await fetch("/api/stripe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    childId: people.id,
-                    childName: people.name,
-                    amount: parseFloat(amount) * 100,
-                    paymentType: selectedOption,
-                }),
-            });
-
-            const { url } = await res.json();
-            if (url) {
-                window.location.href = url;
-            }
-            console.log(stripe)
-        } catch (err) {
-            console.error("Payment Error:", err);
-        }
-    };
-
-    const handleCheckboxChange = (option: string) => {
-        setSelectedOption((prev) => (prev === option ? null : option));
     };
 
     const age = calculateAge(new Date(people.birth_date).toISOString());
@@ -111,46 +64,6 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                             </Text>
                         </Flex>
                     </Box>
-
-                    <Box className="mt-8 w-full" mb={4}>
-                        <Flex
-                            className="border rounded-lg"
-                            mb={4}
-                            align="center"
-                            justify="center"
-                            gap={2}
-                        >
-                            <InputAddon>
-                                $
-                            </InputAddon>
-                            <Input
-                                type="number"
-                                min="1"
-                                value={amount}
-                                onChange={handleAmountChange}
-                                className="px-4"
-                                placeholder="Enter Amount"
-                            />
-                        </Flex>
-                        <Flex justify="center" align="center" gap={8}>
-                            <Flex align="center" gap={2}>
-                                <Checkbox
-                                    className="border rounded-md border-[#8D9692]"
-                                    checked={selectedOption === "subscription"}
-                                    onChange={() => handleCheckboxChange("subscription")}
-                                />
-                                <Text>Monthly</Text>
-                            </Flex>
-                            <Flex align="center" gap={2}>
-                                <Checkbox
-                                    className="border rounded-md border-[#8D9692]"
-                                    checked={selectedOption === "payment"}
-                                    onChange={() => handleCheckboxChange("payment")}
-                                />
-                                <Text>One-time</Text>
-                            </Flex>
-                        </Flex>
-                    </Box>
                 </Box>
                 <Box className="md:ml-14">
                     <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
@@ -164,13 +77,6 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                             Learn more about {people.name}
                         </Text>
                     </Box>
-                    <Button
-                        mt={4}
-                        onClick={handleSponsor}
-                        className="bg-[#1C3C8C] hover:bg-blue-800 text-white font-semibold text-base rounded-[4px] px-[18px] w-2/3 py-3 md:ml-6"
-                    >
-                        Sponsor
-                    </Button>
                 </Box>
             </Box>
         </Flex>
