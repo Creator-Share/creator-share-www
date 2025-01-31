@@ -1,7 +1,8 @@
 "use client";
 import React, { useState } from "react";
 import { Box, Button } from "@chakra-ui/react";
-import { MapContainer, TileLayer, Marker, useMap, Tooltip } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-markercluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -23,6 +24,23 @@ interface ChildMapProps {
     }[];
     onMarkerClick: (id: string) => void;
 }
+
+// Custom cluster icon
+const createClusterCustomIcon = (cluster: any) => {
+    const count = cluster.getChildCount();
+    return L.divIcon({
+        html: `
+            <div style="position: relative; display: flex; align-items: center; justify-content: center;">
+                <img src="/CreatorSharePin.svg" alt="Cluster Icon" style="width: 40px; height: 40px;" />
+                <span style="position: absolute; top: 0; right: 0; background: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; font-weight: bold; color: black;">
+                    ${count}
+                </span>
+            </div>
+        `,
+        className: "custom-cluster-icon",
+        iconSize: [40, 40],
+    });
+};
 
 const FitBounds = ({ childData }: { childData: ChildMapProps["childData"] }) => {
     const map = useMap();
@@ -63,7 +81,7 @@ const ZoomController = () => {
         <Box position="absolute" top={4} right={4} zIndex={1000}>
             <Button
                 size="sm"
-                className="bg-white px-8"
+                className="bg-white text-dark px-8"
                 onClick={() => map.setView([0, 0], 2)}
             >
                 View All Children
@@ -73,14 +91,6 @@ const ZoomController = () => {
 };
 
 const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick }) => {
-    const countries = React.useMemo(() => {
-        return childData.reduce<Record<string, typeof childData>>((acc, child) => {
-            acc[child.country] = acc[child.country] || [];
-            acc[child.country].push(child);
-            return acc;
-        }, {});
-    }, [childData]);
-
     return (
         <Box className="h-[571px] w-full mb-8 rounded-2xl relative">
             <MapContainer
@@ -93,27 +103,32 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick }) => {
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-
-                {Object.entries(countries).map(([country, children]) => (
-                    <Marker
-                        key={children[0].id}
-                        position={[
-                            children[0].location_geo.coordinates[1],
-                            children[0].location_geo.coordinates[0],
-                        ]}
-                        icon={CustomIcon}
-                        eventHandlers={{
-                            click: () => onMarkerClick(children[0].id),
-                        }}
-                    >
-                        <Tooltip direction="top">
-                            {country} - {children.length} children
-                        </Tooltip>
-                    </Marker>
-                ))}
+                <MarkerClusterGroup
+                    chunkedLoading
+                    disableClusteringAtZoom={10}
+                    iconCreateFunction={createClusterCustomIcon}
+                >
+                    {childData.map((child) => (
+                        <Marker
+                            key={child.id}
+                            position={[
+                                child.location_geo.coordinates[1],
+                                child.location_geo.coordinates[0],
+                            ]}
+                            icon={CustomIcon}
+                            eventHandlers={{
+                                click: () => onMarkerClick(child.id),
+                            }}
+                        >
+                            <Tooltip direction="top">
+                                {child.name} - {child.country}
+                            </Tooltip>
+                        </Marker>
+                    ))}
+                </MarkerClusterGroup>
 
                 <FitBounds childData={childData} />
-                <ZoomController /> {/* Adds the zoom reset button */}
+                <ZoomController />
             </MapContainer>
         </Box>
     );
