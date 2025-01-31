@@ -9,8 +9,6 @@ const SuccessPage = () => {
 
   useEffect(() => {
     console.log("Payment successful!");
-
-    // Redirect after 3 seconds
     const timeout = setTimeout(() => {
       const peopleId = localStorage.getItem("sponsoredChildId");
       if (peopleId) {

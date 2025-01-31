@@ -1,12 +1,9 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { Box, Flex, Text, Spinner, Button, Heading } from "@chakra-ui/react";
+import { Box, Flex, Text, Spinner, Heading} from "@chakra-ui/react";
 import { People } from "@/types";
-import { loadStripe } from "@stripe/stripe-js";
 import ChildCard from "../components/ChildCard";
 import GoBackButton from "@/components/ui/goBack";
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string);
 
 const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
   const { id } = React.use(params);
@@ -58,28 +55,6 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
       </Flex>
     );
   }
-
-  const handleSponsor = async () => {
-    if (!child) return;
-
-    try {
-      const stripe = await stripePromise;
-      const res = await fetch("/api/stripe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ childId: child.id, childName: child.name }),
-      });
-
-      const { url } = await res.json();
-      if (url) {
-        window.location.href = url;
-      }
-
-      console.log(stripe)
-    } catch (err) {
-      console.error("Payment Error:", err);
-    }
-  };
 
   return (
     <Box className="md:px-36 p-8">
@@ -151,15 +126,6 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
           </video>
         </Box>
       </Box>
-
-      <Button
-          className="bg-[#1C3C8C] text-base font-semibold text-white"
-          w="full"
-          mt={6}
-          onClick={handleSponsor}
-        >
-          Sponsor {child.name}
-        </Button>
     </Box>
   );
 };

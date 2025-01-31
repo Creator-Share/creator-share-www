@@ -10,7 +10,6 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { genders, ageOptions } from "./config";
-// import { loadStripe } from '@stripe/stripe-js';
 
 interface FiltersProps {
   onFilterChange: (filters: {
@@ -19,9 +18,6 @@ interface FiltersProps {
   }) => void;
 }
 
-// const stripePromise = loadStripe(
-//   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-// );
 
 const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
   const [selectedGender, setSelectedGender] = useState<string>("");
@@ -41,11 +37,11 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
   };
 
   const handleClearFilters = () => {
-    setSelectedGender(""); // Reset gender
-    setSelectedAge(""); // Reset age
+    setSelectedGender("");
+    setSelectedAge("");
 
     console.log("Filters Cleared");
-    onFilterChange({ gender: "", age: "" }); // Notify parent that filters are cleared
+    onFilterChange({ gender: "", age: "" });
   };
 
   return (
