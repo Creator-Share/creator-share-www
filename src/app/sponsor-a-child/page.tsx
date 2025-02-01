@@ -70,7 +70,7 @@ const SponsorChild = () => {
     });
     setVisibleChildren(filtered);
   };
-  
+
 
   const handleMarkerClick = (id: string) => {
     setSelectedChildId(id);
@@ -100,6 +100,9 @@ const SponsorChild = () => {
 
   return (
     <Box className="flex flex-col items-center justify-center" px={{ base: 4, md: 32 }} py={{ base: 12, md: 16 }}>
+      <Filters
+        onFilterChange={(newFilters) => setFilters((prev) => ({ ...prev, ...newFilters }))}
+      />
       <ChildMap
         childData={childrenData}
         onMarkerClick={handleMarkerClick}
@@ -112,9 +115,6 @@ const SponsorChild = () => {
           </Text>
         </Box>
       )}
-      <Filters
-        onFilterChange={(newFilters) => setFilters((prev) => ({ ...prev, ...newFilters }))}
-      />
       <ChildListings peopleData={visibleChildren} selectedChildId={selectedChildId} selectedCountry={selectedCountry} />
     </Box>
   );

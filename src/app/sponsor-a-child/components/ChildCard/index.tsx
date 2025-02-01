@@ -1,5 +1,5 @@
 "use client";
-import { Box, Flex, Text, Image } from "@chakra-ui/react";
+import { Box, Flex, Text, Image, Button } from "@chakra-ui/react";
 import { FaCalendar } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
 import { People } from "@/types";
@@ -15,11 +15,9 @@ interface ChildCardProps {
 
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const router = useRouter();
-
     const handleNavigateChild = () => {
         router.push(`/sponsor-a-child/${people.id}`);
     };
-
     const age = calculateAge(new Date(people.birth_date).toISOString());
     const formattedBirthDate = formatDate(new Date(people.birth_date).toISOString());
 
@@ -33,7 +31,6 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
             borderRadius={{ base: 'lg', md: 'md' }}
             boxShadow="sm"
             className="bg-white shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-6 mb-6 md:p-0 md:mb-0 "
-            onClick={handleNavigateChild}
         >
             <Box>
                 <Image
@@ -70,12 +67,12 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                         Bio
                     </Text>
                     <Box fontSize="base" mb={3}>
-                        <Text className="text-[#767070] mb-4">
+                        <Text className="text-[#767070]">
                             {people.biography}
                         </Text>
-                        <Text fontWeight="md" className="text-[#1C3C8C] cursor-pointer hover:underline">
-                            Learn more about {people.name}
-                        </Text>
+                        <Button fontWeight="md" className="text-[#FFFFFF] cursor-pointer bg-[#1C3C8C] px-4" onClick={handleNavigateChild}>
+                            Sponsor {people.name}
+                        </Button>
                     </Box>
                 </Box>
             </Box>
