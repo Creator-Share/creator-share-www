@@ -15,7 +15,7 @@ interface Filters {
 }
 
 const SponsorChild = () => {
-  const [L, setL] = useState<typeof import("leaflet") | null>(null); // Store Leaflet dynamically
+  const [L, setL] = useState<typeof import("leaflet") | null>(null);
   const [childrenData, setChildrenData] = useState<People[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [visibleChildren, setVisibleChildren] = useState<People[]>([]);
@@ -23,8 +23,6 @@ const SponsorChild = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ age: "", gender: "" });
-
-  // Dynamically import Leaflet on client-side
   useEffect(() => {
     import("leaflet").then((module) => {
       setL(module);
@@ -63,7 +61,7 @@ const SponsorChild = () => {
   }, [filters]);
 
   const handleBoundsChange = (bounds: L.LatLngBounds) => {
-    if (!L) return; // Ensure Leaflet is loaded before using it
+    if (!L) return;
     const filtered = childrenData.filter((child) => {
       const [lng, lat] = child.location_geo.coordinates;
       return bounds.contains(L.latLng(lat, lng));

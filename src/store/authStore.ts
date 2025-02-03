@@ -1,40 +1,43 @@
 import { create } from "zustand";
 import { createClient } from "@/utils/supabase/client";
+import { AuthState } from "@/types";
 
-interface AuthState {
-  user: string | null;
-  registrationEmail: string | null;
-  logout: () => Promise<void>;
-  setRegistrationEmail: (email: string) => void;
-  clearRegistrationEmail: () => void;
-  fetchUser: () => Promise<void>;
-}
-const supabase = createClient()
+const supabase = createClient();
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  registrationEmail: null,
-logout: async () => {
-    try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-      });
+export const useAuthStore = create<AuthState>((set) => {
+  supabase.auth.onAuthStateChange((_, session) => {
+    set({ user: session?.user || null });
+  });
 
-      if (!response.ok) {
-        const result = await response.json();
-        console.error("Logout API Error:", result.error);
-        return;
+  return {
+    user: null,
+    registrationEmail: null,
+
+    logout: async () => {
+      try {
+        const response = await fetch("/api/auth/logout", { method: "POST" });
+        if (!response.ok) {
+          const result = await response.json();
+          console.error("Logout API Error:", result.error);
+          return;
+        }
+        set({ user: null });
+      } catch (error) {
+        console.error("Unexpected logout error:", error);
       }
-      set({ user: null });
-    } catch (error) {
-      console.error("Unexpected logout error:", error);
-    }
-  },
+    },
 
-  fetchUser: async () => {
-    const { data } = await supabase.auth.getUser();
-    set({ user: data.user?.email || null });
-  },
-  setRegistrationEmail: (email: string) => set({ registrationEmail: email }),
-  clearRegistrationEmail: () => set({ registrationEmail: null }),
-}));
+    fetchUser: async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error("Error fetching user:", error);
+        set({ user: null });
+      } else {
+        set({ user: data.user || null });
+      }
+    },
+
+    setRegistrationEmail: (email: string) => set({ registrationEmail: email }),
+    clearRegistrationEmail: () => set({ registrationEmail: null }),
+  };
+});

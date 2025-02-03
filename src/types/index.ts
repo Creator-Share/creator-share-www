@@ -1,3 +1,7 @@
+import { User } from "@supabase/supabase-js"; 
+
+
+
 type Geography = {
   coordinates: [number, number];
   type: 'Point';
@@ -29,4 +33,14 @@ export interface RoleAssignment {
   roles: {
     name: string;
   };
+}
+
+
+export interface AuthState {
+  user: User | null; // Update the type to match Supabase's User type
+  registrationEmail: string | null;
+  logout: () => Promise<void>;
+  setRegistrationEmail: (email: string) => void;
+  clearRegistrationEmail: () => void;
+  fetchUser: () => Promise<void>;
 }

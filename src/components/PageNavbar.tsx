@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import {
   Box,
   Flex,
@@ -11,7 +12,6 @@ import {
 } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { ColorModeButton } from "./ui/color-mode";
-import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
 
@@ -24,18 +24,14 @@ const Links = [
 ];
 
 export function PageNavbar() {
-  const [isScrolled, setIsScrolled] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const fetchUser = useAuthStore((state) => state.fetchUser);
   const router = useRouter();
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 0);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -47,6 +43,9 @@ export function PageNavbar() {
     console.log("User logged out, redirecting to /...");
     router.push("/");
   };
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <Box
@@ -54,7 +53,7 @@ export function PageNavbar() {
       top={0}
       zIndex={1000}
       transition="box-shadow 0.2s"
-      boxShadow={isScrolled ? "lg" : "none"}
+      boxShadow={window.scrollY > 0 ? "lg" : "none"}
       backdropFilter="blur(10px)"
     >
       <Container maxW="container.xl">
@@ -113,7 +112,7 @@ export function PageNavbar() {
                   <Button variant="ghost" size="sm" onClick={handleLogout}>
                     Logout
                   </Button>
-                  <Text fontSize="sm">{user}</Text>
+                  <Text fontSize="sm">{user.email}</Text>
                 </>
               ) : (
                 <>

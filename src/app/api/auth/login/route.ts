@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           message: "Login successful. Redirecting to /choose-dashboard.",
-          redirect: "/admin-panel/choose-dashboard",
+          redirect: "/admin/choose-dashboard",
         },
         { status: 200 }
       );

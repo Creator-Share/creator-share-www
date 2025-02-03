@@ -47,14 +47,16 @@ const Login = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-
+  
       if (!response.ok) {
         const errorData = await response.json();
         alert(errorData.error || "An unexpected error occurred");
         return;
       }
-
+  
       const result = await response.json();
+      await useAuthStore.getState().fetchUser();
+  
       const redirectUrl = result.redirect;
       router.push(redirectUrl);
     } catch (error) {
@@ -62,6 +64,7 @@ const Login = () => {
       console.error(error);
     }
   };
+  
 
   return (
     <Box className="flex flex-col items-center justify-center min-h-screen p-4">

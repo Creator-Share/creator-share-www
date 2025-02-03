@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 const DashboardOptions = () => {
     const router = useRouter();
     const handleNavigateAdmin = () => {
-        router.push('/admin-panel')
+        router.push('/admin')
     }
     const handleNavigateUser = () => {
         router.push('/')
