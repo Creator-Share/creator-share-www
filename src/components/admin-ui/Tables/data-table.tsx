@@ -1,4 +1,5 @@
 "use client";
+
 import * as React from "react";
 import {
   ColumnDef,
@@ -13,7 +14,6 @@ import {
   VisibilityState,
   Row,
 } from "@tanstack/react-table";
-
 import {
   Table,
   TableBody,
@@ -37,19 +37,10 @@ interface DataTableProps<TData, TValue> {
   getRowProps?: (row: Row<TData>) => React.HTMLAttributes<HTMLTableRowElement>;
   initialColumnVisibility?: VisibilityState;
 }
-export interface CustomColumnMeta {
-  [key: string]: unknown;
-}
-export type CustomColumnDef<TData, TValue> = ColumnDef<TData, TValue> & {
-  meta?: CustomColumnMeta;
-};
-
 const excludeFromFiltering = ["select", "actions"];
-const renderFilterInput = (id: string) => {
-  return !excludeFromFiltering.includes(id);
-};
+const renderFilterInput = (id: string) => !excludeFromFiltering.includes(id);
 const DEFAULT_TABLE_HEIGHT = "h-[80vh]";
-export type DataTableRef = React.ElementRef<typeof DataTable>;
+
 export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
   {
     columns,
@@ -86,15 +77,24 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
     },
     initialState: {
       columnVisibility: initialColumnVisibility,
+      pagination: { pageSize: 10 },
     },
   });
+
+  // Log pagination info for debugging:
+  console.log("Data length:", data.length);
+  console.log("Page count:", table.getPageCount());
+
+  // Reset to page 0 if data changes
+  React.useEffect(() => {
+    table.setPageIndex(0);
+  }, [data]);
 
   React.useImperativeHandle(ref, () => ({
     getTableInstance: () => table,
     getSelectedRowModel: () => table.getSelectedRowModel(),
   }));
 
-  
   return (
     <div className="flex flex-col h-full">
       {controls === "top" && (
@@ -112,23 +112,16 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
                   <TableHead key={header.id} className="text-center">
                     {header.isPlaceholder
                       ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
+                      : flexRender(header.column.columnDef.header, header.getContext())}
                     {renderFilterInput(header.id) && (
                       <div className="flex items-center py-4">
                         <Input
                           placeholder="Search..."
                           value={
-                            (table
-                              .getColumn(header.id)
-                              ?.getFilterValue() as string) ?? ""
+                            (table.getColumn(header.id)?.getFilterValue() as string) ?? ""
                           }
                           onChange={(event) =>
-                            table
-                              .getColumn(header.id)
-                              ?.setFilterValue(event.target.value)
+                            table.getColumn(header.id)?.setFilterValue(event.target.value)
                           }
                           className="max-w-sm"
                         />
@@ -140,8 +133,8 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
             ))}
           </TableHeader>
           <TableBody className="overflow-scroll h-full">
-            {table?.getRowModel()?.rows?.length ? (
-              table?.getRowModel()?.rows?.map((row) => (
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
@@ -153,20 +146,14 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
                       key={cell.id}
                       onClick={() => onRowClick && onRowClick(row.original, cell.column.columnDef)}
                     >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
+                <TableCell colSpan={columns.length} className="h-24 text-center">
                   No results.
                 </TableCell>
               </TableRow>

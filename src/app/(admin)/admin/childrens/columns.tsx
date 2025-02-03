@@ -54,7 +54,6 @@ export const columns: ColumnDef<People>[] = [
       const person = row.original;
       return (
         <div className="flex items-center justify-center" title={person.id}>
-          <p>{person.id}</p>
           <IoCopyOutline
             className="ml-1 h-4 w-4 cursor-pointer"
             onClick={() => navigator.clipboard.writeText(person.id)}
