@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { createClient } from "@/utils/supabase/client";
 import { AuthState } from "@/types";
+// Optionally, import the error class if available:
+// import { AuthSessionMissingError } from '@supabase/supabase-js';
 
 const supabase = createClient();
 
@@ -30,8 +32,12 @@ export const useAuthStore = create<AuthState>((set) => {
     fetchUser: async () => {
       const { data, error } = await supabase.auth.getUser();
       if (error) {
-        console.error("Error fetching user:", error);
-        set({ user: null });
+        if (error.message === "Auth session missing!") {
+          set({ user: null });
+        } else {
+          console.error("Error fetching user:", error);
+          set({ user: null });
+        }
       } else {
         set({ user: data.user || null });
       }

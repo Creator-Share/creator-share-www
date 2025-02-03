@@ -22,7 +22,7 @@ export async function POST(request: Request) {
           first_name,
           last_name,
         },
-        emailRedirectTo: `http://localhost:3000/main/onboarding`,
+        emailRedirectTo: `http://localhost:3000/app/main/onboarding`,
       },
     });
 
