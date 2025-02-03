@@ -188,7 +188,7 @@ interface PageTextProps extends TextProps {
 export const PaginationPageText = React.forwardRef<HTMLParagraphElement, PageTextProps>(
   function PaginationPageText(props, ref) {
     const { format = "compact", ...rest } = props;
-    const { page, count, pageRange, totalPages, /* count here can be total items if needed */ } = usePaginationContext();
+    const { page, count /* count here can be total items if needed */ } = usePaginationContext();
     // Use context values here or use our context (if provided via useRootProps)
     // For simplicity, assume useChakraPaginationContext returns page and totalPages:
     const content = React.useMemo(() => {

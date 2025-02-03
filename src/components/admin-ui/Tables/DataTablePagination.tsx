@@ -8,7 +8,6 @@ import {
     PaginationPrevTrigger,
     PaginationNextTrigger,
     PaginationItems,
-    PaginationPageText,
 } from "@/components/ui/pagination";
 
 interface DataTablePaginationProps<TData> {

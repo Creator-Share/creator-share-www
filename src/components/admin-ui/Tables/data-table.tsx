@@ -85,10 +85,6 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
   console.log("Data length:", data.length);
   console.log("Page count:", table.getPageCount());
 
-  // Reset to page 0 if data changes
-  React.useEffect(() => {
-    table.setPageIndex(0);
-  }, [data]);
 
   React.useImperativeHandle(ref, () => ({
     getTableInstance: () => table,
