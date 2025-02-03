@@ -27,7 +27,7 @@ export async function updateSession(request: NextRequest) {
   try {
     const { data } = await supabase.auth.getUser()
     user = data.user
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!(error instanceof AuthSessionMissingError)) {
       console.error("Error fetching user session:", error)
     }

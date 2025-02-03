@@ -22,6 +22,7 @@
     "@tanstack/react-table": "^8.20.6",
     "@types/leaflet": "^1.9.16",
     "@types/leaflet.markercluster": "^1.5.5",
+    "clsx": "^2.1.1",
     "dotenv": "^16.4.7",
     "leaflet": "^1.9.4",
     "lodash.debounce": "^4.0.8",
@@ -36,6 +37,7 @@
     "react-leaflet-markercluster": "^5.0.0-rc.0",
     "react-map-gl": "^7.1.9",
     "stripe": "^17.6.0",
+    "tailwind-merge": "^3.0.1",
     "zustand": "^5.0.3"
   },
   "devDependencies": {

@@ -1,8 +1,6 @@
 import { create } from "zustand";
 import { createClient } from "@/utils/supabase/client";
 import { AuthState } from "@/types";
-// Optionally, import the error class if available:
-// import { AuthSessionMissingError } from '@supabase/supabase-js';
 
 const supabase = createClient();
 

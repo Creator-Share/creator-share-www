@@ -6,12 +6,11 @@ type Geography = {
   coordinates: [number, number];
   type: 'Point';
 };
+
 export interface People {
     id: string;
     name: string;
     gender:string;
-    // location: string;
-    // age: number;
     birth_date: number;
     image: string;
     biography: string;
@@ -37,7 +36,7 @@ export interface RoleAssignment {
 
 
 export interface AuthState {
-  user: User | null; // Update the type to match Supabase's User type
+  user: User | null;
   registrationEmail: string | null;
   logout: () => Promise<void>;
   setRegistrationEmail: (email: string) => void;
