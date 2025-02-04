@@ -47,8 +47,20 @@ const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void
   const map = useMap();
 
   useEffect(() => {
+    const savedState = localStorage.getItem("mapState");
+    if (savedState) {
+      const { center, zoom } = JSON.parse(savedState);
+      map.setView(center, zoom);
+    }
     const updateBounds = () => {
       onBoundsChange(map.getBounds());
+      localStorage.setItem(
+        "mapState",
+        JSON.stringify({
+          center: map.getCenter(),
+          zoom: map.getZoom(),
+        })
+      );
     };
 
     map.on("moveend", updateBounds);
@@ -62,6 +74,7 @@ const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void
 
   return null;
 };
+
 
 const FitBounds: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childData }) => {
   const map = useMap();
