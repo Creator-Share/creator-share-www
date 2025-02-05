@@ -111,13 +111,14 @@ const ZoomController: React.FC = () => {
     };
   }, [map]);
 
+  const handleResetView = () => {
+    localStorage.removeItem("mapState");
+    map.setView([0, 0], 2);
+  };
+
   return showReset ? (
     <Box position="absolute" top={4} right={4} zIndex={1000}>
-      <Button
-        size="sm"
-        className="bg-white text-dark px-8"
-        onClick={() => map.setView([0, 0], 2)}
-      >
+      <Button size="sm" className="bg-white text-dark px-8" onClick={handleResetView}>
         View All Children
       </Button>
     </Box>
