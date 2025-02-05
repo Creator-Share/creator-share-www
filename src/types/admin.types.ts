@@ -13,7 +13,7 @@ export type People = {
     country: string;
     location_str: string;
     location_geo: Geography;
-    image: string;
+    image_url: string;
     gender: string;
   };
 

@@ -81,7 +81,6 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
     },
   });
 
-  // Log pagination info for debugging:
   console.log("Data length:", data.length);
   console.log("Page count:", table.getPageCount());
 

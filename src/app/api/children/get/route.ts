@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   try {
     const query = supabase
       .from("people")
-      .select("id, name, image, location_geo, birth_date, country, location_str, video");
+      .select("id, name, image_url, location_geo, birth_date, country, location_str, video_url");
 
     const ne = searchParams.get("ne");
     const sw = searchParams.get("sw");

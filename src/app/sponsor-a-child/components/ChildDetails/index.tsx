@@ -84,7 +84,7 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
         >
             <Box>
                 <Image
-                    src={people.image}
+                    src={people.image_url}
                     alt={people.name}
                     boxSize={{ base: "150px", md: "273px" }}
                     objectFit="cover"

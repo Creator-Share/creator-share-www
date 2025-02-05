@@ -108,7 +108,7 @@ const ChildListings: React.FC<ChildListingsProps> = ({
                   </Box>
                   <Box mt="12">
                     <video width="3000" height="56000" controls preload="none" className="border rounded-lg">
-                      <source src={people.video} type="video/mp4" />
+                      <source src={people.video_url} type="video/mp4" />
                     </video>
                   </Box>
                 </Box>

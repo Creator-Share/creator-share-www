@@ -12,7 +12,7 @@ export interface People {
     name: string;
     gender:string;
     birth_date: number;
-    image: string;
+    image_url: string;
     biography: string;
     country_group: string;
     time_in_site: string;
@@ -21,7 +21,7 @@ export interface People {
     status: string;
     country:string;
     location_geo: Geography;
-    video: string
+    video_url: string
   }
 
 export interface loginForm {

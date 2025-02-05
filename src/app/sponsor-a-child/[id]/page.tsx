@@ -4,8 +4,7 @@ import {
   Box,
   Flex,
   Text,
-  Spinner,
-  Heading,
+  Spinner
 } from "@chakra-ui/react";
 import { People } from "@/types";
 import ChildDetailsCard from "../components/ChildDetails";

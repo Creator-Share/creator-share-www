@@ -7,6 +7,7 @@ import MarkerClusterGroup from "react-leaflet-markercluster";
 import L, { LatLngBounds, MarkerCluster } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+
 const CustomIcon = L.icon({
   iconUrl: "/CreatorSharePin.svg",
   iconSize: [40, 40],
@@ -36,7 +37,7 @@ interface ChildMapProps {
     location_geo: {
       coordinates: [number, number];
     };
-    image: string;
+    image_url: string;
     country: string;
   }[];
   onMarkerClick: (id: string) => void;
@@ -154,9 +155,9 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
         maxBoundsViscosity={1.0}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+              attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
+              url={`https://api.maptiler.com/maps/basic-v2/{z}/{x}/{y}.png?key=Wm5rwQ7T3kAi2Z07eCBa&lang=en`}
+            />
 
         <MarkerClusterGroup chunkedLoading disableClusteringAtZoom={10} iconCreateFunction={createClusterCustomIcon}>
           {childData.map((child) => (
