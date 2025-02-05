@@ -14,9 +14,9 @@ const CustomIcon = L.icon({
 });
 
 const createClusterCustomIcon = (cluster: MarkerCluster): L.DivIcon => {
-    const count = cluster.getChildCount();
-    return L.divIcon({
-      html: `
+  const count = cluster.getChildCount();
+  return L.divIcon({
+    html: `
         <div style="position: relative; display: flex; align-items: center; justify-content: center;">
           <img src="/CreatorSharePin.svg" alt="Cluster Icon" style="width: 40px; height: 40px;" />
           <span style="position: absolute; top: 0; right: 0; background: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; font-weight: bold; color: black;">
@@ -24,10 +24,10 @@ const createClusterCustomIcon = (cluster: MarkerCluster): L.DivIcon => {
           </span>
         </div>
       `,
-      className: "custom-cluster-icon",
-      iconSize: [40, 40],
-    });
-  };
+    className: "custom-cluster-icon",
+    iconSize: [40, 40],
+  });
+};
 
 interface ChildMapProps {
   childData: {
@@ -140,7 +140,19 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
 
   return (
     <Box className="h-[571px] w-full mb-8 rounded-2xl relative">
-      <MapContainer center={[0, 0]} zoom={2} scrollWheelZoom className="h-full w-full rounded-2xl">
+      <MapContainer
+        center={[0, 0]}
+        zoom={2}
+        scrollWheelZoom
+        className="h-full w-full rounded-2xl"
+        minZoom={2}
+        maxZoom={18}
+        maxBounds={L.latLngBounds(
+          [-90, -180],
+          [90, 180]
+        )}
+        maxBoundsViscosity={1.0}
+      >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -167,6 +179,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
         <FitBounds childData={childData} />
         <ZoomController />
       </MapContainer>
+
     </Box>
   );
 };
