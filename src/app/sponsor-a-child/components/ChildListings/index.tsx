@@ -107,15 +107,8 @@ const ChildListings: React.FC<ChildListingsProps> = ({
                     </Text>
                   </Box>
                   <Box mt="12">
-                    <video width="3000" height="56000" controls preload="none">
-                      <source src="/path/to/video.mp4" type="video/mp4" />
-                      <track
-                        src="https://d4j0oemdjsbb4.cloudfront.net/child/video/221653-RTVW_20250116_103806_CGV_Web.mp4"
-                        kind="subtitles"
-                        srcLang="en"
-                        label="English"
-                      />
-                      Your browser does not support the video tag.
+                    <video width="3000" height="56000" controls preload="none" className="border rounded-lg">
+                      <source src={people.video} type="video/mp4" />
                     </video>
                   </Box>
                 </Box>
