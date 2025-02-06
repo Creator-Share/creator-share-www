@@ -66,6 +66,19 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                             </Text>
                         </Flex>
                     </Box>
+                    <Box mb={4}>
+                      <Box bg="gray.200" h="2px" w="full" borderRadius="full">
+                        <Box 
+                          bg="#1C3C8C" 
+                          h="2px" 
+                          w={`${(people.budget_raised / people.budget_goal) * 100}%`} 
+                          borderRadius="full"
+                        />
+                      </Box>
+                      <Text fontSize="sm" mt={1} className="text-gray-500">
+                        ${people.budget_raised/100} raised of ${people.budget_goal/100}
+                      </Text>
+                    </Box>
                     <Box fontSize="base" mb={3}>
                         <Button fontWeight="md" className="text-[#FFFFFF] cursor-pointer bg-[#1C3C8C] px-4" onClick={() => alert('connect to stripe')}>
                             Sponsor
