@@ -12,7 +12,7 @@ import {
   FileUploadRoot,
   FileUploadTrigger,
 } from "@/components/ui/file-upload"
-import { HiUpload } from "react-icons/hi"
+import { HiUpload } from "react-icons/hi";
 import {
   DrawerActionTrigger,
   DrawerBackdrop,
@@ -31,9 +31,10 @@ import { People } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import { GoPlusCircle } from "react-icons/go";
 import dynamic from "next/dynamic";
+// import EditDrawer from "./components/EditDrawer";
 
 const MapPicker = dynamic(() => import("./components/MapPicker"), { ssr: false });
-
+const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
 const ChildrenTable = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<People[]>([]);
@@ -52,6 +53,8 @@ const ChildrenTable = () => {
     image_url: "",
     video_url: ""
   });
+  const [selectedChild, setSelectedChild] = useState<People | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -110,45 +113,50 @@ const ChildrenTable = () => {
       console.error("Error: Missing required fields.");
       return;
     }
-  
+
     const uploadedImageUrl = imageFiles.length > 0 ? await uploadFileToSupabase(imageFiles[0], "images") : "";
     const uploadedVideoUrl = videoFiles.length > 0 ? await uploadFileToSupabase(videoFiles[0], "videos") : "";
-  
+
     const updatedFormData = {
       ...formData,
       image_url: uploadedImageUrl,
       video_url: uploadedVideoUrl,
     };
-  
+
     console.log("Submitting Data:", updatedFormData);
-  
+
     const supabase = createClient();
     const { error } = await supabase.from("people").insert([updatedFormData]);
-  
+
     if (error) {
       console.error("Error adding child:", error);
     } else {
       console.log("Child added successfully!");
-            // setFormData({
-      //   name: "",
-      //   gender: "",
-      //   birth_date: "",
-      //   biography: "",
-      //   budget_goal: "",
-      //   status: "",
-      //   country: "",
-      //   location_geo: null,
-      //   location_str: "",
-      //   image_url: "",
-      //   video_url: "",
-      // });
-      // setImageFiles([]);
-      // setVideoFiles([]);
+      setFormData({
+        name: "",
+        gender: "",
+        birth_date: "",
+        biography: "",
+        budget_goal: "",
+        status: "",
+        country: "",
+        location_geo: null,
+        location_str: "",
+        image_url: "",
+        video_url: "",
+      });
+      setImageFiles([]);
+      setVideoFiles([]);
     }
   };
-  
+
+  const handleRowClick = (row: People) => {
+    setSelectedChild(row);
+    setIsDrawerOpen(true);
+  };
 
   const handleDrawerClose = () => {
+    setIsDrawerOpen(false);
     console.log("Drawer closed by MapPicker");
   };
 
@@ -258,7 +266,27 @@ const ChildrenTable = () => {
           </DrawerRoot>
         </div>
       </div>
-      <DataTable columns={columns as ColumnDef<unknown, unknown>[]} data={data} controls="bottom" />
+      <DataTable
+        columns={columns as ColumnDef<unknown, unknown>[]}
+        data={data}
+        controls="bottom"
+        onRowClick={(data: unknown) => handleRowClick(data as People)}
+      />
+      {isDrawerOpen && (
+        <EditDrawer
+          selectedChild={selectedChild}
+          isDrawerOpen={isDrawerOpen}
+          onClose={handleDrawerClose}
+          onSave={handleSubmit}
+          onInputChange={handleInputChange}
+          onSelectChange={handleSelectChange}
+          onLocationSelect={handleLocationSelect}
+          imageFiles={imageFiles}
+          setImageFiles={setImageFiles}
+          videoFiles={videoFiles}
+          setVideoFiles={setVideoFiles}
+        />
+      )}
     </div>
   );
 };

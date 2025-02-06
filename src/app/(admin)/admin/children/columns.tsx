@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { LuArrowUpDown } from "react-icons/lu";
 import { IoCopyOutline } from "react-icons/io5";
 import { People } from "@/types/admin.types";
+import { centsToDollars } from "@/utils/currency";
 
 export const columns: ColumnDef<People>[] = [
   {
@@ -131,7 +132,7 @@ export const columns: ColumnDef<People>[] = [
     ),
     cell: ({ row }) => {
       const person = row.original;
-      return <div>${person.budget_goal.toFixed(2)}</div>;
+      return <div>${centsToDollars(person.budget_goal)}</div>;
     },
   },
   {
@@ -149,7 +150,7 @@ export const columns: ColumnDef<People>[] = [
     ),
     cell: ({ row }) => {
       const person = row.original;
-      return <div>${person.budget_raised.toFixed(2)}</div>;
+      return <div>${centsToDollars(person.budget_raised)}</div>;
     },
   },
   {
