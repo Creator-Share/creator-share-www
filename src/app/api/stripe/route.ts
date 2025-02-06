@@ -5,7 +5,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
 export async function POST(req: Request) {
   try {
-    const { childName, amount, paymentType } = await req.json();
+    const { childName, amount, paymentType, childImage } = await req.json();
     if (!amount || amount < 1000) {
       return NextResponse.json({ error: "Minimum amount is $10." }, { status: 400 });
     }
@@ -23,6 +23,7 @@ export async function POST(req: Request) {
               currency: "usd",
               product_data: {
                 name: `Sponsorship for ${childName} (Monthly)`,
+                images: [childImage],
               },
               unit_amount: amount,
               recurring: { interval: "month" },
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
               currency: "usd",
               product_data: {
                 name: `Sponsorship for ${childName} (One-time)`,
+                images: [childImage]
               },
               unit_amount: amount,
             },
