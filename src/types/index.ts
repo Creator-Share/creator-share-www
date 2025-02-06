@@ -21,7 +21,8 @@ export interface People {
     status: string;
     country:string;
     location_geo: Geography;
-    video_url: string
+    video_url: string;
+    introduction: string
   }
 
 export interface loginForm {

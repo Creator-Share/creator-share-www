@@ -1,11 +1,10 @@
 "use client";
 import { Box, Flex, Text, Image, Button } from "@chakra-ui/react";
-import { FaCalendar } from "react-icons/fa";
-import { FaLocationDot } from "react-icons/fa6";
+import { FaCalendar, FaCaretDown } from "react-icons/fa";
+import { FaLocationDot, FaPerson } from "react-icons/fa6";
 import { People } from "@/types";
 import { useRouter } from "next/navigation";
 import { calculateAge } from "@/utils/ageCalculator";
-import { formatDate } from "@/utils/dateFormatter";
 
 interface ChildCardProps {
     people: People;
@@ -19,7 +18,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
         router.push(`/sponsor-a-child/${people.id}`);
     };
     const age = calculateAge(new Date(people.birth_date).toISOString());
-    const formattedBirthDate = formatDate(new Date(people.birth_date).toISOString());
+    // const formattedBirthDate = formatDate(new Date(people.birth_date).toISOString());
 
     return (
         <Flex
@@ -47,11 +46,17 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                     <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">
                         {people.name}
                     </Text>
-                    <Box fontSize="base" className="text-[#767070]">
+                    <Box fontSize="base" className="text-[#767070] mb-4">
                         <Flex justify={{ base: "center", md: "flex-start" }} align="center" gap={2} mb={4}>
                             <FaCalendar />
                             <Text fontSize="sm" className="text-gray-500">
-                                {formattedBirthDate} | {age} years old
+                                {age} year{age > 1 ? 's' : ''} old
+                            </Text>
+                        </Flex>
+                        <Flex justify={{ base: "center", md: "flex-start" }} align="center" gap={2} mb={4}>
+                            <FaPerson />
+                            <Text fontSize="sm" className="text-gray-500">
+                                {people.gender}
                             </Text>
                         </Flex>
                         <Flex justify={{ base: "center", md: "flex-start" }} align="center" gap={2}>
@@ -61,19 +66,24 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                             </Text>
                         </Flex>
                     </Box>
+                    <Box fontSize="base" mb={3}>
+                        <Button fontWeight="md" className="text-[#FFFFFF] cursor-pointer bg-[#1C3C8C] px-4" onClick={() => alert('connect to stripe')}>
+                            Sponsor
+                        </Button>
+                    </Box>
                 </Box>
                 <Box className="md:ml-14">
                     <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
-                        Bio
+                        Introduction
                     </Text>
-                    <Box fontSize="base" mb={3}>
-                        <Text className="text-[#767070]">
-                            {people.biography}
-                        </Text>
-                        <Button fontWeight="md" className="text-[#FFFFFF] cursor-pointer bg-[#1C3C8C] px-4" onClick={handleNavigateChild}>
-                            Sponsor {people.name}
-                        </Button>
-                    </Box>
+                    <Text fontSize="base" className="text-[#767070]">
+                        {people.introduction}
+                    </Text>
+                    <Text fontSize="base" className="text-[#767070] mt-4">
+                        <span className="text-[#1C3C8C] cursor-pointer whitespace-nowrap flex items-center gap-1">
+                            Learn more about {people.name} <FaCaretDown />
+                        </span>
+                    </Text>
                 </Box>
             </Box>
         </Flex>

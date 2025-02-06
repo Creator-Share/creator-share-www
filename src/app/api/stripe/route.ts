@@ -6,8 +6,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 export async function POST(req: Request) {
   try {
     const { childName, amount, paymentType } = await req.json();
-    if (!amount || amount < 100) {
-      return NextResponse.json({ error: "Invalid amount. Minimum is $1." }, { status: 400 });
+    if (!amount || amount < 1000) {
+      return NextResponse.json({ error: "Minimum amount is $10." }, { status: 400 });
     }
     if (!paymentType || (paymentType !== "subscription" && paymentType !== "payment")) {
       return NextResponse.json({ error: "Invalid payment type." }, { status: 400 });
