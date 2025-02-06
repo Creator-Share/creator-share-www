@@ -1,4 +1,5 @@
-import React from 'react'
+"use client"
+import React, {useEffect} from 'react'
 import {
     DrawerActionTrigger,
     DrawerBackdrop,
@@ -9,9 +10,8 @@ import {
     DrawerRoot,
     DrawerTitle,
 } from "@/components/ui/drawer";
-import { Button, Text, Fieldset, Input, Stack, Textarea } from "@chakra-ui/react";
+import { Button, Text, Fieldset, Input, Stack, Textarea, Image } from "@chakra-ui/react";
 import { Field } from "@/components/ui/field";
-import { HiUpload } from "react-icons/hi"
 import {
     NativeSelectField,
     NativeSelectRoot,
@@ -23,14 +23,16 @@ import {
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
 import { People } from "@/types/admin.types";
+import { centsToDollars } from "@/utils/currency";
 
 interface EditDrawerProps {
     selectedChild: People | null;
+    formDataEdit: People;
+    setFormDataEdit: React.Dispatch<React.SetStateAction<People>>;
     isDrawerOpen: boolean;
     onClose: () => void;
-    onSave: () => void;
-    onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-    onSelectChange: (name: string, value: string) => void;
+    onSave: (updatedChild: People) => void;
+    onDelete: (childId: string) => void;
     onLocationSelect: (geo: [number, number], locationStr: string, country: string) => void;
     imageFiles: File[];
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
@@ -38,19 +40,43 @@ interface EditDrawerProps {
     setVideoFiles: React.Dispatch<React.SetStateAction<File[]>>;
 }
 
+
 const EditDrawer: React.FC<EditDrawerProps> = ({
     selectedChild,
     isDrawerOpen,
     onClose,
     onSave,
-    onInputChange,
-    onSelectChange,
+    onDelete,
     onLocationSelect,
     // imageFiles,
     setImageFiles,
     // videoFiles,
-    setVideoFiles
+    setVideoFiles,
 }) => {
+    const [formDataEdit, setFormDataEdit] = React.useState<People>(() => selectedChild || {} as People);
+
+    useEffect(() => {
+        if (selectedChild) {
+            setFormDataEdit(selectedChild);
+        }
+    }, [selectedChild]);
+    
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setFormDataEdit(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSelectChange = (name: string, value: string) => {
+        setFormDataEdit(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSave = () => {
+        onSave(formDataEdit);
+    };
+
+    if (!selectedChild) return null;
+
     return (
         <DrawerRoot placement="start" size="lg" open={isDrawerOpen} onOpenChange={onClose}>
             <DrawerBackdrop />
@@ -68,7 +94,13 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                         </Stack>
                         <Fieldset.Content>
                             <Field label="Name" required errorText="This field is required">
-                                <Input name="name" className="border" px={2} onChange={onInputChange} value={selectedChild?.name || ''} />
+                                <Input 
+                                    name="name" 
+                                    className="border" 
+                                    px={2} 
+                                    onChange={handleInputChange} 
+                                    value={formDataEdit?.name || ''} 
+                                />
                             </Field>
                             <Field label="Gender" required errorText="This field is required">
                                 <NativeSelectRoot>
@@ -77,8 +109,8 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                         placeholder="Select Gender"
                                         px={2}
                                         name="gender"
-                                        onChange={(e) => onSelectChange("gender", e.target.value)}
-                                        value={selectedChild?.gender || ''}
+                                        onChange={(e) => handleSelectChange("gender", e.target.value)}
+                                        value={formDataEdit.gender || ''}
                                     >
                                         <option value="Boy">Boy</option>
                                         <option value="Girl">Girl</option>
@@ -86,13 +118,35 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                 </NativeSelectRoot>
                             </Field>
                             <Field label="Birth Day" required errorText="This field is required">
-                                <Input name="birth_date" type="date" className="border" px={2} onChange={onInputChange} value={selectedChild?.birth_date || ''} />
+                                <Input 
+                                    name="birth_date" 
+                                    type="date" 
+                                    className="border" 
+                                    px={2} 
+                                    onChange={handleInputChange} 
+                                    value={formDataEdit.birth_date || ''} 
+                                />
                             </Field>
                             <Field label="Biography" required errorText="This field is required">
-                                <Textarea name="biography" size="xl" className="border" px={2} py={2} onChange={onInputChange} value={selectedChild?.biography || ''} />
+                                <Textarea 
+                                    name="biography" 
+                                    size="xl" 
+                                    className="border" 
+                                    px={2} 
+                                    py={2} 
+                                    onChange={handleInputChange} 
+                                    value={formDataEdit.biography || ''} 
+                                />
                             </Field>
                             <Field label="Budget Goal">
-                                <Input name="budget_goal" type="text" className="border" px={2} onChange={onInputChange} value={selectedChild?.budget_goal || ''} />
+                                <Input 
+                                    name="budget_goal" 
+                                    type="text" 
+                                    className="border" 
+                                    px={2} 
+                                    onChange={handleInputChange} 
+                                    value={centsToDollars(formDataEdit.budget_goal) || ''} 
+                                />
                             </Field>
                             <Field label="Status" required errorText="This field is required">
                                 <NativeSelectRoot>
@@ -101,8 +155,8 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                         placeholder="Select Status"
                                         px={2}
                                         name="status"
-                                        onChange={(e) => onSelectChange("status", e.target.value)}
-                                        value={selectedChild?.status || ''}
+                                        onChange={(e) => handleSelectChange("status", e.target.value)}
+                                        value={formDataEdit.status || ''}
                                     >
                                         <option value="New">New</option>
                                         <option value="Partially Funded">Partially Funded</option>
@@ -112,12 +166,10 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     </NativeSelectField>
                                 </NativeSelectRoot>
                             </Field>
-                            <Field label="Upload Image">
+                            <Field label="Change Image">
                                 <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]}>
                                     <FileUploadTrigger asChild>
-                                        <Button variant="outline" size="sm" className="border" px={4}>
-                                            <HiUpload /> Upload Image
-                                        </Button>
+                                    <Image src={selectedChild.image_url} alt="Child Image" className="w-1/2 h-1/2 rounded-lg cursor-pointer" />
                                     </FileUploadTrigger>
                                     <FileUploadList />
                                 </FileUploadRoot>
@@ -125,9 +177,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                             <Field label="Upload Video">
                                 <FileUploadRoot onFileChange={(fileDetails) => setVideoFiles(fileDetails.acceptedFiles)} accept={["video/mp4"]} >
                                     <FileUploadTrigger asChild>
-                                        <Button variant="outline" size="sm" className="border" px={4}>
-                                            <HiUpload /> Upload Video
-                                        </Button>
+                                        <video src={selectedChild.video_url} className="w-1/2 h-1/2 rounded-lg cursor-pointer" />
                                     </FileUploadTrigger>
                                     <FileUploadList />
                                 </FileUploadRoot>
@@ -140,7 +190,20 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                     <DrawerActionTrigger asChild>
                         <Button variant="outline" onClick={onClose}>Cancel</Button>
                     </DrawerActionTrigger>
-                    <Button onClick={onSave}>Save</Button>
+                    <Button onClick={handleSave}>Save</Button>
+                    <Button
+                        variant="outline"
+                        colorScheme="red"
+                        onClick={() => {
+                            if (selectedChild?.id) {
+                                onDelete(selectedChild.id);
+                            } else {
+                                console.error("Child ID is undefined");
+                            }
+                        }}
+                    >
+                        Delete
+                    </Button>
                 </DrawerFooter>
             </DrawerContent>
         </DrawerRoot>

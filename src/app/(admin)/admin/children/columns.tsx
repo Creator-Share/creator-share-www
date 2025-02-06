@@ -57,7 +57,7 @@ export const columns: ColumnDef<People>[] = [
         <div className="flex items-center justify-center" title={person.id}>
           <IoCopyOutline
             className="ml-1 h-4 w-4 cursor-pointer"
-            onClick={() => navigator.clipboard.writeText(person.id)}
+            onClick={() => person.id && navigator.clipboard.writeText(person.id)}
           />
         </div>
       );

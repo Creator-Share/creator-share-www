@@ -1,58 +1,54 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Button, Text, Fieldset, Input, Stack, Textarea } from "@chakra-ui/react";
-import { Field } from "@/components/ui/field";
-import {
-  NativeSelectField,
-  NativeSelectRoot,
-} from "@/components/ui/native-select";
-import {
-  FileUploadList,
-  FileUploadRoot,
-  FileUploadTrigger,
-} from "@/components/ui/file-upload"
-import { HiUpload } from "react-icons/hi";
-import {
-  DrawerActionTrigger,
-  DrawerBackdrop,
-  DrawerBody,
-  DrawerContent,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerRoot,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
+import { Button } from "@chakra-ui/react";
+import { DrawerRoot, DrawerTrigger, DrawerBackdrop } from "@/components/ui/drawer";
 import { DataTable } from "@/components/admin-ui/Tables/data-table";
 import { ColumnDef } from "@tanstack/react-table";
 import { columns } from "./columns";
-import { People } from "@/types/admin.types";
+import { People, Geography } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import { GoPlusCircle } from "react-icons/go";
 import dynamic from "next/dynamic";
-// import EditDrawer from "./components/EditDrawer";
 
-const MapPicker = dynamic(() => import("./components/MapPicker"), { ssr: false });
+const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), { ssr: false });
 const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
+
 const ChildrenTable = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<People[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<People>({
     name: "",
     gender: "",
     birth_date: "",
     biography: "",
-    budget_goal: "",
+    budget_goal: 0,
+    budget_raised: 0,
     status: "",
     country: "",
-    location_geo: null as string | null,
+    location_geo: null,
     location_str: "",
     image_url: "",
     video_url: ""
   });
+  const [formDataEdit, setFormDataEdit] = useState<People>({
+    id: "", // Ensure an empty string or a default value
+    name: "",
+    gender: "",
+    birth_date: "",
+    biography: "",
+    budget_goal: 0,
+    budget_raised: 0,
+    status: "",
+    country: "",
+    location_geo: null as Geography | null,
+    location_str: "",
+    image_url: "",
+    video_url: ""
+  });
+
   const [selectedChild, setSelectedChild] = useState<People | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -79,16 +75,15 @@ const ChildrenTable = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleLocationSelect = (geo: [number, number], locationStr: string, country: string) => {
-    console.log("Selected Location String:", locationStr);
-    console.log("Selected Country:", country);
+  const handleLocationSelect = (geo: [number, number] | null, locationStr: string, country: string) => {
     setFormData((prev) => ({
       ...prev,
-      location_geo: `SRID=4326;POINT(${geo[1]} ${geo[0]})`,
+      location_geo: geo ? { type: "Point", coordinates: [geo[1], geo[0]] } as Geography : null,
       location_str: locationStr,
       country,
     }));
   };
+  
 
   const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
     const supabase = createClient();
@@ -108,11 +103,9 @@ const ChildrenTable = () => {
     const { data } = supabase.storage.from("people").getPublicUrl(filePath);
     return data.publicUrl;
   };
+
   const handleSubmit = async () => {
-    if (!formData.name || !formData.gender || !formData.birth_date || !formData.status) {
-      console.error("Error: Missing required fields.");
-      return;
-    }
+    console.log("Submitting Data:", formData);
 
     const uploadedImageUrl = imageFiles.length > 0 ? await uploadFileToSupabase(imageFiles[0], "images") : "";
     const uploadedVideoUrl = videoFiles.length > 0 ? await uploadFileToSupabase(videoFiles[0], "videos") : "";
@@ -137,7 +130,8 @@ const ChildrenTable = () => {
         gender: "",
         birth_date: "",
         biography: "",
-        budget_goal: "",
+        budget_goal: 0,
+        budget_raised: 0,
         status: "",
         country: "",
         location_geo: null,
@@ -147,6 +141,32 @@ const ChildrenTable = () => {
       });
       setImageFiles([]);
       setVideoFiles([]);
+    }
+  };
+
+  const handleSave = async (updatedChild: People) => {
+    const supabase = createClient();
+    const { error } = await supabase.from("people").update(updatedChild).eq('id', updatedChild.id);
+
+    if (error) {
+      console.error("Error updating child:", error);
+    } else {
+      console.log("Child updated successfully!");
+      setData((prevData) => prevData.map(child => child.id === updatedChild.id ? updatedChild : child));
+      setIsDrawerOpen(false);
+    }
+  };
+
+  const handleDelete = async (childId: string) => {
+    const supabase = createClient();
+    const { error } = await supabase.from("people").delete().eq('id', childId);
+
+    if (error) {
+      console.error("Error deleting child:", error);
+    } else {
+      console.log("Child deleted successfully!");
+      setData((prevData) => prevData.filter(child => child.id !== childId));
+      setIsDrawerOpen(false);
     }
   };
 
@@ -176,93 +196,19 @@ const ChildrenTable = () => {
                 <GoPlusCircle className="mr-[3.5px]" /> New Child
               </Button>
             </DrawerTrigger>
-            <DrawerContent>
-              <DrawerHeader>
-                <DrawerTitle>
-                  <Text fontSize="5xl"> Add a Child </Text>
-                </DrawerTitle>
-              </DrawerHeader>
-              <DrawerBody>
-                <Fieldset.Root size="lg" maxW="md">
-                  <Stack>
-                    <Fieldset.Legend>Child details</Fieldset.Legend>
-                    <Fieldset.HelperText>Please provide child details below.</Fieldset.HelperText>
-                  </Stack>
-                  <Fieldset.Content>
-                    <Field label="Name" required errorText="This field is required">
-                      <Input name="name" className="border" px={2} onChange={handleInputChange} />
-                    </Field>
-                    <Field label="Gender" required errorText="This field is required">
-                      <NativeSelectRoot>
-                        <NativeSelectField
-                          className="border"
-                          placeholder="Select Gender"
-                          px={2}
-                          name="gender"
-                          onChange={(e) => handleSelectChange("gender", e.target.value)}
-                        >
-                          <option value="Boy">Boy</option>
-                          <option value="Girl">Girl</option>
-                        </NativeSelectField>
-                      </NativeSelectRoot>
-                    </Field>
-                    <Field label="Birth Day" required errorText="This field is required">
-                      <Input name="birth_date" type="date" className="border" px={2} onChange={handleInputChange} />
-                    </Field>
-                    <Field label="Biography" required errorText="This field is required">
-                      <Textarea name="biography" size="xl" className="border" px={2} py={2} onChange={handleInputChange} />
-                    </Field>
-                    <Field label="Budget Goal">
-                      <Input name="budget_goal" type="text" className="border" px={2} onChange={handleInputChange} />
-                    </Field>
-                    <Field label="Status" required errorText="This field is required">
-                      <NativeSelectRoot>
-                        <NativeSelectField
-                          className="border"
-                          placeholder="Select Status"
-                          px={2}
-                          name="status"
-                          onChange={(e) => handleSelectChange("status", e.target.value)}
-                        >
-                          <option value="New">New</option>
-                          <option value="Partially Funded">Partially Funded</option>
-                          <option value="Budget Filled">Budget Filled</option>
-                          <option value="Archived">Archived</option>
-                          <option value="Draft">Draft</option>
-                        </NativeSelectField>
-                      </NativeSelectRoot>
-                    </Field>
-                    <Field label="Upload Image">
-                      <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]}>
-                        <FileUploadTrigger asChild>
-                          <Button variant="outline" size="sm" className="border" px={4}>
-                            <HiUpload /> Upload Image
-                          </Button>
-                        </FileUploadTrigger>
-                        <FileUploadList />
-                      </FileUploadRoot>
-                    </Field>
-                    <Field label="Upload Video">
-                      <FileUploadRoot onFileChange={(fileDetails) => setVideoFiles(fileDetails.acceptedFiles)} accept={["video/mp4"]} >
-                        <FileUploadTrigger asChild>
-                          <Button variant="outline" size="sm" className="border" px={4}>
-                            <HiUpload /> Upload Video
-                          </Button>
-                        </FileUploadTrigger>
-                        <FileUploadList />
-                      </FileUploadRoot>
-                    </Field>
-                    <MapPicker onCloseDrawer={handleDrawerClose} onSelectLocation={handleLocationSelect} />
-                  </Fieldset.Content>
-                </Fieldset.Root>
-              </DrawerBody>
-              <DrawerFooter>
-                <DrawerActionTrigger asChild>
-                  <Button variant="outline" onClick={handleDrawerClose}>Cancel</Button>
-                </DrawerActionTrigger>
-                <Button onClick={handleSubmit}>Save</Button>
-              </DrawerFooter>
-            </DrawerContent>
+            <CreateDrawer
+              formData={formData}
+              setFormData={setFormData}
+              handleInputChange={handleInputChange}
+              handleSelectChange={handleSelectChange}
+              handleLocationSelect={handleLocationSelect}
+              handleSubmit={handleSubmit}
+              imageFiles={imageFiles}
+              setImageFiles={setImageFiles}
+              videoFiles={videoFiles}
+              setVideoFiles={setVideoFiles}
+              handleDrawerClose={handleDrawerClose}
+            />
           </DrawerRoot>
         </div>
       </div>
@@ -272,20 +218,22 @@ const ChildrenTable = () => {
         controls="bottom"
         onRowClick={(data: unknown) => handleRowClick(data as People)}
       />
-      {isDrawerOpen && (
+      {isDrawerOpen && selectedChild && (
         <EditDrawer
           selectedChild={selectedChild}
+          formDataEdit={formDataEdit}
+          setFormDataEdit={setFormDataEdit}
           isDrawerOpen={isDrawerOpen}
           onClose={handleDrawerClose}
-          onSave={handleSubmit}
-          onInputChange={handleInputChange}
-          onSelectChange={handleSelectChange}
+          onSave={handleSave}
+          onDelete={handleDelete}
           onLocationSelect={handleLocationSelect}
           imageFiles={imageFiles}
           setImageFiles={setImageFiles}
           videoFiles={videoFiles}
           setVideoFiles={setVideoFiles}
         />
+
       )}
     </div>
   );
