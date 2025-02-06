@@ -3,7 +3,7 @@ import { Box, Flex, Text, Image, Button } from "@chakra-ui/react";
 import { FaCalendar, FaCaretDown } from "react-icons/fa";
 import { FaLocationDot, FaPerson } from "react-icons/fa6";
 import { People } from "@/types";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
 import { calculateAge } from "@/utils/ageCalculator";
 
 interface ChildCardProps {
@@ -13,10 +13,10 @@ interface ChildCardProps {
 }
 
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
-    const router = useRouter();
-    const handleNavigateChild = () => {
-        router.push(`/sponsor-a-child/${people.id}`);
-    };
+    // const router = useRouter();
+    // const handleNavigateChild = () => {
+    //     router.push(`/sponsor-a-child/${people.id}`);
+    // };
     const age = calculateAge(new Date(people.birth_date).toISOString());
     // const formattedBirthDate = formatDate(new Date(people.birth_date).toISOString());
 

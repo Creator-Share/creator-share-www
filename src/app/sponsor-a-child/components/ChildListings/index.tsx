@@ -1,5 +1,5 @@
 "use client"
-import { Box, VStack, Text, Heading, Collapsible, Button } from "@chakra-ui/react";
+import { Box, VStack, Text, Collapsible, Button } from "@chakra-ui/react";
 import React, { useState, useEffect, useCallback } from "react";
 import ChildCard from "../ChildCard";
 import { People } from "@/types";
@@ -47,7 +47,10 @@ const ChildListings: React.FC<ChildListingsProps> = ({
       <VStack align="stretch" pt={10}>
         {visiblePeople.map((people) => (
           <Box key={people.id}>
-            <Collapsible.Root open={openId === people.id} onOpenChange={(open) => setOpenId(open ? people.id : null)}>
+            <Collapsible.Root
+              open={openId === people.id}
+              onOpenChange={() => setOpenId(openId === people.id ? null : people.id)}
+            >
               <Collapsible.Trigger as={Box} cursor="pointer">
                 <ChildCard
                   people={people}
@@ -64,16 +67,15 @@ const ChildListings: React.FC<ChildListingsProps> = ({
                   mt={4}
                   className="flex flex-col md:flex-row"
                 >
-                  <Box mr="8" className="w-2/5">
+                  <Box mr="8" className="md:w-2/5 md:text-start w-full text-center">
                     <Text fontSize="xl" fontWeight="semibold" mb={4} color="#1C3C8C">
                       About {people.name}
                     </Text>
                     <Text mb={4}>
                       {people.biography}
                     </Text>
-
                   </Box>
-                  <Box mt="12" className="w-3/5">
+                  <Box mt="12" className="md:w-3/5 w-full">
                     <video width="800" height="600" controls preload="none" className="border rounded-lg">
                       <source src={people.video_url} type="video/mp4" />
                     </video>
@@ -81,7 +83,7 @@ const ChildListings: React.FC<ChildListingsProps> = ({
                 </Box>
                 <Box fontSize="base" mb={3} className="w-full">
                   <Button fontWeight="md" className="text-[#FFFFFF] cursor-pointer bg-[#1C3C8C] px-4 w-full" onClick={() => alert('connect to stripe')}>
-                      Sponsor {people.name}
+                    Sponsor {people.name}
                   </Button>
                 </Box>
               </Collapsible.Content>
