@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
 import { People } from "@/types/admin.types";
-import { centsToDollars } from "@/utils/currency";
 
 interface EditDrawerProps {
     selectedChild: People | null;
