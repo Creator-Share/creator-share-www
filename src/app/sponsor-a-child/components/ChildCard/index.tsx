@@ -30,11 +30,13 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const [value, setValue] = useState<number[]>([0]);
 
     const handleSliderChange = (e: { value: number[] }) => {
-        setValue(e.value);
-        setAmount(e.value[0]);
+        const newValue = Math.min(e.value[0], people.budget_goal / 100);
+        setValue([newValue]);
+        setAmount(newValue);
     };
     const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newValue = parseInt(e.target.value) || 0;
+        let newValue = parseInt(e.target.value) || 0;
+        newValue = Math.min(newValue, people.budget_goal / 100);
         setAmount(newValue);
         setValue([newValue]);
     };
@@ -155,19 +157,18 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                                     <Image src={people.image_url} alt={people.name} className="rounded-lg" />
                                     <Box className="md:mr-14">
                                         <Text className="text-2xl text-center font-bold mt-8 md:text-start">{people.name}</Text>
-                                        <Box mb={4} className="mt-4 md:mt-12">
-                                            <Box bg="gray.200" h="15px" w="full" borderRadius="full">
-                                                <Box
-                                                    bg="#1C3C8C"
-                                                    h="2px"
-                                                    w={`${(people.budget_raised / people.budget_goal) * 100}%`}
-                                                    borderRadius="full"
-                                                />
-                                            </Box>
-                                            <Text fontSize="sm" mt={3} ml={2} className="text-gray-500">
-                                                ${people.budget_raised / 100} raised of ${people.budget_goal / 100}
-                                            </Text>
+                                        <Box bg="gray.200" h="2px" w="full" borderRadius="full">
+                                            <Box
+                                                bg="#1C3C8C"
+                                                h="2px"
+                                                w={`${Math.min((people.budget_raised / people.budget_goal) * 100, 100)}%`}
+                                                borderRadius="full"
+                                            />
                                         </Box>
+                                        <Text fontSize="sm" mt={1} className="text-gray-500">
+                                            ${Math.min(people.budget_raised / 100, people.budget_goal / 100)} raised of ${people.budget_goal / 100}
+                                        </Text>
+
                                         <Box>
                                             <Flex
                                                 className="border rounded-lg"
@@ -182,6 +183,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                                                 <Input
                                                     type="number"
                                                     min="1"
+                                                    max={people.budget_goal / 100}
                                                     value={amount}
                                                     onChange={handleAmountChange}
                                                     className="px-4"
@@ -192,7 +194,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                                                 <Slider
                                                     value={value}
                                                     min={0}
-                                                    max={500}
+                                                    max={people.budget_goal / 100}
                                                     step={5}
                                                     variant="solid"
                                                     onValueChange={handleSliderChange}
