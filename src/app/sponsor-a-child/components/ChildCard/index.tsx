@@ -13,8 +13,8 @@ import {
     DialogRoot,
     DialogTrigger,
 } from "@/components/ui/dialog"
-import { loadStripe } from "@stripe/stripe-js";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 
 interface ChildCardProps {
     people: People;
@@ -22,27 +22,30 @@ interface ChildCardProps {
     id: string;
 }
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string);
 
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const age = calculateAge(new Date(people.birth_date).toISOString());
-    const [amount, setAmount] = useState<string>("");
+    const [amount, setAmount] = useState<number>(0);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
+    const [value, setValue] = useState<number[]>([0]);
+
+    const handleSliderChange = (e: { value: number[] }) => {
+        setValue(e.value);
+        setAmount(e.value[0]);
+    };
     const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        if (/^\d*\.?\d*$/.test(value)) {
-            setAmount(value);
-        }
+        const newValue = parseInt(e.target.value) || 0;
+        setAmount(newValue);
+        setValue([newValue]);
     };
 
     const handleSponsor = async () => {
-        if (!people || !amount || parseFloat(amount) <= 0) {
+        if (amount <= 0) {
             alert("Please enter a valid amount.");
             return;
         }
 
         try {
-            const stripe = await stripePromise;
             const res = await fetch("/api/stripe", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -50,7 +53,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                     childId: people.id,
                     childName: people.name,
                     childImage: people.image_url,
-                    amount: parseFloat(amount) * 100,
+                    amount: amount * 100,
                     paymentType: selectedOption,
                 }),
             });
@@ -59,14 +62,22 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
             if (url) {
                 window.location.href = url;
             }
-            console.log(stripe)
         } catch (err) {
             console.error("Payment Error:", err);
         }
     };
 
     const handleCheckboxChange = (option: string) => {
-        setSelectedOption((prev) => (prev === option ? null : option));
+        setSelectedOption((prev) => {
+            if (prev === option) {
+                return null;
+            } else {
+                const newAmount = option === "payment" ? amount * 12 : amount / 12;
+                setAmount(newAmount);
+                setValue([newAmount]);
+                return option;
+            }
+        });
     };
     return (
         <Flex
@@ -127,7 +138,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                             ${people.budget_raised / 100} raised of ${people.budget_goal / 100}
                         </Text>
                     </Box>
-                    <DialogRoot size="cover" placement="center" motionPreset="slide-in-bottom">
+                    <DialogRoot size="cover" placement="center" motionPreset="slide-in-bottom" role="alertdialog">
                         <DialogTrigger asChild>
                             <Box fontSize="base" mb={3}>
                                 <Button fontWeight="md" className="text-[#FFFFFF] cursor-pointer bg-[#1C3C8C] px-4">
@@ -177,6 +188,17 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                                                     placeholder="Enter Amount"
                                                 />
                                             </Flex>
+                                            <Box my={4}>
+                                                <Slider
+                                                    value={value}
+                                                    min={0}
+                                                    max={500}
+                                                    step={5}
+                                                    variant="solid"
+                                                    onValueChange={handleSliderChange}
+                                                />
+                                                <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
+                                            </Box>
                                             <Flex justify="center" align="center" gap={8}>
                                                 <Flex align="center" gap={2}>
                                                     <Checkbox
@@ -192,7 +214,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                                                         checked={selectedOption === "payment"}
                                                         onChange={() => handleCheckboxChange("payment")}
                                                     />
-                                                    <Text>One-time</Text>
+                                                    <Text>Yearly</Text>
                                                 </Flex>
                                             </Flex>
                                         </Box>

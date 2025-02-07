@@ -11,16 +11,15 @@ import {
   DialogRoot,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { loadStripe } from "@stripe/stripe-js";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
+
 
 interface ChildListingsProps {
   peopleData: People[];
   selectedChildId: string | null;
   selectedCountry: string | null;
 }
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string);
 
 const ChildListings: React.FC<ChildListingsProps> = ({
   peopleData,
@@ -30,15 +29,18 @@ const ChildListings: React.FC<ChildListingsProps> = ({
   const [visiblePeople, setVisiblePeople] = useState<People[]>([]);
   const [loadedCount, setLoadedCount] = useState(4);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [amount, setAmount] = useState<string>("");
+  const [amount, setAmount] = useState<number>(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (/^\d*\.?\d*$/.test(value)) {
-      setAmount(value);
-    }
-  };
+  const [value, setValue] = useState<number[]>([0]);
+  const handleSliderChange = (e: { value: number[] }) => {
+    setValue(e.value);
+    setAmount(e.value[0]);
+};
+const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = parseInt(e.target.value) || 0;
+    setAmount(newValue);
+    setValue([newValue]);
+};
 
   const handleScroll = useCallback(() => {
     if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 10) {
@@ -64,38 +66,45 @@ const ChildListings: React.FC<ChildListingsProps> = ({
   }, [handleScroll]);
 
   const handleSponsor = async () => {
-    if (!peopleData || !amount || parseFloat(amount) <= 0) {
-      alert("Please enter a valid amount.");
-      return;
+    if (amount <= 0) {
+        alert("Please enter a valid amount.");
+        return;
     }
 
     try {
-      const stripe = await stripePromise;
-      const res = await fetch("/api/stripe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          childId: selectedChildId,
-          childName: peopleData[0].name,
-          childImage: peopleData[0].image_url,
-          amount: parseFloat(amount) * 100,
-          paymentType: selectedOption,
-        }),
-      });
+        const res = await fetch("/api/stripe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                childId: selectedChildId,
+                childName: peopleData[0].name,
+                childImage: peopleData[0].image_url,
+                amount: amount * 100,
+                paymentType: selectedOption,
+            }),
+        });
 
-      const { url } = await res.json();
-      if (url) {
-        window.location.href = url;
-      }
-      console.log(stripe)
+        const { url } = await res.json();
+        if (url) {
+            window.location.href = url;
+        }
     } catch (err) {
-      console.error("Payment Error:", err);
+        console.error("Payment Error:", err);
     }
-  };
+};
 
   const handleCheckboxChange = (option: string) => {
-    setSelectedOption((prev) => (prev === option ? null : option));
-  };
+    setSelectedOption((prev) => {
+        if (prev === option) {
+            return null;
+        } else {
+            const newAmount = option === "payment" ? amount * 12 : amount / 12;
+            setAmount(newAmount);
+            setValue([newAmount]);
+            return option;
+        }
+    });
+};
 
   return (
     <Box width="100%" className="border" px={{ base: 3, md: 8 }} mt={4}>
@@ -186,6 +195,17 @@ const ChildListings: React.FC<ChildListingsProps> = ({
                                 placeholder="Enter Amount"
                               />
                             </Flex>
+                            <Box my={4}>
+                              <Slider
+                                value={value}
+                                min={0}
+                                max={500}
+                                step={5}
+                                variant="solid"
+                                onValueChange={handleSliderChange}
+                              />
+                              <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
+                            </Box>
                             <Flex justify="center" align="center" gap={8}>
                               <Flex align="center" gap={2}>
                                 <Checkbox
@@ -201,7 +221,7 @@ const ChildListings: React.FC<ChildListingsProps> = ({
                                   checked={selectedOption === "payment"}
                                   onChange={() => handleCheckboxChange("payment")}
                                 />
-                                <Text>One-time</Text>
+                                <Text>Yearly</Text>
                               </Flex>
                             </Flex>
                           </Box>

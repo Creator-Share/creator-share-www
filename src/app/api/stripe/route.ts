@@ -37,16 +37,17 @@ export async function POST(req: Request) {
     } else if (paymentType === "payment") {
       session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
-        mode: "payment",
+        mode: "subscription",
         line_items: [
           {
             price_data: {
               currency: "usd",
               product_data: {
-                name: `Sponsorship for ${childName} (One-time)`,
+                name: `Sponsorship for ${childName} (Yearly)`,
                 images: [childImage]
               },
               unit_amount: amount,
+              recurring: { interval: "year" },
             },
             quantity: 1,
           },
