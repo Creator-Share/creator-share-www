@@ -72,8 +72,14 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     };
 
     const handleSave = () => {
-        onSave(formDataEdit);
+        const budgetGoalInCents = Math.round(parseFloat(formDataEdit.budget_goal.toString()) * 100);
+        onSave({ 
+            ...formDataEdit, 
+            budget_goal: budgetGoalInCents 
+        });
     };
+    
+    
 
     if (!selectedChild) return null;
 
@@ -140,12 +146,12 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                             </Field>
                             <Field label="Budget Goal">
                                 <Input 
-                                    name="budget_goal" 
+                                    name="budget_goal"
                                     type="text" 
                                     className="border" 
                                     px={2} 
                                     onChange={handleInputChange} 
-                                    value={centsToDollars(formDataEdit.budget_goal) || ''} 
+                                    value={formDataEdit.budget_goal}
                                 />
                             </Field>
                             <Field label="Status" required errorText="This field is required">

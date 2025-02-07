@@ -132,7 +132,7 @@ export const columns: ColumnDef<People>[] = [
     ),
     cell: ({ row }) => {
       const person = row.original;
-      return <div>${centsToDollars(person.budget_goal)}</div>;
+      return <div>${person.budget_goal}</div>;
     },
   },
   {
