@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
-
+import { centsToDollars } from "@/utils/currency";
 
 interface ChildListingsProps {
   peopleData: People[];
@@ -33,14 +33,16 @@ const ChildListings: React.FC<ChildListingsProps> = ({
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [value, setValue] = useState<number[]>([0]);
   const handleSliderChange = (e: { value: number[] }) => {
-    setValue(e.value);
-    setAmount(e.value[0]);
-};
-const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = parseInt(e.target.value) || 0;
+    const newValue = Math.min(e.value[0], peopleData[0].budget_goal / 100);
+    setValue([newValue]);
+    setAmount(newValue);
+  };
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let newValue = parseInt(e.target.value) || 0;
+    newValue = Math.min(newValue, peopleData[0].budget_goal / 100);
     setAmount(newValue);
     setValue([newValue]);
-};
+  };
 
   const handleScroll = useCallback(() => {
     if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 10) {
@@ -67,44 +69,44 @@ const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
   const handleSponsor = async () => {
     if (amount <= 0) {
-        alert("Please enter a valid amount.");
-        return;
+      alert("Please enter a valid amount.");
+      return;
     }
 
     try {
-        const res = await fetch("/api/stripe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                childId: selectedChildId,
-                childName: peopleData[0].name,
-                childImage: peopleData[0].image_url,
-                amount: amount * 100,
-                paymentType: selectedOption,
-            }),
-        });
+      const res = await fetch("/api/stripe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          childId: peopleData[0].id,
+          childName: peopleData[0].name,
+          childImage: peopleData[0].image_url,
+          amount: amount * 100,
+          paymentType: selectedOption,
+        }),
+      });
 
-        const { url } = await res.json();
-        if (url) {
-            window.location.href = url;
-        }
+      const { url } = await res.json();
+      if (url) {
+        window.location.href = url;
+      }
     } catch (err) {
-        console.error("Payment Error:", err);
+      console.error("Payment Error:", err);
     }
-};
+  };
 
   const handleCheckboxChange = (option: string) => {
     setSelectedOption((prev) => {
-        if (prev === option) {
-            return null;
-        } else {
-            const newAmount = option === "payment" ? amount * 12 : amount / 12;
-            setAmount(newAmount);
-            setValue([newAmount]);
-            return option;
-        }
+      if (prev === option) {
+        return null;
+      } else {
+        const newAmount = option === "payment" ? amount * 12 : amount / 12;
+        setAmount(newAmount);
+        setValue([newAmount]);
+        return option;
+      }
     });
-};
+  };
 
   return (
     <Box width="100%" className="border" px={{ base: 3, md: 8 }} mt={4}>
@@ -159,20 +161,20 @@ const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
                     </DialogHeader>
                     <DialogBody>
                       <Box className="flex flex-col md:grid md:grid-cols-2">
-                        <Image src={people.image_url} alt={people.name} className="rounded-lg" />
+                        <Image src={people.image_url} alt={people.name} width={500} height={500} className="rounded-lg" />
                         <Box className="md:mr-14">
                           <Text className="text-2xl text-center font-bold mt-8 md:text-start">{people.name}</Text>
                           <Box mb={4} className="mt-4 md:mt-12">
-                            <Box bg="gray.200" h="15px" w="full" borderRadius="full">
+                            <Box bg="gray.200" h="2px" w="full" borderRadius="full">
                               <Box
                                 bg="#1C3C8C"
                                 h="2px"
-                                w={`${(people.budget_raised / people.budget_goal) * 100}%`}
+                                w={`${Math.min((people.budget_raised / people.budget_goal) * 100, 100)}%`}
                                 borderRadius="full"
                               />
                             </Box>
-                            <Text fontSize="sm" mt={3} ml={2} className="text-gray-500">
-                              ${people.budget_raised / 100} raised of ${people.budget_goal / 100}
+                            <Text fontSize="sm" mt={1} className="text-gray-500">
+                              ${centsToDollars(people.budget_raised)} raised of ${centsToDollars(people.budget_goal)}
                             </Text>
                           </Box>
                           <Box>
@@ -189,6 +191,7 @@ const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
                               <Input
                                 type="number"
                                 min="1"
+                                max={parseFloat(centsToDollars(people.budget_goal))}
                                 value={amount}
                                 onChange={handleAmountChange}
                                 className="px-4"
@@ -199,7 +202,7 @@ const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
                               <Slider
                                 value={value}
                                 min={0}
-                                max={500}
+                                max={parseFloat(centsToDollars(people.budget_goal))}
                                 step={5}
                                 variant="solid"
                                 onValueChange={handleSliderChange}

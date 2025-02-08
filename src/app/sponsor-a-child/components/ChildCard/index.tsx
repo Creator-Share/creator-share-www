@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
+import {centsToDollars} from "@/utils/currency";
 
 interface ChildCardProps {
     people: People;
@@ -132,12 +133,12 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                             <Box
                                 bg="#1C3C8C"
                                 h="2px"
-                                w={`${(people.budget_raised / people.budget_goal) * 100}%`}
+                                w={`${Math.min((people.budget_raised / people.budget_goal) * 100, 100)}%`}
                                 borderRadius="full"
                             />
                         </Box>
                         <Text fontSize="sm" mt={1} className="text-gray-500">
-                            ${people.budget_raised / 100} raised of ${people.budget_goal / 100}
+                            ${centsToDollars(people.budget_raised)} raised of ${centsToDollars(people.budget_goal)}
                         </Text>
                     </Box>
                     <DialogRoot size="cover" placement="center" motionPreset="slide-in-bottom" role="alertdialog">
@@ -154,7 +155,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                             </DialogHeader>
                             <DialogBody>
                                 <Box className="flex flex-col md:grid md:grid-cols-2">
-                                    <Image src={people.image_url} alt={people.name} className="rounded-lg" />
+                                    <Image src={people.image_url} alt={people.name} width={500} height={500} className="rounded-lg" />
                                     <Box className="md:mr-14">
                                         <Text className="text-2xl text-center font-bold mt-8 md:text-start">{people.name}</Text>
                                         <Box bg="gray.200" h="2px" w="full" borderRadius="full">
@@ -166,9 +167,8 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                                             />
                                         </Box>
                                         <Text fontSize="sm" mt={1} className="text-gray-500">
-                                            ${Math.min(people.budget_raised / 100, people.budget_goal / 100)} raised of ${people.budget_goal / 100}
+                                            ${centsToDollars(people.budget_raised)} raised of ${centsToDollars(people.budget_goal)}
                                         </Text>
-
                                         <Box>
                                             <Flex
                                                 className="border rounded-lg"
