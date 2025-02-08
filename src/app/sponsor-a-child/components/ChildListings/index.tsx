@@ -1,5 +1,6 @@
 "use client"
-import { Box, VStack, Text, Collapsible, Button, Image, Flex, Input, InputAddon } from "@chakra-ui/react";
+import { Box, VStack, Text, Collapsible, Image, Flex, Input, InputAddon } from "@chakra-ui/react";
+import { Button } from "@/components/ui/button";
 import React, { useState, useEffect, useCallback } from "react";
 import ChildCard from "../ChildCard";
 import { People } from "@/types";
@@ -14,6 +15,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { centsToDollars } from "@/utils/currency";
+import { toaster } from "@/components/ui/toaster";
 
 interface ChildListingsProps {
   peopleData: People[];
@@ -27,11 +29,13 @@ const ChildListings: React.FC<ChildListingsProps> = ({
   selectedCountry
 }) => {
   const [visiblePeople, setVisiblePeople] = useState<People[]>([]);
-  const [loadedCount, setLoadedCount] = useState(4);
+  const [loadedCount, setLoadedCount] = useState<number>(4);
   const [openId, setOpenId] = useState<string | null>(null);
   const [amount, setAmount] = useState<number>(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [value, setValue] = useState<number[]>([0]);
+  const [loading, setLoading] = useState<boolean>(false);
+
   const handleSliderChange = (e: { value: number[] }) => {
     const newValue = Math.min(e.value[0], peopleData[0].budget_goal / 100);
     setValue([newValue]);
@@ -69,10 +73,24 @@ const ChildListings: React.FC<ChildListingsProps> = ({
 
   const handleSponsor = async () => {
     if (amount <= 0) {
-      alert("Please enter a valid amount.");
+      toaster.create({
+        title: "Invalid Amount",
+        description: "Please enter a valid amount.",
+      });
       return;
     }
 
+    const totalAfterDonation = peopleData[0].budget_raised / 100 + amount;
+
+    if (totalAfterDonation > peopleData[0].budget_goal / 100) {
+      toaster.create({
+        title: "Sponsorship amount exceeds the budget goal.",
+        description: "Please enter a lower amount.",
+      });
+      return;
+    }
+
+    setLoading(true);
     try {
       const res = await fetch("/api/stripe", {
         method: "POST",
@@ -88,12 +106,23 @@ const ChildListings: React.FC<ChildListingsProps> = ({
 
       const { url } = await res.json();
       if (url) {
+        toaster.create({
+          title: "Redirecting...",
+          description: "You will be redirected to complete the sponsorship.",
+        });
         window.location.href = url;
       }
     } catch (err) {
+      toaster.create({
+        title: "Payment Error",
+        description: "Something went wrong. Please try again.",
+      });
       console.error("Payment Error:", err);
+    } finally {
+      setLoading(false);
     }
   };
+
 
   const handleCheckboxChange = (option: string) => {
     setSelectedOption((prev) => {
@@ -228,7 +257,18 @@ const ChildListings: React.FC<ChildListingsProps> = ({
                               </Flex>
                             </Flex>
                           </Box>
-                          <Button className="bg-[#1C3C8C] text-white w-full md:mt-8 mt-4" onClick={handleSponsor}>Save</Button>
+                          <Button
+                            bg="#1C3C8C"
+                            color="white"
+                            w="full"
+                            mt={4}
+                            loading={loading}
+                            loadingText="Processing..."      
+                            onClick={handleSponsor}
+                            disabled={loading}
+                          >
+                            Sponsor
+                          </Button>
                         </Box>
                       </Box>
                     </DialogBody>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Providers } from "@/components/Providers";
 import "@/styles/globals.css";
 import { PageWrapper } from "@/components/PageWrapper";
+import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   title: "Creator Share",
@@ -18,7 +19,8 @@ export default function RootLayout({
       <body>
         <Providers>
           <PageWrapper>{children}</PageWrapper>
-          </Providers>
+          <Toaster />
+        </Providers>
       </body>
     </html>
   );

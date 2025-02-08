@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
-import { Box, Text, Button, Image, Flex, Input, InputAddon } from "@chakra-ui/react";
+import { Box, Text, Image, Flex, Input, InputAddon } from "@chakra-ui/react";
+import { Button } from "@/components/ui/button";
 import { FaCalendar, FaCaretDown } from "react-icons/fa";
 import { FaLocationDot, FaPerson } from "react-icons/fa6";
 import { People } from "@/types";
@@ -15,7 +16,8 @@ import {
 } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
-import {centsToDollars} from "@/utils/currency";
+import { centsToDollars } from "@/utils/currency";
+import { toaster } from "@/components/ui/toaster"
 
 interface ChildCardProps {
     people: People;
@@ -29,6 +31,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const [amount, setAmount] = useState<number>(0);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
     const [value, setValue] = useState<number[]>([0]);
+    const [loading, setLoading] = useState<boolean>(false);
 
     const handleSliderChange = (e: { value: number[] }) => {
         const newValue = Math.min(e.value[0], people.budget_goal / 100);
@@ -44,31 +47,56 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
 
     const handleSponsor = async () => {
         if (amount <= 0) {
-            alert("Please enter a valid amount.");
-            return;
+          toaster.create({
+            title: "Invalid Amount",
+            description: "Please enter a valid amount.",
+          });
+          return;
         }
-
+    
+        const totalAfterDonation = people.budget_raised / 100 + amount;
+    
+        if (totalAfterDonation > people.budget_goal / 100) {
+          toaster.create({
+            title: "Sponsorship amount exceeds the budget goal.",
+            description: "Please enter a lower amount.",
+          });
+          return;
+        }
+    
+        setLoading(true);
         try {
-            const res = await fetch("/api/stripe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    childId: people.id,
-                    childName: people.name,
-                    childImage: people.image_url,
-                    amount: amount * 100,
-                    paymentType: selectedOption,
-                }),
+          const res = await fetch("/api/stripe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              childId: people.id,
+              childName: people.name,
+              childImage: people.image_url,
+              amount: amount * 100,
+              paymentType: selectedOption,
+            }),
+          });
+    
+          const { url } = await res.json();
+          if (url) {
+            toaster.create({
+              title: "Redirecting...",
+              description: "You will be redirected to complete the sponsorship.",
             });
-
-            const { url } = await res.json();
-            if (url) {
-                window.location.href = url;
-            }
+            window.location.href = url;
+          }
         } catch (err) {
-            console.error("Payment Error:", err);
+          toaster.create({
+            title: "Payment Error",
+            description: "Something went wrong. Please try again.",
+          });
+          console.error("Payment Error:", err);
+        } finally {
+          setLoading(false);
         }
-    };
+      };
+
 
     const handleCheckboxChange = (option: string) => {
         setSelectedOption((prev) => {
@@ -220,7 +248,18 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                                                 </Flex>
                                             </Flex>
                                         </Box>
-                                        <Button className="bg-[#1C3C8C] text-white w-full md:mt-8 mt-4" onClick={handleSponsor}>Save</Button>
+                                        <Button
+                                            bg="#1C3C8C"
+                                            color="white"
+                                            w="full"
+                                            mt={4}
+                                            loading={loading}
+                                            loadingText="Processing..."
+                                            onClick={handleSponsor}
+                                            disabled={loading}
+                                        >
+                                            Sponsor
+                                        </Button>
                                     </Box>
                                 </Box>
                             </DialogBody>
