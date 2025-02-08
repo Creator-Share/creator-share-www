@@ -20,9 +20,11 @@ const SponsorChild = () => {
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [visibleChildren, setVisibleChildren] = useState<People[]>([]);
   const [loading, setLoading] = useState(false);
+  const [listingsLoading, setListingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ age: "", gender: "" });
+
   useEffect(() => {
     import("leaflet").then((module) => {
       setL(module);
@@ -62,13 +64,16 @@ const SponsorChild = () => {
 
   const handleBoundsChange = (bounds: L.LatLngBounds) => {
     if (!L) return;
+    setListingsLoading(true);
     const filtered = childrenData.filter((child) => {
       const [lng, lat] = child.location_geo.coordinates;
       return bounds.contains(L.latLng(lat, lng));
     });
-    setVisibleChildren(filtered);
+    setTimeout(() => {
+      setVisibleChildren(filtered);
+      setListingsLoading(false);
+    }, 500);
   };
-
 
   const handleMarkerClick = (id: string) => {
     setSelectedChildId(id);
@@ -95,7 +100,6 @@ const SponsorChild = () => {
       </Flex>
     );
   }
-
   return (
     <Box className="flex flex-col items-center justify-center" px={{ base: 4, md: 32 }} py={{ base: 12, md: 16 }}>
       <Filters
@@ -113,7 +117,19 @@ const SponsorChild = () => {
           </Text>
         </Box>
       )}
-      <ChildListings peopleData={visibleChildren} selectedChildId={selectedChildId} selectedCountry={selectedCountry} />
+      {listingsLoading ? (
+        <Flex justify="center" align="center" minH="20vh">
+          <Spinner size="lg" />
+        </Flex>
+      ) : visibleChildren.length > 0 ? (
+        <ChildListings peopleData={visibleChildren} selectedChildId={selectedChildId} selectedCountry={selectedCountry} />
+      ) : (
+        <Flex justify="center" align="center" minH="20vh">
+          <Text fontSize="xl" color="gray.500">
+            No children listed in this area.
+          </Text>
+        </Flex>
+      )}
     </Box>
   );
 };
