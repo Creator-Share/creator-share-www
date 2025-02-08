@@ -12,11 +12,10 @@ const customIcon = L.icon({
 });
 
 interface MapPickerProps {
-  onCloseDrawer: () => void;
   onSelectLocation: (geo: [number, number], locationStr: string, country: string) => void;
 }
 
-const MapPicker: React.FC<MapPickerProps> = ({ onCloseDrawer, onSelectLocation }) => {
+const MapPicker: React.FC<MapPickerProps> = ({  onSelectLocation }) => {
   const [selectedLocation, setSelectedLocation] = useState<[number, number] | null>(null);
 
   const fetchLocationData = async (lat: number, lng: number) => {
@@ -43,7 +42,6 @@ const MapPicker: React.FC<MapPickerProps> = ({ onCloseDrawer, onSelectLocation }
         setSelectedLocation(location);
         const { locationStr, country } = await fetchLocationData(location[0], location[1]);
         onSelectLocation(location, locationStr, country);
-        onCloseDrawer();
       },
     });
 

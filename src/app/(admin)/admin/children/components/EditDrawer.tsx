@@ -187,7 +187,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     <FileUploadList />
                                 </FileUploadRoot>
                             </Field>
-                            <MapPicker onCloseDrawer={onClose} onSelectLocation={onLocationSelect} />
+                            <MapPicker onSelectLocation={onLocationSelect} />
                         </Fieldset.Content>
                     </Fieldset.Root>
                 </DrawerBody>

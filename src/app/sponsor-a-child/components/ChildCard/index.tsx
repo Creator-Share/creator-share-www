@@ -119,7 +119,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
             borderColor={isSelected ? "blue.500" : "gray.200"}
             borderRadius={{ base: 'lg', md: 'md' }}
             boxShadow="sm"
-            className="bg-white shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-6 mb-6 md:p-0 md:mb-0 "
+            className="bg-white shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-6 mb-6 md:p-0 md:mb-8"
         >
             <Box>
                 <Image
@@ -169,10 +169,23 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                             ${centsToDollars(people.budget_raised)} raised of ${centsToDollars(people.budget_goal)}
                         </Text>
                     </Box>
+                </Box>
+                <Box className="md:ml-14">
+                    <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
+                        Introduction
+                    </Text>
+                    <Text fontSize="base" className="text-[#767070]">
+                        {people.introduction}
+                    </Text>
+                    <Text fontSize="base" className="text-[#767070] mt-4">
+                        <span className="text-[#1C3C8C] cursor-pointer whitespace-nowrap flex items-center gap-1">
+                            Learn more about {people.name} <FaCaretDown />
+                        </span>
+                    </Text>
                     <DialogRoot size="cover" placement="center" motionPreset="slide-in-bottom" role="alertdialog">
                         <DialogTrigger asChild>
                             <Box fontSize="base" mb={3}>
-                                <Button fontWeight="md" className="text-[#FFFFFF] cursor-pointer bg-[#1C3C8C] px-4">
+                                <Button fontWeight="md" className="text-[#FFFFFF] cursor-pointer bg-[#1C3C8C] px-4 mt-8">
                                     Sponsor
                                 </Button>
                             </Box>
@@ -266,19 +279,6 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                             <DialogCloseTrigger />
                         </DialogContent>
                     </DialogRoot>
-                </Box>
-                <Box className="md:ml-14">
-                    <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
-                        Introduction
-                    </Text>
-                    <Text fontSize="base" className="text-[#767070]">
-                        {people.introduction}
-                    </Text>
-                    <Text fontSize="base" className="text-[#767070] mt-4">
-                        <span className="text-[#1C3C8C] cursor-pointer whitespace-nowrap flex items-center gap-1">
-                            Learn more about {people.name} <FaCaretDown />
-                        </span>
-                    </Text>
                 </Box>
             </Box>
         </Flex>

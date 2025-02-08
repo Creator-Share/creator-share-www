@@ -1,15 +1,12 @@
 "use client";
-
 import React, { useEffect, useState } from "react";
-import { Button } from "@chakra-ui/react";
-import { DrawerRoot, DrawerTrigger, DrawerBackdrop } from "@/components/ui/drawer";
 import { DataTable } from "@/components/admin-ui/Tables/data-table";
 import { ColumnDef } from "@tanstack/react-table";
 import { columns } from "./columns";
 import { People, Geography } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
-import { GoPlusCircle } from "react-icons/go";
 import dynamic from "next/dynamic";
+import { centsToDollars } from "@/utils/currency";
 
 const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), { ssr: false });
 const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
@@ -34,7 +31,7 @@ const ChildrenTable = () => {
     video_url: ""
   });
   const [formDataEdit, setFormDataEdit] = useState<People>({
-    id: "", // Ensure an empty string or a default value
+    id: "",
     name: "",
     gender: "",
     birth_date: "",
@@ -54,23 +51,23 @@ const ChildrenTable = () => {
 
   useEffect(() => {
     async function fetchData() {
-        const supabase = createClient();
-        const { data: fetchedData, error } = await supabase.from("people").select("*");
-        
-        if (error) {
-            console.error("Error fetching people:", error);
-        } else if (fetchedData) {
-            const formattedData = fetchedData.map((child) => ({
-                ...child,
-                budget_goal: (child.budget_goal / 100).toFixed(2),
-            }));
+      const supabase = createClient();
+      const { data: fetchedData, error } = await supabase.from("people").select("*");
 
-            setData(formattedData);
-        }
-        setLoading(false);
+      if (error) {
+        console.error("Error fetching people:", error);
+      } else if (fetchedData) {
+        const formattedData = fetchedData.map((child) => ({
+          ...child,
+          budget_goal: (child.budget_goal / 100).toFixed(2),
+        }));
+
+        setData(formattedData);
+      }
+      setLoading(false);
     }
     fetchData();
-}, []);
+  }, []);
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -90,7 +87,7 @@ const ChildrenTable = () => {
       country,
     }));
   };
-  
+
 
   const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
     const supabase = createClient();
@@ -120,41 +117,45 @@ const ChildrenTable = () => {
     const budgetGoalInCents = Math.round(parseFloat(formData.budget_goal.toString()) * 100);
 
     const updatedFormData = {
-        ...formData,
-        budget_goal: budgetGoalInCents,
-        image_url: uploadedImageUrl,
-        video_url: uploadedVideoUrl,
+      ...formData,
+      budget_goal: budgetGoalInCents,
+      image_url: uploadedImageUrl,
+      video_url: uploadedVideoUrl,
     };
 
     console.log("Submitting Data:", updatedFormData);
 
     const supabase = createClient();
-    const { error } = await supabase.from("people").insert([updatedFormData]);
+    const { data: newChild, error } = await supabase.from("people").insert([updatedFormData]).select().single();
 
     if (error) {
-        console.error("Error adding child:", error);
+      console.error("Error adding child:", error);
     } else {
-        console.log("Child added successfully!");
-        setFormData({
-            name: "",
-            gender: "",
-            birth_date: "",
-            biography: "",
-            budget_goal: 0, // Reset input field
-            budget_raised: 0,
-            status: "",
-            country: "",
-            location_geo: null,
-            location_str: "",
-            image_url: "",
-            video_url: "",
-        });
-        setImageFiles([]);
-        setVideoFiles([]);
+      setData((prevData) => [
+        ...prevData,
+        { ...newChild, budget_goal: centsToDollars(newChild.budget_goal) },
+      ]);
+      setFormData({
+        name: "",
+        gender: "",
+        birth_date: "",
+        biography: "",
+        budget_goal: 0,
+        budget_raised: 0,
+        status: "",
+        country: "",
+        location_geo: null,
+        location_str: "",
+        image_url: "",
+        video_url: "",
+      });
+      setImageFiles([]);
+      setVideoFiles([]);
+      console.log("About to close drawer - setting isDrawerOpen to false");
+      setIsDrawerOpen(false);
+      console.log("Drawer state after setting to false:", isDrawerOpen);
     }
-};
-
-
+  };
 
   const handleSave = async (updatedChild: People) => {
     const supabase = createClient();
@@ -189,7 +190,6 @@ const ChildrenTable = () => {
 
   const handleDrawerClose = () => {
     setIsDrawerOpen(false);
-    console.log("Drawer closed by MapPicker");
   };
 
   if (loading) {
@@ -201,27 +201,21 @@ const ChildrenTable = () => {
       <div className="grid grid-cols-2 mb-2">
         <h1 className="text-3xl font-semibold leading-9">Children</h1>
         <div className="justify-self-end">
-          <DrawerRoot placement="start" size="lg">
-            <DrawerBackdrop />
-            <DrawerTrigger asChild>
-              <Button className="border-[2px] border-[#E0E0E0] w-fit h-[40px] px-4">
-                <GoPlusCircle className="mr-[3.5px]" /> New Child
-              </Button>
-            </DrawerTrigger>
-            <CreateDrawer
-              formData={formData}
-              setFormData={setFormData}
-              handleInputChange={handleInputChange}
-              handleSelectChange={handleSelectChange}
-              handleLocationSelect={handleLocationSelect}
-              handleSubmit={handleSubmit}
-              imageFiles={imageFiles}
-              setImageFiles={setImageFiles}
-              videoFiles={videoFiles}
-              setVideoFiles={setVideoFiles}
-              handleDrawerClose={handleDrawerClose}
-            />
-          </DrawerRoot>
+          <CreateDrawer
+            setIsDrawerOpen={setIsDrawerOpen}
+            formData={formData}
+            setFormData={setFormData}
+            handleInputChange={handleInputChange}
+            handleSelectChange={handleSelectChange}
+            handleLocationSelect={handleLocationSelect}
+            handleSubmit={handleSubmit}
+            isDrawerOpen={isDrawerOpen}
+            imageFiles={imageFiles}
+            setImageFiles={setImageFiles}
+            videoFiles={videoFiles}
+            setVideoFiles={setVideoFiles}
+            handleDrawerClose={handleDrawerClose}
+          />
         </div>
       </div>
       <DataTable
