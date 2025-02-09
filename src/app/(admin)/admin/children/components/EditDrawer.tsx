@@ -1,5 +1,5 @@
 "use client"
-import React, {useEffect} from 'react'
+import React, {useEffect, useState} from 'react'
 import {
     DrawerActionTrigger,
     DrawerBackdrop,
@@ -32,13 +32,11 @@ interface EditDrawerProps {
     onClose: () => void;
     onSave: (updatedChild: People) => void;
     onDelete: (childId: string) => void;
-    onLocationSelect: (geo: [number, number], locationStr: string, country: string) => void;
     imageFiles: File[];
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
     videoFiles: File[];
     setVideoFiles: React.Dispatch<React.SetStateAction<File[]>>;
 }
-
 
 const EditDrawer: React.FC<EditDrawerProps> = ({
     selectedChild,
@@ -46,13 +44,10 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     onClose,
     onSave,
     onDelete,
-    onLocationSelect,
-    // imageFiles,
     setImageFiles,
-    // videoFiles,
     setVideoFiles,
 }) => {
-    const [formDataEdit, setFormDataEdit] = React.useState<People>(() => selectedChild || {} as People);
+    const [formDataEdit, setFormDataEdit] = useState<People>(() => selectedChild || {} as People);
 
     useEffect(() => {
         if (selectedChild) {
@@ -77,8 +72,15 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             budget_goal: budgetGoalInCents 
         });
     };
-    
-    
+
+    const handleLocationSelect = (geo: [number, number], locationStr: string, country: string) => {
+        setFormDataEdit(prev => ({
+            ...prev,
+            location_geo: { type: "Point", coordinates: [geo[1], geo[0]] },
+            location_str: locationStr,
+            country: country
+        }));
+    };
 
     if (!selectedChild) return null;
 
@@ -187,7 +189,19 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     <FileUploadList />
                                 </FileUploadRoot>
                             </Field>
-                            <MapPicker onSelectLocation={onLocationSelect} />
+                            <MapPicker 
+                                onSelectLocation={handleLocationSelect} 
+                                initialLocation={
+                                    selectedChild.location_geo ? {
+                                        coordinates: [
+                                            selectedChild.location_geo.coordinates[1],
+                                            selectedChild.location_geo.coordinates[0]
+                                        ],
+                                        locationStr: selectedChild.location_str,
+                                        country: selectedChild.country
+                                    } : undefined
+                                }
+                            />
                         </Fieldset.Content>
                     </Fieldset.Root>
                 </DrawerBody>

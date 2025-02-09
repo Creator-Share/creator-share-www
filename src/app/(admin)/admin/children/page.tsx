@@ -47,7 +47,8 @@ const ChildrenTable = () => {
   });
 
   const [selectedChild, setSelectedChild] = useState<People | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
+  const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -151,9 +152,9 @@ const ChildrenTable = () => {
       });
       setImageFiles([]);
       setVideoFiles([]);
-      console.log("About to close drawer - setting isDrawerOpen to false");
-      setIsDrawerOpen(false);
-      console.log("Drawer state after setting to false:", isDrawerOpen);
+      console.log("About to close drawer - setting isCreateDrawerOpen to false");
+      setIsCreateDrawerOpen(false);
+      console.log("Drawer state after setting to false:", isCreateDrawerOpen);
     }
   };
 
@@ -162,11 +163,14 @@ const ChildrenTable = () => {
     const { error } = await supabase.from("people").update(updatedChild).eq('id', updatedChild.id);
 
     if (error) {
-      console.error("Error updating child:", error);
+        console.error("Error updating child:", error);
     } else {
-      console.log("Child updated successfully!");
-      setData((prevData) => prevData.map(child => child.id === updatedChild.id ? updatedChild : child));
-      setIsDrawerOpen(false);
+        setData((prevData) => prevData.map(child => 
+            child.id === updatedChild.id 
+                ? { ...updatedChild, budget_goal: parseFloat(centsToDollars(updatedChild.budget_goal)) }
+                : child
+        ));
+        setIsEditDrawerOpen(false);
     }
   };
 
@@ -179,17 +183,13 @@ const ChildrenTable = () => {
     } else {
       console.log("Child deleted successfully!");
       setData((prevData) => prevData.filter(child => child.id !== childId));
-      setIsDrawerOpen(false);
+      setIsEditDrawerOpen(false);
     }
   };
 
   const handleRowClick = (row: People) => {
     setSelectedChild(row);
-    setIsDrawerOpen(true);
-  };
-
-  const handleDrawerClose = () => {
-    setIsDrawerOpen(false);
+    setIsEditDrawerOpen(true);
   };
 
   if (loading) {
@@ -202,19 +202,19 @@ const ChildrenTable = () => {
         <h1 className="text-3xl font-semibold leading-9">Children</h1>
         <div className="justify-self-end">
           <CreateDrawer
-            setIsDrawerOpen={setIsDrawerOpen}
+            setIsDrawerOpen={setIsCreateDrawerOpen}
             formData={formData}
             setFormData={setFormData}
             handleInputChange={handleInputChange}
             handleSelectChange={handleSelectChange}
             handleLocationSelect={handleLocationSelect}
             handleSubmit={handleSubmit}
-            isDrawerOpen={isDrawerOpen}
+            isDrawerOpen={isCreateDrawerOpen}
             imageFiles={imageFiles}
             setImageFiles={setImageFiles}
             videoFiles={videoFiles}
             setVideoFiles={setVideoFiles}
-            handleDrawerClose={handleDrawerClose}
+            handleDrawerClose={() => setIsCreateDrawerOpen(false)}
           />
         </div>
       </div>
@@ -224,22 +224,20 @@ const ChildrenTable = () => {
         controls="bottom"
         onRowClick={(data: unknown) => handleRowClick(data as People)}
       />
-      {isDrawerOpen && selectedChild && (
+      {isEditDrawerOpen && selectedChild && (
         <EditDrawer
           selectedChild={selectedChild}
           formDataEdit={formDataEdit}
           setFormDataEdit={setFormDataEdit}
-          isDrawerOpen={isDrawerOpen}
-          onClose={handleDrawerClose}
+          isDrawerOpen={isEditDrawerOpen}
+          onClose={() => setIsEditDrawerOpen(false)}
           onSave={handleSave}
           onDelete={handleDelete}
-          onLocationSelect={handleLocationSelect}
           imageFiles={imageFiles}
           setImageFiles={setImageFiles}
           videoFiles={videoFiles}
           setVideoFiles={setVideoFiles}
         />
-
       )}
     </div>
   );

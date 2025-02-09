@@ -13,10 +13,17 @@ const customIcon = L.icon({
 
 interface MapPickerProps {
   onSelectLocation: (geo: [number, number], locationStr: string, country: string) => void;
+  initialLocation?: {
+    coordinates: [number, number];
+    locationStr: string;
+    country: string;
+  };
 }
 
-const MapPicker: React.FC<MapPickerProps> = ({  onSelectLocation }) => {
-  const [selectedLocation, setSelectedLocation] = useState<[number, number] | null>(null);
+const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation }) => {
+  const [selectedLocation, setSelectedLocation] = useState<[number, number] | null>(
+    initialLocation ? initialLocation.coordinates : null
+  );
 
   const fetchLocationData = async (lat: number, lng: number) => {
     try {
@@ -53,8 +60,8 @@ const MapPicker: React.FC<MapPickerProps> = ({  onSelectLocation }) => {
       <Field label="Location">
         <div className="h-[300px] w-full">
           <MapContainer
-            center={[0, 0]}
-            zoom={2}
+            center={initialLocation?.coordinates || [0, 0]}
+            zoom={initialLocation ? 8 : 2}
             scrollWheelZoom
             className="h-full w-full rounded-2xl"
             minZoom={0.6}
