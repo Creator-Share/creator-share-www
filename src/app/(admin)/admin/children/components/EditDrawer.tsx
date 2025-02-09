@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
 import { People } from "@/types/admin.types";
+import { createClient } from "@/utils/supabase/client";
 
 interface EditDrawerProps {
     selectedChild: People | null;
@@ -41,6 +42,8 @@ interface EditDrawerProps {
 const EditDrawer: React.FC<EditDrawerProps> = ({
     selectedChild,
     isDrawerOpen,
+    imageFiles,
+    videoFiles,
     onClose,
     onSave,
     onDelete,
@@ -48,6 +51,25 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     setVideoFiles,
 }) => {
     const [formDataEdit, setFormDataEdit] = useState<People>(() => selectedChild || {} as People);
+
+    const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
+        const supabase = createClient();
+        const fileName = `${Date.now()}-${file.name}`;
+        const filePath = `${folder}/${fileName}`;
+
+        const { error } = await supabase.storage.from("people").upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: false,
+        });
+
+        if (error) {
+            console.error("File upload failed:", error.message);
+            return null;
+        }
+
+        const { data } = supabase.storage.from("people").getPublicUrl(filePath);
+        return data.publicUrl;
+    };
 
     useEffect(() => {
         if (selectedChild) {
@@ -65,10 +87,21 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
         setFormDataEdit(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
+        const updatedData = { ...formDataEdit };
         const budgetGoalInCents = Math.round(parseFloat(formDataEdit.budget_goal.toString()) * 100);
+
+        if (imageFiles.length > 0) {
+            const imageUrl = await uploadFileToSupabase(imageFiles[0], "images");
+            if (imageUrl) updatedData.image_url = imageUrl;
+        }
+        if (videoFiles.length > 0) {
+            const videoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
+            if (videoUrl) updatedData.video_url = videoUrl;
+        }
+
         onSave({ 
-            ...formDataEdit, 
+            ...updatedData, 
             budget_goal: budgetGoalInCents 
         });
     };
