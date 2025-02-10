@@ -32,33 +32,44 @@ export async function POST(req: Request) {
     const session = event.data.object as Stripe.Checkout.Session;
     const childId = session.metadata?.childId;
     const amount = parseFloat(session.metadata?.amount || "0");
+    
     if (!childId || !amount) {
       console.error("Missing metadata in Stripe session");
       return NextResponse.json({ error: "Invalid metadata" }, { status: 400 });
     }
+
     const { data, error } = await supabase
       .from("people")
-      .select("budget_raised")
+      .select("budget_raised, budget_goal")
       .eq("id", childId)
       .single();
 
     if (error || !data) {
-      console.error("Error fetching budget_raised:", error);
+      console.error("Error fetching child data:", error);
       return NextResponse.json({ error: "Failed to fetch child data" }, { status: 500 });
     }
 
     const updatedBudget = data.budget_raised + amount;
+    let status = "Partially Funded";
+
+    if (updatedBudget >= data.budget_goal) {
+      status = "Budget Fulfilled";
+    }
+
     const { error: updateError } = await supabase
       .from("people")
-      .update({ budget_raised: updatedBudget })
+      .update({ 
+        budget_raised: updatedBudget,
+        status: status 
+      })
       .eq("id", childId);
 
     if (updateError) {
-      console.error("Error updating budget_raised:", updateError);
-      return NextResponse.json({ error: "Failed to update budget_raised" }, { status: 500 });
+      console.error("Error updating child data:", updateError);
+      return NextResponse.json({ error: "Failed to update child data" }, { status: 500 });
     }
 
-    return NextResponse.json({ message: "Budget updated successfully" }, { status: 200 });
+    return NextResponse.json({ message: "Child data updated successfully" }, { status: 200 });
   }
 
   return NextResponse.json({ message: "Unhandled event type" }, { status: 400 });

@@ -8,7 +8,8 @@ export async function GET(req: Request) {
   try {
     const query = supabase
       .from("people")
-      .select("id, name, introduction, biography, gender, budget_raised, budget_goal, image_url, location_geo, birth_date, country, location_str, video_url");
+      .select("id, name, introduction, biography, gender, budget_raised, budget_goal, image_url, location_geo, birth_date, country, location_str, video_url")
+      .neq('status', 'Budget Fulfilled');
 
     const ne = searchParams.get("ne");
     const sw = searchParams.get("sw");
