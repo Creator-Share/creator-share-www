@@ -1,5 +1,5 @@
 "use client"
-import React from "react";
+import React, { useState } from "react";
 import {
     DrawerContent,
     DrawerHeader,
@@ -11,7 +11,8 @@ import {
     DrawerBackdrop,
     DrawerTrigger,
 } from "@/components/ui/drawer";
-import { Button, Text, Fieldset, Input, Stack, Textarea } from "@chakra-ui/react";
+import {  Text, Fieldset, Input, Stack, Textarea } from "@chakra-ui/react";
+import { Button } from '@/components/ui/button';
 import { Field } from "@/components/ui/field";
 import {
     NativeSelectField,
@@ -35,7 +36,7 @@ type CreateDrawerProps = {
     handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
     handleSelectChange: (name: keyof People, value: string) => void;
     handleLocationSelect: (geo: [number, number], locationStr: string, country: string) => void;
-    handleSubmit: (e: React.MouseEvent<HTMLButtonElement>) => void;
+    handleSubmit: (e: React.MouseEvent<HTMLButtonElement>) => Promise<void>;
     imageFiles: File[];
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
     videoFiles: File[];
@@ -53,6 +54,19 @@ const CreateDrawer = ({
     setVideoFiles,
     handleDrawerClose,
 }: CreateDrawerProps) => {
+    const [isAdding, setIsAdding] = useState(false);
+
+    const handleAdd = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        try {
+            setIsAdding(true);
+            await handleSubmit(e);
+        } catch (error) {
+            console.error("Error adding:", error);
+        } finally {
+            setIsAdding(false);
+        }
+    };
+
     return (
         <DrawerRoot placement="start" size="lg" open={isDrawerOpen} onOpenChange={({ open }) => {
             setIsDrawerOpen(open);
@@ -145,9 +159,23 @@ const CreateDrawer = ({
                 </DrawerBody>
                 <DrawerFooter>
                     <DrawerActionTrigger asChild>
-                        <Button variant="outline" onClick={handleDrawerClose}>Cancel</Button>
+                        <Button 
+                            className="bg-black w-1/2 text-white" 
+                            onClick={handleDrawerClose}
+                            disabled={isAdding}
+                        >
+                            Cancel
+                        </Button>
                     </DrawerActionTrigger>
-                    <Button onClick={handleSubmit}>Add</Button>
+                    <Button 
+                        onClick={handleAdd} 
+                        className="bg-[#1C3C8C] w-1/2 text-white"
+                        disabled={isAdding}
+                        loading={isAdding}
+                        loadingText="Adding..."
+                    >
+                        Add
+                    </Button>
                 </DrawerFooter>
             </DrawerContent>
         </DrawerRoot>

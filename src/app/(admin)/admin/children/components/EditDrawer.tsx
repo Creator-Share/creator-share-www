@@ -10,8 +10,9 @@ import {
     DrawerRoot,
     DrawerTitle,
 } from "@/components/ui/drawer";
-import { Button, Text, Fieldset, Input, Stack, Textarea, Image } from "@chakra-ui/react";
+import { Text, Fieldset, Input, Stack, Textarea, Image } from "@chakra-ui/react";
 import { Field } from "@/components/ui/field";
+import { Button } from '@/components/ui/button';
 import {
     NativeSelectField,
     NativeSelectRoot,
@@ -32,7 +33,7 @@ interface EditDrawerProps {
     isDrawerOpen: boolean;
     onClose: () => void;
     onSave: (updatedChild: People) => void;
-    onDelete: (childId: string) => void;
+    onDelete: (childId: string) => Promise<void>;
     imageFiles: File[];
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
     videoFiles: File[];
@@ -51,6 +52,8 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     setVideoFiles,
 }) => {
     const [formDataEdit, setFormDataEdit] = useState<People>(() => selectedChild || {} as People);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
         const supabase = createClient();
@@ -88,22 +91,29 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     };
 
     const handleSave = async () => {
-        const updatedData = { ...formDataEdit };
-        const budgetGoalInCents = Math.round(parseFloat(formDataEdit.budget_goal.toString()) * 100);
+        try {
+            setIsSaving(true);
+            const updatedData = { ...formDataEdit };
+            const budgetGoalInCents = Math.round(parseFloat(formDataEdit.budget_goal.toString()) * 100);
 
-        if (imageFiles.length > 0) {
-            const imageUrl = await uploadFileToSupabase(imageFiles[0], "images");
-            if (imageUrl) updatedData.image_url = imageUrl;
-        }
-        if (videoFiles.length > 0) {
-            const videoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
-            if (videoUrl) updatedData.video_url = videoUrl;
-        }
+            if (imageFiles.length > 0) {
+                const imageUrl = await uploadFileToSupabase(imageFiles[0], "images");
+                if (imageUrl) updatedData.image_url = imageUrl;
+            }
+            if (videoFiles.length > 0) {
+                const videoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
+                if (videoUrl) updatedData.video_url = videoUrl;
+            }
 
-        onSave({ 
-            ...updatedData, 
-            budget_goal: budgetGoalInCents 
-        });
+            await onSave({ 
+                ...updatedData, 
+                budget_goal: budgetGoalInCents 
+            });
+        } catch (error) {
+            console.error("Error saving:", error);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleLocationSelect = (geo: [number, number], locationStr: string, country: string) => {
@@ -240,21 +250,43 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                 </DrawerBody>
                 <DrawerFooter>
                     <DrawerActionTrigger asChild>
-                        <Button variant="outline" onClick={onClose}>Cancel</Button>
+                        <Button 
+                            className='bg-black w-[29.5%] text-white' 
+                            onClick={onClose}
+                            disabled={isDeleting || isSaving}
+                        >
+                            Cancel
+                        </Button>
                     </DrawerActionTrigger>
-                    <Button onClick={handleSave}>Save</Button>
                     <Button
-                        variant="outline"
-                        colorScheme="red"
-                        onClick={() => {
+                        className='bg-red-500 w-1/3 text-white'
+                        onClick={async () => {
                             if (selectedChild?.id) {
-                                onDelete(selectedChild.id);
+                                try {
+                                    setIsDeleting(true);
+                                    await onDelete(selectedChild.id);
+                                    onClose();
+                                } catch (error) {
+                                    console.error("Error deleting:", error);
+                                } finally {
+                                    setIsDeleting(false);
+                                }
                             } else {
                                 console.error("Child ID is undefined");
                             }
                         }}
+                        disabled={isDeleting || isSaving}
                     >
-                        Delete
+                        {isDeleting ? 'Deleting...' : 'Delete'}
+                    </Button>
+                    <Button 
+                        onClick={handleSave} 
+                        className="bg-[#1C3C8C] w-1/3 text-white"
+                        loading={isSaving}
+                        loadingText="Saving..."
+                        disabled={isDeleting}
+                    >
+                        Save
                     </Button>
                 </DrawerFooter>
             </DrawerContent>
