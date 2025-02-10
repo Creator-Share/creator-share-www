@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Box, Flex, Text, Spinner } from "@chakra-ui/react";
 import Filters from "./components/Filters";
 import ChildListings from "./components/ChildListings";
@@ -24,6 +24,7 @@ const SponsorChild = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ age: "", gender: "" });
+  const listingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     import("leaflet").then((module) => {
@@ -81,6 +82,22 @@ const SponsorChild = () => {
     const selectedPerson = childrenData.find((child) => child.id === id);
     if (selectedPerson) {
       setSelectedCountry(selectedPerson.country);
+      
+      setTimeout(() => {
+        if (listingsRef.current) {
+          listingsRef.current.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
+          });
+          const element = document.getElementById(`child-${id}`);
+          if (element) {
+            element.scrollIntoView({ 
+              behavior: 'smooth',
+              block: 'center'
+            });
+          }
+        }
+      }, 100);
     }
   };
 
@@ -112,7 +129,7 @@ const SponsorChild = () => {
         onBoundsChange={handleBoundsChange}
       />
       {selectedCountry && (
-        <Box width="100%">
+        <Box width="100%" ref={listingsRef}>
           <Text mb={8} mt={5} fontSize="4xl" color="#1C3C8C" fontWeight="semibold" textAlign="left">
             Showing results from {selectedCountry}
           </Text>
