@@ -51,7 +51,6 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
             if (url) {
                 window.location.href = url;
             }
-            console.log(stripe)
         } catch (err) {
             console.error("Payment Error:", err);
         }

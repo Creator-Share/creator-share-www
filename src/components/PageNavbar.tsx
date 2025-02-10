@@ -53,7 +53,6 @@ export function PageNavbar() {
 
   const handleLogout = async () => {
     await logout();
-    console.log("User logged out, redirecting to /...");
     router.push("/");
   };
   if (!mounted) {

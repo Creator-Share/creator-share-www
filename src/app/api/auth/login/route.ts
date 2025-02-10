@@ -44,7 +44,6 @@ export async function POST(request: Request) {
       .eq("user_id", userId) as unknown as { data: RoleAssignment[]; };
 
     const roleName = roleData[0]?.roles?.name;
-    console.log("User Role Fetched:", roleName);
 
     if (roleName === "SUPER_ADMIN") {
       return NextResponse.json(

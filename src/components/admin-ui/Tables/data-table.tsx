@@ -81,9 +81,6 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
     },
   });
 
-  console.log("Data length:", data.length);
-  console.log("Page count:", table.getPageCount());
-
 
   React.useImperativeHandle(ref, () => ({
     getTableInstance: () => table,

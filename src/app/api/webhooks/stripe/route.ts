@@ -18,7 +18,6 @@ export async function POST(req: Request) {
 
   try {
     const rawBody = await req.text();
-    console.log("Webhook received:", rawBody);
     event = stripe.webhooks.constructEvent(
       rawBody,
       sig as string,
@@ -31,10 +30,8 @@ export async function POST(req: Request) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
-    console.log("Checkout session completed:", session);
     const childId = session.metadata?.childId;
     const amount = parseFloat(session.metadata?.amount || "0");
-    console.log(`Child ID: ${childId}, Amount: ${amount}`);
     if (!childId || !amount) {
       console.error("Missing metadata in Stripe session");
       return NextResponse.json({ error: "Invalid metadata" }, { status: 400 });
@@ -61,7 +58,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to update budget_raised" }, { status: 500 });
     }
 
-    console.log(`Budget updated successfully for child ID ${childId}`);
     return NextResponse.json({ message: "Budget updated successfully" }, { status: 200 });
   }
 

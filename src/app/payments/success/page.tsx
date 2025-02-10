@@ -8,7 +8,6 @@ const SuccessPage = () => {
   const router = useRouter();
 
   useEffect(() => {
-    console.log("Payment successful!");
     const timeout = setTimeout(() => {
       const peopleId = localStorage.getItem("sponsoredChildId");
       if (peopleId) {
