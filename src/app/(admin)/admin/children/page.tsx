@@ -52,18 +52,15 @@ const ChildrenTable = () => {
 
   useEffect(() => {
     async function fetchData() {
-      const supabase = createClient();
-      const { data: fetchedData, error } = await supabase.from("people").select("*");
-
-      if (error) {
+      try {
+        const response = await fetch('/api/admin/children/retrieve');
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        const fetchedData = await response.json();
+        setData(fetchedData);
+      } catch (error) {
         console.error("Error fetching people:", error);
-      } else if (fetchedData) {
-        const formattedData = fetchedData.map((child) => ({
-          ...child,
-          budget_goal: (child.budget_goal / 100).toFixed(2),
-        }));
-
-        setData(formattedData);
       }
       setLoading(false);
     }
@@ -110,32 +107,38 @@ const ChildrenTable = () => {
   };
 
   const handleSubmit = async () => {
-    console.log("Submitting Data:", formData);
+    try {
+      const uploadedImageUrl = imageFiles.length > 0 ? await uploadFileToSupabase(imageFiles[0], "images") : "";
+      const uploadedVideoUrl = videoFiles.length > 0 ? await uploadFileToSupabase(videoFiles[0], "videos") : "";
 
-    const uploadedImageUrl = imageFiles.length > 0 ? await uploadFileToSupabase(imageFiles[0], "images") : "";
-    const uploadedVideoUrl = videoFiles.length > 0 ? await uploadFileToSupabase(videoFiles[0], "videos") : "";
+      const budgetGoalInCents = Math.round(parseFloat(formData.budget_goal.toString()) * 100);
 
-    const budgetGoalInCents = Math.round(parseFloat(formData.budget_goal.toString()) * 100);
+      const updatedFormData = {
+        ...formData,
+        budget_goal: budgetGoalInCents,
+        image_url: uploadedImageUrl,
+        video_url: uploadedVideoUrl,
+      };
 
-    const updatedFormData = {
-      ...formData,
-      budget_goal: budgetGoalInCents,
-      image_url: uploadedImageUrl,
-      video_url: uploadedVideoUrl,
-    };
+      const response = await fetch('/api/admin/children/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedFormData),
+      });
 
-    console.log("Submitting Data:", updatedFormData);
+      if (!response.ok) {
+        throw new Error('Failed to create child');
+      }
 
-    const supabase = createClient();
-    const { data: newChild, error } = await supabase.from("people").insert([updatedFormData]).select().single();
+      const newChild = await response.json();
 
-    if (error) {
-      console.error("Error adding child:", error);
-    } else {
       setData((prevData) => [
         ...prevData,
         { ...newChild, budget_goal: centsToDollars(newChild.budget_goal) },
       ]);
+
       setFormData({
         name: "",
         gender: "",
@@ -152,38 +155,55 @@ const ChildrenTable = () => {
       });
       setImageFiles([]);
       setVideoFiles([]);
-      console.log("About to close drawer - setting isCreateDrawerOpen to false");
       setIsCreateDrawerOpen(false);
-      console.log("Drawer state after setting to false:", isCreateDrawerOpen);
+    } catch (error) {
+      console.error("Error creating child:", error);
     }
   };
 
   const handleSave = async (updatedChild: People) => {
-    const supabase = createClient();
-    const { error } = await supabase.from("people").update(updatedChild).eq('id', updatedChild.id);
+    try {
+      const response = await fetch('/api/admin/children/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedChild),
+      });
 
-    if (error) {
-        console.error("Error updating child:", error);
-    } else {
-        setData((prevData) => prevData.map(child => 
-            child.id === updatedChild.id 
-                ? { ...updatedChild, budget_goal: parseFloat(centsToDollars(updatedChild.budget_goal)) }
-                : child
-        ));
-        setIsEditDrawerOpen(false);
+      if (!response.ok) {
+        throw new Error('Failed to update child');
+      }
+
+      setData((prevData) => prevData.map(child => 
+          child.id === updatedChild.id 
+              ? { ...updatedChild, budget_goal: parseFloat(centsToDollars(updatedChild.budget_goal)) }
+              : child
+      ));
+      setIsEditDrawerOpen(false);
+    } catch (error) {
+      console.error("Error updating child:", error);
     }
   };
 
   const handleDelete = async (childId: string) => {
-    const supabase = createClient();
-    const { error } = await supabase.from("people").delete().eq('id', childId);
+    try {
+      const response = await fetch('/api/admin/children/delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ childId }),
+      });
 
-    if (error) {
-      console.error("Error deleting child:", error);
-    } else {
-      console.log("Child deleted successfully!");
+      if (!response.ok) {
+        throw new Error('Failed to delete child');
+      }
+
       setData((prevData) => prevData.filter(child => child.id !== childId));
       setIsEditDrawerOpen(false);
+    } catch (error) {
+      console.error("Error deleting child:", error);
     }
   };
 

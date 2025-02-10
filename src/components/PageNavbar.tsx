@@ -29,6 +29,7 @@ export function PageNavbar() {
   const logout = useAuthStore((state) => state.logout);
   const fetchUser = useAuthStore((state) => state.fetchUser);
   const router = useRouter();
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -37,6 +38,18 @@ export function PageNavbar() {
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (user?.id) {
+        const response = await fetch('/api/auth/check-admin');
+        const { isAdmin } = await response.json();
+        setIsAdmin(isAdmin);
+      }
+    };
+
+    checkAdminStatus();
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -109,6 +122,13 @@ export function PageNavbar() {
               <ColorModeButton />
               {user ? (
                 <>
+                  {isAdmin && (
+                    <NextLink href="/admin" passHref>
+                      <Button variant="ghost" size="sm">
+                        Admin
+                      </Button>
+                    </NextLink>
+                  )}
                   <Button variant="ghost" size="sm" onClick={handleLogout}>
                     Logout
                   </Button>
