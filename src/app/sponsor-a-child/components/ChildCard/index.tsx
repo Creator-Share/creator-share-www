@@ -4,7 +4,6 @@ import { Box, Text, Image, Flex, Input, InputAddon } from "@chakra-ui/react";
 import { Button } from "@/components/ui/button";
 import { FaCalendar, FaCaretDown } from "react-icons/fa";
 import { FaLocationDot, FaPerson } from "react-icons/fa6";
-import { People } from "@/types";
 import { calculateAge } from "@/utils/ageCalculator";
 import {
     DialogBody,

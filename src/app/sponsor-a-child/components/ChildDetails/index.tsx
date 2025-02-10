@@ -3,14 +3,11 @@ import { useState } from "react";
 import { Box, Flex, Text, Image, Button, Input, InputAddon } from "@chakra-ui/react";
 import { FaCalendar } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
-import { People } from "@/types";
 import { useRouter } from "next/navigation";
 import { calculateAge } from "@/utils/ageCalculator";
 import { formatDate } from "@/utils/dateFormatter";
-import { loadStripe } from "@stripe/stripe-js";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChildCardProps } from "@/types/propTypes";
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string);
 
 const ChildDetailsCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const router = useRouter();
@@ -35,7 +32,6 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
         }
 
         try {
-            const stripe = await stripePromise;
             const res = await fetch("/api/stripe", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

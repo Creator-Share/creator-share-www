@@ -66,6 +66,7 @@ const SponsorChild = () => {
     if (!L) return;
     setListingsLoading(true);
     const filtered = childrenData.filter((child) => {
+      if (!child.location_geo) return false;
       const [lng, lat] = child.location_geo.coordinates;
       return bounds.contains(L.latLng(lat, lng));
     });

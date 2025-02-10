@@ -20,7 +20,7 @@ export interface People {
     budget_raised: number;
     status: string;
     country:string;
-    location_geo: Geography | null;
+    location_geo: Geography;
     video_url: string;
     introduction: string
   }
