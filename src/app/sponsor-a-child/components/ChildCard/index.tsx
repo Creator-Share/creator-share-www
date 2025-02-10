@@ -47,55 +47,55 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
 
     const handleSponsor = async () => {
         if (amount <= 0) {
-          toaster.create({
-            title: "Invalid Amount",
-            description: "Please enter a valid amount.",
-          });
-          return;
+            toaster.create({
+                title: "Invalid Amount",
+                description: "Please enter a valid amount.",
+            });
+            return;
         }
-    
+
         const totalAfterDonation = people.budget_raised / 100 + amount;
-    
+
         if (totalAfterDonation > people.budget_goal / 100) {
-          toaster.create({
-            title: "Sponsorship amount exceeds the budget goal.",
-            description: "Please enter a lower amount.",
-          });
-          return;
+            toaster.create({
+                title: "Sponsorship amount exceeds the budget goal.",
+                description: "Please enter a lower amount.",
+            });
+            return;
         }
-    
+
         setLoading(true);
         try {
-          const res = await fetch("/api/stripe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              childId: people.id,
-              childName: people.name,
-              childImage: people.image_url,
-              amount: amount * 100,
-              paymentType: selectedOption,
-            }),
-          });
-    
-          const { url } = await res.json();
-          if (url) {
-            toaster.create({
-              title: "Redirecting...",
-              description: "You will be redirected to complete the sponsorship.",
+            const res = await fetch("/api/stripe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    childId: people.id,
+                    childName: people.name,
+                    childImage: people.image_url,
+                    amount: amount * 100,
+                    paymentType: selectedOption,
+                }),
             });
-            window.location.href = url;
-          }
+
+            const { url } = await res.json();
+            if (url) {
+                toaster.create({
+                    title: "Redirecting...",
+                    description: "You will be redirected to complete the sponsorship.",
+                });
+                window.location.href = url;
+            }
         } catch (err) {
-          toaster.create({
-            title: "Payment Error",
-            description: "Something went wrong. Please try again.",
-          });
-          console.error("Payment Error:", err);
+            toaster.create({
+                title: "Payment Error",
+                description: "Something went wrong. Please try again.",
+            });
+            console.error("Payment Error:", err);
         } finally {
-          setLoading(false);
+            setLoading(false);
         }
-      };
+    };
 
 
     const handleCheckboxChange = (option: string) => {
@@ -115,41 +115,37 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
             direction={{ base: "column", md: "row" }}
             align={{ base: "center", md: "flex-start" }}
             textAlign={{ base: "center", md: "left" }}
-            borderWidth="1px"
             borderColor={isSelected ? "blue.500" : "gray.200"}
-            borderRadius={{ base: 'lg', md: 'md' }}
-            boxShadow="sm"
-            className="bg-white shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-6 mb-6 md:p-0 md:mb-8"
+            borderRadius={{ base: 'md', md: 'md' }}
+            className="bg-white cursor-pointer mb-6 p-0 border-0 md:border md:mb-8 md:p-0"
         >
             <Box>
                 <Image
                     src={people.image_url}
                     alt={people.name}
-                    boxSize={{ base: "150px", md: "273px" }}
                     objectFit="cover"
-                    borderRadius={{ base: "full", md: "md" }}
-                    className="mb-4 md:mb-0"
+                    className="mb-4 md:mb-0 rounded-t-md h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:h-[273px] md:w-[450px]"
                 />
             </Box>
-            <Box className="md:grid md:grid-cols-2 pt-[20px]">
+            <Box className="md:grid md:grid-cols-2 pt-[20px] w-full md:w-screen">
                 <Box ml={{ md: 6 }} w="full">
                     <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">
                         {people.name}
                     </Text>
-                    <Box fontSize="base" className="text-[#767070] mb-4">
-                        <Flex justify={{ base: "center", md: "flex-start" }} align="center" gap={2} mb={4}>
+                    <Box fontSize="base" className="text-[#767070] bg-[#DFDFDF] rounded-md md:bg-white p-4 mb-4 text-left md:text-center">
+                        <Flex align="center" gap={2} mb={4}>
                             <FaCalendar />
                             <Text fontSize="sm" className="text-gray-500">
                                 {age} year{age > 1 ? 's' : ''} old
                             </Text>
                         </Flex>
-                        <Flex justify={{ base: "center", md: "flex-start" }} align="center" gap={2} mb={4}>
+                        <Flex align="center" gap={2} mb={4}>
                             <FaPerson />
                             <Text fontSize="sm" className="text-gray-500">
                                 {people.gender}
                             </Text>
                         </Flex>
-                        <Flex justify={{ base: "center", md: "flex-start" }} align="center" gap={2}>
+                        <Flex align="center" gap={2}>
                             <FaLocationDot />
                             <Text fontSize="sm" className="text-gray-500">
                                 {people.country}
@@ -170,7 +166,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                         </Text>
                     </Box>
                 </Box>
-                <Box className="md:ml-14">
+                <Box className="md:ml-14 px-4 md:px-0">
                     <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
                         Introduction
                     </Text>
@@ -178,14 +174,14 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                         {people.introduction}
                     </Text>
                     <Text fontSize="base" className="text-[#767070] mt-4">
-                        <span className="text-[#1C3C8C] cursor-pointer whitespace-nowrap flex items-center gap-1">
+                        <span className="text-[#1C3C8C] ml-2 cursor-pointer whitespace-nowrap flex items-center gap-1">
                             Learn more about {people.name} <FaCaretDown />
                         </span>
                     </Text>
                     <DialogRoot size="cover" placement="center" motionPreset="slide-in-bottom" role="alertdialog">
                         <DialogTrigger asChild>
                             <Box fontSize="base" mb={3}>
-                                <Button fontWeight="md" className="text-[#FFFFFF] cursor-pointer bg-[#1C3C8C] px-4 mt-8">
+                                <Button fontWeight="md" className="text-[#FFFFFF] w-full md:w-11/12 cursor-pointer bg-[#1C3C8C] px-4 mt-8">
                                     Sponsor
                                 </Button>
                             </Box>
@@ -264,12 +260,12 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                                         <Button
                                             bg="#1C3C8C"
                                             color="white"
-                                            w="full"
                                             mt={4}
                                             loading={loading}
                                             loadingText="Processing..."
                                             onClick={handleSponsor}
                                             disabled={loading}
+                                            className="w-full"
                                         >
                                             Sponsor
                                         </Button>
