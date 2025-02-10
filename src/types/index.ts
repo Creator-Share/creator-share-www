@@ -20,7 +20,7 @@ export interface People {
     budget_raised: number;
     status: string;
     country:string;
-    location_geo: Geography;
+    location_geo: Geography | null;
     video_url: string;
     introduction: string
   }
@@ -44,4 +44,13 @@ export interface AuthState {
   setRegistrationEmail: (email: string) => void;
   clearRegistrationEmail: () => void;
   fetchUser: () => Promise<void>;
+}
+
+
+export interface FilterState {
+  selectedGender: string
+  selectedAge: string
+  setGender: (gender: string) => void
+  setAge: (age: string) => void
+  clearFilters: () => void
 }

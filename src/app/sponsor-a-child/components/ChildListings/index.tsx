@@ -16,12 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { centsToDollars } from "@/utils/currency";
 import { toaster } from "@/components/ui/toaster";
-
-interface ChildListingsProps {
-  peopleData: People[];
-  selectedChildId: string | null;
-  selectedCountry: string | null;
-}
+import { ChildListingsProps } from "@/types/propTypes";
 
 const ChildListings: React.FC<ChildListingsProps> = ({
   peopleData,

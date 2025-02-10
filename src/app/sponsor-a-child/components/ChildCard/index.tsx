@@ -18,13 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { centsToDollars } from "@/utils/currency";
 import { toaster } from "@/components/ui/toaster"
-
-interface ChildCardProps {
-    people: People;
-    isSelected?: boolean;
-    id: string;
-}
-
+import { ChildCardProps } from "@/types/propTypes";
 
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const age = calculateAge(new Date(people.birth_date).toISOString());

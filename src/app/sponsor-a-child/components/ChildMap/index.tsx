@@ -6,7 +6,7 @@ import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet"
 import MarkerClusterGroup from "react-leaflet-markercluster";
 import L, { LatLngBounds, MarkerCluster } from "leaflet";
 import "leaflet/dist/leaflet.css";
-
+import { ChildMapProps } from "@/types/propTypes";
 
 const CustomIcon = L.icon({
   iconUrl: "/CreatorSharePin.svg",
@@ -29,20 +29,6 @@ const createClusterCustomIcon = (cluster: MarkerCluster): L.DivIcon => {
     iconSize: [40, 40],
   });
 };
-
-interface ChildMapProps {
-  childData: {
-    id: string;
-    name: string;
-    location_geo: {
-      coordinates: [number, number];
-    };
-    image_url: string;
-    country: string;
-  }[];
-  onMarkerClick: (id: string) => void;
-  onBoundsChange: (bounds: LatLngBounds) => void;
-}
 
 const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void }> = ({ onBoundsChange }) => {
   const map = useMap();

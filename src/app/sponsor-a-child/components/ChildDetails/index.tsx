@@ -9,13 +9,7 @@ import { calculateAge } from "@/utils/ageCalculator";
 import { formatDate } from "@/utils/dateFormatter";
 import { loadStripe } from "@stripe/stripe-js";
 import { Checkbox } from "@/components/ui/checkbox";
-
-interface ChildCardProps {
-    people: People;
-    isSelected?: boolean;
-    id: string;
-}
-
+import { ChildCardProps } from "@/types/propTypes";
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string);
 
 const ChildDetailsCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
