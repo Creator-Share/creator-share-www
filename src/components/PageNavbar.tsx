@@ -14,6 +14,8 @@ const Links = [
   { name: "Causes", href: "/causes" },
   { name: "My Community", href: "/local" },
   { name: "Share Abundance", href: "/share" },
+  { name: "Sponsor-a-Child", href: "/sponsor-a-child" },
+  { name: "I-Frame Test", href: "/iframe-test" },
 ];
 
 export function PageNavbar() {
@@ -76,7 +78,8 @@ export function PageNavbar() {
               px={2}
               py={1}
               rounded="md"
-              _hover={{ textDecoration: "none", bg: "gray.100" }}
+              className="text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-[#2B7FF9]"
+              _hover={{ textDecoration: "none" }}
             >
               {link.name}
             </Link>
