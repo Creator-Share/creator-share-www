@@ -30,7 +30,7 @@ const SuccessPageContent = () => {
         setChildDetails({
           name: session.metadata.childName || '',
           location: session.metadata.childLocation || '',
-          email: localStorage.getItem('userEmail') || ''
+          email: session.customer_details.email || ''
         });
       } catch (error) {
         console.error('Error fetching session:', error);

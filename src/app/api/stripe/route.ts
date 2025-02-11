@@ -24,7 +24,7 @@ export async function POST(req: Request) {
         childLocation: location,
       },
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/cancel`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}`,
     };
 
     let session;
