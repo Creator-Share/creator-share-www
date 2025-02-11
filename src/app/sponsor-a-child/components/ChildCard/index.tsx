@@ -21,9 +21,10 @@ import { ChildCardProps } from "@/types/propTypes";
 
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const age = calculateAge(new Date(people.birth_date).toISOString());
-    const [amount, setAmount] = useState<number>(0);
+    const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
+    const [amount, setAmount] = useState<number>(remainingAmount);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
-    const [value, setValue] = useState<number[]>([0]);
+    const [value, setValue] = useState<number[]>([remainingAmount]);
     const [loading, setLoading] = useState<boolean>(false);
 
     const handleSliderChange = (e: { value: number[] }) => {
@@ -103,6 +104,22 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
             }
         });
     };
+
+    const renderDisclaimer = () => {
+        if ((people.budget_goal - people.budget_raised - amount * 100) > 0) {
+            return (
+                <>
+                    This child has a monthly budget goal that must be met for enrollment in school.
+                    <br />
+                    Additional sponsors are required to meet this goal.
+                </>
+            )
+        } else if (people.budget_raised > 0) {
+            return "This child is partially sponsored. Your contribution will help reach their monthly budget goal!";
+        }
+        return "Your sponsorship will be applied towards the child's monthly budget goals.";
+    };
+
     return (
         <Flex
             direction={{ base: "column", md: "row" }}
@@ -224,7 +241,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                                                 <Slider
                                                     value={value}
                                                     min={0}
-                                                    max={people.budget_goal / 100}
+                                                    max={remainingAmount}
                                                     step={5}
                                                     variant="solid"
                                                     onValueChange={handleSliderChange}
@@ -262,6 +279,9 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                                         >
                                             Sponsor
                                         </Button>
+                                        <Text color="gray.500" textAlign="center" p={1}>
+                                            {renderDisclaimer()}
+                                        </Text>
                                     </Box>
                                 </Box>
                             </DialogBody>
