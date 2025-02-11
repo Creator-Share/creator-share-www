@@ -6,9 +6,19 @@ const nextConfig: NextConfig = {
   },
 
   images: {
-    domains: [
-      "tile.openstreetmap.org",
-      "cdn.pixabay.com" // Add any other image domains you need
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'tile.openstreetmap.org',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.pixabay.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'static.wixstatic.com',
+      },
     ],
   },
 

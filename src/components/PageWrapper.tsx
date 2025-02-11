@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect, useState } from 'react';
 
 const PageNavbar = dynamic(
   () => import("./PageNavbar").then((mod) => mod.PageNavbar),
@@ -8,9 +9,16 @@ const PageNavbar = dynamic(
 );
 
 export function PageWrapper({ children }: { children: React.ReactNode }) {
+  const [isEmbedded, setIsEmbedded] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setIsEmbedded(params.get('embedded') === 'true');
+  }, []);
+
   return (
     <>
-      <PageNavbar />
+      {!isEmbedded && <PageNavbar />}
       {children}
     </>
   );
