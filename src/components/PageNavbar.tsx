@@ -1,19 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import {
-  Box,
-  Flex,
-  HStack,
-  Link,
-  Button,
-  Image,
-  Container,
-  Text,
-} from "@chakra-ui/react";
+import { Box, Flex, Link, Button, Image, VStack } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { ColorModeButton } from "./ui/color-mode";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
+import { ColorModeButton } from "./ui/color-mode";
+import { GiHamburgerMenu } from "react-icons/gi";
+import { IoClose } from "react-icons/io5";
 
 const Links = [
   { name: "Lives", href: "/lives" },
@@ -24,6 +17,7 @@ const Links = [
 ];
 
 export function PageNavbar() {
+  const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -33,124 +27,159 @@ export function PageNavbar() {
 
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-  useEffect(() => {
     fetchUser();
   }, [fetchUser]);
 
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (user?.id) {
-        const response = await fetch('/api/auth/check-admin');
+        const response = await fetch("/api/auth/check-admin");
         const { isAdmin } = await response.json();
         setIsAdmin(isAdmin);
       }
     };
-
     checkAdminStatus();
   }, [user]);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.classList.add("overflow-hidden");
+    } else {
+      document.body.classList.remove("overflow-hidden");
+    }
+  }, [isOpen]);
 
   const handleLogout = async () => {
     await logout();
     router.push("/");
   };
-  if (!mounted) {
-    return null;
-  }
+
+  if (!mounted) return null;
 
   return (
-    <Box
-      position="sticky"
-      top={0}
-      zIndex={1000}
-      transition="box-shadow 0.2s"
-      boxShadow={window.scrollY > 0 ? "lg" : "none"}
-      backdropFilter="blur(10px)"
-    >
-      <Container maxW="container.xl">
-        <Flex h={16} alignItems="center" justifyContent="space-between">
+    <Box className="w-full z-[1000]">
+      <Flex className="container mx-auto px-4 h-16 flex justify-between items-center relative">
+        {/* Logo Centered */}
+        <Box className="w-full md:w-[10%]">
           <NextLink href="/" passHref>
-            <Box>
-              <Image
-                src="/logo_text.svg"
-                alt="Creator Share Logo"
-                height="60px"
-                width="auto"
-              />
-            </Box>
+            <Image src="/logo_text.svg" alt="Logo" height="55px" mx="auto" />
           </NextLink>
+        </Box>
 
-          <Link
-            as={NextLink}
-            href="/sponsor-a-child"
-            px={2}
-            py={1}
-            mt={4}
-            rounded="md"
-            _hover={{
-              textDecoration: "none",
-              bg: "gray.100",
-            }}
-          >
-            Sponsor a Child
-          </Link>
-
-          <HStack gap="2">
-            <HStack as="nav" gap="1" display={{ base: "none", md: "flex" }}>
-              {Links.map((link) => (
-                <Link
-                  as={NextLink}
-                  key={link.name}
-                  href={link.href}
-                  px={2}
-                  py={1}
-                  mt={4}
-                  rounded="md"
-                  _hover={{
-                    textDecoration: "none",
-                    bg: "gray.100",
-                  }}
-                >
-                  {link.name}
-                </Link>
-              ))}
-            </HStack>
-
-            <HStack gap={4} mt={4}>
-              <ColorModeButton />
-              {user ? (
-                <>
-                  {isAdmin && (
-                    <NextLink href="/admin" passHref>
-                      <Button variant="ghost" size="sm">
-                        Admin
-                      </Button>
-                    </NextLink>
-                  )}
-                  <Button variant="ghost" size="sm" onClick={handleLogout}>
-                    Logout
-                  </Button>
-                  <Text fontSize="sm">{user.email}</Text>
-                </>
-              ) : (
-                <>
-                  <NextLink href="/login" passHref>
-                    <Button variant="ghost" size="sm">
-                      Sign In
-                    </Button>
-                  </NextLink>
-                  <NextLink href="/registration" passHref>
-                    <Button size="sm" colorScheme="blue">
-                      Sign Up
-                    </Button>
-                  </NextLink>
-                </>
-              )}
-            </HStack>
-          </HStack>
+        {/* Desktop Menu */}
+        <Flex as="nav" gap={4} display={{ base: "none", md: "flex" }}>
+          {Links.map((link) => (
+            <Link
+              as={NextLink}
+              key={link.name}
+              href={link.href}
+              px={2}
+              py={1}
+              rounded="md"
+              _hover={{ textDecoration: "none", bg: "gray.100" }}
+            >
+              {link.name}
+            </Link>
+          ))}
         </Flex>
-      </Container>
+
+        {/* Right Actions */}
+        <Flex gap={4} display={{ base: "none", md: "flex" }}>
+          <ColorModeButton />
+          {user ? (
+            <>
+              {isAdmin && (
+                <NextLink href="/admin" passHref>
+                  <Button size="sm" variant="ghost">
+                    Admin
+                  </Button>
+                </NextLink>
+              )}
+              <Button size="sm" variant="ghost" onClick={handleLogout}>
+                Logout
+              </Button>
+            </>
+          ) : (
+            <>
+              <NextLink href="/login" passHref>
+                <Button size="sm" variant="ghost">
+                  Sign In
+                </Button>
+              </NextLink>
+              <NextLink href="/registration" passHref>
+                <Button size="sm" colorScheme="blue">
+                  Sign Up
+                </Button>
+              </NextLink>
+            </>
+          )}
+        </Flex>
+
+        {/* Mobile Menu Button */}
+        <Button
+          display={{ base: "block", md: "none" }}
+          onClick={() => setIsOpen(!isOpen)}
+          aria-label="Toggle Menu"
+          className="absolute right-4 z-[1101]"
+        >
+          {isOpen ? (
+            <IoClose className="w-6 h-6" />
+          ) : (
+            <GiHamburgerMenu className="w-6 h-6" />
+          )}
+        </Button>
+      </Flex>
+
+      {/* Mobile Menu (Dropdown) */}
+      {isOpen && (
+        <Box
+          className="fixed inset-0 bg-[#2B7FF9] shadow-lg md:hidden flex flex-col items-center justify-center"
+          zIndex="1100"
+          pointerEvents="auto"
+        >
+          <VStack gap={4} py={6}>
+            {Links.map((link) => (
+              <Link
+                as={NextLink}
+                key={link.name}
+                href={link.href}
+                className="block px-4 py-2 text-center hover:bg-gray-100 w-full"
+                onClick={() => setIsOpen(false)}
+              >
+                {link.name}
+              </Link>
+            ))}
+            <ColorModeButton />
+            {user ? (
+              <>
+                {isAdmin && (
+                  <NextLink href="/admin" passHref>
+                    <Button size="sm" variant="ghost" className="w-full">
+                      Admin
+                    </Button>
+                  </NextLink>
+                )}
+                <Button size="sm" variant="ghost" onClick={handleLogout} className="w-full">
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <>
+                <NextLink href="/login" passHref>
+                  <Button size="sm" variant="ghost" className="w-full">
+                    Sign In
+                  </Button>
+                </NextLink>
+                <NextLink href="/registration" passHref>
+                  <Button size="sm" colorScheme="blue" className="w-full">
+                    Sign Up
+                  </Button>
+                </NextLink>
+              </>
+            )}
+          </VStack>
+        </Box>
+      )}
     </Box>
   );
 }
