@@ -30,9 +30,9 @@ import { paymentOptionsCollection } from "./config";
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const age = calculateAge(new Date(people.birth_date).toISOString());
     const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
-    const [amount, setAmount] = useState<number>(remainingAmount);
+    const [amount, setAmount] = useState<number>(0);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
-    const [value, setValue] = useState<number[]>([remainingAmount]);
+    const [value, setValue] = useState<number[]>([0]);
     const [loading, setLoading] = useState<boolean>(false);
 
     const handleSliderChange = (e: { value: number[] }) => {
@@ -267,11 +267,11 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                                                 <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
                                             </Box>
                                             <Box gap={8}>
-                                                <SelectRoot 
-                                                    collection={paymentOptionsCollection} 
-                                                    className="border rounded-lg" 
-                                                    my={8} 
-                                                    px={4} 
+                                                <SelectRoot
+                                                    collection={paymentOptionsCollection}
+                                                    className="border rounded-lg"
+                                                    my={8}
+                                                    px={4}
                                                     py={2}
                                                     onValueChange={(details) => handleSelectChange(details.value[0])}
                                                 >
