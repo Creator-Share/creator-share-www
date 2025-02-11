@@ -78,7 +78,7 @@ export function PageNavbar() {
               px={2}
               py={1}
               rounded="md"
-              className="text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-[#2B7FF9]"
+              className="hover:bg-gray-100 dark:hover:bg-[#2B7FF9]"
               _hover={{ textDecoration: "none" }}
             >
               {link.name}
