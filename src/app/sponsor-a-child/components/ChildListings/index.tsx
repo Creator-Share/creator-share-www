@@ -103,6 +103,7 @@ const ChildListings: React.FC<ChildListingsProps> = ({
           childImage: peopleData[0].image_url,
           amount: amount * 100,
           paymentType: selectedOption,
+          location: peopleData[0].country,
         }),
       });
 

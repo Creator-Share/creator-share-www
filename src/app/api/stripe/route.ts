@@ -5,7 +5,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
 export async function POST(req: Request) {
   try {
-    const { childId, childName, amount, paymentType, childImage } = await req.json();
+    const { childId, childName, amount, paymentType, childImage, location } = await req.json();
 
     if (!amount || amount < 10) {
       return NextResponse.json({ error: "Minimum amount is $10." }, { status: 400 });
@@ -15,10 +15,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid payment type." }, { status: 400 });
     }
 
+    const commonSessionConfig = {
+      payment_method_types: ['card'] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
+      metadata: {
+        childId,
+        childName,
+        amount,
+        childLocation: location,
+      },
+      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/cancel`,
+    };
+
     let session;
     if (paymentType === "subscription") {
       session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
+        ...commonSessionConfig,
         mode: "subscription",
         line_items: [
           {
@@ -34,16 +46,10 @@ export async function POST(req: Request) {
             quantity: 1,
           },
         ],
-        success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success`,
-        cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/cancel`,
-        metadata: {
-          childId,
-          amount,
-        },
       });
     } else if (paymentType === "payment") {
       session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
+        ...commonSessionConfig,
         mode: "subscription",
         line_items: [
           {
@@ -59,12 +65,6 @@ export async function POST(req: Request) {
             quantity: 1,
           },
         ],
-        success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success`,
-        cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/cancel`,
-        metadata: {
-          childId,
-          amount,
-        },
       });
     }
 

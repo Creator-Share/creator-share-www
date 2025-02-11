@@ -77,6 +77,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                     childImage: people.image_url,
                     amount: amount * 100,
                     paymentType: selectedOption,
+                    location: people.country
                 }),
             });
 
