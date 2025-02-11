@@ -1,9 +1,10 @@
 "use client"
-import { Box, VStack, Text, Collapsible, Image, Flex, Input, InputAddon } from "@chakra-ui/react";
+import { Box, VStack, Text, Collapsible, Image, Flex, Input, InputAddon, Progress, HStack } from "@chakra-ui/react";
 import { Button } from "@/components/ui/button";
 import React, { useState, useEffect, useCallback } from "react";
 import ChildCard from "../ChildCard";
 import { People } from "@/types";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   DialogBody,
   DialogCloseTrigger,
@@ -11,12 +12,19 @@ import {
   DialogHeader,
   DialogRoot,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Checkbox } from "@/components/ui/checkbox";
+} from "@/components/ui/dialog";
+import {
+  SelectRoot,
+  SelectTrigger,
+  SelectValueText,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { centsToDollars } from "@/utils/currency";
 import { toaster } from "@/components/ui/toaster";
 import { ChildListingsProps } from "@/types/propTypes";
+import { paymentOptionsCollection } from "../ChildCard/config";
 
 const ChildListings: React.FC<ChildListingsProps> = ({
   peopleData,
@@ -119,18 +127,9 @@ const ChildListings: React.FC<ChildListingsProps> = ({
   };
 
 
-  const handleCheckboxChange = (option: string) => {
-    setSelectedOption((prev) => {
-      if (prev === option) {
-        return null;
-      } else {
-        const newAmount = option === "payment" ? amount * 12 : amount / 12;
-        setAmount(newAmount);
-        setValue([newAmount]);
-        return option;
-      }
-    });
-  };
+  const handleSelectChange = (value: string) => {
+    setSelectedOption(value);
+};
 
   return (
     <Box width="100%" className="border" px={{ base: 3, md: 8 }} mt={4}>
@@ -171,105 +170,125 @@ const ChildListings: React.FC<ChildListingsProps> = ({
                     </video>
                   </Box>
                 </Box>
-                <DialogRoot size="cover" placement="center" motionPreset="slide-in-bottom">
-                  <DialogTrigger asChild>
-                    <Box fontSize="base" mb={3} className="w-full">
-                      <Button fontWeight="md" className="text-[#FFFFFF] cursor-pointer bg-[#1C3C8C] px-4 w-full">
-                        Sponsor {people.name}
-                      </Button>
-                    </Box>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogCloseTrigger />
-                    </DialogHeader>
-                    <DialogBody>
-                      <Box className="flex flex-col md:grid md:grid-cols-2">
-                        <Image src={people.image_url} alt={people.name} width={500} height={500} className="rounded-lg" />
-                        <Box className="md:mr-14">
-                          <Text className="text-2xl text-center font-bold mt-8 md:text-start">{people.name}</Text>
-                          <Box mb={4} className="mt-4 md:mt-12">
-                            <Box bg="gray.200" h="2px" w="full" borderRadius="full">
-                              <Box
-                                bg="#1C3C8C"
-                                h="2px"
-                                w={`${Math.min((people.budget_raised / people.budget_goal) * 100, 100)}%`}
-                                borderRadius="full"
-                              />
+                <DialogRoot size="cover" placement="center" motionPreset="slide-in-bottom" role="alertdialog">
+                        <DialogTrigger asChild>
+                            <Box fontSize="base" mb={3}>
+                                <Button fontWeight="md" className="text-[#FFFFFF] w-full md:w-11/12 cursor-pointer bg-[#1C3C8C] px-4 mt-8">
+                                    Sponsor
+                                </Button>
                             </Box>
-                            <Text fontSize="sm" mt={1} className="text-gray-500">
-                              ${centsToDollars(people.budget_raised)} raised of ${centsToDollars(people.budget_goal)}
-                            </Text>
-                          </Box>
-                          <Box>
-                            <Flex
-                              className="border rounded-lg"
-                              mb={4}
-                              align="center"
-                              justify="center"
-                              gap={2}
-                            >
-                              <InputAddon>
-                                $
-                              </InputAddon>
-                              <Input
-                                type="number"
-                                min="1"
-                                max={parseFloat(centsToDollars(people.budget_goal))}
-                                value={amount}
-                                onChange={handleAmountChange}
-                                className="px-4"
-                                placeholder="Enter Amount"
-                              />
-                            </Flex>
-                            <Box my={4}>
-                              <Slider
-                                value={value}
-                                min={0}
-                                max={parseFloat(centsToDollars(people.budget_goal))}
-                                step={5}
-                                variant="solid"
-                                onValueChange={handleSliderChange}
-                              />
-                              <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
-                            </Box>
-                            <Flex justify="center" align="center" gap={8}>
-                              <Flex align="center" gap={2}>
-                                <Checkbox
-                                  className="border rounded-md border-[#8D9692]"
-                                  checked={selectedOption === "subscription"}
-                                  onChange={() => handleCheckboxChange("subscription")}
-                                />
-                                <Text>Monthly</Text>
-                              </Flex>
-                              <Flex align="center" gap={2}>
-                                <Checkbox
-                                  className="border rounded-md border-[#8D9692]"
-                                  checked={selectedOption === "payment"}
-                                  onChange={() => handleCheckboxChange("payment")}
-                                />
-                                <Text>Yearly</Text>
-                              </Flex>
-                            </Flex>
-                          </Box>
-                          <Button
-                            bg="#1C3C8C"
-                            color="white"
-                            w="full"
-                            mt={4}
-                            loading={loading}
-                            loadingText="Processing..."      
-                            onClick={handleSponsor}
-                            disabled={loading}
-                          >
-                            Sponsor
-                          </Button>
-                        </Box>
-                      </Box>
-                    </DialogBody>
-                    <DialogCloseTrigger />
-                  </DialogContent>
-                </DialogRoot>
+                        </DialogTrigger>
+                        <DialogContent className="max-h-[90vh] overflow-y-auto mx-auto my-4">
+                            <DialogHeader>
+                                <DialogCloseTrigger />
+                            </DialogHeader>
+                            <DialogBody>
+                                <Box className="flex flex-col md:grid md:grid-cols-2 gap-6">
+                                    <Image
+                                        src={people.image_url}
+                                        alt={people.name}
+                                        width={{ base: 300, md: 500 }}
+                                        height={{ base: 300, md: 500 }}
+                                        className="rounded-lg w-full h-auto object-cover"
+                                    />
+                                    <Box className="md:mr-14 flex flex-col">
+                                        <Text className="text-2xl text-center font-bold mt-4 md:mt-0 md:text-start">
+                                            {people.name}
+                                        </Text>
+                                        <Progress.Root
+                                            defaultValue={Math.min((people.budget_raised / people.budget_goal) * 100, 100)}
+                                            my={8}
+                                        >
+                                            <Text className="text-end text-base text-[#959090] font-normal">
+                                                Goal: {`$${centsToDollars(people.budget_goal)}`}
+                                            </Text>
+                                            <Tooltip
+                                                content={`$${centsToDollars(people.budget_raised)} raised`}
+                                                showArrow
+                                                positioning={{ placement: "right-end" }}
+                                            >
+                                                <HStack gap="5">
+                                                    <Progress.Track className="rounded-lg h-3" flex="1">
+                                                        <Progress.Range className="bg-[#1C3C8C]" />
+                                                    </Progress.Track>
+                                                </HStack>
+                                            </Tooltip>
+                                        </Progress.Root>
+                                        <Box>
+                                            <Text mt={1} className="font-semibold text-base mb-[10px]">
+                                                Amount
+                                            </Text>
+                                            <Flex
+                                                className="border rounded-lg"
+                                                mb={4}
+                                                align="center"
+                                                justify="center"
+                                                gap={2}
+                                            >
+                                                <InputAddon className="bg-[#D6D6D6] px-[15px] py-[5px] m-1 text-[#959090] text-base font-medium">
+                                                    $
+                                                </InputAddon>
+                                                <Input
+                                                    type="number"
+                                                    min="1"
+                                                    max={people.budget_goal / 100}
+                                                    value={amount}
+                                                    onChange={handleAmountChange}
+                                                    className="px-4 h-[50px]"
+                                                    placeholder="Enter Amount"
+                                                />
+                                            </Flex>
+                                            <Box my={4}>
+                                                <Slider
+                                                    value={value}
+                                                    min={0}
+                                                    max={people.budget_goal / 100}
+                                                    step={5}
+                                                    variant="solid"
+                                                    onValueChange={handleSliderChange}
+                                                />
+                                                <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
+                                            </Box>
+                                            <Box gap={8}>
+                                                <SelectRoot 
+                                                    collection={paymentOptionsCollection} 
+                                                    className="border rounded-lg" 
+                                                    my={8} 
+                                                    px={4} 
+                                                    py={2}
+                                                    onValueChange={(details) => handleSelectChange(details.value[0])}
+                                                >
+                                                    <SelectTrigger className="w-full">
+                                                        <SelectValueText placeholder="Select payment frequency" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="z-[9999]">
+                                                        {paymentOptionsCollection.items.map((option) => (
+                                                            <SelectItem key={option.value} item={option}>
+                                                                {option.label}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </SelectRoot>
+                                            </Box>
+                                        </Box>
+                                        <Button
+                                            bg="#1C3C8C"
+                                            color="white"
+                                            mt={4}
+                                            loading={loading}
+                                            loadingText="Processing..."
+                                            onClick={handleSponsor}
+                                            disabled={loading}
+                                            className="w-full"
+                                        >
+                                            Sponsor
+                                        </Button>
+                                    </Box>
+                                </Box>
+                            </DialogBody>
+                            <DialogCloseTrigger />
+                        </DialogContent>
+                    </DialogRoot>
               </Collapsible.Content>
             </Collapsible.Root>
           </Box>
