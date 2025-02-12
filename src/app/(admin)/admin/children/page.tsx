@@ -92,7 +92,7 @@ const ChildrenTable = () => {
     const fileName = `${Date.now()}-${file.name}`;
     const filePath = `${folder}/${fileName}`;
 
-    const { error } = await supabase.storage.from("people").upload(filePath, file, {
+    const { error } = await supabase.storage.from("sponsor_people").upload(filePath, file, {
       cacheControl: "3600",
       upsert: false,
     });
@@ -102,7 +102,7 @@ const ChildrenTable = () => {
       return null;
     }
 
-    const { data } = supabase.storage.from("people").getPublicUrl(filePath);
+    const { data } = supabase.storage.from("sponsor_people").getPublicUrl(filePath);
     return data.publicUrl;
   };
 
