@@ -265,16 +265,18 @@ const ChildListings: React.FC<ChildListingsProps> = ({
                               <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
                             </Box>
                             <Box gap={8}>
+                              <Text mb={2} className="font-semibold text-base">Frequency</Text>
                               <SelectRoot
                                 collection={paymentOptionsCollection}
                                 className="border rounded-lg"
                                 my={8}
                                 px={4}
                                 py={2}
+                                defaultValue={[paymentOptionsCollection.items[0].value]}
                                 onValueChange={(details) => handleSelectChange(details.value[0])}
                               >
                                 <SelectTrigger className="w-full">
-                                  <SelectValueText placeholder="Select payment frequency" />
+                                  <SelectValueText />
                                 </SelectTrigger>
                                 <SelectContent className="z-[9999]">
                                   {paymentOptionsCollection.items.map((option) => (
