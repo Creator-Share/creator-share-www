@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     
     const { data: newChild, error: supabaseError } = await supabase
-      .from("people")
+      .from("sponsor_people")
       .insert([formData])
       .select()
       .single();

@@ -1,5 +1,5 @@
 import { LatLngBounds } from "leaflet";
-import { People } from "./index";
+import { SponsorPeople } from "./index";
 
 export interface FiltersProps {
   onFilterChange: (filters: { gender: string; age: string }) => void;
@@ -20,13 +20,13 @@ export interface ChildMapProps {
 }
 
 export interface ChildListingsProps {
-  peopleData: People[];
+  peopleData: SponsorPeople[];
   selectedChildId: string | null;
   selectedCountry: string | null;
 }
 
 export interface ChildCardProps {
-    people: People;
+    people: SponsorPeople;
     isSelected?: boolean;
     id: string;
 }

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export async function GET() {
   try {
     const supabase = await createClient();
-    const { data: fetchedData, error } = await supabase.from("people").select("*");
+    const { data: fetchedData, error } = await supabase.from("sponsor_people").select("*");
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

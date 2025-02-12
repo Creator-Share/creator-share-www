@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const age = searchParams.get("age");
 
   try {
-    let query = supabase.from("people").select("*");
+    let query = supabase.from("sponsor_people").select("*");
 
     if (gender) {
       query = query.eq("gender", gender);

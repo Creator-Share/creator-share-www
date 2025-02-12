@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     }
 
     const { data, error } = await supabase
-      .from("people")
+      .from("sponsor_people")
       .select("budget_raised, budget_goal")
       .eq("id", childId)
       .single();
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     }
 
     const { error: updateError } = await supabase
-      .from("people")
+      .from("sponsor_people")
       .update({ 
         budget_raised: updatedBudget,
         status: status 

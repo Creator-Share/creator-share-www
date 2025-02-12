@@ -7,7 +7,7 @@ export async function DELETE(request: Request) {
     const supabase = await createClient();
     
     const { error } = await supabase
-      .from("people")
+      .from("sponsor_people")
       .delete()
       .eq('id', childId);
 

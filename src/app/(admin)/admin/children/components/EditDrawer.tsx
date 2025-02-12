@@ -23,16 +23,16 @@ import {
     FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
-import { People } from "@/types/admin.types";
+import { SponsorPeople } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 
 interface EditDrawerProps {
-    selectedChild: People | null;
-    formDataEdit: People;
-    setFormDataEdit: React.Dispatch<React.SetStateAction<People>>;
+    selectedChild: SponsorPeople | null;
+    formDataEdit: SponsorPeople;
+    setFormDataEdit: React.Dispatch<React.SetStateAction<SponsorPeople>>;
     isDrawerOpen: boolean;
     onClose: () => void;
-    onSave: (updatedChild: People) => void;
+    onSave: (updatedChild: SponsorPeople) => void;
     onDelete: (childId: string) => Promise<void>;
     imageFiles: File[];
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
@@ -51,7 +51,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     setImageFiles,
     setVideoFiles,
 }) => {
-    const [formDataEdit, setFormDataEdit] = useState<People>(() => selectedChild || {} as People);
+    const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>(() => selectedChild || {} as SponsorPeople);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -83,11 +83,11 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        setFormDataEdit(prev => ({ ...prev, [name]: value }));
+        setFormDataEdit((prev: SponsorPeople) => ({ ...prev, [name]: value }));
     };
 
     const handleSelectChange = (name: string, value: string) => {
-        setFormDataEdit(prev => ({ ...prev, [name]: value }));
+        setFormDataEdit((prev: SponsorPeople) => ({ ...prev, [name]: value }));
     };
 
     const handleSave = async () => {
@@ -117,7 +117,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     };
 
     const handleLocationSelect = (geo: [number, number], locationStr: string, country: string) => {
-        setFormDataEdit(prev => ({
+        setFormDataEdit((prev: SponsorPeople) => ({
             ...prev,
             location_geo: { type: "Point", coordinates: [geo[1], geo[0]] },
             location_str: locationStr,

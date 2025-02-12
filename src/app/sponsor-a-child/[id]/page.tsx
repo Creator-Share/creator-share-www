@@ -6,13 +6,13 @@ import {
   Text,
   Spinner
 } from "@chakra-ui/react";
-import { People } from "@/types";
+import { SponsorPeople } from "@/types";
 import ChildDetailsCard from "../components/ChildDetails";
 import GoBackButton from "@/components/ui/goBack";
 
 const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
   const { id } = React.use(params);
-  const [child, setChild] = useState<People | null>(null);
+  const [child, setChild] = useState<SponsorPeople | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

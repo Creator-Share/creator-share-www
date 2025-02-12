@@ -3,7 +3,7 @@ import { Box, VStack, Text, Collapsible, Image, Flex, Input, InputAddon, Progres
 import { Button } from "@/components/ui/button";
 import React, { useState, useEffect, useCallback } from "react";
 import ChildCard from "../ChildCard";
-import { People } from "@/types";
+import { SponsorPeople } from "@/types";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
   DialogBody,
@@ -32,7 +32,7 @@ const ChildListings: React.FC<ChildListingsProps> = ({
   selectedCountry
 }) => {
   const remainingAmount = (peopleData[0].budget_goal - peopleData[0].budget_raised) / 100;
-  const [visiblePeople, setVisiblePeople] = useState<People[]>([]);
+  const [visiblePeople, setVisiblePeople] = useState<SponsorPeople[]>([]);
   const [loadedCount, setLoadedCount] = useState<number>(4);
   const [openId, setOpenId] = useState<string | null>(null);
   const [amount, setAmount] = useState<number>(0);

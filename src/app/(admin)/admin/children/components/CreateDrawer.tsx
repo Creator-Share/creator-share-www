@@ -25,16 +25,16 @@ import {
 } from "@/components/ui/file-upload";
 import { HiUpload } from "react-icons/hi";
 import MapPicker from "./MapPicker";
-import { People } from "@/types/admin.types";
+import { SponsorPeople } from "@/types/admin.types";
 import { GoPlusCircle } from "react-icons/go";
 
 type CreateDrawerProps = {
-    formData: People;
+    formData: SponsorPeople;
     isDrawerOpen: boolean;
     setIsDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
-    setFormData: React.Dispatch<React.SetStateAction<People>>;
+    setFormData: React.Dispatch<React.SetStateAction<SponsorPeople>>;
     handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-    handleSelectChange: (name: keyof People, value: string) => void;
+    handleSelectChange: (name: keyof SponsorPeople, value: string) => void;
     handleLocationSelect: (geo: [number, number], locationStr: string, country: string) => void;
     handleSubmit: (e: React.MouseEvent<HTMLButtonElement>) => Promise<void>;
     imageFiles: File[];

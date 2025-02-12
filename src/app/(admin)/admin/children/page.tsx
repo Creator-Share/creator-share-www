@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { DataTable } from "@/components/admin-ui/Tables/data-table";
 import { ColumnDef } from "@tanstack/react-table";
 import { columns } from "./columns";
-import { People, Geography } from "@/types/admin.types";
+import { SponsorPeople, Geography } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import dynamic from "next/dynamic";
 import { centsToDollars } from "@/utils/currency";
@@ -13,10 +13,10 @@ const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false
 
 const ChildrenTable = () => {
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<People[]>([]);
+  const [data, setData] = useState<SponsorPeople[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
-  const [formData, setFormData] = useState<People>({
+  const [formData, setFormData] = useState<SponsorPeople>({
     name: "",
     gender: "",
     birth_date: "",
@@ -30,7 +30,7 @@ const ChildrenTable = () => {
     image_url: "",
     video_url: ""
   });
-  const [formDataEdit, setFormDataEdit] = useState<People>({
+  const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>({
     id: "",
     name: "",
     gender: "",
@@ -46,7 +46,7 @@ const ChildrenTable = () => {
     video_url: ""
   });
 
-  const [selectedChild, setSelectedChild] = useState<People | null>(null);
+  const [selectedChild, setSelectedChild] = useState<SponsorPeople | null>(null);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
 
@@ -161,7 +161,7 @@ const ChildrenTable = () => {
     }
   };
 
-  const handleSave = async (updatedChild: People) => {
+  const handleSave = async (updatedChild: SponsorPeople) => {
     try {
       const response = await fetch('/api/admin/children/update', {
         method: 'PUT',
@@ -207,7 +207,7 @@ const ChildrenTable = () => {
     }
   };
 
-  const handleRowClick = (row: People) => {
+  const handleRowClick = (row: SponsorPeople) => {
     setSelectedChild(row);
     setIsEditDrawerOpen(true);
   };
@@ -242,7 +242,7 @@ const ChildrenTable = () => {
         columns={columns as ColumnDef<unknown, unknown>[]}
         data={data}
         controls="bottom"
-        onRowClick={(data: unknown) => handleRowClick(data as People)}
+        onRowClick={(data: unknown) => handleRowClick(data as SponsorPeople)}
       />
       {isEditDrawerOpen && selectedChild && (
         <EditDrawer

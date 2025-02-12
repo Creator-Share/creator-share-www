@@ -5,7 +5,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { Box, Flex, Text, Spinner } from "@chakra-ui/react";
 import Filters from "./components/Filters";
 import ChildListings from "./components/ChildListings";
-import { People } from "@/types";
+import { SponsorPeople } from "@/types";
 
 const ChildMap = dynamic(() => import("./components/ChildMap"), { ssr: false });
 
@@ -16,9 +16,9 @@ interface Filters {
 
 const SponsorChild = () => {
   const [L, setL] = useState<typeof import("leaflet") | null>(null);
-  const [childrenData, setChildrenData] = useState<People[]>([]);
+  const [childrenData, setChildrenData] = useState<SponsorPeople[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
-  const [visibleChildren, setVisibleChildren] = useState<People[]>([]);
+  const [visibleChildren, setVisibleChildren] = useState<SponsorPeople[]>([]);
   const [loading, setLoading] = useState(false);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -2,7 +2,7 @@ export type Geography = {
     coordinates: [number, number];
     type: 'Point';
   };
-  export interface People {
+  export interface SponsorPeople {
     id?: string;
     name: string;
     gender: string;

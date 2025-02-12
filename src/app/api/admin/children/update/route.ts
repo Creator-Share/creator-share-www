@@ -7,7 +7,7 @@ export async function PUT(request: Request) {
     const supabase = await createClient();
     
     const { data, error } = await supabase
-      .from("people")
+      .from("sponsor_people")
       .update(updatedChild)
       .eq('id', updatedChild.id)
       .select();
