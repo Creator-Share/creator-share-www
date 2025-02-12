@@ -4,9 +4,19 @@ alter table "public"."people" add column "location_geo" geography;
 
 alter table "public"."people" add column "location_str" text;
 
-create type "public"."geometry_dump" as ("path" integer[], "geom" geometry);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geometry_dump') THEN
+        CREATE TYPE "public"."geometry_dump" AS ("path" integer[], "geom" geometry);
+    END IF;
+END $$;
 
-create type "public"."valid_detail" as ("valid" boolean, "reason" character varying, "location" geometry);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'valid_detail') THEN
+        create type "public"."valid_detail" as ("valid" boolean, "reason" character varying, "location" geometry);
+    END IF;
+END $$;
 
 grant delete on table "public"."spatial_ref_sys" to "anon";
 
