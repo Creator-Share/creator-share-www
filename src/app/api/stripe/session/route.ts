@@ -13,8 +13,9 @@ export async function GET(request: Request) {
 
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-
+    console.log(session);
     return NextResponse.json({ session });
+
   } catch (error) {
     if (error instanceof Stripe.errors.StripeError) {
       console.error('Stripe Error:', error.message);

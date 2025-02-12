@@ -32,27 +32,49 @@ export async function POST(req: Request) {
     const session = event.data.object as Stripe.Checkout.Session;
     const childId = session.metadata?.childId;
     const amount = parseFloat(session.metadata?.amount || "0");
+    const userId = session.metadata?.userId || null;
     
     if (!childId || !amount) {
       console.error("Missing metadata in Stripe session");
       return NextResponse.json({ error: "Invalid metadata" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const { data: childData, error: childError } = await supabase
       .from("sponsor_people")
-      .select("budget_raised, budget_goal")
+      .select("name, budget_raised, budget_goal")
       .eq("id", childId)
       .single();
 
-    if (error || !data) {
-      console.error("Error fetching child data:", error);
+    if (childError || !childData) {
+      console.error("Error fetching child data:", childError);
       return NextResponse.json({ error: "Failed to fetch child data" }, { status: 500 });
     }
 
-    const updatedBudget = data.budget_raised + amount;
+
+
+    const { error: transactionError } = await supabase
+      .from("transaction_ledger")
+      .insert({
+        child_id: childId,
+        user_id: userId,
+        description: `Sponsorship to ${childData.name} with amount of ${amount}`,
+        reference: session.invoice as string,
+        credit: amount,
+        subscription_type: session.mode === "subscription" ? "subscription" : "payment",
+        tx_action: "SPONSORSHIP",
+        customer_name: session.customer_details?.name || null,
+        customer_email: session.customer_details?.email || null
+      });
+
+    if (transactionError) {
+      console.error("Error creating transaction:", transactionError);
+      return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
+    }
+
+    const updatedBudget = childData.budget_raised + amount;
     let status = "Partially Funded";
 
-    if (updatedBudget >= data.budget_goal) {
+    if (updatedBudget >= childData.budget_goal) {
       status = "Budget Fulfilled";
     }
 
@@ -69,7 +91,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to update child data" }, { status: 500 });
     }
 
-    return NextResponse.json({ message: "Child data updated successfully" }, { status: 200 });
+    return NextResponse.json({ message: "Transaction processed successfully" }, { status: 200 });
   }
 
   return NextResponse.json({ message: "Unhandled event type" }, { status: 400 });

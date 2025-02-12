@@ -23,6 +23,7 @@ import { centsToDollars } from "@/utils/currency";
 import { toaster } from "@/components/ui/toaster";
 import { paymentOptionsCollection } from "../ChildCard/config";
 import { SponsorPeople } from "@/types";
+import { useAuthStore } from "@/store/authStore";
 
 interface SponsorDialogProps {
   people: SponsorPeople;
@@ -35,6 +36,8 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
   const [selectedOption, setSelectedOption] = useState<string>(paymentOptionsCollection.items[0].value);
   const [value, setValue] = useState<number[]>([0]);
   const [loading, setLoading] = useState<boolean>(false);
+  const user = useAuthStore((state) => state.user);
+  console.log(user?.id);
 
   const handleSliderChange = (e: { value: number[] }) => {
     const newValue = Math.min(e.value[0], remainingAmount);
@@ -78,6 +81,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
           amount: amount * 100,
           paymentType: selectedOption,
           location: people.country,
+          userId: user?.id,
         }),
       });
 
