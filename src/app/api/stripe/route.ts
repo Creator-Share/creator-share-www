@@ -55,14 +55,18 @@ export async function POST(req: Request) {
         userId
       });
 
-      // Create a price for the subscription
+      // Create a product first
+      const product = await stripe.products.create({
+        name: `Sponsorship for ${childName} (Monthly)`,
+        images: [childImage],
+      });
+
+      // Then create the price referencing the product
       const price = await stripe.prices.create({
         unit_amount: amount,
         currency: 'usd',
         recurring: { interval: 'month' },
-        product_data: {
-          name: `Sponsorship for ${childName} (Monthly)`,
-        },
+        product: product.id,
         metadata: {
           childId,
           userId,
