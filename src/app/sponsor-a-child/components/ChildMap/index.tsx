@@ -149,7 +149,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
           {childData.map((child) => (
             <Marker
               key={child.id}
-              position={[child.location_geo.coordinates[1], child.location_geo.coordinates[0]]}
+              position={[child.location_geo?.coordinates[1], child.location_geo?.coordinates[0]]}
               icon={CustomIcon}
               eventHandlers={{
                 click: () => onMarkerClick(child.id),

@@ -92,24 +92,54 @@ const ChildrenTable = () => {
     const fileName = `${Date.now()}-${file.name}`;
     const filePath = `${folder}/${fileName}`;
 
-    const { error } = await supabase.storage.from("sponsor_people").upload(filePath, file, {
-      cacheControl: "3600",
-      upsert: false,
-    });
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from("sponsor_people")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
 
-    if (error) {
-      console.error("File upload failed:", error.message);
+      if (uploadError) {
+        console.error("File upload failed:", uploadError.message);
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+
+      const { data } = supabase.storage
+        .from("sponsor_people")
+        .getPublicUrl(filePath);
+
+      if (!data.publicUrl) {
+        throw new Error("Failed to get public URL");
+      }
+
+      return data.publicUrl;
+    } catch (error) {
+      console.error("File upload error:", error);
       return null;
     }
-
-    const { data } = supabase.storage.from("sponsor_people").getPublicUrl(filePath);
-    return data.publicUrl;
   };
 
   const handleSubmit = async () => {
     try {
-      const uploadedImageUrl = imageFiles.length > 0 ? await uploadFileToSupabase(imageFiles[0], "images") : "";
-      const uploadedVideoUrl = videoFiles.length > 0 ? await uploadFileToSupabase(videoFiles[0], "videos") : "";
+      let uploadedImageUrl = "";
+      let uploadedVideoUrl = "";
+
+      if (imageFiles.length > 0) {
+        const imageUrl = await uploadFileToSupabase(imageFiles[0], "images");
+        if (!imageUrl) {
+          throw new Error("Failed to upload image");
+        }
+        uploadedImageUrl = imageUrl;
+      }
+
+      if (videoFiles.length > 0) {
+        const videoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
+        if (!videoUrl) {
+          throw new Error("Failed to upload video");
+        }
+        uploadedVideoUrl = videoUrl;
+      }
 
       const budgetGoalInCents = Math.round(parseFloat(formData.budget_goal.toString()) * 100);
 
@@ -133,7 +163,6 @@ const ChildrenTable = () => {
       }
 
       const newChild = await response.json();
-
       setData((prevData) => [
         ...prevData,
         { ...newChild, budget_goal: centsToDollars(newChild.budget_goal) },
@@ -158,6 +187,7 @@ const ChildrenTable = () => {
       setIsCreateDrawerOpen(false);
     } catch (error) {
       console.error("Error creating child:", error);
+      alert(error instanceof Error ? error.message : "Failed to create child");
     }
   };
 
