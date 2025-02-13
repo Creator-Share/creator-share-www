@@ -7,17 +7,16 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
 
   const gender = searchParams.get("gender");
-  const age = searchParams.get("age");
 
   try {
     let query = supabase.from("sponsor_people").select("*");
 
+    // Filter by gender if present
     if (gender) {
       query = query.eq("gender", gender);
     }
 
     const { data, error } = await query;
-
     if (error) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: "Database error" }, { status: 500 });
@@ -25,15 +24,25 @@ export async function GET(req: Request) {
 
     let filteredData = data || [];
 
-    if (age) {
-      filteredData = filteredData.filter((child) => {
-        const childAge = calculateAge(new Date(child.birth_date).toISOString());
-        if (age === "less_than_1") {
-          return childAge < 1;
-        }
-        return childAge === parseInt(age, 10);
-      });
+    const ageRange = searchParams.get("ageRange");
+    if (ageRange) {
+      const parts = ageRange.split(",").map(Number);
+      if (parts.length === 1) {
+        const singleAge = parts[0];
+        filteredData = filteredData.filter((child) => {
+          const childAge = calculateAge(new Date(child.birth_date).toISOString());
+          return childAge === singleAge;
+        });
+      }
+      else if (parts.length === 2) {
+        const [minAge, maxAge] = parts;
+        filteredData = filteredData.filter((child) => {
+          const childAge = calculateAge(new Date(child.birth_date).toISOString());
+          return childAge >= minAge && childAge <= maxAge;
+        });
+      }
     }
+    
 
     return NextResponse.json({ people: filteredData });
   } catch (err) {

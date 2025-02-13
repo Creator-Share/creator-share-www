@@ -2,8 +2,9 @@ import { LatLngBounds } from "leaflet";
 import { SponsorPeople } from "./index";
 
 export interface FiltersProps {
-  onFilterChange: (filters: { gender: string; age: string }) => void;
+  onFilterChange: (filters: { gender: string; ageRange: [number] }) => void;
 }
+
 
 export interface ChildMapProps {
   childData: {

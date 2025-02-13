@@ -7,10 +7,9 @@ import ChildListings from "./components/ChildListings";
 import { SponsorPeople } from "@/types";
 
 const ChildMap = dynamic(() => import("./components/ChildMap"), { ssr: false });
-
 interface Filters {
   gender: string;
-  age: string;
+  ageRange: [number];
 }
 
 const SponsorChild = () => {
@@ -18,11 +17,11 @@ const SponsorChild = () => {
   const [childrenData, setChildrenData] = useState<SponsorPeople[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [visibleChildren, setVisibleChildren] = useState<SponsorPeople[]>([]);
-  const [loading, setLoading] = useState(false);         // Page-level loading
-  const [listingsLoading, setListingsLoading] = useState(false); 
+  const [loading, setLoading] = useState(false);
+  const [listingsLoading, setListingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>({ age: "", gender: "" });
+  const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0] });
   const listingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,11 +37,12 @@ const SponsorChild = () => {
     try {
       let endpoint = "/api/children/get";
       const queryParams = new URLSearchParams();
-
-      if (filters.gender || filters.age) {
+      if (filters.gender || (filters.ageRange && filters.ageRange[0] > 0)) {
         endpoint = "/api/children/getByAgeAndGender";
         if (filters.gender) queryParams.append("gender", filters.gender);
-        if (filters.age) queryParams.append("age", filters.age);
+        if (filters.ageRange && filters.ageRange[0] > 0) {
+          queryParams.append("ageRange", filters.ageRange.join(','));
+        }
       }
 
       const res = await fetch(`${endpoint}?${queryParams.toString()}`);

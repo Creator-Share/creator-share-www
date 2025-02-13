@@ -1,10 +1,12 @@
-import { create } from 'zustand'
-import { FilterState } from '@/types/index'
+import { create } from "zustand";
+import { FilterState } from "@/types/index";
 
 export const useFilterStore = create<FilterState>((set) => ({
-  selectedGender: '',
-  selectedAge: '',
+  selectedGender: "",
+  selectedAgeRange: [0],
   setGender: (gender) => set({ selectedGender: gender }),
-  setAge: (age) => set({ selectedAge: age }),
-  clearFilters: () => set({ selectedGender: '', selectedAge: '' }),
-}))
+  setAgeRange: (ageRange) => set({ selectedAgeRange: ageRange }),
+  clearFilters: () => set({ selectedGender: "", selectedAgeRange: [0] }),
+}));
+
+
