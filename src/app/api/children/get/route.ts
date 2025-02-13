@@ -8,9 +8,7 @@ export async function GET(req: Request) {
   try {
     const query = supabase
       .from("sponsor_people")
-      .select("id, name, introduction, biography, gender, budget_raised, budget_goal, image_url, location_geo, birth_date, country, location_str, video_url")
-      .neq('status', 'Budget Fulfilled'); // Todo: Remove this but filter them out in the frontend
-
+      .select("id, name, introduction, status, biography, gender, budget_raised, budget_goal, image_url, location_geo, birth_date, country, location_str, video_url")
     const ne = searchParams.get("ne");
     const sw = searchParams.get("sw");
 

@@ -4,9 +4,11 @@ import { FilterState } from "@/types/index";
 export const useFilterStore = create<FilterState>((set) => ({
   selectedGender: "",
   selectedAgeRange: [0],
+  selectedStatus: ["New", "Partially Funded"],
   setGender: (gender) => set({ selectedGender: gender }),
   setAgeRange: (ageRange) => set({ selectedAgeRange: ageRange }),
-  clearFilters: () => set({ selectedGender: "", selectedAgeRange: [0] }),
+  setStatus: (status) => set({ selectedStatus: status }),
+  clearFilters: () => set({ selectedGender: "", selectedAgeRange: [0], selectedStatus: [] }),
 }));
 
 

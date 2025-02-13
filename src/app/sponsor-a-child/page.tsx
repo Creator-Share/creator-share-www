@@ -10,6 +10,7 @@ const ChildMap = dynamic(() => import("./components/ChildMap"), { ssr: false });
 interface Filters {
   gender: string;
   ageRange: [number];
+  status: string[];
 }
 
 const SponsorChild = () => {
@@ -21,7 +22,7 @@ const SponsorChild = () => {
   const [listingsLoading, setListingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0] });
+  const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0], status: ["New", "Partially Funded"] });
   const listingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,11 +38,14 @@ const SponsorChild = () => {
     try {
       let endpoint = "/api/children/get";
       const queryParams = new URLSearchParams();
-      if (filters.gender || (filters.ageRange && filters.ageRange[0] > 0)) {
+      if (filters.gender || (filters.ageRange && filters.ageRange[0] > 0) || filters.status.length > 0) {
         endpoint = "/api/children/getByAgeAndGender";
         if (filters.gender) queryParams.append("gender", filters.gender);
         if (filters.ageRange && filters.ageRange[0] > 0) {
           queryParams.append("ageRange", filters.ageRange.join(','));
+        }
+        if (filters.status.length > 0) {
+          queryParams.append("status", filters.status.join(','));
         }
       }
 

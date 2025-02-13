@@ -12,32 +12,50 @@ import {
 } from "@/components/ui/select";
 import { useFilterStore } from "@/store/filterStore";
 import { FiltersProps } from "@/types/propTypes";
-import { genders } from "./config";
+import { genders, status as statusOptions } from "./config";
+
 interface ValueChangeDetails {
   value: [number];
 }
 
 const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
-  const { selectedGender, selectedAgeRange, setGender, setAgeRange, clearFilters } = useFilterStore();
+  const {
+    selectedGender,
+    selectedAgeRange,
+    selectedStatus,
+    setGender,
+    setAgeRange,
+    setStatus,
+    clearFilters,
+  } = useFilterStore();
   const [sliderValue, setSliderValue] = useState<[number]>(selectedAgeRange || [0]);
 
   useEffect(() => {
     setSliderValue(selectedAgeRange || [0]);
   }, [selectedAgeRange]);
 
-  const handleFilterChange = (updatedFilters: { gender?: string; ageRange?: [number] }) => {
+  const handleFilterChange = (updatedFilters: {
+    gender?: string;
+    ageRange?: [number];
+    status?: string[];
+  }) => {
     if (updatedFilters.gender !== undefined) {
       setGender(updatedFilters.gender);
     }
     if (updatedFilters.ageRange !== undefined) {
       setAgeRange(updatedFilters.ageRange);
     }
+    if (updatedFilters.status !== undefined) {
+      setStatus(updatedFilters.status);
+    }
 
     onFilterChange({
       gender: updatedFilters.gender ?? selectedGender,
       ageRange: updatedFilters.ageRange ?? selectedAgeRange,
+      status: updatedFilters.status ?? selectedStatus,
     });
   };
+
   const handleSliderChange = (details: ValueChangeDetails) => {
     const value = details.value;
     setSliderValue(value);
@@ -48,7 +66,7 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
     e.preventDefault();
     clearFilters();
     setSliderValue([0]);
-    onFilterChange({ gender: "", ageRange: [0] });
+    onFilterChange({ gender: "", ageRange: [0], status: [] });
   };
 
   return (
@@ -83,6 +101,38 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
             ))}
           </SelectContent>
         </SelectRoot>
+
+        {/* Status Select Dropdown */}
+        <SelectRoot
+          collection={statusOptions}
+          value={selectedStatus && selectedStatus.length > 0 ? selectedStatus : undefined}
+          onValueChange={(details) => {
+            const values = details.items.map(item => item.value);
+            handleFilterChange({ status: values });
+          }}
+          size="sm"
+          className="border rounded-lg"
+          px={4}
+          py={2}
+          multiple
+        >
+          <SelectTrigger>
+            <SelectValueText placeholder="Select Status">
+              {() => {
+                const selected = statusOptions.items.find(item => selectedStatus.includes(item.value));
+                return selected ? selected.label : "Select Status";
+              }}
+            </SelectValueText>
+          </SelectTrigger>
+          <SelectContent>
+            {statusOptions.items.map((option) => (
+              <SelectItem item={option} key={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </SelectRoot>
+
         <Box maxW="300px" w="100%">
           <Text mb={2} fontSize="md" fontWeight="semibold">
             Age: {sliderValue[0]}

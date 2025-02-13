@@ -7,6 +7,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
 
   const gender = searchParams.get("gender");
+  const status = searchParams.get("status");
 
   try {
     let query = supabase.from("sponsor_people").select("*");
@@ -14,6 +15,13 @@ export async function GET(req: Request) {
     // Filter by gender if present
     if (gender) {
       query = query.eq("gender", gender);
+    }
+
+    // Filter by status if present
+    if (status) {
+      // Assuming status is a CSV of values, convert it to an array.
+      const statusArray = status.split(",");
+      query = query.in("status", statusArray);
     }
 
     const { data, error } = await query;
@@ -33,8 +41,7 @@ export async function GET(req: Request) {
           const childAge = calculateAge(new Date(child.birth_date).toISOString());
           return childAge === singleAge;
         });
-      }
-      else if (parts.length === 2) {
+      } else if (parts.length === 2) {
         const [minAge, maxAge] = parts;
         filteredData = filteredData.filter((child) => {
           const childAge = calculateAge(new Date(child.birth_date).toISOString());
@@ -43,7 +50,6 @@ export async function GET(req: Request) {
       }
     }
     
-
     return NextResponse.json({ people: filteredData });
   } catch (err) {
     console.error("Unexpected error:", err);
