@@ -1,5 +1,4 @@
 "use client";
-
 import dynamic from "next/dynamic";
 import React, { useEffect, useState, useRef } from "react";
 import { Box, Flex, Text, Spinner } from "@chakra-ui/react";
@@ -19,8 +18,8 @@ const SponsorChild = () => {
   const [childrenData, setChildrenData] = useState<SponsorPeople[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [visibleChildren, setVisibleChildren] = useState<SponsorPeople[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [listingsLoading, setListingsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);         // Page-level loading
+  const [listingsLoading, setListingsLoading] = useState(false); 
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ age: "", gender: "" });
@@ -66,6 +65,7 @@ const SponsorChild = () => {
   const handleBoundsChange = (bounds: L.LatLngBounds) => {
     if (!L) return;
     setListingsLoading(true);
+
     const filtered = childrenData.filter((child) => {
       if (!child.location_geo) return false;
       const [lng, lat] = child.location_geo.coordinates;
@@ -82,47 +82,30 @@ const SponsorChild = () => {
     const selectedPerson = childrenData.find((child) => child.id === id);
     if (selectedPerson) {
       setSelectedCountry(selectedPerson.country);
-      
       setTimeout(() => {
-        if (listingsRef.current) {
-          listingsRef.current.scrollIntoView({ 
-            behavior: 'smooth',
-            block: 'start'
-          });
-          const element = document.getElementById(`child-${id}`);
-          if (element) {
-            element.scrollIntoView({ 
-              behavior: 'smooth',
-              block: 'center'
-            });
-          }
-        }
+        listingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const element = document.getElementById(`child-${id}`);
+        element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 100);
     }
   };
 
-  if (loading) {
-    return (
-      <Flex justify="center" align="center" minH="100vh">
-        <Spinner size="xl" />
-      </Flex>
-    );
-  }
-
-  if (error) {
-    return (
-      <Flex direction="column" justify="center" align="center" minH="100vh">
-        <Text color="red.500" mb={4}>
-          {error}
-        </Text>
-      </Flex>
-    );
-  }
   return (
-    <Box className="flex flex-col items-center justify-center" px={{ base: 4, md: 32 }} py={{ base: 12, md: 16 }}>
+    <Box
+      className="flex flex-col items-center justify-center"
+      px={{ base: 4, md: 32 }}
+      py={{ base: 12, md: 16 }}
+    >
       <Filters
-        onFilterChange={(newFilters) => setFilters((prev) => ({ ...prev, ...newFilters }))}
+        onFilterChange={(newFilters) =>
+          setFilters((prev) => ({ ...prev, ...newFilters }))
+        }
       />
+      {error && (
+        <Flex justify="center" align="center" mt={4}>
+          <Text color="red.500">{error}</Text>
+        </Flex>
+      )}
       <ChildMap
         childData={childrenData}
         onMarkerClick={handleMarkerClick}
@@ -130,22 +113,39 @@ const SponsorChild = () => {
       />
       {selectedCountry && (
         <Box width="100%" ref={listingsRef}>
-          <Text mb={8} mt={5} fontSize="4xl" color="#1C3C8C" fontWeight="semibold" textAlign="left">
+          <Text
+            mb={8}
+            mt={5}
+            fontSize="4xl"
+            color="#1C3C8C"
+            fontWeight="semibold"
+            textAlign="left"
+          >
             Showing results from {selectedCountry}
           </Text>
         </Box>
       )}
-      {listingsLoading ? (
+      {loading ? (
         <Flex justify="center" align="center" minH="20vh">
           <Spinner size="lg" />
         </Flex>
       ) : visibleChildren.length > 0 ? (
-        <ChildListings peopleData={visibleChildren} selectedChildId={selectedChildId} selectedCountry={selectedCountry} />
+        <ChildListings
+          peopleData={visibleChildren}
+          selectedChildId={selectedChildId}
+          selectedCountry={selectedCountry}
+        />
       ) : (
         <Flex justify="center" align="center" minH="20vh">
           <Text fontSize="xl" color="gray.500">
             No children listed in this area.
           </Text>
+        </Flex>
+      )}
+      {listingsLoading && (
+        <Flex justify="center" align="center" mt={4}>
+          <Spinner size="md" />
+          <Text ml={2}>Updating listings…</Text>
         </Flex>
       )}
     </Box>
