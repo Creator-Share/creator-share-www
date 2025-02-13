@@ -87,11 +87,13 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
 
       const { url } = await res.json();
       if (url) {
-        toaster.create({
-          title: "Redirecting...",
-          description: "You will be redirected to complete the sponsorship.",
-        });
-        window.location.href = url;
+        document.getElementById('closeDialog')?.click();
+        
+        if (window.self !== window.top) {
+          window.open(url, '_blank');
+        } else {
+          window.location.href = url;
+        }
       }
     } catch (err) {
       toaster.create({
@@ -130,7 +132,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto mx-auto my-4">
         <DialogHeader>
-          <DialogCloseTrigger />
+          <DialogCloseTrigger id="closeDialog" />
         </DialogHeader>
         <DialogBody>
           <Box className="flex flex-col md:grid md:grid-cols-2 gap-6">
@@ -241,7 +243,6 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
             </Box>
           </Box>
         </DialogBody>
-        <DialogCloseTrigger />
       </DialogContent>
     </DialogRoot>
   );

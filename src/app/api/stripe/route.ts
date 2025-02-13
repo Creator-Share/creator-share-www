@@ -51,6 +51,7 @@ export async function POST(req: Request) {
       session = await stripe.checkout.sessions.create({
         ...commonSessionConfig,
         mode: "subscription",
+        payment_method_types: ["card"],
         line_items: [
           {
             price_data: {
@@ -65,6 +66,9 @@ export async function POST(req: Request) {
             quantity: 1,
           },
         ],
+        payment_intent_data: {
+          setup_future_usage: 'off_session',
+        },
       });
     } else if (paymentType === "payment") {
       session = await stripe.checkout.sessions.create({
