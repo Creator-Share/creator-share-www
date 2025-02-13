@@ -48,27 +48,50 @@ export async function POST(req: Request) {
 
     let session;
     if (paymentType === "subscription") {
+      console.log('Creating subscription session with data:', {
+        childId,
+        childName,
+        amount,
+        userId
+      });
+
+      // Create a price for the subscription
+      const price = await stripe.prices.create({
+        unit_amount: amount,
+        currency: 'usd',
+        recurring: { interval: 'month' },
+        product_data: {
+          name: `Sponsorship for ${childName} (Monthly)`,
+        },
+        metadata: {
+          childId,
+          userId,
+          amount: amount.toString()
+        }
+      });
+
       session = await stripe.checkout.sessions.create({
         ...commonSessionConfig,
-        mode: "subscription",
-        payment_method_types: ["card"],
+        mode: 'subscription',
         line_items: [
           {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: `Sponsorship for ${childName} (Monthly)`,
-                images: [childImage],
-              },
-              unit_amount: amount,
-              recurring: { interval: "month" },
-            },
+            price: price.id,
             quantity: 1,
           },
         ],
-        payment_intent_data: {
-          setup_future_usage: 'off_session',
-        },
+        subscription_data: {
+          metadata: {
+            childId,
+            userId,
+            amount: amount.toString()
+          }
+        }
+      });
+      
+      console.log('Created subscription session:', {
+        session_id: session.id,
+        price_id: price.id,
+        metadata: session.metadata
       });
     } else if (paymentType === "payment") {
       session = await stripe.checkout.sessions.create({
