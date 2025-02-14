@@ -104,7 +104,8 @@ export async function POST(req: Request) {
       amount: subscription.items.data[0].price.unit_amount,
       interval: subscription.items.data[0].price.recurring?.interval,
       current_period_start: new Date(subscription.current_period_start * 1000),
-      current_period_end: new Date(subscription.current_period_end * 1000)
+      current_period_end: new Date(subscription.current_period_end * 1000),
+      customer_id: subscription.customer
     });
 
     return NextResponse.json({ message: "Subscription processed" }, { status: 200 });
