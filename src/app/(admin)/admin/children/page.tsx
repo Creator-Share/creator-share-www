@@ -28,7 +28,8 @@ const ChildrenTable = () => {
     location_geo: null,
     location_str: "",
     image_url: "",
-    video_url: ""
+    video_url: "",
+    introduction: "",
   });
   const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>({
     id: "",
@@ -43,7 +44,8 @@ const ChildrenTable = () => {
     location_geo: null as Geography | null,
     location_str: "",
     image_url: "",
-    video_url: ""
+    video_url: "",
+    introduction: "",
   });
 
   const [selectedChild, setSelectedChild] = useState<SponsorPeople | null>(null);
@@ -181,6 +183,7 @@ const ChildrenTable = () => {
         location_str: "",
         image_url: "",
         video_url: "",
+        introduction: "",
       });
       setImageFiles([]);
       setVideoFiles([]);

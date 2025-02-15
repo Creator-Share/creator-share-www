@@ -27,6 +27,7 @@ import { HiUpload } from "react-icons/hi";
 import MapPicker from "./MapPicker";
 import { SponsorPeople } from "@/types/admin.types";
 import { GoPlusCircle } from "react-icons/go";
+import { toaster } from "@/components/ui/toaster";
 
 type CreateDrawerProps = {
     formData: SponsorPeople;
@@ -44,6 +45,10 @@ type CreateDrawerProps = {
     handleDrawerClose: () => void;
 };
 const CreateDrawer = ({
+    formData,
+    imageFiles,
+    videoFiles,
+    setVideoFiles,
     setIsDrawerOpen,
     isDrawerOpen,
     handleInputChange,
@@ -51,12 +56,52 @@ const CreateDrawer = ({
     handleLocationSelect,
     handleSubmit,
     setImageFiles,
-    setVideoFiles,
     handleDrawerClose,
 }: CreateDrawerProps) => {
     const [isAdding, setIsAdding] = useState(false);
 
     const handleAdd = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        
+        const requiredFields = ['name', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
+        const emptyFields = requiredFields.filter(field => !formData[field as keyof SponsorPeople]);
+        
+        if (emptyFields.length > 0) {
+            toaster.create({
+                title: "Validation Error",
+                description: `Please fill in all required fields: ${emptyFields.join(', ')}`,
+                duration: 5000,
+            });
+            return;
+        }
+
+        if (imageFiles.length === 0) {
+            toaster.create({
+                title: "Image Required",
+                description: "Please upload an image",
+                duration: 5000,
+            });
+            return;
+        }
+
+        if (videoFiles.length === 0) {
+            toaster.create({
+                title: "Video Required",
+                description: "Please upload a video",
+                duration: 5000,
+            });
+            return;
+        }
+
+        if (!formData.location_geo || !formData.location_str || !formData.country) {
+            toaster.create({
+                title: "Location Required",
+                description: "Please select a location on the map",
+                duration: 5000,
+            });
+            return;
+        }
+
         try {
             setIsAdding(true);
             await handleSubmit(e);
@@ -112,6 +157,16 @@ const CreateDrawer = ({
                             </Field>
                             <Field label="Biography" required errorText="This field is required">
                                 <Textarea name="biography" size="xl" className="border" px={2} py={2} onChange={handleInputChange} />
+                            </Field>
+                            <Field label="Introduction" required errorText="This field is required">
+                                <Textarea 
+                                    name="introduction" 
+                                    size="xl" 
+                                    className="border" 
+                                    px={2} 
+                                    py={2} 
+                                    onChange={handleInputChange} 
+                                />
                             </Field>
                             <Field label="Budget Goal" required errorText="This field is required">
                                 <Input name="budget_goal" type="text" className="border" px={2} onChange={handleInputChange} />

@@ -16,6 +16,7 @@ export type Geography = {
     location_str: string;
     image_url: string;
     video_url: string;
+    introduction: string;
   }
   
 

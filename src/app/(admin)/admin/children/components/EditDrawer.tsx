@@ -25,6 +25,7 @@ import {
 import MapPicker from './MapPicker';
 import { SponsorPeople } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
+import { toaster } from "@/components/ui/toaster";
 
 interface EditDrawerProps {
     selectedChild: SponsorPeople | null;
@@ -91,6 +92,18 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     };
 
     const handleSave = async () => {
+        const requiredFields = ['name', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
+        const emptyFields = requiredFields.filter(field => !formDataEdit[field as keyof SponsorPeople]);
+        
+        if (emptyFields.length > 0) {
+            toaster.create({
+                title: "Validation Error",
+                description: `Please fill in all required fields: ${emptyFields.join(', ')}`,
+                duration: 5000,
+            });
+            return;
+        }
+
         try {
             setIsSaving(true);
             const updatedData = { ...formDataEdit };
@@ -186,6 +199,17 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     py={2} 
                                     onChange={handleInputChange} 
                                     value={formDataEdit.biography || ''} 
+                                />
+                            </Field>
+                            <Field label="Introduction" required errorText="This field is required">
+                                <Textarea 
+                                    name="introduction" 
+                                    size="xl" 
+                                    className="border" 
+                                    px={2} 
+                                    py={2} 
+                                    onChange={handleInputChange}
+                                    value={formDataEdit.introduction || ''} 
                                 />
                             </Field>
                             <Field label="Budget Goal">
