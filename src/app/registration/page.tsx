@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Button, Input, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Input, Stack, Text, Spinner } from "@chakra-ui/react";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { toaster } from "@/components/ui/toaster";
 import { Field } from "@/components/ui/field";
@@ -41,6 +41,7 @@ const Register = () => {
     });
     const router = useRouter();
     const user = useAuthStore((state) => state.user);
+    const [isLoading, setIsLoading] = useState(false);
 
     const setIsDisabled = useFormStore((state) => state.setIsDisabled);
     const isDisabled = useFormStore((state) => state.isDisabled);
@@ -58,7 +59,20 @@ const Register = () => {
         }
     }, [user, router]);
 
+    const passwordValidation = {
+        required: "Password is required",
+        pattern: {
+            value: /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])/,
+            message: "Password must contain at least one uppercase letter, one number, and one special character"
+        },
+        minLength: {
+            value: 8,
+            message: "Password must be at least 8 characters long"
+        }
+    };
+
     const onSubmit = async (data: FormValues) => {
+        setIsLoading(true);
         const { email, password, first_name, last_name } = data;
 
         try {
@@ -71,11 +85,19 @@ const Register = () => {
             const result = await response.json();
 
             if (!response.ok) {
-                toaster.create({
-                    title: "Signup Failed",
-                    description: result.error || "An unexpected error occurred",
-                    duration: 5000,
-                });
+                if (result.error.includes("already exists")) {
+                    toaster.create({
+                        title: "Email Already Exists",
+                        description: "This email address is already registered. Please try logging in instead.",
+                        duration: 5000,
+                    });
+                } else {
+                    toaster.create({
+                        title: "Signup Failed",
+                        description: result.error || "An unexpected error occurred",
+                        duration: 5000,
+                    });
+                }
                 return;
             }
 
@@ -94,9 +116,10 @@ const Register = () => {
                 description: "Something went wrong. Please try again later.",
                 duration: 5000,
             });
+        } finally {
+            setIsLoading(false);
         }
     };
-
 
     const password = watch("password");
     const confirmPassword = watch("confirmPassword");
@@ -161,7 +184,7 @@ const Register = () => {
                         <Box className="relative w-full">
                             <Input
                                 type={showPassword ? "text" : "password"}
-                                {...register("password", { required: "Password is required" })}
+                                {...register("password", passwordValidation)}
                                 className="border border-[#8D9692] p-2 w-full"
                             />
                             <Box
@@ -206,9 +229,16 @@ const Register = () => {
                         type="submit"
                         className="bg-[#1C3C8C] text-white"
                         width="full"
-                        disabled={isDisabled}
+                        disabled={isDisabled || isLoading}
                     >
-                        Submit
+                        {isLoading ? (
+                            <Box display="flex" alignItems="center" gap={2}>
+                                <Spinner size="sm" color="white" />
+                                <Text>Creating Account...</Text>
+                            </Box>
+                        ) : (
+                            "Submit"
+                        )}
                     </Button>
                     <Box className="mt-6 text-center">
                         <Text fontSize="sm" color="gray.600">

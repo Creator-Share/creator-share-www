@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Button, Input, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Input, Stack, Text, Spinner } from "@chakra-ui/react";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { Field } from "@/components/ui/field";
 import { useForm } from "react-hook-form";
@@ -12,6 +12,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useState, useEffect } from "react";
 import { loginForm } from "@/types";
 import ToS from "@/components/ui/ToS";
+import { toaster } from "@/components/ui/toaster";
 
 const Login = () => {
   const {
@@ -25,6 +26,7 @@ const Login = () => {
 
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isDisabled, setIsDisabled] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const email = watch("email", "");
   const password = watch("password", "");
@@ -41,27 +43,38 @@ const Login = () => {
   }, [email, password]);
 
   const onSubmit = async (data: loginForm) => {
+    setIsLoading(true);
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-  
+
       if (!response.ok) {
         const errorData = await response.json();
-        alert(errorData.error || "An unexpected error occurred");
+        toaster.create({
+          title: "Login Failed",
+          description: errorData.error || "Invalid email or password",
+          duration: 5000,
+        });
         return;
       }
-  
+
       const result = await response.json();
       await useAuthStore.getState().fetchUser();
-  
+
       const redirectUrl = result.redirect;
       router.push(redirectUrl);
     } catch (error) {
-      alert("An unexpected error occurred. Please try again.");
+      toaster.create({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        duration: 5000,
+      });
       console.error(error);
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -129,9 +142,16 @@ const Login = () => {
             type="submit"
             className="bg-[#1C3C8C] text-white"
             width="full"
-            disabled={isDisabled}
+            disabled={isDisabled || isLoading}
           >
-            Submit
+            {isLoading ? (
+              <Box display="flex" alignItems="center" gap={2}>
+                <Spinner size="sm" color="white" />
+                <Text>Signing in...</Text>
+              </Box>
+            ) : (
+              "Submit"
+            )}
           </Button>
           <Box className="mt-6 text-center">
             <Text fontSize="sm" color="gray.600">

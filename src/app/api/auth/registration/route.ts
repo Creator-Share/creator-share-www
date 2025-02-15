@@ -14,6 +14,19 @@ export async function POST(request: Request) {
   }
 
   try {
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('email')
+      .eq('email', email)
+      .single();
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: 'An account with this email already exists' },
+        { status: 400 }
+      );
+    }
+
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -26,9 +39,16 @@ export async function POST(request: Request) {
       },
     });
 
-    if (signUpError || !signUpData) {
+    if (signUpError) {
       return NextResponse.json(
-        { error: signUpError?.message || 'Registration failed' },
+        { error: signUpError.message },
+        { status: 400 }
+      );
+    }
+
+    if (signUpData.user?.identities?.length === 0) {
+      return NextResponse.json(
+        { error: 'An account with this email already exists' },
         { status: 400 }
       );
     }
