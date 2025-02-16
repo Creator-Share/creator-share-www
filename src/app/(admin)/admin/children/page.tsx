@@ -7,6 +7,8 @@ import { SponsorPeople, Geography } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import dynamic from "next/dynamic";
 import { centsToDollars } from "@/utils/currency";
+import BulkUploadDrawer from "./components/BulkUploadDrawer";
+import { Box, Text } from "@chakra-ui/react";
 
 const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), { ssr: false });
 const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
@@ -51,6 +53,7 @@ const ChildrenTable = () => {
   const [selectedChild, setSelectedChild] = useState<SponsorPeople | null>(null);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
+  const [isBulkUploadDrawerOpen, setIsBulkUploadDrawerOpen] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -250,10 +253,10 @@ const ChildrenTable = () => {
   }
 
   return (
-    <div className="container mx-auto h-[calc(100vh-200px)] mt-12">
-      <div className="grid grid-cols-2 mb-2">
-        <h1 className="text-3xl font-semibold leading-9">Children</h1>
-        <div className="justify-self-end">
+    <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
+      <Box className="grid grid-cols-2 mb-2">
+        <Text className="text-3xl font-semibold leading-9">Children</Text>
+        <Box className="justify-self-end flex">
           <CreateDrawer
             setIsDrawerOpen={setIsCreateDrawerOpen}
             formData={formData}
@@ -269,8 +272,15 @@ const ChildrenTable = () => {
             setVideoFiles={setVideoFiles}
             handleDrawerClose={() => setIsCreateDrawerOpen(false)}
           />
-        </div>
-      </div>
+          <BulkUploadDrawer
+            isDrawerOpen={isBulkUploadDrawerOpen}
+            setIsDrawerOpen={setIsBulkUploadDrawerOpen}
+            onUploadSuccess={(newChildren) => {
+              setData((prevData) => [...prevData, ...newChildren]);
+            }}
+          />
+        </Box>
+      </Box>
       <DataTable
         columns={columns as ColumnDef<unknown, unknown>[]}
         data={data}
@@ -292,7 +302,7 @@ const ChildrenTable = () => {
           setVideoFiles={setVideoFiles}
         />
       )}
-    </div>
+    </Box>
   );
 };
 

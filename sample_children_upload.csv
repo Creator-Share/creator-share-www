@@ -1,0 +1,4 @@
+name,gender,birth_date,biography,introduction,budget_goal,status,country,location_geo,location_str
+John Doe,Boy,2015-03-15,John is a bright and energetic child who loves to play soccer.,Meet John! He dreams of becoming a teacher.,1200.00,New,Kenya,-1.2921;36.8219,Nairobi
+Maria Garcia,Girl,2016-07-22,Maria enjoys reading and helping her younger siblings.,Maria is a kind and caring girl who loves to learn.,1500.00,New,Mexico,19.4326;-99.1332,Mexico City
+Samuel Osei,Boy,2014-11-30,Samuel is passionate about mathematics and science.,Samuel has big dreams of becoming a doctor.,1350.00,New,Ghana,5.6037;-0.1870,Accra
