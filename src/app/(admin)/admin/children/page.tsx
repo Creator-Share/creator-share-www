@@ -10,12 +10,15 @@ import { centsToDollars } from "@/utils/currency";
 import BulkUploadDrawer from "./components/BulkUploadDrawer";
 import { Box, Button, Text } from "@chakra-ui/react";
 import { MdDeleteOutline } from "react-icons/md";
+import { toaster } from "@/components/ui/toaster";
+import DeleteDialog from "./components/DeleteDialog";
 
 const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), { ssr: false });
 const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
 
 type TableInstance = {
   getSelectedRowModel: () => { rows: Row<SponsorPeople>[] };
+  getTableInstance: () => { toggleAllRowsSelected: (value: boolean) => void };
 };
 
 const ChildrenTable = () => {
@@ -60,6 +63,8 @@ const ChildrenTable = () => {
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
   const [isBulkUploadDrawerOpen, setIsBulkUploadDrawerOpen] = useState(false);
   const [selectedCount, setSelectedCount] = useState(0);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedRowsForDeletion, setSelectedRowsForDeletion] = useState<Row<SponsorPeople>[]>([]);
   const tableRef = useRef<TableInstance | null>(null);
   useEffect(() => {
     async function fetchData() {
@@ -235,14 +240,20 @@ const ChildrenTable = () => {
     const selectedRows = selectedRowModel.rows;
 
     if (selectedRows.length === 0) {
-      alert("No rows selected for deletion.");
+      toaster.create({
+        title: "No Selection",
+        description: "No rows selected for deletion.",
+        duration: 5000,
+      });
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete ${selectedRows.length} selected children?`)) {
-      return;
-    }
-    const childIds = selectedRows.map((row: Row<SponsorPeople>) => row.original.id);
+    setSelectedRowsForDeletion(selectedRows);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const childIds = selectedRowsForDeletion.map((row: Row<SponsorPeople>) => row.original.id);
 
     try {
       const response = await fetch("/api/admin/children/bulk-delete", {
@@ -259,10 +270,27 @@ const ChildrenTable = () => {
       setData((prevData) =>
         prevData.filter((child) => !childIds.includes(child.id))
       );
-      alert("Selected children deleted successfully.");
+      if (tableRef.current) {
+        tableRef.current.getTableInstance().toggleAllRowsSelected(false);
+      }
+      
+      setSelectedCount(0);
+      setSelectedRowsForDeletion([]);
+      
+      toaster.create({
+        title: "Success",
+        description: "Selected children deleted successfully.",
+        duration: 5000,
+      });
     } catch (error) {
       console.error("Bulk delete error:", error);
-      alert("Bulk delete failed. Please try again.");
+      toaster.create({
+        title: "Error",
+        description: "Bulk delete failed. Please try again.",
+        duration: 5000,
+      });
+    } finally {
+      setIsDeleteDialogOpen(false);
     }
   };
 
@@ -353,6 +381,12 @@ const ChildrenTable = () => {
           setVideoFiles={setVideoFiles}
         />
       )}
+      <DeleteDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={confirmDelete}
+        itemCount={selectedRowsForDeletion.length}
+      />
     </Box>
   );
 };
