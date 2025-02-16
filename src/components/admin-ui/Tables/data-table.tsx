@@ -26,6 +26,14 @@ import { DataTablePagination } from "./DataTablePagination";
 import { DataTableViewOptions } from "./column-toggle";
 import { Input } from "@chakra-ui/react";
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
+declare module "@tanstack/table-core" {
+  interface ColumnMeta<TData, TValue> {
+    excludeFromClick?: boolean;
+  }
+}
+/* eslint-enable @typescript-eslint/no-unused-vars */
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
@@ -37,7 +45,7 @@ interface DataTableProps<TData, TValue> {
   getRowProps?: (row: Row<TData>) => React.HTMLAttributes<HTMLTableRowElement>;
   initialColumnVisibility?: VisibilityState;
 }
-const excludeFromFiltering = ["select", "actions"];
+const excludeFromFiltering = ["select", "actions", "id"];
 const renderFilterInput = (id: string) => !excludeFromFiltering.includes(id);
 const DEFAULT_TABLE_HEIGHT = "h-[80vh]";
 
@@ -136,7 +144,15 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      onClick={() => onRowClick && onRowClick(row.original, cell.column.columnDef)}
+                      onClick={() => {
+                        const columnDef = cell.column.columnDef;
+                        if (columnDef.meta?.excludeFromClick && onRowClick) {
+                          return;
+                        }
+                        if (onRowClick) {
+                          onRowClick(row.original, columnDef);
+                        }
+                      }}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>

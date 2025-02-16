@@ -13,24 +13,26 @@ export const columns: ColumnDef<SponsorPeople>[] = [
     id: "select",
     meta: { excludeFromClick: true },
     header: ({ table }) => (
-      <div className="flex items-center justify-center">
+      <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
         <Checkbox
-          className="h-5 w-5"
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          className="h-5 w-5 border border-black"
+          checked={table.getIsAllPageRowsSelected()}
+          _indeterminate={{ opacity: table.getIsSomePageRowsSelected() ? 1 : 0 }}
+          onCheckedChange={(value) => {
+            table.toggleAllPageRowsSelected(!!value);
+          }}
           aria-label="Select all"
         />
       </div>
     ),
     cell: ({ row }) => (
-      <div className="flex items-center justify-center">
+      <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
         <Checkbox
-          className="h-5 w-5"
+          className="h-5 w-5 border border-black"
           checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          onCheckedChange={(value) => {
+            row.toggleSelected(!!value);
+          }}
           aria-label="Select row"
         />
       </div>
@@ -40,17 +42,24 @@ export const columns: ColumnDef<SponsorPeople>[] = [
   },
   {
     accessorKey: "id",
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
-      >
-        ID
-        <LuArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    meta: { excludeFromClick: true },
+    header: ({ column }) => {
+      const meta = column.columnDef.meta as { excludeFromClick?: boolean };
+      if (meta?.excludeFromClick) {
+        return null;
+      }
+      return (
+        <Button
+          variant="ghost"
+          onClick={() =>
+            column.toggleSorting(column.getIsSorted() === "asc")
+          }
+        >
+          ID
+          <LuArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      );
+    },
     cell: ({ row }) => {
       const person = row.original;
       return (

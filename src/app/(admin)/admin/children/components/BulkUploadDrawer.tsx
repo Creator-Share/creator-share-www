@@ -41,11 +41,11 @@ const BulkUploadDrawer = ({
     const processCSV = async (file: File): Promise<SponsorPeople[]> => {
         const text = await file.text();
         const rows = text.split('\n');
-        const headers = rows[0].split(',').map(h => h.trim());
+        const headers = rows[0].split(',').map((h) => h.trim());
         
         return rows.slice(1).filter(row => row.trim()).map(row => {
             const values = row.split(',').map(v => v.trim());
-            const child: any = {};
+            const child: Partial<SponsorPeople> = {};
             headers.forEach((header, index) => {
                 if (header === 'budget_goal') {
                     child[header] = Math.round(parseFloat(values[index]) * 100);
@@ -56,7 +56,7 @@ const BulkUploadDrawer = ({
                         coordinates: [lng, lat]
                     };
                 } else {
-                    child[header] = values[index];
+                    (child as Record<string, string>)[header] = values[index];
                 }
             });
             return child as SponsorPeople;
