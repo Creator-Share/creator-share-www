@@ -44,6 +44,7 @@ interface DataTableProps<TData, TValue> {
   className?: string;
   getRowProps?: (row: Row<TData>) => React.HTMLAttributes<HTMLTableRowElement>;
   initialColumnVisibility?: VisibilityState;
+  onRowSelectionChange?: (rowSelection: Record<string, unknown>) => void;
 }
 const excludeFromFiltering = ["select", "actions", "id"];
 const renderFilterInput = (id: string) => !excludeFromFiltering.includes(id);
@@ -58,6 +59,7 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
     tableHeight = DEFAULT_TABLE_HEIGHT,
     getRowProps,
     initialColumnVisibility = {},
+    onRowSelectionChange,
   }: DataTableProps<TData, TValue>,
   ref: React.Ref<unknown>
 ) {
@@ -65,6 +67,12 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(initialColumnVisibility);
   const [rowSelection, setRowSelection] = React.useState({});
+
+  React.useEffect(() => {
+    if (onRowSelectionChange) {
+      onRowSelectionChange(rowSelection);
+    }
+  }, [rowSelection, onRowSelectionChange]);
 
   const table = useReactTable({
     data,
