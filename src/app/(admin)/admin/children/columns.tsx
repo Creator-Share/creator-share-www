@@ -12,31 +12,34 @@ export const columns: ColumnDef<SponsorPeople>[] = [
   {
     id: "select",
     meta: { excludeFromClick: true },
-    header: ({ table }) => (
-      <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-        <Checkbox
-          className="h-5 w-5 border border-black"
-          checked={table.getIsAllPageRowsSelected()}
-          _indeterminate={{ opacity: table.getIsSomePageRowsSelected() ? 1 : 0 }}
-          onCheckedChange={(value) => {
-            table.toggleAllPageRowsSelected(!!value);
-          }}
-          aria-label="Select all"
-        />
-      </div>
-    ),
-    cell: ({ row }) => (
-      <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-        <Checkbox
-          className="h-5 w-5 border border-black"
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => {
-            row.toggleSelected(!!value);
-          }}
-          aria-label="Select row"
-        />
-      </div>
-    ),
+    header: ({ table }) => {
+      const isAllSelected = table.getIsAllPageRowsSelected();
+      const isSomeSelected = table.getIsSomePageRowsSelected();
+      return (
+        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            key={`header-${isAllSelected}-${isSomeSelected}`}
+            className="h-5 w-5 border border-black"
+            checked={isAllSelected}
+            _indeterminate={isSomeSelected && !isAllSelected ? {} : undefined}
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          />
+        </div>
+      );
+    },
+    cell: ({ row }) => {
+      return (
+        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            key={`${row.id}-${row.getIsSelected()}`}
+            className="h-5 w-5 border border-black"
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+          />
+        </div>
+      );
+    },
     enableSorting: false,
     enableHiding: false,
   },
