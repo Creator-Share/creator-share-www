@@ -1,13 +1,21 @@
 "use client";
 import React from "react";
 import { Box, Text, Image, Flex } from "@chakra-ui/react";
-import { FaCalendar, FaCaretDown } from "react-icons/fa";
+import { FaCalendar } from "react-icons/fa";
 import { FaLocationDot, FaPerson } from "react-icons/fa6";
 import { calculateAge } from "@/utils/ageCalculator";
 import { centsToDollars } from "@/utils/currency";
 import { ChildCardProps } from "@/types/propTypes";
 import SponsorDialog from "../SponsorDialog";
 import { Button } from "@/components/ui/button";
+import {
+    DialogRoot,
+    DialogContent,
+    DialogHeader,
+    DialogBody,
+    DialogCloseTrigger,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const age = calculateAge(new Date(people.birth_date).toISOString());
@@ -21,14 +29,31 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
             borderRadius={{ base: 'md', md: 'md' }}
             className="bg-white mb-6 p-0 border-0 md:border md:mb-0 md:p-0"
         >
-            <Box>
-                <Image
-                    src={people.image_url}
-                    alt={people.name}
-                    objectFit="cover"
-                    className="mb-4 md:mb-0 rounded-t-md h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:h-[273px] md:w-[450px]"
-                />
-            </Box>
+            <DialogRoot>
+                <DialogTrigger asChild>
+                    <Box>
+                        <Image
+                            src={people.image_url}
+                            alt={people.name}
+                            objectFit="cover"
+                            className="mb-4 md:mb-0 rounded-t-md h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:h-[273px] md:w-[450px] cursor-pointer"
+                        />
+                    </Box>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogCloseTrigger />
+                    </DialogHeader>
+                    <DialogBody>
+                        <Image
+                            src={people.image_url}
+                            alt={people.name}
+                            objectFit="contain"
+                            className="w-full h-[90vh]"
+                        />
+                    </DialogBody>
+                </DialogContent>
+            </DialogRoot>
             <Box className="md:grid md:grid-cols-2 pt-[20px] w-full md:w-screen">
                 <Box ml={{ md: 6 }} w="full">
                     <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">

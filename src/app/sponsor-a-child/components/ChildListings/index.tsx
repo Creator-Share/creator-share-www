@@ -6,7 +6,7 @@ import ChildCard from "../ChildCard";
 import { SponsorPeople } from "@/types";
 import { ChildListingsProps } from "@/types/propTypes";
 import SponsorDialog from "../SponsorDialog";
-import { FaCalendar, FaCaretDown, FaCaretUp } from "react-icons/fa";
+import { FaCaretDown } from "react-icons/fa";
 
 const ChildListings: React.FC<ChildListingsProps> = ({
   peopleData,
