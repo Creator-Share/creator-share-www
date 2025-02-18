@@ -1,18 +1,22 @@
--- Every time a transaction is inserted, updated, or deleted
+-- Every time a subscription is inserted, updated, or deleted
 -- Updates the budget for the child
--- TODO: Handle different statuses for when people cancel subscriptions
 CREATE OR REPLACE FUNCTION calc_budget_raised() RETURNS TRIGGER AS $$
 DECLARE
-  amount int;
+  total_amount int;
 BEGIN
-  SELECT SUM(credit)
-  FROM transaction_ledger
-  WHERE child_id = NEW.child_id
-  --AND status != 'void'
-  INTO amount;
+  SELECT SUM(
+    CASE 
+      WHEN s.interval = 'year' THEN s.amount / 12
+      ELSE s.amount
+    END
+  )
+  INTO total_amount
+  FROM subscriptions s
+  WHERE s.child_id = NEW.child_id
+  AND s.status != 'cancelled';
 
   UPDATE sponsor_people 
-  SET budget_raised = amount 
+  SET budget_raised = total_amount 
   WHERE id = NEW.child_id;
 
   RETURN NEW;
@@ -20,5 +24,5 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_budget_raised
-AFTER INSERT OR UPDATE OR DELETE ON transaction_ledger 
+AFTER INSERT OR UPDATE OR DELETE ON subscriptions 
 FOR EACH ROW EXECUTE FUNCTION calc_budget_raised();
