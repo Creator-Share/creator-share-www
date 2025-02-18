@@ -114,6 +114,10 @@ const SponsorChild = () => {
         childData={childrenData}
         onMarkerClick={handleMarkerClick}
         onBoundsChange={handleBoundsChange}
+        onResetView={() => {
+          setSelectedCountry(null);
+          setVisibleChildren(childrenData);
+        }}
       />
       {selectedCountry && (
         <Box width="100%" ref={listingsRef}>

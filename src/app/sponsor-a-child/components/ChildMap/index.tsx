@@ -62,7 +62,6 @@ const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void
   return null;
 };
 
-
 const FitBounds: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childData }) => {
   const map = useMap();
 
@@ -83,7 +82,11 @@ const FitBounds: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childD
   return null;
 };
 
-const ZoomController: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childData }) => {
+const ZoomController: React.FC<{ 
+  childData: ChildMapProps["childData"],
+  onBoundsChange: (bounds: LatLngBounds) => void,
+  onResetView?: () => void
+}> = ({ childData, onBoundsChange, onResetView }) => {
   const map = useMap();
   const [showReset, setShowReset] = useState(false);
 
@@ -100,7 +103,7 @@ const ZoomController: React.FC<{ childData: ChildMapProps["childData"] }> = ({ c
 
   const handleResetView = () => {
     localStorage.removeItem("mapState");
-    
+
     if (childData.length > 0) {
       const bounds = L.latLngBounds(
         childData.map((child) => [
@@ -109,9 +112,11 @@ const ZoomController: React.FC<{ childData: ChildMapProps["childData"] }> = ({ c
         ])
       );
       map.fitBounds(bounds, { padding: [50, 50] });
+      onBoundsChange(bounds);
     } else {
       map.setView([0, 0], 2);
     }
+    if (onResetView) onResetView();
   };
 
   return showReset ? (
@@ -123,7 +128,7 @@ const ZoomController: React.FC<{ childData: ChildMapProps["childData"] }> = ({ c
   ) : null;
 };
 
-const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsChange }) => {
+const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsChange, onResetView }) => {
   const [isReady, setIsReady] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
 
@@ -168,12 +173,16 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
         />
         <MapEventHandler onBoundsChange={onBoundsChange} />
         <FitBounds childData={childData} />
-        <ZoomController childData={childData} />
+        <ZoomController
+          childData={childData}
+          onBoundsChange={onBoundsChange}
+          onResetView={onResetView}
+        />
         <MarkerClusterGroup chunkedLoading disableClusteringAtZoom={10} iconCreateFunction={createClusterCustomIcon}>
           {childData.map((child) => (
             <Marker
               key={child.id}
-              position={[child.location_geo?.coordinates[1], child.location_geo?.coordinates[0]]}
+              position={[child.location_geo.coordinates[1], child.location_geo.coordinates[0]]}
               icon={CustomIcon}
               eventHandlers={{
                 click: () => handleMarkerClick(child.id),

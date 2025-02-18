@@ -18,6 +18,7 @@ export interface ChildMapProps {
   }[];
   onMarkerClick: (id: string) => void;
   onBoundsChange: (bounds: LatLngBounds) => void;
+  onResetView?: () => void;
 }
 
 export interface ChildListingsProps {
