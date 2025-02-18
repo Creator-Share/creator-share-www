@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Text, Image, Flex } from "@chakra-ui/react";
 import { FaCalendar } from "react-icons/fa";
 import { FaLocationDot, FaPerson } from "react-icons/fa6";
@@ -17,8 +17,42 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 
+interface SponsorPeopleImage {
+    id: string;
+    sponsor_people_id: string;
+    image_url: string;
+    order_index: number;
+}
+
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
+    const [images, setImages] = useState<SponsorPeopleImage[]>([]);
+    const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+
+    useEffect(() => {
+        const fetchImages = async () => {
+            try {
+                const response = await fetch(`/api/admin/children/images/${people.id}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setImages(data.sort((a: SponsorPeopleImage, b: SponsorPeopleImage) => a.order_index - b.order_index));
+                }
+            } catch (error) {
+                console.error("Error fetching images:", error);
+            }
+        };
+
+        fetchImages();
+    }, [people.id]);
+
     const age = calculateAge(new Date(people.birth_date).toISOString());
+
+    const handleNextImage = () => {
+        setCurrentImageIndex((prev) => (prev + 1) % images.length);
+    };
+
+    // const handlePrevImage = () => {
+    //     setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+    // };
 
     return (
         <Flex
@@ -33,10 +67,11 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                 <DialogTrigger asChild>
                     <Box>
                         <Image
-                            src={people.image_url}
+                            src={images[currentImageIndex]?.image_url || people.image_url}
                             alt={people.name}
                             objectFit="cover"
                             className="mb-4 md:mb-0 rounded-t-md h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:h-[273px] md:w-[450px] cursor-pointer"
+                            onClick={handleNextImage}
                         />
                     </Box>
                 </DialogTrigger>
@@ -45,12 +80,17 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                         <DialogCloseTrigger />
                     </DialogHeader>
                     <DialogBody>
-                        <Image
-                            src={people.image_url}
-                            alt={people.name}
-                            objectFit="contain"
-                            className="w-full h-[90vh]"
-                        />
+                        <Flex direction="column" gap={4}>
+                            {images.map((img, index) => (
+                                <Image
+                                    key={img.id}
+                                    src={img.image_url}
+                                    alt={`${people.name} - ${index + 1}`}
+                                    objectFit="contain"
+                                    className="w-full max-h-[90vh]"
+                                />
+                            ))}
+                        </Flex>
                     </DialogBody>
                 </DialogContent>
             </DialogRoot>

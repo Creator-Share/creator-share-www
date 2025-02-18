@@ -1,0 +1,28 @@
+import { createClient } from "@/utils/supabase/server";
+import { NextResponse } from "next/server";
+
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const id = url.pathname.split('/').pop();
+    const supabase = await createClient();
+    
+    const { data, error } = await supabase
+      .from("sponsor_people_images")
+      .select("*")
+      .eq("sponsor_people_id", id)
+      .order("order_index");
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Error fetching images:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+} 

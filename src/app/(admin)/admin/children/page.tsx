@@ -37,7 +37,6 @@ const ChildrenTable = () => {
     country: "",
     location_geo: null,
     location_str: "",
-    image_url: "",
     video_url: "",
     introduction: "",
   });
@@ -53,7 +52,6 @@ const ChildrenTable = () => {
     country: "",
     location_geo: null as Geography | null,
     location_str: "",
-    image_url: "",
     video_url: "",
     introduction: "",
   });
@@ -138,40 +136,39 @@ const ChildrenTable = () => {
 
   const handleSubmit = async () => {
     try {
-      let uploadedImageUrl = "";
-      let uploadedVideoUrl = "";
-
-      if (imageFiles.length > 0) {
-        const imageUrl = await uploadFileToSupabase(imageFiles[0], "images");
-        if (!imageUrl) {
-          throw new Error("Failed to upload image");
+      setLoading(true);
+      const imageUrls = [];
+      
+      // Upload each image and collect URLs
+      for (const imageFile of imageFiles) {
+        const imageUrl = await uploadFileToSupabase(imageFile, "images");
+        if (imageUrl) {
+          imageUrls.push(imageUrl);
         }
-        uploadedImageUrl = imageUrl;
       }
 
+      // Upload video if present
+      let videoUrl = "";
       if (videoFiles.length > 0) {
-        const videoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
-        if (!videoUrl) {
-          throw new Error("Failed to upload video");
+        const uploadedVideoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
+        if (uploadedVideoUrl) {
+          videoUrl = uploadedVideoUrl;
         }
-        uploadedVideoUrl = videoUrl;
       }
 
       const budgetGoalInCents = Math.round(parseFloat(formData.budget_goal.toString()) * 100);
 
-      const updatedFormData = {
-        ...formData,
-        budget_goal: budgetGoalInCents,
-        image_url: uploadedImageUrl,
-        video_url: uploadedVideoUrl,
-      };
-
+      // First create the sponsor_people record
       const response = await fetch('/api/admin/children/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updatedFormData),
+        body: JSON.stringify({
+          ...formData,
+          budget_goal: budgetGoalInCents,
+          video_url: videoUrl,
+        }),
       });
 
       if (!response.ok) {
@@ -179,11 +176,27 @@ const ChildrenTable = () => {
       }
 
       const newChild = await response.json();
-      setData((prevData) => [
-        ...prevData,
-        { ...newChild, budget_goal: centsToDollars(newChild.budget_goal) },
-      ]);
 
+      // Then create image records
+      const imageRecords = imageUrls.map((url, index) => ({
+        sponsor_people_id: newChild.id,
+        image_url: url,
+        order_index: index
+      }));
+
+      const imagesResponse = await fetch('/api/admin/children/images/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ images: imageRecords }),
+      });
+
+      if (!imagesResponse.ok) {
+        throw new Error('Failed to create image records');
+      }
+
+      // Reset form and close drawer
       setFormData({
         name: "",
         gender: "",
@@ -194,17 +207,23 @@ const ChildrenTable = () => {
         status: "",
         country: "",
         location_geo: null,
-        location_str: "",
-        image_url: "",
         video_url: "",
+        location_str: "",
         introduction: "",
       });
       setImageFiles([]);
       setVideoFiles([]);
       setIsCreateDrawerOpen(false);
+
     } catch (error) {
       console.error("Error creating child:", error);
-      alert(error instanceof Error ? error.message : "Failed to create child");
+      toaster.create({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create child",
+        duration: 5000,
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -325,14 +344,14 @@ const ChildrenTable = () => {
         <Text className="text-3xl font-semibold leading-9">Children</Text>
         <Box className="justify-self-end flex gap-3">
           <CreateDrawer
-            setIsDrawerOpen={setIsCreateDrawerOpen}
             formData={formData}
+            isDrawerOpen={isCreateDrawerOpen}
+            setIsDrawerOpen={setIsCreateDrawerOpen}
             setFormData={setFormData}
             handleInputChange={handleInputChange}
             handleSelectChange={handleSelectChange}
             handleLocationSelect={handleLocationSelect}
             handleSubmit={handleSubmit}
-            isDrawerOpen={isCreateDrawerOpen}
             imageFiles={imageFiles}
             setImageFiles={setImageFiles}
             videoFiles={videoFiles}

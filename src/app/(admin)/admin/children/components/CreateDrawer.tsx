@@ -189,7 +189,7 @@ const CreateDrawer = ({
                                 </NativeSelectRoot>
                             </Field>
                             <Field label="Upload Image" required errorText="This field is required">
-                                <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]}>
+                                <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]} maxFiles={5}>
                                     <FileUploadTrigger asChild>
                                         <Button variant="outline" size="sm" className="border" px={4}>
                                             <HiUpload /> Upload Image
