@@ -27,6 +27,7 @@ interface SponsorPeopleImage {
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const [images, setImages] = useState<SponsorPeopleImage[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+    const [dialogImageIndex, setDialogImageIndex] = useState<number>(0);
 
     useEffect(() => {
         const fetchImages = async () => {
@@ -44,15 +45,20 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
         fetchImages();
     }, [people.id]);
 
+    useEffect(() => {
+        // Reset dialog image index when card image changes
+        setDialogImageIndex(currentImageIndex);
+    }, [currentImageIndex]);
+
     const age = calculateAge(new Date(people.birth_date).toISOString());
 
     const handleNextImage = () => {
         setCurrentImageIndex((prev) => (prev + 1) % images.length);
     };
 
-    // const handlePrevImage = () => {
-    //     setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
-    // };
+    const handleDialogNextImage = () => {
+        setDialogImageIndex((prev) => (prev + 1) % images.length);
+    };
 
     return (
         <Flex
@@ -65,14 +71,71 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
         >
             <DialogRoot>
                 <DialogTrigger asChild>
-                    <Box>
+                    <Box position="relative">
                         <Image
                             src={images[currentImageIndex]?.image_url || people.image_url}
                             alt={people.name}
                             objectFit="cover"
                             className="mb-4 md:mb-0 rounded-t-md h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:h-[273px] md:w-[450px] cursor-pointer"
-                            onClick={handleNextImage}
                         />
+                        {images.length > 1 && (
+                            <>
+                                <Flex 
+                                    position="absolute" 
+                                    bottom="4" 
+                                    left="50%" 
+                                    transform="translateX(-50%)" 
+                                    gap={2}
+                                >
+                                    {images.map((_, index) => (
+                                        <Box
+                                            key={index}
+                                            w="2"
+                                            h="2"
+                                            borderRadius="full"
+                                            bg={currentImageIndex === index ? "white" : "whiteAlpha.600"}
+                                            cursor="pointer"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setCurrentImageIndex(index);
+                                            }}
+                                        />
+                                    ))}
+                                </Flex>
+                                <Button
+                                    position="absolute"
+                                    left="2"
+                                    top="50%"
+                                    transform="translateY(-50%)"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+                                    }}
+                                    size="sm"
+                                    variant="ghost"
+                                    color="white"
+                                    _hover={{ bg: 'whiteAlpha.200' }}
+                                >
+                                    ←
+                                </Button>
+                                <Button
+                                    position="absolute"
+                                    right="2"
+                                    top="50%"
+                                    transform="translateY(-50%)"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleNextImage();
+                                    }}
+                                    size="sm"
+                                    variant="ghost"
+                                    color="white"
+                                    _hover={{ bg: 'whiteAlpha.200' }}
+                                >
+                                    →
+                                </Button>
+                            </>
+                        )}
                     </Box>
                 </DialogTrigger>
                 <DialogContent>
@@ -80,17 +143,72 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                         <DialogCloseTrigger />
                     </DialogHeader>
                     <DialogBody>
-                        <Flex direction="column" gap={4}>
-                            {images.map((img, index) => (
-                                <Image
-                                    key={img.id}
-                                    src={img.image_url}
-                                    alt={`${people.name} - ${index + 1}`}
-                                    objectFit="contain"
-                                    className="w-full max-h-[90vh]"
-                                />
-                            ))}
-                        </Flex>
+                        <Box position="relative">
+                            <Image
+                                src={images[dialogImageIndex]?.image_url}
+                                alt={`${people.name} - ${dialogImageIndex + 1}`}
+                                objectFit="contain"
+                                className="w-full max-h-[90vh] rounded-lg"
+                            />
+                            {images.length > 1 && (
+                                <>
+                                    <Flex 
+                                        position="absolute" 
+                                        bottom="4" 
+                                        left="50%" 
+                                        transform="translateX(-50%)" 
+                                        gap={2}
+                                        zIndex={10}
+                                    >
+                                        {images.map((_, index) => (
+                                            <Box
+                                                key={index}
+                                                w="2"
+                                                h="2"
+                                                borderRadius="full"
+                                                bg={dialogImageIndex === index ? "white" : "whiteAlpha.600"}
+                                                cursor="pointer"
+                                                onClick={() => setDialogImageIndex(index)}
+                                            />
+                                        ))}
+                                    </Flex>
+                                    <Button
+                                        position="absolute"
+                                        left="2"
+                                        top="50%"
+                                        transform="translateY(-50%)"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDialogImageIndex((prev) => (prev - 1 + images.length) % images.length);
+                                        }}
+                                        size="sm"
+                                        variant="ghost"
+                                        color="white"
+                                        _hover={{ bg: 'whiteAlpha.200' }}
+                                        zIndex={10}
+                                    >
+                                        ←
+                                    </Button>
+                                    <Button
+                                        position="absolute"
+                                        right="2"
+                                        top="50%"
+                                        transform="translateY(-50%)"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDialogNextImage();
+                                        }}
+                                        size="sm"
+                                        variant="ghost"
+                                        color="white"
+                                        _hover={{ bg: 'whiteAlpha.200' }}
+                                        zIndex={10}
+                                    >
+                                        →
+                                    </Button>
+                                </>
+                            )}
+                        </Box>
                     </DialogBody>
                 </DialogContent>
             </DialogRoot>
