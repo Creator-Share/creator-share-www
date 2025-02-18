@@ -37,7 +37,7 @@ type CreateDrawerProps = {
     handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
     handleSelectChange: (name: keyof SponsorPeople, value: string) => void;
     handleLocationSelect: (geo: [number, number], locationStr: string, country: string) => void;
-    handleSubmit: (e: React.MouseEvent<HTMLButtonElement>) => Promise<void>;
+    handleSubmit: (e: React.MouseEvent<HTMLButtonElement>) => Promise<boolean>;
     imageFiles: File[];
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
     videoFiles: File[];
@@ -104,7 +104,10 @@ const CreateDrawer = ({
 
         try {
             setIsAdding(true);
-            await handleSubmit(e);
+            const success = await handleSubmit(e);
+            if (!success) {
+                throw new Error("Failed to add child");
+            }
         } catch (error) {
             console.error("Error adding:", error);
         } finally {

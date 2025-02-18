@@ -138,8 +138,7 @@ const ChildrenTable = () => {
     try {
       setLoading(true);
       const imageUrls = [];
-      
-      // Upload each image and collect URLs
+
       for (const imageFile of imageFiles) {
         const imageUrl = await uploadFileToSupabase(imageFile, "images");
         if (imageUrl) {
@@ -147,7 +146,6 @@ const ChildrenTable = () => {
         }
       }
 
-      // Upload video if present
       let videoUrl = "";
       if (videoFiles.length > 0) {
         const uploadedVideoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
@@ -158,7 +156,6 @@ const ChildrenTable = () => {
 
       const budgetGoalInCents = Math.round(parseFloat(formData.budget_goal.toString()) * 100);
 
-      // First create the sponsor_people record
       const response = await fetch('/api/admin/children/create', {
         method: 'POST',
         headers: {
@@ -177,7 +174,6 @@ const ChildrenTable = () => {
 
       const newChild = await response.json();
 
-      // Then create image records
       const imageRecords = imageUrls.map((url, index) => ({
         sponsor_people_id: newChild.id,
         image_url: url,
@@ -195,6 +191,9 @@ const ChildrenTable = () => {
       if (!imagesResponse.ok) {
         throw new Error('Failed to create image records');
       }
+
+      // Add the new child to the data state
+      setData(prevData => [...prevData, newChild]);
 
       // Reset form and close drawer
       setFormData({
@@ -215,6 +214,7 @@ const ChildrenTable = () => {
       setVideoFiles([]);
       setIsCreateDrawerOpen(false);
 
+      return true;
     } catch (error) {
       console.error("Error creating child:", error);
       toaster.create({
@@ -222,6 +222,7 @@ const ChildrenTable = () => {
         description: error instanceof Error ? error.message : "Failed to create child",
         duration: 5000,
       });
+      return false;
     } finally {
       setLoading(false);
     }
