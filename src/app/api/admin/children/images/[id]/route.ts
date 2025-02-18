@@ -11,7 +11,7 @@ export async function GET(request: Request) {
       .from("sponsor_people_images")
       .select("*")
       .eq("sponsor_people_id", id)
-      .order("order_index");
+      .order("created_at");
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

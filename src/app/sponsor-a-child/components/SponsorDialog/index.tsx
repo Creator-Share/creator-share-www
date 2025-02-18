@@ -1,5 +1,5 @@
 "use client"
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Text, Image, Flex, Input, InputAddon, Progress, HStack } from "@chakra-ui/react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -25,6 +25,13 @@ import { paymentOptionsCollection } from "../ChildCard/config";
 import { SponsorPeople } from "@/types";
 import { useAuthStore } from "@/store/authStore";
 
+interface SponsorPeopleImage {
+    id: string;
+    sponsor_people_id: string;
+    image_url: string;
+    order_index: number;
+}
+
 interface SponsorDialogProps {
     people: SponsorPeople;
     trigger: React.ReactNode;
@@ -38,6 +45,24 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
     const [loading, setLoading] = useState<boolean>(false);
     const user = useAuthStore((state) => state.user);
     console.log(user?.id);
+    const [images, setImages] = useState<SponsorPeopleImage[]>([]);
+    const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+
+    useEffect(() => {
+        const fetchImages = async () => {
+            try {
+                const response = await fetch(`/api/admin/children/images/${people.id}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setImages(data.sort((a: SponsorPeopleImage, b: SponsorPeopleImage) => a.order_index - b.order_index));
+                }
+            } catch (error) {
+                console.error("Error fetching images:", error);
+            }
+        };
+
+        fetchImages();
+    }, [people.id]);
 
     const handleSliderChange = (e: { value: number[] }) => {
         const newValue = Math.min(e.value[0], remainingAmount);
@@ -125,6 +150,10 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
         return "Your sponsorship will be applied towards the child's monthly budget goals.";
     };
 
+    const handleNextImage = () => {
+        setCurrentImageIndex((prev) => (prev + 1) % images.length);
+    };
+
     return (
         <DialogRoot
             size={{ base: "full", md: "xl" }}
@@ -142,11 +171,71 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
                 <DialogBody>
                     <Box className="flex flex-col md:flex-row gap-8 p-5">
                         <Box className="w-full md:w-[359px]">
-                            <Image
-                                src={people.image_url}
-                                alt={people.name}
-                                className="rounded-lg md:h-[479px]"
-                            />
+                            <Box position="relative">
+                                <Image
+                                    src={images[currentImageIndex]?.image_url || people.image_url}
+                                    alt={people.name}
+                                    className="rounded-lg md:h-[479px] w-full object-cover"
+                                />
+                                {images.length > 1 && (
+                                    <>
+                                        <Flex 
+                                            position="absolute" 
+                                            bottom="4" 
+                                            left="50%" 
+                                            transform="translateX(-50%)" 
+                                            gap={2}
+                                        >
+                                            {images.map((_, index) => (
+                                                <Box
+                                                    key={index}
+                                                    w="2"
+                                                    h="2"
+                                                    borderRadius="full"
+                                                    bg={currentImageIndex === index ? "white" : "whiteAlpha.600"}
+                                                    cursor="pointer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setCurrentImageIndex(index);
+                                                    }}
+                                                />
+                                            ))}
+                                        </Flex>
+                                        <Button
+                                            position="absolute"
+                                            left="2"
+                                            top="50%"
+                                            transform="translateY(-50%)"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+                                            }}
+                                            size="sm"
+                                            variant="ghost"
+                                            color="white"
+                                            _hover={{ bg: 'whiteAlpha.200' }}
+                                        >
+                                            ←
+                                        </Button>
+                                        <Button
+                                            position="absolute"
+                                            right="2"
+                                            top="50%"
+                                            transform="translateY(-50%)"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleNextImage();
+                                            }}
+                                            size="sm"
+                                            variant="ghost"
+                                            color="white"
+                                            _hover={{ bg: 'whiteAlpha.200' }}
+                                        >
+                                            →
+                                        </Button>
+                                    </>
+                                )}
+                            </Box>
                         </Box>
                         <Box className="flex-1 border border-[#E8E8EA] p-5">
                             <Text className="text-2xl text-center font-bold md:mt-0 md:text-start">
