@@ -6,6 +6,7 @@ import ChildCard from "../ChildCard";
 import { SponsorPeople } from "@/types";
 import { ChildListingsProps } from "@/types/propTypes";
 import SponsorDialog from "../SponsorDialog";
+import { FaCalendar, FaCaretDown, FaCaretUp } from "react-icons/fa";
 
 const ChildListings: React.FC<ChildListingsProps> = ({
   peopleData,
@@ -44,16 +45,21 @@ const ChildListings: React.FC<ChildListingsProps> = ({
       <VStack align="stretch" pt={10}>
         {visiblePeople.map((people) => (
           <Box key={people.id}>
+            <ChildCard
+              people={people}
+              isSelected={selectedChildId === people.id}
+              id={`child-${people.id}`}
+            />
             <Collapsible.Root
               open={openId === people.id}
               onOpenChange={() => setOpenId(openId === people.id ? null : people.id)}
             >
-              <Collapsible.Trigger as={Box} cursor="pointer">
-                <ChildCard
-                  people={people}
-                  isSelected={selectedChildId === people.id}
-                  id={`child-${people.id}`}
-                />
+              <Collapsible.Trigger as={Box} cursor="pointer" className="flex justify-center items-center mt-2">
+                <Text fontSize="base" className="text-[#767070]">
+                  <span className="text-[#1C3C8C] ml-2 cursor-pointer whitespace-nowrap flex items-center gap-1">
+                    Learn more about {people.name} <FaCaretDown />
+                  </span>
+                </Text>
               </Collapsible.Trigger>
               <Collapsible.Content>
                 <Box

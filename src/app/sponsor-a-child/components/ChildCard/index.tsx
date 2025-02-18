@@ -19,7 +19,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
             textAlign={{ base: "center", md: "left" }}
             borderColor={isSelected ? "blue.500" : "gray.200"}
             borderRadius={{ base: 'md', md: 'md' }}
-            className="bg-white cursor-pointer mb-6 p-0 border-0 md:border md:mb-8 md:p-0"
+            className="bg-white mb-6 p-0 border-0 md:border md:mb-0 md:p-0"
         >
             <Box>
                 <Image
@@ -74,11 +74,6 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                     </Text>
                     <Text fontSize="base" className="text-[#767070]">
                         {people.introduction}
-                    </Text>
-                    <Text fontSize="base" className="text-[#767070] mt-4">
-                        <span className="text-[#1C3C8C] ml-2 cursor-pointer whitespace-nowrap flex items-center gap-1">
-                            Learn more about {people.name} <FaCaretDown />
-                        </span>
                     </Text>
                     <SponsorDialog
                         people={people}
