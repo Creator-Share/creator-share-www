@@ -1,5 +1,5 @@
 "use client"
-import React, {useEffect, useState} from 'react'
+import React, { useEffect, useState } from 'react'
 import {
     DrawerActionTrigger,
     DrawerBackdrop,
@@ -55,6 +55,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>(() => selectedChild || {} as SponsorPeople);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [mainImage, setMainImage] = useState<string>("");
 
     const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
         const supabase = createClient();
@@ -80,7 +81,22 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             setFormDataEdit(selectedChild);
         }
     }, [selectedChild]);
-    
+
+    useEffect(() => {
+        const fetchMainImage = async () => {
+            if (selectedChild?.id) {
+                const response = await fetch(`/api/admin/children/images/${selectedChild.id}`);
+                if (response.ok) {
+                    const images = await response.json();
+                    if (images.length > 0) {
+                        setMainImage(images[0].image_url);
+                    }
+                }
+            }
+        };
+        fetchMainImage();
+    }, [selectedChild]);
+
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -94,7 +110,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     const handleSave = async () => {
         const requiredFields = ['name', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
         const emptyFields = requiredFields.filter(field => !formDataEdit[field as keyof SponsorPeople]);
-        
+
         if (emptyFields.length > 0) {
             toaster.create({
                 title: "Validation Error",
@@ -109,21 +125,64 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             const updatedData = { ...formDataEdit };
             const budgetGoalInCents = Math.round(parseFloat(formDataEdit.budget_goal.toString()) * 100);
 
+            // Upload images and create records
             if (imageFiles.length > 0) {
-                const imageUrl = await uploadFileToSupabase(imageFiles[0], "images");
-                if (imageUrl) updatedData.image_url = imageUrl;
+                const supabase = createClient();
+                const imageUrls = [];
+
+                for (const imageFile of imageFiles) {
+                    const fileName = `${Date.now()}-${imageFile.name}`;
+                    const filePath = `images/${fileName}`;
+
+                    const { error: uploadError } = await supabase.storage
+                        .from("sponsor_people")
+                        .upload(filePath, imageFile, {
+                            cacheControl: "3600",
+                            upsert: false,
+                        });
+
+                    if (uploadError) {
+                        console.error("File upload failed:", uploadError.message);
+                        continue;
+                    }
+
+                    const { data } = supabase.storage
+                        .from("sponsor_people")
+                        .getPublicUrl(filePath);
+
+                    imageUrls.push(data.publicUrl);
+                }
+                const { error: insertError } = await supabase
+                    .from("sponsor_people_images")
+                    .insert(
+                        imageUrls.map((url, index) => ({
+                            sponsor_people_id: selectedChild?.id || '',
+                            image_url: url,
+                            order_index: index
+                        }))
+                    );
+
+                if (insertError) {
+                    throw new Error('Failed to create image records');
+                }
             }
+
             if (videoFiles.length > 0) {
                 const videoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
                 if (videoUrl) updatedData.video_url = videoUrl;
             }
 
-            await onSave({ 
-                ...updatedData, 
-                budget_goal: budgetGoalInCents 
+            await onSave({
+                ...updatedData,
+                budget_goal: budgetGoalInCents
             });
         } catch (error) {
             console.error("Error saving:", error);
+            toaster.create({
+                title: "Error",
+                description: "Failed to save changes",
+                duration: 5000,
+            });
         } finally {
             setIsSaving(false);
         }
@@ -157,12 +216,12 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                         </Stack>
                         <Fieldset.Content>
                             <Field label="Name" required errorText="This field is required">
-                                <Input 
-                                    name="name" 
-                                    className="border" 
-                                    px={2} 
-                                    onChange={handleInputChange} 
-                                    value={formDataEdit?.name || ''} 
+                                <Input
+                                    name="name"
+                                    className="border"
+                                    px={2}
+                                    onChange={handleInputChange}
+                                    value={formDataEdit?.name || ''}
                                 />
                             </Field>
                             <Field label="Gender" required errorText="This field is required">
@@ -181,44 +240,44 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                 </NativeSelectRoot>
                             </Field>
                             <Field label="Birth Day" required errorText="This field is required">
-                                <Input 
-                                    name="birth_date" 
-                                    type="date" 
-                                    className="border" 
-                                    px={2} 
-                                    onChange={handleInputChange} 
-                                    value={formDataEdit.birth_date || ''} 
+                                <Input
+                                    name="birth_date"
+                                    type="date"
+                                    className="border"
+                                    px={2}
+                                    onChange={handleInputChange}
+                                    value={formDataEdit.birth_date || ''}
                                 />
                             </Field>
                             <Field label="Biography" required errorText="This field is required">
-                                <Textarea 
-                                    name="biography" 
-                                    size="xl" 
-                                    className="border" 
-                                    px={2} 
-                                    py={2} 
-                                    onChange={handleInputChange} 
-                                    value={formDataEdit.biography || ''} 
+                                <Textarea
+                                    name="biography"
+                                    size="xl"
+                                    className="border"
+                                    px={2}
+                                    py={2}
+                                    onChange={handleInputChange}
+                                    value={formDataEdit.biography || ''}
                                 />
                             </Field>
                             <Field label="Introduction" required errorText="This field is required">
-                                <Textarea 
-                                    name="introduction" 
-                                    size="xl" 
-                                    className="border" 
-                                    px={2} 
-                                    py={2} 
+                                <Textarea
+                                    name="introduction"
+                                    size="xl"
+                                    className="border"
+                                    px={2}
+                                    py={2}
                                     onChange={handleInputChange}
-                                    value={formDataEdit.introduction || ''} 
+                                    value={formDataEdit.introduction || ''}
                                 />
                             </Field>
                             <Field label="Budget Goal">
-                                <Input 
+                                <Input
                                     name="budget_goal"
-                                    type="text" 
-                                    className="border" 
-                                    px={2} 
-                                    onChange={handleInputChange} 
+                                    type="text"
+                                    className="border"
+                                    px={2}
+                                    onChange={handleInputChange}
                                     value={formDataEdit.budget_goal}
                                 />
                             </Field>
@@ -241,9 +300,9 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                 </NativeSelectRoot>
                             </Field>
                             <Field label="Change Image">
-                                <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]}>
+                                <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]} maxFiles={5}>
                                     <FileUploadTrigger asChild>
-                                    <Image src={selectedChild.image_url} alt="Child Image" className="w-1/2 h-1/2 rounded-lg cursor-pointer" />
+                                        <Image src={mainImage} alt="Child Image" className="w-1/2 h-1/2 rounded-lg cursor-pointer" />
                                     </FileUploadTrigger>
                                     <FileUploadList />
                                 </FileUploadRoot>
@@ -256,8 +315,8 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     <FileUploadList />
                                 </FileUploadRoot>
                             </Field>
-                            <MapPicker 
-                                onSelectLocation={handleLocationSelect} 
+                            <MapPicker
+                                onSelectLocation={handleLocationSelect}
                                 initialLocation={
                                     selectedChild.location_geo ? {
                                         coordinates: [
@@ -274,8 +333,8 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                 </DrawerBody>
                 <DrawerFooter>
                     <DrawerActionTrigger asChild>
-                        <Button 
-                            className='bg-black w-[29.5%] text-white' 
+                        <Button
+                            className='bg-black w-[29.5%] text-white'
                             onClick={onClose}
                             disabled={isDeleting || isSaving}
                         >
@@ -303,8 +362,8 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                     >
                         {isDeleting ? 'Deleting...' : 'Delete'}
                     </Button>
-                    <Button 
-                        onClick={handleSave} 
+                    <Button
+                        onClick={handleSave}
                         className="bg-[#1C3C8C] w-1/3 text-white"
                         loading={isSaving}
                         loadingText="Saving..."
