@@ -39,9 +39,9 @@ interface SponsorDialogProps {
 
 const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
     const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
-    const [amount, setAmount] = useState<number>(0);
+    const [amount, setAmount] = useState<number>(remainingAmount);
     const [selectedOption, setSelectedOption] = useState<string>(paymentOptionsCollection.items[0].value);
-    const [value, setValue] = useState<number[]>([0]);
+    const [value, setValue] = useState<number[]>([remainingAmount]);
     const [loading, setLoading] = useState<boolean>(false);
     const user = useAuthStore((state) => state.user);
     console.log(user?.id);
