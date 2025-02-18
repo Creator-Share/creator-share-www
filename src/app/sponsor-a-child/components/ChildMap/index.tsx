@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Box, Button } from "@chakra-ui/react";
 import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-markercluster";
@@ -83,7 +83,7 @@ const FitBounds: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childD
   return null;
 };
 
-const ZoomController: React.FC = () => {
+const ZoomController: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childData }) => {
   const map = useMap();
   const [showReset, setShowReset] = useState(false);
 
@@ -100,7 +100,18 @@ const ZoomController: React.FC = () => {
 
   const handleResetView = () => {
     localStorage.removeItem("mapState");
-    map.setView([0, 0], 2);
+    
+    if (childData.length > 0) {
+      const bounds = L.latLngBounds(
+        childData.map((child) => [
+          child.location_geo.coordinates[1],
+          child.location_geo.coordinates[0],
+        ])
+      );
+      map.fitBounds(bounds, { padding: [50, 50] });
+    } else {
+      map.setView([0, 0], 2);
+    }
   };
 
   return showReset ? (
@@ -114,6 +125,19 @@ const ZoomController: React.FC = () => {
 
 const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsChange }) => {
   const [isReady, setIsReady] = useState(false);
+  const mapRef = useRef<L.Map | null>(null);
+
+  const handleMarkerClick = (id: string) => {
+    const child = childData.find(c => c.id === id);
+    if (child && mapRef.current) {
+      const { coordinates } = child.location_geo;
+      mapRef.current.setView([coordinates[1], coordinates[0]], 12, {
+        animate: true,
+        duration: 1
+      });
+    }
+    onMarkerClick(id);
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -128,23 +152,23 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
   return (
     <Box className="h-[571px] w-full mb-8 rounded-2xl relative">
       <MapContainer
+        ref={mapRef}
         center={[0, 0]}
         zoom={2}
         scrollWheelZoom
         className="h-full w-full rounded-2xl"
         minZoom={2}
         maxZoom={18}
-        maxBounds={L.latLngBounds(
-          [-90, -180],
-          [90, 180]
-        )}
+        maxBounds={L.latLngBounds([-90, -180], [90, 180])}
         maxBoundsViscosity={1.0}
       >
         <TileLayer
-              attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
-              url={`https://api.maptiler.com/maps/basic-v2/{z}/{x}/{y}.png?key=Wm5rwQ7T3kAi2Z07eCBa&lang=en`}
-            />
-
+          attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
+          url={`https://api.maptiler.com/maps/basic-v2/{z}/{x}/{y}.png?key=Wm5rwQ7T3kAi2Z07eCBa&lang=en`}
+        />
+        <MapEventHandler onBoundsChange={onBoundsChange} />
+        <FitBounds childData={childData} />
+        <ZoomController childData={childData} />
         <MarkerClusterGroup chunkedLoading disableClusteringAtZoom={10} iconCreateFunction={createClusterCustomIcon}>
           {childData.map((child) => (
             <Marker
@@ -152,7 +176,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
               position={[child.location_geo?.coordinates[1], child.location_geo?.coordinates[0]]}
               icon={CustomIcon}
               eventHandlers={{
-                click: () => onMarkerClick(child.id),
+                click: () => handleMarkerClick(child.id),
               }}
             >
               <Tooltip direction="top">
@@ -161,12 +185,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
             </Marker>
           ))}
         </MarkerClusterGroup>
-
-        <MapEventHandler onBoundsChange={onBoundsChange} />
-        <FitBounds childData={childData} />
-        <ZoomController />
       </MapContainer>
-
     </Box>
   );
 };
