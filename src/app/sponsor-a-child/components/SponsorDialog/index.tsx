@@ -37,6 +37,8 @@ interface SponsorDialogProps {
     trigger: React.ReactNode;
 }
 
+const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+
 const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
     const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
     const [amount, setAmount] = useState<number>(remainingAmount);
@@ -173,7 +175,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
                         <Box className="w-full md:w-[359px]">
                             <Box position="relative">
                                 <Image
-                                    src={images[currentImageIndex]?.image_url || people.image_url}
+                                    src={images[currentImageIndex]?.image_url || people.image_url || placeholderImage}
                                     alt={people.name}
                                     className="rounded-lg md:h-[479px] w-full object-cover"
                                 />
