@@ -29,6 +29,8 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
     const [dialogImageIndex, setDialogImageIndex] = useState<number>(0);
 
+    const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+
     useEffect(() => {
         const fetchImages = async () => {
             try {
@@ -73,7 +75,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                 <DialogTrigger asChild>
                     <Box position="relative">
                         <Image
-                            src={images[currentImageIndex]?.image_url || people.image_url}
+                            src={images[currentImageIndex]?.image_url || people.image_url || placeholderImage}
                             alt={people.name}
                             objectFit="cover"
                             className="mb-4 md:mb-0 rounded-t-md h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:h-[273px] md:w-[450px] cursor-pointer"
@@ -145,7 +147,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                     <DialogBody>
                         <Box position="relative">
                             <Image
-                                src={images[dialogImageIndex]?.image_url}
+                                src={images[dialogImageIndex]?.image_url || people.image_url || placeholderImage}
                                 alt={`${people.name} - ${dialogImageIndex + 1}`}
                                 objectFit="contain"
                                 className="w-full max-h-[90vh] rounded-lg"
