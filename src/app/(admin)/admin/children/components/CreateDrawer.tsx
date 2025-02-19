@@ -46,8 +46,6 @@ type CreateDrawerProps = {
 };
 const CreateDrawer = ({
     formData,
-    imageFiles,
-    videoFiles,
     setVideoFiles,
     setIsDrawerOpen,
     isDrawerOpen,
@@ -70,24 +68,6 @@ const CreateDrawer = ({
             toaster.create({
                 title: "Validation Error",
                 description: `Please fill in all required fields: ${emptyFields.join(', ')}`,
-                duration: 5000,
-            });
-            return;
-        }
-
-        if (imageFiles.length === 0) {
-            toaster.create({
-                title: "Image Required",
-                description: "Please upload an image",
-                duration: 5000,
-            });
-            return;
-        }
-
-        if (videoFiles.length === 0) {
-            toaster.create({
-                title: "Video Required",
-                description: "Please upload a video",
                 duration: 5000,
             });
             return;
@@ -191,7 +171,7 @@ const CreateDrawer = ({
                                     </NativeSelectField>
                                 </NativeSelectRoot>
                             </Field>
-                            <Field label="Upload Image" required errorText="This field is required">
+                            <Field label="Upload Image">
                                 <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]} maxFiles={5}>
                                     <FileUploadTrigger asChild>
                                         <Button variant="outline" size="sm" className="border" px={4}>
@@ -201,7 +181,7 @@ const CreateDrawer = ({
                                     <FileUploadList />
                                 </FileUploadRoot>
                             </Field>
-                            <Field label="Upload Video" required errorText="This field is required">
+                            <Field label="Upload Video">
                                 <FileUploadRoot onFileChange={(fileDetails) => setVideoFiles(fileDetails.acceptedFiles)} accept={["video/mp4"]} >
                                     <FileUploadTrigger asChild>
                                         <Button variant="outline" size="sm" className="border" px={4}>
