@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { Box, Button } from "@chakra-ui/react";
 import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-markercluster";
 import L, { LatLngBounds, MarkerCluster } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { ChildMapProps } from "@/types/propTypes";
+import { debounce } from 'lodash';
 
 const CustomIcon = L.icon({
   iconUrl: "/CreatorSharePin.svg",
-  iconSize: [40, 40],
-  iconAnchor: [20, 40],
+  iconSize: [30, 30],
+  iconAnchor: [15, 30],
 });
 
 const createClusterCustomIcon = (cluster: MarkerCluster): L.DivIcon => {
@@ -19,14 +20,14 @@ const createClusterCustomIcon = (cluster: MarkerCluster): L.DivIcon => {
   return L.divIcon({
     html: `
         <div style="position: relative; display: flex; align-items: center; justify-content: center;">
-          <img src="/CreatorSharePin.svg" alt="Cluster Icon" style="width: 40px; height: 40px;" />
+          <img src="/CreatorSharePin.svg" alt="Cluster Icon" style="width: 30px; height: 30px;" />
           <span style="position: absolute; top: 0; right: 0; background: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; font-weight: bold; color: black;">
             ${count}
           </span>
         </div>
       `,
     className: "custom-cluster-icon",
-    iconSize: [40, 40],
+    iconSize: [10, 10],
   });
 };
 
@@ -132,7 +133,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
   const [isReady, setIsReady] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
 
-  const handleMarkerClick = (id: string) => {
+  const handleMarkerClick = useCallback((id: string) => {
     const child = childData.find(c => c.id === id);
     if (child && mapRef.current) {
       const { coordinates } = child.location_geo;
@@ -142,7 +143,24 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
       });
     }
     onMarkerClick(id);
-  };
+  }, [childData, onMarkerClick]);
+
+  const MemoizedMarkers = useMemo(() => {
+    return childData.map((child) => (
+      <Marker
+        key={child.id}
+        position={[child.location_geo.coordinates[1], child.location_geo.coordinates[0]]}
+        icon={CustomIcon}
+        eventHandlers={{
+          click: () => handleMarkerClick(child.id),
+        }}
+      >
+        <Tooltip direction="top">
+          {child.name} - {child.country}
+        </Tooltip>
+      </Marker>
+    ));
+  }, [childData, handleMarkerClick]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -185,20 +203,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
           spiderfyOnMaxZoom={true}
           iconCreateFunction={createClusterCustomIcon}
         >
-          {childData.map((child) => (
-            <Marker
-              key={child.id}
-              position={[child.location_geo.coordinates[1], child.location_geo.coordinates[0]]}
-              icon={CustomIcon}
-              eventHandlers={{
-                click: () => handleMarkerClick(child.id),
-              }}
-            >
-              <Tooltip direction="top">
-                {child.name} - {child.country}
-              </Tooltip>
-            </Marker>
-          ))}
+          {MemoizedMarkers}
         </MarkerClusterGroup>
       </MapContainer>
     </Box>
