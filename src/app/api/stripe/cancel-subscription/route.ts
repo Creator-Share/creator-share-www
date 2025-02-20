@@ -9,10 +9,8 @@ export async function POST(req: Request) {
     const { subscriptionId } = await req.json();
     const supabase = await createClient();
 
-    // Cancel the subscription in Stripe
     await stripe.subscriptions.cancel(subscriptionId);
 
-    // Update the subscription status in your database
     const { error } = await supabase
       .from("subscriptions")
       .update({ 

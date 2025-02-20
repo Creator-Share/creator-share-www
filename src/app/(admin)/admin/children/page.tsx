@@ -136,95 +136,104 @@ const ChildrenTable = () => {
 
   const handleSubmit = async () => {
     try {
-      setLoading(true);
-      const imageUrls = [];
+        const budgetGoalInCents = Math.round(parseFloat(formData.budget_goal.toString()) * 100);
+        const childData = {
+            ...formData,
+            budget_goal: budgetGoalInCents,
+        };
 
-      for (const imageFile of imageFiles) {
-        const imageUrl = await uploadFileToSupabase(imageFile, "images");
-        if (imageUrl) {
-          imageUrls.push(imageUrl);
+        const response = await fetch('/api/admin/children/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(childData),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to create child');
         }
-      }
 
-      let videoUrl = "";
-      if (videoFiles.length > 0) {
-        const uploadedVideoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
-        if (uploadedVideoUrl) {
-          videoUrl = uploadedVideoUrl;
+        const newChild = await response.json();
+
+        // Upload images if any
+        if (imageFiles.length > 0) {
+            const imageUrls = [];
+            for (const imageFile of imageFiles) {
+                const imageUrl = await uploadFileToSupabase(imageFile, "images");
+                if (imageUrl) imageUrls.push(imageUrl);
+            }
+
+            const imageRecords = imageUrls.map((url, index) => ({
+                sponsor_people_id: newChild.id,
+                image_url: url,
+                order_index: index
+            }));
+
+            const imagesResponse = await fetch('/api/admin/children/images/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ images: imageRecords }),
+            });
+
+            if (!imagesResponse.ok) {
+                throw new Error('Failed to create image records');
+            }
         }
-      }
 
-      const budgetGoalInCents = Math.round(parseFloat(formData.budget_goal.toString()) * 100);
+        // Upload video if any
+        if (videoFiles.length > 0) {
+            const videoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
+            if (videoUrl) {
+                const videoUpdateResponse = await fetch('/api/admin/children/update', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        id: newChild.id,
+                        video_url: videoUrl
+                    }),
+                });
 
-      const response = await fetch('/api/admin/children/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          budget_goal: budgetGoalInCents,
-          video_url: videoUrl,
-        }),
-      });
+                if (!videoUpdateResponse.ok) {
+                    throw new Error('Failed to update video URL');
+                }
+            }
+        }
 
-      if (!response.ok) {
-        throw new Error('Failed to create child');
-      }
+        // Update the local state with the new child
+        setData(prevData => [...prevData, { ...newChild, budget_goal: centsToDollars(newChild.budget_goal) }]);
 
-      const newChild = await response.json();
+        // Reset form
+        setFormData({
+            name: "",
+            gender: "",
+            birth_date: "",
+            biography: "",
+            budget_goal: 0,
+            budget_raised: 0,
+            status: "",
+            country: "",
+            location_geo: null,
+            video_url: "",
+            location_str: "",
+            introduction: "",
+        });
+        setImageFiles([]);
+        setVideoFiles([]);
 
-      const imageRecords = imageUrls.map((url, index) => ({
-        sponsor_people_id: newChild.id,
-        image_url: url,
-        order_index: index
-      }));
-
-      const imagesResponse = await fetch('/api/admin/children/images/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ images: imageRecords }),
-      });
-
-      if (!imagesResponse.ok) {
-        throw new Error('Failed to create image records');
-      }
-
-      // Add the new child to the data state
-      setData(prevData => [...prevData, newChild]);
-
-      // Reset form and close drawer
-      setFormData({
-        name: "",
-        gender: "",
-        birth_date: "",
-        biography: "",
-        budget_goal: 0,
-        budget_raised: 0,
-        status: "",
-        country: "",
-        location_geo: null,
-        video_url: "",
-        location_str: "",
-        introduction: "",
-      });
-      setImageFiles([]);
-      setVideoFiles([]);
-      setIsCreateDrawerOpen(false);
-
-      return true;
+        return true;
     } catch (error) {
-      console.error("Error creating child:", error);
-      toaster.create({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create child",
-        duration: 5000,
-      });
-      return false;
-    } finally {
-      setLoading(false);
+        console.error("Error creating child:", error);
+        toaster.create({
+            title: "Error",
+            description: error instanceof Error ? error.message : "Failed to create child",
+            duration: 5000,
+        });
+        return false;
     }
   };
 
@@ -336,7 +345,7 @@ const ChildrenTable = () => {
   };
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <div>test...</div>;
   }
 
   return (

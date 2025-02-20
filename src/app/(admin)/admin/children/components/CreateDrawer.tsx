@@ -37,7 +37,7 @@ type CreateDrawerProps = {
     handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
     handleSelectChange: (name: keyof SponsorPeople, value: string) => void;
     handleLocationSelect: (geo: [number, number], locationStr: string, country: string) => void;
-    handleSubmit: (e: React.MouseEvent<HTMLButtonElement>) => Promise<boolean>;
+    handleSubmit: () => Promise<boolean>;
     imageFiles: File[];
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
     videoFiles: File[];
@@ -58,8 +58,7 @@ const CreateDrawer = ({
 }: CreateDrawerProps) => {
     const [isAdding, setIsAdding] = useState(false);
 
-    const handleAdd = async (e: React.MouseEvent<HTMLButtonElement>) => {
-        e.preventDefault();
+    const handleAdd = async () => {
         
         const requiredFields = ['name', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
         const emptyFields = requiredFields.filter(field => !formData[field as keyof SponsorPeople]);
@@ -84,12 +83,17 @@ const CreateDrawer = ({
 
         try {
             setIsAdding(true);
-            const success = await handleSubmit(e);
-            if (!success) {
-                throw new Error("Failed to add child");
+            const success = await handleSubmit();
+            if (success) {
+                handleDrawerClose();
             }
         } catch (error) {
             console.error("Error adding:", error);
+            toaster.create({
+                title: "Error",
+                description: "Failed to add child",
+                duration: 5000,
+            });
         } finally {
             setIsAdding(false);
         }
@@ -206,13 +210,14 @@ const CreateDrawer = ({
                         </Button>
                     </DrawerActionTrigger>
                     <Button 
+                        type="button"
                         onClick={handleAdd} 
                         className="bg-[#1C3C8C] w-1/2 text-white disabled:opacity-50"
                         disabled={isAdding}
                         loading={isAdding}
                         loadingText="Adding..."
                     >
-                        Add
+                        {isAdding ? "Adding..." : "Add"}
                     </Button>
                 </DrawerFooter>
             </DrawerContent>

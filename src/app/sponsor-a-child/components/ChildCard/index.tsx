@@ -48,7 +48,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
     }, [people.id]);
 
     useEffect(() => {
-        // Reset dialog image index when card image changes
+
         setDialogImageIndex(currentImageIndex);
     }, [currentImageIndex]);
 

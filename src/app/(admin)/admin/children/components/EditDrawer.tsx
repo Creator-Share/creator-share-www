@@ -26,6 +26,7 @@ import MapPicker from './MapPicker';
 import { SponsorPeople } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import { toaster } from "@/components/ui/toaster";
+import { HiUpload } from "react-icons/hi";
 
 interface EditDrawerProps {
     selectedChild: SponsorPeople | null;
@@ -55,7 +56,8 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>(() => selectedChild || {} as SponsorPeople);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [mainImage, setMainImage] = useState<string>("");
+    const [mainImage, setMainImage] = useState<string | null>(null);
+    const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
     const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
         const supabase = createClient();
@@ -79,6 +81,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     useEffect(() => {
         if (selectedChild) {
             setFormDataEdit(selectedChild);
+            setVideoUrl(selectedChild.video_url || null);
         }
     }, [selectedChild]);
 
@@ -90,13 +93,14 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                     const images = await response.json();
                     if (images.length > 0) {
                         setMainImage(images[0].image_url);
+                    } else {
+                        setMainImage(null);
                     }
                 }
             }
         };
         fetchMainImage();
     }, [selectedChild]);
-
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -124,8 +128,6 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             setIsSaving(true);
             const updatedData = { ...formDataEdit };
             const budgetGoalInCents = Math.round(parseFloat(formDataEdit.budget_goal.toString()) * 100);
-
-            // Upload images and create records
             if (imageFiles.length > 0) {
                 const supabase = createClient();
                 const imageUrls = [];
@@ -302,15 +304,36 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                             <Field label="Change Image">
                                 <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]} maxFiles={5}>
                                     <FileUploadTrigger asChild>
-                                        <Image src={mainImage} alt="Child Image" className="w-1/2 h-1/2 rounded-lg cursor-pointer" />
+                                        {mainImage ? (
+                                            <Image
+                                                src={mainImage}
+                                                alt="Child's photo"
+                                                width={200}
+                                                height={200}
+                                                objectFit="cover"
+                                            />
+                                        ) : (
+                                            <Button variant="outline" size="sm" className="border" px={4}>
+                                                <HiUpload /> Upload Image
+                                            </Button>
+                                        )}
                                     </FileUploadTrigger>
                                     <FileUploadList />
                                 </FileUploadRoot>
                             </Field>
-                            <Field label="Upload Video">
-                                <FileUploadRoot onFileChange={(fileDetails) => setVideoFiles(fileDetails.acceptedFiles)} accept={["video/mp4"]} >
+                            <Field label="Change Video">
+                                <FileUploadRoot onFileChange={(fileDetails) => setVideoFiles(fileDetails.acceptedFiles)} accept={["video/mp4"]}>
                                     <FileUploadTrigger asChild>
-                                        <video src={selectedChild.video_url} className="w-1/2 h-1/2 rounded-lg cursor-pointer" />
+                                        {videoUrl ? (
+                                            <video width="200" height="200" controls>
+                                                <source src={videoUrl} type="video/mp4" />
+                                                Your browser does not support the video tag.
+                                            </video>
+                                        ) : (
+                                            <Button variant="outline" size="sm" className="border" px={4}>
+                                                <HiUpload /> Upload Video
+                                            </Button>
+                                        )}
                                     </FileUploadTrigger>
                                     <FileUploadList />
                                 </FileUploadRoot>

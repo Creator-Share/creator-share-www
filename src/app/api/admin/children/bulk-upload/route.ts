@@ -5,16 +5,12 @@ export async function POST(request: Request) {
   try {
     const { children } = await request.json();
     const supabase = await createClient();
-    
-    // Validate the data structure
     if (!Array.isArray(children) || children.length === 0) {
       return NextResponse.json(
         { error: "Invalid data format" },
         { status: 400 }
       );
     }
-
-    // Process each child record
     const { data, error } = await supabase
       .from("sponsor_people")
       .insert(children)
