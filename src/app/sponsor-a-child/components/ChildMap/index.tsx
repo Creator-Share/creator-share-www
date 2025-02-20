@@ -7,7 +7,6 @@ import MarkerClusterGroup from "react-leaflet-markercluster";
 import L, { LatLngBounds, MarkerCluster } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { ChildMapProps } from "@/types/propTypes";
-import { debounce } from 'lodash';
 
 const CustomIcon = L.icon({
   iconUrl: "/CreatorSharePin.svg",
