@@ -11,7 +11,7 @@ import { FaCaretDown } from "react-icons/fa";
 const ChildListings: React.FC<ChildListingsProps> = ({
   peopleData,
   selectedChildId,
-  selectedCountry
+  selectedCountry,
 }) => {
   const [visiblePeople, setVisiblePeople] = useState<SponsorPeople[]>([]);
   const [loadedCount, setLoadedCount] = useState<number>(4);

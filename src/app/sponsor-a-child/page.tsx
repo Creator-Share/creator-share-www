@@ -5,6 +5,7 @@ import { Box, Flex, Text, Spinner } from "@chakra-ui/react";
 import Filters from "./components/Filters";
 import ChildListings from "./components/ChildListings";
 import { SponsorPeople } from "@/types";
+import { ChildListingsSkeleton } from "./components/ChildListings/Skeleton";
 
 const ChildMap = dynamic(() => import("./components/ChildMap"), { ssr: false });
 interface Filters {
@@ -134,9 +135,7 @@ const SponsorChild = () => {
         </Box>
       )}
       {loading ? (
-        <Flex justify="center" align="center" minH="20vh">
-          <Spinner size="lg" />
-        </Flex>
+        <ChildListingsSkeleton />
       ) : visibleChildren.length > 0 ? (
         <ChildListings
           peopleData={visibleChildren}

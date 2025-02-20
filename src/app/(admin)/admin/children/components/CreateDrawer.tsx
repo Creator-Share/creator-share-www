@@ -207,7 +207,7 @@ const CreateDrawer = ({
                     </DrawerActionTrigger>
                     <Button 
                         onClick={handleAdd} 
-                        className="bg-[#1C3C8C] w-1/2 text-white"
+                        className="bg-[#1C3C8C] w-1/2 text-white disabled:opacity-50"
                         disabled={isAdding}
                         loading={isAdding}
                         loadingText="Adding..."

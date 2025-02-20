@@ -25,6 +25,7 @@ export interface ChildListingsProps {
   peopleData: SponsorPeople[];
   selectedChildId: string | null;
   selectedCountry: string | null;
+  isLoading?: boolean;
 }
 
 export interface ChildCardProps {
