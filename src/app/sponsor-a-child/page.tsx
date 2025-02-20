@@ -32,7 +32,11 @@ const SponsorChild = () => {
     });
   }, []);
 
-  const fetchChildren = async (filters: Filters) => {
+  const handleFilterChange = React.useCallback((newFilters: Partial<Filters>) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
+  }, []);
+
+  const fetchChildren = React.useCallback(async (filters: Filters) => {
     setLoading(true);
     setError(null);
 
@@ -61,13 +65,13 @@ const SponsorChild = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchChildren(filters);
-  }, [filters]);
+  }, [fetchChildren, filters]);
 
-  const handleBoundsChange = (bounds: L.LatLngBounds) => {
+  const handleBoundsChange = React.useCallback((bounds: L.LatLngBounds) => {
     if (!L) return;
     setListingsLoading(true);
 
@@ -76,11 +80,10 @@ const SponsorChild = () => {
       const [lng, lat] = child.location_geo.coordinates;
       return bounds.contains(L.latLng(lat, lng));
     });
-    setTimeout(() => {
-      setVisibleChildren(filtered);
-      setListingsLoading(false);
-    }, 500);
-  };
+    
+    setVisibleChildren(filtered);
+    setListingsLoading(false);
+  }, [childrenData, L]);
 
   const handleMarkerClick = (id: string) => {
     setSelectedChildId(id);
@@ -102,9 +105,7 @@ const SponsorChild = () => {
       py={{ base: 12, md: 16 }}
     >
       <Filters
-        onFilterChange={(newFilters) =>
-          setFilters((prev) => ({ ...prev, ...newFilters }))
-        }
+        onFilterChange={handleFilterChange}
       />
       {error && (
         <Flex justify="center" align="center" mt={4}>
@@ -159,4 +160,4 @@ const SponsorChild = () => {
   );
 };
 
-export default SponsorChild;
+export default React.memo(SponsorChild);

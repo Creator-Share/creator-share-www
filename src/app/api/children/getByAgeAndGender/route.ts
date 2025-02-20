@@ -12,14 +12,11 @@ export async function GET(req: Request) {
   try {
     let query = supabase.from("sponsor_people").select("*");
 
-    // Filter by gender if present
     if (gender) {
       query = query.eq("gender", gender);
     }
 
-    // Filter by status if present
     if (status) {
-      // Assuming status is a CSV of values, convert it to an array.
       const statusArray = status.split(",");
       query = query.in("status", statusArray);
     }

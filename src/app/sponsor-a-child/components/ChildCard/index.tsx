@@ -75,12 +75,12 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                 <DialogTrigger asChild>
                     <Box position="relative">
                         <Image
-                            src={images[currentImageIndex]?.image_url || people.image_url || placeholderImage}
+                            src={images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : placeholderImage}
                             alt={people.name}
                             objectFit="cover"
                             className="mb-4 md:mb-0 rounded-t-md h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:h-[273px] md:w-[450px] cursor-pointer"
                         />
-                        {images.length > 1 && (
+                        {images.length > 0 && (
                             <>
                                 <Flex 
                                     position="absolute" 
@@ -147,7 +147,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                     <DialogBody>
                         <Box position="relative">
                             <Image
-                                src={images[dialogImageIndex]?.image_url || people.image_url || placeholderImage}
+                                src={images.length > 0 && images[dialogImageIndex]?.image_url ? images[dialogImageIndex].image_url : placeholderImage}
                                 alt={`${people.name} - ${dialogImageIndex + 1}`}
                                 objectFit="contain"
                                 className="w-full max-h-[90vh] rounded-lg"

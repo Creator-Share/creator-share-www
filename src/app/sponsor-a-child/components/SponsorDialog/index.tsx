@@ -46,7 +46,6 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
     const [value, setValue] = useState<number[]>([remainingAmount]);
     const [loading, setLoading] = useState<boolean>(false);
     const user = useAuthStore((state) => state.user);
-    console.log(user?.id);
     const [images, setImages] = useState<SponsorPeopleImage[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
 

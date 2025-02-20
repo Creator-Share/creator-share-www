@@ -8,7 +8,7 @@ import { ChildListingsProps } from "@/types/propTypes";
 import SponsorDialog from "../SponsorDialog";
 import { FaCaretDown } from "react-icons/fa";
 
-const ChildListings: React.FC<ChildListingsProps> = ({
+const ChildListings: React.FC<ChildListingsProps> = React.memo(({
   peopleData,
   selectedChildId,
   selectedCountry,
@@ -39,6 +39,10 @@ const ChildListings: React.FC<ChildListingsProps> = ({
       window.removeEventListener("scroll", handleScroll);
     };
   }, [handleScroll]);
+
+  useEffect(() => {
+    setVisiblePeople(peopleData);
+  }, [peopleData]);
 
   return (
     <Box width="100%" className="border" px={{ base: 3, md: 8 }} mt={4}>
@@ -79,9 +83,15 @@ const ChildListings: React.FC<ChildListingsProps> = ({
                     </Text>
                   </Box>
                   <Box mt="12" className="md:w-3/5 w-full">
-                    <video width="800" height="600" controls preload="none" className="border rounded-lg">
-                      <source src={people.video_url} type="video/mp4" />
-                    </video>
+                    {people.video_url ? (
+                      <video width="800" height="600" controls preload="none" className="border rounded-lg">
+                        <source src={people.video_url} type="video/mp4" />
+                      </video>
+                    ) : (
+                      <Box className="border rounded-lg h-[600px] flex items-center justify-center bg-gray-100">
+                        <Text color="gray.500">No video available</Text>
+                      </Box>
+                    )}
                   </Box>
                 </Box>
                 <SponsorDialog
@@ -101,6 +111,8 @@ const ChildListings: React.FC<ChildListingsProps> = ({
       </VStack>
     </Box>
   );
-};
+});
+
+ChildListings.displayName = 'ChildListings';
 
 export default ChildListings;

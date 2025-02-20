@@ -155,8 +155,6 @@ const ChildrenTable = () => {
         }
 
         const newChild = await response.json();
-
-        // Upload images if any
         if (imageFiles.length > 0) {
             const imageUrls = [];
             for (const imageFile of imageFiles) {
@@ -183,7 +181,6 @@ const ChildrenTable = () => {
             }
         }
 
-        // Upload video if any
         if (videoFiles.length > 0) {
             const videoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
             if (videoUrl) {
@@ -204,10 +201,7 @@ const ChildrenTable = () => {
             }
         }
 
-        // Update the local state with the new child
         setData(prevData => [...prevData, { ...newChild, budget_goal: centsToDollars(newChild.budget_goal) }]);
-
-        // Reset form
         setFormData({
             name: "",
             gender: "",
