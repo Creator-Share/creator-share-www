@@ -178,7 +178,13 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
           onBoundsChange={onBoundsChange}
           onResetView={onResetView}
         />
-        <MarkerClusterGroup chunkedLoading disableClusteringAtZoom={10} iconCreateFunction={createClusterCustomIcon}>
+        <MarkerClusterGroup 
+          chunkedLoading
+          maxClusterRadius={50}
+          disableClusteringAtZoom={undefined}
+          spiderfyOnMaxZoom={true}
+          iconCreateFunction={createClusterCustomIcon}
+        >
           {childData.map((child) => (
             <Marker
               key={child.id}
