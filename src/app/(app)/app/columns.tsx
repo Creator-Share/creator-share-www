@@ -14,7 +14,6 @@ export type Subscription = {
   stripe_subscription_id: string;
   child: {
     name: string;
-    image_url: string;
   };
 };
 
@@ -30,6 +29,10 @@ export const columns: ColumnDef<Subscription>[] = [
         <LuArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
+    cell: ({ row }) => {
+      const child = row.original.child;
+      return <div>{child?.name || 'N/A'}</div>;
+    },
   },
   {
     accessorKey: "amount",

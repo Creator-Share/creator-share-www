@@ -94,10 +94,15 @@ export function PageNavbar() {
               {isAdmin && (
                 <NextLink href="/admin" passHref>
                   <Button size="sm" variant="ghost">
-                    Admin
+                    Admin Dashboard
                   </Button>
                 </NextLink>
               )}
+              <NextLink href="/app" passHref>
+                <Button size="sm" variant="ghost" className="w-full">
+                  User Dashboard
+                </Button>
+              </NextLink>
               <Button size="sm" variant="ghost" onClick={handleLogout}>
                 Logout
               </Button>
@@ -165,6 +170,11 @@ export function PageNavbar() {
                 <Button size="sm" variant="ghost" onClick={handleLogout} className="w-full">
                   Logout
                 </Button>
+                <NextLink href="/app" passHref>
+                  <Button size="sm" variant="ghost" className="w-full">
+                    Dashboard
+                  </Button>
+                </NextLink>
               </>
             ) : (
               <>

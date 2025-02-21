@@ -22,8 +22,7 @@ const UserDashboard = () => {
         .select(`
           *,
           child:sponsor_people(
-            name,
-            image_url
+            name
           )
         `)
         .eq("user_id", user.id);

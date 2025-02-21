@@ -100,7 +100,7 @@ export async function POST(req: Request) {
       stripe_subscription_id: subscription.id,
       user_id: subscription.metadata?.userId,
       child_id: subscription.metadata?.childId,
-      status: subscription.status,
+      status: "active",
       amount: subscription.items.data[0].price.unit_amount,
       interval: subscription.items.data[0].price.recurring?.interval,
       current_period_start: new Date(subscription.current_period_start * 1000),
