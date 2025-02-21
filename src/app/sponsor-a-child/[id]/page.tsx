@@ -64,12 +64,12 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
   return (
     <Box className="md:px-36 p-8">
       <GoBackButton />
-      <Text fontSize="2xl" fontWeight="bold" mb={4}>
+      <Text fontSize="2xl" fontWeight="bold" mb={4} mt={8}>
         Details
       </Text>
       
       {/* Wrap the child details card in a clickable container */}
-      <Box cursor="pointer">
+      <Box>
         <ChildDetailsCard id={child.id} people={child} />
       </Box>
     </Box>

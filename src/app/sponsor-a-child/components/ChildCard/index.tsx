@@ -8,6 +8,7 @@ import { centsToDollars } from "@/utils/currency";
 import { ChildCardProps } from "@/types/propTypes";
 import SponsorDialog from "../SponsorDialog";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import {
     DialogRoot,
     DialogContent,
@@ -16,6 +17,7 @@ import {
     DialogCloseTrigger,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import { RxActivityLog } from "react-icons/rx";
 
 interface SponsorPeopleImage {
     id: string;
@@ -25,6 +27,7 @@ interface SponsorPeopleImage {
 }
 
 const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
+    const router = useRouter();
     const [images, setImages] = useState<SponsorPeopleImage[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
     const [dialogImageIndex, setDialogImageIndex] = useState<number>(0);
@@ -60,6 +63,11 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
 
     const handleDialogNextImage = () => {
         setDialogImageIndex((prev) => (prev + 1) % images.length);
+    };
+
+    const handleViewActivity = (e: React.MouseEvent) => {
+        e.preventDefault();
+        router.push(`/sponsor-a-child/${people.id}`);
     };
 
     return (
@@ -257,14 +265,20 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                     <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
                         Introduction
                     </Text>
-                    <Text fontSize="base" className="text-[#767070]">
+                    <Text fontSize="base" className="text-[#767070] mb-8">
                         {people.introduction}
                     </Text>
+                    <Button 
+                        onClick={handleViewActivity} 
+                        className="hover:bg-[#1C3C8C] w-full md:w-11/12 hover:text-[#FFFFFF]"
+                    >
+                        <RxActivityLog />View Activity
+                    </Button>
                     <SponsorDialog
                         people={people}
                         trigger={
                             <Box fontSize="base" mb={3}>
-                                <Button fontWeight="md" className="text-[#FFFFFF] w-full md:w-11/12 cursor-pointer bg-[#1C3C8C] px-4 mt-8">
+                                <Button fontWeight="md" className="text-[#FFFFFF] w-full md:w-11/12 cursor-pointer bg-[#1C3C8C] px-4 mt-4">
                                     Sponsor
                                 </Button>
                             </Box>

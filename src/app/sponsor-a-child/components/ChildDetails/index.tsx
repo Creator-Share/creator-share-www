@@ -1,63 +1,47 @@
 "use client";
-import { useState } from "react";
-import { Box, Flex, Text, Image, Button, Input, InputAddon } from "@chakra-ui/react";
+import { Box, Flex, Text, Image, Button } from "@chakra-ui/react";
 import { FaCalendar } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
-import { useRouter } from "next/navigation";
 import { calculateAge } from "@/utils/ageCalculator";
 import { formatDate } from "@/utils/dateFormatter";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ChildCardProps } from "@/types/propTypes";
+import { useState, useEffect } from "react";
 
-const ChildDetailsCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
-    const router = useRouter();
-    const [amount, setAmount] = useState<string>("");
-    const [selectedOption, setSelectedOption] = useState<string | null>(null);
+interface SponsorPeopleImage {
+    id: string;
+    sponsor_people_id: string;
+    image_url: string;
+    order_index: number;
+}
 
-    const handleNavigateChild = () => {
-        router.push(`/sponsor-a-child/${people.id}`);
-    };
+const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
+    const [images, setImages] = useState<SponsorPeopleImage[]>([]);
+    const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+    
+    const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
-    const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        if (/^\d*\.?\d*$/.test(value)) {
-            setAmount(value);
-        }
-    };
-
-    const handleSponsor = async () => {
-        if (!people || !amount || parseFloat(amount) <= 0) {
-            alert("Please enter a valid amount.");
-            return;
-        }
-
-        try {
-            const res = await fetch("/api/stripe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    childId: people.id,
-                    childName: people.name,
-                    amount: parseFloat(amount) * 100,
-                    paymentType: selectedOption,
-                }),
-            });
-
-            const { url } = await res.json();
-            if (url) {
-                window.location.href = url;
+    useEffect(() => {
+        const fetchImages = async () => {
+            try {
+                const response = await fetch(`/api/admin/children/images/${people.id}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setImages(data.sort((a: SponsorPeopleImage, b: SponsorPeopleImage) => a.order_index - b.order_index));
+                }
+            } catch (error) {
+                console.error("Error fetching images:", error);
             }
-        } catch (err) {
-            console.error("Payment Error:", err);
-        }
-    };
+        };
 
-    const handleCheckboxChange = (option: string) => {
-        setSelectedOption((prev) => (prev === option ? null : option));
-    };
+        fetchImages();
+    }, [people.id]);
 
     const age = calculateAge(new Date(people.birth_date).toISOString());
     const formattedBirthDate = formatDate(new Date(people.birth_date).toISOString());
+
+    const handleNextImage = () => {
+        setCurrentImageIndex((prev) => (prev + 1) % images.length);
+    };
 
     return (
         <Flex
@@ -65,21 +49,74 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
             align={{ base: "center", md: "flex-start" }}
             textAlign={{ base: "center", md: "left" }}
             borderWidth="1px"
-            borderColor={isSelected ? "blue.500" : "gray.200"}
             borderRadius={{ base: 'lg', md: 'md' }}
             boxShadow="sm"
-            className="bg-white shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-6 mb-6 md:p-0 md:mb-0 "
-            onClick={handleNavigateChild}
+            className="bg-white p-6 mb-6 md:p-0 md:mb-0"
         >
-            <Box>
+            <Box position="relative">
                 <Image
-                    src={people.image_url}
+                    src={images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : placeholderImage}
                     alt={people.name}
                     boxSize={{ base: "150px", md: "273px" }}
                     objectFit="cover"
                     borderRadius={{ base: "full", md: "md" }}
                     className="mb-4 md:mb-0"
                 />
+                {images.length > 1 && (
+                    <>
+                        <Flex 
+                            position="absolute" 
+                            bottom="4" 
+                            left="50%" 
+                            transform="translateX(-50%)" 
+                            gap={2}
+                        >
+                            {images.map((_, index) => (
+                                <Box
+                                    key={index}
+                                    w="2"
+                                    h="2"
+                                    borderRadius="full"
+                                    bg={currentImageIndex === index ? "white" : "whiteAlpha.600"}
+                                    cursor="pointer"
+                                    onClick={() => setCurrentImageIndex(index)}
+                                />
+                            ))}
+                        </Flex>
+                        <Button
+                            position="absolute"
+                            left="2"
+                            top="50%"
+                            transform="translateY(-50%)"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+                            }}
+                            size="sm"
+                            variant="ghost"
+                            color="white"
+                            _hover={{ bg: 'whiteAlpha.200' }}
+                        >
+                            ←
+                        </Button>
+                        <Button
+                            position="absolute"
+                            right="2"
+                            top="50%"
+                            transform="translateY(-50%)"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleNextImage();
+                            }}
+                            size="sm"
+                            variant="ghost"
+                            color="white"
+                            _hover={{ bg: 'whiteAlpha.200' }}
+                        >
+                            →
+                        </Button>
+                    </>
+                )}
             </Box>
             <Box className="md:grid md:grid-cols-2 pt-[20px]">
                 <Box ml={{ md: 6 }} w="full">
@@ -100,46 +137,6 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                             </Text>
                         </Flex>
                     </Box>
-
-                    <Box className="mt-8 w-full" mb={4}>
-                        <Flex
-                            className="border rounded-lg"
-                            mb={4}
-                            align="center"
-                            justify="center"
-                            gap={2}
-                        >
-                            <InputAddon>
-                                $
-                            </InputAddon>
-                            <Input
-                                type="number"
-                                min="1"
-                                value={amount}
-                                onChange={handleAmountChange}
-                                className="px-4"
-                                placeholder="Enter Amount"
-                            />
-                        </Flex>
-                        <Flex justify="center" align="center" gap={8}>
-                            <Flex align="center" gap={2}>
-                                <Checkbox
-                                    className="border rounded-md border-[#8D9692]"
-                                    checked={selectedOption === "subscription"}
-                                    onChange={() => handleCheckboxChange("subscription")}
-                                />
-                                <Text>Monthly</Text>
-                            </Flex>
-                            <Flex align="center" gap={2}>
-                                <Checkbox
-                                    className="border rounded-md border-[#8D9692]"
-                                    checked={selectedOption === "payment"}
-                                    onChange={() => handleCheckboxChange("payment")}
-                                />
-                                <Text>One-time</Text>
-                            </Flex>
-                        </Flex>
-                    </Box>
                 </Box>
                 <Box className="md:ml-14">
                     <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
@@ -149,17 +146,7 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                         <Text className="text-[#767070] mb-4">
                             {people.biography}
                         </Text>
-                        <Text fontWeight="md" className="text-[#1C3C8C] cursor-pointer hover:underline">
-                            Learn more about {people.name}
-                        </Text>
                     </Box>
-                    <Button
-                        mt={4}
-                        onClick={handleSponsor}
-                        className="bg-[#1C3C8C] hover:bg-blue-800 text-white font-semibold text-base rounded-[4px] px-[18px] w-2/3 py-3 md:ml-6"
-                    >
-                        Sponsor
-                    </Button>
                 </Box>
             </Box>
         </Flex>
