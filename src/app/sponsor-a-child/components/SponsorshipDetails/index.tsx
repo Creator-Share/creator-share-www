@@ -1,42 +1,24 @@
 import React, { useEffect, useState } from 'react'
 import { Box, Text, Table, Badge } from '@chakra-ui/react'
-import { createClient } from '@/utils/supabase/client'
 import { centsToDollars } from '@/utils/currency'
 import { formatDate } from '@/utils/dateFormatter'
 import { Subscription } from '@/types'
 import { SponsorshipDetailsProps } from '@/types/propTypes'
+import { fetchSponsorshipDetailsByChildId } from '@/actions'
 
 const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ childId }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchSubscriptions = async () => {
-      if (!childId) return
-
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select(`
-          *,
-          child:sponsor_people(
-            name
-          )
-        `)
-        .eq('child_id', childId)
-        .order('created_at', { ascending: false })
-        console.log(data)
-
-      if (error) {
-        console.error('Error fetching subscriptions:', error)
-        return
-      }
-
-      setSubscriptions(data || [])
+    const loadSubscriptions = async () => {
+      if (!childId) return;
+      const data = await fetchSponsorshipDetailsByChildId(childId)
+      setSubscriptions(data)
       setLoading(false)
     }
 
-    fetchSubscriptions()
+    loadSubscriptions()
   }, [childId])
 
   const getStatusColor = (status: string) => {
