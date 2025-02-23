@@ -43,6 +43,30 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
         setCurrentImageIndex((prev) => (prev + 1) % images.length);
     };
 
+    const getStatusText = (status: string) => {
+        switch (status) {
+            case "Budget Fulfilled":
+                return (
+                    <Box>
+                        <Image src="/fulfilled.png" alt="Fulfilled" width={24} height={24} />
+                        <Text className="text-[#03150E] font-bold text-center">Sponsored</Text>
+                        <Text></Text>
+                    </Box>
+                );
+            case "Partially Funded":
+                return (
+                    <Box gap={2}>
+                        <Image src="/pending.png" alt="Pending" width={24} height={24} />
+                        <Text className="text-[#767070] text-center">Pending</Text>
+                    </Box>
+                );
+            case "New":
+                return <Text className="text-[#767070] text-center">Sponsor</Text>;
+            default:
+                return <Text className="text-[#767070] text-center">Nothing to show</Text>;
+        }
+    };
+
     return (
         <Flex direction={{ base: "column", md: "row" }} gap={6}>
             <Flex
@@ -153,9 +177,7 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
             </Flex>
             <Flex direction={{ base: "column", md: "row" }} borderWidth="1px" borderRadius={{ base: 'lg', md: 'md' }} className="bg-white p-6 mb-6 md:p-0 md:mb-0">
                 <Box className="flex justify-center items-center h-full px-8">
-                    <Text className="text-[#767070] text-center">
-                        Nothing to show
-                    </Text>
+                    {getStatusText(people.status)}
                 </Box>
             </Flex>
         </Flex>
