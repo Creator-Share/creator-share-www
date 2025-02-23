@@ -6,13 +6,8 @@ import { calculateAge } from "@/utils/ageCalculator";
 import { formatDate } from "@/utils/dateFormatter";
 import { ChildCardProps } from "@/types/propTypes";
 import { useState, useEffect } from "react";
+import { SponsorPeopleImage } from "@/types";
 
-interface SponsorPeopleImage {
-    id: string;
-    sponsor_people_id: string;
-    image_url: string;
-    order_index: number;
-}
 
 const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
     const [images, setImages] = useState<SponsorPeopleImage[]>([]);

@@ -3,24 +3,8 @@ import { Box, Text, Table, Badge } from '@chakra-ui/react'
 import { createClient } from '@/utils/supabase/client'
 import { centsToDollars } from '@/utils/currency'
 import { formatDate } from '@/utils/dateFormatter'
-
-interface Subscription {
-  id: string
-  created_at: string
-  amount: number
-  interval: string
-  status: string
-  current_period_start: string
-  current_period_end: string
-  stripe_subscription_id: string
-  child: {
-    name: string
-  }
-}
-
-interface SponsorshipDetailsProps {
-  childId?: string
-}
+import { Subscription } from '@/types'
+import { SponsorshipDetailsProps } from '@/types/propTypes'
 
 const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ childId }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])

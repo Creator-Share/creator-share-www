@@ -25,6 +25,30 @@ export interface SponsorPeople {
     introduction: string
   }
 
+export interface SponsorPeopleImage {
+    id: string;
+    sponsor_people_id: string;
+    image_url: string;
+    order_index: number;
+}
+
+export interface Subscription {
+  id: string
+  created_at: string
+  amount: number
+  interval: string
+  status: string
+  current_period_start: string
+  current_period_end: string
+  stripe_subscription_id: string
+  child: {
+    name: string
+  }
+}
+
+
+//Auth types
+
 export interface loginForm {
     email: string;
     password: string;

@@ -33,3 +33,7 @@ export interface ChildCardProps {
     isSelected?: boolean;
     id: string;
 }
+
+export interface SponsorshipDetailsProps {
+  childId?: string
+}
