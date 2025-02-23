@@ -33,6 +33,7 @@ export async function POST(req: Request) {
     const childId = session.metadata?.childId;
     const amount = parseFloat(session.metadata?.amount || "0");
     const userId = session.metadata?.userId || null;
+    const paymentType = session.metadata?.paymentType;
     
     if (!childId || !amount) {
       console.error("Missing metadata in Stripe session");
@@ -89,6 +90,39 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to update child data" }, { status: 500 });
     }
 
+    const interval = session.mode === "subscription" ? "yearly" : "monthly";
+    const { error: activityError } = await supabase
+      .from("people_activities")
+      .insert({
+        description: session.customer_details?.name 
+          ? `${session.customer_details.name} sponsored with $${amount} ${interval}`
+          : `Someone sponsored with $${amount} ${interval}`,
+        child_id: childId,
+        user_id: userId
+      });
+
+    if (activityError) {
+      console.error("Error creating activity:", activityError);
+    }
+
+    // Create subscription record for both monthly and yearly subscriptions
+    const { error: subscriptionError } = await supabase.from("subscriptions").insert({
+      stripe_subscription_id: session.subscription as string,
+      user_id: userId,
+      child_id: childId,
+      status: "active",
+      amount: amount,
+      interval: paymentType === "subscription" ? "month" : "year",
+      current_period_start: new Date(),
+      current_period_end: new Date(Date.now() + (paymentType === "subscription" ? 30 : 365) * 24 * 60 * 60 * 1000),
+      customer_id: session.customer as string
+    });
+
+    if (subscriptionError) {
+      console.error("Error creating subscription:", subscriptionError);
+      return NextResponse.json({ error: "Failed to create subscription" }, { status: 500 });
+    }
+
     return NextResponse.json({ message: "Transaction processed successfully" }, { status: 200 });
   }
 
@@ -100,7 +134,7 @@ export async function POST(req: Request) {
       stripe_subscription_id: subscription.id,
       user_id: subscription.metadata?.userId,
       child_id: subscription.metadata?.childId,
-      status: "active",
+      status: "incomplete",
       amount: subscription.items.data[0].price.unit_amount,
       interval: subscription.items.data[0].price.recurring?.interval,
       current_period_start: new Date(subscription.current_period_start * 1000),
@@ -118,6 +152,7 @@ export async function POST(req: Request) {
     const childId = session.metadata?.childId;
     const amount = parseFloat(session.metadata?.amount || "0");
     const userId = session.metadata?.userId || null;
+    const paymentType = session.metadata?.paymentType;
 
     if (!childId || !amount) {
       console.error("Missing metadata in Stripe session");
@@ -142,11 +177,29 @@ export async function POST(req: Request) {
       console.error("Error creating transaction:", transactionError);
       return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
     }
+
+    const { error: subscriptionError } = await supabase.from("subscriptions").insert({
+      stripe_subscription_id: session.subscription as string,
+      user_id: userId,
+      child_id: childId,
+      status: "incomplete",
+      amount: amount,
+      interval: paymentType === "subscription" ? "month" : "year",
+      current_period_start: new Date(),
+      current_period_end: new Date(Date.now() + (paymentType === "subscription" ? 30 : 365) * 24 * 60 * 60 * 1000),
+      customer_id: session.customer as string
+    });
+  
+    if (subscriptionError) {
+      console.error("Error creating subscription:", subscriptionError);
+      return NextResponse.json({ error: "Failed to create subscription" }, { status: 500 });
+    }
+  
   }
 
   if (event.type === "customer.subscription.deleted") {
     const subscription = event.data.object as Stripe.Subscription;
-    
+
     await supabase
       .from("subscriptions")
       .update({ 
@@ -154,6 +207,20 @@ export async function POST(req: Request) {
         canceled_at: new Date()
       })
       .eq("stripe_subscription_id", subscription.id);
+
+    const { error: activityError } = await supabase
+      .from("people_activities")
+      .insert({
+        description: "Someone cancelled a sponsorship",
+        child_id: subscription.metadata?.childId,
+        user_id: subscription.metadata?.userId
+      });
+
+    if (activityError) {
+      console.error("Error creating activity:", activityError);
+    }
+
+    return NextResponse.json({ message: "Subscription cancelled" }, { status: 200 });
   }
 
   return NextResponse.json({ message: "Unhandled event type" }, { status: 400 });

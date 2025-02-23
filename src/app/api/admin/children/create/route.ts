@@ -6,6 +6,15 @@ export async function POST(request: Request) {
     const formData = await request.json();
     const supabase = await createClient();
     
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error("Auth error:", authError);
+      return NextResponse.json({ error: "Authentication error" }, { status: 401 });
+    }
+
+    // Create the child record
     const { data: newChild, error: supabaseError } = await supabase
       .from("sponsor_people")
       .insert([formData])
@@ -14,6 +23,19 @@ export async function POST(request: Request) {
 
     if (supabaseError) {
       return NextResponse.json({ error: supabaseError.message }, { status: 500 });
+    }
+
+    // Create activity entry with user_id
+    const { error: activityError } = await supabase
+      .from("people_activities")
+      .insert({
+        description: `${newChild.name} was added`,
+        child_id: newChild.id,
+        user_id: user?.id
+      });
+
+    if (activityError) {
+      console.error("Error creating activity:", activityError);
     }
 
     return NextResponse.json(newChild);

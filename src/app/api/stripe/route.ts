@@ -21,26 +21,15 @@ export async function POST(req: Request) {
       );
     }
 
-    if (
-      !paymentType ||
-      (paymentType !== "subscription" && paymentType !== "payment")
-    ) {
-      return NextResponse.json(
-        { error: "Invalid payment type." },
-        { status: 400 }
-      );
-    }
-
     const commonSessionConfig = {
-      payment_method_types: [
-        "card",
-      ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
+      payment_method_types: ["card"] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
       metadata: {
         childId,
         childName,
-        amount,
+        amount: amount.toString(),
         childLocation: location,
         userId: userId || null,
+        paymentType
       },
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}`,
@@ -48,15 +37,9 @@ export async function POST(req: Request) {
 
     let session;
     if (paymentType === "subscription") {
-      console.log('Creating subscription session with data:', {
-        childId,
-        childName,
-        amount,
-        userId
-      });
-
+      // Monthly subscription
       const product = await stripe.products.create({
-        name: `Sponsorship for ${childName} (Monthly)`,
+        name: `Monthly Sponsorship for ${childName}`,
         images: [childImage],
       });
 
@@ -89,30 +72,41 @@ export async function POST(req: Request) {
           }
         }
       });
-      
-      console.log('Created subscription session:', {
-        session_id: session.id,
-        price_id: price.id,
-        metadata: session.metadata
+    } else {
+      // Yearly subscription
+      const product = await stripe.products.create({
+        name: `Yearly Sponsorship for ${childName}`,
+        images: [childImage],
       });
-    } else if (paymentType === "payment") {
+
+      const price = await stripe.prices.create({
+        unit_amount: amount,
+        currency: 'usd',
+        recurring: { interval: 'year' },
+        product: product.id,
+        metadata: {
+          childId,
+          userId,
+          amount: amount.toString()
+        }
+      });
+
       session = await stripe.checkout.sessions.create({
         ...commonSessionConfig,
-        mode: "subscription",
+        mode: 'subscription',
         line_items: [
           {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: `Sponsorship for ${childName} (Yearly)`,
-                images: [childImage],
-              },
-              unit_amount: amount,
-              recurring: { interval: "year" },
-            },
+            price: price.id,
             quantity: 1,
           },
         ],
+        subscription_data: {
+          metadata: {
+            childId,
+            userId,
+            amount: amount.toString()
+          }
+        }
       });
     }
 
