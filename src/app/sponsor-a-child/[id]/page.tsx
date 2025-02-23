@@ -9,6 +9,9 @@ import {
 import { SponsorPeople } from "@/types";
 import ChildDetailsCard from "../components/ChildDetails";
 import GoBackButton from "@/components/ui/goBack";
+import SponsorshipDetails from "../components/SponsorshipDetails";
+import ChildActivity from "../components/ChildActivity";
+
 
 const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
   const { id } = React.use(params);
@@ -67,11 +70,14 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
       <Text fontSize="2xl" fontWeight="bold" mb={4} mt={8}>
         Details
       </Text>
-      
-      {/* Wrap the child details card in a clickable container */}
-      <Box>
+      <Box className="mb-6">
         <ChildDetailsCard id={child.id} people={child} />
       </Box>
+      <Box className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <SponsorshipDetails />
+        <ChildActivity />
+      </Box>
+
     </Box>
   );
 };
