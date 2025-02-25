@@ -5,6 +5,7 @@ export type Geography = {
   export interface SponsorPeople {
     id?: string;
     name: string;
+    username: string;
     gender: string;
     birth_date: string;
     biography: string;

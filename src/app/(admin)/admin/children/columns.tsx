@@ -90,6 +90,20 @@ export const columns: ColumnDef<SponsorPeople>[] = [
     ),
   },
   {
+    accessorKey: "username",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Username
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+  },
+  {
     accessorKey: "birth_date",
     header: ({ column }) => (
       <Button

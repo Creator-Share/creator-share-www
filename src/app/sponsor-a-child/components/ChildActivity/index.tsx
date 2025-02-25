@@ -3,20 +3,22 @@ import { Box, Text, Flex, Spinner } from '@chakra-ui/react';
 import { fetchActivitiesByChildId } from '@/actions';
 import { Activity } from '@/types';
 
-const ChildActivity = ({ childId }: { childId: string }) => {
+const ChildActivity = ({ childId }: { childId: string | undefined }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadActivities = async () => {
+      if (!childId) {
+        setLoading(false);
+        return;
+      }
       const data = await fetchActivitiesByChildId(childId);
       setActivities(data);
       setLoading(false);
     };
 
-    if (childId) {
-      loadActivities();
-    }
+    loadActivities();
   }, [childId]);
 
   return (

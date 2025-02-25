@@ -112,7 +112,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     };
 
     const handleSave = async () => {
-        const requiredFields = ['name', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
+        const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
         const emptyFields = requiredFields.filter(field => !formDataEdit[field as keyof SponsorPeople]);
 
         if (emptyFields.length > 0) {
@@ -224,6 +224,15 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     px={2}
                                     onChange={handleInputChange}
                                     value={formDataEdit?.name || ''}
+                                />
+                            </Field>
+                            <Field label="Username" required errorText="This field is required">
+                                <Input
+                                    name="username"
+                                    className="border"
+                                    px={2}
+                                    onChange={handleInputChange}
+                                    value={formDataEdit?.username || ''}
                                 />
                             </Field>
                             <Field label="Gender" required errorText="This field is required">

@@ -60,7 +60,7 @@ const CreateDrawer = ({
 
     const handleAdd = async () => {
         
-        const requiredFields = ['name', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
+        const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
         const emptyFields = requiredFields.filter(field => !formData[field as keyof SponsorPeople]);
         
         if (emptyFields.length > 0) {
@@ -124,6 +124,14 @@ const CreateDrawer = ({
                         <Fieldset.Content>
                             <Field label="Name" required errorText="This field is required">
                                 <Input name="name" className="border" px={2} onChange={handleInputChange} />
+                            </Field>
+                            <Field label="Username" required errorText="This field is required">
+                                <Input 
+                                    name="username" 
+                                    className="border" 
+                                    px={2} 
+                                    onChange={handleInputChange}
+                                />
                             </Field>
                             <Field label="Gender" required errorText="This field is required">
                                 <NativeSelectRoot>

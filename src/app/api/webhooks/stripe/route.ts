@@ -105,7 +105,6 @@ export async function POST(req: Request) {
       console.error("Error creating activity:", activityError);
     }
 
-    // Create subscription record for both monthly and yearly subscriptions
     const { error: subscriptionError } = await supabase.from("subscriptions").insert({
       stripe_subscription_id: session.subscription as string,
       user_id: userId,

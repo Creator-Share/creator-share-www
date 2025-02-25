@@ -67,7 +67,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
 
     const handleViewActivity = (e: React.MouseEvent) => {
         e.preventDefault();
-        router.push(`/sponsor-a-child/${people.id}`);
+        router.push(`/sponsor-a-child/${people.username}`);
     };
 
     return (

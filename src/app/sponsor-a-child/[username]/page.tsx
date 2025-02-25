@@ -13,8 +13,8 @@ import SponsorshipDetails from "../components/SponsorshipDetails";
 import ChildActivity from "../components/ChildActivity";
 
 
-const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
-  const { id } = React.use(params);
+const ChildDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ params }) => {
+  const { username } = React.use(params);
   const [child, setChild] = useState<SponsorPeople | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +22,8 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
   useEffect(() => {
     const fetchChild = async () => {
       try {
-        const res = await fetch(`/api/children/get/${id}`);
+        const encodedUsername = encodeURIComponent(username);
+        const res = await fetch(`/api/children/get/username/${encodedUsername}`);
         if (!res.ok) throw new Error("Failed to fetch child data");
         const data = await res.json();
         setChild(data.child);
@@ -38,7 +39,7 @@ const ChildDetails: React.FC<{ params: Promise<{ id: string }> }> = ({ params })
     };
 
     fetchChild();
-  }, [id]);
+  }, [username]);
 
   if (loading) {
     return (
