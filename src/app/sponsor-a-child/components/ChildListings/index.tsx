@@ -94,6 +94,7 @@ const ChildListings: React.FC<ChildListingsProps> = React.memo(({
                     )}
                   </Box>
                 </Box>
+                {people.status !== "Budget Fulfilled" ? (
                 <SponsorDialog
                   people={people}
                   trigger={
@@ -104,6 +105,13 @@ const ChildListings: React.FC<ChildListingsProps> = React.memo(({
                     </Box>
                   }
                 />
+                ) : (
+                  <Box fontSize="base" mb={3}>
+                    <Button fontWeight="md" className="text-[#FFFFFF] disabled w-full cursor-not-allowed bg-gray-400 px-4 mt-8">
+                      Budget Fulfilled
+                    </Button>
+                  </Box>
+                )}
               </Collapsible.Content>
             </Collapsible.Root>
           </Box>

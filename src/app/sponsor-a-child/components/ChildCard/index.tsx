@@ -90,11 +90,11 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                         />
                         {images.length > 0 && (
                             <>
-                                <Flex 
-                                    position="absolute" 
-                                    bottom="4" 
-                                    left="50%" 
-                                    transform="translateX(-50%)" 
+                                <Flex
+                                    position="absolute"
+                                    bottom="4"
+                                    left="50%"
+                                    transform="translateX(-50%)"
                                     gap={2}
                                 >
                                     {images.map((_, index) => (
@@ -162,11 +162,11 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                             />
                             {images.length > 1 && (
                                 <>
-                                    <Flex 
-                                        position="absolute" 
-                                        bottom="4" 
-                                        left="50%" 
-                                        transform="translateX(-50%)" 
+                                    <Flex
+                                        position="absolute"
+                                        bottom="4"
+                                        left="50%"
+                                        transform="translateX(-50%)"
                                         gap={2}
                                         zIndex={10}
                                     >
@@ -268,22 +268,32 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
                     <Text fontSize="base" className="text-[#767070] mb-8">
                         {people.introduction}
                     </Text>
-                    <Button 
-                        onClick={handleViewActivity} 
+                    <Button
+                        onClick={handleViewActivity}
                         className="hover:bg-[#1C3C8C] w-full md:w-11/12 hover:text-[#FFFFFF]"
                     >
                         <RxActivityLog />View Activity
                     </Button>
-                    <SponsorDialog
-                        people={people}
-                        trigger={
-                            <Box fontSize="base" mb={3}>
-                                <Button fontWeight="md" className="text-[#FFFFFF] w-full md:w-11/12 cursor-pointer bg-[#1C3C8C] px-4 mt-4">
-                                    Sponsor
-                                </Button>
-                            </Box>
-                        }
-                    />
+                    <Box fontSize="base" mb={3}>
+                        {people.status === "Budget Fulfilled" ? (
+                            <Button
+                                fontWeight="md"
+                                className="text-[#FFFFFF] w-full md:w-11/12 cursor-not-allowed bg-gray-400 px-4 mt-4"
+                                disabled
+                            >
+                                Budget Fulfilled
+                            </Button>
+                        ) : (
+                            <SponsorDialog
+                                people={people}
+                                trigger={
+                                    <Button fontWeight="md" className="text-[#FFFFFF] w-full md:w-11/12 cursor-pointer bg-[#1C3C8C] px-4 mt-4">
+                                        Sponsor
+                                    </Button>
+                                }
+                            />
+                        )}
+                    </Box>
                 </Box>
             </Box>
         </Flex>

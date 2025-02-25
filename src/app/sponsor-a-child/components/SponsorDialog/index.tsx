@@ -72,7 +72,14 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
     };
 
     const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let newValue = parseInt(e.target.value) || 0;
+        const inputValue = e.target.value;
+        if (inputValue === '') {
+            setAmount(0);
+            setValue([0]);
+            return;
+        }
+        
+        let newValue = parseInt(inputValue) || 0;
         newValue = Math.min(newValue, remainingAmount);
         setAmount(newValue);
         setValue([newValue]);
@@ -279,7 +286,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
                                         type="number"
                                         min="1"
                                         max={remainingAmount}
-                                        value={amount}
+                                        value={amount || ''}
                                         onChange={handleAmountChange}
                                         className="px-4 h-[50px]"
                                         placeholder="Enter Amount"
