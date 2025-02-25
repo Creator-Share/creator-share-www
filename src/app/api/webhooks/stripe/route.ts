@@ -90,12 +90,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to update child data" }, { status: 500 });
     }
 
-    const interval = session.mode === "subscription" ? "yearly" : "monthly";
+    const interval = paymentType === "subscription" ? "month" : "year";
     const { error: activityError } = await supabase
       .from("people_activities")
       .insert({
         description: session.customer_details?.name 
-          ? `${session.customer_details.name} sponsored with $${amount} ${interval}`
+          ? `${session.customer_details.name} sponsored with $${amount}/${interval}`
           : `Someone sponsored with $${amount} ${interval}`,
         child_id: childId,
         user_id: userId
