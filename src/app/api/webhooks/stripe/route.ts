@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@/utils/supabase/client";
-
+import { centsToDollars } from "@/utils/currency";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY! as string);
 
 export async function POST(req: Request) {
@@ -95,7 +95,7 @@ export async function POST(req: Request) {
       .from("people_activities")
       .insert({
         description: session.customer_details?.name 
-          ? `${session.customer_details.name} sponsored with $${amount}/${interval}`
+          ? `${session.customer_details.name} sponsored with $${centsToDollars(amount)}/${interval}`
           : `Someone sponsored with $${amount} ${interval}`,
         child_id: childId,
         user_id: userId
