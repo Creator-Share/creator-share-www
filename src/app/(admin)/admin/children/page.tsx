@@ -29,6 +29,7 @@ const ChildrenTable = () => {
   const [formData, setFormData] = useState<SponsorPeople>({
     name: "",
     gender: "",
+    username: "",
     birth_date: "",
     biography: "",
     budget_goal: 0 * 100,
@@ -44,6 +45,7 @@ const ChildrenTable = () => {
     id: "",
     name: "",
     gender: "",
+    username: "",
     birth_date: "",
     biography: "",
     budget_goal: 0,
@@ -205,6 +207,7 @@ const ChildrenTable = () => {
         setFormData({
             name: "",
             gender: "",
+            username: "",
             birth_date: "",
             biography: "",
             budget_goal: 0,
