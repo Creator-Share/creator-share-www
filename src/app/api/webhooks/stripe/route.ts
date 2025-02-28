@@ -94,9 +94,7 @@ export async function POST(req: Request) {
     const { error: activityError } = await supabase
       .from("people_activities")
       .insert({
-        description: session.customer_details?.name 
-          ? `${session.customer_details.name} sponsored with $${centsToDollars(amount)}/${interval}`
-          : `Someone sponsored with $${amount} ${interval}`,
+        description: `Someone sponsored with $${centsToDollars(amount)}/${interval}`,
         child_id: childId,
         user_id: userId
       });
