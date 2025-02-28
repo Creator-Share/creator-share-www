@@ -19,4 +19,11 @@ export type Geography = {
     introduction: string;
   }
   
+ export interface SponsorPeopleImage {
+    id: string;
+    sponsor_people_id: string;
+    image_url: string;
+    order_index: number;
+    created_at: string;
+  }
 

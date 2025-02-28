@@ -1,5 +1,5 @@
 "use client"
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import {
     DrawerActionTrigger,
     DrawerBackdrop,
@@ -23,10 +23,10 @@ import {
     FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
-import { SponsorPeople } from "@/types/admin.types";
+import { SponsorPeople, SponsorPeopleImage } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import { toaster } from "@/components/ui/toaster";
-import { HiUpload } from "react-icons/hi";
+import { HiUpload, HiX } from "react-icons/hi";
 
 interface EditDrawerProps {
     selectedChild: SponsorPeople | null;
@@ -40,6 +40,7 @@ interface EditDrawerProps {
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
     videoFiles: File[];
     setVideoFiles: React.Dispatch<React.SetStateAction<File[]>>;
+    onImagesUpdate?: () => void;
 }
 
 const EditDrawer: React.FC<EditDrawerProps> = ({
@@ -51,13 +52,14 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     onSave,
     onDelete,
     setImageFiles,
-    setVideoFiles,
+    setVideoFiles
 }) => {
     const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>(() => selectedChild || {} as SponsorPeople);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [mainImage, setMainImage] = useState<string | null>(null);
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
+    const [allImages, setAllImages] = useState<SponsorPeopleImage[]>([]);
+    const [isImageLoading, setIsImageLoading] = useState(false);
 
     const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
         const supabase = createClient();
@@ -83,23 +85,6 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             setFormDataEdit(selectedChild);
             setVideoUrl(selectedChild.video_url || null);
         }
-    }, [selectedChild]);
-
-    useEffect(() => {
-        const fetchMainImage = async () => {
-            if (selectedChild?.id) {
-                const response = await fetch(`/api/admin/children/images/${selectedChild.id}`);
-                if (response.ok) {
-                    const images = await response.json();
-                    if (images.length > 0) {
-                        setMainImage(images[0].image_url);
-                    } else {
-                        setMainImage(null);
-                    }
-                }
-            }
-        };
-        fetchMainImage();
     }, [selectedChild]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -167,6 +152,10 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                 if (insertError) {
                     throw new Error('Failed to create image records');
                 }
+                
+                // Refresh images after successful upload
+                await fetchImages();
+                setImageFiles([]);
             }
 
             if (videoFiles.length > 0) {
@@ -197,6 +186,54 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             location_str: locationStr,
             country: country
         }));
+    };
+
+    const fetchImages = useCallback(async () => {
+        if (selectedChild?.id) {
+            const response = await fetch(`/api/admin/children/images/${selectedChild.id}`);
+            if (response.ok) {
+                const images = await response.json();
+                setAllImages(images);
+            }
+        }
+    }, [selectedChild?.id]);
+
+    useEffect(() => {
+        fetchImages();
+    }, [selectedChild?.id, fetchImages]);
+
+    const handleDeleteImage = async (imageId: string) => {
+        try {
+            setIsImageLoading(true);
+            const response = await fetch('/api/admin/children/images/delete', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ imageId }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete image');
+            }
+
+            setAllImages(prev => prev.filter(img => img.id !== imageId));
+            
+            toaster.create({
+                title: "Success",
+                description: "Image deleted successfully",
+                duration: 3000,
+            });
+        } catch (error) {
+            console.error("Error deleting image:", error);
+            toaster.create({
+                title: "Error",
+                description: "Failed to delete image",
+                duration: 3000,
+            });
+        } finally {
+            setIsImageLoading(false);
+        }
     };
 
     if (!selectedChild) return null;
@@ -310,25 +347,45 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     </NativeSelectField>
                                 </NativeSelectRoot>
                             </Field>
-                            <Field label="Change Image">
-                                <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]} maxFiles={5}>
-                                    <FileUploadTrigger asChild>
-                                        {mainImage ? (
-                                            <Image
-                                                src={mainImage}
-                                                alt="Child's photo"
-                                                width={200}
-                                                height={200}
-                                                objectFit="cover"
-                                            />
-                                        ) : (
+                            <Field label="Manage Images">
+                                <div className="space-y-4">
+                                    <div className="flex flex-wrap gap-4">
+                                        {allImages.map((image, index) => (
+                                            <div key={image.id} className="relative group">
+                                                <Image
+                                                    src={image.image_url}
+                                                    alt={`Child's photo ${index + 1}`}
+                                                    width={200}
+                                                    height={200}
+                                                    objectFit="cover"
+                                                    className="rounded-lg"
+                                                />
+                                                <button
+                                                    onClick={() => handleDeleteImage(image.id)}
+                                                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    disabled={isImageLoading}
+                                                >
+                                                    <HiX size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    
+                                    <FileUploadRoot 
+                                        onFileChange={(fileDetails) => {
+                                            setImageFiles(fileDetails.acceptedFiles);
+                                        }} 
+                                        accept={["image/*"]} 
+                                        maxFiles={5}
+                                    >
+                                        <FileUploadTrigger asChild>
                                             <Button variant="outline" size="sm" className="border" px={4}>
-                                                <HiUpload /> Upload Image
+                                                <HiUpload /> {allImages.length === 0 ? 'Upload Images' : 'Add More Images'}
                                             </Button>
-                                        )}
-                                    </FileUploadTrigger>
-                                    <FileUploadList />
-                                </FileUploadRoot>
+                                        </FileUploadTrigger>
+                                        <FileUploadList />
+                                    </FileUploadRoot>
+                                </div>
                             </Field>
                             <Field label="Change Video">
                                 <FileUploadRoot onFileChange={(fileDetails) => setVideoFiles(fileDetails.acceptedFiles)} accept={["video/mp4"]}>
