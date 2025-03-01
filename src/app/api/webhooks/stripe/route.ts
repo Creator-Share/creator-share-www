@@ -70,26 +70,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
     }
 
-    const updatedBudget = childData.budget_raised + amount;
-    let status = "Partially Funded";
-
-    if (updatedBudget >= childData.budget_goal) {
-      status = "Budget Fulfilled";
-    }
-
-    const { error: updateError } = await supabase
-      .from("sponsor_people")
-      .update({ 
-        budget_raised: updatedBudget,
-        status: status 
-      })
-      .eq("id", childId);
-
-    if (updateError) {
-      console.error("Error updating child data:", updateError);
-      return NextResponse.json({ error: "Failed to update child data" }, { status: 500 });
-    }
-
     const interval = paymentType === "subscription" ? "month" : "year";
     const { error: activityError } = await supabase
       .from("people_activities")

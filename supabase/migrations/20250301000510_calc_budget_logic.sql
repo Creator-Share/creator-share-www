@@ -1,6 +1,9 @@
--- Every time a subscription is inserted, updated, or deleted
--- Updates the budget for the child
-CREATE OR REPLACE FUNCTION calc_budget_raised() RETURNS TRIGGER AS $$
+set check_function_bodies = off;
+
+CREATE OR REPLACE FUNCTION public.calc_budget_raised()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
   total_amount int;
   updated_status "PersonStatus";
@@ -31,8 +34,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$function$
+;
 
-CREATE TRIGGER update_budget_raised
-AFTER INSERT OR UPDATE OR DELETE ON subscriptions
-FOR EACH ROW EXECUTE FUNCTION calc_budget_raised();
+CREATE TRIGGER update_subscription_budget AFTER INSERT OR DELETE OR UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION calc_budget_raised();
