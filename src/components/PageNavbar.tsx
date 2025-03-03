@@ -9,11 +9,11 @@ import { GiHamburgerMenu } from "react-icons/gi";
 import { IoClose } from "react-icons/io5";
 
 const Links = [
-  { name: "Lives", href: "/lives" },
-  { name: "Projects", href: "/projects" },
-  { name: "Causes", href: "/causes" },
-  { name: "My Community", href: "/local" },
-  { name: "Share Abundance", href: "/share" },
+  // { name: "Lives", href: "/lives" },
+  // { name: "Projects", href: "/projects" },
+  // { name: "Causes", href: "/causes" },
+  // { name: "My Community", href: "/local" },
+  // { name: "Share Abundance", href: "/share" },
   { name: "Sponsor-a-Child", href: "/sponsor-a-child" },
   { name: "I-Frame Test", href: "/iframe-test" },
 ];
@@ -88,7 +88,7 @@ export function PageNavbar() {
 
         {/* Right Actions */}
         <Flex gap={4} display={{ base: "none", md: "flex" }}>
-          <ColorModeButton />
+          {/* <ColorModeButton /> */}
           {user ? (
             <>
               {isAdmin && (
