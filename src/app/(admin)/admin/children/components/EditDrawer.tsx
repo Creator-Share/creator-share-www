@@ -248,7 +248,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                     </DrawerTitle>
                 </DrawerHeader>
                 <DrawerBody>
-                    <Fieldset.Root size="lg" maxW="md">
+                    <Fieldset.Root size="lg">
                         <Stack>
                             <Fieldset.Legend>Child details</Fieldset.Legend>
                             <Fieldset.HelperText>Please provide child details below.</Fieldset.HelperText>

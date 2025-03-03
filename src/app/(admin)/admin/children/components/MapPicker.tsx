@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
-import { Box, Text } from "@chakra-ui/react";
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
+import { Box, Text, Input, Flex } from "@chakra-ui/react";
 import { Field } from "@/components/ui/field";
+import { Button } from "@/components/ui/button";
 
 const customIcon = L.icon({
   iconUrl: "/CreatorSharePin.svg",
@@ -20,9 +21,23 @@ interface MapPickerProps {
   };
 }
 
+// New component to handle map center updates
+const MapController: React.FC<{ center: [number, number] }> = ({ center }) => {
+  const map = useMap();
+  React.useEffect(() => {
+    map.setView(center, 8);
+  }, [center, map]);
+  return null;
+};
+
 const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation }) => {
   const [selectedLocation, setSelectedLocation] = useState<[number, number] | null>(
     initialLocation ? initialLocation.coordinates : null
+  );
+  const [searchQuery, setSearchQuery] = useState(initialLocation?.locationStr || "");
+  const [isSearching, setIsSearching] = useState(false);
+  const [mapCenter, setMapCenter] = useState<[number, number]>(
+    initialLocation?.coordinates || [0, 0]
   );
 
   const fetchLocationData = async (lat: number, lng: number) => {
@@ -42,6 +57,31 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
     }
   };
 
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1`
+      );
+      const data = await response.json();
+      
+      if (data && data[0]) {
+        const { lat, lon } = data[0];
+        const location: [number, number] = [parseFloat(lat), parseFloat(lon)];
+        setMapCenter(location);
+        setSelectedLocation(location);
+        const { locationStr, country } = await fetchLocationData(location[0], location[1]);
+        onSelectLocation(location, locationStr, country);
+      }
+    } catch (error) {
+      console.error("Error searching location:", error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const MapEventHandler: React.FC = () => {
     useMapEvents({
       click: async (e) => {
@@ -58,9 +98,35 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
   return (
     <Box>
       <Field label="Location">
+        <Flex gap={2} mb={2} width="100%">
+          <Input
+            placeholder="Search location..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            px={4}
+            py={2}
+            borderRadius="lg"
+            border="1px solid #e0e0e0"
+          />
+          <Button 
+            onClick={handleSearch}
+            disabled={isSearching}
+            loading={isSearching}
+            className="bg-black text-white text-center"
+            px={4}
+            py={2}
+            textTransform="uppercase"
+            fontWeight="bold"
+            fontSize="sm"
+            loadingText="Searching..."
+          >
+            Search
+          </Button>
+        </Flex>
         <div className="h-[300px] w-full">
           <MapContainer
-            center={initialLocation?.coordinates || [0, 0]}
+            center={mapCenter}
             zoom={initialLocation ? 8 : 2}
             scrollWheelZoom
             className="h-full w-full rounded-2xl"
@@ -77,6 +143,7 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
               <Marker position={selectedLocation} icon={customIcon} />
             )}
             <MapEventHandler />
+            <MapController center={mapCenter} />
           </MapContainer>
         </div>
         {selectedLocation && (
