@@ -45,7 +45,7 @@ const ChildListings: React.FC<ChildListingsProps> = React.memo(({
   }, [peopleData]);
 
   return (
-    <Box width="100%" className="border" px={{ base: 3, md: 8 }} mt={4}>
+    <Box width="100%" className="border bg-white rounded-2xl" px={{ base: 3, md: 8 }} mt={4}>
       <VStack align="stretch" pt={10}>
         {visiblePeople.map((people) => (
           <Box key={people.id}>

@@ -80,7 +80,7 @@ const SponsorChild = () => {
       const [lng, lat] = child.location_geo.coordinates;
       return bounds.contains(L.latLng(lat, lng));
     });
-    
+
     setVisibleChildren(filtered);
     setListingsLoading(false);
   }, [childrenData, L]);
@@ -104,6 +104,15 @@ const SponsorChild = () => {
       px={{ base: 4, md: 32 }}
       py={{ base: 12, md: 16 }}
     >
+      <Box className="text-center justify-center my-12">
+        <Text className="text-[#1C3C8C] font-semibold text-5xl mb-4">
+          Sponsoring a Child with Creator Share
+        </Text>
+        <Text className="text-base font-normal text-[#03150E99]">
+          Sponsoring a child is a personal way to show God&apos;s love to a child in need. For $39 a month,
+        </Text>
+        <Text className="px-[200px] text-base font-normal text-[#03150E99]">you&apos;ll help that child and other vulnerable children in their community to stand tall, free from poverty.</Text>
+      </Box>
       <Filters
         onFilterChange={handleFilterChange}
       />

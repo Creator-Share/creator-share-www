@@ -16,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html suppressHydrationWarning>
-      <body>
+      <body className="bg-[#F5F5F5]">
         <Providers>
           <PageWrapper>{children}</PageWrapper>
           <Toaster />
