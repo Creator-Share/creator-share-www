@@ -21,7 +21,6 @@ interface MapPickerProps {
   };
 }
 
-// New component to handle map center updates
 const MapController: React.FC<{ center: [number, number] }> = ({ center }) => {
   const map = useMap();
   React.useEffect(() => {

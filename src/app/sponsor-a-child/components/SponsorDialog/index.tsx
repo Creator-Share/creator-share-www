@@ -21,7 +21,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { centsToDollars } from "@/utils/currency";
 import { toaster } from "@/components/ui/toaster";
-import { paymentOptionsCollection } from "../ChildCard/config";
+import { paymentOptionsCollection } from "./config";
 import { SponsorPeople } from "@/types";
 import { useAuthStore } from "@/store/authStore";
 
@@ -144,18 +144,46 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
     };
 
     const renderDisclaimer = () => {
+        const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
+        
         if ((people.budget_goal - people.budget_raised - amount * 100) > 0) {
             return (
                 <>
                     This child has a monthly budget goal that must be met for enrollment in school.
+                    {selectedOption === "payment" && (
+                        <>
+                            <br />
+                            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+                        </>
+                    )}
                     <br />
                     Additional sponsors are required to meet this goal.
                 </>
             );
         } else if (people.budget_raised > 0) {
-            return "This child is partially sponsored. Your contribution will help reach their monthly budget goal!";
+            return (
+                <>
+                    This child is partially sponsored. Your contribution will help reach their monthly budget goal!
+                    {selectedOption === "payment" && (
+                        <>
+                            <br />
+                            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+                        </>
+                    )}
+                </>
+            );
         }
-        return "Your sponsorship will be applied towards the child's monthly budget goals.";
+        return (
+            <>
+                Your sponsorship will be applied towards the child's monthly budget goals.
+                {selectedOption === "payment" && (
+                    <>
+                        <br />
+                        Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+                    </>
+                )}
+            </>
+        );
     };
 
     const handleNextImage = () => {
