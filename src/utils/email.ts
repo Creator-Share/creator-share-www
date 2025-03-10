@@ -1,0 +1,106 @@
+import nodemailer from 'nodemailer';
+
+// Create a transporter object
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: parseInt(process.env.EMAIL_PORT || '587'),
+  secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD,
+  },
+});
+
+interface SendEmailParams {
+  to: string;
+  subject: string;
+  text?: string;
+  html?: string;
+}
+
+export const sendEmail = async ({ to, subject, text, html }: SendEmailParams) => {
+  console.log('Attempting to send email with config:', {
+    host: process.env.EMAIL_HOST,
+    port: process.env.EMAIL_PORT,
+    secure: process.env.EMAIL_SECURE === 'true',
+    user: process.env.EMAIL_USER ? '✓ Set' : '✗ Not set',
+    pass: process.env.EMAIL_PASSWORD ? '✓ Set' : '✗ Not set',
+    from: process.env.EMAIL_FROM || '"Creator Share" <noreply@yourapp.com>',
+  });
+
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    console.error('Email configuration is missing');
+    return { success: false, error: 'Email service not configured' };
+  }
+
+  try {
+    console.log(`Sending email to ${to} with subject: ${subject}`);
+    
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_FROM || '"Creator Share" <noreply@yourapp.com>',
+      to,
+      subject,
+      text,
+      html,
+    });
+
+    console.log('Email sent successfully:', {
+      messageId: info.messageId,
+      response: info.response,
+      accepted: info.accepted,
+      rejected: info.rejected,
+    });
+    
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('Error sending email - full details:', error);
+    return { success: false, error };
+  }
+};
+
+export const sendSponsorshipConfirmationEmail = async (
+  email: string,
+  childName: string,
+  amount: number,
+  interval: string
+) => {
+  const subject = `Thank you for sponsoring ${childName}!`;
+  
+  const formattedAmount = (amount / 100).toFixed(2);
+  const intervalText = interval === 'month' ? 'monthly' : 'yearly';
+ 
+  const html = `
+    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+      </div>
+      
+      <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Dear Sponsor,</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> ${intervalText} to sponsor ${childName}.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your support makes a significant difference in providing education and opportunities for children in need.</p>
+      </div>
+      
+      <div style="border-left: 4px solid #1C3C8C; padding-left: 1rem; margin-bottom: 1.5rem;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">We'll keep you updated on ${childName}'s progress and how your sponsorship is making an impact.</p>
+        <p style="font-size: 1rem; line-height: 1.5;">If you have any questions about your sponsorship, please don't hesitate to contact us.</p>
+      </div>
+      
+      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Warm regards,</p>
+        <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
+      </div>
+      
+      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
+        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+
+  return sendEmail({
+    to: email,
+    subject,
+    html,
+  });
+}; 
