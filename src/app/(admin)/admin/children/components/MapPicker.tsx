@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-lea
 import { Box, Text, Input, Flex } from "@chakra-ui/react";
 import { Field } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
+import { toaster } from "@/components/ui/toaster";
 
 const customIcon = L.icon({
   iconUrl: "/CreatorSharePin.svg",
@@ -35,6 +36,7 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
   );
   const [searchQuery, setSearchQuery] = useState(initialLocation?.locationStr || "");
   const [isSearching, setIsSearching] = useState(false);
+  const [isError, setIsError] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>(
     initialLocation?.coordinates || [0, 0]
   );
@@ -56,26 +58,97 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
     }
   };
 
+  // Try multiple geocoding services to find the location
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     
     setIsSearching(true);
+    setIsError(false);
+    
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1`
-      );
-      const data = await response.json();
+      // Try multiple geocoding services in sequence
+      let location: [number, number] | null = null;
       
-      if (data && data[0]) {
-        const { lat, lon } = data[0];
-        const location: [number, number] = [parseFloat(lat), parseFloat(lon)];
+      // 1. Try Nominatim (OpenStreetMap)
+      try {
+        const nominatimResponse = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1`
+        );
+        const nominatimData = await nominatimResponse.json();
+        
+        if (nominatimData && nominatimData.length > 0) {
+          const { lat, lon } = nominatimData[0];
+          location = [parseFloat(lat), parseFloat(lon)];
+        }
+      } catch (error) {
+        console.error("Error with Nominatim search:", error);
+      }
+      
+      // 2. If Nominatim failed, try Photon API (another free geocoding service)
+      if (!location) {
+        try {
+          const photonResponse = await fetch(
+            `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&limit=1`
+          );
+          const photonData = await photonResponse.json();
+          
+          if (photonData && photonData.features && photonData.features.length > 0) {
+            const coordinates = photonData.features[0].geometry.coordinates;
+            // Note: Photon returns [lon, lat] while we need [lat, lon]
+            location = [coordinates[1], coordinates[0]];
+          }
+        } catch (error) {
+          console.error("Error with Photon search:", error);
+        }
+      }
+      
+      // 3. If it looks like a Plus Code, try a specialized approach
+      if (!location && searchQuery.includes('+')) {
+        // For Plus Codes, we can try to extract the general area
+        // This is a simplified approach - extract country name if present
+        const parts = searchQuery.split(',');
+        if (parts.length > 1) {
+          const countryPart = parts[parts.length - 1].trim();
+          try {
+            // Try to find the country at least
+            const countryResponse = await fetch(
+              `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(countryPart)}&format=json&limit=1`
+            );
+            const countryData = await countryResponse.json();
+            
+            if (countryData && countryData.length > 0) {
+              const { lat, lon } = countryData[0];
+              location = [parseFloat(lat), parseFloat(lon)];
+              
+              // Show a message that we're showing an approximate location
+              toaster.create({
+                title: "Approximate Location",
+                description: `Showing approximate location for "${searchQuery}". You can click on the map to refine the position.`,
+                duration: 5000,
+              });
+            }
+          } catch (error) {
+            console.error("Error with country search:", error);
+          }
+        }
+      }
+      
+      if (location) {
         setMapCenter(location);
         setSelectedLocation(location);
         const { locationStr, country } = await fetchLocationData(location[0], location[1]);
         onSelectLocation(location, locationStr, country);
+      } else {
+        setIsError(true);
+        toaster.create({
+          title: "Location Not Found",
+          description: "Could not find the specified location. Try a different search term or format, or click directly on the map.",
+          duration: 5000,
+        });
       }
     } catch (error) {
       console.error("Error searching location:", error);
+      setIsError(true);
     } finally {
       setIsSearching(false);
     }
@@ -88,6 +161,7 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
         setSelectedLocation(location);
         const { locationStr, country } = await fetchLocationData(location[0], location[1]);
         onSelectLocation(location, locationStr, country);
+        setIsError(false);
       },
     });
 
@@ -99,14 +173,14 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
       <Field label="Location">
         <Flex gap={2} mb={2} width="100%">
           <Input
-            placeholder="Search location..."
+            placeholder="Search location or click on map..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             px={4}
             py={2}
             borderRadius="lg"
-            border="1px solid #e0e0e0"
+            border={isError ? "1px solid red" : "1px solid #e0e0e0"}
           />
           <Button 
             onClick={handleSearch}
@@ -123,6 +197,11 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
             Search
           </Button>
         </Flex>
+        {isError && (
+          <Text color="red.500" fontSize="sm" mb={2}>
+            Location not found. Try a different search term or click directly on the map.
+          </Text>
+        )}
         <div className="h-[300px] w-full">
           <MapContainer
             center={mapCenter}
@@ -136,7 +215,7 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
           >
             <TileLayer
               attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
-              url={`https://api.maptiler.com/maps/basic-v2/{z}/{x}/{y}.png?key=Wm5rwQ7T3kAi2Z07eCBa&lang=en`}
+              url={`https://api.maptiler.com/maps/bright-v2/{z}/{x}/{y}.png?key=Wm5rwQ7T3kAi2Z07eCBa&lang=en`}
             />
             {selectedLocation && (
               <Marker position={selectedLocation} icon={customIcon} />
@@ -150,6 +229,9 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
             Selected Location: {selectedLocation[0].toFixed(5)}, {selectedLocation[1].toFixed(5)}
           </Text>
         )}
+        <Text mt={1} fontSize="sm" color="gray.500">
+          Tip: If your exact location isn't found, try searching for a nearby city or landmark, then click on the map to refine the position.
+        </Text>
       </Field>
     </Box>
   );

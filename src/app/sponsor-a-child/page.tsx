@@ -111,7 +111,7 @@ const SponsorChild = () => {
         <Text className="text-base font-normal text-[#03150E99]">
           Sponsoring a child is a personal way to show God&apos;s love to a child in need. For $39 a month,
         </Text>
-        <Text className="px-[200px] text-base font-normal text-[#03150E99]">you&apos;ll help that child and other vulnerable children in their community to stand tall, free from poverty.</Text>
+        <Text className="md:px-[200px] text-base font-normal text-[#03150E99]">you&apos;ll help that child and other vulnerable children in their community to stand tall, free from poverty.</Text>
       </Box>
       <Filters
         onFilterChange={handleFilterChange}
