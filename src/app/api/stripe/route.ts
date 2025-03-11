@@ -37,7 +37,6 @@ export async function POST(req: Request) {
 
     let session;
     if (paymentType === "subscription") {
-      // Monthly subscription
       const product = await stripe.products.create({
         name: `Monthly Sponsorship for ${childName}`,
         images: [childImage],
@@ -64,6 +63,11 @@ export async function POST(req: Request) {
             quantity: 1,
           },
         ],
+        payment_method_options: {
+          card: {
+            request_three_d_secure: 'automatic'
+          }
+        },
         subscription_data: {
           metadata: {
             childId,
@@ -73,7 +77,6 @@ export async function POST(req: Request) {
         }
       });
     } else {
-      // Yearly subscription
       const product = await stripe.products.create({
         name: `Yearly Sponsorship for ${childName}`,
         images: [childImage],
@@ -100,6 +103,11 @@ export async function POST(req: Request) {
             quantity: 1,
           },
         ],
+        payment_method_options: {
+          card: {
+            request_three_d_secure: 'automatic'
+          }
+        },
         subscription_data: {
           metadata: {
             childId,

@@ -13,7 +13,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Delete related records first
     const { error: activitiesError } = await supabase
       .from("people_activities")
       .delete()
@@ -23,7 +22,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: activitiesError.message }, { status: 500 });
     }
 
-    // Delete related subscriptions
     const { error: subscriptionsError } = await supabase
       .from("subscriptions")
       .delete()
@@ -33,7 +31,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: subscriptionsError.message }, { status: 500 });
     }
 
-    // Delete related transactions
     const { error: transactionsError } = await supabase
       .from("transaction_ledger")
       .delete()
@@ -43,7 +40,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: transactionsError.message }, { status: 500 });
     }
 
-    // Delete related images
     const { error: imagesError } = await supabase
       .from("sponsor_people_images")
       .delete()
@@ -53,7 +49,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: imagesError.message }, { status: 500 });
     }
 
-    // Finally delete the children records
     const { error } = await supabase
       .from("sponsor_people")
       .delete()

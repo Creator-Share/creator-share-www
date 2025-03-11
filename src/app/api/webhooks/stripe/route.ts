@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@/utils/supabase/client";
 import { centsToDollars } from "@/utils/currency";
-import { sendSponsorshipConfirmationEmail } from "@/utils/email";
+import { sendSponsorshipConfirmationEmail, sendPaymentFailedEmail } from "@/utils/email";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY! as string);
 
@@ -170,6 +170,81 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json({ message: "Subscription processed" }, { status: 200 });
+      }
+      
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerEmail = invoice.customer_email;
+        const subscriptionId = invoice.subscription as string;
+        
+        console.log(`Payment failed for subscription: ${subscriptionId}`);
+
+        await supabase.from("subscriptions")
+          .update({ status: "incomplete" })
+          .eq("stripe_subscription_id", subscriptionId);
+
+        const { data: childData } = await supabase
+          .from("subscriptions")
+          .select(`child_id`)
+          .eq("stripe_subscription_id", subscriptionId)
+          .single();
+          
+        let childName = "your sponsored child";
+        if (childData?.child_id) {
+          const { data: sponsorPeople } = await supabase
+            .from("sponsor_people")
+            .select("name")
+            .eq("id", childData.child_id)
+            .single();
+            
+          if (sponsorPeople) {
+            childName = sponsorPeople.name;
+          }
+        }
+
+        if (customerEmail) {
+          try {
+            await sendPaymentFailedEmail(
+              customerEmail,
+              childName,
+              invoice.amount_due / 100,
+              invoice.next_payment_attempt 
+                ? new Date(invoice.next_payment_attempt * 1000) 
+                : null
+            );
+            console.log(`Payment failed email sent to ${customerEmail}`);
+          } catch (emailError) {
+            console.error("Error sending payment failed email:", emailError);
+          }
+        }
+        
+        return NextResponse.json({ message: "Payment failure handled" }, { status: 200 });
+      }
+      
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription;
+
+        await supabase.from("subscriptions")
+          .update({ 
+            status: subscription.status === "active" ? "complete" : "incomplete",
+            current_period_end: new Date(subscription.current_period_end * 1000)
+          })
+          .eq("stripe_subscription_id", subscription.id);
+        
+        return NextResponse.json({ message: "Subscription updated" }, { status: 200 });
+      }
+      
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
+
+        await supabase.from("subscriptions")
+          .update({ 
+            status: "cancelled",
+            canceled_at: new Date()
+          })
+          .eq("stripe_subscription_id", subscription.id);
+        
+        return NextResponse.json({ message: "Subscription cancelled" }, { status: 200 });
       }
       
       default:

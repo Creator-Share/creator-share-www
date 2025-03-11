@@ -152,8 +152,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                 if (insertError) {
                     throw new Error('Failed to create image records');
                 }
-                
-                // Refresh images after successful upload
+
                 await fetchImages();
                 setImageFiles([]);
             }
