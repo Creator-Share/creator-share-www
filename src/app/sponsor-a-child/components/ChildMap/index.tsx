@@ -197,8 +197,8 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
         />
         <MarkerClusterGroup 
           chunkedLoading
-          maxClusterRadius={50}
-          disableClusteringAtZoom={undefined}
+          maxClusterRadius={10}
+          showCoverageOnHover={false}
           spiderfyOnMaxZoom={true}
           iconCreateFunction={createClusterCustomIcon}
         >
