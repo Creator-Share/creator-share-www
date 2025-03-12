@@ -88,13 +88,45 @@ const SponsorChild = () => {
   const handleMarkerClick = (id: string) => {
     setSelectedChildId(id);
     const selectedPerson = childrenData.find((child) => child.id === id);
+    
     if (selectedPerson) {
       setSelectedCountry(selectedPerson.country);
-      setTimeout(() => {
-        listingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        const element = document.getElementById(`child-${id}`);
-        element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 100);
+
+      setVisibleChildren(prev => {
+        if (!prev.some(child => child.id === id)) {
+          return [...prev, selectedPerson];
+        }
+        return prev;
+      });
+
+      const element = document.getElementById(`child-${id}`);
+      
+      if (element) {
+        const headerOffset = 250;
+        const elementPosition = element.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: "smooth"
+        });
+
+        element.style.boxShadow = '0 0 0 5px #1C3C8C, 0 0 15px rgba(28, 60, 140, 0.7)';
+        element.style.transition = 'box-shadow 0.3s ease-in-out';
+        element.style.zIndex = '10';
+
+        setTimeout(() => {
+          element.style.boxShadow = 'none';
+          element.style.zIndex = 'auto';
+        }, 3000);
+      } else {
+        console.error(`Element with id child-${id} not found after delay`);
+        if (listingsRef.current) {
+          const yOffset = -50;
+          const y = listingsRef.current.getBoundingClientRect().top + window.pageYOffset + yOffset;
+          window.scrollTo({ top: y, behavior: 'smooth' });
+        }
+      }
     }
   };
 
@@ -113,23 +145,49 @@ const SponsorChild = () => {
         </Text>
         <Text className="md:px-[200px] text-base font-normal text-[#03150E99]">you&apos;ll help that child and other vulnerable children in their community to stand tall, free from poverty.</Text>
       </Box>
-      <Filters
-        onFilterChange={handleFilterChange}
-      />
-      {error && (
-        <Flex justify="center" align="center" mt={4}>
-          <Text color="red.500">{error}</Text>
-        </Flex>
-      )}
-      <ChildMap
-        childData={childrenData}
-        onMarkerClick={handleMarkerClick}
-        onBoundsChange={handleBoundsChange}
-        onResetView={() => {
-          setSelectedCountry(null);
-          setVisibleChildren(childrenData);
-        }}
-      />
+
+      <Box width="100%" position="relative">
+        <ChildMap
+          childData={childrenData}
+          onMarkerClick={handleMarkerClick}
+          onBoundsChange={handleBoundsChange}
+          onResetView={() => {
+            setSelectedCountry(null);
+            setVisibleChildren(childrenData);
+          }}
+        />
+
+        <Box 
+          position="absolute" 
+          top={0}
+          left={0}
+          right={0}
+          zIndex={1000}
+          className="bg-opacity-90 backdrop-blur-sm p-4 shadow-md"
+        >
+          <Filters
+            onFilterChange={handleFilterChange}
+          />
+          {error && (
+            <Flex justify="center" align="center" mt={4}>
+              <Text color="red.500">{error}</Text>
+            </Flex>
+          )}
+        </Box>
+
+        <Box 
+          position="absolute" 
+          bottom={12} 
+          right={4} 
+          zIndex={1000}
+          className="bg-white bg-opacity-90 backdrop-blur-sm rounded-md p-2 shadow-md"
+        >
+          <Text fontSize="sm" fontWeight="bold">
+            {childrenData.length} Children Available
+          </Text>
+        </Box>
+      </Box>
+
       {selectedCountry && (
         <Box width="100%" ref={listingsRef}>
           <Text

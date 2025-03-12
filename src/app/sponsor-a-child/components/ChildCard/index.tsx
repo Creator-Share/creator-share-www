@@ -26,7 +26,7 @@ interface SponsorPeopleImage {
     order_index: number;
 }
 
-const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
+const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
     const router = useRouter();
     const [images, setImages] = useState<SponsorPeopleImage[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
@@ -72,12 +72,13 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected }) => {
 
     return (
         <Flex
+            id={id}
             direction={{ base: "column", md: "row" }}
             align={{ base: "center", md: "flex-start" }}
             textAlign={{ base: "center", md: "left" }}
             borderColor={isSelected ? "blue.500" : "gray.200"}
             borderRadius={{ base: 'md', md: 'md' }}
-            className="bg-white mb-6 p-0 border-0 md:border md:mb-0 md:p-0"
+            className={`bg-white mb-6 p-0 border-0 md:border md:mb-0 md:p-0 ${isSelected ? 'highlight-child' : ''}`}
         >
             <DialogRoot>
                 <DialogTrigger asChild>

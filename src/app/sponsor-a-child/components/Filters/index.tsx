@@ -70,7 +70,7 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
   };
 
   return (
-    <Box className="border bg-white rounded-2xl" width="100%" py={12} px={{ base: 3, md: 12 }} mb={4}>
+    <Box className="bg-transparent rounded-2xl" width="100%">
       <Flex align="center" className="flex-col md:flex-row" gap={4}>
         {/* Gender Select Dropdown */}
         <SelectRoot

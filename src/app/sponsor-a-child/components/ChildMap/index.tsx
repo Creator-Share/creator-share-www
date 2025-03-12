@@ -120,12 +120,42 @@ const ZoomController: React.FC<{
   };
 
   return showReset ? (
-    <Box position="absolute" top={4} right={4} zIndex={1000}>
+    <Box position="absolute" bottom={4} left={4} zIndex={1000}>
       <Button size="sm" className="bg-white text-dark px-8" onClick={handleResetView}>
         View All Children
       </Button>
     </Box>
   ) : null;
+};
+
+const CustomZoomControl = () => {
+  const map = useMap();
+  
+  useEffect(() => {
+    // Only try to remove if it exists
+    if (map.zoomControl) {
+      map.zoomControl.remove();
+    }
+    
+    const zoomControl = L.control.zoom({
+      position: 'bottomleft'
+    });
+    
+    zoomControl.addTo(map);
+    
+    const zoomControlContainer = document.querySelector('.leaflet-control-zoom');
+    if (zoomControlContainer) {
+      const container = zoomControlContainer as HTMLElement;
+      container.style.marginBottom = '80px';
+      container.style.marginLeft = '20px';
+    }
+    
+    return () => {
+      zoomControl.remove();
+    };
+  }, [map]);
+  
+  return null;
 };
 
 const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsChange, onResetView }) => {
@@ -172,7 +202,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
   }
 
   return (
-    <Box className="h-[571px] w-full mb-8 rounded-2xl relative">
+    <Box className="h-[932px] md:h-[450px] w-full mb-8 rounded-2xl relative">
       <MapContainer
         ref={mapRef}
         center={[0, 0]}
@@ -183,6 +213,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
         maxZoom={18}
         maxBounds={L.latLngBounds([-90, -180], [90, 180])}
         maxBoundsViscosity={1.0}
+        zoomControl={false}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
@@ -190,6 +221,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
         />
         <MapEventHandler onBoundsChange={onBoundsChange} />
         <FitBounds childData={childData} />
+        <CustomZoomControl />
         <ZoomController
           childData={childData}
           onBoundsChange={onBoundsChange}
