@@ -8,6 +8,9 @@ import L, { LatLngBounds, MarkerCluster } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { ChildMapProps } from "@/types/propTypes";
 
+// Animation duration in seconds
+const ANIMATION_DURATION = 1;
+
 const CustomIcon = L.icon({
   iconUrl: "/CreatorSharePin.svg",
   iconSize: [30, 30],
@@ -37,7 +40,11 @@ const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void
     const savedState = localStorage.getItem("mapState");
     if (savedState) {
       const { center, zoom } = JSON.parse(savedState);
-      map.setView(center, zoom);
+      // Add animation to initial view setting
+      map.setView(center, zoom, {
+        animate: true,
+        duration: ANIMATION_DURATION
+      });
     }
     const updateBounds = () => {
       onBoundsChange(map.getBounds());
@@ -73,9 +80,18 @@ const FitBounds: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childD
           child.location_geo.coordinates[0],
         ])
       );
-      map.fitBounds(bounds, { padding: [50, 50] });
+      // Add animation to fitBounds
+      map.fitBounds(bounds, { 
+        padding: [50, 50],
+        animate: true,
+        duration: ANIMATION_DURATION
+      });
     } else {
-      map.setView([0, 0], 2);
+      // Add animation to setView when no children are available
+      map.setView([0, 0], 2, {
+        animate: true,
+        duration: ANIMATION_DURATION
+      });
     }
   }, [childData, map]);
 
@@ -111,10 +127,19 @@ const ZoomController: React.FC<{
           child.location_geo.coordinates[0],
         ])
       );
-      map.fitBounds(bounds, { padding: [50, 50] });
+      // Add animation to fitBounds when resetting view
+      map.fitBounds(bounds, { 
+        padding: [50, 50],
+        animate: true,
+        duration: ANIMATION_DURATION
+      });
       onBoundsChange(bounds);
     } else {
-      map.setView([0, 0], 2);
+      // Add animation to setView when resetting with no children
+      map.setView([0, 0], 2, {
+        animate: true,
+        duration: ANIMATION_DURATION
+      });
     }
     if (onResetView) onResetView();
   };
@@ -137,17 +162,47 @@ const CustomZoomControl = () => {
       map.zoomControl.remove();
     }
     
+    // Configure the zoom control to use animations
     const zoomControl = L.control.zoom({
-      position: 'bottomleft'
+      position: 'bottomleft',
+      zoomInTitle: 'Zoom in',
+      zoomOutTitle: 'Zoom out'
     });
     
     zoomControl.addTo(map);
+    
+    // Ensure zoom animations are enabled
+    map.options.zoomAnimation = true;
     
     const zoomControlContainer = document.querySelector('.leaflet-control-zoom');
     if (zoomControlContainer) {
       const container = zoomControlContainer as HTMLElement;
       container.style.marginBottom = '80px';
       container.style.marginLeft = '20px';
+      
+      // Add event listeners to zoom buttons to ensure animations
+      const zoomInButton = container.querySelector('.leaflet-control-zoom-in');
+      const zoomOutButton = container.querySelector('.leaflet-control-zoom-out');
+      
+      if (zoomInButton) {
+        zoomInButton.addEventListener('click', () => {
+          const currentZoom = map.getZoom();
+          map.setZoom(currentZoom + 1, {
+            animate: true,
+            duration: ANIMATION_DURATION
+          });
+        });
+      }
+      
+      if (zoomOutButton) {
+        zoomOutButton.addEventListener('click', () => {
+          const currentZoom = map.getZoom();
+          map.setZoom(currentZoom - 1, {
+            animate: true,
+            duration: ANIMATION_DURATION
+          });
+        });
+      }
     }
     
     return () => {
@@ -166,13 +221,55 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
     const child = childData.find(c => c.id === id);
     if (child && mapRef.current) {
       const { coordinates } = child.location_geo;
+      // Add animation to marker click view change
       mapRef.current.setView([coordinates[1], coordinates[0]], 12, {
         animate: true,
-        duration: 1
+        duration: ANIMATION_DURATION
       });
     }
     onMarkerClick(id);
   }, [childData, onMarkerClick]);
+
+  // Function to check if there are children in the current view
+  const checkChildrenInView = useCallback(() => {
+    if (!mapRef.current) return;
+    
+    const currentBounds = mapRef.current.getBounds();
+    const childrenInView = childData.filter(child => {
+      const childLatLng = L.latLng(
+        child.location_geo.coordinates[1], 
+        child.location_geo.coordinates[0]
+      );
+      return currentBounds.contains(childLatLng);
+    });
+    
+    // If no children in view, pan to where there are children
+    if (childrenInView.length === 0 && childData.length > 0) {
+      const firstChild = childData[0];
+      mapRef.current.setView(
+        [firstChild.location_geo.coordinates[1], firstChild.location_geo.coordinates[0]],
+        mapRef.current.getZoom(),
+        { animate: true, duration: 1 }
+      );
+    }
+  }, [childData]);
+
+  // Add this useEffect to check for children in view when map moves
+  useEffect(() => {
+    if (mapRef.current) {
+      const map = mapRef.current;
+      
+      const handleMoveEnd = () => {
+        checkChildrenInView();
+      };
+      
+      map.on('moveend', handleMoveEnd);
+      
+      return () => {
+        map.off('moveend', handleMoveEnd);
+      };
+    }
+  }, [checkChildrenInView]);
 
   const MemoizedMarkers = useMemo(() => {
     return childData.map((child) => (
@@ -214,6 +311,9 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
         maxBounds={L.latLngBounds([-90, -180], [90, 180])}
         maxBoundsViscosity={1.0}
         zoomControl={false}
+        zoomAnimation={true}
+        fadeAnimation={true}
+        markerZoomAnimation={true}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
@@ -233,6 +333,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
           showCoverageOnHover={false}
           spiderfyOnMaxZoom={true}
           iconCreateFunction={createClusterCustomIcon}
+          animate={true}
         >
           {MemoizedMarkers}
         </MarkerClusterGroup>
