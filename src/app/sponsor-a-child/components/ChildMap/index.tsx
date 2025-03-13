@@ -80,14 +80,12 @@ const FitBounds: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childD
           child.location_geo.coordinates[0],
         ])
       );
-      // Add animation to fitBounds
       map.fitBounds(bounds, { 
         padding: [50, 50],
         animate: true,
         duration: ANIMATION_DURATION
       });
     } else {
-      // Add animation to setView when no children are available
       map.setView([0, 0], 2, {
         animate: true,
         duration: ANIMATION_DURATION
@@ -127,7 +125,6 @@ const ZoomController: React.FC<{
           child.location_geo.coordinates[0],
         ])
       );
-      // Add animation to fitBounds when resetting view
       map.fitBounds(bounds, { 
         padding: [50, 50],
         animate: true,
@@ -135,7 +132,6 @@ const ZoomController: React.FC<{
       });
       onBoundsChange(bounds);
     } else {
-      // Add animation to setView when resetting with no children
       map.setView([0, 0], 2, {
         animate: true,
         duration: ANIMATION_DURATION
@@ -157,12 +153,11 @@ const CustomZoomControl = () => {
   const map = useMap();
   
   useEffect(() => {
-    // Only try to remove if it exists
+
     if (map.zoomControl) {
       map.zoomControl.remove();
     }
-    
-    // Configure the zoom control to use animations
+
     const zoomControl = L.control.zoom({
       position: 'bottomleft',
       zoomInTitle: 'Zoom in',
@@ -170,8 +165,7 @@ const CustomZoomControl = () => {
     });
     
     zoomControl.addTo(map);
-    
-    // Ensure zoom animations are enabled
+
     map.options.zoomAnimation = true;
     
     const zoomControlContainer = document.querySelector('.leaflet-control-zoom');
@@ -179,8 +173,7 @@ const CustomZoomControl = () => {
       const container = zoomControlContainer as HTMLElement;
       container.style.marginBottom = '80px';
       container.style.marginLeft = '20px';
-      
-      // Add event listeners to zoom buttons to ensure animations
+
       const zoomInButton = container.querySelector('.leaflet-control-zoom-in');
       const zoomOutButton = container.querySelector('.leaflet-control-zoom-out');
       
@@ -221,7 +214,6 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
     const child = childData.find(c => c.id === id);
     if (child && mapRef.current) {
       const { coordinates } = child.location_geo;
-      // Add animation to marker click view change
       mapRef.current.setView([coordinates[1], coordinates[0]], 12, {
         animate: true,
         duration: ANIMATION_DURATION
@@ -230,7 +222,6 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
     onMarkerClick(id);
   }, [childData, onMarkerClick]);
 
-  // Function to check if there are children in the current view
   const checkChildrenInView = useCallback(() => {
     if (!mapRef.current) return;
     
@@ -242,8 +233,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
       );
       return currentBounds.contains(childLatLng);
     });
-    
-    // If no children in view, pan to where there are children
+
     if (childrenInView.length === 0 && childData.length > 0) {
       const firstChild = childData[0];
       mapRef.current.setView(
@@ -254,7 +244,6 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
     }
   }, [childData]);
 
-  // Add this useEffect to check for children in view when map moves
   useEffect(() => {
     if (mapRef.current) {
       const map = mapRef.current;
