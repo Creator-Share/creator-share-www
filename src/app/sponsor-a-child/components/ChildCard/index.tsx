@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { Box, Text, Image, Flex } from "@chakra-ui/react";
-import { FaCalendar } from "react-icons/fa";
+import { FaCalendar, FaCaretDown, FaCaretUp } from "react-icons/fa";
 import { FaLocationDot, FaPerson } from "react-icons/fa6";
 import { calculateAge } from "@/utils/ageCalculator";
 import { centsToDollars } from "@/utils/currency";
@@ -18,6 +18,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 import { RxActivityLog } from "react-icons/rx";
+import { Collapsible } from "@chakra-ui/react";
 
 interface SponsorPeopleImage {
     id: string;
@@ -31,6 +32,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
     const [images, setImages] = useState<SponsorPeopleImage[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
     const [dialogImageIndex, setDialogImageIndex] = useState<number>(0);
+    const [isLearnMoreOpen, setIsLearnMoreOpen] = useState<boolean>(false);
 
     const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
@@ -51,7 +53,6 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
     }, [people.id]);
 
     useEffect(() => {
-
         setDialogImageIndex(currentImageIndex);
     }, [currentImageIndex]);
 
@@ -71,97 +72,25 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
     };
 
     return (
-        <Flex
-            id={id}
-            direction={{ base: "column", md: "row" }}
-            align={{ base: "center", md: "flex-start" }}
-            textAlign={{ base: "center", md: "left" }}
-            borderColor={isSelected ? "blue.500" : "gray.200"}
-            borderRadius={{ base: 'md', md: 'md' }}
-            className={`bg-white mb-6 p-0 border-0 md:border md:mb-0 md:p-0 ${isSelected ? 'highlight-child' : ''}`}
-        >
-            <DialogRoot>
-                <DialogTrigger asChild>
-                    <Box position="relative">
-                        <Image
-                            src={images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : placeholderImage}
-                            alt={people.name}
-                            objectFit="cover"
-                            className="mb-4 md:mb-0 rounded-t-md h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:h-[273px] md:w-[450px] cursor-pointer"
-                        />
-                        {images.length > 0 && (
-                            <>
-                                <Flex
-                                    position="absolute"
-                                    bottom="4"
-                                    left="50%"
-                                    transform="translateX(-50%)"
-                                    gap={2}
-                                >
-                                    {images.map((_, index) => (
-                                        <Box
-                                            key={index}
-                                            w="2"
-                                            h="2"
-                                            borderRadius="full"
-                                            bg={currentImageIndex === index ? "white" : "whiteAlpha.600"}
-                                            cursor="pointer"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setCurrentImageIndex(index);
-                                            }}
-                                        />
-                                    ))}
-                                </Flex>
-                                <Button
-                                    position="absolute"
-                                    left="2"
-                                    top="50%"
-                                    transform="translateY(-50%)"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
-                                    }}
-                                    size="sm"
-                                    variant="ghost"
-                                    color="white"
-                                    _hover={{ bg: 'whiteAlpha.200' }}
-                                >
-                                    ←
-                                </Button>
-                                <Button
-                                    position="absolute"
-                                    right="2"
-                                    top="50%"
-                                    transform="translateY(-50%)"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleNextImage();
-                                    }}
-                                    size="sm"
-                                    variant="ghost"
-                                    color="white"
-                                    _hover={{ bg: 'whiteAlpha.200' }}
-                                >
-                                    →
-                                </Button>
-                            </>
-                        )}
-                    </Box>
-                </DialogTrigger>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogCloseTrigger />
-                    </DialogHeader>
-                    <DialogBody>
+        <Box id={id}>
+            <Flex
+                direction={{ base: "column", md: "row" }}
+                align={{ base: "center", md: "flex-start" }}
+                textAlign={{ base: "center", md: "left" }}
+                borderColor={isSelected ? "blue.500" : "gray.200"}
+                borderRadius={{ base: 'md', md: 'md' }}
+                className={`bg-white mb-6 p-0 border-0 md:border md:mb-0 md:p-0 ${isSelected ? 'highlight-child' : ''}`}
+            >
+                <DialogRoot>
+                    <DialogTrigger asChild>
                         <Box position="relative">
                             <Image
-                                src={images.length > 0 && images[dialogImageIndex]?.image_url ? images[dialogImageIndex].image_url : placeholderImage}
-                                alt={`${people.name} - ${dialogImageIndex + 1}`}
-                                objectFit="contain"
-                                className="w-full max-h-[90vh] rounded-lg"
+                                src={images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : placeholderImage}
+                                alt={people.name}
+                                objectFit="cover"
+                                className="mb-4 md:mb-0 rounded-t-md h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:h-[273px] md:w-[450px] cursor-pointer"
                             />
-                            {images.length > 1 && (
+                            {images.length > 0 && (
                                 <>
                                     <Flex
                                         position="absolute"
@@ -169,7 +98,6 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                                         left="50%"
                                         transform="translateX(-50%)"
                                         gap={2}
-                                        zIndex={10}
                                     >
                                         {images.map((_, index) => (
                                             <Box
@@ -177,9 +105,12 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                                                 w="2"
                                                 h="2"
                                                 borderRadius="full"
-                                                bg={dialogImageIndex === index ? "white" : "whiteAlpha.600"}
+                                                bg={currentImageIndex === index ? "white" : "whiteAlpha.600"}
                                                 cursor="pointer"
-                                                onClick={() => setDialogImageIndex(index)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setCurrentImageIndex(index);
+                                                }}
                                             />
                                         ))}
                                     </Flex>
@@ -190,13 +121,12 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                                         transform="translateY(-50%)"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            setDialogImageIndex((prev) => (prev - 1 + images.length) % images.length);
+                                            setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
                                         }}
                                         size="sm"
                                         variant="ghost"
                                         color="white"
                                         _hover={{ bg: 'whiteAlpha.200' }}
-                                        zIndex={10}
                                     >
                                         ←
                                     </Button>
@@ -207,97 +137,214 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                                         transform="translateY(-50%)"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            handleDialogNextImage();
+                                            handleNextImage();
                                         }}
                                         size="sm"
                                         variant="ghost"
                                         color="white"
                                         _hover={{ bg: 'whiteAlpha.200' }}
-                                        zIndex={10}
                                     >
                                         →
                                     </Button>
                                 </>
                             )}
                         </Box>
-                    </DialogBody>
-                </DialogContent>
-            </DialogRoot>
-            <Box className="md:grid md:grid-cols-2 pt-[20px] w-full md:w-screen">
-                <Box ml={{ md: 6 }} w="full">
-                    <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">
-                        {people.name}
-                    </Text>
-                    <Box fontSize="base" className="text-[#767070] bg-[#DFDFDF] rounded-md md:bg-white p-4 mb-4 text-left md:text-center">
-                        <Flex align="center" gap={2} mb={4}>
-                            <FaCalendar />
-                            <Text fontSize="sm" className="text-gray-500">
-                                {age} year{age > 1 ? 's' : ''} old
-                            </Text>
-                        </Flex>
-                        <Flex align="center" gap={2} mb={4}>
-                            <FaPerson />
-                            <Text fontSize="sm" className="text-gray-500">
-                                {people.gender}
-                            </Text>
-                        </Flex>
-                        <Flex align="center" gap={2}>
-                            <FaLocationDot />
-                            <Text fontSize="sm" className="text-gray-500">
-                                {people.country}
-                            </Text>
-                        </Flex>
-                    </Box>
-                    <Box mb={4}>
-                        <Box bg="gray.200" h="2px" w="full" borderRadius="full">
-                            <Box
-                                bg="#1C3C8C"
-                                h="2px"
-                                w={`${Math.min((people.budget_raised / people.budget_goal) * 100, 100)}%`}
-                                borderRadius="full"
-                            />
-                        </Box>
-                        <Text fontSize="sm" mt={1} className="text-gray-500">
-                            ${centsToDollars(people.budget_raised)} raised of ${centsToDollars(people.budget_goal)}
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogCloseTrigger />
+                        </DialogHeader>
+                        <DialogBody>
+                            <Box position="relative">
+                                <Image
+                                    src={images.length > 0 && images[dialogImageIndex]?.image_url ? images[dialogImageIndex].image_url : placeholderImage}
+                                    alt={`${people.name} - ${dialogImageIndex + 1}`}
+                                    objectFit="contain"
+                                    className="w-full max-h-[90vh] rounded-lg"
+                                />
+                                {images.length > 1 && (
+                                    <>
+                                        <Flex
+                                            position="absolute"
+                                            bottom="4"
+                                            left="50%"
+                                            transform="translateX(-50%)"
+                                            gap={2}
+                                            zIndex={10}
+                                        >
+                                            {images.map((_, index) => (
+                                                <Box
+                                                    key={index}
+                                                    w="2"
+                                                    h="2"
+                                                    borderRadius="full"
+                                                    bg={dialogImageIndex === index ? "white" : "whiteAlpha.600"}
+                                                    cursor="pointer"
+                                                    onClick={() => setDialogImageIndex(index)}
+                                                />
+                                            ))}
+                                        </Flex>
+                                        <Button
+                                            position="absolute"
+                                            left="2"
+                                            top="50%"
+                                            transform="translateY(-50%)"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDialogImageIndex((prev) => (prev - 1 + images.length) % images.length);
+                                            }}
+                                            size="sm"
+                                            variant="ghost"
+                                            color="white"
+                                            _hover={{ bg: 'whiteAlpha.200' }}
+                                            zIndex={10}
+                                        >
+                                            ←
+                                        </Button>
+                                        <Button
+                                            position="absolute"
+                                            right="2"
+                                            top="50%"
+                                            transform="translateY(-50%)"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDialogNextImage();
+                                            }}
+                                            size="sm"
+                                            variant="ghost"
+                                            color="white"
+                                            _hover={{ bg: 'whiteAlpha.200' }}
+                                            zIndex={10}
+                                        >
+                                            →
+                                        </Button>
+                                    </>
+                                )}
+                            </Box>
+                        </DialogBody>
+                    </DialogContent>
+                </DialogRoot>
+                <Box className="md:grid md:grid-cols-2 pt-[20px] w-full md:w-screen">
+                    <Box ml={{ md: 6 }} w="full">
+                        <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">
+                            {people.name}
                         </Text>
+                        <Box fontSize="base" className="text-[#767070] bg-[#DFDFDF] rounded-md md:bg-white p-4 mb-4 text-left md:text-center">
+                            <Flex align="center" gap={2} mb={4}>
+                                <FaCalendar />
+                                <Text fontSize="sm" className="text-gray-500">
+                                    {age} year{age > 1 ? 's' : ''} old
+                                </Text>
+                            </Flex>
+                            <Flex align="center" gap={2} mb={4}>
+                                <FaPerson />
+                                <Text fontSize="sm" className="text-gray-500">
+                                    {people.gender}
+                                </Text>
+                            </Flex>
+                            <Flex align="center" gap={2}>
+                                <FaLocationDot />
+                                <Text fontSize="sm" className="text-gray-500">
+                                    {people.country}
+                                </Text>
+                            </Flex>
+                        </Box>
+                        <Box mb={4}>
+                            <Box bg="gray.200" h="2px" w="full" borderRadius="full">
+                                <Box
+                                    bg="#1C3C8C"
+                                    h="2px"
+                                    w={`${Math.min((people.budget_raised / people.budget_goal) * 100, 100)}%`}
+                                    borderRadius="full"
+                                />
+                            </Box>
+                            <Text fontSize="sm" mt={1} className="text-gray-500">
+                                ${centsToDollars(people.budget_raised)} raised of ${centsToDollars(people.budget_goal)}
+                            </Text>
+                        </Box>
+                    </Box>
+                    <Box className="md:ml-14 px-4 md:px-0">
+                        <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
+                            Introduction
+                        </Text>
+                        <Text fontSize="base" className="text-[#767070] mb-2">
+                            {people.introduction}
+                        </Text>
+                        <Button
+                            onClick={handleViewActivity}
+                            className="hover:bg-[#1C3C8C] w-full md:w-11/12 hover:text-[#FFFFFF]"
+                        >
+                            <RxActivityLog />View Activity
+                        </Button>
+                        
+                        <Box cursor="pointer" className="flex justify-center items-center mt-4">
+                            <Text fontSize="base" className="text-[#767070]">
+                                <span 
+                                    className="text-[#1C3C8C] cursor-pointer whitespace-nowrap flex items-center gap-1"
+                                    onClick={() => setIsLearnMoreOpen(!isLearnMoreOpen)}
+                                >
+                                    Learn more about {people.name} {isLearnMoreOpen ? <FaCaretUp /> : <FaCaretDown />}
+                                </span>
+                            </Text>
+                        </Box>
                     </Box>
                 </Box>
-                <Box className="md:ml-14 px-4 md:px-0">
-                    <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
-                        Introduction
-                    </Text>
-                    <Text fontSize="base" className="text-[#767070] mb-8">
-                        {people.introduction}
-                    </Text>
-                    <Button
-                        onClick={handleViewActivity}
-                        className="hover:bg-[#1C3C8C] w-full md:w-11/12 hover:text-[#FFFFFF]"
+            </Flex>
+            
+            <Collapsible.Root
+                open={isLearnMoreOpen}
+                onOpenChange={() => setIsLearnMoreOpen(!isLearnMoreOpen)}
+            >
+                <Collapsible.Content>
+                    <Box
+                        p={6}
+                        bg="white"
+                        borderRadius="lg"
+                        mx="auto"
+                        mt={4}
+                        className="flex flex-col md:flex-row md:border-l md:border-r md:border-b"
                     >
-                        <RxActivityLog />View Activity
-                    </Button>
-                    <Box fontSize="base" mb={3}>
-                        {people.status === "Budget Fulfilled" ? (
-                            <Button
-                                fontWeight="md"
-                                className="text-[#FFFFFF] w-full md:w-11/12 cursor-not-allowed bg-gray-400 px-4 mt-4"
-                                disabled
-                            >
+                        <Box mr="8" className="md:w-2/5 md:text-start w-full text-center">
+                            <Text fontSize="xl" fontWeight="semibold" mb={4} color="#1C3C8C">
+                                About {people.name}
+                            </Text>
+                            <Text mb={4}>
+                                {people.biography}
+                            </Text>
+                        </Box>
+                        <Box mt="12" className="md:w-3/5 w-full">
+                            {people.video_url ? (
+                                <video width="800" height="600" controls preload="none" className="border rounded-lg">
+                                    <source src={people.video_url} type="video/mp4" />
+                                </video>
+                            ) : (
+                                <Box className="border rounded-lg h-[600px] flex items-center justify-center bg-gray-100">
+                                    <Text color="gray.500">No video available</Text>
+                                </Box>
+                            )}
+                        </Box>
+                    </Box>
+                    {people.status !== "Budget Fulfilled" ? (
+                        <SponsorDialog
+                            people={people}
+                            trigger={
+                                <Box fontSize="base" mb={3} className="">
+                                    <Button fontWeight="md" className="text-[#FFFFFF] w-full cursor-pointer bg-[#1C3C8C] px-4 mt-8">
+                                        Sponsor {people.name}
+                                    </Button>
+                                </Box>
+                            }
+                        />
+                    ) : (
+                        <Box fontSize="base" mb={3} className="md:border-l md:border-r md:border-b">
+                            <Button fontWeight="md" className="text-[#FFFFFF] disabled w-full cursor-not-allowed bg-gray-400 px-4 mt-8">
                                 Budget Fulfilled
                             </Button>
-                        ) : (
-                            <SponsorDialog
-                                people={people}
-                                trigger={
-                                    <Button fontWeight="md" className="text-[#FFFFFF] w-full md:w-11/12 cursor-pointer bg-[#1C3C8C] px-4 mt-4">
-                                        Sponsor
-                                    </Button>
-                                }
-                            />
-                        )}
-                    </Box>
-                </Box>
-            </Box>
-        </Flex>
+                        </Box>
+                    )}
+                </Collapsible.Content>
+            </Collapsible.Root>
+        </Box>
     );
 };
 
