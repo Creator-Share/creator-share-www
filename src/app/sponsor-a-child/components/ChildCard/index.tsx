@@ -160,7 +160,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                                     src={images.length > 0 && images[dialogImageIndex]?.image_url ? images[dialogImageIndex].image_url : placeholderImage}
                                     alt={`${people.name} - ${dialogImageIndex + 1}`}
                                     objectFit="contain"
-                                    className="w-full max-h-[90vh] rounded-lg"
+                                    className="w-full max-h-[90vh] rounded-xl"
                                 />
                                 {images.length > 1 && (
                                     <>
@@ -229,7 +229,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                         <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">
                             {people.name}
                         </Text>
-                        <Box fontSize="base" className="text-[#767070] bg-[#DFDFDF] rounded-md md:bg-white p-4 mb-4 text-left md:text-center">
+                        <Box fontSize="base" className="text-[#767070] bg-[#DFDFDF] rounded-xl md:bg-white p-4 mb-4 text-left md:text-center">
                             <Flex align="center" gap={2} mb={4}>
                                 <FaCalendar />
                                 <Text fontSize="sm" className="text-gray-500">
@@ -314,11 +314,11 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                         </Box>
                         <Box mt="12" className="md:w-3/5 w-full">
                             {people.video_url ? (
-                                <video width="800" height="600" controls preload="none" className="border rounded-lg">
+                                <video width="800" height="600" controls preload="none" className="border rounded-xl">
                                     <source src={people.video_url} type="video/mp4" />
                                 </video>
                             ) : (
-                                <Box className="border rounded-lg h-[600px] flex items-center justify-center bg-gray-100">
+                                <Box className="border rounded-xl h-[600px] flex items-center justify-center bg-gray-100">
                                     <Text color="gray.500">No video available</Text>
                                 </Box>
                             )}

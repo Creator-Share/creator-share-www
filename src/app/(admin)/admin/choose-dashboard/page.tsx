@@ -13,7 +13,7 @@ const DashboardOptions = () => {
     }
     return (
         <Box className="flex items-center justify-center min-h-screen">
-            <Box className="w-full max-w-md p-6 bg-[#FFFFFF] md:rounded-lg md:border md:shadow-sm md:px-8 md:py-12">
+            <Box className="w-full max-w-md p-6 bg-[#FFFFFF] md:rounded-xl md:border md:shadow-sm md:px-8 md:py-12">
                 <VStack>
                     <Button onClick={handleNavigateAdmin} className="border bg-[#1C3C8C] text-[#FFFFFF] font-semibold text-base w-full">
                         Admin Dashboard

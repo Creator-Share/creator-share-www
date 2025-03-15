@@ -357,7 +357,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                                     width={200}
                                                     height={200}
                                                     objectFit="cover"
-                                                    className="rounded-lg"
+                                                    className="rounded-xl"
                                                 />
                                                 <button
                                                     onClick={() => handleDeleteImage(image.id)}

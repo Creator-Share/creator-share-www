@@ -70,7 +70,7 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
   };
 
   return (
-    <Box className="bg-transparent rounded-2xl" width="100%">
+    <Box className="bg-transparent rounded-xl" width="100%">
       <Flex align="center" className="flex-col md:flex-row" gap={4}>
         {/* Gender Select Dropdown */}
         <SelectRoot
@@ -81,7 +81,7 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
             handleFilterChange({ gender: value?.value || "" });
           }}
           size="sm"
-          className="border rounded-lg"
+          className="border rounded-xl"
           px={4}
           py={2}
         >
@@ -111,7 +111,7 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
             handleFilterChange({ status: values });
           }}
           size="sm"
-          className="border rounded-lg"
+          className="border rounded-xl"
           px={4}
           py={2}
           multiple

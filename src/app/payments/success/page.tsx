@@ -69,7 +69,7 @@ const SuccessPageContent = () => {
         </Text>
 
         {/* Sponsorship Details */}
-        <Box className="bg-gray-50 p-6 rounded-lg mb-8">
+        <Box className="bg-gray-50 p-6 rounded-xl mb-8">
           <Text className="font-semibold text-xl mb-4">Sponsorship Details</Text>
           
           <Flex direction="column" gap={3}>
@@ -98,7 +98,7 @@ const SuccessPageContent = () => {
 
         <Button
           onClick={() => router.push('/')}
-          className="w-full bg-[#1C3C8C] text-white py-3 rounded-lg hover:bg-blue-800 transition-colors"
+          className="w-full bg-[#1C3C8C] text-white py-3 rounded-xl hover:bg-blue-800 transition-colors"
         >
           Back to Home
         </Button>

@@ -288,13 +288,13 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
   }
 
   return (
-    <Box className="h-[932px] md:h-[450px] w-full mb-8 rounded-2xl relative">
+    <Box className="h-[932px] md:h-[450px] w-full mb-8 rounded-xl relative">
       <MapContainer
         ref={mapRef}
         center={[0, 0]}
         zoom={2}
         scrollWheelZoom
-        className="h-full w-full rounded-2xl"
+        className="h-full w-full rounded-xl"
         minZoom={2}
         maxZoom={18}
         maxBounds={L.latLngBounds([-90, -180], [90, 180])}

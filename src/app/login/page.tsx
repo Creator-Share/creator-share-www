@@ -83,7 +83,7 @@ const Login = () => {
     <Box className="flex flex-col items-center justify-center min-h-screen p-4">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="w-full max-w-md p-6 md:border bg-[#FFFFFF] md:rounded-lg md:shadow-sm md:px-8 md:py-12"
+        className="w-full max-w-md p-6 md:border bg-[#FFFFFF] md:rounded-xl md:shadow-sm md:px-8 md:py-12"
       >
         <Box className="flex justify-center">
           <Image width={200} height={200} alt="creator" src="/creator-text.svg" />
@@ -135,7 +135,7 @@ const Login = () => {
             </Field>
           </Box>
           <Box>
-            <Checkbox className="border rounded-md mr-1 border-[#8D9692]" />
+            <Checkbox className="border rounded-xl mr-1 border-[#8D9692]" />
             <span>Keep me signed in</span>
           </Box>
           <Button

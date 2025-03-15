@@ -61,7 +61,7 @@ const FailedPageContent = () => {
         <Flex direction="column" gap={4}>
           <Button
             onClick={() => router.back()}
-            className="w-full bg-[#1C3C8C] text-white py-3 rounded-lg hover:bg-blue-800 transition-colors"
+            className="w-full bg-[#1C3C8C] text-white py-3 rounded-xl hover:bg-blue-800 transition-colors"
           >
             Retry Payment
           </Button>

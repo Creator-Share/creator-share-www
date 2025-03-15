@@ -14,7 +14,7 @@ export const ChildCardSkeleton = () => {
       <Box className="md:grid md:grid-cols-2 pt-[20px] w-full md:w-screen">
         <Box ml={{ md: 6 }} w="full">
           <Skeleton height="2.5rem" width="200px" mb={2} />
-          <Box className="text-[#767070] bg-[#DFDFDF] rounded-md md:bg-white p-4 mb-4">
+          <Box className="text-[#767070] bg-[#DFDFDF] rounded-xl md:bg-white p-4 mb-4">
             <Skeleton height="1rem" mb={4} />
             <Skeleton height="1rem" mb={4} />
             <Skeleton height="1rem" />

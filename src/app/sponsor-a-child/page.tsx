@@ -180,7 +180,7 @@ const SponsorChild = () => {
           bottom={12} 
           right={4} 
           zIndex={1000}
-          className="bg-white bg-opacity-90 backdrop-blur-sm rounded-md p-2 shadow-md"
+          className="bg-white bg-opacity-90 backdrop-blur-sm rounded-xl p-2 shadow-md"
         >
           <Text fontSize="sm" fontWeight="bold">
             {childrenData.length} Children Available

@@ -86,7 +86,7 @@ const ResetPassword = () => {
     <Box className="flex flex-col items-center justify-center min-h-screen p-4">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="w-full max-w-md p-6 bg-[#FFFFFF] md:rounded-lg md:border md:shadow-sm md:px-8 md:py-12"
+        className="w-full max-w-md p-6 bg-[#FFFFFF] md:rounded-xl md:border md:shadow-sm md:px-8 md:py-12"
       >
         <Box className="flex justify-center">
           <Image width={200} height={200} alt="creator" src="/creator-text.svg" />

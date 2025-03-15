@@ -207,7 +207,7 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
             center={mapCenter}
             zoom={initialLocation ? 8 : 2}
             scrollWheelZoom
-            className="h-full w-full rounded-2xl"
+            className="h-full w-full rounded-xl"
             minZoom={0.6}
             maxZoom={18}
             maxBounds={L.latLngBounds([-90, -180], [90, 180])}

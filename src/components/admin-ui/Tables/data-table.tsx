@@ -111,7 +111,7 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
           <DataTableViewOptions table={table} />
         </div>
       )}
-      <div className={`rounded-md border mt-3 h-full overflow-auto ${tableHeight}`}>
+      <div className={`rounded-xl border mt-3 h-full overflow-auto ${tableHeight}`}>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

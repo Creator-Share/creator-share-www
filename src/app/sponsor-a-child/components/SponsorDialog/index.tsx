@@ -211,7 +211,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
                                 <Image
                                     src={images[currentImageIndex]?.image_url || people.image_url || placeholderImage}
                                     alt={people.name}
-                                    className="rounded-lg md:h-[479px] w-full object-cover"
+                                    className="rounded-xl md:h-[479px] w-full object-cover"
                                 />
                                 {images.length > 1 && (
                                     <>
@@ -290,7 +290,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
                                     positioning={{ placement: "right-end" }}
                                 >
                                     <HStack gap="5">
-                                        <Progress.Track className="rounded-lg h-3" flex="1">
+                                        <Progress.Track className="rounded-xl h-3" flex="1">
                                             <Progress.Range className="bg-[#1C3C8C]" />
                                         </Progress.Track>
                                     </HStack>
@@ -301,7 +301,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
                                     Amount
                                 </Text>
                                 <Flex
-                                    className="border rounded-lg"
+                                    className="border rounded-xl"
                                     mb={4}
                                     align="center"
                                     justify="center"
@@ -335,7 +335,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
                                     <Text className="font-semibold text-base">Frequency</Text>
                                     <SelectRoot
                                         collection={paymentOptionsCollection}
-                                        className="border rounded-lg"
+                                        className="border rounded-xl"
                                         mt={2}
                                         mb={4}
                                         px={4}
