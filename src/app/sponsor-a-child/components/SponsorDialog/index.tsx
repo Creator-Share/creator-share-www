@@ -110,7 +110,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
                 body: JSON.stringify({
                     childId: people.id,
                     childName: people.name,
-                    childImage: people.image_url,
+                    childImage: images[currentImageIndex]?.image_url || people.image_url || placeholderImage,
                     amount: amount * 100,
                     paymentType: selectedOption,
                     location: people.country,

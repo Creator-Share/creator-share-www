@@ -21,6 +21,10 @@ export async function POST(req: Request) {
       );
     }
 
+    const fullImageUrl = childImage.startsWith('http') 
+      ? childImage 
+      : `${process.env.NEXT_PUBLIC_BASE_URL}${childImage}`;
+
     const commonSessionConfig = {
       payment_method_types: ["card"] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
       metadata: {
@@ -39,7 +43,7 @@ export async function POST(req: Request) {
     if (paymentType === "subscription") {
       const product = await stripe.products.create({
         name: `Monthly Sponsorship for ${childName}`,
-        images: [childImage],
+        images: [fullImageUrl],
       });
 
       const price = await stripe.prices.create({
@@ -79,7 +83,7 @@ export async function POST(req: Request) {
     } else {
       const product = await stripe.products.create({
         name: `Yearly Sponsorship for ${childName}`,
-        images: [childImage],
+        images: [fullImageUrl],
       });
 
       const price = await stripe.prices.create({
