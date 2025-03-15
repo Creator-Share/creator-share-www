@@ -7,6 +7,7 @@ import MarkerClusterGroup from "react-leaflet-markercluster";
 import L, { LatLngBounds, MarkerCluster } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { ChildMapProps } from "@/types/propTypes";
+import Filters from "../Filters";
 
 const ANIMATION_DURATION = 1;
 
@@ -170,7 +171,7 @@ const CustomZoomControl = () => {
     }
 
     const zoomControl = L.control.zoom({
-      position: 'bottomleft',
+      position: 'topright',
       zoomInTitle: 'Zoom in',
       zoomOutTitle: 'Zoom out'
     });
@@ -183,7 +184,7 @@ const CustomZoomControl = () => {
     if (zoomControlContainer) {
       const container = zoomControlContainer as HTMLElement;
       container.style.marginBottom = '80px';
-      container.style.marginLeft = '20px';
+      container.style.marginRight = '20px';
 
       const zoomInButton = container.querySelector('.leaflet-control-zoom-in');
       const zoomOutButton = container.querySelector('.leaflet-control-zoom-out');
@@ -217,9 +218,24 @@ const CustomZoomControl = () => {
   return null;
 };
 
-const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsChange, onResetView }) => {
+interface ExtendedChildMapProps extends ChildMapProps {
+  onFilterChange: (filters: Partial<{
+    gender: string;
+    ageRange: [number, number];
+    status: string[];
+  }>) => void;
+}
+
+const ChildMap: React.FC<ExtendedChildMapProps> = ({ 
+  childData, 
+  onMarkerClick, 
+  onBoundsChange, 
+  onResetView,
+  onFilterChange 
+}) => {
   const [isReady, setIsReady] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
+  const [showFilters, setShowFilters] = useState(true);
 
   const handleMarkerClick = useCallback((id: string) => {
     const child = childData.find(c => c.id === id);
@@ -408,6 +424,39 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
           </MarkerClusterGroup>
         ) : null}
       </MapContainer>
+      
+      <Box 
+        position="absolute" 
+        top={4} 
+        left={4} 
+        zIndex={1000}
+      >
+        <Button 
+          size="sm" 
+          className="bg-white text-dark px-4 shadow-md"
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          {showFilters ? "Hide Filters" : "Filter Children"}
+        </Button>
+      </Box>
+      
+      {showFilters && (
+        <Box 
+          position="absolute" 
+          top={16} 
+          left={4} 
+          zIndex={1000}
+          className="bg-white bg-opacity-95 backdrop-blur-sm p-4 rounded-xl shadow-md"
+          width="300px"
+          maxHeight="80%"
+          overflowY="auto"
+        >
+          <Filters
+            onFilterChange={onFilterChange}
+            variant="sidebar"
+          />
+        </Box>
+      )}
     </Box>
   );
 };

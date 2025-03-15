@@ -161,62 +161,31 @@ const SponsorChild = () => {
         <Text className="md:px-[200px] text-base font-normal text-[#03150E99]">you&apos;ll help that child and other vulnerable children in their community to stand tall, free from poverty.</Text>
       </Box>
 
+      {error && (
+        <Text color="red.500" mb={4}>
+          {error}
+        </Text>
+      )}
+
       <Flex 
         width="100%" 
         direction={{ base: "column", md: "row" }}
         gap={{ base: 0, md: 4 }}
         position="relative"
       >
-        {/* Filters for mobile (visible only on small screens) */}
-        <Box 
-          display={{ base: "block", md: "none" }}
-          position="absolute" 
-          top={0}
-          left={0}
-          right={0}
-          zIndex={1000}
-          className="bg-opacity-90 backdrop-blur-sm p-4 shadow-md"
-        >
-          <Filters
-            onFilterChange={handleFilterChange}
-            variant="default"
-          />
-          {error && (
-            <Flex justify="center" align="center" mt={4}>
-              <Text color="red.500">{error}</Text>
-            </Flex>
-          )}
-        </Box>
-        {/* Filters for desktop (side panel) */}
-        <Box 
-          display={{ base: "none", md: "block" }}
-          width={{ md: "300px" }}
-          className="bg-white p-4 rounded-xl shadow-md"
-          height={{ md: "450px" }}
-          overflowY="auto"
-        >
-          <Text className="text-[#1C3C8C] font-semibold text-xl mb-4">
-            Filter Children
-          </Text>
-          <Filters
-            onFilterChange={handleFilterChange}
-            variant="sidebar"
-          />
-          {error && (
-            <Flex justify="center" align="center" mt={4}>
-              <Text color="red.500">{error}</Text>
-            </Flex>
-          )}
-        </Box>
         <Box 
           flex="1"
-          position="relative"
+          position="sticky"
+          top="20px"
+          height="fit-content"
+          zIndex={10}
         >
           <ChildMap
             childData={childrenData}
             onMarkerClick={handleMarkerClick}
             onBoundsChange={handleBoundsChange}
             onResetView={onResetView}
+            onFilterChange={handleFilterChange}
           />
           
           <Box 
