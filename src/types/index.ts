@@ -76,10 +76,10 @@ export interface AuthState {
 
 export interface FilterState {
   selectedGender: string;
-  selectedAgeRange: [number];
+  selectedAgeRange: [number, number];
   selectedStatus: string[];
   setGender: (gender: string) => void;
-  setAgeRange: (ageRange: [number]) => void;
+  setAgeRange: (ageRange: [number, number]) => void;
   setStatus: (status: string[]) => void;
   clearFilters: () => void;
 }

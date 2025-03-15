@@ -10,7 +10,7 @@ import { ChildListingsSkeleton } from "./components/ChildListings/Skeleton";
 const ChildMap = dynamic(() => import("./components/ChildMap"), { ssr: false });
 interface Filters {
   gender: string;
-  ageRange: [number];
+  ageRange: [number, number];
   status: string[];
 }
 
@@ -23,7 +23,7 @@ const SponsorChild = () => {
   const [listingsLoading, setListingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0], status: ["New", "Partially Funded"] });
+  const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0, 14], status: ["New", "Partially Funded"] });
   const listingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,10 +43,10 @@ const SponsorChild = () => {
     try {
       let endpoint = "/api/children/get";
       const queryParams = new URLSearchParams();
-      if (filters.gender || (filters.ageRange && filters.ageRange[0] > 0) || filters.status.length > 0) {
+      if (filters.gender || (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) || filters.status.length > 0) {
         endpoint = "/api/children/getByAgeAndGender";
         if (filters.gender) queryParams.append("gender", filters.gender);
-        if (filters.ageRange && filters.ageRange[0] > 0) {
+        if (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) {
           queryParams.append("ageRange", filters.ageRange.join(','));
         }
         if (filters.status.length > 0) {
@@ -58,6 +58,9 @@ const SponsorChild = () => {
       if (!res.ok) throw new Error("Failed to fetch children data");
 
       const data = await res.json();
+      console.log("API response children:", data.people.length);
+      console.log("Current age filter:", filters.ageRange);
+
       setChildrenData(data.people || []);
       setVisibleChildren(data.people || []);
     } catch (err: unknown) {
@@ -81,9 +84,14 @@ const SponsorChild = () => {
       return bounds.contains(L.latLng(lat, lng));
     });
 
+    console.log("Map bounds changed:");
+    console.log("- Total children from API:", childrenData.length);
+    console.log("- Children visible in current map view:", filtered.length);
+    console.log("- Current age range filter:", filters.ageRange);
+
     setVisibleChildren(filtered);
     setListingsLoading(false);
-  }, [childrenData, L]);
+  }, [childrenData, L, filters.ageRange]);
 
   const handleMarkerClick = (id: string) => {
     setSelectedChildId(id);
@@ -130,6 +138,13 @@ const SponsorChild = () => {
     }
   };
 
+  const onResetView = () => {
+    setSelectedCountry(null);
+    setVisibleChildren(childrenData);
+  };
+
+  console.log("Passing to ChildMap:", childrenData.length, "children");
+
   return (
     <Box
       className="flex flex-col items-center justify-center"
@@ -151,10 +166,7 @@ const SponsorChild = () => {
           childData={childrenData}
           onMarkerClick={handleMarkerClick}
           onBoundsChange={handleBoundsChange}
-          onResetView={() => {
-            setSelectedCountry(null);
-            setVisibleChildren(childrenData);
-          }}
+          onResetView={onResetView}
         />
 
         <Box 

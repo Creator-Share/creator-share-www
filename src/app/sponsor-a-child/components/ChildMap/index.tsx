@@ -8,53 +8,64 @@ import L, { LatLngBounds, MarkerCluster } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { ChildMapProps } from "@/types/propTypes";
 
-// Animation duration in seconds
 const ANIMATION_DURATION = 1;
 
-const CustomIcon = L.icon({
-  iconUrl: "/CreatorSharePin.svg",
+const CustomIcon = L.divIcon({
+  html: `<div style="background: transparent; border: none;">
+           <img src="/CreatorSharePin.svg" alt="Child Marker" style="width: 30px; height: 30px;" />
+         </div>`,
+  className: "custom-child-marker-no-numbers",
   iconSize: [30, 30],
-  iconAnchor: [15, 30],
+  iconAnchor: [15, 30]
 });
 
 const createClusterCustomIcon = (cluster: MarkerCluster): L.DivIcon => {
   const count = cluster.getChildCount();
+  if (count <= 0) return CustomIcon;
+  
   return L.divIcon({
     html: `
-        <div style="position: relative; display: flex; align-items: center; justify-content: center;">
+        <div style="position: relative; display: flex; align-items: center; justify-content: center; background: transparent; border: none;">
           <img src="/CreatorSharePin.svg" alt="Cluster Icon" style="width: 30px; height: 30px;" />
-          <span style="position: absolute; top: 0; right: 0; background: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; font-weight: bold; color: black;">
+          <span style="position: absolute; top: -5px; right: -5px; background: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; font-weight: bold; color: black; min-width: 20px; text-align: center;">
             ${count}
           </span>
         </div>
       `,
     className: "custom-cluster-icon",
-    iconSize: [10, 10],
+    iconSize: [30, 30],
+    iconAnchor: [15, 30],
   });
 };
 
 const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void }> = ({ onBoundsChange }) => {
   const map = useMap();
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const savedState = localStorage.getItem("mapState");
     if (savedState) {
       const { center, zoom } = JSON.parse(savedState);
-      // Add animation to initial view setting
       map.setView(center, zoom, {
         animate: true,
         duration: ANIMATION_DURATION
       });
     }
     const updateBounds = () => {
-      onBoundsChange(map.getBounds());
-      localStorage.setItem(
-        "mapState",
-        JSON.stringify({
-          center: map.getCenter(),
-          zoom: map.getZoom(),
-        })
-      );
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+      
+      updateTimeoutRef.current = setTimeout(() => {
+        onBoundsChange(map.getBounds());
+        localStorage.setItem(
+          "mapState",
+          JSON.stringify({
+            center: map.getCenter(),
+            zoom: map.getZoom(),
+          })
+        );
+      }, 300);
     };
 
     map.on("moveend", updateBounds);
@@ -261,7 +272,25 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
   }, [checkChildrenInView]);
 
   const MemoizedMarkers = useMemo(() => {
-    return childData.map((child) => (
+    console.log("ChildMap received:", childData.length, "children");
+    if (!childData || childData.length === 0) {
+      return [];
+    }
+    
+    const validChildren = childData.filter(child => 
+      child && 
+      child.location_geo && 
+      child.location_geo.coordinates && 
+      child.location_geo.coordinates.length === 2 &&
+      typeof child.location_geo.coordinates[0] === 'number' &&
+      typeof child.location_geo.coordinates[1] === 'number' &&
+      child.name && child.name.trim() !== '' &&
+      child.country && child.country.trim() !== ''
+    );
+    
+    console.log("Valid children after filtering:", validChildren.length);
+    
+    return validChildren.map((child) => (
       <Marker
         key={child.id}
         position={[child.location_geo.coordinates[1], child.location_geo.coordinates[0]]}
@@ -271,7 +300,7 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
         }}
       >
         <Tooltip direction="top">
-          {child.name} - {child.country}
+          {child.name || 'Unknown'} - {child.country || 'Unknown'}
         </Tooltip>
       </Marker>
     ));
@@ -282,6 +311,55 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
       setIsReady(true);
     }
   }, []);
+
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = `
+      .leaflet-marker-icon::before,
+      .leaflet-marker-icon::after,
+      .custom-child-marker-no-numbers span {
+        display: none !important;
+      }
+      .custom-child-marker-no-numbers {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+      .custom-child-marker-no-numbers::before,
+      .custom-child-marker-no-numbers::after {
+        display: none !important;
+      }
+      /* Make sure cluster counts ARE visible */
+      .custom-cluster-icon span {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mapRef.current && (!childData || childData.length === 0)) {
+      const map = mapRef.current;
+      map.eachLayer((layer) => {
+        if (!(layer instanceof L.TileLayer)) {
+          map.removeLayer(layer);
+        }
+      });
+      const tileLayer = L.tileLayer(
+        `https://api.maptiler.com/maps/basic-v2/{z}/{x}/{y}.png?key=Wm5rwQ7T3kAi2Z07eCBa&lang=en`,
+        {
+          attribution: '&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
+        }
+      );
+      tileLayer.addTo(map);
+    }
+  }, [childData]);
 
   if (!isReady) {
     return <Box>Loading map...</Box>;
@@ -316,16 +394,19 @@ const ChildMap: React.FC<ChildMapProps> = ({ childData, onMarkerClick, onBoundsC
           onBoundsChange={onBoundsChange}
           onResetView={onResetView}
         />
-        <MarkerClusterGroup 
-          chunkedLoading
-          maxClusterRadius={10}
-          showCoverageOnHover={false}
-          spiderfyOnMaxZoom={true}
-          iconCreateFunction={createClusterCustomIcon}
-          animate={true}
-        >
-          {MemoizedMarkers}
-        </MarkerClusterGroup>
+        {childData && childData.length > 0 ? (
+          <MarkerClusterGroup 
+            key={`cluster-${childData.length}-${childData.map(c => c.id).join('-')}`}
+            chunkedLoading
+            maxClusterRadius={10}
+            showCoverageOnHover={false}
+            spiderfyOnMaxZoom={true}
+            iconCreateFunction={createClusterCustomIcon}
+            animate={true}
+          >
+            {MemoizedMarkers}
+          </MarkerClusterGroup>
+        ) : null}
       </MapContainer>
     </Box>
   );

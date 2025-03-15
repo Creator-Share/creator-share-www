@@ -14,10 +14,6 @@ import { useFilterStore } from "@/store/filterStore";
 import { FiltersProps } from "@/types/propTypes";
 import { genders, status as statusOptions } from "./config";
 
-interface ValueChangeDetails {
-  value: [number];
-}
-
 const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
   const {
     selectedGender,
@@ -28,15 +24,17 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
     setStatus,
     clearFilters,
   } = useFilterStore();
-  const [sliderValue, setSliderValue] = useState<[number]>(selectedAgeRange || [0]);
+  const [minAge, setMinAge] = useState<number>(selectedAgeRange[0] || 0);
+  const [maxAge, setMaxAge] = useState<number>(selectedAgeRange[1] || 14);
 
   useEffect(() => {
-    setSliderValue(selectedAgeRange || [0]);
+    setMinAge(selectedAgeRange[0] || 0);
+    setMaxAge(selectedAgeRange[1] || 14);
   }, [selectedAgeRange]);
 
   const handleFilterChange = (updatedFilters: {
     gender?: string;
-    ageRange?: [number];
+    ageRange?: [number, number];
     status?: string[];
   }) => {
     if (updatedFilters.gender !== undefined) {
@@ -56,17 +54,12 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
     });
   };
 
-  const handleSliderChange = (details: ValueChangeDetails) => {
-    const value = details.value;
-    setSliderValue(value);
-    handleFilterChange({ ageRange: value });
-  };
-
   const handleClearFilters = (e: React.MouseEvent) => {
     e.preventDefault();
     clearFilters();
-    setSliderValue([0]);
-    onFilterChange({ gender: "", ageRange: [0], status: [] });
+    setMinAge(0);
+    setMaxAge(14);
+    onFilterChange({ gender: "", ageRange: [0, 14], status: [] });
   };
 
   return (
@@ -133,17 +126,34 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
           </SelectContent>
         </SelectRoot>
 
-        <Box maxW="300px" w="100%">
+        <Box maxW="300px" w="100%" px={2}>
           <Text mb={2} fontSize="md" fontWeight="semibold">
-            Age: {sliderValue[0]}
+            Age Range: {minAge} - {maxAge} years
           </Text>
-          <Slider
-            value={sliderValue}
-            min={0}
-            max={14}
-            variant="solid"
-            onValueChange={handleSliderChange}
-          />
+          <Box>
+            <Slider
+              value={[minAge, maxAge]}
+              min={0}
+              max={14}
+              step={1}
+              onValueChange={(details) => {
+                if (details.value && details.value.length >= 2) {
+                  const [newMin, origMax] = details.value;
+                  let newMax = origMax;
+                  
+                  const minDistance = 1;
+                  if (newMax - newMin < minDistance) {
+                    newMax = Math.max(newMin + minDistance, maxAge);
+                  }
+                  
+                  setMinAge(newMin);
+                  setMaxAge(newMax);
+                  handleFilterChange({ ageRange: [newMin, newMax] });
+                }
+              }}
+              showValue
+            />
+          </Box>
         </Box>
         <Button
           onClick={handleClearFilters}

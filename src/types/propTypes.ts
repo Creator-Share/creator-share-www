@@ -2,7 +2,7 @@ import { LatLngBounds } from "leaflet";
 import { SponsorPeople } from "./index";
 
 export interface FiltersProps {
-  onFilterChange: (filters: { gender: string; ageRange: [number]; status: string[] }) => void;
+  onFilterChange: (filters: { gender: string; ageRange: [number, number]; status: string[] }) => void;
 }
 
 

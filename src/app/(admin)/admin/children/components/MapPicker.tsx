@@ -57,8 +57,6 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
       return { locationStr: "Unknown Location", country: "Unknown Country" };
     }
   };
-
-  // Try multiple geocoding services to find the location
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     
@@ -66,10 +64,8 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
     setIsError(false);
     
     try {
-      // Try multiple geocoding services in sequence
       let location: [number, number] | null = null;
-      
-      // 1. Try Nominatim (OpenStreetMap)
+
       try {
         const nominatimResponse = await fetch(
           `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1`
@@ -83,8 +79,6 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
       } catch (error) {
         console.error("Error with Nominatim search:", error);
       }
-      
-      // 2. If Nominatim failed, try Photon API (another free geocoding service)
       if (!location) {
         try {
           const photonResponse = await fetch(
@@ -94,23 +88,17 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
           
           if (photonData && photonData.features && photonData.features.length > 0) {
             const coordinates = photonData.features[0].geometry.coordinates;
-            // Note: Photon returns [lon, lat] while we need [lat, lon]
             location = [coordinates[1], coordinates[0]];
           }
         } catch (error) {
           console.error("Error with Photon search:", error);
         }
       }
-      
-      // 3. If it looks like a Plus Code, try a specialized approach
       if (!location && searchQuery.includes('+')) {
-        // For Plus Codes, we can try to extract the general area
-        // This is a simplified approach - extract country name if present
         const parts = searchQuery.split(',');
         if (parts.length > 1) {
           const countryPart = parts[parts.length - 1].trim();
           try {
-            // Try to find the country at least
             const countryResponse = await fetch(
               `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(countryPart)}&format=json&limit=1`
             );
@@ -120,7 +108,6 @@ const MapPicker: React.FC<MapPickerProps> = ({ onSelectLocation, initialLocation
               const { lat, lon } = countryData[0];
               location = [parseFloat(lat), parseFloat(lon)];
               
-              // Show a message that we're showing an approximate location
               toaster.create({
                 title: "Approximate Location",
                 description: `Showing approximate location for "${searchQuery}". You can click on the map to refine the position.`,
