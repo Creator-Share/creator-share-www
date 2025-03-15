@@ -14,7 +14,10 @@ import { useFilterStore } from "@/store/filterStore";
 import { FiltersProps } from "@/types/propTypes";
 import { genders, status as statusOptions } from "./config";
 
-const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
+const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({ 
+  onFilterChange,
+  variant = 'default'
+}) => {
   const {
     selectedGender,
     selectedAgeRange,
@@ -64,7 +67,13 @@ const Filters: React.FC<FiltersProps> = ({ onFilterChange }) => {
 
   return (
     <Box className="bg-transparent rounded-xl" width="100%">
-      <Flex align="center" className="flex-col md:flex-row" gap={4}>
+      <Flex 
+        align="center" 
+        className={variant === 'sidebar' ? "flex-col" : "flex-col md:flex-row"} 
+        gap={4}
+        position="relative"
+        alignItems="stretch"
+      >
         {/* Gender Select Dropdown */}
         <SelectRoot
           collection={genders}

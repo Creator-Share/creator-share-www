@@ -161,15 +161,15 @@ const SponsorChild = () => {
         <Text className="md:px-[200px] text-base font-normal text-[#03150E99]">you&apos;ll help that child and other vulnerable children in their community to stand tall, free from poverty.</Text>
       </Box>
 
-      <Box width="100%" position="relative">
-        <ChildMap
-          childData={childrenData}
-          onMarkerClick={handleMarkerClick}
-          onBoundsChange={handleBoundsChange}
-          onResetView={onResetView}
-        />
-
+      <Flex 
+        width="100%" 
+        direction={{ base: "column", md: "row" }}
+        gap={{ base: 0, md: 4 }}
+        position="relative"
+      >
+        {/* Filters for mobile (visible only on small screens) */}
         <Box 
+          display={{ base: "block", md: "none" }}
           position="absolute" 
           top={0}
           left={0}
@@ -179,6 +179,7 @@ const SponsorChild = () => {
         >
           <Filters
             onFilterChange={handleFilterChange}
+            variant="default"
           />
           {error && (
             <Flex justify="center" align="center" mt={4}>
@@ -186,19 +187,51 @@ const SponsorChild = () => {
             </Flex>
           )}
         </Box>
-
+        {/* Filters for desktop (side panel) */}
         <Box 
-          position="absolute" 
-          bottom={12} 
-          right={4} 
-          zIndex={1000}
-          className="bg-white bg-opacity-90 backdrop-blur-sm rounded-xl p-2 shadow-md"
+          display={{ base: "none", md: "block" }}
+          width={{ md: "300px" }}
+          className="bg-white p-4 rounded-xl shadow-md"
+          height={{ md: "450px" }}
+          overflowY="auto"
         >
-          <Text fontSize="sm" fontWeight="bold">
-            {childrenData.length} Children Available
+          <Text className="text-[#1C3C8C] font-semibold text-xl mb-4">
+            Filter Children
           </Text>
+          <Filters
+            onFilterChange={handleFilterChange}
+            variant="sidebar"
+          />
+          {error && (
+            <Flex justify="center" align="center" mt={4}>
+              <Text color="red.500">{error}</Text>
+            </Flex>
+          )}
         </Box>
-      </Box>
+        <Box 
+          flex="1"
+          position="relative"
+        >
+          <ChildMap
+            childData={childrenData}
+            onMarkerClick={handleMarkerClick}
+            onBoundsChange={handleBoundsChange}
+            onResetView={onResetView}
+          />
+          
+          <Box 
+            position="absolute" 
+            bottom={12} 
+            right={4} 
+            zIndex={1000}
+            className="bg-white bg-opacity-90 backdrop-blur-sm rounded-xl p-2 shadow-md"
+          >
+            <Text fontSize="sm" fontWeight="bold">
+              {childrenData.length} Children Available
+            </Text>
+          </Box>
+        </Box>
+      </Flex>
 
       {selectedCountry && (
         <Box width="100%" ref={listingsRef}>
