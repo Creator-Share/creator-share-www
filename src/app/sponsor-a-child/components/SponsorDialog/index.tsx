@@ -24,6 +24,11 @@ import { toaster } from "@/components/ui/toaster";
 import { paymentOptionsCollection } from "./config";
 import { SponsorPeople } from "@/types";
 import { useAuthStore } from "@/store/authStore";
+import {
+    EmbeddedCheckout,
+    EmbeddedCheckoutProvider,
+} from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
 
 interface SponsorPeopleImage {
     id: string;
@@ -39,6 +44,8 @@ interface SponsorDialogProps {
 
 const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string);
+
 const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
     const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
     const [amount, setAmount] = useState<number>(remainingAmount);
@@ -48,6 +55,8 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
     const user = useAuthStore((state) => state.user);
     const [images, setImages] = useState<SponsorPeopleImage[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+    const [showEmbeddedCheckout, setShowEmbeddedCheckout] = useState(false);
+    const [clientSecret, setClientSecret] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchImages = async () => {
@@ -115,13 +124,17 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
                     paymentType: selectedOption,
                     location: people.country,
                     userId: user?.id,
+                    isEmbedded: true,
                 }),
             });
 
-            const { url } = await res.json();
-            if (url) {
+            const { clientSecret, url } = await res.json();
+            
+            if (clientSecret) {
+                setClientSecret(clientSecret);
+                setShowEmbeddedCheckout(true);
+            } else if (url) {
                 document.getElementById('closeDialog')?.click();
-
                 if (window.self !== window.top) {
                     window.open(url, '_blank');
                 } else {
@@ -205,177 +218,187 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
                     <DialogCloseTrigger id="closeDialog" />
                 </DialogHeader>
                 <DialogBody>
-                    <Box className="flex flex-col md:flex-row gap-8 p-5">
-                        <Box className="w-full md:w-[359px]">
-                            <Box position="relative">
-                                <Image
-                                    src={images[currentImageIndex]?.image_url || people.image_url || placeholderImage}
-                                    alt={people.name}
-                                    className="rounded-xl md:h-[479px] w-full object-cover"
-                                />
-                                {images.length > 1 && (
-                                    <>
-                                        <Flex 
-                                            position="absolute" 
-                                            bottom="4" 
-                                            left="50%" 
-                                            transform="translateX(-50%)" 
-                                            gap={2}
-                                        >
-                                            {images.map((_, index) => (
-                                                <Box
-                                                    key={index}
-                                                    w="2"
-                                                    h="2"
-                                                    borderRadius="full"
-                                                    bg={currentImageIndex === index ? "white" : "whiteAlpha.600"}
-                                                    cursor="pointer"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setCurrentImageIndex(index);
-                                                    }}
-                                                />
-                                            ))}
-                                        </Flex>
-                                        <Button
-                                            position="absolute"
-                                            left="2"
-                                            top="50%"
-                                            transform="translateY(-50%)"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
-                                            }}
-                                            size="sm"
-                                            variant="ghost"
-                                            color="white"
-                                            _hover={{ bg: 'whiteAlpha.200' }}
-                                        >
-                                            ←
-                                        </Button>
-                                        <Button
-                                            position="absolute"
-                                            right="2"
-                                            top="50%"
-                                            transform="translateY(-50%)"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleNextImage();
-                                            }}
-                                            size="sm"
-                                            variant="ghost"
-                                            color="white"
-                                            _hover={{ bg: 'whiteAlpha.200' }}
-                                        >
-                                            →
-                                        </Button>
-                                    </>
-                                )}
-                            </Box>
-                        </Box>
-                        <Box className="flex-1 border border-[#E8E8EA] p-5">
-                            <Text className="text-2xl text-center font-bold md:mt-0 md:text-start">
-                                {people.name}
-                            </Text>
-                            <Progress.Root
-                                defaultValue={Math.min((people.budget_raised / people.budget_goal) * 100, 100)}
-                                my={8}
+                    {showEmbeddedCheckout && clientSecret ? (
+                        <Box className="w-full min-h-[500px]">
+                            <EmbeddedCheckoutProvider
+                                stripe={stripePromise}
+                                options={{ clientSecret }}
                             >
-                                <Text className="text-end text-base text-[#959090] font-normal">
-                                    Goal: {`$${centsToDollars(people.budget_goal)}`}
-                                </Text>
-                                <Tooltip
-                                    content={`$${centsToDollars(people.budget_raised)} raised`}
-                                    showArrow
-                                    positioning={{ placement: "right-end" }}
-                                >
-                                    <HStack gap="5">
-                                        <Progress.Track className="rounded-xl h-3" flex="1">
-                                            <Progress.Range className="bg-[#1C3C8C]" />
-                                        </Progress.Track>
-                                    </HStack>
-                                </Tooltip>
-                            </Progress.Root>
-                            <Box>
-                                <Text mt={1} className="font-semibold text-base mb-[10px]">
-                                    Amount
-                                </Text>
-                                <Flex
-                                    className="border rounded-xl"
-                                    mb={4}
-                                    align="center"
-                                    justify="center"
-                                    gap={2}
-                                >
-                                    <InputAddon className="bg-[#D6D6D6] px-[15px] py-[5px] m-1 text-[#959090] text-base font-medium">
-                                        $
-                                    </InputAddon>
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        max={remainingAmount}
-                                        value={amount || ''}
-                                        onChange={handleAmountChange}
-                                        className="px-4 h-[50px]"
-                                        placeholder="Enter Amount"
+                                <EmbeddedCheckout />
+                            </EmbeddedCheckoutProvider>
+                        </Box>
+                    ) : (
+                        <Box className="flex flex-col md:flex-row gap-8 p-5">
+                            <Box className="w-full md:w-[359px]">
+                                <Box position="relative">
+                                    <Image
+                                        src={images[currentImageIndex]?.image_url || people.image_url || placeholderImage}
+                                        alt={people.name}
+                                        className="rounded-xl md:h-[479px] w-full object-cover"
                                     />
-                                </Flex>
-                                <Box my={4}>
-                                    <Slider
-                                        value={value}
-                                        min={0}
-                                        max={remainingAmount}
-                                        step={5}
-                                        variant="solid"
-                                        onValueChange={handleSliderChange}
-                                    />
-                                    <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
-                                </Box>
-                                <Box>
-                                    <Text className="font-semibold text-base">Frequency</Text>
-                                    <SelectRoot
-                                        collection={paymentOptionsCollection}
-                                        className="border rounded-xl"
-                                        mt={2}
-                                        mb={4}
-                                        px={4}
-                                        py={2}
-                                        defaultValue={[paymentOptionsCollection.items[0].value]}
-                                        onValueChange={(details) => handleSelectChange(details.value[0])}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValueText />
-                                        </SelectTrigger>
-                                        <SelectContent className="z-[9999]">
-                                            {paymentOptionsCollection.items.map((option) => (
-                                                <SelectItem key={option.value} item={option}>
-                                                    {option.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </SelectRoot>
+                                    {images.length > 1 && (
+                                        <>
+                                            <Flex 
+                                                position="absolute" 
+                                                bottom="4" 
+                                                left="50%" 
+                                                transform="translateX(-50%)" 
+                                                gap={2}
+                                            >
+                                                {images.map((_, index) => (
+                                                    <Box
+                                                        key={index}
+                                                        w="2"
+                                                        h="2"
+                                                        borderRadius="full"
+                                                        bg={currentImageIndex === index ? "white" : "whiteAlpha.600"}
+                                                        cursor="pointer"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setCurrentImageIndex(index);
+                                                        }}
+                                                    />
+                                                ))}
+                                            </Flex>
+                                            <Button
+                                                position="absolute"
+                                                left="2"
+                                                top="50%"
+                                                transform="translateY(-50%)"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+                                                }}
+                                                size="sm"
+                                                variant="ghost"
+                                                color="white"
+                                                _hover={{ bg: 'whiteAlpha.200' }}
+                                            >
+                                                ←
+                                            </Button>
+                                            <Button
+                                                position="absolute"
+                                                right="2"
+                                                top="50%"
+                                                transform="translateY(-50%)"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleNextImage();
+                                                }}
+                                                size="sm"
+                                                variant="ghost"
+                                                color="white"
+                                                _hover={{ bg: 'whiteAlpha.200' }}
+                                            >
+                                                →
+                                            </Button>
+                                        </>
+                                    )}
                                 </Box>
                             </Box>
-                            <Flex gap={4}>
-                                <Button
-                                    onClick={() => document.getElementById('closeDialog')?.click()}
-                                    className="flex-1 py-3 bg-[#D1D1D1] text-[#858585]"
+                            <Box className="flex-1 border border-[#E8E8EA] p-5">
+                                <Text className="text-2xl text-center font-bold md:mt-0 md:text-start">
+                                    {people.name}
+                                </Text>
+                                <Progress.Root
+                                    defaultValue={Math.min((people.budget_raised / people.budget_goal) * 100, 100)}
+                                    my={8}
                                 >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    onClick={handleSponsor}
-                                    loading={loading}
-                                    loadingText="Processing..."
-                                    disabled={loading}
-                                    className="flex-1 py-3 bg-blue-700 text-white hover:bg-blue-800"
-                                >
-                                    Checkout
-                                </Button>
-                            </Flex>
+                                    <Text className="text-end text-base text-[#959090] font-normal">
+                                        Goal: {`$${centsToDollars(people.budget_goal)}`}
+                                    </Text>
+                                    <Tooltip
+                                        content={`$${centsToDollars(people.budget_raised)} raised`}
+                                        showArrow
+                                        positioning={{ placement: "right-end" }}
+                                    >
+                                        <HStack gap="5">
+                                            <Progress.Track className="rounded-xl h-3" flex="1">
+                                                <Progress.Range className="bg-[#1C3C8C]" />
+                                            </Progress.Track>
+                                        </HStack>
+                                    </Tooltip>
+                                </Progress.Root>
+                                <Box>
+                                    <Text mt={1} className="font-semibold text-base mb-[10px]">
+                                        Amount
+                                    </Text>
+                                    <Flex
+                                        className="border rounded-xl"
+                                        mb={4}
+                                        align="center"
+                                        justify="center"
+                                        gap={2}
+                                    >
+                                        <InputAddon className="bg-[#D6D6D6] px-[15px] py-[5px] m-1 text-[#959090] text-base font-medium">
+                                            $
+                                        </InputAddon>
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            max={remainingAmount}
+                                            value={amount || ''}
+                                            onChange={handleAmountChange}
+                                            className="px-4 h-[50px]"
+                                            placeholder="Enter Amount"
+                                        />
+                                    </Flex>
+                                    <Box my={4}>
+                                        <Slider
+                                            value={value}
+                                            min={0}
+                                            max={remainingAmount}
+                                            step={5}
+                                            variant="solid"
+                                            onValueChange={handleSliderChange}
+                                        />
+                                        <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text className="font-semibold text-base">Frequency</Text>
+                                        <SelectRoot
+                                            collection={paymentOptionsCollection}
+                                            className="border rounded-xl"
+                                            mt={2}
+                                            mb={4}
+                                            px={4}
+                                            py={2}
+                                            defaultValue={[paymentOptionsCollection.items[0].value]}
+                                            onValueChange={(details) => handleSelectChange(details.value[0])}
+                                        >
+                                            <SelectTrigger className="w-full">
+                                                <SelectValueText />
+                                            </SelectTrigger>
+                                            <SelectContent className="z-[9999]">
+                                                {paymentOptionsCollection.items.map((option) => (
+                                                    <SelectItem key={option.value} item={option}>
+                                                        {option.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </SelectRoot>
+                                    </Box>
+                                </Box>
+                                <Flex gap={4}>
+                                    <Button
+                                        onClick={() => document.getElementById('closeDialog')?.click()}
+                                        className="flex-1 py-3 bg-[#D1D1D1] text-[#858585]"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        onClick={handleSponsor}
+                                        loading={loading}
+                                        loadingText="Processing..."
+                                        disabled={loading}
+                                        className="flex-1 py-3 bg-blue-700 text-white hover:bg-blue-800"
+                                    >
+                                        Checkout
+                                    </Button>
+                                </Flex>
+                            </Box>
                         </Box>
-
-                    </Box>
+                    )}
                     <Text color="gray.500" textAlign="center" p={1}>
                         {renderDisclaimer()}
                     </Text>

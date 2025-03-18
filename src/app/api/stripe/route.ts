@@ -12,6 +12,7 @@ export async function POST(req: Request) {
       childImage,
       location,
       userId,
+      isEmbedded,
     } = await req.json();
 
     if (!amount || amount < 10) {
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
       ? childImage 
       : `${process.env.NEXT_PUBLIC_BASE_URL}${childImage}`;
 
-    const commonSessionConfig = {
+    const commonSessionConfig: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
       metadata: {
         childId,
@@ -35,9 +36,15 @@ export async function POST(req: Request) {
         userId: userId || null,
         paymentType
       },
-      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}`,
     };
+
+    if (isEmbedded) {
+      commonSessionConfig.ui_mode = 'embedded';
+      commonSessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/return?session_id={CHECKOUT_SESSION_ID}`;
+    } else {
+      commonSessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
+      commonSessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}`;
+    }
 
     let session;
     if (paymentType === "subscription") {
@@ -122,7 +129,10 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json({ url: session?.url });
+    return NextResponse.json({ 
+      url: session.url,
+      clientSecret: session.client_secret 
+    });
   } catch (error) {
     console.error("Stripe Error:", error);
     return NextResponse.json(
