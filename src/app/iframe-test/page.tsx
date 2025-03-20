@@ -8,7 +8,6 @@ const IframeTest = () => {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Verify the message origin for security
       if (event.origin !== window.location.origin) return;
 
       if (event.data?.type === 'resize') {

@@ -146,7 +146,6 @@ const SponsorChild = () => {
   console.log("Passing to ChildMap:", childrenData.length, "children");
 
   useEffect(() => {
-    // Send height updates to parent
     const sendHeight = () => {
       if (window.self !== window.top) {
         window.parent.postMessage({
@@ -156,10 +155,8 @@ const SponsorChild = () => {
       }
     };
 
-    // Send initial height
     sendHeight();
 
-    // Send height on content changes
     const resizeObserver = new ResizeObserver(() => {
       sendHeight();
     });
