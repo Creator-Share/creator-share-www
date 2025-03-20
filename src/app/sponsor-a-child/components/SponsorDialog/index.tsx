@@ -40,13 +40,14 @@ interface SponsorPeopleImage {
 interface SponsorDialogProps {
     people: SponsorPeople;
     trigger: React.ReactNode;
+    useEmbedded?: boolean;
 }
 
 const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string);
 
-const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
+const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger = false }) => {
     const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
     const [amount, setAmount] = useState<number>(remainingAmount);
     const [selectedOption, setSelectedOption] = useState<string>(paymentOptionsCollection.items[0].value);
@@ -124,20 +125,21 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger }) => {
                     paymentType: selectedOption,
                     location: people.country,
                     userId: user?.id,
-                    isEmbedded: true,
+                    isEmbedded: window.self !== window.top,
                 }),
             });
 
             const { clientSecret, url } = await res.json();
             
-            if (clientSecret) {
-                setClientSecret(clientSecret);
-                setShowEmbeddedCheckout(true);
-            } else if (url) {
-                document.getElementById('closeDialog')?.click();
-                if (window.self !== window.top) {
-                    window.open(url, '_blank');
-                } else {
+            if (window.self !== window.top) {
+                if (clientSecret) {
+                    setClientSecret(clientSecret);
+                    setShowEmbeddedCheckout(true);
+                } else if (url) {
+                    window.location.href = url;
+                }
+            } else {
+                if (url) {
                     window.location.href = url;
                 }
             }
