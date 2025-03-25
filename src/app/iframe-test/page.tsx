@@ -1,88 +1,29 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 const IframeTest = () => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [iframeHeight, setIframeHeight] = useState('calc(100vh - 200px)');
 
   useEffect(() => {
+
     const handleMessage = (event: MessageEvent) => {
-      // In production, replace with actual domain check
-      if (!event.origin.includes(window.location.origin)) return;
-      
+      // Verify the message origin for security
+      if (event.origin !== window.location.origin) return;
+
       if (event.data?.type === "resize") {
-        const iframe = iframeRef.current;
-        if (!iframe) return;
-
-        try {
-          // Clear any pending resize timeout
-          if (resizeTimeoutRef.current) {
-            clearTimeout(resizeTimeoutRef.current);
-          }
-
-          // Store original transition
-          const originalTransition = iframe.style.transition;
-          
-          // Temporarily disable transition
-          iframe.style.transition = 'none';
-          
-          // Remove any constraints
-          iframe.style.minHeight = '0';
-          iframe.style.maxHeight = 'none';
-          
-          // Force reflow
-          void iframe.offsetHeight;
-          
-          // Set new height
-          iframe.style.height = `${event.data.height}px`;
-          
-          // Force reflow again
-          void iframe.offsetHeight;
-          
-          // Log detailed height information
-          console.log('Parent: Height details', {
-            receivedHeight: event.data.height,
-            iframeScrollHeight: iframe.scrollHeight,
-            iframeOffsetHeight: iframe.offsetHeight,
-            iframeClientHeight: iframe.clientHeight
-          });
-          
-          // Restore transition after a short delay
-          resizeTimeoutRef.current = setTimeout(() => {
-            iframe.style.transition = originalTransition;
-            resizeTimeoutRef.current = null;
-          }, 50);
-        } catch (error) {
-          console.error('Error resizing iframe:', error);
-        }
+        setIframeHeight(`${event.data.height}px`);
       }
     };
 
     window.addEventListener("message", handleMessage);
 
-    // Request initial height when iframe loads
-    const iframe = iframeRef.current;
-    if (iframe) {
-      iframe.addEventListener('load', () => {
-        // Give a small delay to ensure content is rendered
-        setTimeout(() => {
-          iframe.contentWindow?.postMessage({ type: 'requestHeight' }, '*');
-        }, 100);
-      });
-    }
-
+    // Use the stored ref value in cleanup
     return () => {
       window.removeEventListener("message", handleMessage);
-      if (resizeTimeoutRef.current) {
-        clearTimeout(resizeTimeoutRef.current);
-      }
-      const iframe = iframeRef.current;
-      if (iframe) {
-        iframe.removeEventListener('load', () => {});
-      }
     };
-  }, []);
+  }, []); // iframeRef is stable, so it doesn't need to be in deps
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -167,19 +108,9 @@ window.addEventListener('load', function() {
         <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
           <iframe
             ref={iframeRef}
-            src="/sponsor-a-child?embedded=true&parentOrigin=http://localhost:3000"
+            src="/sponsor-a-child?embedded=true"
             className="w-full"
-            style={{ 
-              border: "none", 
-              height: "500px", 
-              transition: "height 0.3s ease",
-              minHeight: "0",
-              maxHeight: "none",
-              display: "block",
-              width: "100%",
-              overflow: "hidden"
-            }}
-            scrolling="no"
+            style={{ height: iframeHeight }}
           />
         </div>
       </div>

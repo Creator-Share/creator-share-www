@@ -1,6 +1,6 @@
 "use client"
-import { Box, VStack, Button } from "@chakra-ui/react";
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { Box, VStack } from "@chakra-ui/react";
+import React, { useState, useEffect, useCallback } from "react";
 import ChildCard from "../ChildCard";
 import { SponsorPeople } from "@/types";
 import { ChildListingsProps } from "@/types/propTypes";
