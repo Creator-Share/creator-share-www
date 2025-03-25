@@ -414,7 +414,7 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
           <MarkerClusterGroup 
             key={`cluster-${childData.length}-${childData.map(c => c.id).join('-')}`}
             chunkedLoading
-            maxClusterRadius={10}
+            maxClusterRadius={150}
             showCoverageOnHover={false}
             spiderfyOnMaxZoom={true}
             iconCreateFunction={createClusterCustomIcon}
