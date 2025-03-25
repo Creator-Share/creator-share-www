@@ -5,7 +5,6 @@ import { ThemeProvider } from "next-themes";
 import { ChakraProvider, defaultSystem } from "@chakra-ui/react";
 import { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 // import { ColorModeProvider } from "./ui/color-mode";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -21,7 +20,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         {/* <ColorModeProvider> */}
           <QueryClientProvider client={queryClient}>
             {children}
-            <ReactQueryDevtools initialIsOpen={false} />
           </QueryClientProvider>
         {/* </ColorModeProvider> */}
       </ThemeProvider>
