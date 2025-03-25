@@ -56,6 +56,13 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
         setDialogImageIndex(currentImageIndex);
     }, [currentImageIndex]);
 
+    // Reset learn more state when component unmounts
+    useEffect(() => {
+        return () => {
+            setIsLearnMoreOpen(false);
+        };
+    }, []);
+
     const age = calculateAge(new Date(people.birth_date).toISOString());
 
     const handleNextImage = () => {
@@ -88,7 +95,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                                 src={images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : placeholderImage}
                                 alt={people.name}
                                 objectFit="cover"
-                                className="mb-4 md:mb-0 rounded-t-md h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:h-[273px] md:w-[450px] cursor-pointer"
+                                className="mb-4 md:mb-0 rounded-t-md max-h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:max-h-[273px] md:w-[450px] cursor-pointer"
                             />
                             {images.length > 0 && (
                                 <>
@@ -294,6 +301,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
             <Collapsible.Root
                 open={isLearnMoreOpen}
                 onOpenChange={() => setIsLearnMoreOpen(!isLearnMoreOpen)}
+                style={{ overflow: 'hidden', transition: 'height 0.3s ease' }}
             >
                 <Collapsible.Content>
                     <Box
@@ -318,7 +326,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                                     <source src={people.video_url} type="video/mp4" />
                                 </video>
                             ) : (
-                                <Box className="border rounded-xl h-[600px] flex items-center justify-center bg-gray-100">
+                                <Box className="border rounded-xl min-h-[200px] max-h-[600px] flex items-center justify-center bg-gray-100">
                                     <Text color="gray.500">No video available</Text>
                                 </Box>
                             )}

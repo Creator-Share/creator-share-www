@@ -1,13 +1,25 @@
-"use client";
-import dynamic from "next/dynamic";
-import React, { useEffect, useState, useRef } from "react";
-import { Box, Flex, Text, Spinner } from "@chakra-ui/react";
-import Filters from "./components/Filters";
-import ChildListings from "./components/ChildListings";
-import { SponsorPeople } from "@/types";
-import { ChildListingsSkeleton } from "./components/ChildListings/Skeleton";
+'use client';
 
-const ChildMap = dynamic(() => import("./components/ChildMap"), { ssr: false });
+import React, { useEffect, useState, useRef } from 'react';
+import { Box, Flex, Text, Spinner } from '@chakra-ui/react';
+import dynamic from 'next/dynamic';
+import { SponsorPeople } from '@/types';
+
+// Components that require client-side only rendering
+const ChildMap = dynamic(() => import('./components/ChildMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[400px] bg-gray-100 animate-pulse rounded-lg" />
+  ),
+});
+
+// These components can be rendered on server but may need client interactivity
+const Filters = dynamic(() => import('./components/Filters'));
+const ChildListings = dynamic(() => import('./components/ChildListings'));
+const ChildListingsSkeleton = dynamic(() => 
+  import('./components/ChildListings/Skeleton').then(mod => mod.ChildListingsSkeleton)
+);
+
 interface Filters {
   gender: string;
   ageRange: [number, number];
@@ -15,24 +27,31 @@ interface Filters {
 }
 
 const SponsorChild = () => {
+  // State
   const [L, setL] = useState<typeof import("leaflet") | null>(null);
   const [childrenData, setChildrenData] = useState<SponsorPeople[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [visibleChildren, setVisibleChildren] = useState<SponsorPeople[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0, 14], status: ["New", "Partially Funded"] });
+  
+  // Refs
   const listingsRef = useRef<HTMLDivElement>(null);
+  const childListingsRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
+  // Load Leaflet on mount
   useEffect(() => {
-    import("leaflet").then((module) => {
-      setL(module);
-    });
+    import("leaflet")
+      .then(setL)
+      .catch(error => console.error('Error loading Leaflet:', error));
   }, []);
 
   const handleFilterChange = React.useCallback((newFilters: Partial<Filters>) => {
+    // Update filters
     setFilters(prev => ({ ...prev, ...newFilters }));
   }, []);
 
@@ -58,9 +77,6 @@ const SponsorChild = () => {
       if (!res.ok) throw new Error("Failed to fetch children data");
 
       const data = await res.json();
-      console.log("API response children:", data.people.length);
-      console.log("Current age filter:", filters.ageRange);
-
       setChildrenData(data.people || []);
       setVisibleChildren(data.people || []);
     } catch (err: unknown) {
@@ -76,24 +92,25 @@ const SponsorChild = () => {
 
   const handleBoundsChange = React.useCallback((bounds: L.LatLngBounds) => {
     if (!L) return;
-    setListingsLoading(true);
 
-    const filtered = childrenData.filter((child) => {
-      if (!child.location_geo) return false;
-      const [lng, lat] = child.location_geo.coordinates;
-      return bounds.contains(L.latLng(lat, lng));
-    });
+    try {
+      setListingsLoading(true);
 
-    console.log("Map bounds changed:");
-    console.log("- Total children from API:", childrenData.length);
-    console.log("- Children visible in current map view:", filtered.length);
-    console.log("- Current age range filter:", filters.ageRange);
+      const filtered = childrenData.filter((child) => {
+        if (!child.location_geo) return false;
+        const [lng, lat] = child.location_geo.coordinates;
+        return bounds.contains(L.latLng(lat, lng));
+      });
 
-    setVisibleChildren(filtered);
-    setListingsLoading(false);
-  }, [childrenData, L, filters.ageRange]);
+      setVisibleChildren(filtered);
+    } catch (error) {
+      console.error('Error handling bounds change:', error);
+    } finally {
+      setListingsLoading(false);
+    }
+  }, [childrenData, L]);
 
-  const handleMarkerClick = (id: string) => {
+  const handleMarkerClick = React.useCallback((id: string) => {
     setSelectedChildId(id);
     const selectedPerson = childrenData.find((child) => child.id === id);
     
@@ -106,71 +123,113 @@ const SponsorChild = () => {
         }
         return prev;
       });
-
-      const element = document.getElementById(`child-${id}`);
-      
-      if (element) {
-        const headerOffset = 250;
-        const elementPosition = element.getBoundingClientRect().top;
-        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-        window.scrollTo({
-          top: offsetPosition,
-          behavior: "smooth"
-        });
-
-        element.style.boxShadow = '0 0 0 5px #1C3C8C, 0 0 15px rgba(28, 60, 140, 0.7)';
-        element.style.transition = 'box-shadow 0.3s ease-in-out';
-        element.style.zIndex = '10';
-
-        setTimeout(() => {
-          element.style.boxShadow = 'none';
-          element.style.zIndex = 'auto';
-        }, 3000);
-      } else {
-        console.error(`Element with id child-${id} not found after delay`);
-        if (listingsRef.current) {
-          const yOffset = -50;
-          const y = listingsRef.current.getBoundingClientRect().top + window.pageYOffset + yOffset;
-          window.scrollTo({ top: y, behavior: 'smooth' });
-        }
-      }
     }
-  };
+  }, [childrenData]);
 
-  const onResetView = () => {
+  const onResetView = React.useCallback(() => {
     setSelectedCountry(null);
     setVisibleChildren(childrenData);
-  };
+  }, [childrenData]);
 
-  console.log("Passing to ChildMap:", childrenData.length, "children");
+  // Handle iframe height updates
+  const sendHeight = React.useCallback(() => {
+    if (window.self === window.top) return;
 
-  useEffect(() => {
-    const sendHeight = () => {
-      if (window.self !== window.top) {
-        window.parent.postMessage({
-          type: 'resize',
-          height: document.documentElement.scrollHeight
-        }, '*');
-      }
-    };
+    try {
+      // Get all relevant heights
+      const contentHeight = contentRef.current?.offsetHeight || 0;
+      const listingsHeight = listingsRef.current?.offsetHeight || 0;
+      const childListingsHeight = childListingsRef.current?.offsetHeight || 0;
 
-    sendHeight();
+      // Log individual heights for debugging
+      console.log('[Child Frame] Heights:', {
+        contentHeight,
+        listingsHeight,
+        childListingsHeight,
+      });
 
-    const resizeObserver = new ResizeObserver(() => {
-      sendHeight();
-    });
+      // Calculate new height based only on actual content
+      const newHeight = Math.max(
+        contentHeight,
+        listingsHeight,
+        childListingsHeight
+      );
 
-    resizeObserver.observe(document.documentElement);
+      // Get parent origin from URL params
+      const urlParams = new URLSearchParams(window.location.search);
+      const parentOrigin = urlParams.get('parentOrigin') || '*';
 
-    return () => resizeObserver.disconnect();
+      // Send height update
+      window.parent.postMessage({
+        type: 'resize',
+        height: newHeight
+      }, parentOrigin);
+
+      console.log('[Child Frame] Sent height:', newHeight);
+    } catch (error) {
+      console.error('[Child Frame] Error sending height:', error);
+    }
   }, []);
 
+  // Setup iframe resizing
+  useEffect(() => {
+    if (window.self === window.top) return;
+
+    let resizeObserver: ResizeObserver | null = null;
+    let resizeTimeout: NodeJS.Timeout | null = null;
+
+    try {
+      // Handle height request messages
+      const handleMessage = (event: MessageEvent) => {
+        if (!event.origin.includes('share-tanzania.webflow.io') && 
+            !event.origin.includes('localhost:3000')) {
+          return;
+        }
+
+        if (event.data?.type === 'requestHeight') {
+          sendHeight();
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      // Setup resize observer with debounce
+      const debouncedSendHeight = () => {
+        if (resizeTimeout) {
+          clearTimeout(resizeTimeout);
+        }
+        resizeTimeout = setTimeout(sendHeight, 100);
+      };
+
+      const observer = new ResizeObserver(debouncedSendHeight);
+      resizeObserver = observer;
+
+      // Only observe content-specific elements
+      [
+        contentRef.current,
+        listingsRef.current,
+        childListingsRef.current
+      ].forEach(element => {
+        if (element) observer.observe(element);
+      });
+
+      // Send initial height
+      sendHeight();
+
+      return () => {
+        window.removeEventListener('message', handleMessage);
+        if (resizeObserver) resizeObserver.disconnect();
+        if (resizeTimeout) clearTimeout(resizeTimeout);
+      };
+    } catch (error) {
+      console.error('[Child Frame] Error setting up resize handling:', error);
+    }
+  }, [sendHeight]);
+
   return (
-    <Box
-      className="flex flex-col items-center justify-center"
-      px={{ base: 4, md: 32 }}
-      py={{ base: 12, md: 16 }}
+    <Box 
+      ref={contentRef}
+      className="flex flex-col items-center justify-center px-4 md:px-32 py-12 md:py-16"
     >
       <Box className="text-center justify-center my-12">
         <Text className="text-[#1C3C8C] font-semibold text-5xl mb-4">
@@ -179,7 +238,9 @@ const SponsorChild = () => {
         <Text className="text-base font-normal text-[#03150E99]">
           Sponsoring a child is a personal way to show God&apos;s love to a child in need. For $39 a month,
         </Text>
-        <Text className="md:px-[200px] text-base font-normal text-[#03150E99]">you&apos;ll help that child and other vulnerable children in their community to stand tall, free from poverty.</Text>
+        <Text className="md:px-[200px] text-base font-normal text-[#03150E99]">
+          you&apos;ll help that child and other vulnerable children in their community to stand tall, free from poverty.
+        </Text>
       </Box>
 
       {error && (
@@ -224,23 +285,27 @@ const SponsorChild = () => {
       </Flex>
 
       {selectedCountry && (
-        <Box width="100%" ref={listingsRef}>
-          <Text
-            mb={8}
-            mt={5}
-            fontSize="4xl"
-            color="#1C3C8C"
-            fontWeight="semibold"
-            textAlign="left"
-          >
-            Showing results from {selectedCountry}
-          </Text>
-        </Box>
+        <div ref={listingsRef}>
+          <Box width="100%">
+            <Text
+              mb={8}
+              mt={5}
+              fontSize="4xl"
+              color="#1C3C8C"
+              fontWeight="semibold"
+              textAlign="left"
+            >
+              Showing results from {selectedCountry}
+            </Text>
+          </Box>
+        </div>
       )}
+
       {loading ? (
         <ChildListingsSkeleton />
       ) : visibleChildren.length > 0 ? (
         <ChildListings
+          ref={childListingsRef}
           peopleData={visibleChildren}
           selectedChildId={selectedChildId}
           selectedCountry={selectedCountry}
@@ -252,6 +317,7 @@ const SponsorChild = () => {
           </Text>
         </Flex>
       )}
+
       {listingsLoading && (
         <Flex justify="center" align="center" mt={4}>
           <Spinner size="md" />
