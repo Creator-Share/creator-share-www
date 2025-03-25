@@ -79,14 +79,16 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
     };
 
     return (
-        <Box id={id}>
+        <Box 
+            id={id} 
+            borderColor={isSelected ? "blue.500" : "gray.200"}
+            borderRadius={{ base: 'md', md: 'md' }}
+            className={`bg-white mb-6 ${isLearnMoreOpen ? 'border-t border-l border-r' : 'border-0 md:border'} md:mb-0 ${isSelected ? 'highlight-child' : ''}`}
+        >
             <Flex
                 direction={{ base: "column", md: "row" }}
                 align={{ base: "center", md: "flex-start" }}
                 textAlign={{ base: "center", md: "left" }}
-                borderColor={isSelected ? "blue.500" : "gray.200"}
-                borderRadius={{ base: 'md', md: 'md' }}
-                className={`bg-white mb-6 p-0 border-0 md:border md:mb-0 md:p-0 ${isSelected ? 'highlight-child' : ''}`}
             >
                 <DialogRoot>
                     <DialogTrigger asChild>
@@ -95,7 +97,9 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                                 src={images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : placeholderImage}
                                 alt={people.name}
                                 objectFit="cover"
-                                className="mb-4 md:mb-0 rounded-t-md max-h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:max-h-[273px] md:w-[450px] cursor-pointer"
+                                className={`mb-4 md:mb-0 min-h-[400px] h-[400px] w-[550px] md:min-h-[273px] md:h-[273px] md:w-[450px] cursor-pointer ${
+                                    isLearnMoreOpen ? '' : 'rounded-t-md md:rounded-l-md md:rounded-t-none'
+                                }`}
                             />
                             {images.length > 0 && (
                                 <>
@@ -307,10 +311,9 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                     <Box
                         p={6}
                         bg="white"
-                        borderRadius="lg"
                         mx="auto"
                         mt={4}
-                        className="flex flex-col md:flex-row md:border-l md:border-r md:border-b"
+                        className="flex flex-col md:flex-row"
                     >
                         <Box mr="8" className="md:w-2/5 md:text-start w-full text-center">
                             <Text fontSize="xl" fontWeight="semibold" mb={4} color="#1C3C8C">
@@ -332,24 +335,26 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                             )}
                         </Box>
                     </Box>
-                    {people.status !== "Budget Fulfilled" ? (
-                        <SponsorDialog
-                            people={people}
-                            trigger={
-                                <Box fontSize="base" mb={3} className="">
-                                    <Button fontWeight="md" className="text-[#FFFFFF] w-full cursor-pointer bg-[#1C3C8C] px-4 mt-8">
-                                        Sponsor {people.name}
-                                    </Button>
-                                </Box>
-                            }
-                        />
-                    ) : (
-                        <Box fontSize="base" mb={3} className="md:border-l md:border-r md:border-b">
-                            <Button fontWeight="md" className="text-[#FFFFFF] disabled w-full cursor-not-allowed bg-gray-400 px-4 mt-8">
-                                Budget Fulfilled
-                            </Button>
-                        </Box>
-                    )}
+                    <Box className={isLearnMoreOpen ? 'border-b' : ''}>
+                        {people.status !== "Budget Fulfilled" ? (
+                            <SponsorDialog
+                                people={people}
+                                trigger={
+                                    <Box fontSize="base" className="pb-6 px-6">
+                                        <Button fontWeight="md" className="text-[#FFFFFF] w-full cursor-pointer bg-[#1C3C8C] mt-8">
+                                            Sponsor {people.name}
+                                        </Button>
+                                    </Box>
+                                }
+                            />
+                        ) : (
+                            <Box fontSize="base" className="pb-6 px-6">
+                                <Button fontWeight="md" className="text-[#FFFFFF] disabled w-full cursor-not-allowed bg-gray-400 mt-8">
+                                    Budget Fulfilled
+                                </Button>
+                            </Box>
+                        )}
+                    </Box>
                 </Collapsible.Content>
             </Collapsible.Root>
         </Box>
