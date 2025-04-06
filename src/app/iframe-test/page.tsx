@@ -1,34 +1,32 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 
 const IframeTest = () => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [iframeHeight, setIframeHeight] = useState('calc(100vh - 200px)');
 
   useEffect(() => {
-
     const handleMessage = (event: MessageEvent) => {
-      // Verify the message origin for security
-      if (event.origin !== window.location.origin) return;
-
-      if (event.data?.type === "resize") {
-        setIframeHeight(`${event.data.height}px`);
+      if (!event.origin.includes('localhost:3000')) return;
+      
+      if (event.data?.type === 'resize' && iframeRef.current) {
+        const iframe = iframeRef.current;
+        iframe.style.transition = 'none';
+        iframe.style.height = `${event.data.height}px`;
+        
+        requestAnimationFrame(() => {
+          iframe.style.transition = 'height 0.3s ease';
+        });
       }
     };
 
-    window.addEventListener("message", handleMessage);
-
-    // Use the stored ref value in cleanup
-    return () => {
-      window.removeEventListener("message", handleMessage);
-    };
-  }, []); // iframeRef is stable, so it doesn't need to be in deps
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto p-4">
-        {/* Example implementation section */}
         <div className="mb-8 p-4 bg-white rounded-xl shadow-sm">
           <h2 className="text-xl font-semibold mb-4">Implementation Reference</h2>
           <div>
@@ -103,14 +101,18 @@ window.addEventListener('load', function() {
             </div>
           </div>
         </div>
-
-        {/* Live example section */}
         <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
           <iframe
             ref={iframeRef}
             src="/sponsor-a-child?embedded=true"
             className="w-full"
-            style={{ height: iframeHeight }}
+            style={{ 
+              border: 'none',
+              width: '100%',
+              height: '500px',
+              display: 'block',
+              transition: 'height 0.3s ease'
+            }}
           />
         </div>
       </div>

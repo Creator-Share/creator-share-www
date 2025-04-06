@@ -5,7 +5,6 @@ import { Box, Flex, Text, Spinner } from '@chakra-ui/react';
 import dynamic from 'next/dynamic';
 import { SponsorPeople } from '@/types';
 
-// Components that require client-side only rendering
 const ChildMap = dynamic(() => import('./components/ChildMap'), {
   ssr: false,
   loading: () => (
@@ -13,7 +12,6 @@ const ChildMap = dynamic(() => import('./components/ChildMap'), {
   ),
 });
 
-// These components can be rendered on server but may need client interactivity
 const Filters = dynamic(() => import('./components/Filters'));
 const ChildListings = dynamic(() => import('./components/ChildListings'));
 const ChildListingsSkeleton = dynamic(() => 
@@ -27,7 +25,6 @@ interface Filters {
 }
 
 const SponsorChild = () => {
-  // State
   const [L, setL] = useState<typeof import("leaflet") | null>(null);
   const [childrenData, setChildrenData] = useState<SponsorPeople[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
@@ -37,13 +34,11 @@ const SponsorChild = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0, 14], status: ["New", "Partially Funded"] });
-  
-  // Refs
+
   const listingsRef = useRef<HTMLDivElement>(null);
   const childListingsRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Load Leaflet on mount
   useEffect(() => {
     import("leaflet")
       .then(setL)
@@ -51,7 +46,7 @@ const SponsorChild = () => {
   }, []);
 
   const handleFilterChange = React.useCallback((newFilters: Partial<Filters>) => {
-    // Update filters
+
     setFilters(prev => ({ ...prev, ...newFilters }));
   }, []);
 
@@ -131,47 +126,31 @@ const SponsorChild = () => {
     setVisibleChildren(childrenData);
   }, [childrenData]);
 
-  // Handle iframe height updates
   const sendHeight = React.useCallback(() => {
     if (window.self === window.top) return;
 
     try {
-      // Get all relevant heights
-      const contentHeight = contentRef.current?.offsetHeight || 0;
-      const listingsHeight = listingsRef.current?.offsetHeight || 0;
-      const childListingsHeight = childListingsRef.current?.offsetHeight || 0;
+      requestAnimationFrame(() => {
+        const height = Math.max(
+          document.documentElement.offsetHeight,
+          document.documentElement.scrollHeight
+        );
 
-      // Log individual heights for debugging
-      console.log('[Child Frame] Heights:', {
-        contentHeight,
-        listingsHeight,
-        childListingsHeight,
+        const urlParams = new URLSearchParams(window.location.search);
+        const parentOrigin = urlParams.get('parentOrigin') || '*';
+
+        window.parent.postMessage({
+          type: 'resize',
+          height: height
+        }, parentOrigin);
+
+        console.log('[Child Frame] Sent height:', height);
       });
-
-      // Calculate new height based only on actual content
-      const newHeight = Math.max(
-        contentHeight,
-        listingsHeight,
-        childListingsHeight
-      );
-
-      // Get parent origin from URL params
-      const urlParams = new URLSearchParams(window.location.search);
-      const parentOrigin = urlParams.get('parentOrigin') || '*';
-
-      // Send height update
-      window.parent.postMessage({
-        type: 'resize',
-        height: newHeight
-      }, parentOrigin);
-
-      console.log('[Child Frame] Sent height:', newHeight);
     } catch (error) {
       console.error('[Child Frame] Error sending height:', error);
     }
   }, []);
 
-  // Setup iframe resizing
   useEffect(() => {
     if (window.self === window.top) return;
 
@@ -179,7 +158,6 @@ const SponsorChild = () => {
     let resizeTimeout: NodeJS.Timeout | null = null;
 
     try {
-      // Handle height request messages
       const handleMessage = (event: MessageEvent) => {
         if (!event.origin.includes('share-tanzania.webflow.io') && 
             !event.origin.includes('localhost:3000')) {
@@ -193,31 +171,26 @@ const SponsorChild = () => {
 
       window.addEventListener('message', handleMessage);
 
-      // Setup resize observer with debounce
+      
       const debouncedSendHeight = () => {
-        if (resizeTimeout) {
-          clearTimeout(resizeTimeout);
-        }
+        if (resizeTimeout) clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(sendHeight, 100);
       };
 
       const observer = new ResizeObserver(debouncedSendHeight);
       resizeObserver = observer;
 
-      // Only observe content-specific elements
-      [
-        contentRef.current,
-        listingsRef.current,
-        childListingsRef.current
-      ].forEach(element => {
-        if (element) observer.observe(element);
-      });
+     
+      observer.observe(document.documentElement);
 
-      // Send initial height
-      sendHeight();
+      window.addEventListener('load', sendHeight);
+      setTimeout(sendHeight, 100);
+      setTimeout(sendHeight, 500);
+      setTimeout(sendHeight, 1000);
 
       return () => {
         window.removeEventListener('message', handleMessage);
+        window.removeEventListener('load', sendHeight);
         if (resizeObserver) resizeObserver.disconnect();
         if (resizeTimeout) clearTimeout(resizeTimeout);
       };

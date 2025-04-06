@@ -11,24 +11,8 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
   selectedCountry,
 }, ref) => {
   const [visiblePeople, setVisiblePeople] = useState<SponsorPeople[]>([]);
-  const [loadedCount, setLoadedCount] = useState<number>(8);
+  const isInIframe = window.self !== window.top;
   
-  const handleScroll = useCallback(() => {
-    if (
-      window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 500 &&
-      loadedCount < peopleData.length
-    ) {
-      setLoadedCount((prevCount) => Math.min(prevCount + 4, peopleData.length));
-    }
-  }, [peopleData.length, loadedCount]);
-
-  useEffect(() => {
-    window.addEventListener("scroll", handleScroll);
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, [handleScroll]);
-
   useEffect(() => {
     let filteredPeople = peopleData;
 
@@ -36,10 +20,38 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
       filteredPeople = peopleData.filter(person => person.country === selectedCountry);
     }
 
-    // Only show the loaded amount
-    setVisiblePeople(filteredPeople.slice(0, loadedCount));
-  }, [peopleData, selectedCountry, loadedCount]);
+    setVisiblePeople(isInIframe ? filteredPeople : filteredPeople.slice(0, 8));
 
+    if (isInIframe) {
+      setTimeout(() => {
+        window.parent.postMessage({
+          type: 'resize',
+          height: document.documentElement.scrollHeight + 200
+        }, '*');
+      }, 100);
+    }
+  }, [peopleData, selectedCountry, isInIframe]);
+
+  const handleScroll = useCallback(() => {
+    if (isInIframe) return;
+
+    if (
+      window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 500 &&
+      visiblePeople.length < peopleData.length
+    ) {
+      setVisiblePeople(prev => [
+        ...prev,
+        ...peopleData.slice(prev.length, prev.length + 8)
+      ]);
+    }
+  }, [peopleData, visiblePeople.length, isInIframe]);
+
+  useEffect(() => {
+    if (!isInIframe) {
+      window.addEventListener("scroll", handleScroll);
+      return () => window.removeEventListener("scroll", handleScroll);
+    }
+  }, [handleScroll, isInIframe]);
 
   return (
     <Box 
