@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       : `${process.env.NEXT_PUBLIC_BASE_URL}${childImage}`;
 
     const commonSessionConfig: Stripe.Checkout.SessionCreateParams = {
-      payment_method_types: ["card"] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
+      payment_method_types: ["card"],
       metadata: {
         childId,
         childName,
@@ -40,7 +40,10 @@ export async function POST(req: Request) {
 
     if (isEmbedded) {
       commonSessionConfig.ui_mode = 'embedded';
-      commonSessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/return?session_id={CHECKOUT_SESSION_ID}`;
+      commonSessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/return?embedded=true&session_id={CHECKOUT_SESSION_ID}`;
+      commonSessionConfig.payment_method_types = ['card'];
+      delete commonSessionConfig.success_url;
+      delete commonSessionConfig.cancel_url;
     } else {
       commonSessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
       commonSessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}`;

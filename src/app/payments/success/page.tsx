@@ -1,22 +1,25 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Box, Text, Button } from "@chakra-ui/react";
 
 const SuccessPageContent = () => {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [childDetails, setChildDetails] = useState({
     name: '',
     location: '',
     email: ''
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSessionDetails = async () => {
       const sessionId = searchParams.get('session_id');
       if (!sessionId) {
+        setError("Invalid session ID");
         setIsLoading(false);
         return;
       }
@@ -37,6 +40,7 @@ const SuccessPageContent = () => {
         });
       } catch (error) {
         console.error('Error fetching session:', error);
+        setError("Unable to retrieve payment details. The session may have expired.");
       } finally {
         setIsLoading(false);
       }
@@ -49,6 +53,22 @@ const SuccessPageContent = () => {
     return <Box className="flex items-center justify-center min-h-screen">Loading...</Box>;
   }
 
+  if (error) {
+    return (
+      <Box className="p-8 text-center">
+        <Text className="text-xl mb-4 text-red-600">
+          {error}
+        </Text>
+        <Button
+          onClick={() => router.push('/')}
+          className="mt-4 bg-blue-700 text-white"
+        >
+          Return Home
+        </Button>
+      </Box>
+    );
+  }
+
   return (
     <Box className="p-8 text-center">
       <Text className="text-xl mb-4">
@@ -58,7 +78,7 @@ const SuccessPageContent = () => {
         A confirmation email will be sent to {childDetails.email}.
       </Text>
       <Button
-        onClick={() => window.location.href = '/'}
+        onClick={() => router.push('/')}
         className="mt-4 bg-blue-700 text-white"
       >
         Return Home
