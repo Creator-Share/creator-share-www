@@ -282,6 +282,7 @@ const SponsorChild = () => {
           peopleData={visibleChildren}
           selectedChildId={selectedChildId}
           selectedCountry={selectedCountry}
+          setSelectedChildId={setSelectedChildId}
         />
       ) : (
         <Flex justify="center" align="center" minH="20vh">

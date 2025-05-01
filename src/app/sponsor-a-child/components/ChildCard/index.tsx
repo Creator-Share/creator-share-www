@@ -6,7 +6,6 @@ import { FaLocationDot, FaPerson } from "react-icons/fa6";
 import { calculateAge } from "@/utils/ageCalculator";
 import { centsToDollars } from "@/utils/currency";
 import { ChildCardProps } from "@/types/propTypes";
-import SponsorDialog from "../SponsorDialog";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import {
@@ -27,7 +26,12 @@ interface SponsorPeopleImage {
     order_index: number;
 }
 
-const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
+const ChildCard: React.FC<ChildCardProps> = ({ 
+    people, 
+    isSelected, 
+    id,
+    onOpenDialog
+}) => {
     const router = useRouter();
     const [images, setImages] = useState<SponsorPeopleImage[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
@@ -76,6 +80,13 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
     const handleViewActivity = (e: React.MouseEvent) => {
         e.preventDefault();
         router.push(`/sponsor-a-child/${people.username}`);
+    };
+
+    const handleSponsorClick = () => {
+        console.log(`ChildCard: Sponsor button clicked for ${people.name} (ID: ${people.id})`);
+        if (onOpenDialog) {
+            onOpenDialog();
+        }
     };
 
     return (
@@ -337,16 +348,15 @@ const ChildCard: React.FC<ChildCardProps> = ({ people, isSelected, id }) => {
                     </Box>
                     <Box className={isLearnMoreOpen ? 'border-b' : ''}>
                         {people.status !== "Budget Fulfilled" ? (
-                            <SponsorDialog
-                                people={people}
-                                trigger={
-                                    <Box fontSize="base" className="pb-6 px-6">
-                                        <Button fontWeight="md" className="text-[#FFFFFF] w-full cursor-pointer bg-[#1C3C8C] mt-8">
-                                            Sponsor {people.name}
-                                        </Button>
-                                    </Box>
-                                }
-                            />
+                            <Box fontSize="base" className="pb-6 px-6">
+                                <Button 
+                                    fontWeight="md" 
+                                    className="text-[#FFFFFF] w-full cursor-pointer bg-[#1C3C8C] mt-8"
+                                    onClick={handleSponsorClick}
+                                >
+                                    Sponsor {people.name}
+                                </Button>
+                            </Box>
                         ) : (
                             <Box fontSize="base" className="pb-6 px-6">
                                 <Button fontWeight="md" className="text-[#FFFFFF] disabled w-full cursor-not-allowed bg-gray-400 mt-8">

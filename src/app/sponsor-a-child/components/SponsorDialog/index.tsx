@@ -35,11 +35,26 @@ interface SponsorDialogProps {
     people: SponsorPeople;
     trigger: React.ReactNode;
     useEmbedded?: boolean;
+    onNext?: () => void;
+    onPrevious?: () => void;
+    hasNext?: boolean;
+    hasPrevious?: boolean;
+    isOpen?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }
 
 const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
-const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger = false }) => {
+const SponsorDialog: React.FC<SponsorDialogProps> = ({ 
+    people, 
+    trigger = false, 
+    onNext, 
+    onPrevious,
+    hasNext = false,
+    hasPrevious = false,
+    isOpen = false,
+    onOpenChange
+}) => {
     const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
     const [amount, setAmount] = useState<number>(remainingAmount);
     const [selectedOption, setSelectedOption] = useState<string>(paymentOptionsCollection.items[0].value);
@@ -50,12 +65,22 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger = false }
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
 
     useEffect(() => {
+        console.log("SponsorDialog: people.id changed to", people.id, "name:", people.name);
+        
+        // Reset state when people changes
+        setAmount(remainingAmount);
+        setValue([remainingAmount]);
+        setCurrentImageIndex(0);
+        setSelectedOption(paymentOptionsCollection.items[0].value);
+        
         const fetchImages = async () => {
             try {
                 const response = await fetch(`/api/admin/children/images/${people.id}`);
                 if (response.ok) {
                     const data = await response.json();
-                    setImages(data.sort((a: SponsorPeopleImage, b: SponsorPeopleImage) => a.order_index - b.order_index));
+                    setImages(data.sort((a: SponsorPeopleImage, b: SponsorPeopleImage) => 
+                        a.order_index - b.order_index
+                    ));
                 }
             } catch (error) {
                 console.error("Error fetching images:", error);
@@ -63,7 +88,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger = false }
         };
 
         fetchImages();
-    }, [people.id]);
+    }, [people.id, remainingAmount, people.name]);
 
     const handleSliderChange = (e: { value: number[] }) => {
         const newValue = Math.min(e.value[0], remainingAmount);
@@ -194,8 +219,26 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger = false }
         setCurrentImageIndex((prev) => (prev + 1) % images.length);
     };
 
+    const handlePrevious = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (onPrevious) {
+            onPrevious();
+        }
+    };
+
+    const handleNext = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (onNext) {
+            onNext();
+        }
+    };
+
     return (
         <DialogRoot
+            open={isOpen}
+            onOpenChange={(details) => onOpenChange?.(details.open)}
             size={{ base: "full", md: "xl" }}
             placement="center"
             motionPreset="slide-in-bottom"
@@ -276,13 +319,31 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger = false }
                                     </>
                                 )}
                             </Box>
+                            <Flex justify="space-between" mt={4}>
+                                <Button
+                                    onClick={handlePrevious}
+                                    disabled={!hasPrevious}
+                                    variant="outline"
+                                    className={`px-4 py-2 ${!hasPrevious ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    ← Previous Child
+                                </Button>
+                                <Button
+                                    onClick={handleNext}
+                                    disabled={!hasNext}
+                                    variant="outline"
+                                    className={`px-4 py-2 ${!hasNext ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    Next Child →
+                                </Button>
+                            </Flex>
                         </Box>
                         <Box className="flex-1 border border-[#E8E8EA] p-5">
                             <Text className="text-2xl text-center font-bold md:mt-0 md:text-start">
                                 {people.name}
                             </Text>
                             <Progress.Root
-                                defaultValue={Math.min((people.budget_raised / people.budget_goal) * 100, 100)}
+                                value={Math.min((people.budget_raised / people.budget_goal) * 100, 100)}
                                 my={8}
                             >
                                 <Text className="text-end text-base text-[#959090] font-normal">
@@ -344,7 +405,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger = false }
                                         mb={4}
                                         px={4}
                                         py={2}
-                                        defaultValue={[paymentOptionsCollection.items[0].value]}
+                                        value={[selectedOption]}
                                         onValueChange={(details) => handleSelectChange(details.value[0])}
                                     >
                                         <SelectTrigger className="w-full">
@@ -388,4 +449,4 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ people, trigger = false }
     );
 };
 
-export default SponsorDialog; 
+export default SponsorDialog;

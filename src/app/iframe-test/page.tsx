@@ -8,12 +8,12 @@ const IframeTest = () => {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (!event.origin.includes('localhost:3000')) return;
-      
+
       if (event.data?.type === 'resize' && iframeRef.current) {
         const iframe = iframeRef.current;
         iframe.style.transition = 'none';
         iframe.style.height = `${event.data.height}px`;
-        
+
         requestAnimationFrame(() => {
           iframe.style.transition = 'height 0.3s ease';
         });
@@ -83,7 +83,7 @@ window.addEventListener('load', function() {
                 onClick={() => {
                   const textarea = document.querySelector('textarea');
                   if (!textarea) return;
-                  
+
                   const button = document.querySelector('[data-copy-button]') as HTMLButtonElement;
                   const originalText = button.textContent;
                   navigator.clipboard.writeText(textarea.value).then(() => {
@@ -104,9 +104,9 @@ window.addEventListener('load', function() {
         <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
           <iframe
             ref={iframeRef}
-            src="/sponsor-a-child?embedded=true"
+            src="http://localhost:3000/sponsor-a-child?embedded=true&parentOrigin=http://localhost:3000.com"
             className="w-full"
-            style={{ 
+            style={{
               border: 'none',
               width: '100%',
               height: '500px',

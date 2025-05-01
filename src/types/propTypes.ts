@@ -26,12 +26,18 @@ export interface ChildListingsProps {
   selectedChildId: string | null;
   selectedCountry: string | null;
   isLoading?: boolean;
+  setSelectedChildId: (id: string | null) => void;
 }
 
 export interface ChildCardProps {
     people: SponsorPeople;
     isSelected?: boolean;
     id: string;
+    onNext?: () => void;
+    onPrevious?: () => void;
+    hasNext?: boolean;
+    hasPrevious?: boolean;
+    onOpenDialog?: () => void;
 }
 
 export interface SponsorshipDetailsProps {
