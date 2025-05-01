@@ -22,12 +22,17 @@ const ChildDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ par
   useEffect(() => {
     const fetchChild = async () => {
       try {
-        const encodedUsername = encodeURIComponent(username);
-        const res = await fetch(`/api/children/get/username/${encodedUsername}`);
-        if (!res.ok) throw new Error("Failed to fetch child data");
+        const res = await fetch(`/api/children/get/username/${username}`);
+        
+        if (!res.ok) {
+          console.error("Failed to fetch child data:", await res.text());
+          throw new Error("Failed to fetch child data");
+        }
+        
         const data = await res.json();
         setChild(data.child);
       } catch (err: unknown) {
+        console.error("Error in child details page:", err);
         if (err instanceof Error) {
           setError(err.message || "Unexpected error occurred");
         } else {
@@ -38,7 +43,9 @@ const ChildDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ par
       }
     };
 
-    fetchChild();
+    if (username) {
+      fetchChild();
+    }
   }, [username]);
 
   if (loading) {

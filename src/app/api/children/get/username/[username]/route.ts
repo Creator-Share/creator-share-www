@@ -5,7 +5,18 @@ export async function GET(request: Request) {
   const supabase = await createClient()
   const url = new URL(request.url);
   const encodedUsername = url.pathname.split('/').pop() || '';
-  const username = decodeURIComponent(encodedUsername);
+  let username;
+  try {
+    username = decodeURIComponent(encodedUsername);
+    if (username.includes('%')) {
+      username = decodeURIComponent(username);
+    }
+  } catch (e) {
+    username = encodedUsername;
+    console.error('Error decoding username:', e);
+  }
+
+  console.log('Processing username:', username);
 
   try {
     const { data, error } = await supabase
@@ -20,9 +31,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ child: data }, { status: 200 });
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Unexpected error occurred';
+    console.error('Error fetching child by username:', errorMessage);
     return NextResponse.json(
       { error: errorMessage },
       { status: 500 }
     );
   }
-} 
+}
