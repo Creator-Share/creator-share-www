@@ -45,6 +45,9 @@ interface SponsorDialogProps {
 
 const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
+// Check if we're in an iframe
+const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+
 const SponsorDialog: React.FC<SponsorDialogProps> = ({ 
     people, 
     trigger = false, 
@@ -66,8 +69,6 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
 
     useEffect(() => {
         console.log("SponsorDialog: people.id changed to", people.id, "name:", people.name);
-        
-        // Reset state when people changes
         setAmount(remainingAmount);
         setValue([remainingAmount]);
         setCurrentImageIndex(0);
@@ -88,7 +89,68 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         };
 
         fetchImages();
-    }, [people.id, remainingAmount, people.name]);
+        
+        // Send dialog position to parent after a short delay to allow rendering
+        if (isInIframe && isOpen) {
+            setTimeout(() => {
+                try {
+                    const dialogElement = document.querySelector('[role="alertdialog"]');
+                    const dialogRect = dialogElement?.getBoundingClientRect();
+                    
+                    if (dialogRect) {
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const parentOrigin = urlParams.get('parentOrigin') || '*';
+                        
+                        window.parent.postMessage({
+                            type: 'makeDialogSticky',
+                            from: 'sponsor-dialog-update',
+                            dialogPosition: {
+                                top: dialogRect.top,
+                                left: dialogRect.left,
+                                height: dialogRect.height,
+                                width: dialogRect.width
+                            }
+                        }, parentOrigin);
+                        
+                        console.log('[Child Frame] Sent makeDialogSticky request to parent');
+                    }
+                } catch (e) {
+                    console.error('[Child Frame] Error sending dialog position:', e);
+                }
+            }, 200);
+        }
+    }, [people.id, remainingAmount, people.name, isInIframe, isOpen]);
+    
+    // Effect for making the dialog sticky when it opens
+    useEffect(() => {
+        if (isInIframe && isOpen) {
+            try {
+                // Send a message to parent window to make the dialog sticky
+                const urlParams = new URLSearchParams(window.location.search);
+                const parentOrigin = urlParams.get('parentOrigin') || '*';
+                
+                // Send dialog position information to parent
+                const dialogElement = document.querySelector('[role="alertdialog"]');
+                const dialogRect = dialogElement?.getBoundingClientRect();
+                
+                window.parent.postMessage({
+                    type: 'makeDialogSticky',
+                    from: 'sponsor-dialog',
+                    dialogPosition: dialogRect ? {
+                        top: dialogRect.top,
+                        left: dialogRect.left,
+                        height: dialogRect.height,
+                        width: dialogRect.width
+                    } : null
+                }, parentOrigin);
+                
+                console.log('[Child Frame] Sent makeDialogSticky request to parent');
+            } catch (e) {
+                // Ignore errors from cross-origin restrictions
+                console.error('[Child Frame] Error sending makeDialogSticky:', e);
+            }
+        }
+    }, [isOpen, isInIframe]);
 
     const handleSliderChange = (e: { value: number[] }) => {
         const newValue = Math.min(e.value[0], remainingAmount);
@@ -222,16 +284,20 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     const handlePrevious = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        
         if (onPrevious) {
             onPrevious();
+            // No scrolling - we want the dialog to stay in place
         }
     };
 
     const handleNext = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        
         if (onNext) {
             onNext();
+            // No scrolling - we want the dialog to stay in place
         }
     };
 
@@ -239,8 +305,8 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         <DialogRoot
             open={isOpen}
             onOpenChange={(details) => onOpenChange?.(details.open)}
-            size={{ base: "full", md: "xl" }}
-            placement="center"
+            size={isInIframe ? { base: "lg", md: "lg" } : { base: "full", md: "xl" }}
+            placement={isInIframe ? "top" : "center"}
             motionPreset="slide-in-bottom"
             role="alertdialog"
         >
@@ -251,14 +317,23 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 <DialogHeader>
                     <DialogCloseTrigger id="closeDialog" />
                 </DialogHeader>
-                <DialogBody>
-                    <Box className="flex flex-col md:flex-row gap-8 p-5">
+                <DialogBody suppressHydrationWarning={true}>
+                    <Box 
+                        className={isInIframe 
+                            ? "flex flex-col gap-4 p-3" 
+                            : "flex flex-col md:flex-row gap-8 p-5"
+                        } 
+                        suppressHydrationWarning={true}
+                    >
                         <Box className="w-full md:w-[359px]">
                             <Box position="relative">
                                 <Image
                                     src={images[currentImageIndex]?.image_url || people.image_url || placeholderImage}
                                     alt={people.name}
-                                    className="rounded-xl md:h-[479px] w-full object-cover"
+                                    className={isInIframe 
+                                        ? "rounded-xl h-[300px] w-full object-cover" 
+                                        : "rounded-xl md:h-[479px] w-full object-cover"
+                                    }
                                 />
                                 {images.length > 1 && (
                                     <>
@@ -440,7 +515,12 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                             </Flex>
                         </Box>
                     </Box>
-                    <Text color="gray.500" textAlign="center" p={1}>
+                    <Text 
+                        color="gray.500" 
+                        textAlign="center" 
+                        p={1}
+                        fontSize={isInIframe ? "xs" : "sm"}
+                    >
                         {renderDisclaimer()}
                     </Text>
                 </DialogBody>

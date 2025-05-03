@@ -63,7 +63,7 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
     setActiveChildId(childId);
     setDialogOpen(true);
   };
-
+  
   // Handle dialog navigation
   const handleDialogNavigation = (direction: 'next' | 'previous') => {
     if (!activeChildId) return;
@@ -76,13 +76,21 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
       console.log(`ChildListings: Navigating to next child: ${nextChild.name} (ID: ${nextChild.id})`);
       setActiveChildId(nextChild.id);
       setSelectedChildId(nextChild.id);
-      document.getElementById(nextChild.id)?.scrollIntoView({ behavior: 'smooth' });
+      
+      // Only scroll to the child if not in an iframe
+      if (!isInIframe) {
+        document.getElementById(nextChild.id)?.scrollIntoView({ behavior: 'smooth' });
+      }
     } else if (direction === 'previous' && currentIndex > 0) {
       const prevChild = visiblePeople[currentIndex - 1];
       console.log(`ChildListings: Navigating to previous child: ${prevChild.name} (ID: ${prevChild.id})`);
       setActiveChildId(prevChild.id);
       setSelectedChildId(prevChild.id);
-      document.getElementById(prevChild.id)?.scrollIntoView({ behavior: 'smooth' });
+      
+      // Only scroll to the child if not in an iframe
+      if (!isInIframe) {
+        document.getElementById(prevChild.id)?.scrollIntoView({ behavior: 'smooth' });
+      }
     }
   };
 
@@ -110,6 +118,7 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
       px={{ base: 3, md: 8 }} 
       mt={4}
       style={{ minHeight: visiblePeople.length ? 'auto' : '100px' }}
+      suppressHydrationWarning={true}
     >
       {/* Render the shared dialog */}
       {activeChild && (

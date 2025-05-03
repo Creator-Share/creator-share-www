@@ -18,6 +18,32 @@ const IframeTest = () => {
           iframe.style.transition = 'height 0.3s ease';
         });
       }
+      
+      // Handle makeDialogSticky message from the iframe
+      if (event.data?.type === 'makeDialogSticky') {
+        console.log('Received makeDialogSticky request from iframe', event.data);
+        
+        // We don't need to scroll - the dialog should stay in place
+        // Just ensure the iframe is visible
+        if (iframeRef.current) {
+          // Make sure the iframe is visible
+          const iframeRect = iframeRef.current.getBoundingClientRect();
+          if (iframeRect.top < 0 || iframeRect.bottom > window.innerHeight) {
+            iframeRef.current.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start'
+            });
+          }
+        }
+      }
+      
+      // Handle scrollToTop message from the iframe (legacy support)
+      else if (event.data?.type === 'scrollToTop') {
+        console.log('Received scrollToTop request from iframe', event.data);
+        
+        // We don't want to scroll anymore - the dialog should stay in place
+        // No action needed
+      }
     };
 
     window.addEventListener('message', handleMessage);
@@ -25,7 +51,7 @@ const IframeTest = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50" suppressHydrationWarning={true}>
       <div className="container mx-auto p-4">
         <div className="mb-8 p-4 bg-white rounded-xl shadow-sm">
           <h2 className="text-xl font-semibold mb-4">Implementation Reference</h2>
@@ -44,7 +70,7 @@ const IframeTest = () => {
 ></iframe>
 
 <script>
-// Handle iframe resizing
+// Handle iframe resizing and scrolling
 window.addEventListener('message', function(event) {
     // Replace localhost:3000 with your domain in production
     if (!event.origin.includes('localhost:3000')) return;
@@ -60,6 +86,33 @@ window.addEventListener('message', function(event) {
         setTimeout(function() {
             iframe.style.transition = transition;
         }, 50);
+    }
+    
+    // Handle makeDialogSticky message from the iframe
+    if (event.data?.type === 'makeDialogSticky') {
+        console.log('Received makeDialogSticky request from iframe', event.data);
+        
+        // We don't need to scroll - the dialog should stay in place
+        // Just ensure the iframe is visible
+        var iframe = document.querySelector('iframe[src*="sponsor-a-child"]');
+        if (iframe) {
+            // Make sure the iframe is visible
+            var iframeRect = iframe.getBoundingClientRect();
+            if (iframeRect.top < 0 || iframeRect.bottom > window.innerHeight) {
+                iframe.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        }
+    }
+    
+    // Handle scrollToTop message from the iframe (legacy support)
+    else if (event.data?.type === 'scrollToTop') {
+        console.log('Received scrollToTop request from iframe', event.data);
+        
+        // We don't want to scroll anymore - the dialog should stay in place
+        // No action needed
     }
 }, false);
 
@@ -104,7 +157,7 @@ window.addEventListener('load', function() {
         <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
           <iframe
             ref={iframeRef}
-            src="http://localhost:3000/sponsor-a-child?embedded=true&parentOrigin=http://localhost:3000.com"
+            src="http://localhost:3000/sponsor-a-child?embedded=true&parentOrigin=http://localhost:3000"
             className="w-full"
             style={{
               border: 'none',

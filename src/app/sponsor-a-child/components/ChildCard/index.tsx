@@ -95,6 +95,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
             borderColor={isSelected ? "blue.500" : "gray.200"}
             borderRadius={{ base: 'md', md: 'md' }}
             className={`bg-white mb-6 ${isLearnMoreOpen ? 'border-t border-l border-r' : 'border-0 md:border'} md:mb-0 ${isSelected ? 'highlight-child' : ''}`}
+            suppressHydrationWarning={true}
         >
             <Flex
                 direction={{ base: "column", md: "row" }}

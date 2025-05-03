@@ -203,6 +203,7 @@ const SponsorChild = () => {
     <Box 
       ref={contentRef}
       className="flex flex-col items-center justify-center px-4 md:px-32 py-12 md:py-16"
+      suppressHydrationWarning={true}
     >
       <Box className="text-center justify-center my-12">
         <Text className="text-[#1C3C8C] font-semibold text-5xl mb-4">

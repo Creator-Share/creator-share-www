@@ -382,7 +382,7 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
   }
 
   return (
-    <Box className="h-[932px] md:h-[450px] w-full mb-8 rounded-xl relative">
+    <Box className="h-[932px] md:h-[450px] w-full mb-8 rounded-xl relative" suppressHydrationWarning={true}>
       <MapContainer
         ref={mapRef}
         center={[0, 0]}
