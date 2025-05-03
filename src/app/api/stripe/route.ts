@@ -15,19 +15,50 @@ export async function POST(req: Request) {
       isEmbedded,
     } = await req.json();
 
-    if (!amount || amount < 10) {
+    // Validate amount
+    if (!amount || amount < 1000) { // 1000 cents = $10.00
       return NextResponse.json(
         { error: "Minimum amount is $10." },
         { status: 400 }
       );
     }
 
+    // Ensure we have a valid image URL
     const fullImageUrl = childImage.startsWith('http') 
       ? childImage 
       : `${process.env.NEXT_PUBLIC_BASE_URL}${childImage}`;
 
-    const commonSessionConfig: Stripe.Checkout.SessionCreateParams = {
+    // Determine if this is monthly or yearly subscription
+    const isMonthly = paymentType === "subscription";
+    const interval = isMonthly ? 'month' : 'year';
+    
+    // Create product
+    const product = await stripe.products.create({
+      name: `${isMonthly ? 'Monthly' : 'Yearly'} Sponsorship for ${childName}`,
+      images: [fullImageUrl],
+    });
+
+    // Create price
+    const price = await stripe.prices.create({
+      unit_amount: amount,
+      currency: 'usd',
+      recurring: { interval },
+      product: product.id,
+      metadata: {
+        childId,
+        userId: userId || null,
+        amount: amount.toString()
+      }
+    });
+
+    // Common session configuration
+    const sessionConfig: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
+      mode: 'subscription',
+      line_items: [{ price: price.id, quantity: 1 }],
+      payment_method_options: {
+        card: { request_three_d_secure: 'automatic' }
+      },
       metadata: {
         childId,
         childName,
@@ -36,101 +67,26 @@ export async function POST(req: Request) {
         userId: userId || null,
         paymentType
       },
+      subscription_data: {
+        metadata: {
+          childId,
+          userId: userId || null,
+          amount: amount.toString()
+        }
+      }
     };
 
+    // Configure based on embedded or standard checkout
     if (isEmbedded) {
-      commonSessionConfig.ui_mode = 'embedded';
-      commonSessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/return?embedded=true&session_id={CHECKOUT_SESSION_ID}`;
-      commonSessionConfig.payment_method_types = ['card'];
-      delete commonSessionConfig.success_url;
-      delete commonSessionConfig.cancel_url;
+      sessionConfig.ui_mode = 'embedded';
+      sessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/return?embedded=true&session_id={CHECKOUT_SESSION_ID}`;
     } else {
-      commonSessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
-      commonSessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}`;
+      sessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
+      sessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}`;
     }
 
-    let session;
-    if (paymentType === "subscription") {
-      const product = await stripe.products.create({
-        name: `Monthly Sponsorship for ${childName}`,
-        images: [fullImageUrl],
-      });
-
-      const price = await stripe.prices.create({
-        unit_amount: amount,
-        currency: 'usd',
-        recurring: { interval: 'month' },
-        product: product.id,
-        metadata: {
-          childId,
-          userId,
-          amount: amount.toString()
-        }
-      });
-
-      session = await stripe.checkout.sessions.create({
-        ...commonSessionConfig,
-        mode: 'subscription',
-        line_items: [
-          {
-            price: price.id,
-            quantity: 1,
-          },
-        ],
-        payment_method_options: {
-          card: {
-            request_three_d_secure: 'automatic'
-          }
-        },
-        subscription_data: {
-          metadata: {
-            childId,
-            userId,
-            amount: amount.toString()
-          }
-        }
-      });
-    } else {
-      const product = await stripe.products.create({
-        name: `Yearly Sponsorship for ${childName}`,
-        images: [fullImageUrl],
-      });
-
-      const price = await stripe.prices.create({
-        unit_amount: amount,
-        currency: 'usd',
-        recurring: { interval: 'year' },
-        product: product.id,
-        metadata: {
-          childId,
-          userId,
-          amount: amount.toString()
-        }
-      });
-
-      session = await stripe.checkout.sessions.create({
-        ...commonSessionConfig,
-        mode: 'subscription',
-        line_items: [
-          {
-            price: price.id,
-            quantity: 1,
-          },
-        ],
-        payment_method_options: {
-          card: {
-            request_three_d_secure: 'automatic'
-          }
-        },
-        subscription_data: {
-          metadata: {
-            childId,
-            userId,
-            amount: amount.toString()
-          }
-        }
-      });
-    }
+    // Create checkout session
+    const session = await stripe.checkout.sessions.create(sessionConfig);
 
     return NextResponse.json({ 
       url: session.url,

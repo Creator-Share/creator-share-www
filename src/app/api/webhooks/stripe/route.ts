@@ -20,7 +20,6 @@ export async function POST(req: Request) {
 
   try {
     const rawBody = await req.text();
-    console.log("Received webhook with signature:", sig);
     
     event = stripe.webhooks.constructEvent(
       rawBody,
@@ -33,27 +32,29 @@ export async function POST(req: Request) {
     console.error("Error verifying Stripe webhook:", err);
     return NextResponse.json({ error: "Webhook verification failed" }, { status: 400 });
   }
-  console.log(`Processing event: ${event.type}`);
 
   try {
+    console.log(`Processing event: ${event.type}`);
+    
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        console.log("Processing checkout.session.completed:", session.id);
         
+        // Extract metadata
         const childId = session.metadata?.childId;
         const amount = parseFloat(session.metadata?.amount || "0");
         const userId = session.metadata?.userId || null;
         const paymentType = session.metadata?.paymentType;
         const customerEmail = session.customer_details?.email;
+        const interval = paymentType === "subscription" ? "month" : "year";
         
+        // Validate required metadata
         if (!childId || !amount) {
-          console.error("Missing metadata in Stripe session:", session.metadata);
+          console.error("Missing required metadata in Stripe session:", session.metadata);
           return NextResponse.json({ error: "Invalid metadata" }, { status: 400 });
         }
 
-        console.log(`Processing sponsorship: ${childId}, ${amount}, ${customerEmail}`);
-
+        // Fetch child data
         const { data: childData, error: childError } = await supabase
           .from("sponsor_people")
           .select("name, budget_raised, budget_goal")
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: "Failed to fetch child data" }, { status: 500 });
         }
 
-        console.log("Child data retrieved:", childData);
+        // Create transaction record
         const { error: transactionError } = await supabase
           .from("transaction_ledger")
           .insert({
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
         }
 
-        const interval = paymentType === "subscription" ? "month" : "year";
+        // Create activity record
         const { error: activityError } = await supabase
           .from("people_activities")
           .insert({
@@ -96,19 +97,23 @@ export async function POST(req: Request) {
 
         if (activityError) {
           console.error("Error creating activity:", activityError);
+          // Continue processing even if activity creation fails
         }
+
+        // For subscription mode, we'll handle subscription creation in the subscription.created event
         if (session.mode === 'subscription') {
-          console.log('Skipping subscription creation for checkout.session.completed - will be handled by subscription event');
+          console.log('Subscription will be handled by subscription.created event');
         } else {
+          // For one-time payments, create subscription record now
           const { error: subscriptionError } = await supabase.from("subscriptions").insert({
             stripe_subscription_id: session.subscription as string,
             user_id: userId,
             child_id: childId,
             status: "complete",
             amount: amount,
-            interval: paymentType === "subscription" ? "month" : "year",
+            interval: interval,
             current_period_start: new Date(),
-            current_period_end: new Date(Date.now() + (paymentType === "subscription" ? 30 : 365) * 24 * 60 * 60 * 1000),
+            current_period_end: new Date(Date.now() + (interval === "month" ? 30 : 365) * 24 * 60 * 60 * 1000),
             customer_id: session.customer as string
           });
 
@@ -117,9 +122,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Failed to create subscription" }, { status: 500 });
           }
         }
+
+        // Send confirmation email if we have customer email
         if (customerEmail) {
           try {
-            console.log(`Attempting to send email to ${customerEmail}`);
             if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
               console.warn("Email configuration missing - skipping email send");
             } else {
@@ -130,7 +136,7 @@ export async function POST(req: Request) {
                 interval
               );
               
-              console.log("Email sending result:", emailResult);
+              // Log email attempt
               try {
                 await supabase.from("email_logs").insert({
                   user_id: userId,
@@ -147,6 +153,7 @@ export async function POST(req: Request) {
             }
           } catch (emailError) {
             console.error("Error in email sending process:", emailError);
+            // Continue processing even if email sending fails
           }
         }
 
@@ -157,17 +164,23 @@ export async function POST(req: Request) {
         const subscription = event.data.object as Stripe.Subscription;
         console.log('Subscription created:', subscription.id);
         
-        await supabase.from("subscriptions").insert({
+        // Create subscription record in database
+        const { error: subscriptionError } = await supabase.from("subscriptions").insert({
           stripe_subscription_id: subscription.id,
           user_id: subscription.metadata?.userId,
           child_id: subscription.metadata?.childId,
-          status: "incomplete",
+          status: subscription.status === "active" ? "complete" : "incomplete",
           amount: subscription.items.data[0].price.unit_amount,
           interval: subscription.items.data[0].price.recurring?.interval,
           current_period_start: new Date(subscription.current_period_start * 1000),
           current_period_end: new Date(subscription.current_period_end * 1000),
           customer_id: subscription.customer as string
         });
+
+        if (subscriptionError) {
+          console.error("Error creating subscription record:", subscriptionError);
+          return NextResponse.json({ error: "Failed to create subscription record" }, { status: 500 });
+        }
 
         return NextResponse.json({ message: "Subscription processed" }, { status: 200 });
       }
@@ -179,22 +192,28 @@ export async function POST(req: Request) {
         
         console.log(`Payment failed for subscription: ${subscriptionId}`);
 
-        await supabase.from("subscriptions")
+        // Update subscription status
+        const { error: updateError } = await supabase.from("subscriptions")
           .update({ status: "incomplete" })
           .eq("stripe_subscription_id", subscriptionId);
+          
+        if (updateError) {
+          console.error("Error updating subscription status:", updateError);
+        }
 
-        const { data: childData } = await supabase
+        // Get child information for email
+        const { data: subscriptionData } = await supabase
           .from("subscriptions")
           .select(`child_id`)
           .eq("stripe_subscription_id", subscriptionId)
           .single();
           
         let childName = "your sponsored child";
-        if (childData?.child_id) {
+        if (subscriptionData?.child_id) {
           const { data: sponsorPeople } = await supabase
             .from("sponsor_people")
             .select("name")
-            .eq("id", childData.child_id)
+            .eq("id", subscriptionData.child_id)
             .single();
             
           if (sponsorPeople) {
@@ -202,6 +221,7 @@ export async function POST(req: Request) {
           }
         }
 
+        // Send payment failed email
         if (customerEmail) {
           try {
             await sendPaymentFailedEmail(
@@ -212,7 +232,18 @@ export async function POST(req: Request) {
                 ? new Date(invoice.next_payment_attempt * 1000) 
                 : null
             );
-            console.log(`Payment failed email sent to ${customerEmail}`);
+            
+            // Log email attempt
+            try {
+              await supabase.from("email_logs").insert({
+                email: customerEmail,
+                subject: `Payment failed for ${childName} sponsorship`,
+                status: 'sent',
+                created_at: new Date()
+              });
+            } catch (err) {
+              console.error("Error logging email attempt:", err);
+            }
           } catch (emailError) {
             console.error("Error sending payment failed email:", emailError);
           }
@@ -224,12 +255,19 @@ export async function POST(req: Request) {
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
 
-        await supabase.from("subscriptions")
+        // Update subscription record
+        const { error: updateError } = await supabase.from("subscriptions")
           .update({ 
             status: subscription.status === "active" ? "complete" : "incomplete",
+            current_period_start: new Date(subscription.current_period_start * 1000),
             current_period_end: new Date(subscription.current_period_end * 1000)
           })
           .eq("stripe_subscription_id", subscription.id);
+          
+        if (updateError) {
+          console.error("Error updating subscription:", updateError);
+          return NextResponse.json({ error: "Failed to update subscription" }, { status: 500 });
+        }
         
         return NextResponse.json({ message: "Subscription updated" }, { status: 200 });
       }
@@ -237,17 +275,48 @@ export async function POST(req: Request) {
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
 
-        await supabase.from("subscriptions")
+        // Mark subscription as cancelled
+        const { error: updateError } = await supabase.from("subscriptions")
           .update({ 
             status: "cancelled",
             canceled_at: new Date()
           })
           .eq("stripe_subscription_id", subscription.id);
+          
+        if (updateError) {
+          console.error("Error cancelling subscription:", updateError);
+          return NextResponse.json({ error: "Failed to cancel subscription" }, { status: 500 });
+        }
         
         return NextResponse.json({ message: "Subscription cancelled" }, { status: 200 });
       }
       
+      case "invoice.paid":
+      case "invoice.payment_succeeded":
+        // These events indicate successful payment of an invoice
+        // We can use them to update our database if needed
+        const invoice = event.data.object as Stripe.Invoice;
+        const subscriptionId = invoice.subscription as string;
+        
+        if (subscriptionId) {
+          await supabase.from("subscriptions")
+            .update({ status: "complete" })
+            .eq("stripe_subscription_id", subscriptionId);
+        }
+        
+        return NextResponse.json({ message: "Invoice payment processed" }, { status: 200 });
+        
+      case "payment_intent.succeeded":
+        // Payment intent succeeded, which means a payment was successful
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        
+        // Log the successful payment intent for reference
+        console.log(`Payment intent succeeded: ${paymentIntent.id}`);
+        
+        return NextResponse.json({ message: "Payment intent succeeded" }, { status: 200 });
+        
       default:
+        // For all other event types, just acknowledge receipt
         console.log(`Unhandled event type: ${event.type}`);
         return NextResponse.json({ message: `Received ${event.type} event` }, { status: 200 });
     }

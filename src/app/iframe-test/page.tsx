@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 const IframeTest = () => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (!event.origin.includes('localhost:3000')) return;
 
+      // Handle iframe resizing
       if (event.data?.type === 'resize' && iframeRef.current) {
         const iframe = iframeRef.current;
         iframe.style.transition = 'none';
@@ -37,12 +39,31 @@ const IframeTest = () => {
         }
       }
       
-      // Handle scrollToTop message from the iframe (legacy support)
-      else if (event.data?.type === 'scrollToTop') {
-        console.log('Received scrollToTop request from iframe', event.data);
+      // Handle sponsorship complete message
+      else if (event.data?.type === 'sponsorship_complete') {
+        console.log('Received sponsorship_complete from iframe', event.data);
+        setPaymentStatus('complete');
         
-        // We don't want to scroll anymore - the dialog should stay in place
-        // No action needed
+        // You could show a success message or redirect the user
+        if (iframeRef.current) {
+          iframeRef.current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      }
+      
+      // Handle navigation message
+      else if (event.data?.type === 'navigation') {
+        console.log('Received navigation request from iframe', event.data);
+        
+        if (event.data.action === 'return') {
+          // Reset the iframe to the sponsor-a-child page
+          if (iframeRef.current) {
+            iframeRef.current.src = "http://localhost:3000/sponsor-a-child?embedded=true&parentOrigin=http://localhost:3000";
+            setPaymentStatus(null);
+          }
+        }
       }
     };
 
@@ -107,12 +128,31 @@ window.addEventListener('message', function(event) {
         }
     }
     
-    // Handle scrollToTop message from the iframe (legacy support)
-    else if (event.data?.type === 'scrollToTop') {
-        console.log('Received scrollToTop request from iframe', event.data);
+    // Handle sponsorship complete message
+    else if (event.data?.type === 'sponsorship_complete') {
+        console.log('Received sponsorship_complete from iframe', event.data);
         
-        // We don't want to scroll anymore - the dialog should stay in place
-        // No action needed
+        // You could show a success message or redirect the user
+        var iframe = document.querySelector('iframe[src*="sponsor-a-child"]');
+        if (iframe) {
+            iframe.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }
+    }
+    
+    // Handle navigation message
+    else if (event.data?.type === 'navigation') {
+        console.log('Received navigation request from iframe', event.data);
+        
+        if (event.data.action === 'return') {
+            // Reset the iframe to the sponsor-a-child page
+            var iframe = document.querySelector('iframe[src*="sponsor-a-child"]');
+            if (iframe) {
+                iframe.src = "http://localhost:3000/sponsor-a-child?embedded=true&parentOrigin=https://share-tanzania.webflow.io";
+            }
+        }
     }
 }, false);
 
@@ -154,6 +194,14 @@ window.addEventListener('load', function() {
             </div>
           </div>
         </div>
+        
+        {paymentStatus === 'complete' && (
+          <div className="mb-4 p-4 bg-green-100 border border-green-300 rounded-xl text-green-800">
+            <h3 className="font-semibold text-lg mb-2">Thank you for your sponsorship!</h3>
+            <p>Your payment has been successfully processed. A confirmation email will be sent to you shortly.</p>
+          </div>
+        )}
+        
         <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
           <iframe
             ref={iframeRef}

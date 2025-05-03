@@ -1,5 +1,5 @@
 "use client";
-import { Box, Text, Button, Flex } from "@chakra-ui/react";
+import { Box, Text, Button, Flex, Spinner, Center } from "@chakra-ui/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 
@@ -7,31 +7,64 @@ const FailedPageContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [childDetails, setChildDetails] = useState({
-    name: '',
+    name: 'this child',
     location: ''
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const fetchSessionDetails = async () => {
       const sessionId = searchParams.get('session_id');
-      if (!sessionId) return;
+      if (!sessionId) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
         const response = await fetch(`/api/stripe/session?id=${sessionId}`);
-        if (!response.ok) throw new Error('Failed to fetch session');
+        const data = await response.json();
         
-        const { session } = await response.json();
+        if (!response.ok) {
+          // If session not found and we haven't retried too many times, retry after a delay
+          if (data.code === 'SESSION_NOT_FOUND' && retryCount < 2) {
+            console.log(`Session not found, retrying in 1 second (attempt ${retryCount + 1}/2)...`);
+            setTimeout(() => {
+              setRetryCount(prev => prev + 1);
+            }, 1000);
+            return;
+          }
+          
+          // For failed payments, we don't need to retry as much
+          throw new Error(data.error || 'Failed to fetch session');
+        }
+        
+        const { session } = data;
         setChildDetails({
-          name: session.metadata.childName || '',
-          location: session.metadata.childLocation || ''
+          name: session.metadata?.childName || 'this child',
+          location: session.metadata?.childLocation || ''
         });
       } catch (error) {
         console.error('Error fetching session:', error);
+        // Even if we can't get the session, we can still show the failed page
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchSessionDetails();
-  }, [searchParams]);
+  }, [searchParams, retryCount]);
+
+  if (isLoading) {
+    return (
+      <Center className="min-h-screen">
+        <Box className="text-center">
+          <Spinner size="xl" color="blue.500" mb={4} />
+          <Text>Loading payment details...</Text>
+        </Box>
+      </Center>
+    );
+  }
 
   return (
     <Box className="flex flex-col items-center justify-center min-h-screen p-4">
@@ -87,7 +120,7 @@ const FailedPageContent = () => {
 
 const FailedPage = () => {
   return (
-    <Suspense fallback={<Box className="flex items-center justify-center min-h-screen">Loading...</Box>}>
+    <Suspense fallback={<Center className="min-h-screen"><Spinner size="xl" color="blue.500" /></Center>}>
       <FailedPageContent />
     </Suspense>
   );

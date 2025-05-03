@@ -119,7 +119,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 }
             }, 200);
         }
-    }, [people.id, remainingAmount, people.name, isInIframe, isOpen]);
+    }, [people.id, remainingAmount, people.name, isOpen]);
     
     // Effect for making the dialog sticky when it opens
     useEffect(() => {
@@ -150,7 +150,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 console.error('[Child Frame] Error sending makeDialogSticky:', e);
             }
         }
-    }, [isOpen, isInIframe]);
+    }, [isOpen]);
 
     const handleSliderChange = (e: { value: number[] }) => {
         const newValue = Math.min(e.value[0], remainingAmount);
@@ -173,10 +173,11 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     };
 
     const handleSponsor = async () => {
-        if (amount <= 0) {
+        // Minimum amount should be $10 (1000 cents)
+        if (amount < 10) {
             toaster.create({
                 title: "Invalid Amount",
-                description: "Please enter a valid amount.",
+                description: "Minimum sponsorship amount is $10.",
             });
             return;
         }
