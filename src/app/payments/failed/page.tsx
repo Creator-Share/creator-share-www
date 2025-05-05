@@ -1,7 +1,8 @@
 "use client";
-import { Box, Text, Button, Flex, Spinner, Center } from "@chakra-ui/react";
+import { Box, Text, Button, Link, Flex, Spinner, Center, VStack } from "@chakra-ui/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
+import NextLink from "next/link";
 
 const FailedPageContent = () => {
   const router = useRouter();
@@ -67,54 +68,93 @@ const FailedPageContent = () => {
   }
 
   return (
-    <Box className="flex flex-col items-center justify-center min-h-screen p-4">
-      {/* Error Icon */}
-      <Box className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6">
-        <Box className="w-12 h-12 text-red-500">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-          </svg>
-        </Box>
-      </Box>
+    <Center className="bg-gray-50 items-center justify-center min-h-screen">
+      <Box 
+        maxW="md" 
+        w="full" 
+        bg="white" 
+        p={8} 
+        borderRadius="2xl" 
+        boxShadow="md" 
+        className="text-center mx-4"
+      >
+        {/* Error Icon */}
+        <Center mb={6}>
+          <Box 
+            borderRadius="full" 
+            bg="#F7CACA" 
+            p={4} 
+            width="80px" 
+            height="80px" 
+            display="flex" 
+            alignItems="center" 
+            justifyContent="center"
+          >
+            <Box as="span" color="#F30000" fontSize="3xl" fontWeight="bold">✕</Box>
+          </Box>
+        </Center>
 
-      <Box className="w-full max-w-xl text-center">
-        <Text className="text-3xl font-semibold text-[#1C3C8C] mb-6">
-          Oh no! Your Payment Didn't Go Through
+        {/* Heading */}
+        <Text 
+          fontSize="2xl" 
+          fontWeight="bold" 
+          mb={4} 
+          color="#1C3C8C"
+          className="text-center"
+        >
+          Sorry that didn't work out
         </Text>
 
-        <Text className="text-gray-600 mb-8">
-          It looks like something went wrong, and your sponsorship payment wasn't completed. But don't worry – it happens to the best of us!
+        {/* Message */}
+        <Text mb={6} color="gray.600" fontSize="sm" className="text-center">
+          You can always{' '}
+          <Link as={NextLink} href="/sponsor-a-child" color="blue.500">
+            click here
+          </Link>
+          {' '}to see other ways you can share with our children or work
         </Text>
 
-        <Text className="text-gray-600 mb-8">
-          You can still make a huge difference in {childDetails.name}'s life.<br />
-          Let's give it another try
-        </Text>
-
-        <Flex direction="column" gap={4}>
+        {/* Buttons */}
+        <VStack gap={4} mb={6}>
           <Button
             onClick={() => router.back()}
-            className="w-full bg-[#1C3C8C] text-white py-3 rounded-xl hover:bg-blue-800 transition-colors"
+            colorScheme="blue"
+            size="md"
+            width="full"
+            borderRadius="md"
+            bg="#1C3C8C"
+            _hover={{ bg: "#34495e" }}
+            color={'#FFFFFF'}
+            fontWeight={'semibold'}
           >
             Retry Payment
           </Button>
-
-          <Button
-            onClick={() => router.push('/')}
-            variant="ghost"
-            className="text-[#1C3C8C]"
+          
+          <Link 
+            as={NextLink} 
+            href="/sponsor-a-child"
+            fontSize="sm"
+            fontWeight="medium"
           >
-            Back to Home
-          </Button>
-        </Flex>
+            &lt;&lt; Back to Child listing
+          </Link>
+        </VStack>
 
-        <Text className="text-gray-500 mt-8 text-sm">
-          If you're running into any issues or have questions, we're here to help! Just reach out to us at{' '}
-          <span className="text-blue-600">support@sharetanzania.co.uk</span> or visit our{' '}
-          <span className="text-blue-600">Help Center</span>.
+        {/* Support Info */}
+        <Text fontSize="sm" color="gray.600" className="text-center">
+          If you're running into any issues or have questions,<br />
+          we're here to help! Just reach out to us<br />
+          at{' '}
+          <Link href="mailto:support@sharetanzania.co.uk" color="blue.500">
+            support@sharetanzania.co.uk
+          </Link>
+          {' '}or visit our{' '}
+          <Link href="/help" color="blue.500">
+            Help Center
+          </Link>.
         </Text>
       </Box>
-    </Box>
+    </Center>
   );
 };
 

@@ -2,7 +2,8 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Box, Text, Button, Spinner, Center } from "@chakra-ui/react";
+import { Box, Text, Button, Spinner, Center, Flex, VStack, HStack } from "@chakra-ui/react";
+import { start } from "repl";
 
 const SuccessPageContent = () => {
   const searchParams = useSearchParams();
@@ -30,7 +31,6 @@ const SuccessPageContent = () => {
         const data = await response.json();
         
         if (!response.ok) {
-          // If session not found and we haven't retried too many times, retry after a delay
           if (data.code === 'SESSION_NOT_FOUND' && retryCount < 3) {
             console.log(`Session not found, retrying in 2 seconds (attempt ${retryCount + 1}/3)...`);
             setTimeout(() => {
@@ -40,8 +40,6 @@ const SuccessPageContent = () => {
           }
           
           if (data.code === 'SESSION_NOT_FOUND') {
-            // If we've retried and still can't find the session, assume payment was successful
-            // This is a fallback for when the session exists in Stripe but not in our database yet
             console.log('Session not found after retries, assuming payment success');
             setChildDetails({
               name: 'your sponsored child',
@@ -63,8 +61,6 @@ const SuccessPageContent = () => {
         });
       } catch (error) {
         console.error('Error fetching session:', error);
-        // Even if there's an error, assume payment was successful if we're on the success page
-        // This is a fallback for when there are API issues but the payment went through
         setChildDetails({
           name: 'your sponsored child',
           location: '',
@@ -113,22 +109,94 @@ const SuccessPageContent = () => {
   }
 
   return (
-    <Box className="p-8 text-center">
-      <Text className="text-xl mb-4">
-        Thank you for sponsoring {childDetails.name}!
-      </Text>
-      {childDetails.email && (
-        <Text className="mb-4">
-          A confirmation email will be sent to {childDetails.email}.
-        </Text>
-      )}
-      <Button
-        onClick={() => router.push('/')}
-        className="mt-4 bg-blue-700 text-white"
+    <Center className="min-h-screen bg-gray-50">
+      <Box 
+        maxW="md" 
+        w="full" 
+        bg="white" 
+        p={8} 
+        borderRadius="2xl" 
+        boxShadow="md" 
+        className="text-center mx-4"
       >
-        Return Home
-      </Button>
-    </Box>
+        {/* Success Icon */}
+        <Center mb={6}>
+          <Box 
+            borderRadius="full" 
+            bg="#009C5E" 
+            p={4} 
+            width="80px" 
+            height="80px" 
+            display="flex" 
+            alignItems="center" 
+            justifyContent="center"
+          >
+            <Box as="span" color="#FFFFFF" fontSize="2xl" fontWeight="bold">✓</Box>
+          </Box>
+        </Center>
+
+        {/* Heading */}
+        <Text 
+          fontSize="2xl" 
+          fontWeight="bold" 
+          mb={4} 
+          color="#1C3C8C"
+          className="text-center"
+        >
+          Thank You for Changing a Life!
+        </Text>
+        <Text mb={6} color="gray.600" fontSize="sm" className="text-center">
+          Your generous sponsorship payment has been successfully processed. Because of you, {childDetails.name} is one step closer to a brighter future.
+        </Text>
+        <Box mb={6}>
+          <Text 
+            fontWeight="semibold" 
+            mb={4} 
+            color="#2c3e50"
+            className="text-center"
+          >
+            Sponsorship Details
+          </Text>
+          
+          <VStack gap={3} align="stretch">
+            <Flex justify="space-between" fontSize="sm">
+              <Text fontWeight={"semibold"}>Child's Name</Text>
+              <Text fontWeight="medium" color="gray.500">{childDetails.name}</Text>
+            </Flex>
+            
+            {childDetails.location && (
+              <Flex justify="space-between" fontSize="sm">
+                <Text fontWeight={"semibold"}>Location</Text>
+                <Text fontWeight="medium" color="gray.500">{childDetails.location}</Text>
+              </Flex>
+            )}
+            
+            {childDetails.email && (
+              <Flex justify="space-between" fontSize="sm">
+                <Text textAlign={"start"} fontWeight={"semibold"}>Confirmation Email</Text>
+                <Text fontWeight="medium" textAlign={"end"} color="blue.500">Sent to {childDetails.email}</Text>
+              </Flex>
+            )}
+          </VStack>
+        </Box>
+        <Text fontSize="sm" color="gray.600" mb={6} className="text-center">
+          You'll receive updates about {childDetails.name}'s progress and how your support is making a difference.
+        </Text>
+        <Button
+          onClick={() => router.push('/')}
+          colorScheme="blue"
+          size="md"
+          width="full"
+          borderRadius="md"
+          bg="#1C3C8C"
+          color={"#F8FAFC"}
+          fontWeight={"semibold"}
+          _hover={{ bg: "#34495e" }}
+        >
+          Back to Home
+        </Button>
+      </Box>
+    </Center>
   );
 };
 
