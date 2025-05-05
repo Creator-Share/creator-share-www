@@ -2,8 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Box, Text, Button, Spinner, Center, Flex, VStack, HStack } from "@chakra-ui/react";
-import { start } from "repl";
+import { Box, Text, Button, Spinner, Center, Flex, VStack } from "@chakra-ui/react";
 
 const SuccessPageContent = () => {
   const searchParams = useSearchParams();

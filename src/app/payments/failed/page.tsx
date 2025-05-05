@@ -1,5 +1,5 @@
 "use client";
-import { Box, Text, Button, Link, Flex, Spinner, Center, VStack } from "@chakra-ui/react";
+import { Box, Text, Button, Link, Spinner, Center, VStack } from "@chakra-ui/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import NextLink from "next/link";
@@ -7,7 +7,7 @@ import NextLink from "next/link";
 const FailedPageContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [childDetails, setChildDetails] = useState({
+  const [, setChildDetails] = useState({
     name: 'this child',
     location: ''
   });
