@@ -27,7 +27,6 @@ const FailedPageContent = () => {
         const data = await response.json();
         
         if (!response.ok) {
-          // If session not found and we haven't retried too many times, retry after a delay
           if (data.code === 'SESSION_NOT_FOUND' && retryCount < 2) {
             console.log(`Session not found, retrying in 1 second (attempt ${retryCount + 1}/2)...`);
             setTimeout(() => {

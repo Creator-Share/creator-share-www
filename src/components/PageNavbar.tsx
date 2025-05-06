@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Box, Flex, Link, Button, Image, VStack } from "@chakra-ui/react";
+import { Box, Flex, Link, Button, Image, VStack, Menu, Portal } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
@@ -15,6 +15,11 @@ const Links = [
   // { name: "My Community", href: "/local" },
   // { name: "Share Abundance", href: "/share" },
   { name: "Sponsor-a-Child", href: "/sponsor-a-child" },
+  { name: "Sponsor-a-Puppy", href: "/sponsor-a-child" },
+  { name: "Sponsor-a-Family", href: "/sponsor-a-child" },
+  { name: "Street Involved", href: "/sponsor-a-child" },
+  { name: "Family In Need", href: "/sponsor-a-child" },
+  { name: "Child Laborer", href: "/sponsor-a-child" },
   { name: "I-Frame Test", href: "/iframe-test" },
 ];
 
@@ -90,23 +95,48 @@ export function PageNavbar() {
         <Flex gap={4} display={{ base: "none", md: "flex" }}>
           {/* <ColorModeButton /> */}
           {user ? (
-            <>
-              {isAdmin && (
-                <NextLink href="/admin" passHref>
-                  <Button size="sm" variant="ghost">
-                    Admin Dashboard
-                  </Button>
-                </NextLink>
-              )}
-              <NextLink href="/app" passHref>
-                <Button size="sm" variant="ghost" className="w-full">
-                  User Dashboard
+            <Menu.Root>
+              <Menu.Trigger asChild>
+                <Button size="sm" variant="ghost">
+                  {user.email}
                 </Button>
-              </NextLink>
-              <Button size="sm" variant="ghost" onClick={handleLogout}>
-                Logout
-              </Button>
-            </>
+              </Menu.Trigger>
+              <Portal>
+                <Menu.Positioner>
+                  <Menu.Content>
+                    {isAdmin && (
+                      <Menu.Item
+                        value="admin"
+                        onClick={() => {
+                          console.log("Admin Dashboard clicked");
+                          router.push("/admin");
+                        }}
+                      >
+                        Admin Dashboard
+                      </Menu.Item>
+                    )}
+                    <Menu.Item
+                      value="user-dashboard"
+                      onClick={() => {
+                        console.log("User Dashboard clicked");
+                        router.push("/app");
+                      }}
+                    >
+                      User Dashboard
+                    </Menu.Item>
+                    <Menu.Item
+                      value="logout"
+                      onClick={() => {
+                        console.log("Logout clicked");
+                        handleLogout();
+                      }}
+                    >
+                      Logout
+                    </Menu.Item>
+                  </Menu.Content>
+                </Menu.Positioner>
+              </Portal>
+            </Menu.Root>
           ) : (
             <>
               <NextLink href="/login" passHref>
