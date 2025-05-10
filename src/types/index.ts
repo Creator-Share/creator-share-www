@@ -22,6 +22,7 @@ export interface SponsorPeople {
   location_geo: Geography;
   video_url: string;
   introduction: string;
+  family_size?: number;
 }
 
 export interface SponsorPeopleImage {
