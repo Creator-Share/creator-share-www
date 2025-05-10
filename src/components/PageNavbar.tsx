@@ -15,11 +15,10 @@ const Links = [
   // { name: "My Community", href: "/local" },
   // { name: "Share Abundance", href: "/share" },
   { name: "Sponsor-a-Child", href: "/sponsor-a-child" },
-  { name: "Sponsor-a-Puppy", href: "/sponsor-a-child" },
-  { name: "Sponsor-a-Family", href: "/sponsor-a-child" },
-  { name: "Street Involved", href: "/sponsor-a-child" },
-  { name: "Family In Need", href: "/sponsor-a-child" },
-  { name: "Child Laborer", href: "/sponsor-a-child" },
+  { name: "Sponsor-a-Puppy", href: "/sponsor-a-puppy" },
+  { name: "Sponsor-a-Family", href: "/family-in-need" },
+  { name: "Street Involved", href: "/street-involved" },
+  { name: "Child Laborer", href: "/child-labor" },
   { name: "I-Frame Test", href: "/iframe-test" },
 ];
 
