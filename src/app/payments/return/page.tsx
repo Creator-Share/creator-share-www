@@ -19,7 +19,6 @@ const ReturnContent = () => {
   const isEmbedded = searchParams.get('embedded') === 'true';
 
   useEffect(() => {
-    // Function to check if we're in an iframe
     const isInIframe = window.self !== window.top;
     
     const fetchSession = async () => {
@@ -31,8 +30,6 @@ const ReturnContent = () => {
       }
 
       try {
-        // For embedded checkout, we might not need to fetch the session
-        // If we're on the return page with a session_id, the payment likely succeeded
         if (isEmbedded && isInIframe) {
           console.log('Embedded checkout detected, assuming payment success');
           setStatus('complete');
@@ -41,8 +38,7 @@ const ReturnContent = () => {
             location: '',
             email: ''
           });
-          
-          // Notify parent frame of success
+
           window.parent.postMessage({ 
             type: 'sponsorship_complete',
             childName: 'your sponsored child'
@@ -51,14 +47,11 @@ const ReturnContent = () => {
           setIsLoading(false);
           return;
         }
-        
-        // For non-embedded checkout, fetch the session details
+
         const response = await fetch(`/api/stripe/session?id=${sessionId}`);
         const data = await response.json();
         
         if (!response.ok) {
-          // If session not found and we haven't retried too many times, retry after a delay
-          // This helps when the webhook hasn't processed the session yet
           if (data.code === 'SESSION_NOT_FOUND' && retryCount < 3) {
             console.log(`Session not found, retrying in 2 seconds (attempt ${retryCount + 1}/3)...`);
             setTimeout(() => {
@@ -68,8 +61,6 @@ const ReturnContent = () => {
           }
           
           if (data.code === 'SESSION_NOT_FOUND') {
-            // If we've retried and still can't find the session, assume payment was successful
-            // This is a fallback for when the session exists in Stripe but not in our database yet
             setStatus('complete');
             setChildDetails({
               name: 'your sponsored child',
@@ -92,7 +83,6 @@ const ReturnContent = () => {
           email: session.customer_details?.email || ''
         });
 
-        // Notify parent frame of success if in embedded mode
         if (isEmbedded && (sessionStatus === 'complete' || session.status === 'complete')) {
           window.parent.postMessage({ 
             type: 'sponsorship_complete',
@@ -101,8 +91,7 @@ const ReturnContent = () => {
         }
       } catch (error) {
         console.error('Error fetching session:', error);
-        // Even if there's an error, assume payment was successful if we're on the return page
-        // This is a fallback for when there are API issues but the payment went through
+
         setStatus('complete');
         setChildDetails({
           name: 'your sponsored child',
@@ -116,7 +105,6 @@ const ReturnContent = () => {
 
     fetchSession();
 
-    // Update iframe height
     if (isEmbedded) {
       const sendHeight = () => {
         const height = document.documentElement.scrollHeight;
@@ -131,10 +119,8 @@ const ReturnContent = () => {
 
   const handleReturn = () => {
     if (isEmbedded) {
-      // For embedded mode, notify parent frame to handle navigation
       window.parent.postMessage({ type: 'navigation', action: 'return' }, '*');
     } else {
-      // For normal mode, use router
       router.push('/');
     }
   };

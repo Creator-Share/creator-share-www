@@ -39,22 +39,19 @@ export async function POST(req: Request) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        
-        // Extract metadata
+
         const childId = session.metadata?.childId;
         const amount = parseFloat(session.metadata?.amount || "0");
         const userId = session.metadata?.userId || null;
         const paymentType = session.metadata?.paymentType;
         const customerEmail = session.customer_details?.email;
         const interval = paymentType === "subscription" ? "month" : "year";
-        
-        // Validate required metadata
+
         if (!childId || !amount) {
           console.error("Missing required metadata in Stripe session:", session.metadata);
           return NextResponse.json({ error: "Invalid metadata" }, { status: 400 });
         }
 
-        // Fetch child data
         const { data: childData, error: childError } = await supabase
           .from("sponsor_people")
           .select("name, budget_raised, budget_goal")
@@ -66,27 +63,97 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: "Failed to fetch child data" }, { status: 500 });
         }
 
-        // Create transaction record
-        const { error: transactionError } = await supabase
-          .from("transaction_ledger")
-          .insert({
-            child_id: childId,
-            user_id: userId,
-            description: `Sponsorship to ${childData.name} with amount of ${amount}`,
-            reference: session.invoice as string,
-            credit: amount,
-            subscription_type: session.mode === "subscription" ? "subscription" : "payment",
-            tx_action: "SPONSORSHIP",
-            customer_name: session.customer_details?.name || null,
-            customer_email: customerEmail || null
-          });
+        console.log('Processing checkout.session.completed:', {
+          mode: session.mode,
+          payment_intent: session.payment_intent,
+          setup_intent: session.setup_intent,
+          payment_status: session.payment_status,
+          subscription: session.subscription,
+          line_items: session.line_items,
+          metadata: session.metadata
+        });
 
-        if (transactionError) {
-          console.error("Error creating transaction:", transactionError);
-          return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
+        const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
+          expand: ['line_items.data.price']
+        });
+        console.log('Expanded session details:', {
+          line_items: expandedSession.line_items?.data
+        });
+
+        let paymentMethodId = null;
+        let paymentMethodType = null;
+        let paymentIntentId = null;
+
+        try {
+
+          if (session.mode === 'subscription' && session.setup_intent) {
+            console.log('Retrieving setup intent:', session.setup_intent);
+            const setupIntent = await stripe.setupIntents.retrieve(session.setup_intent as string);
+            paymentMethodId = setupIntent.payment_method as string;
+            
+            if (paymentMethodId) {
+              const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+              paymentMethodType = paymentMethod.type;
+            }
+            
+            console.log('Setup intent details:', {
+              payment_method: paymentMethodId,
+              payment_method_type: paymentMethodType
+            });
+          } 
+          else if (session.payment_intent) {
+            console.log('Retrieving payment intent:', session.payment_intent);
+            paymentIntentId = session.payment_intent as string;
+            const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+            paymentMethodId = paymentIntent.payment_method as string;
+            
+            if (paymentMethodId) {
+              const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+              paymentMethodType = paymentMethod.type;
+            }
+            
+            console.log('Payment intent details:', {
+              payment_method: paymentMethodId,
+              payment_method_type: paymentMethodType
+            });
+          }
+        } catch (error) {
+          console.error('Error retrieving payment details:', error);
         }
 
-        // Create activity record
+        console.log('Final payment details:', {
+          paymentMethodId,
+          paymentMethodType,
+          paymentIntentId
+        });
+
+        // Only create transaction for one-time payments here
+        // Subscription payments are handled in invoice.paid event
+        if (session.mode === 'payment') {
+          const { error: transactionError } = await supabase
+            .from("transaction_ledger")
+            .insert({
+              child_id: childId,
+              user_id: userId,
+              description: `One-time sponsorship to ${childData.name} with amount of ${amount}`,
+              reference: session.invoice as string,
+              credit: amount,
+              subscription_type: "Child Sponsorship",
+              tx_action: "SPONSORSHIP",
+              customer_name: session.customer_details?.name || null,
+              customer_email: customerEmail || null,
+              sponsorship_type: paymentType || null,
+              stripe_payment_intent_id: paymentIntentId,
+              stripe_payment_method_id: paymentMethodId,
+              payment_method_type: paymentMethodType
+            });
+
+          if (transactionError) {
+            console.error("Error creating transaction:", transactionError);
+            return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
+          }
+        }
+
         const { error: activityError } = await supabase
           .from("people_activities")
           .insert({
@@ -97,14 +164,11 @@ export async function POST(req: Request) {
 
         if (activityError) {
           console.error("Error creating activity:", activityError);
-          // Continue processing even if activity creation fails
         }
 
-        // For subscription mode, we'll handle subscription creation in the subscription.created event
         if (session.mode === 'subscription') {
           console.log('Subscription will be handled by subscription.created event');
         } else {
-          // For one-time payments, create subscription record now
           const { error: subscriptionError } = await supabase.from("subscriptions").insert({
             stripe_subscription_id: session.subscription as string,
             user_id: userId,
@@ -114,7 +178,9 @@ export async function POST(req: Request) {
             interval: interval,
             current_period_start: new Date(),
             current_period_end: new Date(Date.now() + (interval === "month" ? 30 : 365) * 24 * 60 * 60 * 1000),
-            customer_id: session.customer as string
+            customer_id: session.customer as string,
+            stripe_price_id: session.line_items?.data[0]?.price?.id,
+            sponsorship_type: paymentType
           });
 
           if (subscriptionError) {
@@ -123,7 +189,6 @@ export async function POST(req: Request) {
           }
         }
 
-        // Send confirmation email if we have customer email
         if (customerEmail) {
           try {
             if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
@@ -135,8 +200,7 @@ export async function POST(req: Request) {
                 amount,
                 interval
               );
-              
-              // Log email attempt
+
               try {
                 await supabase.from("email_logs").insert({
                   user_id: userId,
@@ -153,7 +217,6 @@ export async function POST(req: Request) {
             }
           } catch (emailError) {
             console.error("Error in email sending process:", emailError);
-            // Continue processing even if email sending fails
           }
         }
 
@@ -163,8 +226,7 @@ export async function POST(req: Request) {
       case "customer.subscription.created": {
         const subscription = event.data.object as Stripe.Subscription;
         console.log('Subscription created:', subscription.id);
-        
-        // Create subscription record in database
+
         const { error: subscriptionError } = await supabase.from("subscriptions").insert({
           stripe_subscription_id: subscription.id,
           user_id: subscription.metadata?.userId,
@@ -174,7 +236,9 @@ export async function POST(req: Request) {
           interval: subscription.items.data[0].price.recurring?.interval,
           current_period_start: new Date(subscription.current_period_start * 1000),
           current_period_end: new Date(subscription.current_period_end * 1000),
-          customer_id: subscription.customer as string
+          customer_id: subscription.customer as string,
+          stripe_price_id: subscription.items.data[0].price.id,
+          sponsorship_type: subscription.metadata?.paymentType
         });
 
         if (subscriptionError) {
@@ -192,7 +256,6 @@ export async function POST(req: Request) {
         
         console.log(`Payment failed for subscription: ${subscriptionId}`);
 
-        // Update subscription status
         const { error: updateError } = await supabase.from("subscriptions")
           .update({ status: "incomplete" })
           .eq("stripe_subscription_id", subscriptionId);
@@ -201,7 +264,6 @@ export async function POST(req: Request) {
           console.error("Error updating subscription status:", updateError);
         }
 
-        // Get child information for email
         const { data: subscriptionData } = await supabase
           .from("subscriptions")
           .select(`child_id`)
@@ -221,7 +283,6 @@ export async function POST(req: Request) {
           }
         }
 
-        // Send payment failed email
         if (customerEmail) {
           try {
             await sendPaymentFailedEmail(
@@ -232,8 +293,7 @@ export async function POST(req: Request) {
                 ? new Date(invoice.next_payment_attempt * 1000) 
                 : null
             );
-            
-            // Log email attempt
+
             try {
               await supabase.from("email_logs").insert({
                 email: customerEmail,
@@ -255,12 +315,12 @@ export async function POST(req: Request) {
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
 
-        // Update subscription record
         const { error: updateError } = await supabase.from("subscriptions")
           .update({ 
             status: subscription.status === "active" ? "complete" : "incomplete",
             current_period_start: new Date(subscription.current_period_start * 1000),
-            current_period_end: new Date(subscription.current_period_end * 1000)
+            current_period_end: new Date(subscription.current_period_end * 1000),
+            stripe_price_id: subscription.items.data[0].price.id
           })
           .eq("stripe_subscription_id", subscription.id);
           
@@ -274,8 +334,6 @@ export async function POST(req: Request) {
       
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
-
-        // Mark subscription as cancelled
         const { error: updateError } = await supabase.from("subscriptions")
           .update({ 
             status: "cancelled",
@@ -291,32 +349,85 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: "Subscription cancelled" }, { status: 200 });
       }
       
-      case "invoice.paid":
-      case "invoice.payment_succeeded":
-        // These events indicate successful payment of an invoice
-        // We can use them to update our database if needed
+      case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
         const subscriptionId = invoice.subscription as string;
+        const paymentIntentId = invoice.payment_intent as string;
         
-        if (subscriptionId) {
-          await supabase.from("subscriptions")
-            .update({ status: "complete" })
-            .eq("stripe_subscription_id", subscriptionId);
+        try {
+          const { data: subscriptionData, error: subscriptionError } = await supabase
+            .from("subscriptions")
+            .select("child_id, sponsorship_type")
+            .eq("stripe_subscription_id", subscriptionId)
+            .single();
+
+          if (subscriptionError) {
+            console.error("Error fetching subscription data:", subscriptionError);
+            throw subscriptionError;
+          }
+
+          const { data: childData, error: childError } = await supabase
+            .from("sponsor_people")
+            .select("name")
+            .eq("id", subscriptionData.child_id)
+            .single();
+
+          if (childError) {
+            console.error("Error fetching child data:", childError);
+            throw childError;
+          }
+
+          if (paymentIntentId) {
+            const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+            const paymentMethodId = paymentIntent.payment_method as string;
+            
+            if (paymentMethodId) {
+              const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+
+              await supabase.from("transaction_ledger").insert({
+                child_id: subscriptionData.child_id,
+                description: `Sponsorship payment for ${childData.name}`,
+                credit: invoice.amount_paid,
+                reference: invoice.number,
+                subscription_type: "Child Sponsorship",
+                tx_action: "Sponsorship",
+                customer_email: invoice.customer_email,
+                customer_name: invoice.customer_name,
+                sponsorship_type: subscriptionData.sponsorship_type,
+                stripe_payment_intent_id: paymentIntentId,
+                stripe_payment_method_id: paymentMethodId,
+                payment_method_type: paymentMethod.type
+              });
+            }
+          }
+
+          if (subscriptionId) {
+            await supabase.from("subscriptions")
+              .update({ status: "complete" })
+              .eq("stripe_subscription_id", subscriptionId);
+          }
+        } catch (error) {
+          console.error("Error processing invoice payment:", error);
         }
         
         return NextResponse.json({ message: "Invoice payment processed" }, { status: 200 });
+      }
         
+      case "invoice.payment_succeeded": {
+        // Skip processing to avoid duplicate entries since we handle this in invoice.paid
+        console.log('Skipping invoice.payment_succeeded to avoid duplicate transaction');
+        return NextResponse.json({ message: "Skipped to avoid duplicate" }, { status: 200 });
+      }
+
       case "payment_intent.succeeded":
-        // Payment intent succeeded, which means a payment was successful
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        
-        // Log the successful payment intent for reference
+
         console.log(`Payment intent succeeded: ${paymentIntent.id}`);
         
         return NextResponse.json({ message: "Payment intent succeeded" }, { status: 200 });
         
       default:
-        // For all other event types, just acknowledge receipt
+
         console.log(`Unhandled event type: ${event.type}`);
         return NextResponse.json({ message: `Received ${event.type} event` }, { status: 200 });
     }

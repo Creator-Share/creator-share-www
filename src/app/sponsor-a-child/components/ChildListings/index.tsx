@@ -57,14 +57,12 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
     }
   }, [handleScroll, isInIframe]);
 
-  // Handle opening the dialog for a specific child
   const handleOpenDialog = (childId: string) => {
     console.log(`ChildListings: Opening dialog for child ID: ${childId}`);
     setActiveChildId(childId);
     setDialogOpen(true);
   };
-  
-  // Handle dialog navigation
+
   const handleDialogNavigation = (direction: 'next' | 'previous') => {
     if (!activeChildId) return;
     
@@ -76,8 +74,7 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
       console.log(`ChildListings: Navigating to next child: ${nextChild.name} (ID: ${nextChild.id})`);
       setActiveChildId(nextChild.id);
       setSelectedChildId(nextChild.id);
-      
-      // Only scroll to the child if not in an iframe
+
       if (!isInIframe) {
         document.getElementById(nextChild.id)?.scrollIntoView({ behavior: 'smooth' });
       }
@@ -87,19 +84,16 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
       setActiveChildId(prevChild.id);
       setSelectedChildId(prevChild.id);
       
-      // Only scroll to the child if not in an iframe
       if (!isInIframe) {
         document.getElementById(prevChild.id)?.scrollIntoView({ behavior: 'smooth' });
       }
     }
   };
 
-  // Get the active child data
   const activeChild = activeChildId 
     ? visiblePeople.find(child => child.id === activeChildId) 
     : null;
 
-  // Get navigation props for the dialog
   const getDialogNavigationProps = () => {
     if (!activeChildId) return { hasNext: false, hasPrevious: false };
     

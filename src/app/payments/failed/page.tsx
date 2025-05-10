@@ -34,8 +34,7 @@ const FailedPageContent = () => {
             }, 1000);
             return;
           }
-          
-          // For failed payments, we don't need to retry as much
+
           throw new Error(data.error || 'Failed to fetch session');
         }
         
@@ -46,7 +45,6 @@ const FailedPageContent = () => {
         });
       } catch (error) {
         console.error('Error fetching session:', error);
-        // Even if we can't get the session, we can still show the failed page
       } finally {
         setIsLoading(false);
       }

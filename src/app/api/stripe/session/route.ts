@@ -17,8 +17,7 @@ export async function GET(request: Request) {
     let session = null;
     let sessionStatus = null;
     let errorDetails = null;
-    
-    // First try to get the session directly from Stripe
+
     try {
       session = await stripe.checkout.sessions.retrieve(sessionId, {
         expand: ['customer_details', 'payment_intent']
@@ -27,7 +26,16 @@ export async function GET(request: Request) {
       sessionStatus = session.status;
       console.log(`Retrieved session from Stripe: ${sessionId}, status: ${sessionStatus}`);
       
-      // If we found the session in Stripe, return it immediately
+      if (session.payment_intent) {
+        console.log('Payment Intent ID from session:', session.payment_intent);
+        const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent as string);
+        console.log('Retrieved Payment Intent details:', {
+          id: paymentIntent.id,
+          status: paymentIntent.status,
+          amount: paymentIntent.amount
+        });
+      }
+
       return NextResponse.json({ 
         session,
         status: sessionStatus 
@@ -35,13 +43,8 @@ export async function GET(request: Request) {
     } catch (stripeError) {
       console.log("Could not retrieve session from Stripe, checking database:", stripeError);
       errorDetails = stripeError instanceof Error ? stripeError.message : 'Unknown Stripe error';
-      
-      // Continue to check database
     }
-    
-    // If Stripe retrieval fails, check our database records
-    
-    // First check transaction ledger
+
     const { data: transaction } = await supabase
       .from("transaction_ledger")
       .select("*, sponsor_people(name)")
@@ -65,8 +68,7 @@ export async function GET(request: Request) {
         status: 'completed'
       });
     }
-    
-    // Then check subscriptions
+
     const { data: subscription } = await supabase
       .from("subscriptions")
       .select("*, sponsor_people!inner(name)")
@@ -84,15 +86,14 @@ export async function GET(request: Request) {
             childLocation: '',
           },
           customer_details: {
-            email: '' // We might not have this in the subscription record
+            email: ''
           }
         },
         status: subscription.status
       });
     }
     
-    // Check if there's any subscription with this ID as a substring
-    // This helps when the session ID is part of a longer subscription ID
+
     const { data: partialSubscriptions } = await supabase
       .from("subscriptions")
       .select("*, sponsor_people!inner(name)")
@@ -116,8 +117,7 @@ export async function GET(request: Request) {
         status: partialSubscriptions[0].status
       });
     }
-    
-    // If we can't find any records, return a clear error with details
+
     return NextResponse.json({ 
       error: "Payment session not found",
       code: "SESSION_NOT_FOUND",

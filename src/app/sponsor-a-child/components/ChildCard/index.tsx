@@ -60,7 +60,6 @@ const ChildCard: React.FC<ChildCardProps> = ({
         setDialogImageIndex(currentImageIndex);
     }, [currentImageIndex]);
 
-    // Reset learn more state when component unmounts
     useEffect(() => {
         return () => {
             setIsLearnMoreOpen(false);

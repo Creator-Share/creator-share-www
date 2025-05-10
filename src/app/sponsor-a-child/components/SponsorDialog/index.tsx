@@ -45,7 +45,6 @@ interface SponsorDialogProps {
 
 const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
-// Check if we're in an iframe
 const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
 const SponsorDialog: React.FC<SponsorDialogProps> = ({ 
