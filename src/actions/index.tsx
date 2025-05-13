@@ -1,37 +1,37 @@
 import { createClient } from '@/utils/supabase/client'
 import { Subscription } from '@/types'
 
-export async function fetchSponsorshipDetailsByChildId(childId: string): Promise<Subscription[]> {
-  if (!childId) return []
+export async function fetchSponsorshipDetailsSponsorshipId(sponsorshipId: string): Promise<Subscription[]> {
+  if (!sponsorshipId) return [];
 
-  const supabase = createClient()
+  const supabase = createClient();
   const { data, error } = await supabase
     .from('subscriptions')
     .select(`
       *,
-      child:sponsor_people(
-        name
+      sponsorships:sponsorship_id (
+        child_details(*)
       )
     `)
-    .eq('child_id', childId)
-    .order('created_at', { ascending: false })
+    .eq('sponsorship_id', sponsorshipId)
+    .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching subscriptions:', error)
-    return []
+    console.error('Error fetching subscriptions:', error);
+    return [];
   }
 
-  return data || []
+  return data || [];
 }
 
-export async function fetchActivitiesByChildId(childId: string) {
-  if (!childId) return [];
+export async function fetchActivitiesById(sponsorshipId: string) {
+  if (!sponsorshipId) return [];
 
   const supabase = createClient();
   const { data, error } = await supabase
-    .from('people_activities')
+    .from('sponsorship_activities')
     .select('*')
-    .eq('child_id', childId)
+    .eq('sponsorship_id', sponsorshipId)
     .order('created_at', { ascending: false });
 
   if (error) {

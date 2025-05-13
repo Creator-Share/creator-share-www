@@ -25,17 +25,17 @@ import {
 } from "@/components/ui/file-upload";
 import { HiUpload } from "react-icons/hi";
 import MapPicker from "./MapPicker";
-import { SponsorPeople } from "@/types/admin.types";
+import { ChildSponsorship } from "@/types";
 import { GoPlusCircle } from "react-icons/go";
 import { toaster } from "@/components/ui/toaster";
 
 type CreateDrawerProps = {
-    formData: SponsorPeople;
+    formData: ChildSponsorship;
     isDrawerOpen: boolean;
     setIsDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
-    setFormData: React.Dispatch<React.SetStateAction<SponsorPeople>>;
+    setFormData: React.Dispatch<React.SetStateAction<ChildSponsorship>>;
     handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-    handleSelectChange: (name: keyof SponsorPeople, value: string) => void;
+    handleSelectChange: (name: string, value: string) => void;
     handleLocationSelect: (geo: [number, number], locationStr: string, country: string) => void;
     handleSubmit: () => Promise<boolean>;
     imageFiles: File[];
@@ -44,6 +44,7 @@ type CreateDrawerProps = {
     setVideoFiles: React.Dispatch<React.SetStateAction<File[]>>;
     handleDrawerClose: () => void;
 };
+
 const CreateDrawer = ({
     formData,
     setVideoFiles,
@@ -59,9 +60,8 @@ const CreateDrawer = ({
     const [isAdding, setIsAdding] = useState(false);
 
     const handleAdd = async () => {
-        
-        const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
-        const emptyFields = requiredFields.filter(field => !formData[field as keyof SponsorPeople]);
+        const requiredFields = ['name', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
+        const emptyFields = requiredFields.filter(field => !formData[field]);
         
         if (emptyFields.length > 0) {
             toaster.create({
@@ -125,14 +125,6 @@ const CreateDrawer = ({
                             <Field label="Name" required errorText="This field is required">
                                 <Input name="name" className="border" px={2} onChange={handleInputChange} />
                             </Field>
-                            <Field label="Username" required errorText="This field is required">
-                                <Input 
-                                    name="username" 
-                                    className="border" 
-                                    px={2} 
-                                    onChange={handleInputChange}
-                                />
-                            </Field>
                             <Field label="Gender" required errorText="This field is required">
                                 <NativeSelectRoot>
                                     <NativeSelectField
@@ -175,11 +167,9 @@ const CreateDrawer = ({
                                         name="status"
                                         onChange={(e) => handleSelectChange("status", e.target.value)}
                                     >
-                                        <option value="New">New</option>
-                                        <option value="Partially Funded">Partially Funded</option>
-                                        <option value="Budget Filled">Budget Filled</option>
-                                        <option value="Archived">Archived</option>
-                                        <option value="Draft">Draft</option>
+                                        <option value="ACTIVE">Available</option>
+                                        <option value="PENDING">Pending</option>
+                                        <option value="INACTIVE">Sponsored</option>
                                     </NativeSelectField>
                                 </NativeSelectRoot>
                             </Field>

@@ -6,23 +6,22 @@ import {
   Text,
   Spinner
 } from "@chakra-ui/react";
-import { SponsorPeople } from "@/types";
+import { ChildSponsorship } from "@/types";
 import ChildDetailsCard from "../components/ChildDetails";
 import GoBackButton from "@/components/ui/goBack";
 import SponsorshipDetails from "../components/SponsorshipDetails";
 import ChildActivity from "../components/ChildActivity";
 
-
 const ChildDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ params }) => {
   const { username } = React.use(params);
-  const [child, setChild] = useState<SponsorPeople | null>(null);
+  const [child, setChild] = useState<ChildSponsorship | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchChild = async () => {
       try {
-        const res = await fetch(`/api/children/get/username/${username}`);
+        const res = await fetch(`/api/sponsorships/${username}?type=CHILD`);
         
         if (!res.ok) {
           console.error("Failed to fetch child data:", await res.text());
@@ -30,7 +29,7 @@ const ChildDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ par
         }
         
         const data = await res.json();
-        setChild(data.child);
+        setChild(data.sponsorship);
       } catch (err: unknown) {
         console.error("Error in child details page:", err);
         if (err instanceof Error) {
@@ -79,13 +78,12 @@ const ChildDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ par
         Details
       </Text>
       <Box className="mb-6">
-        <ChildDetailsCard id={child.id} people={child} />
+        <ChildDetailsCard id={child.id} child={child} />
       </Box>
       <Box className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <SponsorshipDetails childId={child.id} />
-        <ChildActivity childId={child.id} />
+        <SponsorshipDetails sponsorshipId={child.id} />
+        <ChildActivity sponsorshipId={child.id} />
       </Box>
-
     </Box>
   );
 };

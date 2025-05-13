@@ -23,18 +23,18 @@ import {
     FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
-import { SponsorPeople, SponsorPeopleImage } from "@/types/admin.types";
+import { ChildSponsorship, SponsorshipImage } from "@/types";
 import { createClient } from "@/utils/supabase/client";
 import { toaster } from "@/components/ui/toaster";
 import { HiUpload, HiX } from "react-icons/hi";
 
 interface EditDrawerProps {
-    selectedChild: SponsorPeople | null;
-    formDataEdit: SponsorPeople;
-    setFormDataEdit: React.Dispatch<React.SetStateAction<SponsorPeople>>;
+    selectedChild: ChildSponsorship | null;
+    formDataEdit: ChildSponsorship;
+    setFormDataEdit: React.Dispatch<React.SetStateAction<ChildSponsorship>>;
     isDrawerOpen: boolean;
     onClose: () => void;
-    onSave: (updatedChild: SponsorPeople) => void;
+    onSave: (updatedChild: ChildSponsorship) => void;
     onDelete: (childId: string) => Promise<void>;
     imageFiles: File[];
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
@@ -54,11 +54,11 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     setImageFiles,
     setVideoFiles
 }) => {
-    const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>(() => selectedChild || {} as SponsorPeople);
+    const [formDataEdit, setFormDataEdit] = useState<ChildSponsorship>(() => selectedChild || {} as ChildSponsorship);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
-    const [allImages, setAllImages] = useState<SponsorPeopleImage[]>([]);
+    const [allImages, setAllImages] = useState<SponsorshipImage[]>([]);
     const [isImageLoading, setIsImageLoading] = useState(false);
 
     const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
@@ -66,7 +66,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
         const fileName = `${Date.now()}-${file.name}`;
         const filePath = `${folder}/${fileName}`;
 
-        const { error } = await supabase.storage.from("sponsor_people").upload(filePath, file, {
+        const { error } = await supabase.storage.from("sponsorships").upload(filePath, file, {
             cacheControl: "3600",
             upsert: false,
         });
@@ -76,7 +76,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             return null;
         }
 
-        const { data } = supabase.storage.from("sponsor_people").getPublicUrl(filePath);
+        const { data } = supabase.storage.from("sponsorships").getPublicUrl(filePath);
         return data.publicUrl;
     };
 
@@ -89,16 +89,16 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        setFormDataEdit((prev: SponsorPeople) => ({ ...prev, [name]: value }));
+        setFormDataEdit((prev: ChildSponsorship) => ({ ...prev, [name]: value }));
     };
 
     const handleSelectChange = (name: string, value: string) => {
-        setFormDataEdit((prev: SponsorPeople) => ({ ...prev, [name]: value }));
+        setFormDataEdit((prev: ChildSponsorship) => ({ ...prev, [name]: value }));
     };
 
     const handleSave = async () => {
-        const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
-        const emptyFields = requiredFields.filter(field => !formDataEdit[field as keyof SponsorPeople]);
+        const requiredFields = ['name', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
+        const emptyFields = requiredFields.filter(field => !formDataEdit[field]);
 
         if (emptyFields.length > 0) {
             toaster.create({
@@ -122,7 +122,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                     const filePath = `images/${fileName}`;
 
                     const { error: uploadError } = await supabase.storage
-                        .from("sponsor_people")
+                        .from("sponsorships")
                         .upload(filePath, imageFile, {
                             cacheControl: "3600",
                             upsert: false,
@@ -134,16 +134,16 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                     }
 
                     const { data } = supabase.storage
-                        .from("sponsor_people")
+                        .from("sponsorships")
                         .getPublicUrl(filePath);
 
                     imageUrls.push(data.publicUrl);
                 }
                 const { error: insertError } = await supabase
-                    .from("sponsor_people_images")
+                    .from("sponsorship_images")
                     .insert(
                         imageUrls.map((url, index) => ({
-                            sponsor_people_id: selectedChild?.id || '',
+                            sponsorship_id: selectedChild?.id || '',
                             image_url: url,
                             order_index: index
                         }))
@@ -179,7 +179,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     };
 
     const handleLocationSelect = (geo: [number, number], locationStr: string, country: string) => {
-        setFormDataEdit((prev: SponsorPeople) => ({
+        setFormDataEdit((prev: ChildSponsorship) => ({
             ...prev,
             location_geo: { type: "Point", coordinates: [geo[1], geo[0]] },
             location_str: locationStr,
@@ -189,7 +189,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
 
     const fetchImages = useCallback(async () => {
         if (selectedChild?.id) {
-            const response = await fetch(`/api/admin/children/images/${selectedChild.id}`);
+            const response = await fetch(`/api/sponsorships/images/${selectedChild.id}`);
             if (response.ok) {
                 const images = await response.json();
                 setAllImages(images);
@@ -204,7 +204,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     const handleDeleteImage = async (imageId: string) => {
         try {
             setIsImageLoading(true);
-            const response = await fetch('/api/admin/children/images/delete', {
+            const response = await fetch('/api/sponsorships/images/delete', {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -260,15 +260,6 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     px={2}
                                     onChange={handleInputChange}
                                     value={formDataEdit?.name || ''}
-                                />
-                            </Field>
-                            <Field label="Username" required errorText="This field is required">
-                                <Input
-                                    name="username"
-                                    className="border"
-                                    px={2}
-                                    onChange={handleInputChange}
-                                    value={formDataEdit?.username || ''}
                                 />
                             </Field>
                             <Field label="Gender" required errorText="This field is required">
@@ -338,11 +329,9 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                         onChange={(e) => handleSelectChange("status", e.target.value)}
                                         value={formDataEdit.status || ''}
                                     >
-                                        <option value="New">New</option>
-                                        <option value="Partially Funded">Partially Funded</option>
-                                        <option value="Budget Filled">Budget Filled</option>
-                                        <option value="Archived">Archived</option>
-                                        <option value="Draft">Draft</option>
+                                        <option value="ACTIVE">Available</option>
+                                        <option value="PENDING">Pending</option>
+                                        <option value="INACTIVE">Sponsored</option>
                                     </NativeSelectField>
                                 </NativeSelectRoot>
                             </Field>

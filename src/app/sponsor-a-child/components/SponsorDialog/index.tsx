@@ -22,17 +22,11 @@ import { Slider } from "@/components/ui/slider";
 import { centsToDollars } from "@/utils/currency";
 import { toaster } from "@/components/ui/toaster";
 import { paymentOptionsCollection } from "./config";
-import { SponsorPeople } from "@/types";
+import { ChildSponsorship, SponsorshipImage } from "@/types";
 import { useAuthStore } from "@/store/authStore";
-interface SponsorPeopleImage {
-    id: string;
-    sponsor_people_id: string;
-    image_url: string;
-    order_index: number;
-}
 
 interface SponsorDialogProps {
-    people: SponsorPeople;
+    child: ChildSponsorship;
     trigger: React.ReactNode;
     useEmbedded?: boolean;
     onNext?: () => void;
@@ -48,7 +42,7 @@ const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/mis
 const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
 const SponsorDialog: React.FC<SponsorDialogProps> = ({ 
-    people, 
+    child, 
     trigger = false, 
     onNext, 
     onPrevious,
@@ -57,17 +51,17 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     isOpen = false,
     onOpenChange
 }) => {
-    const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
+    const remainingAmount = (child.budget_goal - child.budget_raised) / 100;
     const [amount, setAmount] = useState<number>(remainingAmount);
     const [selectedOption, setSelectedOption] = useState<string>(paymentOptionsCollection.items[0].value);
     const [value, setValue] = useState<number[]>([remainingAmount]);
     const [loading, setLoading] = useState<boolean>(false);
     const user = useAuthStore((state) => state.user);
-    const [images, setImages] = useState<SponsorPeopleImage[]>([]);
+    const [images, setImages] = useState<SponsorshipImage[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
 
     useEffect(() => {
-        console.log("SponsorDialog: people.id changed to", people.id, "name:", people.name);
+        console.log("SponsorDialog: child.id changed to", child.id, "name:", child.name);
         setAmount(remainingAmount);
         setValue([remainingAmount]);
         setCurrentImageIndex(0);
@@ -75,10 +69,10 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         
         const fetchImages = async () => {
             try {
-                const response = await fetch(`/api/admin/children/images/${people.id}`);
+                const response = await fetch(`/api/admin/sponsorships/images/${child.id}`);
                 if (response.ok) {
                     const data = await response.json();
-                    setImages(data.sort((a: SponsorPeopleImage, b: SponsorPeopleImage) => 
+                    setImages(data.sort((a: SponsorshipImage, b: SponsorshipImage) => 
                         a.order_index - b.order_index
                     ));
                 }
@@ -118,7 +112,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 }
             }, 200);
         }
-    }, [people.id, remainingAmount, people.name, isOpen]);
+    }, [child.id, remainingAmount, child.name, isOpen]);
     
     // Effect for making the dialog sticky when it opens
     useEffect(() => {
@@ -195,12 +189,13 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    childId: people.id,
-                    childName: people.name,
-                    childImage: images[currentImageIndex]?.image_url || people.image_url || placeholderImage,
+                    sponsorshipId: child.id,
+                    sponsorshipType: child.sponsorship_type,
+                    name: child.name,
+                    image: images[currentImageIndex]?.image_url || placeholderImage,
                     amount: amount * 100,
                     paymentType: selectedOption,
-                    location: people.country,
+                    location: child.country,
                     userId: user?.id,
                     isEmbedded: window.self !== window.top,
                 }),
@@ -237,7 +232,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     const renderDisclaimer = () => {
         const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
         
-        if ((people.budget_goal - people.budget_raised - amount * 100) > 0) {
+        if ((child.budget_goal - child.budget_raised - amount * 100) > 0) {
             return (
                 <>
                     This child has a monthly budget goal that must be met for enrollment in school.
@@ -251,7 +246,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                     Additional sponsors are required to meet this goal.
                 </>
             );
-        } else if (people.budget_raised > 0) {
+        } else if (child.budget_raised > 0) {
             return (
                 <>
                     This child is partially sponsored. Your contribution will help reach their monthly budget goal!
@@ -328,8 +323,8 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                         <Box className="w-full md:w-[359px]">
                             <Box position="relative">
                                 <Image
-                                    src={images[currentImageIndex]?.image_url || people.image_url || placeholderImage}
-                                    alt={people.name}
+                                    src={images[currentImageIndex]?.image_url || placeholderImage}
+                                    alt={child.name}
                                     className={isInIframe 
                                         ? "rounded-xl h-[300px] w-full object-cover" 
                                         : "rounded-xl md:h-[479px] w-full object-cover"
@@ -415,17 +410,17 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                         </Box>
                         <Box className="flex-1 border border-[#E8E8EA] p-5">
                             <Text className="text-2xl text-center font-bold md:mt-0 md:text-start">
-                                {people.name}
+                                {child.name}
                             </Text>
                             <Progress.Root
-                                value={Math.min((people.budget_raised / people.budget_goal) * 100, 100)}
+                                value={Math.min((child.budget_raised / child.budget_goal) * 100, 100)}
                                 my={8}
                             >
                                 <Text className="text-end text-base text-[#959090] font-normal">
-                                    Goal: {`$${centsToDollars(people.budget_goal)}`}
+                                    Goal: {`$${centsToDollars(child.budget_goal)}`}
                                 </Text>
                                 <Tooltip
-                                    content={`$${centsToDollars(people.budget_raised)} raised`}
+                                    content={`$${centsToDollars(child.budget_raised)} raised`}
                                     showArrow
                                     positioning={{ placement: "right-end" }}
                                 >

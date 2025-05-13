@@ -3,26 +3,42 @@ import { Box, Text, Table, Badge } from '@chakra-ui/react'
 import { centsToDollars } from '@/utils/currency'
 import { formatDate } from '@/utils/dateFormatter'
 import { Subscription } from '@/types'
-import { SponsorshipDetailsProps } from '@/types/propTypes'
-import { fetchSponsorshipDetailsByChildId } from '@/actions'
 
-const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ childId }) => {
+interface SponsorshipDetailsProps {
+  sponsorshipId: string | undefined;
+}
+
+const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ sponsorshipId }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadSubscriptions = async () => {
-      if (!childId) return;
-      const data = await fetchSponsorshipDetailsByChildId(childId)
-      setSubscriptions(data)
-      setLoading(false)
+      if (!sponsorshipId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const response = await fetch(`/api/subscriptions/${sponsorshipId}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch subscriptions');
+        }
+        const data = await response.json();
+        setSubscriptions(data.subscriptions);
+      } catch (error) {
+        console.error('Error fetching subscriptions:', error);
+        setSubscriptions([]);
+      } finally {
+        setLoading(false);
+      }
     }
 
     loadSubscriptions()
-  }, [childId])
+  }, [sponsorshipId])
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
+      case 'complete':
       case 'active':
         return 'green'
       case 'incomplete':

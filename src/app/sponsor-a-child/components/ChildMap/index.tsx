@@ -85,11 +85,12 @@ const FitBounds: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childD
   const map = useMap();
 
   useEffect(() => {
-    if (childData.length > 0) {
+    const validChildren = childData.filter(child => child.location_geo !== null);
+    if (validChildren.length > 0) {
       const bounds = L.latLngBounds(
-        childData.map((child) => [
-          child.location_geo.coordinates[1],
-          child.location_geo.coordinates[0],
+        validChildren.map((child) => [
+          child.location_geo!.coordinates[1],
+          child.location_geo!.coordinates[0],
         ])
       );
       map.fitBounds(bounds, { 
@@ -130,11 +131,12 @@ const ZoomController: React.FC<{
   const handleResetView = () => {
     localStorage.removeItem("mapState");
 
-    if (childData.length > 0) {
+    const validChildren = childData.filter(child => child.location_geo !== null);
+    if (validChildren.length > 0) {
       const bounds = L.latLngBounds(
-        childData.map((child) => [
-          child.location_geo.coordinates[1],
-          child.location_geo.coordinates[0],
+        validChildren.map((child) => [
+          child.location_geo!.coordinates[1],
+          child.location_geo!.coordinates[0],
         ])
       );
       map.fitBounds(bounds, { 
@@ -165,7 +167,6 @@ const CustomZoomControl = () => {
   const map = useMap();
   
   useEffect(() => {
-
     if (map.zoomControl) {
       map.zoomControl.remove();
     }
@@ -218,15 +219,7 @@ const CustomZoomControl = () => {
   return null;
 };
 
-interface ExtendedChildMapProps extends ChildMapProps {
-  onFilterChange: (filters: Partial<{
-    gender: string;
-    ageRange: [number, number];
-    status: string[];
-  }>) => void;
-}
-
-const ChildMap: React.FC<ExtendedChildMapProps> = ({ 
+const ChildMap: React.FC<ChildMapProps> = ({ 
   childData, 
   onMarkerClick, 
   onBoundsChange, 
@@ -239,7 +232,7 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
 
   const handleMarkerClick = useCallback((id: string) => {
     const child = childData.find(c => c.id === id);
-    if (child && mapRef.current) {
+    if (child && child.location_geo && mapRef.current) {
       const { coordinates } = child.location_geo;
       mapRef.current.setView([coordinates[1], coordinates[0]], 12, {
         animate: true,
@@ -254,6 +247,7 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
     
     const currentBounds = mapRef.current.getBounds();
     const childrenInView = childData.filter(child => {
+      if (!child.location_geo) return false;
       const childLatLng = L.latLng(
         child.location_geo.coordinates[1], 
         child.location_geo.coordinates[0]
@@ -262,12 +256,15 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
     });
 
     if (childrenInView.length === 0 && childData.length > 0) {
-      const firstChild = childData[0];
-      mapRef.current.setView(
-        [firstChild.location_geo.coordinates[1], firstChild.location_geo.coordinates[0]],
-        mapRef.current.getZoom(),
-        { animate: true, duration: 1 }
-      );
+      const validChildren = childData.filter(child => child.location_geo !== null);
+      if (validChildren.length > 0) {
+        const firstChild = validChildren[0];
+        mapRef.current.setView(
+          [firstChild.location_geo!.coordinates[1], firstChild.location_geo!.coordinates[0]],
+          mapRef.current.getZoom(),
+          { animate: true, duration: 1 }
+        );
+      }
     }
   }, [childData]);
 
@@ -309,14 +306,14 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
     return validChildren.map((child) => (
       <Marker
         key={child.id}
-        position={[child.location_geo.coordinates[1], child.location_geo.coordinates[0]]}
+        position={[child.location_geo!.coordinates[1], child.location_geo!.coordinates[0]]}
         icon={CustomIcon}
         eventHandlers={{
           click: () => handleMarkerClick(child.id),
         }}
       >
         <Tooltip direction="top">
-          {child.name || 'Unknown'} - {child.country || 'Unknown'}
+          {child.name} - {child.country}
         </Tooltip>
       </Marker>
     ));

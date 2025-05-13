@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { ChildSponsorship } from "@/types";
+
+type RawChildSponsorship = ChildSponsorship & { child_details?: Partial<ChildSponsorship> };
 
 export async function GET(req: Request) {
   const supabase = await createClient();
@@ -7,8 +10,13 @@ export async function GET(req: Request) {
 
   try {
     const query = supabase
-      .from("sponsor_people")
-      .select("*")
+      .from("sponsorships")
+      .select(`
+        *,
+        child_details(*)
+      `)
+      .eq('sponsorship_type', 'CHILD');
+
     const ne = searchParams.get("ne");
     const sw = searchParams.get("sw");
 
@@ -26,11 +34,12 @@ export async function GET(req: Request) {
         const clampedNeCoords = [clampLat(neCoords[0]), clampLng(neCoords[1])];
         const clampedSwCoords = [clampLat(swCoords[0]), clampLng(swCoords[1])];
 
-        const { data, error } = await supabase.rpc("filter_by_polygon", {
+        const { data, error } = await supabase.rpc("filter_sponsorships_by_polygon", {
           sw_lng: clampedSwCoords[1],
           sw_lat: clampedSwCoords[0],
           ne_lng: clampedNeCoords[1],
           ne_lat: clampedNeCoords[0],
+          sponsorship_type: 'CHILD'
         });
 
         if (error) {
@@ -38,7 +47,14 @@ export async function GET(req: Request) {
           return NextResponse.json({ error: "Database error" }, { status: 500 });
         }
 
-        return NextResponse.json({ people: data });
+        // Transform data to match ChildSponsorship interface
+        const transformedData = data.map((item: RawChildSponsorship) => ({
+          ...item,
+          ...item.child_details,
+          child_details: undefined
+        }));
+
+        return NextResponse.json({ children: transformedData });
       } catch (e) {
         console.error("Error parsing coordinates:", e);
         return NextResponse.json(
@@ -55,7 +71,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
 
-    return NextResponse.json({ people: data });
+    // Transform data to match ChildSponsorship interface
+    const transformedData = data.map((item: RawChildSponsorship) => ({
+      ...item,
+      ...item.child_details,
+      child_details: undefined
+    }));
+
+    return NextResponse.json({ children: transformedData });
   } catch (err) {
     console.error("Unexpected error:", err);
     return NextResponse.json(

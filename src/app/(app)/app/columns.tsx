@@ -5,7 +5,6 @@ import { MdCancelPresentation } from "react-icons/md";
 
 export type Subscription = {
   id: string;
-  child_id: string;
   status: string;
   amount: number;
   interval: string;

@@ -3,28 +3,28 @@ import { Box, VStack } from "@chakra-ui/react";
 import React, { useState, useEffect, useCallback } from "react";
 import ChildCard from "../ChildCard";
 import SponsorDialog from "../SponsorDialog";
-import { SponsorPeople } from "@/types";
+import { ChildSponsorship } from "@/types";
 import { ChildListingsProps } from "@/types/propTypes";
 
 const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
-  peopleData,
+  childrenData,
   selectedChildId,
   selectedCountry,
   setSelectedChildId
 }, ref) => {
-  const [visiblePeople, setVisiblePeople] = useState<SponsorPeople[]>([]);
+  const [visibleChildren, setVisibleChildren] = useState<ChildSponsorship[]>([]);
   const isInIframe = window.self !== window.top;
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [activeChildId, setActiveChildId] = useState<string | null>(null);
   
   useEffect(() => {
-    let filteredPeople = peopleData;
+    let filteredChildren = childrenData;
 
     if (selectedCountry) {
-      filteredPeople = peopleData.filter(person => person.country === selectedCountry);
+      filteredChildren = childrenData.filter(child => child.country === selectedCountry);
     }
 
-    setVisiblePeople(isInIframe ? filteredPeople : filteredPeople.slice(0, 8));
+    setVisibleChildren(isInIframe ? filteredChildren : filteredChildren.slice(0, 8));
 
     if (isInIframe) {
       setTimeout(() => {
@@ -34,21 +34,21 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
         }, '*');
       }, 100);
     }
-  }, [peopleData, selectedCountry, isInIframe]);
+  }, [childrenData, selectedCountry, isInIframe]);
 
   const handleScroll = useCallback(() => {
     if (isInIframe) return;
 
     if (
       window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 500 &&
-      visiblePeople.length < peopleData.length
+      visibleChildren.length < childrenData.length
     ) {
-      setVisiblePeople(prev => [
+      setVisibleChildren(prev => [
         ...prev,
-        ...peopleData.slice(prev.length, prev.length + 8)
+        ...childrenData.slice(prev.length, prev.length + 8)
       ]);
     }
-  }, [peopleData, visiblePeople.length, isInIframe]);
+  }, [childrenData, visibleChildren.length, isInIframe]);
 
   useEffect(() => {
     if (!isInIframe) {
@@ -66,11 +66,11 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
   const handleDialogNavigation = (direction: 'next' | 'previous') => {
     if (!activeChildId) return;
     
-    const currentIndex = visiblePeople.findIndex(child => child.id === activeChildId);
+    const currentIndex = visibleChildren.findIndex(child => child.id === activeChildId);
     console.log(`ChildListings: handleDialogNavigation called with direction: ${direction}, current index: ${currentIndex}`);
     
-    if (direction === 'next' && currentIndex < visiblePeople.length - 1) {
-      const nextChild = visiblePeople[currentIndex + 1];
+    if (direction === 'next' && currentIndex < visibleChildren.length - 1) {
+      const nextChild = visibleChildren[currentIndex + 1];
       console.log(`ChildListings: Navigating to next child: ${nextChild.name} (ID: ${nextChild.id})`);
       setActiveChildId(nextChild.id);
       setSelectedChildId(nextChild.id);
@@ -79,7 +79,7 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
         document.getElementById(nextChild.id)?.scrollIntoView({ behavior: 'smooth' });
       }
     } else if (direction === 'previous' && currentIndex > 0) {
-      const prevChild = visiblePeople[currentIndex - 1];
+      const prevChild = visibleChildren[currentIndex - 1];
       console.log(`ChildListings: Navigating to previous child: ${prevChild.name} (ID: ${prevChild.id})`);
       setActiveChildId(prevChild.id);
       setSelectedChildId(prevChild.id);
@@ -91,15 +91,15 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
   };
 
   const activeChild = activeChildId 
-    ? visiblePeople.find(child => child.id === activeChildId) 
+    ? visibleChildren.find(child => child.id === activeChildId) 
     : null;
 
   const getDialogNavigationProps = () => {
     if (!activeChildId) return { hasNext: false, hasPrevious: false };
     
-    const currentIndex = visiblePeople.findIndex(child => child.id === activeChildId);
+    const currentIndex = visibleChildren.findIndex(child => child.id === activeChildId);
     return {
-      hasNext: currentIndex < visiblePeople.length - 1,
+      hasNext: currentIndex < visibleChildren.length - 1,
       hasPrevious: currentIndex > 0,
     };
   };
@@ -111,13 +111,13 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
       className="border bg-white rounded-xl" 
       px={{ base: 3, md: 8 }} 
       mt={4}
-      style={{ minHeight: visiblePeople.length ? 'auto' : '100px' }}
+      style={{ minHeight: visibleChildren.length ? 'auto' : '100px' }}
       suppressHydrationWarning={true}
     >
       {/* Render the shared dialog */}
       {activeChild && (
         <SponsorDialog
-          people={activeChild}
+          child={activeChild}
           isOpen={dialogOpen}
           onOpenChange={(open) => setDialogOpen(open)}
           onNext={() => handleDialogNavigation('next')}
@@ -133,17 +133,17 @@ const ChildListings = React.forwardRef<HTMLDivElement, ChildListingsProps>(({
         pb={10}
         gap="1.5rem"
       >
-        {visiblePeople.map((person) => (
-          <Box key={person.id}>
+        {visibleChildren.map((child) => (
+          <Box key={child.id}>
             <ChildCard
-              people={person}
-              isSelected={selectedChildId === person.id}
-              id={person.id}
-              onOpenDialog={() => handleOpenDialog(person.id)}
-              onNext={person.id === activeChildId ? () => handleDialogNavigation('next') : undefined}
-              onPrevious={person.id === activeChildId ? () => handleDialogNavigation('previous') : undefined}
-              hasNext={person.id === activeChildId ? getDialogNavigationProps().hasNext : false}
-              hasPrevious={person.id === activeChildId ? getDialogNavigationProps().hasPrevious : false}
+              child={child}
+              isSelected={selectedChildId === child.id}
+              id={child.id}
+              onOpenDialog={() => handleOpenDialog(child.id)}
+              onNext={child.id === activeChildId ? () => handleDialogNavigation('next') : undefined}
+              onPrevious={child.id === activeChildId ? () => handleDialogNavigation('previous') : undefined}
+              hasNext={child.id === activeChildId ? getDialogNavigationProps().hasNext : false}
+              hasPrevious={child.id === activeChildId ? getDialogNavigationProps().hasPrevious : false}
             />
           </Box>
         ))}

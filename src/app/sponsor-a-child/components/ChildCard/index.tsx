@@ -18,22 +18,16 @@ import {
 } from "@/components/ui/dialog";
 import { RxActivityLog } from "react-icons/rx";
 import { Collapsible } from "@chakra-ui/react";
-
-interface SponsorPeopleImage {
-    id: string;
-    sponsor_people_id: string;
-    image_url: string;
-    order_index: number;
-}
+import { SponsorshipImage } from "@/types";
 
 const ChildCard: React.FC<ChildCardProps> = ({ 
-    people, 
+    child, 
     isSelected, 
     id,
     onOpenDialog
 }) => {
     const router = useRouter();
-    const [images, setImages] = useState<SponsorPeopleImage[]>([]);
+    const [images, setImages] = useState<SponsorshipImage[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
     const [dialogImageIndex, setDialogImageIndex] = useState<number>(0);
     const [isLearnMoreOpen, setIsLearnMoreOpen] = useState<boolean>(false);
@@ -43,10 +37,11 @@ const ChildCard: React.FC<ChildCardProps> = ({
     useEffect(() => {
         const fetchImages = async () => {
             try {
-                const response = await fetch(`/api/admin/children/images/${people.id}`);
+                // Update the API endpoint to match the correct route
+                const response = await fetch(`/api/sponsorships/images/${child.id}`);
                 if (response.ok) {
                     const data = await response.json();
-                    setImages(data.sort((a: SponsorPeopleImage, b: SponsorPeopleImage) => a.order_index - b.order_index));
+                    setImages(data.sort((a: SponsorshipImage, b: SponsorshipImage) => a.order_index - b.order_index));
                 }
             } catch (error) {
                 console.error("Error fetching images:", error);
@@ -54,7 +49,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
         };
 
         fetchImages();
-    }, [people.id]);
+    }, [child.id]);
 
     useEffect(() => {
         setDialogImageIndex(currentImageIndex);
@@ -66,7 +61,13 @@ const ChildCard: React.FC<ChildCardProps> = ({
         };
     }, []);
 
-    const age = calculateAge(new Date(people.birth_date).toISOString());
+    let age: number | null = null;
+  if (child.birth_date) {
+    const date = new Date(child.birth_date);
+    if (!isNaN(date.getTime())) {
+      age = calculateAge(date.toISOString());
+    }
+  }
 
     const handleNextImage = () => {
         setCurrentImageIndex((prev) => (prev + 1) % images.length);
@@ -78,11 +79,11 @@ const ChildCard: React.FC<ChildCardProps> = ({
 
     const handleViewActivity = (e: React.MouseEvent) => {
         e.preventDefault();
-        router.push(`/sponsor-a-child/${people.username}`);
+        router.push(`/sponsor-a-child/${child.id}`);
     };
 
     const handleSponsorClick = () => {
-        console.log(`ChildCard: Sponsor button clicked for ${people.name} (ID: ${people.id})`);
+        console.log(`ChildCard: Sponsor button clicked for ${child.name} (ID: ${child.id})`);
         if (onOpenDialog) {
             onOpenDialog();
         }
@@ -106,7 +107,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
                         <Box position="relative">
                             <Image
                                 src={images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : placeholderImage}
-                                alt={people.name}
+                                alt={child.name}
                                 objectFit="cover"
                                 className={`mb-4 md:mb-0 min-h-[400px] h-[400px] w-[550px] md:min-h-[273px] md:h-[273px] md:w-[450px] cursor-pointer ${
                                     isLearnMoreOpen ? '' : 'rounded-t-md md:rounded-l-md md:rounded-t-none'
@@ -180,7 +181,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
                             <Box position="relative">
                                 <Image
                                     src={images.length > 0 && images[dialogImageIndex]?.image_url ? images[dialogImageIndex].image_url : placeholderImage}
-                                    alt={`${people.name} - ${dialogImageIndex + 1}`}
+                                    alt={`${child.name} - ${dialogImageIndex + 1}`}
                                     objectFit="contain"
                                     className="w-full max-h-[90vh] rounded-xl"
                                 />
@@ -249,25 +250,27 @@ const ChildCard: React.FC<ChildCardProps> = ({
                 <Box className="md:grid md:grid-cols-2 pt-[20px] w-full md:w-screen">
                     <Box ml={{ md: 6 }} w="full">
                         <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">
-                            {people.name}
+                            {child.name}
                         </Text>
                         <Box fontSize="base" className="text-[#767070] bg-[#DFDFDF] rounded-xl md:bg-white p-4 mb-4 text-left md:text-center">
-                            <Flex align="center" gap={2} mb={4}>
-                                <FaCalendar />
-                                <Text fontSize="sm" className="text-gray-500">
-                                    {age} year{age > 1 ? 's' : ''} old
-                                </Text>
-                            </Flex>
+                            {age !== null && (
+                              <Flex align="center" gap={2} mb={4}>
+                                  <FaCalendar />
+                                  <Text fontSize="sm" className="text-gray-500">
+                                      {age} year{age > 1 ? 's' : ''} old
+                                  </Text>
+                              </Flex>
+                            )}
                             <Flex align="center" gap={2} mb={4}>
                                 <FaPerson />
                                 <Text fontSize="sm" className="text-gray-500">
-                                    {people.gender}
+                                    {child.gender}
                                 </Text>
                             </Flex>
                             <Flex align="center" gap={2}>
                                 <FaLocationDot />
                                 <Text fontSize="sm" className="text-gray-500">
-                                    {people.country}
+                                    {child.country}
                                 </Text>
                             </Flex>
                         </Box>
@@ -276,12 +279,12 @@ const ChildCard: React.FC<ChildCardProps> = ({
                                 <Box
                                     bg="#1C3C8C"
                                     h="2px"
-                                    w={`${Math.min((people.budget_raised / people.budget_goal) * 100, 100)}%`}
+                                    w={`${Math.min((child.budget_raised / child.budget_goal) * 100, 100)}%`}
                                     borderRadius="full"
                                 />
                             </Box>
                             <Text fontSize="sm" mt={1} className="text-gray-500">
-                                ${centsToDollars(people.budget_raised)} raised of ${centsToDollars(people.budget_goal)}
+                                ${centsToDollars(child.budget_raised)} raised of ${centsToDollars(child.budget_goal)}
                             </Text>
                         </Box>
                     </Box>
@@ -290,7 +293,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
                             Introduction
                         </Text>
                         <Text fontSize="base" className="text-[#767070] mb-2">
-                            {people.introduction}
+                            {child.introduction}
                         </Text>
                         <Button
                             onClick={handleViewActivity}
@@ -305,7 +308,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
                                     className="text-[#1C3C8C] cursor-pointer whitespace-nowrap flex items-center gap-1"
                                     onClick={() => setIsLearnMoreOpen(!isLearnMoreOpen)}
                                 >
-                                    Learn more about {people.name} {isLearnMoreOpen ? <FaCaretUp /> : <FaCaretDown />}
+                                    Learn more about {child.name} {isLearnMoreOpen ? <FaCaretUp /> : <FaCaretDown />}
                                 </span>
                             </Text>
                         </Box>
@@ -328,16 +331,16 @@ const ChildCard: React.FC<ChildCardProps> = ({
                     >
                         <Box mr="8" className="md:w-2/5 md:text-start w-full text-center">
                             <Text fontSize="xl" fontWeight="semibold" mb={4} color="#1C3C8C">
-                                About {people.name}
+                                About {child.name}
                             </Text>
                             <Text mb={4}>
-                                {people.biography}
+                                {child.biography}
                             </Text>
                         </Box>
                         <Box mt="12" className="md:w-3/5 w-full">
-                            {people.video_url ? (
+                            {child.video_url ? (
                                 <video width="800" height="600" controls preload="none" className="border rounded-xl">
-                                    <source src={people.video_url} type="video/mp4" />
+                                    <source src={child.video_url} type="video/mp4" />
                                 </video>
                             ) : (
                                 <Box className="border rounded-xl min-h-[200px] max-h-[600px] flex items-center justify-center bg-gray-100">
@@ -347,14 +350,14 @@ const ChildCard: React.FC<ChildCardProps> = ({
                         </Box>
                     </Box>
                     <Box className={isLearnMoreOpen ? 'border-b' : ''}>
-                        {people.status !== "Budget Fulfilled" ? (
+                        {child.status !== "INACTIVE" ? (
                             <Box fontSize="base" className="pb-6 px-6">
                                 <Button 
                                     fontWeight="md" 
                                     className="text-[#FFFFFF] w-full cursor-pointer bg-[#1C3C8C] mt-8"
                                     onClick={handleSponsorClick}
                                 >
-                                    Sponsor {people.name}
+                                    Sponsor {child.name}
                                 </Button>
                             </Box>
                         ) : (

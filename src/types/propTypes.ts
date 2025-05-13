@@ -1,28 +1,21 @@
 import { LatLngBounds } from "leaflet";
-import { SponsorPeople } from "./index";
+import { ChildSponsorship } from "./index";
 
 export interface FiltersProps {
   onFilterChange: (filters: { gender: string; ageRange: [number, number]; status: string[] }) => void;
+  variant?: 'sidebar';
 }
 
-
 export interface ChildMapProps {
-  childData: {
-    id: string;
-    name: string;
-    location_geo: {
-      coordinates: [number, number];
-    };
-    image_url: string;
-    country: string;
-  }[];
+  childData: ChildSponsorship[];
   onMarkerClick: (id: string) => void;
   onBoundsChange: (bounds: LatLngBounds) => void;
   onResetView?: () => void;
+  onFilterChange: (filters: { gender: string; ageRange: [number, number]; status: string[] }) => void;
 }
 
 export interface ChildListingsProps {
-  peopleData: SponsorPeople[];
+  childrenData: ChildSponsorship[];
   selectedChildId: string | null;
   selectedCountry: string | null;
   isLoading?: boolean;
@@ -30,16 +23,16 @@ export interface ChildListingsProps {
 }
 
 export interface ChildCardProps {
-    people: SponsorPeople;
-    isSelected?: boolean;
-    id: string;
-    onNext?: () => void;
-    onPrevious?: () => void;
-    hasNext?: boolean;
-    hasPrevious?: boolean;
-    onOpenDialog?: () => void;
+  child: ChildSponsorship;
+  isSelected?: boolean;
+  id: string;
+  onNext?: () => void;
+  onPrevious?: () => void;
+  hasNext?: boolean;
+  hasPrevious?: boolean;
+  onOpenDialog?: () => void;
 }
 
 export interface SponsorshipDetailsProps {
-  childId?: string
+  childId?: string;
 }

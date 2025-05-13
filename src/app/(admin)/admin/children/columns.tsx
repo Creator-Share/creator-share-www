@@ -5,10 +5,10 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LuArrowUpDown } from "react-icons/lu";
 import { IoCopyOutline } from "react-icons/io5";
-import { SponsorPeople } from "@/types/admin.types";
+import { ChildSponsorship } from "@/types";
 import { centsToDollars } from "@/utils/currency";
 
-export const columns: ColumnDef<SponsorPeople>[] = [
+export const columns: ColumnDef<ChildSponsorship>[] = [
   {
     id: "select",
     meta: { excludeFromClick: true },
@@ -90,20 +90,6 @@ export const columns: ColumnDef<SponsorPeople>[] = [
     ),
   },
   {
-    accessorKey: "username",
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
-      >
-        Username
-        <LuArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
-  },
-  {
     accessorKey: "birth_date",
     header: ({ column }) => (
       <Button
@@ -176,7 +162,7 @@ export const columns: ColumnDef<SponsorPeople>[] = [
     ),
     cell: ({ row }) => {
       const person = row.original;
-      return <div>${person.budget_goal}</div>;
+      return <div>${centsToDollars(person.budget_goal)}</div>;
     },
   },
   {

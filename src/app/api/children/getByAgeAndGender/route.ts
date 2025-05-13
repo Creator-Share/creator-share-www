@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { calculateAge } from "@/utils/ageCalculator";
+import { ChildSponsorship } from "@/types";
+
+type RawChildSponsorship = ChildSponsorship & { child_details?: Partial<ChildSponsorship> };
 
 export async function GET(req: Request) {
   const supabase = await createClient();
@@ -10,10 +13,17 @@ export async function GET(req: Request) {
   const status = searchParams.get("status");
 
   try {
-    let query = supabase.from("sponsor_people").select("*");
+    // Query base sponsorships table with child-specific details
+    let query = supabase
+      .from("sponsorships")
+      .select(`
+        *,
+        child_details(*)
+      `)
+      .eq('sponsorship_type', 'CHILD');
 
     if (gender) {
-      query = query.eq("gender", gender);
+      query = query.eq("child_details.gender", gender);
     }
 
     if (status) {
@@ -27,33 +37,38 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
 
-    let filteredData = data || [];
+    // Transform data to match ChildSponsorship interface
+    let transformedData = (data || []).map((item: RawChildSponsorship) => ({
+      ...item,
+      ...item.child_details,
+      child_details: undefined
+    }));
 
     const ageRange = searchParams.get("ageRange");
     if (ageRange) {
       const parts = ageRange.split(",").map(Number);
       if (parts.length === 1) {
         const singleAge = parts[0];
-        filteredData = filteredData.filter((child) => {
+        transformedData = transformedData.filter((child) => {
           const childAge = calculateAge(new Date(child.birth_date).toISOString());
           return childAge === singleAge;
         });
       } else if (parts.length === 2) {
         const [minAge, maxAge] = parts;
-        filteredData = filteredData.filter((child) => {
+        transformedData = transformedData.filter((child) => {
           const childAge = calculateAge(new Date(child.birth_date).toISOString());
           return childAge >= minAge && childAge <= maxAge;
         });
       }
     }
     
-    console.log("API response children:", filteredData.length);
+    console.log("API response children:", transformedData.length);
     console.log("Age range filter:", ageRange);
     
-    const uniqueIds = new Set(filteredData.map(child => child.id));
-    console.log("Unique children count:", uniqueIds.size, "Total children:", filteredData.length);
+    const uniqueIds = new Set(transformedData.map(child => child.id));
+    console.log("Unique children count:", uniqueIds.size, "Total children:", transformedData.length);
     
-    return NextResponse.json({ people: filteredData });
+    return NextResponse.json({ children: transformedData });
   } catch (err) {
     console.error("Unexpected error:", err);
     return NextResponse.json(

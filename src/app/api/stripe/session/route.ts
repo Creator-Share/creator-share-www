@@ -47,18 +47,36 @@ export async function GET(request: Request) {
 
     const { data: transaction } = await supabase
       .from("transaction_ledger")
-      .select("*, sponsor_people(name)")
+      .select(`
+        *,
+        sponsorships: sponsorship_id (
+          child_details(*),
+          street_involved_details(*),
+          child_labor_details(*),
+          family_details(*),
+          puppy_details(*)
+        )
+      `)
       .eq("reference", sessionId)
       .single();
 
     if (transaction) {
+      const sponsorship = transaction.sponsorships || {};
+      const childName =
+        sponsorship.child_details?.[0]?.name ||
+        sponsorship.street_involved_details?.[0]?.name ||
+        sponsorship.child_labor_details?.[0]?.name ||
+        sponsorship.family_details?.[0]?.name ||
+        sponsorship.puppy_details?.[0]?.name ||
+        "";
+
       console.log(`Found transaction in database for session: ${sessionId}`);
       return NextResponse.json({
         session: {
           id: sessionId,
           status: 'complete',
           metadata: {
-            childName: transaction.sponsor_people?.name || '',
+            childName,
             childLocation: '',
           },
           customer_details: {
@@ -71,18 +89,36 @@ export async function GET(request: Request) {
 
     const { data: subscription } = await supabase
       .from("subscriptions")
-      .select("*, sponsor_people!inner(name)")
+      .select(`
+        *,
+        sponsorships: sponsorship_id (
+          child_details(*),
+          street_involved_details(*),
+          child_labor_details(*),
+          family_details(*),
+          puppy_details(*)
+        )
+      `)
       .eq("stripe_subscription_id", sessionId)
       .single();
 
     if (subscription) {
+      const sponsorship = subscription.sponsorships || {};
+      const childName =
+        sponsorship.child_details?.[0]?.name ||
+        sponsorship.street_involved_details?.[0]?.name ||
+        sponsorship.child_labor_details?.[0]?.name ||
+        sponsorship.family_details?.[0]?.name ||
+        sponsorship.puppy_details?.[0]?.name ||
+        "";
+
       console.log(`Found subscription in database for session: ${sessionId}`);
       return NextResponse.json({
         session: {
           id: sessionId,
           status: subscription.status,
           metadata: {
-            childName: subscription.sponsor_people?.name || '',
+            childName,
             childLocation: '',
           },
           customer_details: {
@@ -96,18 +132,36 @@ export async function GET(request: Request) {
 
     const { data: partialSubscriptions } = await supabase
       .from("subscriptions")
-      .select("*, sponsor_people!inner(name)")
+      .select(`
+        *,
+        sponsorships: sponsorship_id (
+          child_details(*),
+          street_involved_details(*),
+          child_labor_details(*),
+          family_details(*),
+          puppy_details(*)
+        )
+      `)
       .ilike("stripe_subscription_id", `%${sessionId}%`)
       .limit(1);
       
     if (partialSubscriptions && partialSubscriptions.length > 0) {
+      const sponsorship = partialSubscriptions[0].sponsorships || {};
+      const childName =
+        sponsorship.child_details?.[0]?.name ||
+        sponsorship.street_involved_details?.[0]?.name ||
+        sponsorship.child_labor_details?.[0]?.name ||
+        sponsorship.family_details?.[0]?.name ||
+        sponsorship.puppy_details?.[0]?.name ||
+        "";
+
       console.log(`Found partial match subscription in database for session: ${sessionId}`);
       return NextResponse.json({
         session: {
           id: sessionId,
           status: partialSubscriptions[0].status,
           metadata: {
-            childName: partialSubscriptions[0].sponsor_people?.name || '',
+            childName,
             childLocation: '',
           },
           customer_details: {

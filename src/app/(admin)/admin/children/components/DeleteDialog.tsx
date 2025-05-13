@@ -1,18 +1,21 @@
+"use client";
+
 import React from "react";
-import { Text, Flex } from "@chakra-ui/react";
-import { Button } from "@/components/ui/button";
 import {
   DialogRoot,
   DialogContent,
   DialogHeader,
-  DialogBody,
-  DialogCloseTrigger,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogActionTrigger,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface DeleteDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: () => void;
   itemCount: number;
 }
 
@@ -23,34 +26,30 @@ const DeleteDialog: React.FC<DeleteDialogProps> = ({
   itemCount,
 }) => {
   return (
-    <DialogRoot open={isOpen}>
+    <DialogRoot open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <Text className="text-xl font-semibold">Confirm Deletion</Text>
-          <DialogCloseTrigger onClick={onClose} />
+          <DialogTitle>Confirm Deletion</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete {itemCount} selected {itemCount === 1 ? "child" : "children"}? This action cannot be undone.
+          </DialogDescription>
         </DialogHeader>
-        <DialogBody>
-          <Text>
-            Are you sure you want to delete {itemCount} selected children? This action cannot be undone.
-          </Text>
-          <Flex gap={3} mt={4}>
-            <Button
-              onClick={onClose}
-              className="bg-gray-500 text-white p-4"
-            >
+        <DialogFooter>
+          <DialogActionTrigger asChild>
+            <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button
-              onClick={onConfirm}
-              className="bg-red-500 text-white p-4"
-            >
-              Delete
-            </Button>
-          </Flex>
-        </DialogBody>
+          </DialogActionTrigger>
+          <Button 
+            className="bg-red-500 text-white hover:bg-red-600" 
+            onClick={onConfirm}
+          >
+            Delete
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </DialogRoot>
   );
 };
 
-export default DeleteDialog; 
+export default DeleteDialog;

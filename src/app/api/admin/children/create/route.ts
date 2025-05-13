@@ -24,10 +24,10 @@ export async function POST(request: Request) {
     }
 
     const { error: activityError } = await supabase
-      .from("people_activities")
+      .from("sponsorship_activities")
       .insert({
         description: `${newChild.name} was added`,
-        child_id: newChild.id,
+        sponsorship_id: newChild.id,
         user_id: user?.id
       });
 
@@ -43,4 +43,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Box, Flex, Text, Spinner } from '@chakra-ui/react';
 import dynamic from 'next/dynamic';
-import { SponsorPeople } from '@/types';
+import { ChildSponsorship } from '@/types';
 
 const ChildMap = dynamic(() => import('./components/ChildMap'), {
   ssr: false,
@@ -26,14 +26,14 @@ interface Filters {
 
 const SponsorChild = () => {
   const [L, setL] = useState<typeof import("leaflet") | null>(null);
-  const [childrenData, setChildrenData] = useState<SponsorPeople[]>([]);
+  const [childrenData, setChildrenData] = useState<ChildSponsorship[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
-  const [visibleChildren, setVisibleChildren] = useState<SponsorPeople[]>([]);
+  const [visibleChildren, setVisibleChildren] = useState<ChildSponsorship[]>([]);
   const [loading, setLoading] = useState(true);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0, 14], status: ["New", "Partially Funded"] });
+  const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0, 14], status: ["ACTIVE", "PENDING"] });
 
   const listingsRef = useRef<HTMLDivElement>(null);
   const childListingsRef = useRef<HTMLDivElement>(null);
@@ -46,7 +46,6 @@ const SponsorChild = () => {
   }, []);
 
   const handleFilterChange = React.useCallback((newFilters: Partial<Filters>) => {
-
     setFilters(prev => ({ ...prev, ...newFilters }));
   }, []);
 
@@ -55,10 +54,11 @@ const SponsorChild = () => {
     setError(null);
 
     try {
-      let endpoint = "/api/children/get";
+      const endpoint = "/api/sponsorships";
       const queryParams = new URLSearchParams();
+      queryParams.append("type", "CHILD");
+      
       if (filters.gender || (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) || filters.status.length > 0) {
-        endpoint = "/api/children/getByAgeAndGender";
         if (filters.gender) queryParams.append("gender", filters.gender);
         if (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) {
           queryParams.append("ageRange", filters.ageRange.join(','));
@@ -72,8 +72,8 @@ const SponsorChild = () => {
       if (!res.ok) throw new Error("Failed to fetch children data");
 
       const data = await res.json();
-      setChildrenData(data.people || []);
-      setVisibleChildren(data.people || []);
+      setChildrenData(data.sponsorships || []);
+      setVisibleChildren(data.sponsorships || []);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unexpected error occurred");
     } finally {
@@ -107,14 +107,14 @@ const SponsorChild = () => {
 
   const handleMarkerClick = React.useCallback((id: string) => {
     setSelectedChildId(id);
-    const selectedPerson = childrenData.find((child) => child.id === id);
+    const selectedChild = childrenData.find((child) => child.id === id);
     
-    if (selectedPerson) {
-      setSelectedCountry(selectedPerson.country);
+    if (selectedChild) {
+      setSelectedCountry(selectedChild.country);
 
       setVisibleChildren(prev => {
         if (!prev.some(child => child.id === id)) {
-          return [...prev, selectedPerson];
+          return [...prev, selectedChild];
         }
         return prev;
       });
@@ -171,7 +171,6 @@ const SponsorChild = () => {
 
       window.addEventListener('message', handleMessage);
 
-      
       const debouncedSendHeight = () => {
         if (resizeTimeout) clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(sendHeight, 100);
@@ -180,7 +179,6 @@ const SponsorChild = () => {
       const observer = new ResizeObserver(debouncedSendHeight);
       resizeObserver = observer;
 
-     
       observer.observe(document.documentElement);
 
       window.addEventListener('load', sendHeight);
@@ -280,7 +278,7 @@ const SponsorChild = () => {
       ) : visibleChildren.length > 0 ? (
         <ChildListings
           ref={childListingsRef}
-          peopleData={visibleChildren}
+          childrenData={visibleChildren}
           selectedChildId={selectedChildId}
           selectedCountry={selectedCountry}
           setSelectedChildId={setSelectedChildId}

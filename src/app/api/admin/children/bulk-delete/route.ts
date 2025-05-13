@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const { error: activitiesError } = await supabase
       .from("people_activities")
       .delete()
-      .in('child_id', childIds);
+      .in('sponsorship_id', childIds);
 
     if (activitiesError) {
       return NextResponse.json({ error: activitiesError.message }, { status: 500 });
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const { error: subscriptionsError } = await supabase
       .from("subscriptions")
       .delete()
-      .in('child_id', childIds);
+      .in('sponsorship_id', childIds);
 
     if (subscriptionsError) {
       return NextResponse.json({ error: subscriptionsError.message }, { status: 500 });
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const { error: transactionsError } = await supabase
       .from("transaction_ledger")
       .delete()
-      .in('child_id', childIds);
+      .in('sponsorship_id', childIds);
 
     if (transactionsError) {
       return NextResponse.json({ error: transactionsError.message }, { status: 500 });
@@ -66,4 +66,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

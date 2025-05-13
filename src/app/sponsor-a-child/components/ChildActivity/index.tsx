@@ -1,25 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text, Flex, Spinner } from '@chakra-ui/react';
-import { fetchActivitiesByChildId } from '@/actions';
 import { Activity } from '@/types';
 
-const ChildActivity = ({ childId }: { childId: string | undefined }) => {
+interface ChildActivityProps {
+  sponsorshipId: string | undefined;
+}
+
+const ChildActivity: React.FC<ChildActivityProps> = ({ sponsorshipId }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadActivities = async () => {
-      if (!childId) {
+      if (!sponsorshipId) {
         setLoading(false);
         return;
       }
-      const data = await fetchActivitiesByChildId(childId);
-      setActivities(data);
-      setLoading(false);
+      try {
+        const response = await fetch(`/api/activities/${sponsorshipId}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch activities');
+        }
+        const data = await response.json();
+        setActivities(data.activities);
+      } catch (error) {
+        console.error('Error fetching activities:', error);
+        setActivities([]);
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadActivities();
-  }, [childId]);
+  }, [sponsorshipId]);
 
   return (
     <Box borderWidth="1px" borderRadius="md" p={4} boxShadow="md" maxHeight="400px" overflowY="auto">
