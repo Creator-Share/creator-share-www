@@ -24,12 +24,8 @@ import { toaster } from "@/components/ui/toaster";
 import { paymentOptionsCollection } from "./config";
 import { SponsorPeople } from "@/types";
 import { useAuthStore } from "@/store/authStore";
-interface SponsorPeopleImage {
-    id: string;
-    sponsor_people_id: string;
-    image_url: string;
-    order_index: number;
-}
+import { BeneficiaryMedia } from "@/types/admin.types";
+
 
 interface SponsorDialogProps {
     people: SponsorPeople;
@@ -64,7 +60,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     const [value, setValue] = useState<number[]>([remainingAmount]);
     const [loading, setLoading] = useState<boolean>(false);
     const user = useAuthStore((state) => state.user);
-    const [images, setImages] = useState<SponsorPeopleImage[]>([]);
+    const [images, setImages] = useState<BeneficiaryMedia[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
 
     useEffect(() => {
@@ -79,7 +75,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 const response = await fetch(`/api/admin/children/images/${people.id}`);
                 if (response.ok) {
                     const data = await response.json();
-                    setImages(data.sort((a: SponsorPeopleImage, b: SponsorPeopleImage) => 
+                    setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => 
                         a.order_index - b.order_index
                     ));
                 }

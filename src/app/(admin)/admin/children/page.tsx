@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { DataTable } from "@/components/admin-ui/Tables/data-table";
 import { ColumnDef, Row } from "@tanstack/react-table";
 import { columns } from "./columns";
-import { SponsorPeople, Geography, BeneficiaryType } from "@/types/admin.types";
+import { SponsorPeople, Geography } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import dynamic from "next/dynamic";
 import { centsToDollars } from "@/utils/currency";
@@ -27,7 +27,6 @@ const ChildrenTable = () => {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [formData, setFormData] = useState<SponsorPeople>({
-    id: "",
     name: "",
     gender: "Boy",
     username: "",
@@ -41,13 +40,11 @@ const ChildrenTable = () => {
     location_str: "",
     video_url: "",
     introduction: "",
-    created_at: "",
     active_subscriptions: 0,
     metadata: {},
     beneficiary_type: "CHILD",
   });
   const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>({
-    id: "",
     name: "",
     gender: "Boy",
     username: "",
@@ -61,7 +58,6 @@ const ChildrenTable = () => {
     location_str: "",
     video_url: "",
     introduction: "",
-    created_at: "",
     active_subscriptions: 0,
     metadata: {},
     beneficiary_type: "CHILD",
@@ -119,7 +115,7 @@ const ChildrenTable = () => {
 
     try {
       const { error: uploadError } = await supabase.storage
-        .from("sponsor_people")
+        .from("beneficiaries")
         .upload(filePath, file, {
           cacheControl: "3600",
           upsert: false,
@@ -131,7 +127,7 @@ const ChildrenTable = () => {
       }
 
       const { data } = supabase.storage
-        .from("sponsor_people")
+        .from("beneficiaries")
         .getPublicUrl(filePath);
 
       if (!data.publicUrl) {
@@ -174,7 +170,7 @@ const ChildrenTable = () => {
             }
 
             const imageRecords = imageUrls.map((url, index) => ({
-                sponsor_people_id: newChild.id,
+                beneficiary_id: newChild.id,
                 image_url: url,
                 order_index: index
             }));
@@ -213,9 +209,7 @@ const ChildrenTable = () => {
         }
 
         setData(prevData => [...prevData, { ...newChild, budget_goal: centsToDollars(newChild.budget_goal) }]);
-        setData(prevData => [...prevData, { ...newChild, budget_goal: centsToDollars(newChild.budget_goal) }]);
         setFormData({
-            id: newChild.id,
             name: "",
             gender: "Boy",
             username: "",
@@ -229,7 +223,6 @@ const ChildrenTable = () => {
             video_url: "",
             location_str: "",
             introduction: "",
-            created_at: "",
             active_subscriptions: 0,
             metadata: {},
             beneficiary_type: "CHILD",

@@ -23,7 +23,7 @@ import {
     FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
-import { SponsorPeople, SponsorPeopleImage } from "@/types/admin.types";
+import { SponsorPeople, BeneficiaryMedia } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import { toaster } from "@/components/ui/toaster";
 import { HiUpload, HiX } from "react-icons/hi";
@@ -54,11 +54,31 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     setImageFiles,
     setVideoFiles
 }) => {
-    const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>(() => selectedChild || {} as SponsorPeople);
+    const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>(() =>
+    selectedChild || {
+        id: "",
+        name: "",
+        username: "",
+        gender: "Boy",
+        birth_date: "",
+        biography: "",
+        budget_goal: 0,
+        budget_raised: 0,
+        status: "New",
+        country: "",
+        location_geo: null,
+        location_str: "",
+        video_url: "",
+        introduction: "",
+        active_subscriptions: 0,
+        metadata: {},
+        beneficiary_type: "CHILD",
+    }
+);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
-    const [allImages, setAllImages] = useState<SponsorPeopleImage[]>([]);
+    const [allImages, setAllImages] = useState<BeneficiaryMedia[]>([]);
     const [isImageLoading, setIsImageLoading] = useState(false);
 
     const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
@@ -66,7 +86,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
         const fileName = `${Date.now()}-${file.name}`;
         const filePath = `${folder}/${fileName}`;
 
-        const { error } = await supabase.storage.from("sponsor_people").upload(filePath, file, {
+        const { error } = await supabase.storage.from("beneficiaries").upload(filePath, file, {
             cacheControl: "3600",
             upsert: false,
         });
@@ -76,7 +96,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             return null;
         }
 
-        const { data } = supabase.storage.from("sponsor_people").getPublicUrl(filePath);
+        const { data } = supabase.storage.from("beneficiaries").getPublicUrl(filePath);
         return data.publicUrl;
     };
 
@@ -114,47 +134,47 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             const updatedData = { ...formDataEdit };
             const budgetGoalInCents = Math.round(parseFloat(formDataEdit.budget_goal.toString()) * 100);
             if (imageFiles.length > 0) {
-                const supabase = createClient();
-                const imageUrls = [];
+            const supabase = createClient();
+            const imageUrls = [];
 
-                for (const imageFile of imageFiles) {
-                    const fileName = `${Date.now()}-${imageFile.name}`;
-                    const filePath = `images/${fileName}`;
+            for (const imageFile of imageFiles) {
+                const fileName = `${Date.now()}-${imageFile.name}`;
+                const filePath = `images/${fileName}`;
 
-                    const { error: uploadError } = await supabase.storage
-                        .from("sponsor_people")
-                        .upload(filePath, imageFile, {
-                            cacheControl: "3600",
-                            upsert: false,
-                        });
+                const { error: uploadError } = await supabase.storage
+                    .from("beneficiaries")
+                    .upload(filePath, imageFile, {
+                        cacheControl: "3600",
+                        upsert: false,
+                    });
 
-                    if (uploadError) {
-                        console.error("File upload failed:", uploadError.message);
-                        continue;
-                    }
-
-                    const { data } = supabase.storage
-                        .from("sponsor_people")
-                        .getPublicUrl(filePath);
-
-                    imageUrls.push(data.publicUrl);
-                }
-                const { error: insertError } = await supabase
-                    .from("sponsor_people_images")
-                    .insert(
-                        imageUrls.map((url, index) => ({
-                            sponsor_people_id: selectedChild?.id || '',
-                            image_url: url,
-                            order_index: index
-                        }))
-                    );
-
-                if (insertError) {
-                    throw new Error('Failed to create image records');
+                if (uploadError) {
+                    console.error("File upload failed:", uploadError.message);
+                    continue;
                 }
 
-                await fetchImages();
-                setImageFiles([]);
+                const { data } = supabase.storage
+                    .from("beneficiaries")
+                    .getPublicUrl(filePath);
+
+                imageUrls.push(data.publicUrl);
+            }
+            const { error: insertError } = await supabase
+                .from("media")
+                .insert(
+                    imageUrls.map((url, index) => ({
+                        beneficiary_id: selectedChild?.id || '',
+                        image_url: url,
+                        order_index: index
+                    }))
+                );
+
+            if (insertError) {
+                throw new Error('Failed to create image records');
+            }
+
+            await fetchImages();
+            setImageFiles([]);
             }
 
             if (videoFiles.length > 0) {

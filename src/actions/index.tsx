@@ -1,8 +1,8 @@
 import { createClient } from '@/utils/supabase/client'
 import { Subscription } from '@/types'
 
-export async function fetchSponsorshipDetailsByChildId(childId: string): Promise<Subscription[]> {
-  if (!childId) return []
+export async function fetchSponsorshipDetailsByChildId(beneficiaryId: string): Promise<Subscription[]> {
+  if (!beneficiaryId) return []
 
   const supabase = createClient()
   const { data, error } = await supabase
@@ -13,7 +13,7 @@ export async function fetchSponsorshipDetailsByChildId(childId: string): Promise
         name
       )
     `)
-    .eq('child_id', childId)
+    .eq('beneficiary_id', beneficiaryId)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -24,14 +24,14 @@ export async function fetchSponsorshipDetailsByChildId(childId: string): Promise
   return data || []
 }
 
-export async function fetchActivitiesByChildId(childId: string) {
-  if (!childId) return [];
+export async function fetchActivitiesByChildId(beneficiaryId: string) {
+  if (!beneficiaryId) return [];
 
   const supabase = createClient();
   const { data, error } = await supabase
-    .from('people_activities')
+    .from('acitivities')
     .select('*')
-    .eq('child_id', childId)
+    .eq('beneficiary_id', beneficiaryId)
     .order('created_at', { ascending: false });
 
   if (error) {

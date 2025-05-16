@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   try {
     const { data, error } = await supabase
-      .from('sponsor_people')
+      .from('beneficiaries')
       .select('*')
       .eq('username', username)
       .single();

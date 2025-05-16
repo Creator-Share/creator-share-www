@@ -18,13 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { RxActivityLog } from "react-icons/rx";
 import { Collapsible } from "@chakra-ui/react";
+import { BeneficiaryMedia } from "@/types/admin.types";
 
-interface SponsorPeopleImage {
-    id: string;
-    sponsor_people_id: string;
-    image_url: string;
-    order_index: number;
-}
 
 const ChildCard: React.FC<ChildCardProps> = ({ 
     people, 
@@ -33,7 +28,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
     onOpenDialog
 }) => {
     const router = useRouter();
-    const [images, setImages] = useState<SponsorPeopleImage[]>([]);
+    const [images, setImages] = useState<BeneficiaryMedia[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
     const [dialogImageIndex, setDialogImageIndex] = useState<number>(0);
     const [isLearnMoreOpen, setIsLearnMoreOpen] = useState<boolean>(false);
@@ -46,7 +41,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
                 const response = await fetch(`/api/admin/children/images/${people.id}`);
                 if (response.ok) {
                     const data = await response.json();
-                    setImages(data.sort((a: SponsorPeopleImage, b: SponsorPeopleImage) => a.order_index - b.order_index));
+                    setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
                 }
             } catch (error) {
                 console.error("Error fetching images:", error);

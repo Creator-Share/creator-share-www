@@ -7,9 +7,9 @@ export async function GET(request: Request) {
   const id = url.pathname.split('/').pop();
 
   try {
-    const { data, error } = await supabase.from('sponsor_people').select('*').eq('id', id).single();
+    const { data, error } = await supabase.from('beneficiaries').select('*').eq('id', id).single();
     if (error) {
-      throw new Error(error.message || 'Child not found');
+      throw new Error(error.message || 'Beneficiary not found');
     }
     return NextResponse.json({ child: data }, { status: 200 });
   } catch (err: unknown) {

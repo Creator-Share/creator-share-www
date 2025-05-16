@@ -8,8 +8,7 @@ export interface Geography {
 }
 
 export interface SponsorPeople {
-  id: string;
-  created_at: string;
+  id?: string;
   name: string;
   username: string;
   gender: Gender;
@@ -24,14 +23,15 @@ export interface SponsorPeople {
   video_url: string;
   introduction: string;
   active_subscriptions: number;
-  metadata: any;
+  metadata: Record<string, unknown>;
   beneficiary_type: BeneficiaryType;
 }
 
-export interface SponsorPeopleImage {
+export interface BeneficiaryMedia {
   id: string;
-  sponsor_people_id: string;
+  beneficiary_id: string;
   image_url: string;
   order_index: number;
   created_at: string;
+  acitivy_id?:string;
 }

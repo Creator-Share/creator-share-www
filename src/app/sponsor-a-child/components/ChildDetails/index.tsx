@@ -6,11 +6,11 @@ import { calculateAge } from "@/utils/ageCalculator";
 import { formatDate } from "@/utils/dateFormatter";
 import { ChildCardProps } from "@/types/propTypes";
 import { useState, useEffect } from "react";
-import { SponsorPeopleImage } from "@/types";
+import { BeneficiaryMedia } from "@/types";
 
 
 const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
-    const [images, setImages] = useState<SponsorPeopleImage[]>([]);
+    const [images, setImages] = useState<BeneficiaryMedia[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
 
     const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
@@ -21,7 +21,7 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
                 const response = await fetch(`/api/admin/children/images/${people.id}`);
                 if (response.ok) {
                     const data = await response.json();
-                    setImages(data.sort((a: SponsorPeopleImage, b: SponsorPeopleImage) => a.order_index - b.order_index));
+                    setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
                 }
             } catch (error) {
                 console.error("Error fetching images:", error);

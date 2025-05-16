@@ -5,7 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LuArrowUpDown } from "react-icons/lu";
 import { IoCopyOutline } from "react-icons/io5";
-import { SponsorPeople, Gender, PersonStatus, BeneficiaryType } from "@/types/admin.types";
+import { SponsorPeople } from "@/types/admin.types";
 import { centsToDollars } from "@/utils/currency";
 
 export const columns: ColumnDef<SponsorPeople>[] = [

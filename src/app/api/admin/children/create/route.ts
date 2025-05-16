@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 export async function POST(request: Request) {
   try {
     const formData = await request.json();
+
+
     const supabase = await createClient();
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -13,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Authentication error" }, { status: 401 });
     }
 
-    const { data: newChild, error: supabaseError } = await supabase
+    const { data: newBeneficiary, error: supabaseError } = await supabase
       .from("beneficiaries")
       .insert([formData])
       .select()
@@ -24,10 +26,10 @@ export async function POST(request: Request) {
     }
 
     const { error: activityError } = await supabase
-      .from("people_activities")
+      .from("activities")
       .insert({
-        description: `${newChild.name} was added`,
-        child_id: newChild.id,
+        description: `${newBeneficiary.name} was added`,
+        beneficiary_id: newBeneficiary.id,
         user_id: user?.id
       });
 
@@ -35,7 +37,7 @@ export async function POST(request: Request) {
       console.error("Error creating activity:", activityError);
     }
 
-    return NextResponse.json(newChild);
+    return NextResponse.json(newBeneficiary);
   } catch (error) {
     console.error("Error creating child:", error);
     return NextResponse.json(

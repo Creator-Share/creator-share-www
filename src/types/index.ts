@@ -25,13 +25,6 @@ export interface SponsorPeople {
   family_size?: number;
 }
 
-export interface SponsorPeopleImage {
-  id: string;
-  sponsor_people_id: string;
-  image_url: string;
-  order_index: number;
-}
-
 export interface Subscription {
   id: string;
   created_at: string;
@@ -50,7 +43,16 @@ export interface Activity {
   id: string;
   description: string;
   created_at: string;
-  child_id: string;
+  beneficiary_id: string;
+}
+
+export interface BeneficiaryMedia {
+  id: string;
+  beneficiary_id: string;
+  image_url: string;
+  order_index: number;
+  created_at: string;
+  acitivy_id?:string;
 }
 
 //Auth types
