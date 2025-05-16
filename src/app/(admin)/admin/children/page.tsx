@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { DataTable } from "@/components/admin-ui/Tables/data-table";
 import { ColumnDef, Row } from "@tanstack/react-table";
 import { columns } from "./columns";
-import { SponsorPeople, Geography } from "@/types/admin.types";
+import { SponsorPeople, Geography, BeneficiaryType } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import dynamic from "next/dynamic";
 import { centsToDollars } from "@/utils/currency";
@@ -27,35 +27,44 @@ const ChildrenTable = () => {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [formData, setFormData] = useState<SponsorPeople>({
-    name: "",
-    gender: "",
-    username: "",
-    birth_date: "",
-    biography: "",
-    budget_goal: 0 * 100,
-    budget_raised: 0,
-    status: "",
-    country: "",
-    location_geo: null,
-    location_str: "",
-    video_url: "",
-    introduction: "",
-  });
-  const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>({
     id: "",
     name: "",
-    gender: "",
+    gender: "Boy",
     username: "",
     birth_date: "",
     biography: "",
     budget_goal: 0,
     budget_raised: 0,
-    status: "",
+    status: "New",
+    country: "",
+    location_geo: null,
+    location_str: "",
+    video_url: "",
+    introduction: "",
+    created_at: "",
+    active_subscriptions: 0,
+    metadata: {},
+    beneficiary_type: "CHILD",
+  });
+  const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>({
+    id: "",
+    name: "",
+    gender: "Boy",
+    username: "",
+    birth_date: "",
+    biography: "",
+    budget_goal: 0,
+    budget_raised: 0,
+    status: "New",
     country: "",
     location_geo: null as Geography | null,
     location_str: "",
     video_url: "",
     introduction: "",
+    created_at: "",
+    active_subscriptions: 0,
+    metadata: {},
+    beneficiary_type: "CHILD",
   });
 
   const [selectedChild, setSelectedChild] = useState<SponsorPeople | null>(null);
@@ -204,20 +213,26 @@ const ChildrenTable = () => {
         }
 
         setData(prevData => [...prevData, { ...newChild, budget_goal: centsToDollars(newChild.budget_goal) }]);
+        setData(prevData => [...prevData, { ...newChild, budget_goal: centsToDollars(newChild.budget_goal) }]);
         setFormData({
+            id: newChild.id,
             name: "",
-            gender: "",
+            gender: "Boy",
             username: "",
             birth_date: "",
             biography: "",
             budget_goal: 0,
             budget_raised: 0,
-            status: "",
+            status: "New",
             country: "",
             location_geo: null,
             video_url: "",
             location_str: "",
             introduction: "",
+            created_at: "",
+            active_subscriptions: 0,
+            metadata: {},
+            beneficiary_type: "CHILD",
         });
         setImageFiles([]);
         setVideoFiles([]);

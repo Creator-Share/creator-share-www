@@ -41,9 +41,9 @@ export async function POST(request: Request) {
     }
 
     const { error: imagesError } = await supabase
-      .from("sponsor_people_images")
+      .from("media")
       .delete()
-      .in('sponsor_people_id', childIds);
+      .in('beneficiary_id', childIds);
 
     if (imagesError) {
       return NextResponse.json({ error: imagesError.message }, { status: 500 });
@@ -66,4 +66,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

@@ -7,7 +7,7 @@ export async function PUT(request: Request) {
     const supabase = await createClient();
     
     const { data, error } = await supabase
-      .from("sponsor_people")
+      .from("beneficiaries")
       .update(updatedChild)
       .eq('id', updatedChild.id)
       .select();
@@ -23,4 +23,4 @@ export async function PUT(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

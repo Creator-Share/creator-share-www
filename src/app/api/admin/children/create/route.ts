@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     }
 
     const { data: newChild, error: supabaseError } = await supabase
-      .from("sponsor_people")
+      .from("beneficiaries")
       .insert([formData])
       .select()
       .single();
@@ -43,4 +43,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

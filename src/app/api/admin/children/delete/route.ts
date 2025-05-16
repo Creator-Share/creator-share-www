@@ -25,9 +25,9 @@ export async function DELETE(request: Request) {
     }
 
     const { error: imagesError } = await supabase
-      .from("sponsor_people_images")
+      .from("media")
       .delete()
-      .eq('sponsor_people_id', childId);
+      .eq('beneficiary_id', childId);
 
     if (imagesError) {
       return NextResponse.json({ error: imagesError.message }, { status: 500 });

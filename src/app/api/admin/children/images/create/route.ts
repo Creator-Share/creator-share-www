@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     
     const { data, error } = await supabase
-      .from("sponsor_people_images")
+      .from("media")
       .insert(images)
       .select();
 

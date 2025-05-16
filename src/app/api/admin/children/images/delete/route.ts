@@ -7,7 +7,7 @@ export async function DELETE(request: Request) {
     const supabase = await createClient();
     
     const { error } = await supabase
-      .from("sponsor_people_images")
+      .from("media")
       .delete()
       .eq("id", imageId);
 
@@ -23,4 +23,4 @@ export async function DELETE(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

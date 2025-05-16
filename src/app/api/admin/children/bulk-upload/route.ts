@@ -12,7 +12,7 @@ export async function POST(request: Request) {
       );
     }
     const { data, error } = await supabase
-      .from("sponsor_people")
+      .from("beneficiaries")
       .insert(children)
       .select();
 
@@ -28,4 +28,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

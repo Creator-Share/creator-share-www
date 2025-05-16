@@ -8,9 +8,9 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     
     const { data, error } = await supabase
-      .from("sponsor_people_images")
+      .from("media")
       .select("*")
-      .eq("sponsor_people_id", id)
+      .eq("beneficiary_id", id)
       .order("created_at");
 
     if (error) {
@@ -25,4 +25,4 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

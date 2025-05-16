@@ -13,10 +13,6 @@ const Dashboard = () => {
 
   const navigationItems = [
     { label: 'Manage Children', path: '/admin/children' },
-    { label: 'Child Labor', path: '/admin/child-labor' },
-    { label: 'Families', path: '/admin/families' },
-    { label: 'Puppies', path: '/admin/puppies' },
-    { label: 'Street Involved', path: '/admin/street-involved' },
   ];
 
   const handleNavigate = (path: string) => {
