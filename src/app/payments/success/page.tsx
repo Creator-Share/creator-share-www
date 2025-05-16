@@ -7,7 +7,7 @@ import { Box, Text, Button, Spinner, Center, Flex, VStack } from "@chakra-ui/rea
 const SuccessPageContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [childDetails, setChildDetails] = useState({
+  const [beneficiaryDetails, setBeneficiaryDetails] = useState({
     name: '',
     location: '',
     email: ''
@@ -40,7 +40,7 @@ const SuccessPageContent = () => {
           
           if (data.code === 'SESSION_NOT_FOUND') {
             console.log('Session not found after retries, assuming payment success');
-            setChildDetails({
+            setBeneficiaryDetails({
               name: 'your sponsored child',
               location: '',
               email: ''
@@ -53,14 +53,14 @@ const SuccessPageContent = () => {
         }
         
         const { session } = data;
-        setChildDetails({
+        setBeneficiaryDetails({
           name: session.metadata?.childName || 'your sponsored child',
           location: session.metadata?.childLocation || '',
           email: session.customer_details?.email || ''
         });
       } catch (error) {
         console.error('Error fetching session:', error);
-        setChildDetails({
+        setBeneficiaryDetails({
           name: 'your sponsored child',
           location: '',
           email: ''
@@ -88,7 +88,7 @@ const SuccessPageContent = () => {
     );
   }
 
-  if (error && !childDetails.name) {
+  if (error && !beneficiaryDetails.name) {
     return (
       <Box className="p-8 text-center">
         <Text className="text-xl mb-4 text-red-600">
@@ -145,7 +145,7 @@ const SuccessPageContent = () => {
           Thank You for Changing a Life!
         </Text>
         <Text mb={6} color="gray.600" fontSize="sm" className="text-center">
-          Your generous sponsorship payment has been successfully processed. Because of you, {childDetails.name} is one step closer to a brighter future.
+          Your generous sponsorship payment has been successfully processed. Because of you, {beneficiaryDetails.name} is one step closer to a brighter future.
         </Text>
         <Box mb={6}>
           <Text 
@@ -159,27 +159,27 @@ const SuccessPageContent = () => {
           
           <VStack gap={3} align="stretch">
             <Flex justify="space-between" fontSize="sm">
-              <Text fontWeight={"semibold"}>Child's Name</Text>
-              <Text fontWeight="medium" color="gray.500">{childDetails.name}</Text>
+              <Text fontWeight={"semibold"}>Beneficiary's Name</Text>
+              <Text fontWeight="medium" color="gray.500">{beneficiaryDetails.name}</Text>
             </Flex>
             
-            {childDetails.location && (
+            {beneficiaryDetails.location && (
               <Flex justify="space-between" fontSize="sm">
                 <Text fontWeight={"semibold"}>Location</Text>
-                <Text fontWeight="medium" color="gray.500">{childDetails.location}</Text>
+                <Text fontWeight="medium" color="gray.500">{beneficiaryDetails.location}</Text>
               </Flex>
             )}
             
-            {childDetails.email && (
+            {beneficiaryDetails.email && (
               <Flex justify="space-between" fontSize="sm">
                 <Text textAlign={"start"} fontWeight={"semibold"}>Confirmation Email</Text>
-                <Text fontWeight="medium" textAlign={"end"} color="blue.500">Sent to {childDetails.email}</Text>
+                <Text fontWeight="medium" textAlign={"end"} color="blue.500">Sent to {beneficiaryDetails.email}</Text>
               </Flex>
             )}
           </VStack>
         </Box>
         <Text fontSize="sm" color="gray.600" mb={6} className="text-center">
-          You'll receive updates about {childDetails.name}'s progress and how your support is making a difference.
+          You'll receive updates about {beneficiaryDetails.name}'s progress and how your support is making a difference.
         </Text>
         <Button
           onClick={() => router.push('/')}

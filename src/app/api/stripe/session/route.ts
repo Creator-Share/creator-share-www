@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     // First check transaction ledger
     const { data: transaction } = await supabase
       .from("transaction_ledger")
-      .select("*, sponsor_people(name)")
+      .select("*, beneficiaries(name)")
       .eq("reference", sessionId)
       .single();
 
@@ -55,7 +55,7 @@ export async function GET(request: Request) {
           id: sessionId,
           status: 'complete',
           metadata: {
-            childName: transaction.sponsor_people?.name || '',
+            childName: transaction.beneficiaries?.name || '',
             childLocation: '',
           },
           customer_details: {
@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     // Then check subscriptions
     const { data: subscription } = await supabase
       .from("subscriptions")
-      .select("*, sponsor_people!inner(name)")
+      .select("*, beneficiaries!inner(name)")
       .eq("stripe_subscription_id", sessionId)
       .single();
 
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
           id: sessionId,
           status: subscription.status,
           metadata: {
-            childName: subscription.sponsor_people?.name || '',
+            childName: subscription.beneficiaries?.name || '',
             childLocation: '',
           },
           customer_details: {
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
     // This helps when the session ID is part of a longer subscription ID
     const { data: partialSubscriptions } = await supabase
       .from("subscriptions")
-      .select("*, sponsor_people!inner(name)")
+      .select("*, beneficiaries!inner(name)")
       .ilike("stripe_subscription_id", `%${sessionId}%`)
       .limit(1);
       
@@ -106,8 +106,8 @@ export async function GET(request: Request) {
           id: sessionId,
           status: partialSubscriptions[0].status,
           metadata: {
-            childName: partialSubscriptions[0].sponsor_people?.name || '',
-            childLocation: '',
+            beneficiaryName: partialSubscriptions[0].beneficiaries?.name || '',
+            beneficiaryLocation: '',
           },
           customer_details: {
             email: '' 

@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/client'
 import { Subscription } from '@/types'
 
-export async function fetchSponsorshipDetailsByChildId(beneficiaryId: string): Promise<Subscription[]> {
+export async function fetchSponsorshipDetailsByBeneficiaryId(beneficiaryId: string): Promise<Subscription[]> {
   if (!beneficiaryId) return []
 
   const supabase = createClient()
@@ -24,7 +24,7 @@ export async function fetchSponsorshipDetailsByChildId(beneficiaryId: string): P
   return data || []
 }
 
-export async function fetchActivitiesByChildId(beneficiaryId: string) {
+export async function fetchActivitiesByBeneficiaryId(beneficiaryId: string) {
   if (!beneficiaryId) return [];
 
   const supabase = createClient();

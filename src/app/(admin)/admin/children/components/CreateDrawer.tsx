@@ -25,17 +25,17 @@ import {
 } from "@/components/ui/file-upload";
 import { HiUpload } from "react-icons/hi";
 import MapPicker from "./MapPicker";
-import { SponsorPeople } from "@/types/admin.types";
+import { Beneficiaries } from "@/types/admin.types";
 import { GoPlusCircle } from "react-icons/go";
 import { toaster } from "@/components/ui/toaster";
 
 type CreateDrawerProps = {
-    formData: SponsorPeople;
+    formData: Beneficiaries;
     isDrawerOpen: boolean;
     setIsDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
-    setFormData: React.Dispatch<React.SetStateAction<SponsorPeople>>;
+    setFormData: React.Dispatch<React.SetStateAction<Beneficiaries>>;
     handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-    handleSelectChange: (name: keyof SponsorPeople, value: string) => void;
+    handleSelectChange: (name: keyof Beneficiaries, value: string) => void;
     handleLocationSelect: (geo: [number, number], locationStr: string, country: string) => void;
     handleSubmit: () => Promise<boolean>;
     imageFiles: File[];
@@ -61,7 +61,7 @@ const CreateDrawer = ({
     const handleAdd = async () => {
         
         const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
-        const emptyFields = requiredFields.filter(field => !formData[field as keyof SponsorPeople]);
+        const emptyFields = requiredFields.filter(field => !formData[field as keyof Beneficiaries]);
         
         if (emptyFields.length > 0) {
             toaster.create({

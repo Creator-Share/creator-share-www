@@ -15,13 +15,13 @@ import { Button } from '@/components/ui/button';
 import { FileUploadList, FileUploadRoot, FileUploadTrigger } from "@/components/ui/file-upload";
 import { HiUpload } from "react-icons/hi";
 import { toaster } from "@/components/ui/toaster";
-import { SponsorPeople } from "@/types/admin.types";
+import { Beneficiaries } from "@/types/admin.types";
 import { centsToDollars } from "@/utils/currency";
 
 type BulkUploadDrawerProps = {
     isDrawerOpen: boolean;
     setIsDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
-    onUploadSuccess: (newChildren: SponsorPeople[]) => void;
+    onUploadSuccess: (newChildren: Beneficiaries[]) => void;
 };
 
 const BulkUploadDrawer = ({
@@ -38,28 +38,28 @@ const BulkUploadDrawer = ({
         }
     };
 
-    const processCSV = async (file: File): Promise<SponsorPeople[]> => {
+    const processCSV = async (file: File): Promise<Beneficiaries[]> => {
         const text = await file.text();
         const rows = text.split('\n');
         const headers = rows[0].split(',').map((h) => h.trim());
         
         return rows.slice(1).filter(row => row.trim()).map(row => {
             const values = row.split(',').map(v => v.trim());
-            const child: Partial<SponsorPeople> = {};
+            const beneficiary: Partial<Beneficiaries> = {};
             headers.forEach((header, index) => {
                 if (header === 'budget_goal') {
-                    child[header] = Math.round(parseFloat(values[index]) * 100);
+                    beneficiary[header] = Math.round(parseFloat(values[index]) * 100);
                 } else if (header === 'location_geo') {
                     const [lat, lng] = values[index].split(';').map(Number);
-                    child[header] = {
+                    beneficiary[header] = {
                         type: 'Point',
                         coordinates: [lng, lat]
                     };
                 } else {
-                    (child as Record<string, string>)[header] = values[index];
+                    (beneficiary as Record<string, string>)[header] = values[index];
                 }
             });
-            return child as SponsorPeople;
+            return beneficiary as Beneficiaries;
         });
     };
 
@@ -90,9 +90,9 @@ const BulkUploadDrawer = ({
             }
 
             const newChildren = await response.json();
-            const formattedChildren = newChildren.map((child: SponsorPeople) => ({
-                ...child,
-                budget_goal: centsToDollars(child.budget_goal)
+            const formattedChildren = newChildren.map((beneficiary: Beneficiaries) => ({
+                ...beneficiary,
+                budget_goal: centsToDollars(beneficiary.budget_goal)
             }));
             
             onUploadSuccess(formattedChildren);

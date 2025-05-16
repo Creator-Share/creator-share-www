@@ -14,11 +14,11 @@ const Links = [
   // { name: "Causes", href: "/causes" },
   // { name: "My Community", href: "/local" },
   // { name: "Share Abundance", href: "/share" },
-  { name: "Sponsor-a-Child", href: "/sponsor-a-child" },
-  { name: "Sponsor-a-Puppy", href: "/sponsor-a-puppy" },
-  { name: "Sponsor-a-Family", href: "/family-in-need" },
-  { name: "Street Involved", href: "/street-involved" },
-  { name: "Child Laborer", href: "/child-labor" },
+  { name: "Sponsorships", href: "/sponsorships" },
+  // { name: "Sponsor-a-Puppy", href: "/sponsor-a-puppy" },
+  // { name: "Sponsor-a-Family", href: "/family-in-need" },
+  // { name: "Street Involved", href: "/street-involved" },
+  // { name: "Child Laborer", href: "/child-labor" },
   { name: "I-Frame Test", href: "/iframe-test" },
 ];
 

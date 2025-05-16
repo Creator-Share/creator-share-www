@@ -6,16 +6,16 @@ import {
   Text,
   Spinner
 } from "@chakra-ui/react";
-import { SponsorPeople } from "@/types";
-import ChildDetailsCard from "../components/ChildDetails";
+import { Beneficiaries } from "@/types";
 import GoBackButton from "@/components/ui/goBack";
 import SponsorshipDetails from "../components/SponsorshipDetails";
-import ChildActivity from "../components/ChildActivity";
+import BeneficiaryActivity from "../components/SponsorshipActivity";
+import BeneficiaryDetailsCard from "../components/BeneficiaryDetails";
 
 
-const ChildDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ params }) => {
+const BeneficiaryDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ params }) => {
   const { username } = React.use(params);
-  const [child, setChild] = useState<SponsorPeople | null>(null);
+  const [beneficiary, setBeneficiary] = useState<Beneficiaries | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +30,7 @@ const ChildDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ par
         }
         
         const data = await res.json();
-        setChild(data.child);
+        setBeneficiary(data.child);
       } catch (err: unknown) {
         console.error("Error in child details page:", err);
         if (err instanceof Error) {
@@ -64,7 +64,7 @@ const ChildDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ par
     );
   }
 
-  if (!child) {
+  if (!beneficiary) {
     return (
       <Flex justify="center" align="center" minH="100vh">
         <Text color="gray.500">No child data found.</Text>
@@ -79,15 +79,15 @@ const ChildDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ par
         Details
       </Text>
       <Box className="mb-6">
-        <ChildDetailsCard id={child.id} people={child} />
+        <BeneficiaryDetailsCard id={beneficiary?.id} beneficiary={beneficiary} />
       </Box>
       <Box className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <SponsorshipDetails childId={child.id} />
-        <ChildActivity childId={child.id} />
+        <SponsorshipDetails beneficiaryId={beneficiary?.id} />
+        <BeneficiaryActivity beneficiaryId={beneficiary?.id} />
       </Box>
 
     </Box>
   );
 };
 
-export default ChildDetails;
+export default BeneficiaryDetails;

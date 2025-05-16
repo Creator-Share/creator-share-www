@@ -5,10 +5,10 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LuArrowUpDown } from "react-icons/lu";
 import { IoCopyOutline } from "react-icons/io5";
-import { SponsorPeople } from "@/types/admin.types";
+import { Beneficiaries } from "@/types/admin.types";
 import { centsToDollars } from "@/utils/currency";
 
-export const columns: ColumnDef<SponsorPeople>[] = [
+export const columns: ColumnDef<Beneficiaries>[] = [
   {
     id: "select",
     meta: { excludeFromClick: true },

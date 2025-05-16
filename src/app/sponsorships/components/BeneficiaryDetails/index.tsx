@@ -4,12 +4,12 @@ import { FaCalendar } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
 import { calculateAge } from "@/utils/ageCalculator";
 import { formatDate } from "@/utils/dateFormatter";
-import { ChildCardProps } from "@/types/propTypes";
+import { BeneficiaryCardProps } from "@/types/propTypes";
 import { useState, useEffect } from "react";
 import { BeneficiaryMedia } from "@/types";
 
 
-const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
+const BeneficiaryDetailsCard: React.FC<BeneficiaryCardProps> = ({ beneficiary }) => {
     const [images, setImages] = useState<BeneficiaryMedia[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
 
@@ -18,7 +18,7 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
     useEffect(() => {
         const fetchImages = async () => {
             try {
-                const response = await fetch(`/api/admin/children/images/${people.id}`);
+                const response = await fetch(`/api/admin/children/images/${beneficiary.id}`);
                 if (response.ok) {
                     const data = await response.json();
                     setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
@@ -29,10 +29,10 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
         };
 
         fetchImages();
-    }, [people.id]);
+    }, [beneficiary.id]);
 
-    const age = calculateAge(new Date(people.birth_date).toISOString());
-    const formattedBirthDate = formatDate(new Date(people.birth_date).toISOString());
+    const age = calculateAge(new Date(beneficiary.birth_date).toISOString());
+    const formattedBirthDate = formatDate(new Date(beneficiary.birth_date).toISOString());
 
     const handleNextImage = () => {
         setCurrentImageIndex((prev) => (prev + 1) % images.length);
@@ -75,7 +75,7 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
                 <Box position="relative" p={"10px"}>
                     <Image
                         src={images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : placeholderImage}
-                        alt={people.name}
+                        alt={beneficiary.name}
                         objectFit="cover"
                         rounded={"full"}
                         className="mb-4 md:mb-0"
@@ -141,7 +141,7 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
                 <Box className="md:grid md:grid-cols-2 pt-[20px] gap-3">
                     <Box ml={{ md: 6 }} w="full">
                         <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">
-                            {people.name}
+                            {beneficiary.name}
                         </Text>
                         <Flex fontSize="base" className="text-[#767070] gap-3" display={{ base: "column", md: "flex" }}>
                             <Flex justify={{ base: "center", md: "flex-start" }} align="center" className="gap-3">
@@ -153,7 +153,7 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
                             <Flex justify={{ base: "center", md: "flex-start" }} align="center" gap={2}>
                                 <FaLocationDot />
                                 <Text fontSize="sm" className="text-gray-500">
-                                    {people.country}
+                                    {beneficiary.country}
                                 </Text>
                             </Flex>
                         </Flex>
@@ -164,7 +164,7 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
                         </Text>
                         <Box fontSize="base" mb={3}>
                             <Text className="text-[#767070] mb-4">
-                                {people.biography}
+                                {beneficiary.biography}
                             </Text>
                         </Box>
                     </Box>
@@ -172,11 +172,11 @@ const ChildDetailsCard: React.FC<ChildCardProps> = ({ people }) => {
             </Flex>
             <Flex direction={{ base: "column", md: "row" }} borderWidth="1px" borderRadius={{ base: 'lg', md: 'md' }} className="bg-white p-6 mb-6 md:p-0 md:mb-0">
                 <Box className="flex justify-center items-center h-full px-8">
-                    {getStatusText(people.status)}
+                    {getStatusText(beneficiary.status)}
                 </Box>
             </Flex>
         </Flex>
     );
 };
 
-export default ChildDetailsCard;
+export default BeneficiaryDetailsCard;

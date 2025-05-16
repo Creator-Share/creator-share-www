@@ -5,11 +5,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 export async function POST(req: Request) {
   try {
     const {
-      childId,
-      childName,
+      beneficiaryId,
+      beneficiaryName,
       amount,
       paymentType,
-      childImage,
+      beneficiaryImage,
       location,
       userId,
       isEmbedded,
@@ -24,9 +24,10 @@ export async function POST(req: Request) {
     }
 
     // Ensure we have a valid image URL
-    const fullImageUrl = childImage.startsWith('http') 
-      ? childImage 
-      : `${process.env.NEXT_PUBLIC_BASE_URL}${childImage}`;
+    const safeImage = beneficiaryImage || "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+    const fullImageUrl = safeImage.startsWith('http') 
+      ? safeImage 
+      : `${process.env.NEXT_PUBLIC_BASE_URL}${safeImage}`;
 
     // Determine if this is monthly or yearly subscription
     const isMonthly = paymentType === "subscription";
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
     
     // Create product
     const product = await stripe.products.create({
-      name: `${isMonthly ? 'Monthly' : 'Yearly'} Sponsorship for ${childName}`,
+      name: `${isMonthly ? 'Monthly' : 'Yearly'} Sponsorship for ${beneficiaryName}`,
       images: [fullImageUrl],
     });
 
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
       recurring: { interval },
       product: product.id,
       metadata: {
-        childId,
+        beneficiaryId,
         userId: userId || null,
         amount: amount.toString()
       }
@@ -60,8 +61,8 @@ export async function POST(req: Request) {
         card: { request_three_d_secure: 'automatic' }
       },
       metadata: {
-        childId,
-        childName,
+        beneficiaryId,
+        beneficiaryName,
         amount: amount.toString(),
         childLocation: location,
         userId: userId || null,
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
       },
       subscription_data: {
         metadata: {
-          childId,
+          beneficiaryId,
           userId: userId || null,
           amount: amount.toString()
         }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { calculateAge } from "@/utils/ageCalculator";
-import { SponsorPeople, Gender, PersonStatus } from "@/types/admin.types";
+import { Beneficiaries, Gender, PersonStatus } from "@/types/admin.types";
 
 export async function GET(req: Request) {
   const supabase = await createClient();
@@ -28,7 +28,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
 
-    let filteredData: SponsorPeople[] = data as SponsorPeople[] || [];
+    let filteredData: Beneficiaries[] = data as Beneficiaries[] || [];
 
     const ageRange = searchParams.get("ageRange");
     if (ageRange) {

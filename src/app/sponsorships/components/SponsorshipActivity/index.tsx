@@ -1,25 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text, Flex, Spinner } from '@chakra-ui/react';
-import { fetchActivitiesByChildId } from '@/actions';
+import { fetchActivitiesByBeneficiaryId } from '@/actions';
 import { Activity } from '@/types';
 
-const ChildActivity = ({ childId }: { childId: string | undefined }) => {
+const BeneficiaryActivity = ({ beneficiaryId }: { beneficiaryId: string | undefined }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadActivities = async () => {
-      if (!childId) {
+      if (!beneficiaryId) {
         setLoading(false);
         return;
       }
-      const data = await fetchActivitiesByChildId(childId);
+      const data = await fetchActivitiesByBeneficiaryId(beneficiaryId);
       setActivities(data);
       setLoading(false);
     };
 
     loadActivities();
-  }, [childId]);
+  }, [beneficiaryId]);
 
   return (
     <Box borderWidth="1px" borderRadius="md" p={4} boxShadow="md" maxHeight="400px" overflowY="auto">
@@ -53,4 +53,4 @@ const ChildActivity = ({ childId }: { childId: string | undefined }) => {
   );
 };
 
-export default ChildActivity;
+export default BeneficiaryActivity;

@@ -41,7 +41,7 @@ export async function POST(req: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         
         // Extract metadata
-        const childId = session.metadata?.childId;
+        const beneficiaryId = session.metadata?.beneficiaryId;
         const amount = parseFloat(session.metadata?.amount || "0");
         const userId = session.metadata?.userId || null;
         const paymentType = session.metadata?.paymentType;
@@ -49,30 +49,30 @@ export async function POST(req: Request) {
         const interval = paymentType === "subscription" ? "month" : "year";
         
         // Validate required metadata
-        if (!childId || !amount) {
+        if (!beneficiaryId || !amount) {
           console.error("Missing required metadata in Stripe session:", session.metadata);
           return NextResponse.json({ error: "Invalid metadata" }, { status: 400 });
         }
 
         // Fetch child data
-        const { data: childData, error: childError } = await supabase
-          .from("sponsor_people")
+        const { data: beneficiaryData, error: beneficiaryError } = await supabase
+          .from("beneficiaries")
           .select("name, budget_raised, budget_goal")
-          .eq("id", childId)
+          .eq("id", beneficiaryId)
           .single();
 
-        if (childError || !childData) {
-          console.error("Error fetching child data:", childError);
-          return NextResponse.json({ error: "Failed to fetch child data" }, { status: 500 });
+        if (beneficiaryError || !beneficiaryData) {
+          console.error("Error fetching beneficiary data:", beneficiaryError);
+          return NextResponse.json({ error: "Failed to fetch beneficiary data" }, { status: 500 });
         }
 
         // Create transaction record
         const { error: transactionError } = await supabase
           .from("transaction_ledger")
           .insert({
-            child_id: childId,
+            beneficiary_id: beneficiaryId,
             user_id: userId,
-            description: `Sponsorship to ${childData.name} with amount of ${amount}`,
+            description: `Sponsorship to ${beneficiaryData.name} with amount of ${amount}`,
             reference: session.invoice as string,
             credit: amount,
             subscription_type: session.mode === "subscription" ? "subscription" : "payment",
@@ -88,10 +88,10 @@ export async function POST(req: Request) {
 
         // Create activity record
         const { error: activityError } = await supabase
-          .from("people_activities")
+          .from("activities")
           .insert({
             description: `Someone sponsored with $${centsToDollars(amount)}/${interval}`,
-            child_id: childId,
+            beneficiary_id: beneficiaryId,
             user_id: userId
           });
 
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
           const { error: subscriptionError } = await supabase.from("subscriptions").insert({
             stripe_subscription_id: session.subscription as string,
             user_id: userId,
-            child_id: childId,
+            beneficiary_id: beneficiaryId,
             status: "complete",
             amount: amount,
             interval: interval,
@@ -131,7 +131,7 @@ export async function POST(req: Request) {
             } else {
               const emailResult = await sendSponsorshipConfirmationEmail(
                 customerEmail,
-                childData.name,
+                beneficiaryData.name,
                 amount,
                 interval
               );
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
                 await supabase.from("email_logs").insert({
                   user_id: userId,
                   email: customerEmail,
-                  subject: `Thank you for sponsoring ${childData.name}!`,
+                  subject: `Thank you for sponsoring ${beneficiaryData.name}!`,
                   status: emailResult.success ? 'sent' : 'failed',
                   error: emailResult.error ? JSON.stringify(emailResult.error) : null,
                   message_id: emailResult.messageId,
@@ -168,7 +168,7 @@ export async function POST(req: Request) {
         const { error: subscriptionError } = await supabase.from("subscriptions").insert({
           stripe_subscription_id: subscription.id,
           user_id: subscription.metadata?.userId,
-          child_id: subscription.metadata?.childId,
+          beneficiary_id: subscription.metadata?.beneficiaryId,
           status: subscription.status === "active" ? "complete" : "incomplete",
           amount: subscription.items.data[0].price.unit_amount,
           interval: subscription.items.data[0].price.recurring?.interval,
@@ -204,20 +204,20 @@ export async function POST(req: Request) {
         // Get child information for email
         const { data: subscriptionData } = await supabase
           .from("subscriptions")
-          .select(`child_id`)
+          .select(`beneficiary_id`)
           .eq("stripe_subscription_id", subscriptionId)
           .single();
           
-        let childName = "your sponsored child";
-        if (subscriptionData?.child_id) {
-          const { data: sponsorPeople } = await supabase
-            .from("sponsor_people")
+        let beneficiaryName = "your sponsored beneficiary";
+        if (subscriptionData?.beneficiary_id) {
+          const { data: sponsorship } = await supabase
+            .from("beneficiaries")
             .select("name")
-            .eq("id", subscriptionData.child_id)
+            .eq("id", subscriptionData.beneficiary_id)
             .single();
             
-          if (sponsorPeople) {
-            childName = sponsorPeople.name;
+          if (sponsorship) {
+            beneficiaryName = sponsorship.name;
           }
         }
 
@@ -226,7 +226,7 @@ export async function POST(req: Request) {
           try {
             await sendPaymentFailedEmail(
               customerEmail,
-              childName,
+              beneficiaryName,
               invoice.amount_due / 100,
               invoice.next_payment_attempt 
                 ? new Date(invoice.next_payment_attempt * 1000) 
@@ -237,7 +237,7 @@ export async function POST(req: Request) {
             try {
               await supabase.from("email_logs").insert({
                 email: customerEmail,
-                subject: `Payment failed for ${childName} sponsorship`,
+                subject: `Payment failed for ${beneficiaryName} sponsorship`,
                 status: 'sent',
                 created_at: new Date()
               });

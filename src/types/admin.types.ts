@@ -7,7 +7,7 @@ export interface Geography {
   type: "Point";
 }
 
-export interface SponsorPeople {
+export interface Beneficiaries {
   id?: string;
   name: string;
   username: string;

@@ -1,19 +1,19 @@
 import { LatLngBounds } from "leaflet";
-import { SponsorPeople } from "./index";
+import { Beneficiaries } from "./index";
 
 export interface FiltersProps {
   onFilterChange: (filters: { gender: string; ageRange: [number, number]; status: string[] }) => void;
 }
 
 
-export interface ChildMapProps {
-  childData: {
+export interface BeneficiaryMapProps {
+  beneficiaryData: {
     id: string;
     name: string;
     location_geo: {
       coordinates: [number, number];
-    };
-    image_url: string;
+    } | null;
+    image_url?: string;
     country: string;
   }[];
   onMarkerClick: (id: string) => void;
@@ -21,16 +21,16 @@ export interface ChildMapProps {
   onResetView?: () => void;
 }
 
-export interface ChildListingsProps {
-  peopleData: SponsorPeople[];
-  selectedChildId: string | null;
+export interface BeneficiaryListingsProps {
+  beneficiaryData: Beneficiaries[];
+  selectedBeneficiaryId: string | null;
   selectedCountry: string | null;
   isLoading?: boolean;
-  setSelectedChildId: (id: string | null) => void;
+  setSelectedBeneficiaryId: (id: string | null) => void;
 }
 
-export interface ChildCardProps {
-    people: SponsorPeople;
+export interface BeneficiaryCardProps {
+    beneficiary: Beneficiaries;
     isSelected?: boolean;
     id: string;
     onNext?: () => void;
@@ -41,5 +41,5 @@ export interface ChildCardProps {
 }
 
 export interface SponsorshipDetailsProps {
-  childId?: string
+  beneficiaryId?: string
 }

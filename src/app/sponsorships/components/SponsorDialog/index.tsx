@@ -22,13 +22,13 @@ import { Slider } from "@/components/ui/slider";
 import { centsToDollars } from "@/utils/currency";
 import { toaster } from "@/components/ui/toaster";
 import { paymentOptionsCollection } from "./config";
-import { SponsorPeople } from "@/types";
+import { Beneficiaries } from "@/types";
 import { useAuthStore } from "@/store/authStore";
 import { BeneficiaryMedia } from "@/types/admin.types";
 
 
 interface SponsorDialogProps {
-    people: SponsorPeople;
+    people: Beneficiaries;
     trigger: React.ReactNode;
     useEmbedded?: boolean;
     onNext?: () => void;
@@ -188,32 +188,56 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
 
         setLoading(true);
         try {
+            const payload = {
+                beneficiaryId: people.id,
+                beneficiaryName: people.name,
+                beneficiaryImage: images[currentImageIndex]?.image_url || people.image_url || placeholderImage,
+                amount: amount * 100,
+                paymentType: selectedOption,
+                location: people.country,
+                userId: user?.id,
+                isEmbedded: window.self !== window.top,
+            };
+            console.log("SponsorDialog: Stripe payload", payload);
+
             const res = await fetch("/api/stripe", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    childId: people.id,
-                    childName: people.name,
-                    childImage: images[currentImageIndex]?.image_url || people.image_url || placeholderImage,
-                    amount: amount * 100,
-                    paymentType: selectedOption,
-                    location: people.country,
-                    userId: user?.id,
-                    isEmbedded: window.self !== window.top,
-                }),
+                body: JSON.stringify(payload),
             });
 
-            const { clientSecret, url } = await res.json();
-            
+            const data = await res.json();
+
+            if (!res.ok) {
+                toaster.create({
+                    title: "Payment Error",
+                    description: data?.error || "Something went wrong. Please try again.",
+                });
+                setLoading(false);
+                return;
+            }
+
+            const { clientSecret, url } = data;
+
             if (window.self !== window.top) {
                 if (clientSecret) {
-                    window.location.href = `/sponsor-a-child/checkout?client_secret=${clientSecret}`;
+                    window.location.href = `/sponsor-a-/checkout?client_secret=${clientSecret}`;
                 } else if (url) {
                     window.location.href = url;
+                } else {
+                    toaster.create({
+                        title: "Payment Error",
+                        description: "No checkout information returned. Please try again.",
+                    });
                 }
             } else {
                 if (url) {
                     window.location.href = url;
+                } else {
+                    toaster.create({
+                        title: "Payment Error",
+                        description: "No checkout URL returned. Please try again.",
+                    });
                 }
             }
         } catch (err) {
@@ -237,11 +261,11 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         if ((people.budget_goal - people.budget_raised - amount * 100) > 0) {
             return (
                 <>
-                    This child has a monthly budget goal that must be met for enrollment in school.
+                    This  has a monthly budget goal that must be met for enrollment in school.
                     {selectedOption === "payment" && (
                         <>
                             <br />
-                            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+                            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this .
                         </>
                     )}
                     <br />
@@ -251,11 +275,11 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         } else if (people.budget_raised > 0) {
             return (
                 <>
-                    This child is partially sponsored. Your contribution will help reach their monthly budget goal!
+                    This  is partially sponsored. Your contribution will help reach their monthly budget goal!
                     {selectedOption === "payment" && (
                         <>
                             <br />
-                            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+                            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this .
                         </>
                     )}
                 </>
@@ -263,11 +287,11 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         }
         return (
             <>
-                Your sponsorship will be applied towards the child's monthly budget goals.
+                Your sponsorship will be applied towards the 's monthly budget goals.
                 {selectedOption === "payment" && (
                     <>
                         <br />
-                        Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+                        Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this .
                     </>
                 )}
             </>
@@ -398,7 +422,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                     variant="outline"
                                     className={`px-4 py-2 ${!hasPrevious ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
-                                    ← Previous Child
+                                    ← Previous Beneficiary
                                 </Button>
                                 <Button
                                     onClick={handleNext}
@@ -406,7 +430,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                     variant="outline"
                                     className={`px-4 py-2 ${!hasNext ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
-                                    Next Child →
+                                    Next Beneficiary →
                                 </Button>
                             </Flex>
                         </Box>

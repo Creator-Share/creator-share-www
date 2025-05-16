@@ -1,48 +1,46 @@
 import { http, HttpResponse } from "msw";
-import { SponsorPeople } from "@/types";
+import { Beneficiaries } from "@/types";
 
-const mockChildren: SponsorPeople[] = [
+const mockChildren: Beneficiaries[] = [
   {
     id: "1",
     name: "John Doe",
     username: "john_doe",
-    gender: "Male",
-    birth_date: Date.now() - (8 * 365 * 24 * 60 * 60 * 1000), // 8 years old
+    gender: "Boy",
+    birth_date: new Date(Date.now() - (8 * 365 * 24 * 60 * 60 * 1000)).toISOString(),
     image_url: "https://example.com/john.jpg",
     biography: "John is a bright and energetic child who loves to learn.",
-    country_group: "East Africa",
-    time_in_site: "2 years",
+    country: "Tanzania",
+    location_geo: { coordinates: [39.2833, -6.8235], type: "Point" },
+    video_url: "https://example.com/john-video.mp4",
+    introduction: "Meet John, a wonderful child from Tanzania",
     budget_goal: 1000,
     budget_raised: 200,
     status: "New",
-    country: "Tanzania",
-    location_geo: {
-      coordinates: [39.2833, -6.8235], // Dar es Salaam coordinates
-      type: "Point"
-    },
-    video_url: "https://example.com/john-video.mp4",
-    introduction: "Meet John, a wonderful child from Tanzania"
+    location_str: "Dar es Salaam, Tanzania",
+    active_subscriptions: 0,
+    metadata: {},
+    beneficiary_type: "CHILD"
   },
   {
-    id: "2",
-    name: "Sarah Smith",
-    username: "sarah_smith",
-    gender: "Female",
-    birth_date: Date.now() - (10 * 365 * 24 * 60 * 60 * 1000), // 10 years old
-    image_url: "https://example.com/sarah.jpg",
-    biography: "Sarah is passionate about art and helping others.",
-    country_group: "East Africa",
-    time_in_site: "1 year",
-    budget_goal: 1000,
-    budget_raised: 500,
-    status: "Partially Funded",
+    id: "1",
+    name: "John Doe",
+    username: "john_doe",
+    gender: "Boy",
+    birth_date: new Date(Date.now() - (8 * 365 * 24 * 60 * 60 * 1000)).toISOString(),
+    image_url: "https://example.com/john.jpg",
+    biography: "John is a bright and energetic child who loves to learn.",
     country: "Tanzania",
-    location_geo: {
-      coordinates: [39.2833, -6.8235], // Dar es Salaam coordinates
-      type: "Point"
-    },
-    video_url: "https://example.com/sarah-video.mp4",
-    introduction: "Meet Sarah, an aspiring artist from Tanzania"
+    location_geo: { coordinates: [39.2833, -6.8235], type: "Point" },
+    video_url: "https://example.com/john-video.mp4",
+    introduction: "Meet John, a wonderful child from Tanzania",
+    budget_goal: 1000,
+    budget_raised: 200,
+    status: "New",
+    location_str: "Dar es Salaam, Tanzania",
+    active_subscriptions: 0,
+    metadata: {},
+    beneficiary_type: "CHILD"
   }
 ];
 
@@ -66,7 +64,7 @@ export const handlers = [
     if (ageRange) {
       const now = Date.now();
       filteredChildren = filteredChildren.filter(child => {
-        const ageInYears = (now - child.birth_date) / (365 * 24 * 60 * 60 * 1000);
+        const ageInYears = (now - new Date(child.birth_date).getTime()) / (365 * 24 * 60 * 60 * 1000);
         return ageInYears >= ageRange[0] && ageInYears <= ageRange[1];
       });
     }

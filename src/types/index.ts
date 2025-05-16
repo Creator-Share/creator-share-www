@@ -1,29 +1,44 @@
 import { User } from "@supabase/supabase-js";
 
+export type Gender = "Boy" | "Girl";
+export type PersonStatus = "New" | "Partially Funded" | "Budget Fulfilled" | "Archived" | "Draft";
+export type BeneficiaryType = "CHILD" | "ANIMAL" | "FAMILY";
+
 type Geography = {
   coordinates: [number, number];
   type: "Point";
 };
 
-export interface SponsorPeople {
+export interface Beneficiaries {
   id: string;
   name: string;
   username: string;
-  gender: string;
-  birth_date: number;
-  image_url: string;
+  gender: Gender;
+  birth_date: string;
   biography: string;
-  country_group: string;
-  time_in_site: string;
   budget_goal: number;
   budget_raised: number;
-  status: string;
+  status: PersonStatus;
   country: string;
-  location_geo: Geography;
+  location_geo: Geography | null;
+  location_str: string;
   video_url: string;
   introduction: string;
-  family_size?: number;
+  active_subscriptions: number;
+  metadata: Record<string, unknown>;
+  beneficiary_type: BeneficiaryType;
+  image_url?: string;
 }
+
+export interface BeneficiaryMedia {
+  id: string;
+  beneficiary_id: string;
+  image_url: string;
+  order_index: number;
+  created_at: string;
+  acitivy_id?:string;
+}
+
 
 export interface Subscription {
   id: string;
@@ -44,15 +59,6 @@ export interface Activity {
   description: string;
   created_at: string;
   beneficiary_id: string;
-}
-
-export interface BeneficiaryMedia {
-  id: string;
-  beneficiary_id: string;
-  image_url: string;
-  order_index: number;
-  created_at: string;
-  acitivy_id?:string;
 }
 
 //Auth types

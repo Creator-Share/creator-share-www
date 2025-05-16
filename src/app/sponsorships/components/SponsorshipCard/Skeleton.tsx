@@ -1,6 +1,6 @@
 import { Box, Flex, Skeleton } from "@chakra-ui/react";
 
-export const ChildCardSkeleton = () => {
+export const BeneficiaryCardSkeleton = () => {
   return (
     <Flex
       direction={{ base: "column", md: "row" }}

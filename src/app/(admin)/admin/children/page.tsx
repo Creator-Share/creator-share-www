@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { DataTable } from "@/components/admin-ui/Tables/data-table";
 import { ColumnDef, Row } from "@tanstack/react-table";
 import { columns } from "./columns";
-import { SponsorPeople, Geography } from "@/types/admin.types";
+import { Beneficiaries, Geography } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import dynamic from "next/dynamic";
 import { centsToDollars } from "@/utils/currency";
@@ -17,16 +17,16 @@ const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), { ssr: f
 const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
 
 type TableInstance = {
-  getSelectedRowModel: () => { rows: Row<SponsorPeople>[] };
+  getSelectedRowModel: () => { rows: Row<Beneficiaries>[] };
   getTableInstance: () => { toggleAllRowsSelected: (value: boolean) => void };
 };
 
 const ChildrenTable = () => {
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<SponsorPeople[]>([]);
+  const [data, setData] = useState<Beneficiaries[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
-  const [formData, setFormData] = useState<SponsorPeople>({
+  const [formData, setFormData] = useState<Beneficiaries>({
     name: "",
     gender: "Boy",
     username: "",
@@ -44,7 +44,7 @@ const ChildrenTable = () => {
     metadata: {},
     beneficiary_type: "CHILD",
   });
-  const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>({
+  const [formDataEdit, setFormDataEdit] = useState<Beneficiaries>({
     name: "",
     gender: "Boy",
     username: "",
@@ -63,13 +63,13 @@ const ChildrenTable = () => {
     beneficiary_type: "CHILD",
   });
 
-  const [selectedChild, setSelectedChild] = useState<SponsorPeople | null>(null);
+  const [selectedChild, setSelectedChild] = useState<Beneficiaries | null>(null);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
   const [isBulkUploadDrawerOpen, setIsBulkUploadDrawerOpen] = useState(false);
   const [selectedCount, setSelectedCount] = useState(0);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedRowsForDeletion, setSelectedRowsForDeletion] = useState<Row<SponsorPeople>[]>([]);
+  const [selectedRowsForDeletion, setSelectedRowsForDeletion] = useState<Row<Beneficiaries>[]>([]);
   const tableRef = useRef<TableInstance | null>(null);
   useEffect(() => {
     async function fetchData() {
@@ -158,7 +158,7 @@ const ChildrenTable = () => {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to create child');
+            throw new Error('Failed to create beneficiary');
         }
 
         const newChild = await response.json();
@@ -232,17 +232,17 @@ const ChildrenTable = () => {
 
         return true;
     } catch (error) {
-        console.error("Error creating child:", error);
+        console.error("Error creating beneficiary:", error);
         toaster.create({
             title: "Error",
-            description: error instanceof Error ? error.message : "Failed to create child",
+            description: error instanceof Error ? error.message : "Failed to create beneficiary",
             duration: 5000,
         });
         return false;
     }
   };
 
-  const handleSave = async (updatedChild: SponsorPeople) => {
+  const handleSave = async (updatedChild: Beneficiaries) => {
     try {
       const response = await fetch('/api/admin/children/update', {
         method: 'PUT',
@@ -253,17 +253,17 @@ const ChildrenTable = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update child');
+        throw new Error('Failed to update beneficiary');
       }
 
-      setData((prevData) => prevData.map(child =>
-        child.id === updatedChild.id
+      setData((prevData) => prevData.map(beneficiary =>
+        beneficiary.id === updatedChild.id
           ? { ...updatedChild, budget_goal: parseFloat(centsToDollars(updatedChild.budget_goal)) }
-          : child
+          : beneficiary
       ));
       setIsEditDrawerOpen(false);
     } catch (error) {
-      console.error("Error updating child:", error);
+      console.error("Error updating beneficiary:", error);
     }
   };
 
@@ -287,7 +287,7 @@ const ChildrenTable = () => {
   };
 
   const confirmDelete = async () => {
-    const childIds = selectedRowsForDeletion.map((row: Row<SponsorPeople>) => row.original.id);
+    const beneficiaryIds = selectedRowsForDeletion.map((row: Row<Beneficiaries>) => row.original.id);
 
     try {
       const response = await fetch("/api/admin/children/bulk-delete", {
@@ -295,14 +295,14 @@ const ChildrenTable = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ childIds }),
+        body: JSON.stringify({ beneficiaryIds }),
       });
 
       if (!response.ok) {
         throw new Error("Bulk delete failed");
       }
       setData((prevData) =>
-        prevData.filter((child) => !childIds.includes(child.id))
+        prevData.filter((beneficiary) => !beneficiaryIds.includes(beneficiary.id))
       );
       if (tableRef.current) {
         tableRef.current.getTableInstance().toggleAllRowsSelected(false);
@@ -313,7 +313,7 @@ const ChildrenTable = () => {
       
       toaster.create({
         title: "Success",
-        description: "Selected children deleted successfully.",
+        description: "Selected beneficiaries deleted successfully.",
         duration: 5000,
       });
     } catch (error) {
@@ -328,24 +328,24 @@ const ChildrenTable = () => {
     }
   };
 
-  const handleDelete = async (childId: string) => {
+  const handleDelete = async (beneficiaryId: string) => {
     try {
       const response = await fetch('/api/admin/children/delete', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ childId }),
+        body: JSON.stringify({ beneficiaryId }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete child');
+        throw new Error('Failed to delete beneficiary');
       }
 
-      setData((prevData) => prevData.filter(child => child.id !== childId));
+      setData((prevData) => prevData.filter(beneficiary => beneficiary.id !== beneficiaryId));
       setIsEditDrawerOpen(false);
     } catch (error) {
-      console.error("Error deleting child:", error);
+      console.error("Error deleting beneficiary:", error);
     }
   };
 
@@ -396,7 +396,7 @@ const ChildrenTable = () => {
           setSelectedCount(Object.keys(rowSelection).length)
         }
         onRowClick={(data: unknown) => {
-          setSelectedChild(data as SponsorPeople);
+          setSelectedChild(data as Beneficiaries);
           setIsEditDrawerOpen(true);
         }}
       />

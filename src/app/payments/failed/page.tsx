@@ -8,7 +8,7 @@ const FailedPageContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, setChildDetails] = useState({
-    name: 'this child',
+    name: 'this beneficiary',
     location: ''
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -41,7 +41,7 @@ const FailedPageContent = () => {
         
         const { session } = data;
         setChildDetails({
-          name: session.metadata?.childName || 'this child',
+          name: session.metadata?.childName || 'this beneficiary',
           location: session.metadata?.childLocation || ''
         });
       } catch (error) {
@@ -135,7 +135,7 @@ const FailedPageContent = () => {
             fontSize="sm"
             fontWeight="medium"
           >
-            &lt;&lt; Back to Child listing
+            &lt;&lt; Back to Beneficiaries listing
           </Link>
         </VStack>
 

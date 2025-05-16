@@ -3,9 +3,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Box, Flex, Text, Spinner } from '@chakra-ui/react';
 import dynamic from 'next/dynamic';
-import { SponsorPeople } from '@/types';
+import { Beneficiaries } from '@/types';
 
-const ChildMap = dynamic(() => import('./components/ChildMap'), {
+const SponsorshipMap = dynamic(() => import('./components/SponsorshipMap'), {
   ssr: false,
   loading: () => (
     <div className="w-full h-[400px] bg-gray-100 animate-pulse rounded-lg" />
@@ -13,9 +13,9 @@ const ChildMap = dynamic(() => import('./components/ChildMap'), {
 });
 
 const Filters = dynamic(() => import('./components/Filters'));
-const ChildListings = dynamic(() => import('./components/ChildListings'));
+const ChildListings = dynamic(() => import('./components/SponsorshipListings'));
 const ChildListingsSkeleton = dynamic(() => 
-  import('./components/ChildListings/Skeleton').then(mod => mod.ChildListingsSkeleton)
+  import('./components/SponsorshipListings/Skeleton').then(mod => mod.ChildListingsSkeleton)
 );
 
 interface Filters {
@@ -26,9 +26,9 @@ interface Filters {
 
 const SponsorChild = () => {
   const [L, setL] = useState<typeof import("leaflet") | null>(null);
-  const [childrenData, setChildrenData] = useState<SponsorPeople[]>([]);
+  const [childrenData, setChildrenData] = useState<Beneficiaries[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
-  const [visibleChildren, setVisibleChildren] = useState<SponsorPeople[]>([]);
+  const [visibleChildren, setVisibleChildren] = useState<Beneficiaries[]>([]);
   const [loading, setLoading] = useState(true);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -236,8 +236,8 @@ const SponsorChild = () => {
           height="fit-content"
           zIndex={10}
         >
-          <ChildMap
-            childData={childrenData}
+          <SponsorshipMap
+            beneficiaryData={childrenData}
             onMarkerClick={handleMarkerClick}
             onBoundsChange={handleBoundsChange}
             onResetView={onResetView}
@@ -280,10 +280,10 @@ const SponsorChild = () => {
       ) : visibleChildren.length > 0 ? (
         <ChildListings
           ref={childListingsRef}
-          peopleData={visibleChildren}
-          selectedChildId={selectedChildId}
+          beneficiaryData={visibleChildren}
+          selectedBeneficiaryId={selectedChildId}
           selectedCountry={selectedCountry}
-          setSelectedChildId={setSelectedChildId}
+          setSelectedBeneficiaryId={setSelectedChildId}
         />
       ) : (
         <Flex justify="center" align="center" minH="20vh">

@@ -23,18 +23,18 @@ import {
     FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
-import { SponsorPeople, BeneficiaryMedia } from "@/types/admin.types";
+import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import { toaster } from "@/components/ui/toaster";
 import { HiUpload, HiX } from "react-icons/hi";
 
 interface EditDrawerProps {
-    selectedChild: SponsorPeople | null;
-    formDataEdit: SponsorPeople;
-    setFormDataEdit: React.Dispatch<React.SetStateAction<SponsorPeople>>;
+    selectedChild: Beneficiaries | null;
+    formDataEdit: Beneficiaries;
+    setFormDataEdit: React.Dispatch<React.SetStateAction<Beneficiaries>>;
     isDrawerOpen: boolean;
     onClose: () => void;
-    onSave: (updatedChild: SponsorPeople) => void;
+    onSave: (updatedChild: Beneficiaries) => void;
     onDelete: (childId: string) => Promise<void>;
     imageFiles: File[];
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
@@ -54,7 +54,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     setImageFiles,
     setVideoFiles
 }) => {
-    const [formDataEdit, setFormDataEdit] = useState<SponsorPeople>(() =>
+    const [formDataEdit, setFormDataEdit] = useState<Beneficiaries>(() =>
     selectedChild || {
         id: "",
         name: "",
@@ -109,16 +109,16 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        setFormDataEdit((prev: SponsorPeople) => ({ ...prev, [name]: value }));
+        setFormDataEdit((prev: Beneficiaries) => ({ ...prev, [name]: value }));
     };
 
     const handleSelectChange = (name: string, value: string) => {
-        setFormDataEdit((prev: SponsorPeople) => ({ ...prev, [name]: value }));
+        setFormDataEdit((prev: Beneficiaries) => ({ ...prev, [name]: value }));
     };
 
     const handleSave = async () => {
         const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
-        const emptyFields = requiredFields.filter(field => !formDataEdit[field as keyof SponsorPeople]);
+        const emptyFields = requiredFields.filter(field => !formDataEdit[field as keyof Beneficiaries]);
 
         if (emptyFields.length > 0) {
             toaster.create({
@@ -199,7 +199,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     };
 
     const handleLocationSelect = (geo: [number, number], locationStr: string, country: string) => {
-        setFormDataEdit((prev: SponsorPeople) => ({
+        setFormDataEdit((prev: Beneficiaries) => ({
             ...prev,
             location_geo: { type: "Point", coordinates: [geo[1], geo[0]] },
             location_str: locationStr,

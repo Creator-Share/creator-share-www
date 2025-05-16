@@ -6,14 +6,14 @@ import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet"
 import MarkerClusterGroup from "react-leaflet-markercluster";
 import L, { LatLngBounds, MarkerCluster } from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { ChildMapProps } from "@/types/propTypes";
+import { BeneficiaryMapProps } from "@/types/propTypes";
 import Filters from "../Filters";
 
 const ANIMATION_DURATION = 1;
 
 const CustomIcon = L.divIcon({
   html: `<div style="background: transparent; border: none;">
-           <img src="/CreatorSharePin.svg" alt="Child Marker" style="width: 30px; height: 30px;" />
+           <img src="/CreatorSharePin.svg" alt="Beneficiary Marker" style="width: 30px; height: 30px;" />
          </div>`,
   className: "custom-child-marker-no-numbers",
   iconSize: [30, 30],
@@ -81,38 +81,46 @@ const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void
   return null;
 };
 
-const FitBounds: React.FC<{ childData: ChildMapProps["childData"] }> = ({ childData }) => {
+const FitBounds: React.FC<{ beneficiaryData: BeneficiaryMapProps["beneficiaryData"] }> = ({ beneficiaryData }) => {
   const map = useMap();
 
   useEffect(() => {
-    if (childData.length > 0) {
-      const bounds = L.latLngBounds(
-        childData.map((child) => [
-          child.location_geo.coordinates[1],
-          child.location_geo.coordinates[0],
-        ])
-      );
-      map.fitBounds(bounds, { 
-        padding: [50, 50],
-        animate: true,
-        duration: ANIMATION_DURATION
-      });
+    if (beneficiaryData.length > 0) {
+      const validCoords = beneficiaryData
+        .filter(child => child.location_geo && Array.isArray(child.location_geo.coordinates))
+        .map(child => [
+          child.location_geo!.coordinates[1],
+          child.location_geo!.coordinates[0],
+        ]);
+      if (validCoords.length > 0) {
+        const bounds = L.latLngBounds(validCoords as [number, number][]);
+        map.fitBounds(bounds, { 
+          padding: [50, 50],
+          animate: true,
+          duration: ANIMATION_DURATION
+        });
+      } else {
+        map.setView([0, 0], 2, {
+          animate: true,
+          duration: ANIMATION_DURATION
+        });
+      }
     } else {
       map.setView([0, 0], 2, {
         animate: true,
         duration: ANIMATION_DURATION
       });
     }
-  }, [childData, map]);
+  }, [beneficiaryData, map]);
 
   return null;
 };
 
 const ZoomController: React.FC<{ 
-  childData: ChildMapProps["childData"],
+  beneficiaryData: BeneficiaryMapProps["beneficiaryData"],
   onBoundsChange: (bounds: LatLngBounds) => void,
   onResetView?: () => void
-}> = ({ childData, onBoundsChange, onResetView }) => {
+}> = ({ beneficiaryData, onBoundsChange, onResetView }) => {
   const map = useMap();
   const [showReset, setShowReset] = useState(false);
 
@@ -130,19 +138,27 @@ const ZoomController: React.FC<{
   const handleResetView = () => {
     localStorage.removeItem("mapState");
 
-    if (childData.length > 0) {
-      const bounds = L.latLngBounds(
-        childData.map((child) => [
-          child.location_geo.coordinates[1],
-          child.location_geo.coordinates[0],
-        ])
-      );
-      map.fitBounds(bounds, { 
-        padding: [50, 50],
-        animate: true,
-        duration: ANIMATION_DURATION
-      });
-      onBoundsChange(bounds);
+    if (beneficiaryData.length > 0) {
+      const validCoords = beneficiaryData
+        .filter(child => child.location_geo && Array.isArray(child.location_geo.coordinates))
+        .map(child => [
+          child.location_geo!.coordinates[1],
+          child.location_geo!.coordinates[0],
+        ]);
+      if (validCoords.length > 0) {
+        const bounds = L.latLngBounds(validCoords as [number, number][]);
+        map.fitBounds(bounds, { 
+          padding: [50, 50],
+          animate: true,
+          duration: ANIMATION_DURATION
+        });
+        onBoundsChange(bounds);
+      } else {
+        map.setView([0, 0], 2, {
+          animate: true,
+          duration: ANIMATION_DURATION
+        });
+      }
     } else {
       map.setView([0, 0], 2, {
         animate: true,
@@ -218,7 +234,7 @@ const CustomZoomControl = () => {
   return null;
 };
 
-interface ExtendedChildMapProps extends ChildMapProps {
+interface ExtendedBeneficiaryMapProps extends BeneficiaryMapProps {
   onFilterChange: (filters: Partial<{
     gender: string;
     ageRange: [number, number];
@@ -226,8 +242,8 @@ interface ExtendedChildMapProps extends ChildMapProps {
   }>) => void;
 }
 
-const ChildMap: React.FC<ExtendedChildMapProps> = ({ 
-  childData, 
+const ChildMap: React.FC<ExtendedBeneficiaryMapProps> = ({ 
+  beneficiaryData, 
   onMarkerClick, 
   onBoundsChange, 
   onResetView,
@@ -238,8 +254,8 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
   const [showFilters, setShowFilters] = useState(true);
 
   const handleMarkerClick = useCallback((id: string) => {
-    const child = childData.find(c => c.id === id);
-    if (child && mapRef.current) {
+    const child = beneficiaryData.find((c) => c.id === id);
+    if (child && child.location_geo && mapRef.current) {
       const { coordinates } = child.location_geo;
       mapRef.current.setView([coordinates[1], coordinates[0]], 12, {
         animate: true,
@@ -247,13 +263,14 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
       });
     }
     onMarkerClick(id);
-  }, [childData, onMarkerClick]);
+  }, [beneficiaryData, onMarkerClick]);
 
   const checkChildrenInView = useCallback(() => {
     if (!mapRef.current) return;
     
     const currentBounds = mapRef.current.getBounds();
-    const childrenInView = childData.filter(child => {
+    const childrenInView = beneficiaryData.filter((child) => {
+      if (!child.location_geo) return false;
       const childLatLng = L.latLng(
         child.location_geo.coordinates[1], 
         child.location_geo.coordinates[0]
@@ -261,15 +278,17 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
       return currentBounds.contains(childLatLng);
     });
 
-    if (childrenInView.length === 0 && childData.length > 0) {
-      const firstChild = childData[0];
-      mapRef.current.setView(
-        [firstChild.location_geo.coordinates[1], firstChild.location_geo.coordinates[0]],
-        mapRef.current.getZoom(),
-        { animate: true, duration: 1 }
-      );
+    if (childrenInView.length === 0 && beneficiaryData.length > 0) {
+      const firstChild = beneficiaryData[0];
+      if (firstChild.location_geo) {
+        mapRef.current.setView(
+          [firstChild.location_geo.coordinates[1], firstChild.location_geo.coordinates[0]],
+          mapRef.current.getZoom(),
+          { animate: true, duration: 1 }
+        );
+      }
     }
-  }, [childData]);
+  }, [beneficiaryData]);
 
   useEffect(() => {
     if (mapRef.current) {
@@ -288,12 +307,12 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
   }, [checkChildrenInView]);
 
   const MemoizedMarkers = useMemo(() => {
-    console.log("ChildMap received:", childData.length, "children");
-    if (!childData || childData.length === 0) {
+    console.log("ChildMap received:", beneficiaryData?.length, "children");
+    if (!beneficiaryData || beneficiaryData.length === 0) {
       return [];
     }
     
-    const validChildren = childData.filter(child => 
+    const validChildren = beneficiaryData.filter((child) => 
       child && 
       child.location_geo && 
       child.location_geo.coordinates && 
@@ -309,7 +328,7 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
     return validChildren.map((child) => (
       <Marker
         key={child.id}
-        position={[child.location_geo.coordinates[1], child.location_geo.coordinates[0]]}
+        position={[child.location_geo!.coordinates[1], child.location_geo!.coordinates[0]]}
         icon={CustomIcon}
         eventHandlers={{
           click: () => handleMarkerClick(child.id),
@@ -320,7 +339,7 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
         </Tooltip>
       </Marker>
     ));
-  }, [childData, handleMarkerClick]);
+  }, [beneficiaryData, handleMarkerClick]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -360,7 +379,7 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
   }, []);
 
   useEffect(() => {
-    if (mapRef.current && (!childData || childData.length === 0)) {
+    if (mapRef.current && (!beneficiaryData || beneficiaryData.length === 0)) {
       const map = mapRef.current;
       map.eachLayer((layer) => {
         if (!(layer instanceof L.TileLayer)) {
@@ -375,7 +394,7 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
       );
       tileLayer.addTo(map);
     }
-  }, [childData]);
+  }, [beneficiaryData]);
 
   if (!isReady) {
     return <Box>Loading map...</Box>;
@@ -403,16 +422,16 @@ const ChildMap: React.FC<ExtendedChildMapProps> = ({
           url={`https://api.maptiler.com/maps/basic-v2/{z}/{x}/{y}.png?key=Wm5rwQ7T3kAi2Z07eCBa&lang=en`}
         />
         <MapEventHandler onBoundsChange={onBoundsChange} />
-        <FitBounds childData={childData} />
+        <FitBounds beneficiaryData={beneficiaryData} />
         <CustomZoomControl />
         <ZoomController
-          childData={childData}
+          beneficiaryData={beneficiaryData}
           onBoundsChange={onBoundsChange}
           onResetView={onResetView}
         />
-        {childData && childData.length > 0 ? (
+        {beneficiaryData && beneficiaryData.length > 0 ? (
           <MarkerClusterGroup 
-            key={`cluster-${childData.length}-${childData.map(c => c.id).join('-')}`}
+            key={`cluster-${beneficiaryData.length}-${beneficiaryData.map((c) => c.id).join('-')}`}
             chunkedLoading
             maxClusterRadius={150}
             showCoverageOnHover={false}

@@ -4,22 +4,22 @@ import { centsToDollars } from '@/utils/currency'
 import { formatDate } from '@/utils/dateFormatter'
 import { Subscription } from '@/types'
 import { SponsorshipDetailsProps } from '@/types/propTypes'
-import { fetchSponsorshipDetailsByChildId } from '@/actions'
+import { fetchSponsorshipDetailsByBeneficiaryId } from '@/actions'
 
-const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ childId }) => {
+const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadSubscriptions = async () => {
-      if (!childId) return;
-      const data = await fetchSponsorshipDetailsByChildId(childId)
+      if (!beneficiaryId) return;
+      const data = await fetchSponsorshipDetailsByBeneficiaryId(beneficiaryId)
       setSubscriptions(data)
       setLoading(false)
     }
 
     loadSubscriptions()
-  }, [childId])
+  }, [beneficiaryId])
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {

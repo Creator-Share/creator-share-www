@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { SponsorPeople } from "@/types/admin.types";
+import { Beneficiaries } from "@/types/admin.types";
 
 export async function GET(req: Request) {
   const supabase = await createClient();
@@ -39,7 +39,7 @@ export async function GET(req: Request) {
           return NextResponse.json({ error: "Database error" }, { status: 500 });
         }
 
-        return NextResponse.json({ people: data as SponsorPeople[] });
+        return NextResponse.json({ people: data as Beneficiaries[] });
       } catch (e) {
         console.error("Error parsing coordinates:", e);
         return NextResponse.json(
@@ -56,7 +56,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
 
-    return NextResponse.json({ people: data as SponsorPeople[] });
+    return NextResponse.json({ people: data as Beneficiaries[] });
   } catch (err) {
     console.error("Unexpected error:", err);
     return NextResponse.json(
