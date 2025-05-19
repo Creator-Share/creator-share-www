@@ -353,7 +353,9 @@ const ChildrenTable = () => {
   };
 
   if (loading) {
-    return <div>test...</div>;
+    return <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
+    <div className="text-gray-500">Loading...</div>
+  </div>;
   }
 
   return (

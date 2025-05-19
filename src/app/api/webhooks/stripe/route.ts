@@ -90,6 +90,7 @@ export async function POST(req: Request) {
         const { error: activityError } = await supabase
           .from("activities")
           .insert({
+            title: 'SPONSORSHIP',
             description: `Someone sponsored with $${centsToDollars(amount)}/${interval}`,
             beneficiary_id: beneficiaryId,
             user_id: userId

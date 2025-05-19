@@ -30,7 +30,7 @@ const ChakraSelect: React.FC<{
         <Select.HiddenSelect />
         <Select.Label>Select child</Select.Label>
         <Select.Control>
-          <Select.Trigger>
+          <Select.Trigger className="border border-stone-600 p-2 w-full">
             <Select.ValueText placeholder="-- Select --" />
           </Select.Trigger>
           <Select.IndicatorGroup>

@@ -4,7 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 // POST /api/admin/activities/create
 export async function POST(req: NextRequest) {
   const data = await req.json();
-  const { description, beneficiary_id } = data;
+  const { description, beneficiary_id, title } = data;
   if (!description || !beneficiary_id) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     .from("activities")
     .insert([
       {
+        title,
         description,
         beneficiary_id,
         created_at: new Date().toISOString(),

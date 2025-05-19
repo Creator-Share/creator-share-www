@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 
-// DELETE /api/admin/activities/delete?id=...
+// DELETE /api/admin/activities/delete
 export async function DELETE(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
+  const body = await req.json();
+  const id = body.id;
   if (!id) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }

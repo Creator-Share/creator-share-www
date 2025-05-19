@@ -13,6 +13,7 @@ const Dashboard = () => {
 
   const navigationItems = [
     { label: 'Manage Children', path: '/admin/children' },
+    { label: 'Manage Activities', path: '/admin/activities' },
   ];
 
   const handleNavigate = (path: string) => {

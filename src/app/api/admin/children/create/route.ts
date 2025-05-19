@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     const { error: activityError } = await supabase
       .from("activities")
       .insert({
+        title: `Beneficiary Added`,
         description: `${newBeneficiary.name} was added`,
         beneficiary_id: newBeneficiary.id,
         user_id: user?.id
