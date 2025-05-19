@@ -27,6 +27,14 @@ export interface Beneficiaries {
   beneficiary_type: BeneficiaryType;
 }
 
+export interface Activity {
+  id: string;
+  description: string;
+  created_at: string;
+  beneficiary_id: string;
+  title: string;
+}
+
 export interface BeneficiaryMedia {
   id: string;
   beneficiary_id: string;

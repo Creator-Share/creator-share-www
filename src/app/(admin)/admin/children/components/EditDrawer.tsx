@@ -27,6 +27,7 @@ import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import { toaster } from "@/components/ui/toaster";
 import { HiUpload, HiX } from "react-icons/hi";
+import ActivitiesTable from "../../activities/components/ActivitiesTable";
 
 interface EditDrawerProps {
     selectedChild: Beneficiaries | null;
@@ -55,26 +56,26 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     setVideoFiles
 }) => {
     const [formDataEdit, setFormDataEdit] = useState<Beneficiaries>(() =>
-    selectedChild || {
-        id: "",
-        name: "",
-        username: "",
-        gender: "Boy",
-        birth_date: "",
-        biography: "",
-        budget_goal: 0,
-        budget_raised: 0,
-        status: "New",
-        country: "",
-        location_geo: null,
-        location_str: "",
-        video_url: "",
-        introduction: "",
-        active_subscriptions: 0,
-        metadata: {},
-        beneficiary_type: "CHILD",
-    }
-);
+        selectedChild || {
+            id: "",
+            name: "",
+            username: "",
+            gender: "Boy",
+            birth_date: "",
+            biography: "",
+            budget_goal: 0,
+            budget_raised: 0,
+            status: "New",
+            country: "",
+            location_geo: null,
+            location_str: "",
+            video_url: "",
+            introduction: "",
+            active_subscriptions: 0,
+            metadata: {},
+            beneficiary_type: "CHILD",
+        }
+    );
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -134,47 +135,47 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             const updatedData = { ...formDataEdit };
             const budgetGoalInCents = Math.round(parseFloat(formDataEdit.budget_goal.toString()) * 100);
             if (imageFiles.length > 0) {
-            const supabase = createClient();
-            const imageUrls = [];
+                const supabase = createClient();
+                const imageUrls = [];
 
-            for (const imageFile of imageFiles) {
-                const fileName = `${Date.now()}-${imageFile.name}`;
-                const filePath = `images/${fileName}`;
+                for (const imageFile of imageFiles) {
+                    const fileName = `${Date.now()}-${imageFile.name}`;
+                    const filePath = `images/${fileName}`;
 
-                const { error: uploadError } = await supabase.storage
-                    .from("beneficiaries")
-                    .upload(filePath, imageFile, {
-                        cacheControl: "3600",
-                        upsert: false,
-                    });
+                    const { error: uploadError } = await supabase.storage
+                        .from("beneficiaries")
+                        .upload(filePath, imageFile, {
+                            cacheControl: "3600",
+                            upsert: false,
+                        });
 
-                if (uploadError) {
-                    console.error("File upload failed:", uploadError.message);
-                    continue;
+                    if (uploadError) {
+                        console.error("File upload failed:", uploadError.message);
+                        continue;
+                    }
+
+                    const { data } = supabase.storage
+                        .from("beneficiaries")
+                        .getPublicUrl(filePath);
+
+                    imageUrls.push(data.publicUrl);
+                }
+                const { error: insertError } = await supabase
+                    .from("media")
+                    .insert(
+                        imageUrls.map((url, index) => ({
+                            beneficiary_id: selectedChild?.id || '',
+                            image_url: url,
+                            order_index: index
+                        }))
+                    );
+
+                if (insertError) {
+                    throw new Error('Failed to create image records');
                 }
 
-                const { data } = supabase.storage
-                    .from("beneficiaries")
-                    .getPublicUrl(filePath);
-
-                imageUrls.push(data.publicUrl);
-            }
-            const { error: insertError } = await supabase
-                .from("media")
-                .insert(
-                    imageUrls.map((url, index) => ({
-                        beneficiary_id: selectedChild?.id || '',
-                        image_url: url,
-                        order_index: index
-                    }))
-                );
-
-            if (insertError) {
-                throw new Error('Failed to create image records');
-            }
-
-            await fetchImages();
-            setImageFiles([]);
+                await fetchImages();
+                setImageFiles([]);
             }
 
             if (videoFiles.length > 0) {
@@ -237,7 +238,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             }
 
             setAllImages(prev => prev.filter(img => img.id !== imageId));
-            
+
             toaster.create({
                 title: "Success",
                 description: "Image deleted successfully",
@@ -258,7 +259,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     if (!selectedChild) return null;
 
     return (
-        <DrawerRoot placement="start" size="lg" open={isDrawerOpen} onOpenChange={onClose}>
+        <DrawerRoot placement="start" size="full" open={isDrawerOpen} onOpenChange={onClose}>
             <DrawerBackdrop />
             <DrawerContent>
                 <DrawerHeader>
@@ -389,12 +390,12 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                             </div>
                                         ))}
                                     </div>
-                                    
-                                    <FileUploadRoot 
+
+                                    <FileUploadRoot
                                         onFileChange={(fileDetails) => {
                                             setImageFiles(fileDetails.acceptedFiles);
-                                        }} 
-                                        accept={["image/*"]} 
+                                        }}
+                                        accept={["image/*"]}
                                         maxFiles={5}
                                     >
                                         <FileUploadTrigger asChild>
@@ -438,7 +439,16 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                             />
                         </Fieldset.Content>
                     </Fieldset.Root>
+                    {selectedChild?.id && (
+                        <div className="mt-8">
+                            <ActivitiesTable
+                                beneficiaryType="CHILD"
+                                beneficiaryId={selectedChild.id}
+                            />
+                        </div>
+                    )}
                 </DrawerBody>
+
                 <DrawerFooter>
                     <DrawerActionTrigger asChild>
                         <Button

@@ -15,7 +15,7 @@ export async function GET() {
       budget_goal: (child.budget_goal / 100).toFixed(2),
     }));
 
-    return NextResponse.json(formattedData);
+    return NextResponse.json({ children: formattedData });
   } catch (error) {
     console.error("Error retrieving children:", error);
     return NextResponse.json(

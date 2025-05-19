@@ -122,7 +122,7 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
                     {renderFilterInput(header.id) && (
-                      <div className="flex items-center py-4">
+                      <div className="flex justify-center items-center w-full py-4">
                         <Input
                           placeholder="Search..."
                           value={
@@ -131,7 +131,7 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
                           onChange={(event) =>
                             table.getColumn(header.id)?.setFilterValue(event.target.value)
                           }
-                          className="max-w-sm"
+                          className="max-w-sm p-2"
                         />
                       </div>
                     )}

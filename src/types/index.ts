@@ -59,6 +59,7 @@ export interface Activity {
   description: string;
   created_at: string;
   beneficiary_id: string;
+  title: string;
 }
 
 //Auth types
