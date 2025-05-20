@@ -83,7 +83,7 @@ const BeneficiaryDetails: React.FC<{ params: Promise<{ username: string }> }> = 
       </Box>
       <Box className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SponsorshipDetails beneficiaryId={beneficiary?.id} />
-        <BeneficiaryActivity beneficiaryId={beneficiary?.id} />
+        <BeneficiaryActivity beneficiaryId={beneficiary?.id} username={username} />
       </Box>
 
     </Box>

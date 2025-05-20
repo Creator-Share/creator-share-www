@@ -1,7 +1,7 @@
 import { User } from "@supabase/supabase-js";
 
 export type Gender = "Boy" | "Girl";
-export type PersonStatus = "New" | "Partially Funded" | "Budget Fulfilled" | "Archived" | "Draft";
+export type Status = "New" | "Partially Funded" | "Budget Fulfilled" | "Archived" | "Draft";
 export type BeneficiaryType = "CHILD" | "ANIMAL" | "FAMILY";
 
 type Geography = {
@@ -18,7 +18,7 @@ export interface Beneficiaries {
   biography: string;
   budget_goal: number;
   budget_raised: number;
-  status: PersonStatus;
+  status: Status;
   country: string;
   location_geo: Geography | null;
   location_str: string;
@@ -36,7 +36,7 @@ export interface BeneficiaryMedia {
   image_url: string;
   order_index: number;
   created_at: string;
-  acitivy_id?:string;
+  activity_id?: string;  // Fixed typo in property name
 }
 
 
@@ -49,7 +49,7 @@ export interface Subscription {
   current_period_start: string;
   current_period_end: string;
   stripe_subscription_id: string;
-  child: {
+  beneificiary: {
     name: string;
   };
 }
