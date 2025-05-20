@@ -58,7 +58,7 @@ const IframeTest = () => {
         console.log('Received navigation request from iframe', event.data);
         
         if (event.data.action === 'return') {
-          // Reset the iframe to the sponsor-a-child page
+          // Reset the iframe to the sponsorships page
           if (iframeRef.current) {
             iframeRef.current.src = "http://localhost:3000/sponsorships?embedded=true&parentOrigin=http://localhost:3000";
             setPaymentStatus(null);
@@ -148,7 +148,7 @@ window.addEventListener('message', function(event) {
         
         if (event.data.action === 'return') {
             // Reset the iframe to the sponsorships page
-            var iframe = document.querySelector('iframe[src*="sponsor-a-child"]');
+            var iframe = document.querySelector('iframe[src*="sponsorships"]');
             if (iframe) {
                 iframe.src = "http://localhost:3000/sponsorships?embedded=true&parentOrigin=https://share-tanzania.webflow.io";
             }

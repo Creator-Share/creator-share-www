@@ -27,7 +27,7 @@ export default function CheckoutContent() {
   }, [searchParams]);
 
   const handleReturn = () => {
-    router.push('/sponsor-a-child');
+    router.push('/sponsorships');
   };
 
   if (loading) {

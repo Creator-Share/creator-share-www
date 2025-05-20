@@ -36,6 +36,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     useEffect(() => {
         const fetchImages = async () => {
             try {
+                // TODO: Update API path
                 const response = await fetch(`/api/admin/children/images/${beneficiary.id}`);
                 if (response.ok) {
                     const data = await response.json();

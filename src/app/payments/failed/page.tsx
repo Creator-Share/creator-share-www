@@ -107,7 +107,7 @@ const FailedPageContent = () => {
         {/* Message */}
         <Text mb={6} color="gray.600" fontSize="sm" className="text-center">
           You can always{' '}
-          <Link as={NextLink} href="/sponsor-a-child" color="blue.500">
+          <Link as={NextLink} href="/sponsorships" color="blue.500">
             click here
           </Link>
           {' '}to see other ways you can share with our children or work
@@ -131,7 +131,7 @@ const FailedPageContent = () => {
           
           <Link 
             as={NextLink} 
-            href="/sponsor-a-child"
+            href="/sponsorships"
             fontSize="sm"
             fontWeight="medium"
           >

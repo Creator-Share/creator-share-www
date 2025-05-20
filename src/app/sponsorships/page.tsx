@@ -159,6 +159,7 @@ const SponsorChild = () => {
 
     try {
       const handleMessage = (event: MessageEvent) => {
+        // TODO: Respect .env instead of hardcode
         if (!event.origin.includes('share-tanzania.webflow.io') && 
             !event.origin.includes('localhost:3000')) {
           return;
