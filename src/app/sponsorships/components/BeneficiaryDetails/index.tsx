@@ -19,10 +19,21 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryCardProps> = ({ beneficiary })
         const fetchImages = async () => {
             try {
                 const response = await fetch(`/api/admin/children/images/${beneficiary.id}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
+                console.log("Fetching images for beneficiary:", beneficiary.id);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                const data = await response.json();
+                console.log("Images API response:", data);
+                if (!Array.isArray(data)) {
+                    console.error("Expected array of images but got:", data);
+                    return;
+                }
+                if (data.length === 0) {
+                    console.log("No images found for beneficiary");
+                    return;
+                }
+                setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
             } catch (error) {
                 console.error("Error fetching images:", error);
             }
@@ -63,24 +74,39 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryCardProps> = ({ beneficiary })
     };
 
     return (
-        <Flex direction={{ base: "column", md: "row" }} gap={6}>
-            <Flex
-                direction={{ base: "column", md: "row" }}
-                align={{ base: "center", md: "flex-start" }}
-                textAlign={{ base: "center", md: "left" }}
-                borderWidth="1px"
-                borderRadius={{ base: 'lg', md: 'md' }}
-                className="bg-white p-6 mb-6 md:p-0 md:mb-0 w-full"
+        <Flex
+            maxW="1100px"
+            mx="auto"
+            mt={10}
+            gap={8}
+            direction={{ base: "column", md: "row" }}
+        >
+            <Box
+                minW={{ base: "auto", md: "400px" }}
+                maxW="400px"
+                h="400px"
+                borderRadius="xl"
+                overflow="hidden"
+                boxShadow="md"
+                bg="gray.50"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                position="relative"
+                p={0}
             >
-                <Box position="relative" p={"10px"}>
+                <Box
+                    position="relative"
+                    width="100%"
+                    height="100%"
+                >
                     <Image
                         src={images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : placeholderImage}
                         alt={beneficiary.name}
                         objectFit="cover"
-                        rounded={"full"}
-                        className="mb-4 md:mb-0"
-                        w={{ base: "150px", md: "115px" }}
-                        h={{ base: "150px", md: "115px" }}
+                        width="100%"
+                        height="100%"
+                        borderRadius="xl"
                     />
                     {images.length > 1 && (
                         <>
@@ -138,43 +164,42 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryCardProps> = ({ beneficiary })
                         </>
                     )}
                 </Box>
-                <Box className="md:grid md:grid-cols-2 pt-[20px] gap-3">
-                    <Box ml={{ md: 6 }} w="full">
-                        <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">
-                            {beneficiary.name}
-                        </Text>
-                        <Flex fontSize="base" className="text-[#767070] gap-3" display={{ base: "column", md: "flex" }}>
-                            <Flex justify={{ base: "center", md: "flex-start" }} align="center" className="gap-3">
-                                <FaCalendar />
-                                <Text fontSize="sm" className="text-gray-500">
-                                    {formattedBirthDate} | {age} years old
-                                </Text>
-                            </Flex>
-                            <Flex justify={{ base: "center", md: "flex-start" }} align="center" gap={2}>
-                                <FaLocationDot />
-                                <Text fontSize="sm" className="text-gray-500">
-                                    {beneficiary.country}
-                                </Text>
-                            </Flex>
-                        </Flex>
-                    </Box>
-                    <Box className="md:ml-14">
-                        <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
-                            Bio
-                        </Text>
-                        <Box fontSize="base" mb={3}>
-                            <Text className="text-[#767070] mb-4">
-                                {beneficiary.biography}
-                            </Text>
-                        </Box>
-                    </Box>
+            </Box>
+            <Box flex="1" px={{ base: 0, md: 6 }} py={4}>
+                <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">
+                    {beneficiary.name}
+                </Text>
+                <Flex align="center" gap={3} mb={4}>
+                    <FaCalendar />
+                    <Text fontSize="sm" color="gray.500">
+                        {formattedBirthDate} | {age} years old
+                    </Text>
+                    <FaLocationDot />
+                    <Text fontSize="sm" color="gray.500">
+                        {beneficiary.country}
+                    </Text>
+                </Flex>
+                <Box bg="gray.50" borderRadius="md" p={4}>
+                    <Text fontSize="xl" fontWeight="bold" mb={2} className="text-[#03150E]">
+                        Bio
+                    </Text>
+                    <Text color="gray.700" lineHeight="tall">
+                        {beneficiary.biography}
+                    </Text>
                 </Box>
-            </Flex>
-            <Flex direction={{ base: "column", md: "row" }} borderWidth="1px" borderRadius={{ base: 'lg', md: 'md' }} className="bg-white p-6 mb-6 md:p-0 md:mb-0">
-                <Box className="flex justify-center items-center h-full px-8">
-                    {getStatusText(beneficiary.status)}
-                </Box>
-            </Flex>
+            </Box>
+            <Box
+                minW="200px"
+                bg="white"
+                borderRadius="xl"
+                boxShadow="md"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                p={6}
+            >
+                {getStatusText(beneficiary.status)}
+            </Box>
         </Flex>
     );
 };

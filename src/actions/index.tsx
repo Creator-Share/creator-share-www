@@ -9,7 +9,7 @@ export async function fetchSponsorshipDetailsByBeneficiaryId(beneficiaryId: stri
     .from('subscriptions')
     .select(`
       *,
-      child:sponsor_people(
+      beneficiary:beneficiaries(
         name
       )
     `)
@@ -29,7 +29,7 @@ export async function fetchActivitiesByBeneficiaryId(beneficiaryId: string) {
 
   const supabase = createClient();
   const { data, error } = await supabase
-    .from('acitivities')
+    .from('activities')
     .select('*')
     .eq('beneficiary_id', beneficiaryId)
     .order('created_at', { ascending: false });

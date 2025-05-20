@@ -19,8 +19,6 @@ import {
 import { RxActivityLog } from "react-icons/rx";
 import { Collapsible } from "@chakra-ui/react";
 import { BeneficiaryMedia } from "@/types/admin.types";
-
-
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({ 
     beneficiary, 
     isSelected, 
@@ -55,7 +53,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         setDialogImageIndex(currentImageIndex);
     }, [currentImageIndex]);
 
-    // Reset learn more state when component unmounts
     useEffect(() => {
         return () => {
             setIsLearnMoreOpen(false);
@@ -74,7 +71,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
     const handleViewActivity = (e: React.MouseEvent) => {
         e.preventDefault();
-        router.push(`/sponsor-a-child/${beneficiary.username}`);
+        router.push(`/sponsorships/${beneficiary.username}`);
     };
 
     const handleSponsorClick = () => {

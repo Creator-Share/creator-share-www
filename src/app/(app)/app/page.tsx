@@ -21,7 +21,7 @@ const UserDashboard = () => {
         .from("subscriptions")
         .select(`
           *,
-          child:sponsor_people(
+          child:beneficiaries(
             name
           )
         `)
