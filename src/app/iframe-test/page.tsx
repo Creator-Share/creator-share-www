@@ -60,7 +60,7 @@ const IframeTest = () => {
         if (event.data.action === 'return') {
           // Reset the iframe to the sponsor-a-child page
           if (iframeRef.current) {
-            iframeRef.current.src = "http://localhost:3000/sponsor-a-child?embedded=true&parentOrigin=http://localhost:3000";
+            iframeRef.current.src = "http://localhost:3000/sponsorships?embedded=true&parentOrigin=http://localhost:3000";
             setPaymentStatus(null);
           }
         }
@@ -84,7 +84,7 @@ const IframeTest = () => {
                   if (el) {
                     el.value = `<!-- Add this to your Webflow page -->
 <iframe 
-  src="http://localhost:3000/sponsor-a-child?embedded=true&parentOrigin=https://share-tanzania.webflow.io" 
+  src="http://localhost:3000/sponsorships?embedded=true&parentOrigin=https://share-tanzania.webflow.io" 
   width="100%" 
   style="border: none; height: 500px; transition: height 0.3s ease; display: block; width: 100%;"
   scrolling="no"
@@ -97,7 +97,7 @@ window.addEventListener('message', function(event) {
     if (!event.origin.includes('localhost:3000')) return;
     
     if (event.data?.type === 'resize') {
-        var iframe = document.querySelector('iframe[src*="sponsor-a-child"]');
+        var iframe = document.querySelector('iframe[src*="sponsorships"]');
         if (!iframe) return;
         
         var transition = iframe.style.transition;
@@ -115,7 +115,7 @@ window.addEventListener('message', function(event) {
         
         // We don't need to scroll - the dialog should stay in place
         // Just ensure the iframe is visible
-        var iframe = document.querySelector('iframe[src*="sponsor-a-child"]');
+        var iframe = document.querySelector('iframe[src*="sponsorships"]');
         if (iframe) {
             // Make sure the iframe is visible
             var iframeRect = iframe.getBoundingClientRect();
@@ -133,7 +133,7 @@ window.addEventListener('message', function(event) {
         console.log('Received sponsorship_complete from iframe', event.data);
         
         // You could show a success message or redirect the user
-        var iframe = document.querySelector('iframe[src*="sponsor-a-child"]');
+        var iframe = document.querySelector('iframe[src*="sponsorships"]');
         if (iframe) {
             iframe.scrollIntoView({
                 behavior: 'smooth',
@@ -147,10 +147,10 @@ window.addEventListener('message', function(event) {
         console.log('Received navigation request from iframe', event.data);
         
         if (event.data.action === 'return') {
-            // Reset the iframe to the sponsor-a-child page
+            // Reset the iframe to the sponsorships page
             var iframe = document.querySelector('iframe[src*="sponsor-a-child"]');
             if (iframe) {
-                iframe.src = "http://localhost:3000/sponsor-a-child?embedded=true&parentOrigin=https://share-tanzania.webflow.io";
+                iframe.src = "http://localhost:3000/sponsorships?embedded=true&parentOrigin=https://share-tanzania.webflow.io";
             }
         }
     }
@@ -159,7 +159,7 @@ window.addEventListener('message', function(event) {
 // Request initial height
 window.addEventListener('load', function() {
     setTimeout(function() {
-        var iframe = document.querySelector('iframe[src*="sponsor-a-child"]');
+        var iframe = document.querySelector('iframe[src*="sponsorships"]');
         if (iframe?.contentWindow) {
             iframe.contentWindow.postMessage({ type: 'requestHeight' }, '*');
         }
@@ -205,7 +205,7 @@ window.addEventListener('load', function() {
         <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
           <iframe
             ref={iframeRef}
-            src="http://localhost:3000/sponsor-a-child?embedded=true&parentOrigin=http://localhost:3000"
+            src="http://localhost:3000/sponsorships?embedded=true&parentOrigin=http://localhost:3000"
             className="w-full"
             style={{
               border: 'none',
