@@ -40,18 +40,13 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const handleCreateActivity = async () => {
+  const handleCreateActivity = async (formData: FormData) => {
     setCreating(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/activities/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newTitle,
-          description: newDescription,
-          beneficiary_id: beneficiaryId,
-        }),
+        body: formData,
       });
       if (!res.ok) throw new Error("Failed to create activity");
       const data = await res.json();
@@ -135,6 +130,7 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
         onClose={onClose}
         title={newTitle}
         description={newDescription}
+        beneficiaryId={beneficiaryId}
         onTitleChange={setNewTitle}
         onDescriptionChange={setNewDescription}
         onCreate={handleCreateActivity}

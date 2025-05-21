@@ -1,15 +1,22 @@
-import React from "react";
+import React, { useState } from "react";
 import { Button, Input, Textarea } from "@chakra-ui/react";
 import { Activity } from "@/types/admin.types";
+import {
+  FileUploadRoot,
+  FileUploadTrigger,
+  FileUploadList,
+} from "@/components/ui/file-upload";
+import { HiUpload } from "react-icons/hi";
 
 interface CreateModalProps {
   open: boolean;
   onClose: () => void;
   title: string;
   description: string;
+  beneficiaryId: string;
   onTitleChange: (v: string) => void;
   onDescriptionChange: (v: string) => void;
-  onCreate: () => void;
+  onCreate: (formData: FormData) => void;
   creating: boolean;
   error: string | null;
 }
@@ -19,13 +26,27 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   onClose,
   title,
   description,
+  beneficiaryId,
   onTitleChange,
   onDescriptionChange,
   onCreate,
   creating,
   error,
-}) =>
-  open ? (
+}) => {
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [videoFiles, setVideoFiles] = useState<File[]>([]);
+
+  const handleCreate = () => {
+    const formData = new FormData();
+    formData.append("title", title);
+    formData.append("description", description);
+    formData.append("beneficiary_id", beneficiaryId);
+    imageFiles.forEach((file) => formData.append("images", file));
+    videoFiles.forEach((file) => formData.append("videos", file));
+    onCreate(formData);
+  };
+
+  return open ? (
     <div
       style={{
         position: "fixed",
@@ -69,6 +90,36 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           p={2}
           className="border border-stone-600"
         />
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontWeight: 500 }}>Upload Images</label>
+          <FileUploadRoot
+            onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)}
+            accept={["image/*"]}
+            maxFiles={5}
+          >
+            <FileUploadTrigger asChild>
+              <Button variant="outline" size="sm" className="border" px={4}>
+                <HiUpload /> Upload Images
+              </Button>
+            </FileUploadTrigger>
+            <FileUploadList />
+          </FileUploadRoot>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontWeight: 500 }}>Upload Videos</label>
+          <FileUploadRoot
+            onFileChange={(fileDetails) => setVideoFiles(fileDetails.acceptedFiles)}
+            accept={["video/*"]}
+            maxFiles={5}
+          >
+            <FileUploadTrigger asChild>
+              <Button variant="outline" size="sm" className="border" px={4}>
+                <HiUpload /> Upload Videos
+              </Button>
+            </FileUploadTrigger>
+            <FileUploadList />
+          </FileUploadRoot>
+        </div>
         {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
           <Button onClick={onClose} style={{ marginRight: 12 }} disabled={creating}>
@@ -76,15 +127,16 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           </Button>
           <Button
             colorScheme="blue"
-            onClick={onCreate}
-            disabled={!title || !description}
+            onClick={handleCreate}
+            disabled={!title || !description || creating}
           >
-            Create
+            {creating ? "Creating..." : "Create"}
           </Button>
         </div>
       </div>
     </div>
   ) : null;
+};
 
 interface EditModalProps {
   open: boolean;
