@@ -24,11 +24,11 @@ The webhook handler processes the following Stripe event types:
 
 - `customer.subscription.created`: Creates a subscription record in the database when a new subscription is created.
 
-- `invoice.payment_failed`: Handles failed payments by updating subscription status and sending payment failure notification emails.
-
 - `customer.subscription.updated`: Updates subscription status and billing period dates in the database.
 
 - `customer.subscription.deleted`: Marks subscriptions as cancelled in the database.
+
+- `invoice.payment_failed`: Handles failed payments by updating subscription status and sending payment failure notification emails.
 
 - `invoice.paid` and `invoice.payment_succeeded`: Marks subscriptions as complete upon successful invoice payment.
 
