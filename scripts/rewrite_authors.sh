@@ -23,10 +23,12 @@ while true; do
     git reset --hard origin/$TARGET_BRANCH
 
     # Check if latest commit author matches desired author
-    CURRENT_AUTHOR=$(git log -1 --format='%an <%ae>')
-    DESIRED_AUTHOR="$NEW_AUTHOR_NAME <$NEW_AUTHOR_EMAIL>"
-    if [ "$CURRENT_AUTHOR" = "$DESIRED_AUTHOR" ]; then
-      echo "Latest commit author already matches desired author. Skipping amend and push."
+    # Check total number of commits on source and target branches
+    SOURCE_COUNT=$(git rev-list --count origin/$SOURCE_BRANCH)
+    TARGET_COUNT=$(git rev-list --count origin/$TARGET_BRANCH)
+
+    if [ "$SOURCE_COUNT" -le "$TARGET_COUNT" ]; then
+      echo "Target branch has equal or more commits. Skipping amend and push."
     else
       # Delete temp branch locally if it exists
       if git show-ref --verify --quiet refs/heads/$TEMP_BRANCH; then
@@ -38,7 +40,7 @@ while true; do
 
       # Rewrite author and committer info on the latest commit in temp branch
       git checkout $TEMP_BRANCH
-      git commit --amend --author="$NEW_AUTHOR_NAME <$NEW_AUTHOR_EMAIL>" --no-edit
+      GIT_COMMITTER_NAME="CreatorShare" GIT_COMMITTER_EMAIL="creatorshare@thegeeky.ninja" git commit --amend --author="CreatorShare <creatorshare@thegeeky.ninja>" --no-edit
 
       # Reset target branch to rewritten temp branch
       git checkout $TARGET_BRANCH
@@ -46,10 +48,15 @@ while true; do
 
       # Force push updated target branch
       git push origin $TARGET_BRANCH --force
+
+      # Trigger deployment
+      yarn deploy-dev
     fi
 
     # Cleanup
-    git branch -D $TEMP_BRANCH
+    if git show-ref --verify --quiet refs/heads/$TEMP_BRANCH; then
+      git branch -D $TEMP_BRANCH || true
+    fi
     git reflog expire --expire=now --all
     git gc --prune=now --aggressive
 

@@ -9,7 +9,7 @@
     "lint": "next lint",
     "deploy-prod": "curl https://api.vercel.com/v1/integrations/deploy/prj_ADJFcjE3MdbkPERe4bzTgJGQaFBj/X1UBfAQaV0",
     "deploy-staging": "curl https://api.vercel.com/v1/integrations/deploy/prj_ADJFcjE3MdbkPERe4bzTgJGQaFBj/AB5uiztDin",
-    "deploy-dev": "curl https://api.vercel.com/v1/integrations/deploy/prj_ADJFcjE3MdbkPERe4bzTgJGQaFBj/e7Pcr0iy6y"
+    "deploy-dev": "curl https://api.vercel.com/v1/integrations/deploy/prj_ADJFcjE3MdbkPERe4bzTgJGQaFBj/QAxrphmIsa"
   },
   "dependencies": {
     "@chakra-ui/next-js": "^2.4.2",
