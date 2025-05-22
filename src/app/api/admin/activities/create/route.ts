@@ -1,15 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 
-// POST /api/admin/activities/create
 export async function POST(req: NextRequest) {
-  const data = await req.json();
-  const { description, beneficiary_id, title } = data;
+  const formData = await req.formData();
+  const title = formData.get("title") as string | null;
+  const description = formData.get("description") as string | null;
+  const beneficiary_id = formData.get("beneficiary_id") as string | null;
+
   if (!description || !beneficiary_id) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
+  const images: File[] = [];
+  const videos: File[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (value instanceof File && value.size > 0) {
+      if (key === "images") images.push(value);
+      if (key === "videos") videos.push(value);
+    }
+  }
+  console.log("Received images:", images.length, images.map(f => f.name));
+  console.log("Received videos:", videos.length, videos.map(f => f.name));
 
   const supabase = await createClient();
+  const images_url: string[] = [];
+  for (const file of images) {
+    const ext = file.name.split('.').pop();
+    const filePath = `activities/images/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage
+      .from("activities-media")
+      .upload(filePath, file, { contentType: file.type });
+    if (error) {
+      console.error("Image upload error:", error.message);
+      continue;
+    }
+    const { data: publicUrlData } = supabase.storage.from("activities-media").getPublicUrl(filePath);
+    if (publicUrlData?.publicUrl) images_url.push(publicUrlData.publicUrl);
+  }
+  const videos_url: string[] = [];
+  for (const file of videos) {
+    const ext = file.name.split('.').pop();
+    const filePath = `activities/videos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage
+      .from("activities-media")
+      .upload(filePath, file, { contentType: file.type });
+    if (error) {
+      console.error("Video upload error:", error.message);
+      continue;
+    }
+    const { data: publicUrlData } = supabase.storage.from("activities-media").getPublicUrl(filePath);
+    if (publicUrlData?.publicUrl) videos_url.push(publicUrlData.publicUrl);
+  }
   const { data: inserted, error } = await supabase
     .from("activities")
     .insert([
@@ -18,6 +58,8 @@ export async function POST(req: NextRequest) {
         description,
         beneficiary_id,
         created_at: new Date().toISOString(),
+        images_url,
+        videos_url,
       },
     ])
     .select()
