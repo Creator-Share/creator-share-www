@@ -50,7 +50,7 @@ while true; do
       git push origin $TARGET_BRANCH --force
 
       # Trigger deployment
-      yarn deploy-dev
+      # yarn deploy-dev # Seems to be happening automatically, disabling for now
     fi
 
     # Cleanup
