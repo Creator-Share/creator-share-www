@@ -47,12 +47,45 @@ export default async function ActivityDetailPage({ params }: ActivityPageProps) 
       <Text fontSize="2xl" fontWeight="bold" mb={4}>
         Activity Details
       </Text>
+      <Text fontSize="lg" mb={2} className="font-bold">
+        {activity.title}
+      </Text>
       <Text fontSize="lg" mb={2}>
         {activity.description}
       </Text>
       <Text color="gray.500" mb={2}>
         Created: {new Date(activity.created_at).toISOString().replace("T", " ").slice(0, 16)}
       </Text>
+      {Array.isArray(activity.images_url) && activity.images_url.length > 0 && (
+        <Box mt={4}>
+          <Text fontWeight="bold" mb={2}>Images:</Text>
+          <Box display="flex" flexWrap="wrap" gap={2}>
+            {activity.images_url.map((url: string, idx: number) => (
+              <img
+                key={idx}
+                src={url}
+                alt={`Activity image ${idx + 1}`}
+                style={{ maxWidth: "180px", maxHeight: "180px", borderRadius: 8, border: "1px solid #eee" }}
+              />
+            ))}
+          </Box>
+        </Box>
+      )}
+      {Array.isArray(activity.videos_url) && activity.videos_url.length > 0 && (
+        <Box mt={4}>
+          <Text fontWeight="bold" mb={2}>Videos:</Text>
+          <Box display="flex" flexWrap="wrap" gap={2}>
+            {activity.videos_url.map((url: string, idx: number) => (
+              <video
+                key={idx}
+                src={url}
+                controls
+                style={{ maxWidth: "320px", maxHeight: "180px", borderRadius: 8, border: "1px solid #eee" }}
+              />
+            ))}
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }

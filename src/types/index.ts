@@ -60,6 +60,8 @@ export interface Activity {
   created_at: string;
   beneficiary_id: string;
   title: string;
+  images_url?: string[];
+  videos_url?: string[];
 }
 
 //Auth types
