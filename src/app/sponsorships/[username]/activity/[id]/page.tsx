@@ -1,6 +1,7 @@
 import { fetchActivitiesByBeneficiaryId } from "@/actions";
 import { Beneficiaries, Activity } from "@/types";
 import { Box, Text, Flex } from "@chakra-ui/react";
+import Image from "next/image";
 
 async function getBeneficiary(username: string): Promise<Beneficiaries | null> {
   try {
@@ -61,7 +62,7 @@ export default async function ActivityDetailPage({ params }: ActivityPageProps) 
           <Text fontWeight="bold" mb={2}>Images:</Text>
           <Box display="flex" flexWrap="wrap" gap={2}>
             {activity.images_url.map((url: string, idx: number) => (
-              <img
+              <Image
                 key={idx}
                 src={url}
                 alt={`Activity image ${idx + 1}`}

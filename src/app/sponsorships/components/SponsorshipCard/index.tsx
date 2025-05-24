@@ -1,13 +1,13 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Box, Text, Image, Flex } from "@chakra-ui/react";
+import { Box, Text, Flex } from "@chakra-ui/react";
 import { FaCalendar, FaCaretDown, FaCaretUp } from "react-icons/fa";
 import { FaLocationDot, FaPerson } from "react-icons/fa6";
 import { calculateAge } from "@/utils/ageCalculator";
 import { centsToDollars } from "@/utils/currency";
 import { BeneficiaryCardProps } from "@/types/propTypes";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
     DialogRoot,
     DialogContent,
@@ -19,13 +19,13 @@ import {
 import { RxActivityLog } from "react-icons/rx";
 import { Collapsible } from "@chakra-ui/react";
 import { BeneficiaryMedia } from "@/types/admin.types";
+import BeneficiaryActivityModal from "../SponsorshipActivity/BeneficiaryActivityModal";
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({ 
     beneficiary, 
     isSelected, 
     id,
     onOpenDialog
 }) => {
-    const router = useRouter();
     const [images, setImages] = useState<BeneficiaryMedia[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
     const [dialogImageIndex, setDialogImageIndex] = useState<number>(0);
@@ -70,9 +70,12 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         setDialogImageIndex((prev) => (prev + 1) % images.length);
     };
 
+    const [showActivityModal, setShowActivityModal] = useState(false);
+
     const handleViewActivity = (e: React.MouseEvent) => {
         e.preventDefault();
-        router.push(`/sponsorships/${beneficiary.username}`);
+        console.log("Beneficiary object passed to modal:", beneficiary);
+        setShowActivityModal(true);
     };
 
     const handleSponsorClick = () => {
@@ -101,7 +104,9 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                             <Image
                                 src={images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : placeholderImage}
                                 alt={beneficiary.name}
-                                objectFit="cover"
+                                width={550}
+                                height={400}
+                                style={{ objectFit: "cover" }}
                                 className={`mb-4 md:mb-0 min-h-[400px] h-[400px] w-[550px] md:min-h-[273px] md:h-[273px] md:w-[450px] cursor-pointer ${
                                     isLearnMoreOpen ? '' : 'rounded-t-md md:rounded-l-md md:rounded-t-none'
                                 }`}
@@ -175,7 +180,9 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                                 <Image
                                     src={images.length > 0 && images[dialogImageIndex]?.image_url ? images[dialogImageIndex].image_url : placeholderImage}
                                     alt={`${beneficiary.name} - ${dialogImageIndex + 1}`}
-                                    objectFit="contain"
+                                    width={800}
+                                    height={600}
+                                    style={{ objectFit: "contain" }}
                                     className="w-full max-h-[90vh] rounded-xl"
                                 />
                                 {images.length > 1 && (
@@ -292,6 +299,11 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                         >
                             <RxActivityLog />View Activity
                         </Button>
+                        <BeneficiaryActivityModal
+                            open={showActivityModal}
+                            onClose={() => setShowActivityModal(false)}
+                            beneficiary={{ ...beneficiary, image_url: images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : undefined }}
+                        />
                         
                         <Box cursor="pointer" className="flex justify-center items-center mt-4">
                             <Text fontSize="base" className="text-[#767070]">

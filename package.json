@@ -23,6 +23,7 @@
     "@types/leaflet": "^1.9.16",
     "@types/leaflet.markercluster": "^1.5.5",
     "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
     "leaflet": "^1.9.4",
     "leaflet-control-geocoder": "^3.1.0",

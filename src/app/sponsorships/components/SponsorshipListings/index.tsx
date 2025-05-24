@@ -92,7 +92,6 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
         console.log(`BeneficiaryListings: Navigating to previous beneficiary: ${prevBeneficiary.name} (ID: ${prevBeneficiary.id})`);
         setActiveBeneficiaryId(prevBeneficiary.id);
         setSelectedBeneficiaryId(prevBeneficiary.id);
-        // Only scroll to the child if not in an iframe
         if (!isInIframe) {
           document.getElementById(prevBeneficiary.id)?.scrollIntoView({ behavior: 'smooth' });
         }
@@ -126,7 +125,6 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
       style={{ minHeight: visibleBeneficiary.length ? 'auto' : '100px' }}
       suppressHydrationWarning={true}
     >
-      {/* Render the shared dialog */}
       {activeBeneficiary && (
         <SponsorDialog
           people={activeBeneficiary}
@@ -135,7 +133,7 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
           onNext={() => handleDialogNavigation('next')}
           onPrevious={() => handleDialogNavigation('previous')}
           {...getDialogNavigationProps()}
-          trigger={<div style={{ display: 'none' }} />} // Hidden trigger as we're controlling the dialog open state
+          trigger={<div style={{ display: 'none' }} />}
         />
       )}
       
