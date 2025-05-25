@@ -18,8 +18,6 @@ export async function POST(req: NextRequest) {
       if (key === "videos") videos.push(value);
     }
   }
-  console.log("Received images:", images.length, images.map(f => f.name));
-  console.log("Received videos:", videos.length, videos.map(f => f.name));
 
   const supabase = await createClient();
   const images_url: string[] = [];

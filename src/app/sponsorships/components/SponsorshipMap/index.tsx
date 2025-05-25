@@ -307,7 +307,6 @@ const ChildMap: React.FC<ExtendedBeneficiaryMapProps> = ({
   }, [checkChildrenInView]);
 
   const MemoizedMarkers = useMemo(() => {
-    console.log("ChildMap received:", beneficiaryData?.length, "children");
     if (!beneficiaryData || beneficiaryData.length === 0) {
       return [];
     }
@@ -323,7 +322,6 @@ const ChildMap: React.FC<ExtendedBeneficiaryMapProps> = ({
       child.country && child.country.trim() !== ''
     );
     
-    console.log("Valid children after filtering:", validChildren.length);
     
     return validChildren.map((child) => (
       <Marker

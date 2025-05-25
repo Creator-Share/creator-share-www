@@ -19,18 +19,15 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryCardProps> = ({ beneficiary })
         const fetchImages = async () => {
             try {
                 const response = await fetch(`/api/admin/children/images/${beneficiary.id}`);
-                console.log("Fetching images for beneficiary:", beneficiary.id);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                console.log("Images API response:", data);
                 if (!Array.isArray(data)) {
                     console.error("Expected array of images but got:", data);
                     return;
                 }
                 if (data.length === 0) {
-                    console.log("No images found for beneficiary");
                     return;
                 }
                 setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Box, Text, Image, Spinner, Button } from "@chakra-ui/react";
 import SponsorshipDetails from "../SponsorshipDetails";
+import SponsorDialog from "../SponsorDialog";
 import BeneficiaryActivity from "../SponsorshipActivity";
 import { FaCalendar, FaPerson } from "react-icons/fa6";
 import { FaLocationDot } from "react-icons/fa6";
@@ -28,32 +29,30 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   beneficiary,
 }) => {
   const [loading, setLoading] = useState(true);
+  const [sponsorDialogOpen, setSponsorDialogOpen] = useState(false);
 
-
-
-const getStatusText = (status: string) => {
-  switch (status) {
+  const getStatusText = (status: string) => {
+    switch (status) {
       case "Budget Fulfilled":
-          return (
-              <Box className="flex flex-col items-center">
-                  <Image src="/fulfilled.png" alt="Fulfilled" width={73} height={84} className="mb-2" />
-                  <Text className="text-[#03150E] font-bold text-center">Sponsored</Text>
-              </Box>
-          );
+        return (
+          <Box className="flex flex-col items-center">
+            <Image src="/fulfilled.png" alt="Fulfilled" width={73} height={84} className="mb-2" />
+            <Text className="text-[#03150E] font-bold text-center">Sponsored</Text>
+          </Box>
+        );
       case "Partially Funded":
-          return (
-              <Box className="flex flex-col items-center">
-                  <Image src="/pending.png" alt="Pending" width={73} height={84} className="mb-2" />
-                  <Text className="text-[#767070] text-center">On Going</Text>
-              </Box>
-          );
+        return (
+          <Box className="flex flex-col items-center">
+            <Image src="/pending.png" alt="Pending" width={73} height={84} className="mb-2" />
+            <Text className="text-[#767070] text-center">On Going</Text>
+          </Box>
+        );
       case "New":
-          return <Text className="text-[#767070] text-center">Sponsor</Text>;
+        return <Text className="text-[#767070] text-center">Sponsor</Text>;
       default:
-          return <Text className="text-[#767070] text-center">Nothing to show</Text>;
-  }
-};
-  console.log("Beneficiary image_url:", beneficiary.image_url);
+        return <Text className="text-[#767070] text-center">Nothing to show</Text>;
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -63,7 +62,6 @@ const getStatusText = (status: string) => {
         await fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id);
         await fetchActivitiesByBeneficiaryId(beneficiary.id);
       } catch {
-        // error handling intentionally left blank
       }
       setLoading(false);
     };
@@ -83,7 +81,7 @@ const getStatusText = (status: string) => {
             </div>
           )}
           <Box>
-            <div className="flex gap-6 mb-8">
+            <Box className="flex gap-6">
               <div className="flex flex-1 items-center bg-white rounded-xl p-6 shadow-sm">
                 <Image
                   src={beneficiary.image_url || "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="}
@@ -121,29 +119,36 @@ const getStatusText = (status: string) => {
               <div className="flex flex-col items-center justify-center bg-white rounded-xl p-6 min-w-[200px] shadow-sm">
                 {getStatusText(beneficiary.status)}
               </div>
-            </div>
+            </Box>
+            <Box className="my-4 flex flex-row gap-3">
+              <Button
+                className="bg-white text-[#1C3C8C] hover:text-white hover:bg-[#1C3C8C] px-8 py-3 rounded-lg font-medium"
+                onClick={() => window.location.assign(`/sponsorships/${beneficiary.username}`)}
+              >
+                See Full Profile
+              </Button>
+              <Button
+                className="bg-[#1C3C8C] text-white hover:bg-[#15307A] px-8 py-3 rounded-lg font-medium"
+                onClick={() => setSponsorDialogOpen(true)}
+              >
+                Sponsor {beneficiary.name}
+              </Button>
+              <SponsorDialog
+                people={beneficiary}
+                isOpen={sponsorDialogOpen}
+                onOpenChange={setSponsorDialogOpen}
+                trigger={<div style={{ display: "none" }} />}
+              />
+            </Box>
 
-            {/* Sponsorship Details */}
             <Box mb={8}>
               <SponsorshipDetails beneficiaryId={beneficiary.id} />
             </Box>
-
-            {/* Quick Updates */}
             <Box mb={8}>
               <Text fontSize="lg" fontWeight="semibold" mb={4}>
                 Quick Updates
               </Text>
               <BeneficiaryActivity beneficiaryId={beneficiary.id} username={beneficiary.username} />
-            </Box>
-
-            {/* Footer */}
-            <Box textAlign="center">
-              <Button
-                className="bg-[#1C3C8C] text-white hover:bg-[#15307A] px-8 py-3 rounded-lg font-medium"
-                onClick={() => window.location.assign(`/sponsorships/${beneficiary.username}`)}
-              >
-                See Full Profile
-              </Button>
             </Box>
           </Box>
         </DialogBody>

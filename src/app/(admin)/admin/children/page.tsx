@@ -82,7 +82,6 @@ const ChildrenTable = () => {
         const childrenArr = Array.isArray(fetchedData.children) ? fetchedData.children : [];
         const childrenOnly = childrenArr.filter((b: Beneficiaries) => b.beneficiary_type === "CHILD");
         setData(childrenOnly);
-        console.log(fetchedData);
       } catch (error) {
         console.error("Error fetching people:", error);
       }

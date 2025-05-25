@@ -143,8 +143,6 @@ const SponsorChild = () => {
           type: 'resize',
           height: height
         }, parentOrigin);
-
-        console.log('[Child Frame] Sent height:', height);
       });
     } catch (error) {
       console.error('[Child Frame] Error sending height:', error);

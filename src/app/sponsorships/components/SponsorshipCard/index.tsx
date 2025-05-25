@@ -74,14 +74,14 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
     const handleViewActivity = (e: React.MouseEvent) => {
         e.preventDefault();
-        console.log("Beneficiary object passed to modal:", beneficiary);
         setShowActivityModal(true);
     };
 
     const handleSponsorClick = () => {
-        console.log(`ChildCard: Sponsor button clicked for ${beneficiary.name} (ID: ${beneficiary.id})`);
         if (onOpenDialog) {
             onOpenDialog();
+        } else {
+            console.warn("onOpenDialog prop is not defined in BeneficiaryCard");
         }
     };
 

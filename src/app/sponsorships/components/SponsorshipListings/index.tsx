@@ -63,25 +63,20 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
   // Handle opening the dialog for a specific child
   const handleOpenDialog = (beneficiaryId?: string) => {
     if (!beneficiaryId) return;
-    console.log(`BeneficiaryListings: Opening dialog for beneficiary ID: ${beneficiaryId}`);
     setActiveBeneficiaryId(beneficiaryId);
     setDialogOpen(true);
   };
-  
-  // Handle dialog navigation
+
   const handleDialogNavigation = (direction: 'next' | 'previous') => {
     if (!activeBeneficiaryId) return;
     
     const currentIndex = visibleBeneficiary.findIndex(beneficiary => beneficiary.id === activeBeneficiaryId);
-    console.log(`ChildListings: handleDialogNavigation called with direction: ${direction}, current index: ${currentIndex}`);
     
     if (direction === 'next' && currentIndex < visibleBeneficiary.length - 1) {
       const nextBeneficiary = visibleBeneficiary[currentIndex + 1];
       if (nextBeneficiary.id) {
-        console.log(`ChildListings: Navigating to next child: ${nextBeneficiary.name} (ID: ${nextBeneficiary.id})`);
         setActiveBeneficiaryId(nextBeneficiary.id);
         setSelectedBeneficiaryId(nextBeneficiary.id);
-        // Only scroll to the child if not in an iframe
         if (!isInIframe) {
           document.getElementById(nextBeneficiary.id)?.scrollIntoView({ behavior: 'smooth' });
         }
@@ -89,7 +84,6 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
     } else if (direction === 'previous' && currentIndex > 0) {
       const prevBeneficiary = visibleBeneficiary[currentIndex - 1];
       if (prevBeneficiary.id) {
-        console.log(`BeneficiaryListings: Navigating to previous beneficiary: ${prevBeneficiary.name} (ID: ${prevBeneficiary.id})`);
         setActiveBeneficiaryId(prevBeneficiary.id);
         setSelectedBeneficiaryId(prevBeneficiary.id);
         if (!isInIframe) {
