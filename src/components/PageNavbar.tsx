@@ -63,7 +63,7 @@ export function PageNavbar() {
   if (!mounted) return null;
 
   return (
-    <Box className="w-full z-[1000]">
+    <Box className="w-full z-[1000] bg-[#FFFFFF]">
       <Flex className="container mx-auto px-4 h-16 flex justify-between items-center relative">
         {/* Logo Centered */}
         <Box className="w-full md:w-[10%]">

@@ -20,7 +20,7 @@ const formatDate = (date: string) => {
   return format(new Date(date), "d MMMM, yyyy h:mmaaa").replace('AM', 'AM').replace('PM', 'PM');
 };
 
-const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId }) => {
+const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId, hideStatus }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -51,7 +51,9 @@ const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId }
                 <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">DATE</th>
                 <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">DESCRIPTION</th>
                 <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">AMOUNT</th>
-                <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">STATUS</th>
+                {!hideStatus && (
+                  <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">STATUS</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -66,11 +68,13 @@ const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId }
                   <td className="py-3 px-4 text-sm text-[#222]">
                     ${centsToDollars(subscription.amount)}
                   </td>
-                  <td className="py-3 px-4 text-center">
-                    <span className={`inline-block rounded-full px-4 py-1 text-xs font-medium ${getStatusStyle(subscription.status)}`}>
-                      {subscription.status === "success" ? "Success" : subscription.status === "pending" ? "Pending" : subscription.status}
-                    </span>
-                  </td>
+                  {!hideStatus && (
+                    <td className="py-3 px-4 text-center">
+                      <span className={`inline-block rounded-full px-4 py-1 text-xs font-medium ${getStatusStyle(subscription.status)}`}>
+                        {subscription.status === "success" ? "Success" : subscription.status === "pending" ? "Pending" : subscription.status}
+                      </span>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
