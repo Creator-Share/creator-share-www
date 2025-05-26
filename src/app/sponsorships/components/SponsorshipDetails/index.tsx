@@ -45,7 +45,8 @@ const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId, 
       ) : subscriptions.length === 0 ? (
         <Text color="gray.500" className="px-8 py-4">No sponsorships yet</Text>
       ) : (
-          <table className="w-full">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full min-w-[600px] overflow-hidden">
             <thead className='bg-[#E4EAE7] border-y-2 border-[#E4EAE7]'>
               <tr>
                 <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">DATE</th>
@@ -79,6 +80,7 @@ const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId, 
               ))}
             </tbody>
           </table>
+        </div>
       )}
     </div>
   )

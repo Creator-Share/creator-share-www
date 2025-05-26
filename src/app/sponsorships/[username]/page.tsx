@@ -191,8 +191,8 @@ export default function FullProfileDynamic() {
         <Heading as="h3" size="lg" color="#2B7FF9" mb={6} className="font-bold text-2xl">
           Latest Updates on {beneficiary.name}
         </Heading>
-        <Box className="grid grid-cols-5 gap-4">
-          <Box mb={8} className="col-span-3">
+        <Box className="md:grid md:grid-cols-5 gap-4">
+          <Box mb={8} className="md:col-span-3">
             <VStack gap={6} align="stretch">
               {activities.length > 0 ? (
                 activities.map((activity: Activity) => (
@@ -223,7 +223,7 @@ export default function FullProfileDynamic() {
               )}
             </VStack>
           </Box>
-          <Box className="col-span-2">
+          <Box className="md:col-span-2">
             <VStack align={"stretch"} gap={6}>
               <SponsorshipDetails beneficiaryId={beneficiary.id} hideStatus />
               <Box bg="#4169E1" rounded="xl" p={8} color="white">

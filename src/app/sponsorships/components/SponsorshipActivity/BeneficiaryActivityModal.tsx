@@ -81,7 +81,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             </div>
           )}
           <Box>
-            <Box className="flex gap-6">
+            <Box className="flex gap-6 md:flex-row flex-col">
               <div className="flex flex-1 items-center bg-white rounded-xl p-6 shadow-sm">
                 <Image
                   src={beneficiary.image_url || "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="}
@@ -92,14 +92,16 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 />
                 <div className="ml-6">
                   <div className="text-2xl font-bold text-[#03150E] mb-1">{beneficiary.name}</div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[#767070] text-base items-center">
-                    <div className="flex items-center gap-1">
-                      <FaCalendar />
-                      <span>
-                        {beneficiary.birth_date
-                          ? new Date(beneficiary.birth_date).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })
-                          : "N/A"}
-                      </span>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[#767070] text-base md:items-center md:flex-row flex-col items-start">
+                    <div className="flex items-center gap-1 md:flex-row flex-col">
+                      <div className="flex flex-row gap-1">
+                        <FaCalendar className="mt-1"/>
+                        <span>
+                          {beneficiary.birth_date
+                            ? new Date(beneficiary.birth_date).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })
+                            : "N/A"}
+                        </span>
+                      </div>
                       <span className="ml-2 text-xs text-[#767070]">
                         {beneficiary.birth_date ? `${calculateAge(beneficiary.birth_date)} yrs old` : ""}
                       </span>
@@ -115,12 +117,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   </div>
                 </div>
               </div>
-              {/* Status Card */}
               <div className="flex flex-col items-center justify-center bg-white rounded-xl p-6 min-w-[200px] shadow-sm">
                 {getStatusText(beneficiary.status)}
               </div>
             </Box>
-            <Box className="my-4 flex flex-row gap-3">
+            <Box className="my-4 flex gap-3 md:flex-row flex-col">
               <Button
                 className="bg-white text-[#1C3C8C] hover:text-white hover:bg-[#1C3C8C] px-8 py-3 rounded-lg font-medium"
                 onClick={() => window.location.assign(`/sponsorships/${beneficiary.username}`)}
