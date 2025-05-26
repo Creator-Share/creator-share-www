@@ -1,5 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { fetchActivitiesByBeneficiaryId } from "@/actions";
+import Link from "next/link";
 import {
   Box,
   Button,
@@ -8,13 +10,12 @@ import {
   Image,
   Text,
   VStack,
-  HStack,
   Input,
   Spinner,
 } from "@chakra-ui/react";
 import { useParams } from "next/navigation";
 import SponsorshipDetails from "../components/SponsorshipDetails";
-import { Beneficiaries, BeneficiaryMedia } from "@/types";
+import { Activity, Beneficiaries, BeneficiaryMedia } from "@/types";
 import SponsorDialog from "../components/SponsorDialog";
 
 export default function FullProfileDynamic() {
@@ -24,42 +25,11 @@ export default function FullProfileDynamic() {
   const [error, setError] = useState("");
   const [sponsorDialogOpen, setSponsorDialogOpen] = useState(false);
   const [images, setImages] = useState<BeneficiaryMedia[]>([]);
+  const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([]);
+  const [currentBeneficiaryIndex, setCurrentBeneficiaryIndex] = useState(0);
+  const [activities, setActivities] = useState<Activity[]>([]);
 
   const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
-  const updates = [
-    {
-      image: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=facearea&w=400&q=80",
-      title: "Sylvain Dada Goes to school",
-      author: "Fritz",
-      date: "19 January 2019",
-      comments: 2,
-      description: "A 6-year-old boy from Congo - Democratic Republic of full of hope",
-    },
-    {
-      image: "https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=facearea&w=400&q=80",
-      title: "Sylvain Dada Goes to school",
-      author: "Fritz",
-      date: "19 January 2019",
-      comments: 2,
-      description: "A 6-year-old boy from Congo - Democratic Republic of full of hope",
-    },
-    {
-      image: "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=facearea&w=400&q=80",
-      title: "Sylvain Dada Visits the market",
-      author: "Jules",
-      date: "15 February 2020",
-      comments: 5,
-      description: "A spirited young girl from France discovering local delicacies.",
-    },
-    {
-      image: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=facearea&w=400&q=80",
-      title: "Sylvain Dada Explores the city",
-      author: "Yuki",
-      date: "3 March 2021",
-      comments: 3,
-      description: "A curious teenager from Japan experiencing urban life.",
-    },
-  ];
 
   const fetchImages = async (beneficiaryId: string) => {
     try {
@@ -100,6 +70,22 @@ export default function FullProfileDynamic() {
         setBeneficiary(child);
         if (child?.id) {
           await fetchImages(child.id);
+          
+          // Fetch activities
+          const activitiesData = await fetchActivitiesByBeneficiaryId(child.id);
+          setActivities(activitiesData);
+          
+          // Fetch all beneficiaries
+          const res = await fetch('/api/children/get');
+          const data = await res.json();
+          if (data.people) {
+            setBeneficiaries(data.people);
+            // Find current beneficiary index
+            const index = data.people.findIndex((b: Beneficiaries) => b.username === username);
+            if (index !== -1) {
+              setCurrentBeneficiaryIndex(index);
+            }
+          }
         }
       } catch (err) {
         setError("Beneficiary not found.");
@@ -131,6 +117,36 @@ export default function FullProfileDynamic() {
   return (
     <Box minH="100vh" p={6}>
       <Box maxW="6xl" mx="auto">
+        {/* Navigation */}
+        <Flex justify="space-between" mb={4}>
+          <Button
+            onClick={() => {
+              const newIndex = currentBeneficiaryIndex - 1;
+              if (newIndex >= 0 && beneficiaries[newIndex]?.username) {
+                window.location.href = `/sponsorships/${beneficiaries[newIndex].username}`;
+              }
+            }}
+            disabled={currentBeneficiaryIndex === 0}
+            variant="outline"
+            className={`px-4 py-2 ${currentBeneficiaryIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            ← Previous Beneficiary
+          </Button>
+          <Button
+            onClick={() => {
+              const newIndex = currentBeneficiaryIndex + 1;
+              if (newIndex < beneficiaries.length && beneficiaries[newIndex]?.username) {
+                window.location.href = `/sponsorships/${beneficiaries[newIndex].username}`;
+              }
+            }}
+            disabled={currentBeneficiaryIndex === beneficiaries.length - 1}
+            variant="outline"
+            className={`px-4 py-2 ${currentBeneficiaryIndex === beneficiaries.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            Next Beneficiary →
+          </Button>
+        </Flex>
+
         {/* Header */}
         <Flex justify="space-between" align="center" mb={6}>
           <Heading as="h1" className="font-bold text-2xl md:text-[55px]" color="#2B7FF9">
@@ -175,53 +191,43 @@ export default function FullProfileDynamic() {
         <Heading as="h3" size="lg" color="#2B7FF9" mb={6} className="font-bold text-2xl">
           Latest Updates on {beneficiary.name}
         </Heading>
-        <Box className="grid grid-cols-2 gap-4">
-          <Box mb={8}>
+        <Box className="grid grid-cols-5 gap-4">
+          <Box mb={8} className="col-span-3">
             <VStack gap={6} align="stretch">
-              {updates.map((update, idx) => (
-                <Flex key={idx} bg="white" rounded="xl" overflow="hidden" boxShadow="sm">
-                  <Image src={update.image} alt={update.title} w="144px" h="144px" objectFit="cover" />
-                  <Box flex="1" p={4}>
-                    <Text fontWeight="bold" fontSize="lg" mb={1}>
-                      {update.title}
-                    </Text>
-                    <HStack color="gray.500" fontSize="xs" mb={2} gap={4}>
-                      <Text>👤 {update.author}</Text>
-                      <Text>📅 {update.date}</Text>
-                      <Text>💬 {update.comments} Comments</Text>
-                    </HStack>
-                    <Text color="gray.700">{update.description}</Text>
-                  </Box>
-                </Flex>
-              ))}
+              {activities.length > 0 ? (
+                activities.map((activity: Activity) => (
+                  <Link
+                    key={activity.id}
+                    href={`/sponsorships/${username}/activity/${activity.id}`}
+                    style={{ textDecoration: "none" }}
+                  >
+                    <Flex bg="white" rounded="xl" overflow="hidden" boxShadow="sm" _hover={{ bg: "gray.50" }}>
+                      <Box flex="1" p={4}>
+                        <Text color="gray.700" mb={2}>{activity.description}</Text>
+                        <Text color="gray.500" fontSize="xs">
+                          📅 {new Date(activity.created_at).toLocaleString("en-GB", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: false,
+                          })}
+                        </Text>
+                      </Box>
+                    </Flex>
+                  </Link>
+                ))
+              ) : (
+                <Text color="gray.500" textAlign="center">No activities available yet.</Text>
+              )}
             </VStack>
-            <Flex justify="center" align="center" gap={2} mt={6}>
-              <Button size="sm" bg="white" border="1px" borderColor="gray.200" color="gray.500">
-                {"<"}
-              </Button>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                <Button
-                  key={n}
-                  size="sm"
-                  bg={n === 1 ? "#3b5bdb" : "white"}
-                  color={n === 1 ? "white" : "gray.500"}
-                  border="1px"
-                  borderColor="gray.200"
-                  _hover={{ bg: n === 1 ? "#274690" : "gray.100" }}
-                >
-                  {n}
-                </Button>
-              ))}
-              <Button size="sm" bg="white" border="1px" borderColor="gray.200" color="gray.500">
-                {">"}
-              </Button>
-            </Flex>
           </Box>
-          <Box>
+          <Box className="col-span-2">
             <VStack align={"stretch"} gap={6}>
               <SponsorshipDetails beneficiaryId={beneficiary.id} hideStatus />
               <Box bg="#4169E1" rounded="xl" p={8} color="white">
-                <Heading as="h3" size="lg" mb={4} textAlign="center">
+                <Heading as="h3" className="text-2xl font-bold" mb={4} textAlign="center">
                   Sign up to receive FREE monthly updates on {beneficiary.name}
                 </Heading>
                 <Text fontSize="md" mb={6} textAlign="center">
@@ -251,7 +257,6 @@ export default function FullProfileDynamic() {
                 </Box>
               </Box>
             </VStack>
-
           </Box>
         </Box>
       </Box>

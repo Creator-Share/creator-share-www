@@ -27,6 +27,7 @@ export interface BeneficiaryListingsProps {
   selectedCountry: string | null;
   isLoading?: boolean;
   setSelectedBeneficiaryId: (id: string | null) => void;
+  mapBounds?: LatLngBounds;
 }
 
 export interface BeneficiaryCardProps {

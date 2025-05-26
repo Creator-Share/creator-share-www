@@ -17,8 +17,7 @@ export async function GET(request: Request) {
     let session = null;
     let sessionStatus = null;
     let errorDetails = null;
-    
-    // First try to get the session directly from Stripe
+
     try {
       session = await stripe.checkout.sessions.retrieve(sessionId, {
         expand: ['customer_details', 'payment_intent']
@@ -26,8 +25,7 @@ export async function GET(request: Request) {
       
       sessionStatus = session.status;
       console.log(`Retrieved session from Stripe: ${sessionId}, status: ${sessionStatus}`);
-      
-      // If we found the session in Stripe, return it immediately
+
       return NextResponse.json({ 
         session,
         status: sessionStatus 

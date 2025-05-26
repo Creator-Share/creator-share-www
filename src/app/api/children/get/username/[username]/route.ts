@@ -16,8 +16,6 @@ export async function GET(request: Request) {
     console.error('Error decoding username:', e);
   }
 
-  console.log('Processing username:', username);
-
   try {
     const { data, error } = await supabase
       .from('beneficiaries')

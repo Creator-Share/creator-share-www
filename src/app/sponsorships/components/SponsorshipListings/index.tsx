@@ -1,32 +1,63 @@
 "use client"
-import { Box, VStack } from "@chakra-ui/react";
-import React, { useState, useEffect, useCallback } from "react";
+import { Box, VStack, Flex, Button } from "@chakra-ui/react";
+import React, { useState, useEffect } from "react";
 import BeneficiaryCard from "../SponsorshipCard";
 import SponsorDialog from "../SponsorDialog";
-import { Beneficiaries } from "@/types";
 import { BeneficiaryListingsProps } from "@/types/propTypes";
 
 const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListingsProps>(({
   beneficiaryData,
   selectedBeneficiaryId,
   selectedCountry,
-  setSelectedBeneficiaryId
+  setSelectedBeneficiaryId,
+  mapBounds
 }, ref) => {
-  const [visibleBeneficiary, setVisibleBeneficiary] = useState<Beneficiaries[]>([]);
-  const isInIframe = window.self !== window.top;
+  const [currentPage, setCurrentPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [activeBeneficiaryId, setActiveBeneficiaryId] = useState<string | null>(null);
+  const isInIframe = window.self !== window.top;
+  const itemsPerPage = 3; // Show fewer items per page to test pagination
   
-  useEffect(() => {
+  const filteredBeneficiary = React.useMemo(() => {
     const safeBeneficiaryData = Array.isArray(beneficiaryData) ? beneficiaryData : [];
-    let filteredBeneficiary = safeBeneficiaryData;
+    
+    const filtered = safeBeneficiaryData.filter(beneficiary => {
+      // Filter by country if selected
+      if (selectedCountry && beneficiary.country !== selectedCountry) {
+        return false;
+      }
 
-    if (selectedCountry) {
-      filteredBeneficiary = safeBeneficiaryData.filter(beneficiary => beneficiary.country === selectedCountry);
-    }
+      // Filter by map bounds if available
+      if (mapBounds && beneficiary.location_geo) {
+        const [lng, lat] = beneficiary.location_geo.coordinates;
+        return mapBounds.contains([lat, lng]);
+      }
 
-    setVisibleBeneficiary(isInIframe ? filteredBeneficiary : filteredBeneficiary.slice(0, 8));
+      return true;
+    });
 
+    return filtered;
+  }, [beneficiaryData, selectedCountry, mapBounds]);
+
+  const visibleBeneficiary = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const sliced = filteredBeneficiary.slice(startIndex, endIndex);
+
+    // Debug log for pagination
+    console.log('Pagination:', {
+      currentPage,
+      startIndex,
+      endIndex,
+      visibleCount: sliced.length,
+      totalItems: filteredBeneficiary.length,
+      totalPages: Math.ceil(filteredBeneficiary.length / itemsPerPage)
+    });
+
+    return sliced;
+  }, [filteredBeneficiary, currentPage, itemsPerPage]);
+
+  useEffect(() => {
     if (isInIframe) {
       setTimeout(() => {
         window.parent.postMessage({
@@ -35,30 +66,11 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
         }, '*');
       }, 100);
     }
-  }, [beneficiaryData, selectedCountry, isInIframe]);
-
-  const handleScroll = useCallback(() => {
-    if (isInIframe) return;
-
-    const safeBeneficiaryData = Array.isArray(beneficiaryData) ? beneficiaryData : [];
-
-    if (
-      window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 500 &&
-      visibleBeneficiary.length < safeBeneficiaryData.length
-    ) {
-      setVisibleBeneficiary(prev => [
-        ...prev,
-        ...safeBeneficiaryData.slice(prev.length, prev.length + 8)
-      ]);
-    }
-  }, [beneficiaryData, visibleBeneficiary.length, isInIframe]);
+  }, [isInIframe]);
 
   useEffect(() => {
-    if (!isInIframe) {
-      window.addEventListener("scroll", handleScroll);
-      return () => window.removeEventListener("scroll", handleScroll);
-    }
-  }, [handleScroll, isInIframe]);
+    setCurrentPage(1); // Reset to first page when country or map bounds change
+  }, [selectedCountry, mapBounds]);
 
   // Handle opening the dialog for a specific child
   const handleOpenDialog = (beneficiaryId?: string) => {
@@ -109,6 +121,9 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
     };
   };
 
+  // Calculate total pages
+  const totalPages = Math.ceil(filteredBeneficiary.length / itemsPerPage);
+
   return (
     <Box 
       ref={ref}
@@ -134,7 +149,7 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
       <VStack 
         align="stretch" 
         pt={10}
-        pb={10}
+        pb={6}
         gap="1.5rem"
       >
         {visibleBeneficiary.map((beneficiary) =>
@@ -154,6 +169,36 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
           ) : null
         )}
       </VStack>
+      {filteredBeneficiary.length > itemsPerPage && (
+        <Flex justify="center" pb={10} gap={2}>
+          <Flex gap={2}>
+            <Button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+{Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+  <Button
+    key={page}
+    onClick={() => setCurrentPage(page)}
+    colorScheme={currentPage === page ? "blue" : undefined}
+    variant={currentPage === page ? "solid" : "outline"}
+    aria-current={currentPage === page ? "page" : undefined}
+    fontWeight={currentPage === page ? "bold" : "normal"}
+  >
+    {page}
+  </Button>
+))}
+            <Button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+          </Flex>
+        </Flex>
+      )}
     </Box>
   );
 });
