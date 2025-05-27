@@ -18,16 +18,24 @@ type TableInstance = {
   getTableInstance: () => { toggleAllRowsSelected: (value: boolean) => void };
 };
 
-type AnimalFormState = Omit<AnimalBeneficiary, "budget_goal"> & { budget_goal: string };
+type AnimalFormState = Omit<AnimalBeneficiary, "budget_goal" | "birth_date" | "gender"> & {
+  budget_goal: string;
+  birth_date: string;
+  gender: string;
+};
 
 const AnimalsTable = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AnimalBeneficiary[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [formData, setFormData] = useState<AnimalFormState>({
     id: "",
     name: "",
     username: "",
+    gender: "",
+    birth_date: "",
     biography: "",
     introduction: "",
     budget_goal: "",
@@ -45,6 +53,8 @@ const AnimalsTable = () => {
     id: "",
     name: "",
     username: "",
+    gender: "",
+    birth_date: "",
     biography: "",
     introduction: "",
     budget_goal: "",
@@ -71,11 +81,12 @@ const AnimalsTable = () => {
         }
         const fetchedData = await response.json();
         const animalsArr = Array.isArray(fetchedData.animals) ? fetchedData.animals : [];
+        type AnimalMetadata = { breed?: string; animal_type?: string };
         setData(animalsArr.map((animal: AnimalBeneficiary) => ({
           ...animal,
           budget_goal: String(centsToDollars(animal.budget_goal)),
-          breed: animal.breed || animal.metadata?.breed || "",
-          animal_type: animal.animal_type || animal.metadata?.animal_type || "",
+          breed: animal.breed || (animal.metadata && (animal.metadata as AnimalMetadata).breed) || "",
+          animal_type: animal.animal_type || (animal.metadata && (animal.metadata as AnimalMetadata).animal_type) || "",
         })));
       } catch (error) {
         console.error("Error fetching animals:", error);
@@ -100,6 +111,8 @@ const AnimalsTable = () => {
       id: "",
       name: "",
       username: "",
+      gender: "",
+      birth_date: "",
       biography: "",
       introduction: "",
       budget_goal: "",
@@ -135,10 +148,81 @@ const AnimalsTable = () => {
         throw new Error("Failed to create animal beneficiary");
       }
       const { animal } = await response.json();
+
+      // Upload images to Supabase storage and insert media records
+      if (imageFiles.length > 0) {
+        const supabase = (await import("@/utils/supabase/client")).createClient();
+        const imageUrls: string[] = [];
+        for (const imageFile of imageFiles) {
+          const fileName = `${Date.now()}-${imageFile.name}`;
+          const filePath = `images/${fileName}`;
+          const { error: uploadError } = await supabase.storage
+            .from("beneficiaries")
+            .upload(filePath, imageFile, {
+              cacheControl: "3600",
+              upsert: false,
+            });
+          if (uploadError) {
+            console.error("File upload failed:", uploadError.message);
+            continue;
+          }
+          const { data: urlData } = supabase.storage
+            .from("beneficiaries")
+            .getPublicUrl(filePath);
+          if (urlData?.publicUrl) {
+            imageUrls.push(urlData.publicUrl);
+          }
+        }
+        if (imageUrls.length > 0) {
+          await fetch("/api/admin/animals/images/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              images: imageUrls.map((url, index) => ({
+                beneficiary_id: animal.id,
+                image_url: url,
+                order_index: index,
+              })),
+            }),
+          });
+        }
+      }
+
+      // Upload video to Supabase storage and update animal record
+      if (videoFiles.length > 0) {
+        const supabase = (await import("@/utils/supabase/client")).createClient();
+        const videoFile = videoFiles[0];
+        const fileName = `${Date.now()}-${videoFile.name}`;
+        const filePath = `videos/${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("beneficiaries")
+          .upload(filePath, videoFile, {
+            cacheControl: "3600",
+            upsert: false,
+          });
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from("beneficiaries")
+            .getPublicUrl(filePath);
+          if (urlData?.publicUrl) {
+            await fetch("/api/admin/animals/update", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                id: animal.id,
+                video_url: urlData.publicUrl,
+              }),
+            });
+          }
+        }
+      }
+
       setData((prev) => [
         ...prev,
         { ...animal, budget_goal: String(dollarsToCents(animal.budget_goal)) },
       ]);
+      setImageFiles([]);
+      setVideoFiles([]);
       handleDrawerClose();
       return true;
     } catch (error) {
@@ -159,6 +243,8 @@ const AnimalsTable = () => {
       ),
       breed: animal.breed || animal.metadata?.breed || "",
       animal_type: animal.animal_type || animal.metadata?.animal_type || "",
+      birth_date: animal.birth_date || "",
+      gender: animal.gender || "",
     });
     setIsEditDrawerOpen(true);
   };
@@ -169,6 +255,8 @@ const AnimalsTable = () => {
       id: "",
       name: "",
       username: "",
+      gender: "",
+      birth_date: "",
       biography: "",
       introduction: "",
       budget_goal: "",
@@ -207,7 +295,7 @@ const AnimalsTable = () => {
       setData((prev) =>
         prev.map((a) =>
           a.id === animal.id
-            ? { ...animal, budget_goal: String(dollarsToCents(animal.budget_goal)) }
+            ? { ...animal, budget_goal: Number(animal.budget_goal) }
             : a
         )
       );
@@ -252,6 +340,10 @@ const AnimalsTable = () => {
             handleSelectChange={handleSelectChange}
             handleSubmit={handleSubmit}
             handleDrawerClose={handleDrawerClose}
+            imageFiles={imageFiles}
+            setImageFiles={setImageFiles}
+            videoFiles={videoFiles}
+            setVideoFiles={setVideoFiles}
           />
           {selectedCount > 0 && (
             <Button

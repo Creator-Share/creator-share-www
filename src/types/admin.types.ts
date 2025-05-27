@@ -57,8 +57,9 @@ export type AnimalBeneficiary = {
   status: string;
   country: string;
   location_str: string;
-  gender?: string;
+  gender: string;
   video_url?: string;
+  birth_date: string;
   active_subscriptions?: number;
   beneficiary_type: "ANIMAL";
   metadata: {

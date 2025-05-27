@@ -21,6 +21,12 @@ import {
 import { AnimalBeneficiary } from "@/types/admin.types";
 import { GoPlusCircle } from "react-icons/go";
 import { toaster } from "@/components/ui/toaster";
+import {
+  FileUploadList,
+  FileUploadRoot,
+  FileUploadTrigger,
+} from "@/components/ui/file-upload";
+import { HiUpload } from "react-icons/hi";
 
 type AnimalFormState = Omit<AnimalBeneficiary, "budget_goal"> & { budget_goal: string };
 
@@ -33,6 +39,10 @@ type CreateDrawerProps = {
   handleSelectChange: (name: keyof AnimalBeneficiary, value: string) => void;
   handleSubmit: () => Promise<boolean>;
   handleDrawerClose: () => void;
+  imageFiles: File[];
+  setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
+  videoFiles: File[];
+  setVideoFiles: React.Dispatch<React.SetStateAction<File[]>>;
 };
 
 const animalTypes = ["Puppy", "Kitten", "Dog", "Cat"]; // Replace with your enums
@@ -45,6 +55,8 @@ const CreateDrawer = ({
   handleSelectChange,
   handleSubmit,
   handleDrawerClose,
+  setImageFiles,
+  setVideoFiles,
 }: CreateDrawerProps) => {
   const [isAdding, setIsAdding] = useState(false);
 
@@ -52,6 +64,8 @@ const CreateDrawer = ({
     const requiredFields = [
       "name",
       "username",
+      "gender",
+      "birth_date",
       "biography",
       "introduction",
       "budget_goal",
@@ -137,6 +151,35 @@ const CreateDrawer = ({
                   px={2}
                   onChange={handleInputChange}
                   value={formData.username}
+                />
+              </Field>
+              <Field label="Gender" required errorText="This field is required">
+                <NativeSelectRoot>
+                  <NativeSelectField
+                    className="border"
+                    placeholder="Select Gender"
+                    px={2}
+                    name="gender"
+                    value={formData.gender}
+                    onChange={(e) =>
+                      handleSelectChange("gender", e.target.value)
+                    }
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Unknown">Unknown</option>
+                  </NativeSelectField>
+                </NativeSelectRoot>
+              </Field>
+              <Field label="Birth Date" required errorText="This field is required">
+                <Input
+                  name="birth_date"
+                  type="date"
+                  className="border"
+                  px={2}
+                  onChange={handleInputChange}
+                  value={formData.birth_date}
                 />
               </Field>
               <Field label="Breed" required errorText="This field is required">
@@ -238,6 +281,26 @@ const CreateDrawer = ({
                   onChange={handleInputChange}
                   value={formData.location_str}
                 />
+              </Field>
+              <Field label="Upload Image">
+                <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]} maxFiles={5}>
+                  <FileUploadTrigger asChild>
+                    <Button variant="outline" size="sm" className="border" px={4}>
+                      <HiUpload /> Upload Image
+                    </Button>
+                  </FileUploadTrigger>
+                  <FileUploadList />
+                </FileUploadRoot>
+              </Field>
+              <Field label="Upload Video">
+                <FileUploadRoot onFileChange={(fileDetails) => setVideoFiles(fileDetails.acceptedFiles)} accept={["video/mp4"]}>
+                  <FileUploadTrigger asChild>
+                    <Button variant="outline" size="sm" className="border" px={4}>
+                      <HiUpload /> Upload Video
+                    </Button>
+                  </FileUploadTrigger>
+                  <FileUploadList />
+                </FileUploadRoot>
               </Field>
             </Fieldset.Content>
           </Fieldset.Root>

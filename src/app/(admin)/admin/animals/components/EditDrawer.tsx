@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   DrawerContent,
   DrawerHeader,
@@ -29,7 +29,7 @@ type EditDrawerProps = {
   onDelete: (animalId: string) => Promise<void>;
 };
 
-const animalTypes = ["Puppy", "Kitten", "Dog", "Cat"]; // Replace with your enums
+const animalTypes = ["Puppy", "Kitten", "Dog", "Cat"];
 
 const EditDrawer = ({
   formDataEdit,
@@ -41,6 +41,8 @@ const EditDrawer = ({
 }: EditDrawerProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Sync local input state with form state when drawer opens or value changes
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -65,15 +67,6 @@ const EditDrawer = ({
     onClose();
   };
 
-  useEffect(() => {
-    if (formDataEdit.metadata) {
-      setFormDataEdit((prev) => ({
-        ...prev,
-        breed: prev.metadata.breed || prev.breed || "",
-        animal_type: prev.metadata.animal_type || prev.animal_type || "",
-      }));
-    }
-  }, [isDrawerOpen, formDataEdit.metadata, setFormDataEdit]);
 
   return (
     <DrawerRoot
@@ -116,6 +109,34 @@ const EditDrawer = ({
                   px={2}
                   onChange={handleInputChange}
                   value={formDataEdit.username}
+                />
+              </Field>
+              <Field label="Gender" required errorText="This field is required">
+                <NativeSelectRoot>
+                  <NativeSelectField
+                    className="border"
+                    placeholder="Select Gender"
+                    px={2}
+                    name="gender"
+                    value={formDataEdit.gender}
+                    onChange={(e) =>
+                      handleSelectChange("gender", e.target.value)
+                    }
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Boy">Male</option>
+                    <option value="Girl">Female</option>
+                  </NativeSelectField>
+                </NativeSelectRoot>
+              </Field>
+              <Field label="Birth Date" required errorText="This field is required">
+                <Input
+                  name="birth_date"
+                  type="date"
+                  className="border"
+                  px={2}
+                  onChange={handleInputChange}
+                  value={formDataEdit.birth_date}
                 />
               </Field>
               <Field label="Breed" required errorText="This field is required">

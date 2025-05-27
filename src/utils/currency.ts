@@ -1,5 +1,5 @@
 export const dollarsToCents = (dollars: number): string => {
-  return (dollars * 100).toFixed(2);
+  return Math.round(dollars * 100).toString();
 };
 
 export const centsToDollars = (cents: number): string => {

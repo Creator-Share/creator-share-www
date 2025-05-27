@@ -219,7 +219,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
 
             if (window.self !== window.top) {
                 if (clientSecret) {
-                    window.location.href = `/sponsor-a-/checkout?client_secret=${clientSecret}`;
+                    window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}`;
                 } else if (url) {
                     window.location.href = url;
                 } else {
