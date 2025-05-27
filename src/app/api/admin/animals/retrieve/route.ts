@@ -7,20 +7,23 @@ export async function GET() {
     const { data: fetchedData, error } = await supabase
       .from("beneficiaries")
       .select("*")
-      .eq("beneficiary_type", "CHILD");
+      .eq("beneficiary_type", "ANIMAL");
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const formattedData = fetchedData.map((child) => ({
-      ...child,
-      budget_goal: (child.budget_goal / 100).toFixed(2),
+    // Animal-specific fields are in metadata
+    const formattedData = fetchedData.map((animal) => ({
+      ...animal,
+      budget_goal: (animal.budget_goal / 100).toFixed(2),
+      breed: animal.metadata?.breed || null,
+      animal_type: animal.metadata?.animal_type || null,
     }));
 
-    return NextResponse.json({ children: formattedData });
+    return NextResponse.json({ animals: formattedData });
   } catch (error) {
-    console.error("Error retrieving children:", error);
+    console.error("Error retrieving animals:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

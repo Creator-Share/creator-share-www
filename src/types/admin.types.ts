@@ -45,3 +45,27 @@ export interface BeneficiaryMedia {
   created_at: string;
   acitivy_id?:string;
 }
+
+export type AnimalBeneficiary = {
+  id: string;
+  name: string;
+  username: string;
+  biography: string;
+  introduction: string;
+  budget_goal: number;
+  budget_raised: number;
+  status: string;
+  country: string;
+  location_str: string;
+  gender?: string;
+  video_url?: string;
+  active_subscriptions?: number;
+  beneficiary_type: "ANIMAL";
+  metadata: {
+    breed?: string;
+    animal_type?: string;
+    [key: string]: unknown;
+  };
+  breed?: string;
+  animal_type?: string;
+};
