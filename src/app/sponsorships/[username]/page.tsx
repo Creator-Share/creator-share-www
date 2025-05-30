@@ -10,13 +10,13 @@ import {
   Image,
   Text,
   VStack,
-  Input,
   Spinner,
 } from "@chakra-ui/react";
 import { useParams } from "next/navigation";
 import SponsorshipDetails from "../components/SponsorshipDetails";
 import { Activity, Beneficiaries, BeneficiaryMedia } from "@/types";
 import SponsorDialog from "../components/SponsorDialog";
+import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox";
 
 export default function FullProfileDynamic() {
   const { username } = useParams();
@@ -70,17 +70,13 @@ export default function FullProfileDynamic() {
         setBeneficiary(child);
         if (child?.id) {
           await fetchImages(child.id);
-          
-          // Fetch activities
+
           const activitiesData = await fetchActivitiesByBeneficiaryId(child.id);
           setActivities(activitiesData);
-          
-          // Fetch all beneficiaries
           const res = await fetch('/api/children/get');
           const data = await res.json();
           if (data.people) {
             setBeneficiaries(data.people);
-            // Find current beneficiary index
             const index = data.people.findIndex((b: Beneficiaries) => b.username === username);
             if (index !== -1) {
               setCurrentBeneficiaryIndex(index);
@@ -226,36 +222,7 @@ export default function FullProfileDynamic() {
           <Box className="md:col-span-2">
             <VStack align={"stretch"} gap={6}>
               <SponsorshipDetails beneficiaryId={beneficiary.id} hideStatus />
-              <Box bg="#4169E1" rounded="xl" p={8} color="white">
-                <Heading as="h3" className="text-2xl font-bold" mb={4} textAlign="center">
-                  Sign up to receive FREE monthly updates on {beneficiary.name}
-                </Heading>
-                <Text fontSize="md" mb={6} textAlign="center">
-                  A spirited young girl from France discovering local delicacies.
-                </Text>
-                <Box maxW="md" mx="auto">
-                  <Input
-                    type="email"
-                    placeholder="name@email.com"
-                    bg="white"
-                    color="gray.900"
-                    mb={4}
-                    size="lg"
-                    _placeholder={{ color: "gray.500" }}
-                    p={2}
-                  />
-                  <Button
-                    bg="white"
-                    color="#4169E1"
-                    size="lg"
-                    width="full"
-                    fontWeight="bold"
-                    _hover={{ bg: "gray.100" }}
-                  >
-                    Subscribe
-                  </Button>
-                </Box>
-              </Box>
+              <BeneficiarySubscribeBox beneficiary={beneficiary} />
             </VStack>
           </Box>
         </Box>

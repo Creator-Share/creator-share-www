@@ -1,4 +1,5 @@
 import { fetchActivitiesByBeneficiaryId } from "@/actions";
+import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox";
 import { Beneficiaries, Activity } from "@/types";
 import { Box, Text, Flex, Button, Input, Textarea } from "@chakra-ui/react";
 import Image from "next/image";
@@ -146,23 +147,7 @@ export default async function ActivityDetailPage({ params }: ActivityPageProps) 
           </form>
         </Box>
         {/* Subscribe Box */}
-        <Box flex="1" minW="280px" bg="blue.600" color="white" p={6} borderRadius="md" boxShadow="sm" className="flex flex-col justify-center">
-          <Text fontWeight="bold" fontSize="lg" mb={2}>
-            Sign up to receive FREE monthly updates on {beneficiary.name}
-          </Text>
-          <Text fontSize="sm" mb={4}>
-            A spirited young girl from France discovering local delicacies.
-          </Text>
-          <form className="flex flex-col gap-2">
-            <label htmlFor="subscribe-email" className="text-white text-sm font-medium mb-1">
-              Email Address
-            </label>
-            <Input id="subscribe-email" placeholder="name@email.com" type="email" bg="white" color="black" mb={2} />
-            <Button colorScheme="whiteAlpha" bg="white" color="blue.700" w="full" mt={2} type="submit">
-              Subscribe
-            </Button>
-          </form>
-        </Box>
+        <BeneficiarySubscribeBox beneficiary={beneficiary} />
       </Flex>
 
       {/* Other Updates */}
