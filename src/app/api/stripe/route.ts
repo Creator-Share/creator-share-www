@@ -15,83 +15,79 @@ export async function POST(req: Request) {
       isEmbedded,
     } = await req.json();
 
-    // Validate amount
-    if (!amount || amount < 1000) { // 1000 cents = $10.00
+    if (!amount || amount < 1000) {
       return NextResponse.json(
         { error: "Minimum amount is $10." },
         { status: 400 }
       );
     }
 
-    // Ensure we have a valid image URL
     const safeImage = beneficiaryImage;
-    const fullImageUrl = safeImage.startsWith('http') 
-      ? safeImage 
+    const fullImageUrl = safeImage.startsWith("http")
+      ? safeImage
       : `${process.env.NEXT_PUBLIC_BASE_URL}${safeImage}`;
 
-    // Determine if this is monthly or yearly subscription
     const isMonthly = paymentType === "subscription";
-    const interval = isMonthly ? 'month' : 'year';
-    
-    // Create product
+    const interval = isMonthly ? "month" : "year";
+
     const product = await stripe.products.create({
-      name: `${isMonthly ? 'Monthly' : 'Yearly'} Sponsorship for ${beneficiaryName}`,
+      name: `${
+        isMonthly ? "Monthly" : "Yearly"
+      } Sponsorship for ${beneficiaryName}`,
       images: [fullImageUrl],
     });
 
-    // Create price
     const price = await stripe.prices.create({
       unit_amount: amount,
-      currency: 'usd',
+      currency: "usd",
       recurring: { interval },
       product: product.id,
       metadata: {
         beneficiaryId,
         userId: userId || null,
-        amount: amount.toString()
-      }
+        amount: amount.toString(),
+      },
     });
 
     // Common session configuration
     const sessionConfig: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
-      mode: 'subscription',
+      mode: "subscription",
       line_items: [{ price: price.id, quantity: 1 }],
       payment_method_options: {
-        card: { request_three_d_secure: 'automatic' }
+        card: { request_three_d_secure: "automatic" },
       },
       metadata: {
         beneficiaryId,
         beneficiaryName,
+        childName: beneficiaryName,
         amount: amount.toString(),
         childLocation: location,
         userId: userId || null,
-        paymentType
+        paymentType,
       },
       subscription_data: {
         metadata: {
           beneficiaryId,
           userId: userId || null,
-          amount: amount.toString()
-        }
-      }
+          amount: amount.toString(),
+        },
+      },
     };
 
-    // Configure based on embedded or standard checkout
     if (isEmbedded) {
-      sessionConfig.ui_mode = 'embedded';
+      sessionConfig.ui_mode = "embedded";
       sessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/return?embedded=true&session_id={CHECKOUT_SESSION_ID}`;
     } else {
       sessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
       sessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}`;
     }
 
-    // Create checkout session
     const session = await stripe.checkout.sessions.create(sessionConfig);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       url: session.url,
-      clientSecret: session.client_secret 
+      clientSecret: session.client_secret,
     });
   } catch (error) {
     console.error("Stripe Error:", error);

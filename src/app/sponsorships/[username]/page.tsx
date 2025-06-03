@@ -60,10 +60,7 @@ export default function FullProfileDynamic() {
           throw new Error("Beneficiary not found");
         }
         const data = await res.json();
-        console.log("Full API response:", data);
         const { child } = data;
-        console.log("Beneficiary data:", child);
-        console.log("Image URL:", child?.image_url);
         if (!child) {
           throw new Error("Beneficiary data is empty");
         }

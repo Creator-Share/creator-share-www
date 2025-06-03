@@ -107,7 +107,6 @@ export function PageNavbar() {
                       <Menu.Item
                         value="admin"
                         onClick={() => {
-                          console.log("Admin Dashboard clicked");
                           router.push("/admin");
                         }}
                       >
@@ -117,7 +116,6 @@ export function PageNavbar() {
                     <Menu.Item
                       value="user-dashboard"
                       onClick={() => {
-                        console.log("User Dashboard clicked");
                         router.push("/app");
                       }}
                     >
@@ -126,7 +124,6 @@ export function PageNavbar() {
                     <Menu.Item
                       value="logout"
                       onClick={() => {
-                        console.log("Logout clicked");
                         handleLogout();
                       }}
                     >

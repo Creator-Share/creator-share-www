@@ -8,7 +8,10 @@ export async function POST(req: NextRequest) {
   const beneficiary_id = formData.get("beneficiary_id") as string | null;
 
   if (!description || !beneficiary_id) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing required fields" },
+      { status: 400 }
+    );
   }
   const images: File[] = [];
   const videos: File[] = [];
@@ -22,8 +25,10 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const images_url: string[] = [];
   for (const file of images) {
-    const ext = file.name.split('.').pop();
-    const filePath = `activities/images/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const ext = file.name.split(".").pop();
+    const filePath = `activities/images/${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`;
     const { error } = await supabase.storage
       .from("activities-media")
       .upload(filePath, file, { contentType: file.type });
@@ -31,13 +36,17 @@ export async function POST(req: NextRequest) {
       console.error("Image upload error:", error.message);
       continue;
     }
-    const { data: publicUrlData } = supabase.storage.from("activities-media").getPublicUrl(filePath);
+    const { data: publicUrlData } = supabase.storage
+      .from("activities-media")
+      .getPublicUrl(filePath);
     if (publicUrlData?.publicUrl) images_url.push(publicUrlData.publicUrl);
   }
   const videos_url: string[] = [];
   for (const file of videos) {
-    const ext = file.name.split('.').pop();
-    const filePath = `activities/videos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const ext = file.name.split(".").pop();
+    const filePath = `activities/videos/${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`;
     const { error } = await supabase.storage
       .from("activities-media")
       .upload(filePath, file, { contentType: file.type });
@@ -45,7 +54,9 @@ export async function POST(req: NextRequest) {
       console.error("Video upload error:", error.message);
       continue;
     }
-    const { data: publicUrlData } = supabase.storage.from("activities-media").getPublicUrl(filePath);
+    const { data: publicUrlData } = supabase.storage
+      .from("activities-media")
+      .getPublicUrl(filePath);
     if (publicUrlData?.publicUrl) videos_url.push(publicUrlData.publicUrl);
   }
   const { data: inserted, error } = await supabase
@@ -58,6 +69,7 @@ export async function POST(req: NextRequest) {
         created_at: new Date().toISOString(),
         images_url,
         videos_url,
+        created_by: "admin", // Set the activity source
       },
     ])
     .select()
@@ -67,51 +79,62 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  try {
-    const { data: subscribers, error: subError } = await supabase
-      .from("beneficiary_subscriptions")
-      .select("email")
-      .eq("beneficiary_id", beneficiary_id);
+  // Only notify subscribers if created_by is 'admin'
+  if (inserted?.created_by === "admin") {
+    try {
+      const { data: subscribers, error: subError } = await supabase
+        .from("activity_subscriptions")
+        .select("email")
+        .eq("beneficiary_id", beneficiary_id);
 
-    if (!subError && Array.isArray(subscribers)) {
-      const { data: beneficiaryData } = await supabase
-        .from("beneficiaries")
-        .select("name")
-        .eq("id", beneficiary_id)
-        .single();
+      if (!subError && Array.isArray(subscribers)) {
+        const { data: beneficiaryData } = await supabase
+          .from("beneficiaries")
+          .select("name")
+          .eq("id", beneficiary_id)
+          .single();
 
-      const { sendActivityNotificationEmail } = await import("@/utils/email");
-      if (beneficiaryData && beneficiaryData.name) {
-        for (const sub of subscribers) {
-          try {
-            const emailResult = await sendActivityNotificationEmail(
-              sub.email,
-              beneficiaryData,
-              inserted
-            );
-            await supabase.from("email_logs").insert({
-              email: sub.email,
-              subject: `New update on ${beneficiaryData.name}`,
-              status: emailResult.success ? "sent" : "failed",
-              error: emailResult.error ? JSON.stringify(emailResult.error) : null,
-              message_id: emailResult.messageId,
-              created_at: new Date(),
-            });
-          } catch (emailErr) {
-            console.error("Error sending activity notification email:", emailErr);
-            await supabase.from("email_logs").insert({
-              email: sub.email,
-              subject: `New update on ${beneficiaryData.name}`,
-              status: "failed",
-              error: emailErr instanceof Error ? emailErr.message : String(emailErr),
-              created_at: new Date(),
-            });
+        const { sendActivityNotificationEmail } = await import("@/utils/email");
+        if (beneficiaryData && beneficiaryData.name) {
+          for (const sub of subscribers) {
+            try {
+              const emailResult = await sendActivityNotificationEmail(
+                sub.email,
+                beneficiaryData,
+                inserted
+              );
+              await supabase.from("email_logs").insert({
+                email: sub.email,
+                subject: `New update on ${beneficiaryData.name}`,
+                status: emailResult.success ? "sent" : "failed",
+                error: emailResult.error
+                  ? JSON.stringify(emailResult.error)
+                  : null,
+                message_id: emailResult.messageId,
+                created_at: new Date(),
+              });
+            } catch (emailErr) {
+              console.error(
+                "Error sending activity notification email:",
+                emailErr
+              );
+              await supabase.from("email_logs").insert({
+                email: sub.email,
+                subject: `New update on ${beneficiaryData.name}`,
+                status: "failed",
+                error:
+                  emailErr instanceof Error
+                    ? emailErr.message
+                    : String(emailErr),
+                created_at: new Date(),
+              });
+            }
           }
         }
       }
+    } catch (notifyError) {
+      console.error("Error notifying subscribers:", notifyError);
     }
-  } catch (notifyError) {
-    console.error("Error notifying subscribers:", notifyError);
   }
 
   return NextResponse.json({ activity: inserted }, { status: 201 });

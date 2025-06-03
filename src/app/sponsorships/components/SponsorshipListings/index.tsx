@@ -17,10 +17,10 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
   const [activeBeneficiaryId, setActiveBeneficiaryId] = useState<string | null>(null);
   const isInIframe = window.self !== window.top;
   const itemsPerPage = 3; // Show fewer items per page to test pagination
-  
+
   const filteredBeneficiary = React.useMemo(() => {
     const safeBeneficiaryData = Array.isArray(beneficiaryData) ? beneficiaryData : [];
-    
+
     const filtered = safeBeneficiaryData.filter(beneficiary => {
       // Filter by country if selected
       if (selectedCountry && beneficiary.country !== selectedCountry) {
@@ -43,16 +43,6 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const sliced = filteredBeneficiary.slice(startIndex, endIndex);
-
-    // Debug log for pagination
-    console.log('Pagination:', {
-      currentPage,
-      startIndex,
-      endIndex,
-      visibleCount: sliced.length,
-      totalItems: filteredBeneficiary.length,
-      totalPages: Math.ceil(filteredBeneficiary.length / itemsPerPage)
-    });
 
     return sliced;
   }, [filteredBeneficiary, currentPage, itemsPerPage]);
@@ -81,9 +71,9 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
 
   const handleDialogNavigation = (direction: 'next' | 'previous') => {
     if (!activeBeneficiaryId) return;
-    
+
     const currentIndex = visibleBeneficiary.findIndex(beneficiary => beneficiary.id === activeBeneficiaryId);
-    
+
     if (direction === 'next' && currentIndex < visibleBeneficiary.length - 1) {
       const nextBeneficiary = visibleBeneficiary[currentIndex + 1];
       if (nextBeneficiary.id) {
@@ -106,14 +96,14 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
   };
 
   // Get the active child data
-  const activeBeneficiary = activeBeneficiaryId 
-    ? visibleBeneficiary.find(beneficiary => beneficiary.id === activeBeneficiaryId) 
+  const activeBeneficiary = activeBeneficiaryId
+    ? visibleBeneficiary.find(beneficiary => beneficiary.id === activeBeneficiaryId)
     : null;
 
   // Get navigation props for the dialog
   const getDialogNavigationProps = () => {
     if (!activeBeneficiaryId) return { hasNext: false, hasPrevious: false };
-    
+
     const currentIndex = visibleBeneficiary.findIndex(beneficiary => beneficiary.id === activeBeneficiaryId);
     return {
       hasNext: currentIndex < visibleBeneficiary.length - 1,
@@ -125,11 +115,11 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
   const totalPages = Math.ceil(filteredBeneficiary.length / itemsPerPage);
 
   return (
-    <Box 
+    <Box
       ref={ref}
-      width="100%" 
-      className="border bg-white rounded-xl" 
-      px={{ base: 3, md: 8 }} 
+      width="100%"
+      className="border bg-white rounded-xl"
+      px={{ base: 3, md: 8 }}
       mt={4}
       style={{ minHeight: visibleBeneficiary.length ? 'auto' : '100px' }}
       suppressHydrationWarning={true}
@@ -145,9 +135,9 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
           trigger={<div style={{ display: 'none' }} />}
         />
       )}
-      
-      <VStack 
-        align="stretch" 
+
+      <VStack
+        align="stretch"
         pt={10}
         pb={6}
         gap="1.5rem"
@@ -178,18 +168,18 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
             >
               Previous
             </Button>
-{Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-  <Button
-    key={page}
-    onClick={() => setCurrentPage(page)}
-    colorScheme={currentPage === page ? "blue" : undefined}
-    variant={currentPage === page ? "solid" : "outline"}
-    aria-current={currentPage === page ? "page" : undefined}
-    fontWeight={currentPage === page ? "bold" : "normal"}
-  >
-    {page}
-  </Button>
-))}
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <Button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                colorScheme={currentPage === page ? "blue" : undefined}
+                variant={currentPage === page ? "solid" : "outline"}
+                aria-current={currentPage === page ? "page" : undefined}
+                fontWeight={currentPage === page ? "bold" : "normal"}
+              >
+                {page}
+              </Button>
+            ))}
             <Button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}

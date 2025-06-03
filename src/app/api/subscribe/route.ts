@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { error: insertError } = await supabase
-      .from("beneficiary_subscriptions")
+      .from("activity_subscriptions")
       .insert({
         beneficiary_id: beneficiaryData.id,
         email,
