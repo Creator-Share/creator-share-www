@@ -44,10 +44,10 @@ const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/mis
 // Check if we're in an iframe
 const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
-const SponsorDialog: React.FC<SponsorDialogProps> = ({ 
-    people, 
-    trigger = false, 
-    onNext, 
+const SponsorDialog: React.FC<SponsorDialogProps> = ({
+    people,
+    trigger = false,
+    onNext,
     onPrevious,
     hasNext = false,
     hasPrevious = false,
@@ -68,13 +68,13 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         setValue([remainingAmount]);
         setCurrentImageIndex(0);
         setSelectedOption(paymentOptionsCollection.items[0].value);
-        
+
         const fetchImages = async () => {
             try {
                 const response = await fetch(`/api/admin/children/images/${people.id}`);
                 if (response.ok) {
                     const data = await response.json();
-                    setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => 
+                    setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) =>
                         a.order_index - b.order_index
                     ));
                 }
@@ -84,18 +84,18 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         };
 
         fetchImages();
-        
+
         // Send dialog position to parent after a short delay to allow rendering
         if (isInIframe && isOpen) {
             setTimeout(() => {
                 try {
                     const dialogElement = document.querySelector('[role="alertdialog"]');
                     const dialogRect = dialogElement?.getBoundingClientRect();
-                    
+
                     if (dialogRect) {
                         const urlParams = new URLSearchParams(window.location.search);
                         const parentOrigin = urlParams.get('parentOrigin') || '*';
-                        
+
                         window.parent.postMessage({
                             type: 'makeDialogSticky',
                             from: 'sponsor-dialog-update',
@@ -106,7 +106,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                 width: dialogRect.width
                             }
                         }, parentOrigin);
-                        
+
                     }
                 } catch (e) {
                     console.error('[Child Frame] Error sending dialog position:', e);
@@ -114,7 +114,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
             }, 200);
         }
     }, [people.id, remainingAmount, people.name, isOpen]);
-    
+
     // Effect for making the dialog sticky when it opens
     useEffect(() => {
         if (isInIframe && isOpen) {
@@ -122,11 +122,11 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 // Send a message to parent window to make the dialog sticky
                 const urlParams = new URLSearchParams(window.location.search);
                 const parentOrigin = urlParams.get('parentOrigin') || '*';
-                
+
                 // Send dialog position information to parent
                 const dialogElement = document.querySelector('[role="alertdialog"]');
                 const dialogRect = dialogElement?.getBoundingClientRect();
-                
+
                 window.parent.postMessage({
                     type: 'makeDialogSticky',
                     from: 'sponsor-dialog',
@@ -137,10 +137,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                         width: dialogRect.width
                     } : null
                 }, parentOrigin);
-                
-                console.log('[Child Frame] Sent makeDialogSticky request to parent');
             } catch (e) {
-                // Ignore errors from cross-origin restrictions
                 console.error('[Child Frame] Error sending makeDialogSticky:', e);
             }
         }
@@ -159,7 +156,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
             setValue([0]);
             return;
         }
-        
+
         let newValue = parseInt(inputValue) || 0;
         newValue = Math.min(newValue, remainingAmount);
         setAmount(newValue);
@@ -196,7 +193,6 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 userId: user?.id,
                 isEmbedded: window.self !== window.top,
             };
-            console.log("SponsorDialog: Stripe payload", payload);
 
             const res = await fetch("/api/stripe", {
                 method: "POST",
@@ -255,7 +251,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
 
     const renderDisclaimer = () => {
         const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
-        
+
         if ((people.budget_goal - people.budget_raised - amount * 100) > 0) {
             return (
                 <>
@@ -303,7 +299,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     const handlePrevious = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        
+
         if (onPrevious) {
             onPrevious();
             // No scrolling - we want the dialog to stay in place
@@ -313,7 +309,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     const handleNext = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        
+
         if (onNext) {
             onNext();
         }
@@ -338,11 +334,11 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                     <DialogCloseTrigger id="closeDialog" />
                 </DialogHeader>
                 <DialogBody suppressHydrationWarning={true}>
-                    <Box 
-                        className={isInIframe 
-                            ? "flex flex-col gap-4 p-3" 
+                    <Box
+                        className={isInIframe
+                            ? "flex flex-col gap-4 p-3"
                             : "flex flex-col md:flex-row gap-8 p-5"
-                        } 
+                        }
                         suppressHydrationWarning={true}
                     >
                         <Box className="w-full md:w-[359px]">
@@ -350,18 +346,18 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                 <Image
                                     src={images[currentImageIndex]?.image_url || people.image_url || placeholderImage}
                                     alt={people.name}
-                                    className={isInIframe 
-                                        ? "rounded-xl h-[300px] w-full object-cover" 
+                                    className={isInIframe
+                                        ? "rounded-xl h-[300px] w-full object-cover"
                                         : "rounded-xl md:h-[479px] w-full object-cover"
                                     }
                                 />
                                 {images.length > 1 && (
                                     <>
-                                        <Flex 
-                                            position="absolute" 
-                                            bottom="4" 
-                                            left="50%" 
-                                            transform="translateX(-50%)" 
+                                        <Flex
+                                            position="absolute"
+                                            bottom="4"
+                                            left="50%"
+                                            transform="translateX(-50%)"
                                             gap={2}
                                         >
                                             {images.map((_, index) => (
@@ -535,9 +531,9 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                             </Flex>
                         </Box>
                     </Box>
-                    <Text 
-                        color="gray.500" 
-                        textAlign="center" 
+                    <Text
+                        color="gray.500"
+                        textAlign="center"
                         p={1}
                         fontSize={isInIframe ? "xs" : "sm"}
                     >

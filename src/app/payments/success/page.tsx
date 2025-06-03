@@ -31,7 +31,6 @@ const SuccessPageContent = () => {
         
         if (!response.ok) {
           if (data.code === 'SESSION_NOT_FOUND' && retryCount < 3) {
-            console.log(`Session not found, retrying in 2 seconds (attempt ${retryCount + 1}/3)...`);
             setTimeout(() => {
               setRetryCount(prev => prev + 1);
             }, 2000);
@@ -39,7 +38,6 @@ const SuccessPageContent = () => {
           }
           
           if (data.code === 'SESSION_NOT_FOUND') {
-            console.log('Session not found after retries, assuming payment success');
             setBeneficiaryDetails({
               name: 'your sponsored child',
               location: '',
@@ -182,7 +180,7 @@ const SuccessPageContent = () => {
           You'll receive updates about {beneficiaryDetails.name}'s progress and how your support is making a difference.
         </Text>
         <Button
-          onClick={() => router.push('/')}
+          onClick={() => router.push('/sponsorships')}
           colorScheme="blue"
           size="md"
           width="full"
@@ -192,7 +190,7 @@ const SuccessPageContent = () => {
           fontWeight={"semibold"}
           _hover={{ bg: "#34495e" }}
         >
-          Back to Home
+          Back to Sponsorships
         </Button>
       </Box>
     </Center>
