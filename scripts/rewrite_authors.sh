@@ -1,5 +1,6 @@
 #!/bin/bash
 # Script to continuously check for new commits on a source branch and rewrite authorship on a target branch
+# Usage: ./rewrite_authors.sh [--force]
 
 SOURCE_BRANCH=dev
 TARGET_BRANCH=deploy-dev
@@ -7,62 +8,106 @@ NEW_AUTHOR_NAME=CreatorShare
 NEW_AUTHOR_EMAIL=creatorshare@thegeeky.ninja
 TEMP_BRANCH="temp-rewrite-authors"
 
-while true; do
-  echo "Fetching latest changes..."
-  git fetch origin
+force_run=false
 
-  # Check if source branch has new commits compared to target branch
-  UPSTREAM_DIFF=$(git rev-list --count origin/$TARGET_BRANCH..origin/$SOURCE_BRANCH)
-  if [ "$UPSTREAM_DIFF" -eq 0 ]; then
-    echo "No new commits on $SOURCE_BRANCH since last sync."
-  else
-    echo "New commits detected on $SOURCE_BRANCH. Rewriting authors and updating $TARGET_BRANCH..."
+if [ "$1" == "--force" ]; then
+  force_run=true
+fi
 
-    # Checkout target branch and reset to remote
-    git checkout $TARGET_BRANCH
-    git reset --hard origin/$TARGET_BRANCH
+fetch_latest() {
+  git fetch --quiet origin
+}
 
-    # Check if latest commit author matches desired author
-    # Check total number of commits on source and target branches
-    SOURCE_COUNT=$(git rev-list --count origin/$SOURCE_BRANCH)
-    TARGET_COUNT=$(git rev-list --count origin/$TARGET_BRANCH)
+check_new_commits() {
+  git rev-list --count origin/$TARGET_BRANCH..origin/$SOURCE_BRANCH
+}
 
-    if [ "$SOURCE_COUNT" -le "$TARGET_COUNT" ]; then
-      echo "Target branch has equal or more commits. Skipping amend and push."
-    else
-      # Delete temp branch locally if it exists
-      if git show-ref --verify --quiet refs/heads/$TEMP_BRANCH; then
-        git branch -D $TEMP_BRANCH
-      fi
+get_commit_counts() {
+  source_count=$(git rev-list --count origin/$SOURCE_BRANCH)
+  target_count=$(git rev-list --count origin/$TARGET_BRANCH)
+}
 
-      # Create a temporary branch from source branch
-      git checkout -b $TEMP_BRANCH origin/$SOURCE_BRANCH
+delete_temp_branch() {
+  if git show-ref --verify --quiet refs/heads/$TEMP_BRANCH; then
+    git branch -D $TEMP_BRANCH || true
+  fi
+}
 
-      # Rewrite author and committer info on the latest commit in temp branch
-      git checkout $TEMP_BRANCH
-      GIT_COMMITTER_NAME="CreatorShare" GIT_COMMITTER_EMAIL="creatorshare@thegeeky.ninja" git commit --amend --author="CreatorShare <creatorshare@thegeeky.ninja>" --no-edit
+create_temp_branch() {
+  git checkout -b $TEMP_BRANCH origin/$SOURCE_BRANCH
+}
 
-      # Reset target branch to rewritten temp branch
-      git checkout $TARGET_BRANCH
-      git reset --hard $TEMP_BRANCH
+amend_latest_commit() {
+  git checkout $TEMP_BRANCH
+  GIT_COMMITTER_NAME="$NEW_AUTHOR_NAME" GIT_COMMITTER_EMAIL="$NEW_AUTHOR_EMAIL" git commit --amend --author="$NEW_AUTHOR_NAME <$NEW_AUTHOR_EMAIL>" --no-edit
+}
 
-      # Force push updated target branch
-      git push origin $TARGET_BRANCH --force
+reset_target_branch() {
+  git checkout $TARGET_BRANCH
+  git reset --hard $TEMP_BRANCH
+}
 
-      # Trigger deployment
-      # yarn deploy-dev # Seems to be happening automatically, disabling for now
-    fi
+push_target_branch() {
+  git push --quiet origin $TARGET_BRANCH --force
+}
 
-    # Cleanup
-    if git show-ref --verify --quiet refs/heads/$TEMP_BRANCH; then
-      git branch -D $TEMP_BRANCH || true
-    fi
-    git reflog expire --expire=now --all
-    git gc --prune=now --aggressive
+cleanup() {
+  delete_temp_branch
+  git reflog expire --expire=now --all > /dev/null 2>&1
+  git gc --prune=now --aggressive > /dev/null 2>&1
+}
 
-    echo "Update complete."
+process_update() {
+  echo "New commits detected on $SOURCE_BRANCH. Rewriting authors and updating $TARGET_BRANCH..."
+
+  git checkout $TARGET_BRANCH
+  git reset --hard origin/$TARGET_BRANCH
+
+  get_commit_counts
+
+  if [ "$source_count" -le "$target_count" ] && [ "$force_run" = false ]; then
+    # Target branch has equal or more commits. Skipping amend and push.
+    return
   fi
 
-  echo "Sleeping for 60 seconds..."
-  sleep 60
-done
+  delete_temp_branch
+  create_temp_branch
+  amend_latest_commit
+  reset_target_branch
+  push_target_branch
+  # yarn deploy-dev > /dev/null 2>&1 # Uncomment if manual deploy trigger needed
+  cleanup
+}
+
+main_loop() {
+  while true; do
+    # Fetching latest changes...
+    fetch_latest
+
+    upstream_diff=$(check_new_commits)
+    if [ "$upstream_diff" -eq 0 ] && [ "$force_run" = false ]; then
+      # No new commits on $SOURCE_BRANCH since last sync.
+      :
+    else
+      process_update
+      if [ "$force_run" = true ]; then
+        exit 0
+      fi
+    fi
+
+    sleep 60
+  done
+}
+
+if [ "$force_run" = true ]; then
+  fetch_latest
+  upstream_diff=$(check_new_commits)
+  if [ "$upstream_diff" -eq 0 ]; then
+    # No new commits on $SOURCE_BRANCH since last sync.
+    :
+  else
+    process_update
+  fi
+else
+  main_loop
+fi

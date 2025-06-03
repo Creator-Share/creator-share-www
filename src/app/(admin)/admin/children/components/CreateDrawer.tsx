@@ -105,8 +105,8 @@ const CreateDrawer = ({
           }}>
             <DrawerBackdrop />
             <DrawerTrigger asChild>
-                <Button className="border-[2px] border-[#E0E0E0] w-fit h-[40px] px-4">
-                    <GoPlusCircle className="mr-[3.5px]" /> New Child
+                <Button className="border-[2px] border-[#E0E0E0] rounded-md w-fit h-[40px] px-10 bg-[#1C3C8C] text-white">
+                    <GoPlusCircle className="mr-[3.5px]" /> List A Child
                 </Button>
             </DrawerTrigger>
             <DrawerContent>

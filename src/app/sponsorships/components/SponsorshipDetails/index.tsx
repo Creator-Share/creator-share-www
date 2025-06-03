@@ -1,12 +1,26 @@
 import React, { useEffect, useState } from 'react'
-import { Box, Text, Table, Badge } from '@chakra-ui/react'
+import { Text } from '@chakra-ui/react'
 import { centsToDollars } from '@/utils/currency'
-import { formatDate } from '@/utils/dateFormatter'
+import { format } from 'date-fns'
 import { Subscription } from '@/types'
 import { SponsorshipDetailsProps } from '@/types/propTypes'
 import { fetchSponsorshipDetailsByBeneficiaryId } from '@/actions'
 
-const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId }) => {
+const getStatusStyle = (status: string) => {
+  if (status.toLowerCase() === 'success') {
+    return 'bg-[#E6F4EA] text-[#2ECC71]';
+  }
+  if (status.toLowerCase() === 'pending') {
+    return 'bg-[#FFF4E5] text-[#FFA500]';
+  }
+  return 'bg-gray-100 text-gray-600';
+};
+
+const formatDate = (date: string) => {
+  return format(new Date(date), "d MMMM, yyyy h:mmaaa").replace('AM', 'AM').replace('PM', 'PM');
+};
+
+const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId, hideStatus }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -21,59 +35,54 @@ const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId }
     loadSubscriptions()
   }, [beneficiaryId])
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active':
-        return 'green'
-      case 'incomplete':
-        return 'yellow'
-      case 'cancelled':
-        return 'red'
-      default:
-        return 'gray'
-    }
-  }
-
   return (
-    <Box borderWidth="1px" borderRadius={{ base: 'lg', md: 'md' }} p={8}>
-      <Text className='text-base font-bold border-b border-gray-200 pb-4'>
-        Sponsorship Details
-      </Text>
-      
+    <div className="bg-[#FFFFFF] rounded-xl border border-[#E4EAE7] pb-2">
+      <div className="p-6">
+        <h2 className="text-base font-bold text-[#03150E]">Sponsorship Details</h2>
+      </div>
       {loading ? (
-        <Text mt={4} color="gray.500">Loading sponsorships...</Text>
+        <Text color="gray.500" className="px-8 py-4">Loading sponsorships...</Text>
       ) : subscriptions.length === 0 ? (
-        <Text mt={4} color="gray.500">No sponsorships yet</Text>
+        <Text color="gray.500" className="px-8 py-4">No sponsorships yet</Text>
       ) : (
-        <Table.Root size="sm" variant="outline">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeader>Date</Table.ColumnHeader>
-              <Table.ColumnHeader>Amount</Table.ColumnHeader>
-              <Table.ColumnHeader>Interval</Table.ColumnHeader>
-              <Table.ColumnHeader>Status</Table.ColumnHeader>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {subscriptions.map((subscription) => (
-              <Table.Row key={subscription.id}>
-                <Table.Cell>{formatDate(subscription.created_at)}</Table.Cell>
-                <Table.Cell>${centsToDollars(subscription.amount)}</Table.Cell>
-                <Table.Cell className="capitalize">{subscription.interval}</Table.Cell>
-                <Table.Cell>
-                  <Badge 
-                    colorScheme={getStatusColor(subscription.status)}
-                    variant="subtle"
-                  >
-                    {subscription.status}
-                  </Badge>
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
+        <div className="w-full overflow-x-auto">
+          <table className="w-full min-w-[600px] overflow-hidden">
+            <thead className='bg-[#E4EAE7] border-y-2 border-[#E4EAE7]'>
+              <tr>
+                <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">DATE</th>
+                <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">DESCRIPTION</th>
+                <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">AMOUNT</th>
+                {!hideStatus && (
+                  <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">STATUS</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {subscriptions.map((subscription) => (
+                <tr key={subscription.id} className='border-y-[1px] border-[#E4EAE7]'>
+                  <td className="py-3 px-4 text-sm text-[#222]">
+                    {formatDate(subscription.created_at)}
+                  </td>
+                  <td className="py-3 px-4 text-sm font-bold text-[#222]">
+                    {subscription.interval === 'year' ? 'Annual Sponsorship' : 'Monthly Sponsorship'}
+                  </td>
+                  <td className="py-3 px-4 text-sm text-[#222]">
+                    ${centsToDollars(subscription.amount)}
+                  </td>
+                  {!hideStatus && (
+                    <td className="py-3 px-4 text-center">
+                      <span className={`inline-block rounded-full px-4 py-1 text-xs font-medium ${getStatusStyle(subscription.status)}`}>
+                        {subscription.status === "success" ? "Success" : subscription.status === "pending" ? "Pending" : subscription.status}
+                      </span>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
-    </Box>
+    </div>
   )
 }
 

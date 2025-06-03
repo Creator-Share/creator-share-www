@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     }
 
     // Ensure we have a valid image URL
-    const safeImage = beneficiaryImage || "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+    const safeImage = beneficiaryImage;
     const fullImageUrl = safeImage.startsWith('http') 
       ? safeImage 
       : `${process.env.NEXT_PUBLIC_BASE_URL}${safeImage}`;

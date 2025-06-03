@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/table";
 import { DataTablePagination } from "./DataTablePagination";
 import { DataTableViewOptions } from "./column-toggle";
-import { Input } from "@chakra-ui/react";
+// import { Input } from "@chakra-ui/react";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 declare module "@tanstack/table-core" {
@@ -46,8 +46,8 @@ interface DataTableProps<TData, TValue> {
   initialColumnVisibility?: VisibilityState;
   onRowSelectionChange?: (rowSelection: Record<string, unknown>) => void;
 }
-const excludeFromFiltering = ["select", "actions", "id"];
-const renderFilterInput = (id: string) => !excludeFromFiltering.includes(id);
+// const excludeFromFiltering = ["select", "actions", "id"];
+// const renderFilterInput = (id: string) => !excludeFromFiltering.includes(id);
 const DEFAULT_TABLE_HEIGHT = "h-[80vh]";
 
 export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
@@ -113,15 +113,15 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
       )}
       <div className={`rounded-xl border mt-3 h-full overflow-auto ${tableHeight}`}>
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-[#E5EEFB]">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} className="text-center">
+                  <TableHead key={header.id} className="text-center text-[#727D79] px-6 py-3">
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
-                    {renderFilterInput(header.id) && (
+                    {/* {renderFilterInput(header.id) && (
                       <div className="flex justify-center items-center w-full py-4">
                         <Input
                           placeholder="Search..."
@@ -134,7 +134,7 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
                           className="max-w-sm p-2"
                         />
                       </div>
-                    )}
+                    )} */}
                   </TableHead>
                 ))}
               </TableRow>

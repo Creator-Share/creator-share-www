@@ -6,6 +6,7 @@ import {
   Pagination as ChakraPagination,
   IconButton,
   Text,
+  Flex,
   createContext,
   usePaginationContext,
 } from "@chakra-ui/react"
@@ -204,3 +205,43 @@ export const PaginationPageText = React.forwardRef<HTMLParagraphElement, PageTex
     );
   }
 );
+
+interface PaginationProps {
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
+  variant?: "outline" | "solid" | "subtle"
+  size?: "sm" | "md" | "lg"
+}
+
+export const Pagination = ({
+  currentPage,
+  totalPages,
+  onPageChange,
+  variant = "outline",
+  size = "sm"
+}: PaginationProps) => {
+  // Adapt onPageChange to accept PageChangeDetails if needed
+  const handlePageChange = React.useCallback(
+    (details: { page: number }) => {
+      onPageChange(details.page);
+    },
+    [onPageChange]
+  );
+
+  return (
+    <PaginationRoot
+      page={currentPage}
+      count={totalPages}
+      onPageChange={handlePageChange}
+      variant={variant}
+      size={size}
+    >
+      <Flex gap={2} align="center" justify="center">
+        <PaginationPrevTrigger />
+        <PaginationItems />
+        <PaginationNextTrigger />
+      </Flex>
+    </PaginationRoot>
+  )
+}

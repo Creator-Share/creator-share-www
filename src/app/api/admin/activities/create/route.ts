@@ -18,8 +18,6 @@ export async function POST(req: NextRequest) {
       if (key === "videos") videos.push(value);
     }
   }
-  console.log("Received images:", images.length, images.map(f => f.name));
-  console.log("Received videos:", videos.length, videos.map(f => f.name));
 
   const supabase = await createClient();
   const images_url: string[] = [];
@@ -60,6 +58,7 @@ export async function POST(req: NextRequest) {
         created_at: new Date().toISOString(),
         images_url,
         videos_url,
+        created_by: 'admin', // Set the activity source
       },
     ])
     .select()
@@ -67,6 +66,56 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Only notify subscribers if created_by is 'admin'
+  if (inserted?.created_by === 'admin') {
+    try {
+      const { data: subscribers, error: subError } = await supabase
+        .from("activity_subscriptions")
+        .select("email")
+        .eq("beneficiary_id", beneficiary_id);
+
+      if (!subError && Array.isArray(subscribers)) {
+        const { data: beneficiaryData } = await supabase
+          .from("beneficiaries")
+          .select("name")
+          .eq("id", beneficiary_id)
+          .single();
+
+        const { sendActivityNotificationEmail } = await import("@/utils/email");
+        if (beneficiaryData && beneficiaryData.name) {
+          for (const sub of subscribers) {
+            try {
+              const emailResult = await sendActivityNotificationEmail(
+                sub.email,
+                beneficiaryData,
+                inserted
+              );
+              await supabase.from("email_logs").insert({
+                email: sub.email,
+                subject: `New update on ${beneficiaryData.name}`,
+                status: emailResult.success ? "sent" : "failed",
+                error: emailResult.error ? JSON.stringify(emailResult.error) : null,
+                message_id: emailResult.messageId,
+                created_at: new Date(),
+              });
+            } catch (emailErr) {
+              console.error("Error sending activity notification email:", emailErr);
+              await supabase.from("email_logs").insert({
+                email: sub.email,
+                subject: `New update on ${beneficiaryData.name}`,
+                status: "failed",
+                error: emailErr instanceof Error ? emailErr.message : String(emailErr),
+                created_at: new Date(),
+              });
+            }
+          }
+        }
+      }
+    } catch (notifyError) {
+      console.error("Error notifying subscribers:", notifyError);
+    }
   }
 
   return NextResponse.json({ activity: inserted }, { status: 201 });

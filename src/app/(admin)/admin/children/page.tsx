@@ -1,17 +1,16 @@
 "use client";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { DataTable } from "@/components/admin-ui/Tables/data-table";
 import { ColumnDef, Row } from "@tanstack/react-table";
 import { columns } from "./columns";
-import { Beneficiaries, Geography } from "@/types/admin.types";
-import { createClient } from "@/utils/supabase/client";
 import dynamic from "next/dynamic";
-import { centsToDollars } from "@/utils/currency";
-import BulkUploadDrawer from "./components/BulkUploadDrawer";
+// import BulkUploadDrawer from "./components/BulkUploadDrawer";
 import { Box, Button, Text } from "@chakra-ui/react";
 import { MdDeleteOutline } from "react-icons/md";
 import { toaster } from "@/components/ui/toaster";
 import DeleteDialog from "./components/DeleteDialog";
+import { useChildrenStore } from "@/store/childrenStore";
+import { Beneficiaries } from "@/types/admin.types";
 
 const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), { ssr: false });
 const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
@@ -22,260 +21,91 @@ type TableInstance = {
 };
 
 const ChildrenTable = () => {
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<Beneficiaries[]>([]);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [videoFiles, setVideoFiles] = useState<File[]>([]);
-  const [formData, setFormData] = useState<Beneficiaries>({
-    name: "",
-    gender: "Boy",
-    username: "",
-    birth_date: "",
-    biography: "",
-    budget_goal: 0,
-    budget_raised: 0,
-    status: "New",
-    country: "",
-    location_geo: null,
-    location_str: "",
-    video_url: "",
-    introduction: "",
-    active_subscriptions: 0,
-    metadata: {},
-    beneficiary_type: "CHILD",
-  });
-  const [formDataEdit, setFormDataEdit] = useState<Beneficiaries>({
-    name: "",
-    gender: "Boy",
-    username: "",
-    birth_date: "",
-    biography: "",
-    budget_goal: 0,
-    budget_raised: 0,
-    status: "New",
-    country: "",
-    location_geo: null as Geography | null,
-    location_str: "",
-    video_url: "",
-    introduction: "",
-    active_subscriptions: 0,
-    metadata: {},
-    beneficiary_type: "CHILD",
-  });
+  const {
+    data,
+    loading,
+    formData,
+    formDataEdit,
+    selectedChild,
+    imageFiles,
+    videoFiles,
+    selectedRowsForDeletion,
+    setFormData,
+    setFormDataEdit,
+    setSelectedChild,
+    setImageFiles,
+    setVideoFiles,
+    setSelectedRowsForDeletion,
+    fetchChildren,
+    createChild,
+    updateChild,
+    deleteChild,
+    bulkDelete,
+  } = useChildrenStore();
 
-  const [selectedChild, setSelectedChild] = useState<Beneficiaries | null>(null);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
-  const [isBulkUploadDrawerOpen, setIsBulkUploadDrawerOpen] = useState(false);
+  // const [isBulkUploadDrawerOpen, setIsBulkUploadDrawerOpen] = useState(false);
   const [selectedCount, setSelectedCount] = useState(0);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedRowsForDeletion, setSelectedRowsForDeletion] = useState<Row<Beneficiaries>[]>([]);
   const tableRef = useRef<TableInstance | null>(null);
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const response = await fetch('/api/admin/children/retrieve');
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        const fetchedData = await response.json();
-        const childrenArr = Array.isArray(fetchedData.children) ? fetchedData.children : [];
-        const childrenOnly = childrenArr.filter((b: Beneficiaries) => b.beneficiary_type === "CHILD");
-        setData(childrenOnly);
-        console.log(fetchedData);
-      } catch (error) {
-        console.error("Error fetching people:", error);
-      }
-      setLoading(false);
-    }
-    fetchData();
-  }, []);
 
+  useEffect(() => {
+    fetchChildren();
+  }, [fetchChildren]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData({ ...formData, [name]: value });
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData({ ...formData, [name]: value });
   };
 
   const handleLocationSelect = (geo: [number, number] | null, locationStr: string, country: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      location_geo: geo ? { type: "Point", coordinates: [geo[1], geo[0]] } as Geography : null,
+    setFormData({
+      ...formData,
+      location_geo: geo ? { type: "Point", coordinates: [geo[1], geo[0]] } : null,
       location_str: locationStr,
       country,
-    }));
+    });
   };
 
-
-  const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
-    const supabase = createClient();
-    const fileName = `${Date.now()}-${file.name}`;
-    const filePath = `${folder}/${fileName}`;
-
-    try {
-      const { error: uploadError } = await supabase.storage
-        .from("beneficiaries")
-        .upload(filePath, file, {
-          cacheControl: "3600",
-          upsert: false,
-        });
-
-      if (uploadError) {
-        console.error("File upload failed:", uploadError.message);
-        throw new Error(`Upload failed: ${uploadError.message}`);
-      }
-
-      const { data } = supabase.storage
-        .from("beneficiaries")
-        .getPublicUrl(filePath);
-
-      if (!data.publicUrl) {
-        throw new Error("Failed to get public URL");
-      }
-
-      return data.publicUrl;
-    } catch (error) {
-      console.error("File upload error:", error);
-      return null;
-    }
-  };
-
-  const handleSubmit = async () => {
-    try {
-        const budgetGoalInCents = Math.round(parseFloat(formData.budget_goal.toString()) * 100);
-        const childData = {
-            ...formData,
-            budget_goal: budgetGoalInCents,
-        };
-
-        const response = await fetch('/api/admin/children/create', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(childData),
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to create beneficiary');
-        }
-
-        const newChild = await response.json();
-        if (imageFiles.length > 0) {
-            const imageUrls = [];
-            for (const imageFile of imageFiles) {
-                const imageUrl = await uploadFileToSupabase(imageFile, "images");
-                if (imageUrl) imageUrls.push(imageUrl);
-            }
-
-            const imageRecords = imageUrls.map((url, index) => ({
-                beneficiary_id: newChild.id,
-                image_url: url,
-                order_index: index
-            }));
-
-            const imagesResponse = await fetch('/api/admin/children/images/create', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ images: imageRecords }),
-            });
-
-            if (!imagesResponse.ok) {
-                throw new Error('Failed to create image records');
-            }
-        }
-
-        if (videoFiles.length > 0) {
-            const videoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
-            if (videoUrl) {
-                const videoUpdateResponse = await fetch('/api/admin/children/update', {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        id: newChild.id,
-                        video_url: videoUrl
-                    }),
-                });
-
-                if (!videoUpdateResponse.ok) {
-                    throw new Error('Failed to update video URL');
-                }
-            }
-        }
-
-        setData(prevData => [...prevData, { ...newChild, budget_goal: centsToDollars(newChild.budget_goal) }]);
-        setFormData({
-            name: "",
-            gender: "Boy",
-            username: "",
-            birth_date: "",
-            biography: "",
-            budget_goal: 0,
-            budget_raised: 0,
-            status: "New",
-            country: "",
-            location_geo: null,
-            video_url: "",
-            location_str: "",
-            introduction: "",
-            active_subscriptions: 0,
-            metadata: {},
-            beneficiary_type: "CHILD",
-        });
-        setImageFiles([]);
-        setVideoFiles([]);
-
-        return true;
-    } catch (error) {
-        console.error("Error creating beneficiary:", error);
-        toaster.create({
-            title: "Error",
-            description: error instanceof Error ? error.message : "Failed to create beneficiary",
-            duration: 5000,
-        });
-        return false;
+  const handleSubmit = async (): Promise<boolean> => {
+    const success = await createChild(formData, imageFiles, videoFiles);
+    if (success) {
+      setIsCreateDrawerOpen(false);
+      toaster.create({
+        title: "Success",
+        description: "Child created successfully.",
+        duration: 5000,
+      });
+      return true;
+    } else {
+      toaster.create({
+        title: "Error",
+        description: "Failed to create beneficiary",
+        duration: 5000,
+      });
+      return false;
     }
   };
 
   const handleSave = async (updatedChild: Beneficiaries) => {
-    try {
-      const response = await fetch('/api/admin/children/update', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatedChild),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update beneficiary');
-      }
-
-      setData((prevData) => prevData.map(beneficiary =>
-        beneficiary.id === updatedChild.id
-          ? { ...updatedChild, budget_goal: parseFloat(centsToDollars(updatedChild.budget_goal)) }
-          : beneficiary
-      ));
-      setIsEditDrawerOpen(false);
-    } catch (error) {
-      console.error("Error updating beneficiary:", error);
-    }
+    await updateChild(updatedChild);
+    setIsEditDrawerOpen(false);
+    toaster.create({
+      title: "Success",
+      description: "Child updated successfully.",
+      duration: 5000,
+    });
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (!tableRef.current) return;
-
     const selectedRowModel = tableRef.current.getSelectedRowModel();
     const selectedRows = selectedRowModel.rows;
-
     if (selectedRows.length === 0) {
       toaster.create({
         title: "No Selection",
@@ -284,107 +114,81 @@ const ChildrenTable = () => {
       });
       return;
     }
-
-    setSelectedRowsForDeletion(selectedRows);
+    setSelectedRowsForDeletion(selectedRows.map((row) => row.original));
     setIsDeleteDialogOpen(true);
   };
 
   const confirmDelete = async () => {
-    const beneficiaryIds = selectedRowsForDeletion.map((row: Row<Beneficiaries>) => row.original.id);
-
-    try {
-      const response = await fetch("/api/admin/children/bulk-delete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ beneficiaryIds }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Bulk delete failed");
-      }
-      setData((prevData) =>
-        prevData.filter((beneficiary) => !beneficiaryIds.includes(beneficiary.id))
-      );
-      if (tableRef.current) {
-        tableRef.current.getTableInstance().toggleAllRowsSelected(false);
-      }
-      
-      setSelectedCount(0);
-      setSelectedRowsForDeletion([]);
-      
-      toaster.create({
-        title: "Success",
-        description: "Selected beneficiaries deleted successfully.",
-        duration: 5000,
-      });
-    } catch (error) {
-      console.error("Bulk delete error:", error);
-      toaster.create({
-        title: "Error",
-        description: "Bulk delete failed. Please try again.",
-        duration: 5000,
-      });
-    } finally {
-      setIsDeleteDialogOpen(false);
+    const beneficiaryIds = selectedRowsForDeletion.map((b) => b.id).filter((id): id is string => typeof id === "string");
+    await bulkDelete(beneficiaryIds);
+    if (tableRef.current) {
+      tableRef.current.getTableInstance().toggleAllRowsSelected(false);
     }
+    setSelectedCount(0);
+    setSelectedRowsForDeletion([]);
+    setIsDeleteDialogOpen(false);
+    toaster.create({
+      title: "Success",
+      description: "Selected beneficiaries deleted successfully.",
+      duration: 5000,
+    });
   };
 
   const handleDelete = async (beneficiaryId: string) => {
-    try {
-      const response = await fetch('/api/admin/children/delete', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ beneficiaryId }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete beneficiary');
-      }
-
-      setData((prevData) => prevData.filter(beneficiary => beneficiary.id !== beneficiaryId));
-      setIsEditDrawerOpen(false);
-    } catch (error) {
-      console.error("Error deleting beneficiary:", error);
-    }
+    await deleteChild(beneficiaryId);
+    setIsEditDrawerOpen(false);
+    toaster.create({
+      title: "Success",
+      description: "Child deleted successfully.",
+      duration: 5000,
+    });
   };
 
   if (loading) {
     return <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
-    <div className="text-gray-500">Loading...</div>
-  </div>;
+      <div className="text-gray-500">Loading...</div>
+    </div>;
   }
 
   return (
     <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
       <Box className="grid grid-cols-2 mb-2">
-        <Text className="text-3xl font-semibold leading-9">Children</Text>
+        <Text className="text-3xl font-semibold leading-9">Manage Children</Text>
         <Box className="justify-self-end flex gap-3">
           <CreateDrawer
             formData={formData}
             isDrawerOpen={isCreateDrawerOpen}
             setIsDrawerOpen={setIsCreateDrawerOpen}
-            setFormData={setFormData}
+            setFormData={(value) =>
+              typeof value === "function"
+                ? setFormData(value(formData))
+                : setFormData(value)
+            }
             handleInputChange={handleInputChange}
             handleSelectChange={handleSelectChange}
             handleLocationSelect={handleLocationSelect}
             handleSubmit={handleSubmit}
             imageFiles={imageFiles}
-            setImageFiles={setImageFiles}
+            setImageFiles={(value) =>
+              typeof value === "function"
+                ? setImageFiles(value(imageFiles))
+                : setImageFiles(value)
+            }
             videoFiles={videoFiles}
-            setVideoFiles={setVideoFiles}
+            setVideoFiles={(value) =>
+              typeof value === "function"
+                ? setVideoFiles(value(videoFiles))
+                : setVideoFiles(value)
+            }
             handleDrawerClose={() => setIsCreateDrawerOpen(false)}
           />
-          <BulkUploadDrawer
+          {/* <BulkUploadDrawer
             isDrawerOpen={isBulkUploadDrawerOpen}
             setIsDrawerOpen={setIsBulkUploadDrawerOpen}
             onUploadSuccess={(newChildren) => {
-              setData((prevData) => [...prevData, ...newChildren]);
+              fetchChildren();
             }}
-          />
+          /> */}
           {selectedCount > 0 && (
             <Button onClick={handleBulkDelete} className="border-[2px] border-[#E0E0E0] bg-red-500 text-white w-fit h-[40px] px-4">
               <MdDeleteOutline className="mr-[3.5px]" /> Bulk Delete ({selectedCount})
@@ -409,15 +213,27 @@ const ChildrenTable = () => {
         <EditDrawer
           selectedChild={selectedChild}
           formDataEdit={formDataEdit}
-          setFormDataEdit={setFormDataEdit}
+          setFormDataEdit={(value) =>
+            typeof value === "function"
+              ? setFormDataEdit(value(formDataEdit))
+              : setFormDataEdit(value)
+          }
           isDrawerOpen={isEditDrawerOpen}
           onClose={() => setIsEditDrawerOpen(false)}
           onSave={handleSave}
           onDelete={handleDelete}
           imageFiles={imageFiles}
-          setImageFiles={setImageFiles}
+          setImageFiles={(value) =>
+            typeof value === "function"
+              ? setImageFiles(value(imageFiles))
+              : setImageFiles(value)
+          }
           videoFiles={videoFiles}
-          setVideoFiles={setVideoFiles}
+          setVideoFiles={(value) =>
+            typeof value === "function"
+              ? setVideoFiles(value(videoFiles))
+              : setVideoFiles(value)
+          }
         />
       )}
       <DeleteDialog

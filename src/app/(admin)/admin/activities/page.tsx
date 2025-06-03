@@ -13,13 +13,6 @@ const ActivitiesAdminPage: React.FC = () => {
     const fetchChildren = async () => {
       const res = await fetch("/api/admin/children/retrieve");
       const data = await res.json();
-      console.log("Fetched children from /api/admin/children/retrieve:", {
-        data,
-        firstChild: data.children?.[0],
-        childCount: data.children?.length || 0,
-        hasName: data.children?.[0]?.name,
-        hasId: data.children?.[0]?.id
-      });
       setChildren(data.children || []);
     };
     fetchChildren();

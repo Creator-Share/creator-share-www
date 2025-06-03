@@ -26,11 +26,10 @@ interface Filters {
 
 const SponsorChild = () => {
   const [L, setL] = useState<typeof import("leaflet") | null>(null);
+  const [currentBounds, setCurrentBounds] = useState<L.LatLngBounds | undefined>(undefined);
   const [childrenData, setChildrenData] = useState<Beneficiaries[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
-  const [visibleChildren, setVisibleChildren] = useState<Beneficiaries[]>([]);
   const [loading, setLoading] = useState(true);
-  const [listingsLoading, setListingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0, 14], status: ["New", "Partially Funded"] });
@@ -73,7 +72,6 @@ const SponsorChild = () => {
 
       const data = await res.json();
       setChildrenData(data.people || []);
-      setVisibleChildren(data.people || []);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unexpected error occurred");
     } finally {
@@ -87,23 +85,8 @@ const SponsorChild = () => {
 
   const handleBoundsChange = React.useCallback((bounds: L.LatLngBounds) => {
     if (!L) return;
-
-    try {
-      setListingsLoading(true);
-
-      const filtered = childrenData.filter((child) => {
-        if (!child.location_geo) return false;
-        const [lng, lat] = child.location_geo.coordinates;
-        return bounds.contains(L.latLng(lat, lng));
-      });
-
-      setVisibleChildren(filtered);
-    } catch (error) {
-      console.error('Error handling bounds change:', error);
-    } finally {
-      setListingsLoading(false);
-    }
-  }, [childrenData, L]);
+    setCurrentBounds(bounds);
+  }, [L]);
 
   const handleMarkerClick = React.useCallback((id: string) => {
     setSelectedChildId(id);
@@ -112,19 +95,12 @@ const SponsorChild = () => {
     if (selectedPerson) {
       setSelectedCountry(selectedPerson.country);
 
-      setVisibleChildren(prev => {
-        if (!prev.some(child => child.id === id)) {
-          return [...prev, selectedPerson];
-        }
-        return prev;
-      });
     }
   }, [childrenData]);
 
   const onResetView = React.useCallback(() => {
     setSelectedCountry(null);
-    setVisibleChildren(childrenData);
-  }, [childrenData]);
+  }, []);
 
   const sendHeight = React.useCallback(() => {
     if (window.self === window.top) return;
@@ -143,8 +119,6 @@ const SponsorChild = () => {
           type: 'resize',
           height: height
         }, parentOrigin);
-
-        console.log('[Child Frame] Sent height:', height);
       });
     } catch (error) {
       console.error('[Child Frame] Error sending height:', error);
@@ -277,29 +251,31 @@ const SponsorChild = () => {
       )}
 
       {loading ? (
-        <ChildListingsSkeleton />
-      ) : visibleChildren.length > 0 ? (
-        <ChildListings
-          ref={childListingsRef}
-          beneficiaryData={visibleChildren}
-          selectedBeneficiaryId={selectedChildId}
-          selectedCountry={selectedCountry}
-          setSelectedBeneficiaryId={setSelectedChildId}
-        />
-      ) : (
         <Flex justify="center" align="center" minH="20vh">
-          <Text fontSize="xl" color="gray.500">
-            No children listed in this area.
-          </Text>
+          <Spinner size="xl" mr={4} />
+          <ChildListingsSkeleton />
         </Flex>
+      ) : (
+        <>
+          {childrenData.length > 0 ? (
+            <ChildListings
+              ref={childListingsRef}
+              beneficiaryData={childrenData}
+              selectedBeneficiaryId={selectedChildId}
+              selectedCountry={selectedCountry}
+              mapBounds={currentBounds}
+              setSelectedBeneficiaryId={setSelectedChildId}
+            />
+          ) : (
+            <Flex justify="center" align="center" minH="20vh">
+              <Text fontSize="xl" color="gray.500">
+                No children listed in this area.
+              </Text>
+            </Flex>
+          )}
+        </>
       )}
 
-      {listingsLoading && (
-        <Flex justify="center" align="center" mt={4}>
-          <Spinner size="md" />
-          <Text ml={2}>Updating listings…</Text>
-        </Flex>
-      )}
     </Box>
   );
 };

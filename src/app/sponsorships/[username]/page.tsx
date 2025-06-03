@@ -1,93 +1,232 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { fetchActivitiesByBeneficiaryId } from "@/actions";
+import Link from "next/link";
 import {
   Box,
+  Button,
   Flex,
+  Heading,
+  Image,
   Text,
-  Spinner
+  VStack,
+  Spinner,
 } from "@chakra-ui/react";
-import { Beneficiaries } from "@/types";
-import GoBackButton from "@/components/ui/goBack";
+import { useParams } from "next/navigation";
 import SponsorshipDetails from "../components/SponsorshipDetails";
-import BeneficiaryActivity from "../components/SponsorshipActivity";
-import BeneficiaryDetailsCard from "../components/BeneficiaryDetails";
+import { Activity, Beneficiaries, BeneficiaryMedia } from "@/types";
+import SponsorDialog from "../components/SponsorDialog";
+import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox";
 
-
-const BeneficiaryDetails: React.FC<{ params: Promise<{ username: string }> }> = ({ params }) => {
-  const { username } = React.use(params);
+export default function FullProfileDynamic() {
+  const { username } = useParams();
   const [beneficiary, setBeneficiary] = useState<Beneficiaries | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [sponsorDialogOpen, setSponsorDialogOpen] = useState(false);
+  const [images, setImages] = useState<BeneficiaryMedia[]>([]);
+  const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([]);
+  const [currentBeneficiaryIndex, setCurrentBeneficiaryIndex] = useState(0);
+  const [activities, setActivities] = useState<Activity[]>([]);
+
+  const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+
+  const fetchImages = async (beneficiaryId: string) => {
+    try {
+      const response = await fetch(`/api/admin/children/images/${beneficiaryId}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      if (!Array.isArray(data)) {
+        console.error("Expected array of images but got:", data);
+        return;
+      }
+      if (data.length > 0) {
+        setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
+      }
+    } catch (error) {
+      console.error("Error fetching images:", error);
+    }
+  };
 
   useEffect(() => {
-    const fetchChild = async () => {
+    async function fetchData() {
+      setLoading(true);
+      setError("");
       try {
         const res = await fetch(`/api/children/get/username/${username}`);
-        
         if (!res.ok) {
-          console.error("Failed to fetch child data:", await res.text());
-          throw new Error("Failed to fetch child data");
+          throw new Error("Beneficiary not found");
         }
-        
         const data = await res.json();
-        setBeneficiary(data.child);
-      } catch (err: unknown) {
-        console.error("Error in child details page:", err);
-        if (err instanceof Error) {
-          setError(err.message || "Unexpected error occurred");
-        } else {
-          setError("Unexpected error occurred");
+        console.log("Full API response:", data);
+        const { child } = data;
+        console.log("Beneficiary data:", child);
+        console.log("Image URL:", child?.image_url);
+        if (!child) {
+          throw new Error("Beneficiary data is empty");
         }
+        setBeneficiary(child);
+        if (child?.id) {
+          await fetchImages(child.id);
+
+          const activitiesData = await fetchActivitiesByBeneficiaryId(child.id);
+          setActivities(activitiesData);
+          const res = await fetch('/api/children/get');
+          const data = await res.json();
+          if (data.people) {
+            setBeneficiaries(data.people);
+            const index = data.people.findIndex((b: Beneficiaries) => b.username === username);
+            if (index !== -1) {
+              setCurrentBeneficiaryIndex(index);
+            }
+          }
+        }
+      } catch (err) {
+        setError("Beneficiary not found.");
+        setBeneficiary(null);
+        console.error(err)
       } finally {
         setLoading(false);
       }
-    };
-
-    if (username) {
-      fetchChild();
     }
+    if (username) fetchData();
   }, [username]);
 
   if (loading) {
     return (
-      <Flex justify="center" align="center" minH="100vh">
-        <Spinner size="xl" />
+      <Flex minH="100vh" align="center" justify="center">
+        <Spinner size="xl" color="blue.500" />
       </Flex>
     );
   }
 
-  if (error) {
+  if (error || !beneficiary) {
     return (
-      <Flex justify="center" align="center" minH="100vh">
-        <Text color="red.500">{error}</Text>
-      </Flex>
-    );
-  }
-
-  if (!beneficiary) {
-    return (
-      <Flex justify="center" align="center" minH="100vh">
-        <Text color="gray.500">No child data found.</Text>
+      <Flex minH="100vh" align="center" justify="center">
+        <Text color="red.500" fontSize="xl">{error || "Beneficiary not found."}</Text>
       </Flex>
     );
   }
 
   return (
-    <Box className="md:px-36 p-8">
-      <GoBackButton />
-      <Text fontSize="2xl" fontWeight="bold" mb={4} mt={8}>
-        Details
-      </Text>
-      <Box className="mb-6">
-        <BeneficiaryDetailsCard id={beneficiary?.id} beneficiary={beneficiary} />
-      </Box>
-      <Box className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <SponsorshipDetails beneficiaryId={beneficiary?.id} />
-        <BeneficiaryActivity beneficiaryId={beneficiary?.id} username={username} />
-      </Box>
+    <Box minH="100vh" p={6}>
+      <Box maxW="6xl" mx="auto">
+        {/* Navigation */}
+        <Flex justify="space-between" mb={4}>
+          <Button
+            onClick={() => {
+              const newIndex = currentBeneficiaryIndex - 1;
+              if (newIndex >= 0 && beneficiaries[newIndex]?.username) {
+                window.location.href = `/sponsorships/${beneficiaries[newIndex].username}`;
+              }
+            }}
+            disabled={currentBeneficiaryIndex === 0}
+            variant="outline"
+            className={`px-4 py-2 ${currentBeneficiaryIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            ← Previous Beneficiary
+          </Button>
+          <Button
+            onClick={() => {
+              const newIndex = currentBeneficiaryIndex + 1;
+              if (newIndex < beneficiaries.length && beneficiaries[newIndex]?.username) {
+                window.location.href = `/sponsorships/${beneficiaries[newIndex].username}`;
+              }
+            }}
+            disabled={currentBeneficiaryIndex === beneficiaries.length - 1}
+            variant="outline"
+            className={`px-4 py-2 ${currentBeneficiaryIndex === beneficiaries.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            Next Beneficiary →
+          </Button>
+        </Flex>
 
+        {/* Header */}
+        <Flex justify="space-between" align="center" mb={6}>
+          <Heading as="h1" className="font-bold text-2xl md:text-[55px]" color="#2B7FF9">
+            {beneficiary.name}
+          </Heading>
+          <Button
+            bg="#1C3C8C"
+            color="white"
+            px={6}
+            py={2}
+            _hover={{ bg: "#1C2B7A" }}
+            onClick={() => setSponsorDialogOpen(true)}
+            className="font-semibold text-[15px]"
+          >
+            Sponsor Me
+          </Button>
+          <SponsorDialog
+            people={beneficiary}
+            isOpen={sponsorDialogOpen}
+            onOpenChange={setSponsorDialogOpen}
+            trigger={<div style={{ display: "none" }} />}
+          />
+        </Flex>
+        <Box mb={8} rounded="xl" overflow="hidden" position="relative" h={{ base: "300px", md: "440px" }}>
+          <Image
+            src={images.length > 0 ? images[0].image_url : placeholderImage}
+            alt={beneficiary.name}
+            position="absolute"
+            w="100%"
+            h="100%"
+            objectFit="cover"
+          />
+        </Box>
+        <Box mb={8}>
+          <Heading as="h2" className="font-bold text-2xl" mb={4}>
+            About Me
+          </Heading>
+          <Text className="text-[#767070] text-base">
+            {beneficiary.biography || beneficiary.introduction || "No biography available."}
+          </Text>
+        </Box>
+        <Heading as="h3" size="lg" color="#2B7FF9" mb={6} className="font-bold text-2xl">
+          Latest Updates on {beneficiary.name}
+        </Heading>
+        <Box className="md:grid md:grid-cols-5 gap-4">
+          <Box mb={8} className="md:col-span-3">
+            <VStack gap={6} align="stretch">
+              {activities.length > 0 ? (
+                activities.map((activity: Activity) => (
+                  <Link
+                    key={activity.id}
+                    href={`/sponsorships/${username}/activity/${activity.id}`}
+                    style={{ textDecoration: "none" }}
+                  >
+                    <Flex bg="white" rounded="xl" overflow="hidden" boxShadow="sm" _hover={{ bg: "gray.50" }}>
+                      <Box flex="1" p={4}>
+                        <Text color="gray.700" mb={2}>{activity.description}</Text>
+                        <Text color="gray.500" fontSize="xs">
+                          📅 {new Date(activity.created_at).toLocaleString("en-GB", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: false,
+                          })}
+                        </Text>
+                      </Box>
+                    </Flex>
+                  </Link>
+                ))
+              ) : (
+                <Text color="gray.500" textAlign="center">No activities available yet.</Text>
+              )}
+            </VStack>
+          </Box>
+          <Box className="md:col-span-2">
+            <VStack align={"stretch"} gap={6}>
+              <SponsorshipDetails beneficiaryId={beneficiary.id} hideStatus />
+              <BeneficiarySubscribeBox beneficiary={beneficiary} />
+            </VStack>
+          </Box>
+        </Box>
+      </Box>
     </Box>
   );
-};
-
-export default BeneficiaryDetails;
+}

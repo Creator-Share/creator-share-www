@@ -64,7 +64,6 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
 
     useEffect(() => {
-        console.log("SponsorDialog: people.id changed to", people.id, "name:", people.name);
         setAmount(remainingAmount);
         setValue([remainingAmount]);
         setCurrentImageIndex(0);
@@ -108,7 +107,6 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                             }
                         }, parentOrigin);
                         
-                        console.log('[Child Frame] Sent makeDialogSticky request to parent');
                     }
                 } catch (e) {
                     console.error('[Child Frame] Error sending dialog position:', e);
@@ -221,7 +219,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
 
             if (window.self !== window.top) {
                 if (clientSecret) {
-                    window.location.href = `/sponsor-a-/checkout?client_secret=${clientSecret}`;
+                    window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}`;
                 } else if (url) {
                     window.location.href = url;
                 } else {
@@ -318,14 +316,15 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         
         if (onNext) {
             onNext();
-            // No scrolling - we want the dialog to stay in place
         }
     };
 
     return (
         <DialogRoot
             open={isOpen}
-            onOpenChange={(details) => onOpenChange?.(details.open)}
+            onOpenChange={(details) => {
+                onOpenChange?.(details.open);
+            }}
             size={isInIframe ? { base: "lg", md: "lg" } : { base: "full", md: "xl" }}
             placement={isInIframe ? "top" : "center"}
             motionPreset="slide-in-bottom"

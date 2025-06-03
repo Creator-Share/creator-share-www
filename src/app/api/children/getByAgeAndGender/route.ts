@@ -47,13 +47,7 @@ export async function GET(req: Request) {
         });
       }
     }
-    
-    console.log("API response children:", filteredData.length);
-    console.log("Age range filter:", ageRange);
-    
-    const uniqueIds = new Set(filteredData.map(child => child.id));
-    console.log("Unique children count:", uniqueIds.size, "Total children:", filteredData.length);
-    
+
     return NextResponse.json({ people: filteredData });
   } catch (err) {
     console.error("Unexpected error:", err);
