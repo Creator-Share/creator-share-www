@@ -4,7 +4,6 @@ import { Box, Text, Flex } from "@chakra-ui/react";
 import { FaCalendar, FaCaretDown, FaCaretUp } from "react-icons/fa";
 import { FaLocationDot, FaPerson } from "react-icons/fa6";
 import { calculateAge } from "@/utils/ageCalculator";
-import { centsToDollars } from "@/utils/currency";
 import { BeneficiaryCardProps } from "@/types/propTypes";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
@@ -16,13 +15,12 @@ import {
     DialogCloseTrigger,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import { RxActivityLog } from "react-icons/rx";
 import { Collapsible } from "@chakra-ui/react";
 import { BeneficiaryMedia } from "@/types/admin.types";
 import BeneficiaryActivityModal from "../SponsorshipActivity/BeneficiaryActivityModal";
-const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({ 
-    beneficiary, 
-    isSelected, 
+const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
+    beneficiary,
+    isSelected,
     id,
     onOpenDialog
 }) => {
@@ -36,7 +34,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     useEffect(() => {
         const fetchImages = async () => {
             try {
-                // TODO: Update API path
                 const response = await fetch(`/api/admin/children/images/${beneficiary.id}`);
                 if (response.ok) {
                     const data = await response.json();
@@ -86,13 +83,15 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     };
 
     return (
-        <Box 
-            id={id} 
+        <Box
+            id={id}
             borderColor={isSelected ? "blue.500" : "gray.200"}
             borderRadius={{ base: 'md', md: 'md' }}
             className={`bg-white mb-6 ${isLearnMoreOpen ? 'border-t border-l border-r' : 'border-0 md:border'} md:mb-0 ${isSelected ? 'highlight-child' : ''}`}
             suppressHydrationWarning={true}
+            style={{ overflow: "hidden" }}
         >
+            {/* Card Header: Image, Name, Info, Buttons */}
             <Flex
                 direction={{ base: "column", md: "row" }}
                 align={{ base: "center", md: "flex-start" }}
@@ -103,13 +102,12 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                         <Box position="relative">
                             <Image
                                 src={images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : placeholderImage}
-                                alt={beneficiary.name}
-                                width={550}
-                                height={400}
+                                alt={beneficiary.name?.split(" ")[0] ?? ""}
+                                width={140}
+                                height={273}
                                 style={{ objectFit: "cover" }}
-                                className={`mb-4 md:mb-0 min-h-[400px] h-[400px] w-[550px] md:min-h-[273px] md:h-[273px] md:w-[450px] cursor-pointer ${
-                                    isLearnMoreOpen ? '' : 'rounded-t-md md:rounded-l-md md:rounded-t-none'
-                                }`}
+                                className={`mb-4 md:mb-0 min-h-[400px] h-[400px] w-[550px] md:min-h-[273px] md:h-[273px] md:w-[450px] cursor-pointer ${isLearnMoreOpen ? '' : 'rounded-t-md md:rounded-l-md md:rounded-t-none'
+                                    }`}
                             />
                             {images.length > 0 && (
                                 <>
@@ -179,7 +177,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                             <Box position="relative">
                                 <Image
                                     src={images.length > 0 && images[dialogImageIndex]?.image_url ? images[dialogImageIndex].image_url : placeholderImage}
-                                    alt={`${beneficiary.name} - ${dialogImageIndex + 1}`}
+                                    alt={`${beneficiary.name?.split(" ")[0] ?? ""} - ${dialogImageIndex + 1}`}
                                     width={800}
                                     height={600}
                                     style={{ objectFit: "contain" }}
@@ -250,7 +248,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                 <Box className="md:grid md:grid-cols-2 pt-[20px] w-full md:w-screen">
                     <Box ml={{ md: 6 }} w="full">
                         <Text fontSize="4xl" fontWeight="bold" mb={2} className="text-[#03150E]">
-                            {beneficiary.name}
+                            {beneficiary.name?.split(" ")[0]}
                         </Text>
                         <Box fontSize="base" className="text-[#767070] bg-[#DFDFDF] rounded-xl md:bg-white p-4 mb-4 text-left md:text-center">
                             <Flex align="center" gap={2} mb={4}>
@@ -265,102 +263,101 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                                     {beneficiary.gender}
                                 </Text>
                             </Flex>
-                            <Flex align="center" gap={2}>
+                            <Flex align="center" gap={2} mb={4}>
                                 <FaLocationDot />
                                 <Text fontSize="sm" className="text-gray-500">
                                     {beneficiary.country}
                                 </Text>
                             </Flex>
-                        </Box>
-                        <Box mb={4}>
-                            <Box bg="gray.200" h="2px" w="full" borderRadius="full">
-                                <Box
-                                    bg="#1C3C8C"
-                                    h="2px"
-                                    w={`${Math.min((beneficiary.budget_raised / beneficiary.budget_goal) * 100, 100)}%`}
-                                    borderRadius="full"
-                                />
-                            </Box>
-                            <Text fontSize="sm" mt={1} className="text-gray-500">
-                                ${centsToDollars(beneficiary.budget_raised)} raised of ${centsToDollars(beneficiary.budget_goal)}
-                            </Text>
+                            <Flex cursor="pointer" align={"center"} gap={2}>
+                                <Text fontSize="base" className="text-[#767070]">
+                                    <span
+                                        className="text-[#1C3C8C] cursor-pointer whitespace-nowrap flex items-center gap-1"
+                                        onClick={() => setIsLearnMoreOpen(!isLearnMoreOpen)}
+                                    >
+                                        More about {beneficiary.name?.split(" ")[0]} {isLearnMoreOpen ? <FaCaretUp /> : <FaCaretDown />}
+                                    </span>
+                                </Text>
+                            </Flex>
                         </Box>
                     </Box>
-                    <Box className="md:ml-14 px-4 md:px-0">
-                        <Text fontSize="4xl" fontWeight="bold" className="text-[#03150E] mb-1">
-                            Introduction
-                        </Text>
-                        <Text fontSize="base" className="text-[#767070] mb-2">
-                            {beneficiary.introduction}
-                        </Text>
-                        <Button
-                            onClick={handleViewActivity}
-                            className="hover:bg-[#1C3C8C] w-full md:w-11/12 hover:text-[#FFFFFF]"
-                        >
-                            <RxActivityLog />View Activity
-                        </Button>
+                    <Box className="px-4 md:px-4">
+                        <Flex>
+                            <Text fontSize="4xl" fontWeight="medium" mb={2} className="text-[#03150E]">Bio</Text>
+                        </Flex>
+                        <Flex gap={2} align="center" className="w-full flex">
+                            <Button
+                                onClick={handleViewActivity}
+                                className="border-[#1C3C8C] font-semibold text-[#1C3C8C] border hover:bg-[#1C3C8C] px-4 hover:text-[#FFFFFF] w-1/2"
+                            >
+                                View Activity
+                            </Button>
+                            {beneficiary.status !== "Budget Fulfilled" ? (
+                                <Button
+                                    fontWeight="md"
+                                    className="text-[#FFFFFF] px-4 cursor-pointer bg-[#1C3C8C] w-1/2"
+                                    onClick={handleSponsorClick}
+                                >
+                                    Sponsor
+                                </Button>
+                            ) : (
+                                <Button
+                                    fontWeight="md"
+                                    className="text-[#FFFFFF] disabled cursor-not-allowed bg-gray-400 w-1/2"
+                                    disabled
+                                >
+                                    Budget Fulfilled
+                                </Button>
+                            )}
+                        </Flex>
                         <BeneficiaryActivityModal
                             open={showActivityModal}
                             onClose={() => setShowActivityModal(false)}
                             beneficiary={{ ...beneficiary, image_url: images.length > 0 && images[currentImageIndex]?.image_url ? images[currentImageIndex].image_url : undefined }}
                         />
-                        
-                        <Box cursor="pointer" className="flex justify-center items-center mt-4">
-                            <Text fontSize="base" className="text-[#767070]">
-                                <span 
-                                    className="text-[#1C3C8C] cursor-pointer whitespace-nowrap flex items-center gap-1"
-                                    onClick={() => setIsLearnMoreOpen(!isLearnMoreOpen)}
-                                >
-                                    Learn more about {beneficiary.name} {isLearnMoreOpen ? <FaCaretUp /> : <FaCaretDown />}
-                                </span>
-                            </Text>
-                        </Box>
                     </Box>
                 </Box>
             </Flex>
-            
+
             <Collapsible.Root
                 open={isLearnMoreOpen}
                 onOpenChange={() => setIsLearnMoreOpen(!isLearnMoreOpen)}
                 style={{ overflow: 'hidden', transition: 'height 0.3s ease' }}
             >
                 <Collapsible.Content>
+                    {/* About Section */}
                     <Box
                         p={6}
                         bg="white"
                         mx="auto"
                         mt={4}
-                        className="flex flex-col md:flex-row"
+                        className="w-full text-left"
                     >
-                        <Box mr="8" className="md:w-2/5 md:text-start w-full text-center">
-                            <Text fontSize="xl" fontWeight="semibold" mb={4} color="#1C3C8C">
-                                About {beneficiary.name}
-                            </Text>
-                            <Text mb={4}>
-                                {beneficiary.biography}
-                            </Text>
-                        </Box>
-                        <Box mt="12" className="md:w-3/5 w-full">
-                            {beneficiary.video_url ? (
-                                <video width="800" height="600" controls preload="none" className="border rounded-xl">
-                                    <source src={beneficiary.video_url} type="video/mp4" />
-                                </video>
-                            ) : (
-                                <Box className="border rounded-xl min-h-[200px] max-h-[600px] flex items-center justify-center bg-gray-100">
-                                    <Text color="gray.500">No video available</Text>
-                                </Box>
-                            )}
-                        </Box>
+                        <Text fontSize="xl" fontWeight="semibold" mb={4} color="#1C3C8C">
+                            {beneficiary.biography}
+                        </Text>
                     </Box>
+                    {/* Video Section */}
+                    {beneficiary.video_url && (
+                        <Box
+                            mt={4}
+                            mb={4}
+                            className="w-full flex justify-center"
+                        >
+                            <video width="100%" height="auto" controls preload="none" className="border rounded-xl max-w-full">
+                                <source src={beneficiary.video_url} type="video/mp4" />
+                            </video>
+                        </Box>
+                    )}
                     <Box className={isLearnMoreOpen ? 'border-b' : ''}>
                         {beneficiary.status !== "Budget Fulfilled" ? (
                             <Box fontSize="base" className="pb-6 px-6">
-                                <Button 
-                                    fontWeight="md" 
+                                <Button
+                                    fontWeight="md"
                                     className="text-[#FFFFFF] w-full cursor-pointer bg-[#1C3C8C] mt-8"
                                     onClick={handleSponsorClick}
                                 >
-                                    Sponsor {beneficiary.name}
+                                    Sponsor {beneficiary.name?.split(" ")[0]}
                                 </Button>
                             </Box>
                         ) : (

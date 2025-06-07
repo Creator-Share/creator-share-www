@@ -10,6 +10,7 @@ export async function GET(req: Request) {
     const query = supabase
       .from("beneficiaries")
       .select("*")
+      .eq("beneficiary_type", "CHILD")
     const ne = searchParams.get("ne");
     const sw = searchParams.get("sw");
 

@@ -177,7 +177,7 @@ const SponsorChild = () => {
   return (
     <Box 
       ref={contentRef}
-      className="flex flex-col items-center justify-center px-4 md:px-32 py-12 md:py-16"
+      className="flex flex-col items-center justify-center px-4 md:px-10 py-12 md:py-16"
       suppressHydrationWarning={true}
     >
       <Box className="text-center justify-center my-12">

@@ -1,5 +1,5 @@
 "use client"
-import { Box, VStack, Flex, Button } from "@chakra-ui/react";
+import { Box, Flex, Button, SimpleGrid } from "@chakra-ui/react";
 import React, { useState, useEffect } from "react";
 import BeneficiaryCard from "../SponsorshipCard";
 import SponsorDialog from "../SponsorDialog";
@@ -16,7 +16,7 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [activeBeneficiaryId, setActiveBeneficiaryId] = useState<string | null>(null);
   const isInIframe = window.self !== window.top;
-  const itemsPerPage = 3; // Show fewer items per page to test pagination
+  const itemsPerPage = 4; // Show fewer items per page to test pagination
 
   const filteredBeneficiary = React.useMemo(() => {
     const safeBeneficiaryData = Array.isArray(beneficiaryData) ? beneficiaryData : [];
@@ -27,7 +27,6 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
         return false;
       }
 
-      // Filter by map bounds if available
       if (mapBounds && beneficiary.location_geo) {
         const [lng, lat] = beneficiary.location_geo.coordinates;
         return mapBounds.contains([lat, lng]);
@@ -136,29 +135,26 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
         />
       )}
 
-      <VStack
-        align="stretch"
-        pt={10}
-        pb={6}
-        gap="1.5rem"
-      >
-        {visibleBeneficiary.map((beneficiary) =>
-          beneficiary.id ? (
-            <Box key={beneficiary.id}>
-              <BeneficiaryCard
-                beneficiary={beneficiary}
-                isSelected={selectedBeneficiaryId === beneficiary.id}
-                id={beneficiary.id}
-                onOpenDialog={() => handleOpenDialog(beneficiary.id)}
-                onNext={beneficiary.id === activeBeneficiaryId ? () => handleDialogNavigation('next') : undefined}
-                onPrevious={beneficiary.id === activeBeneficiaryId ? () => handleDialogNavigation('previous') : undefined}
-                hasNext={beneficiary.id === activeBeneficiaryId ? getDialogNavigationProps().hasNext : false}
-                hasPrevious={beneficiary.id === activeBeneficiaryId ? getDialogNavigationProps().hasPrevious : false}
-              />
-            </Box>
-          ) : null
-        )}
-      </VStack>
+      <Box pt={10} pb={6}>
+        <SimpleGrid columns={{ base: 1, md: 1 }} gap="1.5rem">
+          {visibleBeneficiary.map((beneficiary) =>
+            beneficiary.id ? (
+              <Box key={beneficiary.id}>
+                <BeneficiaryCard
+                  beneficiary={beneficiary}
+                  isSelected={selectedBeneficiaryId === beneficiary.id}
+                  id={beneficiary.id}
+                  onOpenDialog={() => handleOpenDialog(beneficiary.id)}
+                  onNext={beneficiary.id === activeBeneficiaryId ? () => handleDialogNavigation('next') : undefined}
+                  onPrevious={beneficiary.id === activeBeneficiaryId ? () => handleDialogNavigation('previous') : undefined}
+                  hasNext={beneficiary.id === activeBeneficiaryId ? getDialogNavigationProps().hasNext : false}
+                  hasPrevious={beneficiary.id === activeBeneficiaryId ? getDialogNavigationProps().hasPrevious : false}
+                />
+              </Box>
+            ) : null
+          )}
+        </SimpleGrid>
+      </Box>
       {filteredBeneficiary.length > itemsPerPage && (
         <Flex justify="center" pb={10} gap={2}>
           <Flex gap={2}>

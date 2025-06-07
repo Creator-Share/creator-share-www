@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const status = statusString.split(",") as PersonStatus[];
 
   try {
-    let query = supabase.from("beneficiaries").select("*");
+    let query = supabase.from("beneficiaries").select("*").eq("beneficiary_type", "CHILD");
 
     if (gender) {
       query = query.eq("gender", gender);
