@@ -13,9 +13,10 @@ export async function POST(req: Request) {
       location,
       userId,
       isEmbedded,
+      allowBelowMinimum
     } = await req.json();
 
-    if (!amount || amount < 1000) {
+    if (!amount || (amount < 1000 && !allowBelowMinimum)) {
       return NextResponse.json(
         { error: "Minimum amount is $10." },
         { status: 400 }

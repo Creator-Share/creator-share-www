@@ -172,11 +172,11 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     };
 
     const handleSponsor = async () => {
-        // Minimum amount should be $10 (1000 cents)
-        if (amount < 10) {
+        // Allow sponsoring below minimum only if it's the final remaining amount
+        if (amount < minimumAmount && !(remainingAmount < minimumAmount && amount === remainingAmount)) {
             toaster.create({
                 title: "Invalid Amount",
-                description: "Minimum sponsorship amount is $10.",
+                description: `Minimum sponsorship amount is $${minimumAmount}.`,
             });
             return;
         }
@@ -200,6 +200,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 location: people.country,
                 userId: user?.id,
                 isEmbedded: window.self !== window.top,
+                allowBelowMinimum: remainingAmount < minimumAmount && amount === remainingAmount
             };
 
             const res = await fetch("/api/stripe", {
