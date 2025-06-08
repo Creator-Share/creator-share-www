@@ -15,7 +15,7 @@ const Links = [
   // { name: "My Community", href: "/local" },
   // { name: "Share Abundance", href: "/share" },
   { name: "Sponsorships", href: "/sponsorships" },
-  // { name: "Sponsor-a-Puppy", href: "/sponsor-a-puppy" },
+  { name: "Strays Worth Saving", href: "/strays-worth-saving" },
   // { name: "Sponsor-a-Family", href: "/family-in-need" },
   // { name: "Street Involved", href: "/street-involved" },
   // { name: "Child Laborer", href: "/child-labor" },

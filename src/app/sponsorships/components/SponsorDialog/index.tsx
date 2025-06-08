@@ -37,6 +37,7 @@ interface SponsorDialogProps {
     hasPrevious?: boolean;
     isOpen?: boolean;
     onOpenChange?: (open: boolean) => void;
+    beneficiaryType?: "CHILD" | "ANIMAL";
 }
 
 const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
@@ -52,7 +53,8 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     hasNext = false,
     hasPrevious = false,
     isOpen = false,
-    onOpenChange
+    onOpenChange,
+    beneficiaryType = "CHILD"
 }) => {
     const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
     const minimumAmount = 10;
@@ -79,7 +81,8 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
 
         const fetchImages = async () => {
             try {
-                const response = await fetch(`/api/admin/children/images/${people.id}`);
+                const endpoint = beneficiaryType === "ANIMAL" ? "animals" : "children";
+                const response = await fetch(`/api/admin/${endpoint}/images/${people.id}`);
                 if (response.ok) {
                     const data = await response.json();
                     setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) =>
@@ -121,7 +124,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 }
             }, 200);
         }
-    }, [people.id, remainingAmount, people.name, isOpen]);
+    }, [people.id, remainingAmount, people.name, isOpen, beneficiaryType]);
 
     // Effect for making the dialog sticky when it opens
     useEffect(() => {
@@ -264,11 +267,11 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         if ((people.budget_goal - people.budget_raised - amount * 100) > 0) {
             return (
                 <>
-                    This  has a monthly budget goal that must be met for enrollment in school.
+                    This {beneficiaryType === "ANIMAL" ? "animal" : "child"} has a monthly budget goal that must be met for {beneficiaryType === "ANIMAL" ? "care and medical needs" : "enrollment in school"}.
                     {selectedOption === "payment" && (
                         <>
                             <br />
-                            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this .
+                            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this {beneficiaryType === "ANIMAL" ? "animal" : "child"}.
                         </>
                     )}
                     <br />
@@ -278,7 +281,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         } else if (people.budget_raised > 0) {
             return (
                 <>
-                    This  is partially sponsored. Your contribution will help reach their monthly budget goal!
+                    This {beneficiaryType === "ANIMAL" ? "animal" : "child"} is partially sponsored. Your contribution will help reach their monthly budget goal!
                     {selectedOption === "payment" && (
                         <>
                             <br />
@@ -290,7 +293,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         }
         return (
             <>
-                Your sponsorship will be applied towards the 's monthly budget goals.
+                Your {beneficiaryType === "ANIMAL" ? "adoption" : "sponsorship"} will be applied towards the {beneficiaryType === "ANIMAL" ? "animal" : "child"}'s monthly budget goals.
                 {selectedOption === "payment" && (
                     <>
                         <br />

@@ -16,7 +16,8 @@ import { genders, status as statusOptions } from "./config";
 
 const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({ 
   onFilterChange,
-  variant = 'default'
+  variant = 'default',
+  beneficiaryType = 'CHILD'
 }) => {
   const {
     selectedGender,
@@ -28,12 +29,13 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
     clearFilters,
   } = useFilterStore();
   const [minAge, setMinAge] = useState<number>(selectedAgeRange[0] || 0);
-  const [maxAge, setMaxAge] = useState<number>(selectedAgeRange[1] || 14);
+  const defaultMaxAge = beneficiaryType === 'ANIMAL' ? 20 : 14;
+  const [maxAge, setMaxAge] = useState<number>(selectedAgeRange[1] || defaultMaxAge);
 
   useEffect(() => {
     setMinAge(selectedAgeRange[0] || 0);
-    setMaxAge(selectedAgeRange[1] || 14);
-  }, [selectedAgeRange]);
+    setMaxAge(selectedAgeRange[1] || defaultMaxAge);
+  }, [selectedAgeRange, defaultMaxAge]);
 
   const handleFilterChange = (updatedFilters: {
     gender?: string;
@@ -62,7 +64,7 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
     clearFilters();
     setMinAge(0);
     setMaxAge(14);
-    onFilterChange({ gender: "", ageRange: [0, 14], status: [] });
+    onFilterChange({ gender: "", ageRange: [0, defaultMaxAge], status: [] });
   };
 
   return (
@@ -143,7 +145,7 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
             <Slider
               value={[minAge, maxAge]}
               min={0}
-              max={14}
+              max={defaultMaxAge}
               step={1}
               onValueChange={(details) => {
                 if (details.value && details.value.length >= 2) {

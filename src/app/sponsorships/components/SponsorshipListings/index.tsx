@@ -10,7 +10,8 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
   selectedBeneficiaryId,
   selectedCountry,
   setSelectedBeneficiaryId,
-  mapBounds
+  mapBounds,
+  beneficiaryType = "CHILD"
 }, ref) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
@@ -132,6 +133,7 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
           onPrevious={() => handleDialogNavigation('previous')}
           {...getDialogNavigationProps()}
           trigger={<div style={{ display: 'none' }} />}
+          beneficiaryType={beneficiaryType}
         />
       )}
 
@@ -149,6 +151,7 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
                   onPrevious={beneficiary.id === activeBeneficiaryId ? () => handleDialogNavigation('previous') : undefined}
                   hasNext={beneficiary.id === activeBeneficiaryId ? getDialogNavigationProps().hasNext : false}
                   hasPrevious={beneficiary.id === activeBeneficiaryId ? getDialogNavigationProps().hasPrevious : false}
+                  beneficiaryType={beneficiaryType}
                 />
               </Box>
             ) : null

@@ -3,6 +3,7 @@ import { Beneficiaries } from "./index";
 
 export interface FiltersProps {
   onFilterChange: (filters: { gender: string; ageRange: [number, number]; status: string[] }) => void;
+  beneficiaryType?: "CHILD" | "ANIMAL";
 }
 
 
@@ -28,6 +29,7 @@ export interface BeneficiaryListingsProps {
   isLoading?: boolean;
   setSelectedBeneficiaryId: (id: string | null) => void;
   mapBounds?: LatLngBounds;
+  beneficiaryType?: "CHILD" | "ANIMAL";
 }
 
 export interface BeneficiaryCardProps {
@@ -39,9 +41,22 @@ export interface BeneficiaryCardProps {
     hasNext?: boolean;
     hasPrevious?: boolean;
     onOpenDialog?: () => void;
+    beneficiaryType?: "CHILD" | "ANIMAL";
 }
 
 export interface SponsorshipDetailsProps {
   beneficiaryId?: string;
   hideStatus?: boolean;
+}
+
+export interface SponsorDialogProps {
+  people: Beneficiaries;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  hasNext: boolean;
+  hasPrevious: boolean;
+  trigger: React.ReactElement;
+  beneficiaryType?: "CHILD" | "ANIMAL";
 }

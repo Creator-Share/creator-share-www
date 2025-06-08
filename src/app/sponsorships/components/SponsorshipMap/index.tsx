@@ -11,7 +11,7 @@ import Filters from "../Filters";
 
 const ANIMATION_DURATION = 1;
 
-const CustomIcon = L.divIcon({
+const createCustomIcon = () => L.divIcon({
   html: `<div style="background: transparent; border: none;">
            <img src="/CreatorSharePin.svg" alt="Beneficiary Marker" style="width: 30px; height: 30px;" />
          </div>`,
@@ -22,7 +22,7 @@ const CustomIcon = L.divIcon({
 
 const createClusterCustomIcon = (cluster: MarkerCluster): L.DivIcon => {
   const count = cluster.getChildCount();
-  if (count <= 0) return CustomIcon;
+  if (count <= 0) return createCustomIcon();
   
   return L.divIcon({
     html: `
@@ -119,8 +119,9 @@ const FitBounds: React.FC<{ beneficiaryData: BeneficiaryMapProps["beneficiaryDat
 const ZoomController: React.FC<{ 
   beneficiaryData: BeneficiaryMapProps["beneficiaryData"],
   onBoundsChange: (bounds: LatLngBounds) => void,
-  onResetView?: () => void
-}> = ({ beneficiaryData, onBoundsChange, onResetView }) => {
+  onResetView?: () => void,
+  beneficiaryType?: "CHILD" | "ANIMAL"
+}> = ({ beneficiaryData, onBoundsChange, onResetView, beneficiaryType = "CHILD" }) => {
   const map = useMap();
   const [showReset, setShowReset] = useState(false);
 
@@ -171,7 +172,7 @@ const ZoomController: React.FC<{
   return showReset ? (
     <Box position="absolute" bottom={4} left={4} zIndex={1000}>
       <Button size="sm" className="bg-white text-dark px-8" onClick={handleResetView}>
-        View All Children
+        View All {beneficiaryType === "ANIMAL" ? "Animals" : "Children"}
       </Button>
     </Box>
   ) : null;
@@ -240,23 +241,25 @@ interface ExtendedBeneficiaryMapProps extends BeneficiaryMapProps {
     ageRange: [number, number];
     status: string[];
   }>) => void;
+  beneficiaryType?: "CHILD" | "ANIMAL";
 }
 
-const ChildMap: React.FC<ExtendedBeneficiaryMapProps> = ({ 
+const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({ 
   beneficiaryData, 
   onMarkerClick, 
   onBoundsChange, 
   onResetView,
-  onFilterChange 
+  onFilterChange,
+  beneficiaryType = "CHILD"
 }) => {
   const [isReady, setIsReady] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
   const [showFilters, setShowFilters] = useState(true);
 
   const handleMarkerClick = useCallback((id: string) => {
-    const child = beneficiaryData.find((c) => c.id === id);
-    if (child && child.location_geo && mapRef.current) {
-      const { coordinates } = child.location_geo;
+    const beneficiary = beneficiaryData.find((b) => b.id === id);
+    if (beneficiary && beneficiary.location_geo && mapRef.current) {
+      const { coordinates } = beneficiary.location_geo;
       mapRef.current.setView([coordinates[1], coordinates[0]], 12, {
         animate: true,
         duration: ANIMATION_DURATION
@@ -265,24 +268,24 @@ const ChildMap: React.FC<ExtendedBeneficiaryMapProps> = ({
     onMarkerClick(id);
   }, [beneficiaryData, onMarkerClick]);
 
-  const checkChildrenInView = useCallback(() => {
+  const checkBeneficiariesInView = useCallback(() => {
     if (!mapRef.current) return;
     
     const currentBounds = mapRef.current.getBounds();
-    const childrenInView = beneficiaryData.filter((child) => {
-      if (!child.location_geo) return false;
-      const childLatLng = L.latLng(
-        child.location_geo.coordinates[1], 
-        child.location_geo.coordinates[0]
+    const beneficiariesInView = beneficiaryData.filter((beneficiary) => {
+      if (!beneficiary.location_geo) return false;
+      const beneficiaryLatLng = L.latLng(
+        beneficiary.location_geo.coordinates[1], 
+        beneficiary.location_geo.coordinates[0]
       );
-      return currentBounds.contains(childLatLng);
+      return currentBounds.contains(beneficiaryLatLng);
     });
 
-    if (childrenInView.length === 0 && beneficiaryData.length > 0) {
-      const firstChild = beneficiaryData[0];
-      if (firstChild.location_geo) {
+    if (beneficiariesInView.length === 0 && beneficiaryData.length > 0) {
+      const firstBeneficiary = beneficiaryData[0];
+      if (firstBeneficiary.location_geo) {
         mapRef.current.setView(
-          [firstChild.location_geo.coordinates[1], firstChild.location_geo.coordinates[0]],
+          [firstBeneficiary.location_geo.coordinates[1], firstBeneficiary.location_geo.coordinates[0]],
           mapRef.current.getZoom(),
           { animate: true, duration: 1 }
         );
@@ -295,7 +298,7 @@ const ChildMap: React.FC<ExtendedBeneficiaryMapProps> = ({
       const map = mapRef.current;
       
       const handleMoveEnd = () => {
-        checkChildrenInView();
+        checkBeneficiariesInView();
       };
       
       map.on('moveend', handleMoveEnd);
@@ -304,36 +307,35 @@ const ChildMap: React.FC<ExtendedBeneficiaryMapProps> = ({
         map.off('moveend', handleMoveEnd);
       };
     }
-  }, [checkChildrenInView]);
+  }, [checkBeneficiariesInView]);
 
   const MemoizedMarkers = useMemo(() => {
     if (!beneficiaryData || beneficiaryData.length === 0) {
       return [];
     }
     
-    const validChildren = beneficiaryData.filter((child) => 
-      child && 
-      child.location_geo && 
-      child.location_geo.coordinates && 
-      child.location_geo.coordinates.length === 2 &&
-      typeof child.location_geo.coordinates[0] === 'number' &&
-      typeof child.location_geo.coordinates[1] === 'number' &&
-      child.name && child.name.trim() !== '' &&
-      child.country && child.country.trim() !== ''
+    const validBeneficiaries = beneficiaryData.filter((beneficiary) => 
+      beneficiary && 
+      beneficiary.location_geo && 
+      beneficiary.location_geo.coordinates && 
+      beneficiary.location_geo.coordinates.length === 2 &&
+      typeof beneficiary.location_geo.coordinates[0] === 'number' &&
+      typeof beneficiary.location_geo.coordinates[1] === 'number' &&
+      beneficiary.name && beneficiary.name.trim() !== '' &&
+      beneficiary.country && beneficiary.country.trim() !== ''
     );
     
-    
-    return validChildren.map((child) => (
+    return validBeneficiaries.map((beneficiary) => (
       <Marker
-        key={child.id}
-        position={[child.location_geo!.coordinates[1], child.location_geo!.coordinates[0]]}
-        icon={CustomIcon}
+        key={beneficiary.id}
+        position={[beneficiary.location_geo!.coordinates[1], beneficiary.location_geo!.coordinates[0]]}
+        icon={createCustomIcon()}
         eventHandlers={{
-          click: () => handleMarkerClick(child.id),
+          click: () => handleMarkerClick(beneficiary.id),
         }}
       >
         <Tooltip direction="top">
-          {child.name || 'Unknown'} - {child.country || 'Unknown'}
+          {beneficiary.name || 'Unknown'} - {beneficiary.country || 'Unknown'}
         </Tooltip>
       </Marker>
     ));
@@ -426,10 +428,11 @@ const ChildMap: React.FC<ExtendedBeneficiaryMapProps> = ({
           beneficiaryData={beneficiaryData}
           onBoundsChange={onBoundsChange}
           onResetView={onResetView}
+          beneficiaryType={beneficiaryType}
         />
         {beneficiaryData && beneficiaryData.length > 0 ? (
           <MarkerClusterGroup 
-            key={`cluster-${beneficiaryData.length}-${beneficiaryData.map((c) => c.id).join('-')}`}
+            key={`cluster-${beneficiaryData.length}-${beneficiaryData.map((b) => b.id).join('-')}`}
             chunkedLoading
             maxClusterRadius={150}
             showCoverageOnHover={false}
@@ -453,7 +456,7 @@ const ChildMap: React.FC<ExtendedBeneficiaryMapProps> = ({
           className="bg-white text-dark px-4 shadow-md"
           onClick={() => setShowFilters(!showFilters)}
         >
-          {showFilters ? "Hide Filters" : "Filter Children"}
+          {showFilters ? "Hide Filters" : `Filter ${beneficiaryType === "ANIMAL" ? "Animals" : "Children"}`}
         </Button>
       </Box>
       
@@ -471,6 +474,7 @@ const ChildMap: React.FC<ExtendedBeneficiaryMapProps> = ({
           <Filters
             onFilterChange={onFilterChange}
             variant="sidebar"
+            beneficiaryType={beneficiaryType}
           />
         </Box>
       )}
@@ -478,4 +482,4 @@ const ChildMap: React.FC<ExtendedBeneficiaryMapProps> = ({
   );
 };
 
-export default ChildMap;
+export default BeneficiaryMap;

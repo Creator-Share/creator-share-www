@@ -5,9 +5,9 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const id = url.pathname.split('/').pop();
-    
+
     const supabase = await createClient();
-    
+
     const { data, error } = await supabase
       .from("media")
       .select("*")
@@ -17,8 +17,6 @@ export async function GET(request: Request) {
     if (error) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    if (data && data.length > 0) {
     }
 
     return NextResponse.json(data || []);

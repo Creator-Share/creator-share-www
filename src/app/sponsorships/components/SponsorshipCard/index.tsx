@@ -22,7 +22,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     beneficiary,
     isSelected,
     id,
-    onOpenDialog
+    onOpenDialog,
+    beneficiaryType = "CHILD"
 }) => {
     const [images, setImages] = useState<BeneficiaryMedia[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
@@ -34,7 +35,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     useEffect(() => {
         const fetchImages = async () => {
             try {
-                const response = await fetch(`/api/admin/children/images/${beneficiary.id}`);
+                const endpoint = beneficiaryType === "ANIMAL" ? "animals" : "children";
+                const response = await fetch(`/api/admin/${endpoint}/images/${beneficiary.id}`);
                 if (response.ok) {
                     const data = await response.json();
                     setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
@@ -45,7 +47,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         };
 
         fetchImages();
-    }, [beneficiary.id]);
+    }, [beneficiary.id, beneficiaryType]);
 
     useEffect(() => {
         setDialogImageIndex(currentImageIndex);
@@ -298,7 +300,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                                     className="text-[#FFFFFF] px-4 cursor-pointer bg-[#1C3C8C] w-1/2"
                                     onClick={handleSponsorClick}
                                 >
-                                    Sponsor
+                                    {beneficiaryType === "ANIMAL" ? "Adopt" : "Sponsor"}
                                 </Button>
                             ) : (
                                 <Button
@@ -306,7 +308,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                                     className="text-[#FFFFFF] disabled cursor-not-allowed bg-gray-400 w-1/2"
                                     disabled
                                 >
-                                    Budget Fulfilled
+                                    {beneficiaryType === "ANIMAL" ? "Adopted" : "Budget Fulfilled"}
                                 </Button>
                             )}
                         </Flex>
@@ -357,13 +359,13 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                                     className="text-[#FFFFFF] w-full cursor-pointer bg-[#1C3C8C] mt-8"
                                     onClick={handleSponsorClick}
                                 >
-                                    Sponsor {beneficiary.name?.split(" ")[0]}
+                                    {beneficiaryType === "ANIMAL" ? "Adopt" : "Sponsor"} {beneficiary.name?.split(" ")[0]}
                                 </Button>
                             </Box>
                         ) : (
                             <Box fontSize="base" className="pb-6 px-6">
                                 <Button fontWeight="md" className="text-[#FFFFFF] disabled w-full cursor-not-allowed bg-gray-400 mt-8">
-                                    Budget Fulfilled
+                                    {beneficiaryType === "ANIMAL" ? "Adopted" : "Budget Fulfilled"}
                                 </Button>
                             </Box>
                         )}
