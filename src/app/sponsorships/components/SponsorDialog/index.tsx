@@ -55,6 +55,14 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     onOpenChange
 }) => {
     const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
+    const minimumAmount = 10;
+    // To avoid a leftover below minimum, cap the max selectable amount so that leftover is 0 or >= minimum
+    const maxSelectableAmount = remainingAmount > minimumAmount
+        ? remainingAmount - minimumAmount < minimumAmount
+            ? remainingAmount
+            : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
+        : remainingAmount;
+
     const [amount, setAmount] = useState<number>(remainingAmount);
     const [selectedOption, setSelectedOption] = useState<string>(paymentOptionsCollection.items[0].value);
     const [value, setValue] = useState<number[]>([remainingAmount]);
@@ -456,37 +464,81 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                 <Text mt={1} className="font-semibold text-base mb-[10px]">
                                     Amount
                                 </Text>
-                                <Flex
-                                    className="border rounded-xl"
-                                    mb={4}
-                                    align="center"
-                                    justify="center"
-                                    gap={2}
-                                >
-                                    <InputAddon className="bg-[#D6D6D6] px-[15px] py-[5px] m-1 text-[#959090] text-base font-medium">
-                                        $
-                                    </InputAddon>
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        max={remainingAmount}
-                                        value={amount || ''}
-                                        onChange={handleAmountChange}
-                                        className="px-4 h-[50px]"
-                                        placeholder="Enter Amount"
-                                    />
-                                </Flex>
-                                <Box my={4}>
-                                    <Slider
-                                        value={value}
-                                        min={0}
-                                        max={remainingAmount}
-                                        step={5}
-                                        variant="solid"
-                                        onValueChange={handleSliderChange}
-                                    />
-                                    <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
-                                </Box>
+                                {remainingAmount < minimumAmount ? (
+                                    <Box mb={4}>
+                                        <Flex
+                                            className="border rounded-xl"
+                                            mb={4}
+                                            align="center"
+                                            justify="center"
+                                            gap={2}
+                                        >
+                                            <InputAddon className="bg-[#D6D6D6] px-[15px] py-[5px] m-1 text-[#959090] text-base font-medium">
+                                                $
+                                            </InputAddon>
+                                            <Input
+                                                type="number"
+                                                value={remainingAmount}
+                                                readOnly
+                                                className="px-4 h-[50px] bg-gray-100"
+                                                placeholder="Enter Amount"
+                                            />
+                                        </Flex>
+                                        <Box my={4}>
+                                            <Slider
+                                                value={[remainingAmount]}
+                                                min={remainingAmount}
+                                                max={remainingAmount}
+                                                step={1}
+                                                variant="solid"
+                                                disabled
+                                                onValueChange={() => {}}
+                                            />
+                                            <Text textAlign="center" mt={2}>
+                                                You can sponsor the final ${remainingAmount} to fully fund this beneficiary, even though it is below the usual minimum.
+                                            </Text>
+                                        </Box>
+                                    </Box>
+                                ) : (
+                                    <>
+                                        <Flex
+                                            className="border rounded-xl"
+                                            mb={4}
+                                            align="center"
+                                            justify="center"
+                                            gap={2}
+                                        >
+                                            <InputAddon className="bg-[#D6D6D6] px-[15px] py-[5px] m-1 text-[#959090] text-base font-medium">
+                                                $
+                                            </InputAddon>
+                                            <Input
+                                                type="number"
+                                                min="1"
+                                                max={maxSelectableAmount}
+                                                value={amount || ''}
+                                                onChange={handleAmountChange}
+                                                className="px-4 h-[50px]"
+                                                placeholder="Enter Amount"
+                                            />
+                                        </Flex>
+                                        <Box my={4}>
+                                            <Slider
+                                                value={value}
+                                                min={0}
+                                                max={maxSelectableAmount}
+                                                step={5}
+                                                variant="solid"
+                                                onValueChange={handleSliderChange}
+                                            />
+                                            <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
+                                            {amount > 0 && amount < minimumAmount && (
+                                                <Text color="gray.400" fontSize="sm" textAlign="center" mt={1}>
+                                                    Minimum sponsorship amount is ${minimumAmount}.
+                                                </Text>
+                                            )}
+                                        </Box>
+                                    </>
+                                )}
                                 <Box>
                                     <Text className="font-semibold text-base">Frequency</Text>
                                     <SelectRoot
@@ -523,8 +575,21 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                     onClick={handleSponsor}
                                     loading={loading}
                                     loadingText="Processing..."
-                                    disabled={loading}
-                                    className="flex-1 py-3 bg-blue-700 text-white hover:bg-blue-800"
+                                    disabled={
+                                        loading ||
+                                        (
+                                            remainingAmount < minimumAmount
+                                                ? amount !== remainingAmount
+                                                : amount < minimumAmount
+                                        )
+                                    }
+                                    className={`flex-1 py-3 bg-blue-700 text-white hover:bg-blue-800${
+                                        (remainingAmount < minimumAmount
+                                            ? amount !== remainingAmount
+                                            : amount < minimumAmount)
+                                            ? ' opacity-50 cursor-not-allowed'
+                                            : ''
+                                    }`}
                                 >
                                     Checkout
                                 </Button>
