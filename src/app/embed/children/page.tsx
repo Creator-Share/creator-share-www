@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Box, Text, Image, Flex, Input, InputAddon, Spinner, Button as ChakraButton } from "@chakra-ui/react";
+import { Box, Text, Image, Flex, Input, InputAddon, Spinner } from "@chakra-ui/react";
 import { Button } from "@/components/ui/button";
 import { SelectRoot, SelectTrigger, SelectValueText, SelectContent, SelectItem } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
@@ -570,12 +570,20 @@ export default function SponsorshipEmbedChildrenPage() {
           </SelectRoot>
         </Box>
         <Flex gap={2} mb={2}>
-          <Button
-            className="flex-1 py-2 bg-[#D1D1D1] text-[#858585]"
-            disabled
+          <a
+            className={`flex-1 py-2 rounded-md text-center transition-colors duration-150
+              ${people.username
+                ? "bg-[#D1D1D1] text-[#1C3C8C] hover:bg-[#E8F0FF] cursor-pointer"
+                : "bg-[#D1D1D1] text-[#858585] opacity-50 cursor-not-allowed"
+              }`
+            }
+            href={people.username ? `https://dev.creatorshare.com/sponsorships/${people.username}` : undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            tabIndex={people.username ? 0 : -1}
           >
             More info
-          </Button>
+          </a>
           <Button
             className="flex-1 py-2 bg-blue-700 text-white hover:bg-blue-800"
             onClick={handleSponsor}
@@ -596,17 +604,25 @@ export default function SponsorshipEmbedChildrenPage() {
         <Text color="gray.500" fontSize="sm" textAlign="center" mb={3}>
           {renderDisclaimer()}
         </Text>
-        <ChakraButton
-          w="100%"
-          bg="#E8F0FF"
-          color="#1C3C8C"
-          borderRadius="md"
-          fontWeight="semibold"
-          _hover={{ bg: "#D6E6FF" }}
-          onClick={() => window.location.href = '/sponsorships'}
+        <a
+          href="https://dev.creatorshare.com/sponsorships"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "block",
+            width: "100%",
+            background: "#E8F0FF",
+            color: "#1C3C8C",
+            borderRadius: "0.75rem",
+            fontWeight: 600,
+            textAlign: "center",
+            padding: "0.75rem 0",
+            textDecoration: "none",
+            marginTop: "0.5rem"
+          }}
         >
           See more children
-        </ChakraButton>
+        </a>
       </Box>
     </Flex>
   );
