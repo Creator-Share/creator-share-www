@@ -80,29 +80,26 @@ export default function SponsorshipEmbedChildrenPage() {
   }, []);
 
   useEffect(() => {
-    async function fetchImages() {
-      if (!children[currentIndex]) return;
+    if (!children[currentIndex]) return;
+
+    const timeout = setTimeout(async () => {
       try {
         const response = await fetch(`/api/admin/children/images/${children[currentIndex].id}`);
         if (response.ok) {
           const data = await response.json();
           setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
+          setCurrentImageIndex(0);
         } else {
           setImages([]);
+          setCurrentImageIndex(0);
         }
       } catch {
         setImages([]);
+        setCurrentImageIndex(0);
       }
-      setCurrentImageIndex(0);
-    }
-    if (children.length > 0) {
-      fetchImages();
-      const remaining = (children[currentIndex].budget_goal - children[currentIndex].budget_raised) / 100;
-      setAmount(remaining);
-      setValue([remaining]);
-      setInputValue(remaining.toString());
-      setSelectedOption("subscription");
-    }
+    }, 0);
+
+    return () => clearTimeout(timeout);
   }, [currentIndex, children]);
 
   console.log('Current State:', { children, loadingChildren, currentIndex });
@@ -381,7 +378,11 @@ export default function SponsorshipEmbedChildrenPage() {
         <Box position="relative">
           <Flex justify="center" mb={3}>
             <Image
-              src={images[currentImageIndex]?.image_url || people.image_url || placeholderImage}
+              src={
+                images.length > 0
+                  ? images[currentImageIndex]?.image_url
+                  : people.image_url || placeholderImage
+              }
               alt={people.name}
               borderRadius="xl"
               boxSize="120px"
