@@ -1,5 +1,5 @@
 export type Gender = "Boy" | "Girl";
-export type PersonStatus = "New" | "Partially Funded" | "Budget Fulfilled" | "Archived" | "Draft";
+export type Status = "New" | "Partially Funded" | "Budget Fulfilled" | "Archived" | "Draft";
 export type BeneficiaryType = "CHILD" | "ANIMAL" | "FAMILY";
 
 export interface Geography {
@@ -16,7 +16,7 @@ export interface Beneficiaries {
   biography: string;
   budget_goal: number;
   budget_raised: number;
-  status: PersonStatus;
+  status: Status;
   country: string;
   location_geo: Geography | null;
   location_str: string;

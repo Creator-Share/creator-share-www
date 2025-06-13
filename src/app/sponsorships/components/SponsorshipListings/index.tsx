@@ -28,9 +28,14 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
         return false;
       }
 
-      if (mapBounds && beneficiary.location_geo) {
-        const [lng, lat] = beneficiary.location_geo.coordinates;
-        return mapBounds.contains([lat, lng]);
+      if (mapBounds) {
+        if (beneficiary.location_geo) {
+          const [lng, lat] = beneficiary.location_geo.coordinates;
+          return mapBounds.contains([lat, lng]);
+        } else {
+          // Include animals with null location_geo in the listings
+          return true;
+        }
       }
 
       return true;

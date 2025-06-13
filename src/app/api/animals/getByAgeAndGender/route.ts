@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { calculateAge } from "@/utils/ageCalculator";
-import { Beneficiaries, Gender, PersonStatus } from "@/types/admin.types";
+import { Beneficiaries, Gender, Status } from "@/types/admin.types";
 
 export async function GET(req: Request) {
   const supabase = await createClient();
@@ -9,7 +9,7 @@ export async function GET(req: Request) {
 
   const gender = searchParams.get("gender") as Gender | null;
   const statusString = searchParams.get("status") || "";
-  const status = statusString.split(",") as PersonStatus[];
+  const status = statusString.split(",") as Status[];
 
   try {
     let query = supabase.from("beneficiaries").select("*").eq("beneficiary_type", "ANIMAL");
@@ -19,10 +19,12 @@ export async function GET(req: Request) {
     }
 
     if (status.length > 0) {
+      console.log('Status filter:', status);
       query = query.in("status", status);
     }
 
     const { data, error } = await query;
+    console.log('Query result:', data);
     if (error) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: "Database error" }, { status: 500 });
@@ -42,13 +44,14 @@ export async function GET(req: Request) {
       } else if (parts.length === 2) {
         const [minAge, maxAge] = parts;
         filteredData = filteredData.filter((animal) => {
+          if (!animal.birth_date) return true;
           const animalAge = calculateAge(new Date(animal.birth_date).toISOString());
           return animalAge >= minAge && animalAge <= maxAge;
         });
       }
     }
 
-    return NextResponse.json({ people: filteredData });
+    return NextResponse.json({ beneficiary: filteredData });
   } catch (err) {
     console.error("Unexpected error:", err);
     return NextResponse.json(

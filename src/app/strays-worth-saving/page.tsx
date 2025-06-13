@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Box, Flex, Text, Spinner } from '@chakra-ui/react';
 import dynamic from 'next/dynamic';
 import { Beneficiaries } from '@/types';
+import { useFilterStore } from '@/store/filterStore';
 
 const SponsorshipMap = dynamic(() => import('../sponsorships/components/SponsorshipMap'), {
   ssr: false,
@@ -25,6 +26,8 @@ interface Filters {
 }
 
 const StraySponsorPage = () => {
+  const { setStatus } = useFilterStore();
+
   const [L, setL] = useState<typeof import("leaflet") | null>(null);
   const [currentBounds, setCurrentBounds] = useState<L.LatLngBounds | undefined>(undefined);
   const [animalsData, setAnimalsData] = useState<Beneficiaries[]>([]);
@@ -44,9 +47,18 @@ const StraySponsorPage = () => {
       .catch(error => console.error('Error loading Leaflet:', error));
   }, []);
 
+
   const handleFilterChange = React.useCallback((newFilters: Partial<Filters>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
-  }, []);
+    // Ensure we maintain the current status if not explicitly changed
+    const updatedFilters = {
+      ...newFilters,
+      status: newFilters.status ?? filters.status
+    };
+    
+    setFilters(prev => ({ ...prev, ...updatedFilters }));
+    // Also update the global filter store if status is being changed
+    setStatus(updatedFilters.status);
+  }, [setStatus, filters.status]);
 
   const fetchAnimals = React.useCallback(async (filters: Filters) => {
     setLoading(true);
@@ -66,11 +78,17 @@ const StraySponsorPage = () => {
         }
       }
 
+      console.log('Fetching animals with query:', `${endpoint}?${queryParams.toString()}`);
+      console.log('Status filter:', filters.status);
       const res = await fetch(`${endpoint}?${queryParams.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch animals data");
 
       const data = await res.json();
-      setAnimalsData(data.people || []);
+      console.log('API response data:', data);
+      if (data.beneficiary && data.beneficiary.length > 0) {
+        console.log('First animal status:', data.beneficiary[0].status);
+      }
+      setAnimalsData(data.beneficiary || []);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unexpected error occurred");
     } finally {
@@ -172,6 +190,19 @@ const StraySponsorPage = () => {
             >
               Showing results from {selectedCountry}
             </Text>
+            <button
+              style={{
+                marginBottom: "1rem",
+                padding: "0.5rem 1rem",
+                background: "#e2e8f0",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer"
+              }}
+              onClick={() => setSelectedCountry(null)}
+            >
+              Clear Country Filter
+            </button>
           </Box>
         </div>
       )}
