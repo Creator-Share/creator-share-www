@@ -95,11 +95,23 @@ const CreateDrawer = ({
       }
     } catch (error) {
       console.error("Error adding:", error);
-      toaster.create({
-        title: "Error",
-        description: "Failed to add animal",
-        duration: 5000,
-      });
+      const errorMsg = (error as Error)?.message || "";
+      if (
+        errorMsg.includes("duplicate key value") ||
+        errorMsg.toLowerCase().includes("username")
+      ) {
+        toaster.create({
+          title: "Username Error",
+          description: "This username is already taken. Please choose a different username.",
+          duration: 5000,
+        });
+      } else {
+        toaster.create({
+          title: "Error",
+          description: "Failed to add animal",
+          duration: 5000,
+        });
+      }
     } finally {
       setIsAdding(false);
     }
@@ -166,7 +178,7 @@ const CreateDrawer = ({
                     }
                   >
                     <option value="">Select Gender</option>
-                    <option value="Male">Male</option>
+                    <option value="Boy">Male</option>
                     <option value="Female">Female</option>
                     <option value="Unknown">Unknown</option>
                   </NativeSelectField>
