@@ -7,7 +7,7 @@ import Link from "next/link";
 
 async function getBeneficiary(username: string): Promise<Beneficiaries | null> {
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/children/get/username/${username}`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/beneficiaries/get/username/${username}`, {
       cache: "no-store",
     });
     if (!res.ok) return null;

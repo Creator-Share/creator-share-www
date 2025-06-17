@@ -55,7 +55,7 @@ export default function FullProfileDynamic() {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch(`/api/children/get/username/${username}`);
+        const res = await fetch(`/api/beneficiaries/get/username/${username}`);
         if (!res.ok) {
           throw new Error("Beneficiary not found");
         }
@@ -70,7 +70,7 @@ export default function FullProfileDynamic() {
 
           const activitiesData = await fetchActivitiesByBeneficiaryId(child.id);
           setActivities(activitiesData);
-          const res = await fetch('/api/children/get');
+          const res = await fetch('/api/beneficiaries/get');
           const data = await res.json();
           if (data.people) {
             setBeneficiaries(data.people);

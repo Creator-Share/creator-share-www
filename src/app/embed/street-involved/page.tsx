@@ -8,14 +8,14 @@ import { centsToDollars } from "@/utils/currency";
 import { toaster } from "@/components/ui/toaster";
 import { paymentOptionsCollection } from "@/app/sponsorships/components/SponsorDialog/config";
 import { useAuthStore } from "@/store/authStore";
-import { AnimalBeneficiary, BeneficiaryMedia } from "@/types/admin.types";
+import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types";
 
 const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
-const placeholderImage = "https://cdn-icons-png.flaticon.com/512/616/616408.png";
+const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
-export default function SponsorshipEmbedStraysPage() {
-  const [animals, setAnimals] = useState<AnimalBeneficiary[]>([]);
+export default function SponsorshipEmbedStreetInvolvedPage() {
+  const [streetInvolved, setStreetInvolved] = useState<Beneficiaries[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [images, setImages] = useState<BeneficiaryMedia[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -24,17 +24,17 @@ export default function SponsorshipEmbedStraysPage() {
   const [selectedOption, setSelectedOption] = useState<string>("subscription");
   const [value, setValue] = useState<number[]>([0]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [loadingAnimals, setLoadingAnimals] = useState<boolean>(true);
+  const [loadingStreetInvolved, setLoadingStreetInvolved] = useState<boolean>(true);
   const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
-    async function fetchAnimals() {
-      setLoadingAnimals(true);
+    async function fetchStreetInvolved() {
+      setLoadingStreetInvolved(true);
       try {
         const queryParams = new URLSearchParams();
         queryParams.append("status", ["New", "Partially Funded"].join(','));
-        queryParams.append("excludeStatus", ["Budget Fulfilled"].join(','));
-        queryParams.append("beneficiary_type", "ANIMAL");
+        queryParams.append("excludeStatus", ["Budget Fulfilled", "Fulfilled"].join(','));
+        queryParams.append("beneficiary_type", "STREET_INVOLVED");
         const url = `/api/beneficiaries/getByAgeAndGender?${queryParams.toString()}`;
         const res = await fetch(url, {
           method: 'GET',
@@ -44,38 +44,38 @@ export default function SponsorshipEmbedStraysPage() {
         });
         if (res.ok) {
           const data = await res.json();
-          const animalList = data.people;
-          if (!animalList || !Array.isArray(animalList)) {
-            setAnimals([]);
+          const streetList = data.people;
+          if (!streetList || !Array.isArray(streetList)) {
+            setStreetInvolved([]);
             return;
           }
-          setAnimals(animalList);
-          if (animalList.length > 0) {
-            const remaining = (animalList[0].budget_goal - animalList[0].budget_raised) / 100;
+          setStreetInvolved(streetList);
+          if (streetList.length > 0) {
+            const remaining = (streetList[0].budget_goal - streetList[0].budget_raised) / 100;
             setAmount(remaining);
             setValue([remaining]);
             setInputValue(remaining.toString());
           }
         } else {
-          setAnimals([]);
-          toaster.create({ title: "Error", description: "Failed to load strays." });
+          setStreetInvolved([]);
+          toaster.create({ title: "Error", description: "Failed to load street-involved beneficiaries." });
         }
       } catch {
-        setAnimals([]);
-        toaster.create({ title: "Error", description: "Failed to load strays." });
+        setStreetInvolved([]);
+        toaster.create({ title: "Error", description: "Failed to load street-involved beneficiaries." });
       } finally {
-        setLoadingAnimals(false);
+        setLoadingStreetInvolved(false);
       }
     }
-    fetchAnimals();
+    fetchStreetInvolved();
   }, []);
 
   useEffect(() => {
-    if (!animals[currentIndex]) return;
+    if (!streetInvolved[currentIndex]) return;
 
     const timeout = setTimeout(async () => {
       try {
-        const response = await fetch(`/api/admin/animals/images/${animals[currentIndex].id}`);
+        const response = await fetch(`/api/admin/children/images/${streetInvolved[currentIndex].id}`);
         if (response.ok) {
           const data = await response.json();
           setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
@@ -91,30 +91,30 @@ export default function SponsorshipEmbedStraysPage() {
     }, 0);
 
     return () => clearTimeout(timeout);
-  }, [currentIndex, animals]);
+  }, [currentIndex, streetInvolved]);
 
-  if (loadingAnimals) {
+  if (loadingStreetInvolved) {
     return (
       <Flex minH="100vh" align="center" justify="center" direction="column" gap={4}>
         <Spinner size="xl" />
-        <Text>Loading strays data...</Text>
+        <Text>Loading street-involved data...</Text>
       </Flex>
     );
   }
 
-  const animal = animals[currentIndex];
+  const street = streetInvolved[currentIndex];
 
-  if (!animal) {
+  if (!street) {
     return (
       <Flex minH="100vh" align="center" justify="center" direction="column" gap={4}>
-        <Text>No strays available for sponsorship</Text>
+        <Text>No street-involved beneficiaries available for sponsorship</Text>
         <Text color="gray.500" fontSize="sm">
-          {animals.length === 0 ? "No strays data found" : "Error loading stray data"}
+          {streetInvolved.length === 0 ? "No street-involved data found" : "Error loading street-involved data"}
         </Text>
       </Flex>
     );
   }
-  const remainingAmount = (animal.budget_goal - animal.budget_raised) / 100;
+  const remainingAmount = (street.budget_goal - street.budget_raised) / 100;
   const minimumAmount = 10;
   const maxSelectableAmount = remainingAmount > minimumAmount
     ? remainingAmount - minimumAmount < minimumAmount
@@ -181,12 +181,12 @@ export default function SponsorshipEmbedStraysPage() {
     setLoading(true);
     try {
       const payload = {
-        beneficiaryId: animal.id,
-        beneficiaryName: animal.name,
+        beneficiaryId: street.id,
+        beneficiaryName: street.name,
         beneficiaryImage: images[currentImageIndex]?.image_url || placeholderImage,
         amount: amount * 100,
         paymentType: selectedOption,
-        location: animal.country,
+        location: street.country,
         userId: user?.id,
         isEmbedded: true,
         allowBelowMinimum: remainingAmount < minimumAmount && amount === remainingAmount
@@ -199,7 +199,7 @@ export default function SponsorshipEmbedStraysPage() {
         setLoading(false);
         return;
       }
-      if (!animal.country) {
+      if (!street.country) {
         toaster.create({
           title: "Payment Error",
           description: "Missing location information. Please try again.",
@@ -271,28 +271,28 @@ export default function SponsorshipEmbedStraysPage() {
 
   const renderDisclaimer = () => {
     const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
-    if ((animal.budget_goal - animal.budget_raised - amount * 100) > 0) {
+    if ((street.budget_goal - street.budget_raised - amount * 100) > 0) {
       return (
         <>
-          This stray has a monthly budget goal that must be met for their care.
+          This street-involved beneficiary has a monthly budget goal that must be met for their support.
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this stray.
+              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this street-involved beneficiary.
             </>
           )}
           <br />
           Additional sponsors are required to meet this goal.
         </>
       );
-    } else if (animal.budget_raised > 0) {
+    } else if (street.budget_raised > 0) {
       return (
         <>
-          This stray is partially sponsored. Your contribution will help reach their monthly budget goal!
+          This street-involved beneficiary is partially sponsored. Your contribution will help reach their monthly budget goal!
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this stray.
+              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this street-involved beneficiary.
             </>
           )}
         </>
@@ -300,11 +300,11 @@ export default function SponsorshipEmbedStraysPage() {
     }
     return (
       <>
-        Your sponsorship will be applied towards the stray's monthly budget goals.
+        Your sponsorship will be applied towards the street-involved beneficiary's monthly budget goals.
         {selectedOption === "payment" && (
           <>
             <br />
-            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this stray.
+            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this street-involved beneficiary.
           </>
         )}
       </>
@@ -336,17 +336,17 @@ export default function SponsorshipEmbedStraysPage() {
           <Button
             variant="ghost"
             onClick={() => {
-              if (currentIndex < animals.length - 1) {
+              if (currentIndex < streetInvolved.length - 1) {
                 setCurrentIndex(currentIndex + 1);
               }
             }}
-            disabled={currentIndex >= animals.length - 1}
+            disabled={currentIndex >= streetInvolved.length - 1}
           >
             {"Next >>"}
           </Button>
         </Flex>
         <Text fontWeight="bold" fontSize="lg" textAlign="center" mb={2}>
-          Sponsor a Stray Worth Saving
+          Sponsor a Street-Involved Beneficiary
         </Text>
         <Box position="relative">
           <Flex justify="center" mb={3}>
@@ -356,7 +356,7 @@ export default function SponsorshipEmbedStraysPage() {
                   ? images[currentImageIndex]?.image_url
                   : placeholderImage
               }
-              alt={animal.name}
+              alt={street.name}
               borderRadius="xl"
               boxSize="120px"
               objectFit="cover"
@@ -413,7 +413,7 @@ export default function SponsorshipEmbedStraysPage() {
           )}
         </Box>
         <Text fontWeight="bold" fontSize="xl" textAlign="center" mb={2}>
-          {animal.name}
+          {street.name}
         </Text>
         <Flex align="center" justify="space-between" mb={1}>
           <Box flex="1">
@@ -422,19 +422,19 @@ export default function SponsorshipEmbedStraysPage() {
                 h="100%"
                 bg="#1C3C8C"
                 borderRadius="md"
-                width={`${Math.min((animal.budget_raised / animal.budget_goal) * 100, 100)}%`}
+                width={`${Math.min((street.budget_raised / street.budget_goal) * 100, 100)}%`}
                 transition="width 0.3s"
               />
             </Box>
             <Flex justify="space-between" mt={1}>
-              <Text fontSize="xs" color="gray.500">Raised: ${centsToDollars(animal.budget_raised)}</Text>
+              <Text fontSize="xs" color="gray.500">Raised: ${centsToDollars(street.budget_raised)}</Text>
               <Text fontSize="xs" color="gray.500">Pending: ${remainingAmount}</Text>
             </Flex>
           </Box>
         </Flex>
         <Flex justify="flex-end" mb={2}>
           <Text color="blue.700" fontWeight="semibold" fontSize="md">
-            Monthly Goal: ${centsToDollars(animal.budget_goal)}
+            Monthly Goal: ${centsToDollars(street.budget_goal)}
           </Text>
         </Flex>
         <Box mb={2}>
@@ -545,15 +545,15 @@ export default function SponsorshipEmbedStraysPage() {
         <Flex gap={2} mb={2}>
           <a
             className={`flex-1 py-2 rounded-md text-center transition-colors duration-150
-              ${animal.username
+              ${street.username
                 ? "bg-[#D1D1D1] text-[#1C3C8C] hover:bg-[#E8F0FF] cursor-pointer"
                 : "bg-[#D1D1D1] text-[#858585] opacity-50 cursor-not-allowed"
               }`
             }
-            href={animal.username ? `https://dev.creatorshare.com/sponsorships/${animal.username}` : undefined}
+            href={street.username ? `https://dev.creatorshare.com/sponsorships/${street.username}` : undefined}
             target="_blank"
             rel="noopener noreferrer"
-            tabIndex={animal.username ? 0 : -1}
+            tabIndex={street.username ? 0 : -1}
           >
             More info
           </a>
@@ -594,7 +594,7 @@ export default function SponsorshipEmbedStraysPage() {
             marginTop: "0.5rem"
           }}
         >
-          See more strays
+          See more street-involved beneficiaries
         </a>
       </Box>
     </Flex>

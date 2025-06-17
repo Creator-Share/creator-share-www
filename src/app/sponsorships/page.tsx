@@ -54,10 +54,10 @@ const SponsorChild = () => {
     setError(null);
 
     try {
-      let endpoint = "/api/children/get";
+      let endpoint = "/api/beneficiaries/get";
       const queryParams = new URLSearchParams();
       if (filters.gender || (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) || filters.status.length > 0) {
-        endpoint = "/api/children/getByAgeAndGender";
+        endpoint = "/api/beneficiaries/getByAgeAndGender";
         if (filters.gender) queryParams.append("gender", filters.gender);
         if (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) {
           queryParams.append("ageRange", filters.ageRange.join(','));

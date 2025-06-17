@@ -10,9 +10,10 @@ export async function GET(req: Request) {
   const gender = searchParams.get("gender") as Gender | null;
   const statusString = searchParams.get("status") || "";
   const status = statusString.split(",") as Status[];
+  const beneficiaryType = searchParams.get("beneficiary_type") || "CHILD";
 
   try {
-    let query = supabase.from("beneficiaries").select("*").eq("beneficiary_type", "CHILD");
+    let query = supabase.from("beneficiaries").select("*").eq("beneficiary_type", beneficiaryType);
 
     if (gender) {
       query = query.eq("gender", gender);
@@ -35,15 +36,15 @@ export async function GET(req: Request) {
       const parts = ageRange.split(",").map(Number);
       if (parts.length === 1) {
         const singleAge = parts[0];
-        filteredData = filteredData.filter((child) => {
-          const childAge = calculateAge(new Date(child.birth_date).toISOString());
-          return childAge === singleAge;
+        filteredData = filteredData.filter((b) => {
+          const age = calculateAge(new Date(b.birth_date).toISOString());
+          return age === singleAge;
         });
       } else if (parts.length === 2) {
         const [minAge, maxAge] = parts;
-        filteredData = filteredData.filter((child) => {
-          const childAge = calculateAge(new Date(child.birth_date).toISOString());
-          return childAge >= minAge && childAge <= maxAge;
+        filteredData = filteredData.filter((b) => {
+          const age = calculateAge(new Date(b.birth_date).toISOString());
+          return age >= minAge && age <= maxAge;
         });
       }
     }

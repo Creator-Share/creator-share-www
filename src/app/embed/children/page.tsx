@@ -35,7 +35,7 @@ export default function SponsorshipEmbedChildrenPage() {
         const queryParams = new URLSearchParams();
         queryParams.append("status", ["New", "Partially Funded"].join(','));
         queryParams.append("excludeStatus", ["Budget Fulfilled", "Fulfilled"].join(','));
-        const url = `/api/children/getByAgeAndGender?${queryParams.toString()}`;
+        const url = `/api/beneficiaries/getByAgeAndGender?${queryParams.toString()}`;
         console.log('Fetching children from:', url);
         const res = await fetch(url, {
           method: 'GET',
