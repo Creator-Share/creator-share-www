@@ -38,13 +38,14 @@ export async function GET(req: Request) {
       if (parts.length === 1) {
         const singleAge = parts[0];
         filteredData = filteredData.filter((animal) => {
+          if (!animal.birth_date) return false;
           const animalAge = calculateAge(new Date(animal.birth_date).toISOString());
           return animalAge === singleAge;
         });
       } else if (parts.length === 2) {
         const [minAge, maxAge] = parts;
         filteredData = filteredData.filter((animal) => {
-          if (!animal.birth_date) return true;
+          if (!animal.birth_date) return false;
           const animalAge = calculateAge(new Date(animal.birth_date).toISOString());
           return animalAge >= minAge && animalAge <= maxAge;
         });

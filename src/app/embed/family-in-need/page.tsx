@@ -75,7 +75,7 @@ export default function SponsorshipEmbedFamilyPage() {
 
     const timeout = setTimeout(async () => {
       try {
-        const response = await fetch(`/api/admin/children/images/${families[currentIndex].id}`);
+        const response = await fetch(`/api/admin/beneficiaries/images/${families[currentIndex].id}`);
         if (response.ok) {
           const data = await response.json();
           setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));

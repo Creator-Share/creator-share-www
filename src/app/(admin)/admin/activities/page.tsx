@@ -11,7 +11,7 @@ const ActivitiesAdminPage: React.FC = () => {
   const [selectedChild, setSelectedChild] = useState<string[]>([]);
   useEffect(() => {
     const fetchChildren = async () => {
-      const res = await fetch("/api/admin/children/retrieve");
+      const res = await fetch("/api/admin/beneficiaries/retrieve");
       const data = await res.json();
       setChildren(data.children || []);
     };

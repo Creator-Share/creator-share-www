@@ -84,7 +84,7 @@ export default function SponsorshipEmbedChildrenPage() {
 
     const timeout = setTimeout(async () => {
       try {
-        const response = await fetch(`/api/admin/children/images/${children[currentIndex].id}`);
+        const response = await fetch(`/api/admin/beneficiaries/images/${children[currentIndex].id}`);
         if (response.ok) {
           const data = await response.json();
           setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));

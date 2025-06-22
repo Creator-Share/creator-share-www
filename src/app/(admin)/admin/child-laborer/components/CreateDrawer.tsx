@@ -46,22 +46,32 @@ type CreateDrawerProps = {
 };
 const CreateDrawer = ({
     formData,
+    setFormData,
     setVideoFiles,
     setIsDrawerOpen,
     isDrawerOpen,
     handleInputChange,
     handleSelectChange,
-    handleLocationSelect,
     handleSubmit,
     setImageFiles,
     handleDrawerClose,
 }: CreateDrawerProps) => {
+
+    // Ensure location selection updates country, location_str, and location_geo
+    const handleLocationSelect = (geo: [number, number], locationStr: string, country: string) => {
+        setFormData({
+            ...formData,
+            location_geo: geo ? { type: "Point", coordinates: [geo[1], geo[0]] } : null,
+            location_str: locationStr,
+            country,
+        });
+    };
     const [isAdding, setIsAdding] = useState(false);
 
     const handleAdd = async () => {
         
         const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'country'] as const;
-        const emptyFields = requiredFields.filter(field => !formData[field]);
+        const emptyFields = requiredFields.filter(field => !formData[field as keyof Beneficiaries]);
         
         if (emptyFields.length > 0) {
             toaster.create({
@@ -91,7 +101,7 @@ const CreateDrawer = ({
             console.error("Error adding:", error);
             toaster.create({
                 title: "Error",
-                description: "Failed to add child",
+                description: "Failed to add child laborer",
                 duration: 5000,
             });
         } finally {
@@ -106,20 +116,20 @@ const CreateDrawer = ({
             <DrawerBackdrop />
             <DrawerTrigger asChild>
                 <Button className="border-[2px] border-[#E0E0E0] rounded-md w-fit h-[40px] px-10 bg-[#1C3C8C] text-white">
-                    <GoPlusCircle className="mr-[3.5px]" /> List A Child
+                    <GoPlusCircle className="mr-[3.5px]" /> List A Child Laborer
                 </Button>
             </DrawerTrigger>
             <DrawerContent>
                 <DrawerHeader>
                     <DrawerTitle>
-                        <Text fontSize="5xl"> Add a Child </Text>
+                        <Text fontSize="5xl"> Add a Child Laborer </Text>
                     </DrawerTitle>
                 </DrawerHeader>
                 <DrawerBody>
                     <Fieldset.Root size="lg">
                         <Stack>
-                            <Fieldset.Legend>Child details</Fieldset.Legend>
-                            <Fieldset.HelperText>Please provide child details below.</Fieldset.HelperText>
+                            <Fieldset.Legend>Child Laborer details</Fieldset.Legend>
+                            <Fieldset.HelperText>Please provide child laborer details below.</Fieldset.HelperText>
                         </Stack>
                         <Fieldset.Content>
                             <Field label="Name" required errorText="This field is required">

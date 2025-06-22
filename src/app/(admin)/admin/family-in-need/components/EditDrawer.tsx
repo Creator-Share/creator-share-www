@@ -31,13 +31,13 @@ import { HiUpload, HiX } from "react-icons/hi";
 import ActivitiesTable from "../../activities/components/ActivitiesTable";
 
 interface EditDrawerProps {
-    selectedChild: Partial<Beneficiaries>;
+    selectedBeneficiary: Beneficiaries | null;
     formDataEdit: Partial<Beneficiaries>;
     setFormDataEdit: React.Dispatch<React.SetStateAction<Partial<Beneficiaries>>>;
     isDrawerOpen: boolean;
     onClose: () => void;
-    onSave: (updatedChild: Partial<Beneficiaries>) => void;
-    onDelete: (childId: string) => Promise<void>;
+    onSave: (updated: Partial<Beneficiaries>) => void;
+    onDelete: (beneficiaryId: string) => Promise<void>;
     imageFiles: File[];
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
     videoFiles: File[];
@@ -46,7 +46,7 @@ interface EditDrawerProps {
 }
 
 const EditDrawer: React.FC<EditDrawerProps> = ({
-    selectedChild,
+    selectedBeneficiary,
     isDrawerOpen,
     imageFiles,
     videoFiles,
@@ -56,8 +56,24 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     setImageFiles,
     setVideoFiles
 }) => {
-    const [formDataEdit, setFormDataEdit] = useState<Partial<Beneficiaries>>(
-        selectedChild || {}
+    const [formDataEdit, setFormDataEdit] = useState<Beneficiaries>(
+        selectedBeneficiary || {
+            id: "",
+            name: "",
+            username: "",
+            biography: "",
+            budget_goal: 0,
+            budget_raised: 0,
+            status: "New",
+            country: "",
+            location_geo: null,
+            location_str: "",
+            video_url: "",
+            introduction: "",
+            active_subscriptions: 0,
+            metadata: {},
+            beneficiary_type: "FAMILY",
+        }
     );
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -85,30 +101,28 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     };
 
     useEffect(() => {
-        if (selectedChild) {
+        if (selectedBeneficiary) {
             // Convert budget_goal from cents to dollars for display
             const formattedData = {
-                ...selectedChild,
-                budget_goal: selectedChild.budget_goal ? selectedChild.budget_goal / 100 : 0
+                ...selectedBeneficiary,
+                budget_goal: selectedBeneficiary.budget_goal ? selectedBeneficiary.budget_goal / 100 : 0
             };
             setFormDataEdit(formattedData);
-            setVideoUrl(selectedChild.video_url || null);
+            setVideoUrl(selectedBeneficiary.video_url || null);
         }
-    }, [selectedChild]);
+    }, [selectedBeneficiary]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        // Convert budget_goal to number if it's the budget field
-        const processedValue = name === 'budget_goal' ? parseFloat(value) || 0 : value;
-        setFormDataEdit((prev) => ({ ...prev, [name]: processedValue }));
+        setFormDataEdit((prev: Beneficiaries) => ({ ...prev, [name]: value }));
     };
 
     const handleSelectChange = (name: string, value: string) => {
-        setFormDataEdit((prev) => ({ ...prev, [name]: value }));
+        setFormDataEdit((prev: Beneficiaries) => ({ ...prev, [name]: value }));
     };
 
     const handleSave = async () => {
-        const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
+        const requiredFields = ['name', 'username', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
         const emptyFields = requiredFields.filter(field => !formDataEdit[field as keyof Beneficiaries]);
 
         if (emptyFields.length > 0) {
@@ -154,7 +168,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                     .from("media")
                     .insert(
                         imageUrls.map((url, index) => ({
-                            beneficiary_id: selectedChild?.id || '',
+                            beneficiary_id: selectedBeneficiary?.id || '',
                             image_url: url,
                             order_index: index
                         }))
@@ -190,7 +204,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     };
 
     const handleLocationSelect = (geo: [number, number], locationStr: string, country: string) => {
-        setFormDataEdit((prev) => ({
+        setFormDataEdit((prev: Beneficiaries) => ({
             ...prev,
             location_geo: { type: "Point", coordinates: [geo[1], geo[0]] },
             location_str: locationStr,
@@ -199,18 +213,18 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     };
 
     const fetchImages = useCallback(async () => {
-        if (selectedChild?.id) {
-            const response = await fetch(`/api/admin/beneficiaries/images/${selectedChild.id}`);
+        if (selectedBeneficiary?.id) {
+            const response = await fetch(`/api/admin/beneficiaries/images/${selectedBeneficiary.id}`);
             if (response.ok) {
                 const images = await response.json();
                 setAllImages(images);
             }
         }
-    }, [selectedChild?.id]);
+    }, [selectedBeneficiary?.id]);
 
     useEffect(() => {
         fetchImages();
-    }, [selectedChild?.id, fetchImages]);
+    }, [selectedBeneficiary?.id, fetchImages]);
 
     const handleDeleteImage = async (imageId: string) => {
         try {
@@ -246,7 +260,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
         }
     };
 
-    if (!selectedChild) return null;
+    if (!selectedBeneficiary) return null;
 
     return (
         <DrawerRoot placement="start" size="full" open={isDrawerOpen} onOpenChange={onClose}>
@@ -254,14 +268,14 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             <DrawerContent>
                 <DrawerHeader>
                     <DrawerTitle>
-                        <Text fontSize="5xl"> Edit Child </Text>
+                        <Text fontSize="5xl"> Edit Family in Need </Text>
                     </DrawerTitle>
                 </DrawerHeader>
                 <DrawerBody>
                     <Fieldset.Root size="lg">
                         <Stack>
-                            <Fieldset.Legend>Child details</Fieldset.Legend>
-                            <Fieldset.HelperText>Please provide child details below.</Fieldset.HelperText>
+                            <Fieldset.Legend>Family in Need details</Fieldset.Legend>
+                            <Fieldset.HelperText>Please provide family in need details below.</Fieldset.HelperText>
                         </Stack>
                         <Fieldset.Content>
                             <Field label="Name" required errorText="This field is required">
@@ -280,31 +294,6 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     px={2}
                                     onChange={handleInputChange}
                                     value={formDataEdit?.username || ''}
-                                />
-                            </Field>
-                            <Field label="Gender" required errorText="This field is required">
-                                <NativeSelectRoot>
-                                    <NativeSelectField
-                                        className="border"
-                                        placeholder="Select Gender"
-                                        px={2}
-                                        name="gender"
-                                        onChange={(e) => handleSelectChange("gender", e.target.value)}
-                                        value={formDataEdit.gender || ''}
-                                    >
-                                        <option value="Boy">Boy</option>
-                                        <option value="Girl">Girl</option>
-                                    </NativeSelectField>
-                                </NativeSelectRoot>
-                            </Field>
-                            <Field label="Birth Day" required errorText="This field is required">
-                                <Input
-                                    name="birth_date"
-                                    type="date"
-                                    className="border"
-                                    px={2}
-                                    onChange={handleInputChange}
-                                    value={formDataEdit.birth_date || ''}
                                 />
                             </Field>
                             <Field label="Biography" required errorText="This field is required">
@@ -364,7 +353,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                             <div key={image.id} className="relative group">
                                                 <Image
                                                     src={image.image_url}
-                                                    alt={`Child's photo ${index + 1}`}
+                                                    alt={`Family in Need's photo ${index + 1}`}
                                                     width={200}
                                                     height={200}
                                                     objectFit="cover"
@@ -415,25 +404,25 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                 </FileUploadRoot>
                             </Field>
                             <MapPicker
-                                onSelectLocation={handleLocationSelect}
-                                initialLocation={
-                                    selectedChild?.location_geo ? {
-                                        coordinates: [
-                                            selectedChild.location_geo.coordinates[1],
-                                            selectedChild.location_geo.coordinates[0]
-                                        ],
-                                        locationStr: selectedChild.location_str || "",
-                                        country: selectedChild.country || ""
-                                    } : undefined
-                                }
-                            />
+                            onSelectLocation={handleLocationSelect}
+                            initialLocation={
+                                selectedBeneficiary && selectedBeneficiary.location_geo ? {
+                                    coordinates: [
+                                        selectedBeneficiary.location_geo.coordinates[1],
+                                        selectedBeneficiary.location_geo.coordinates[0]
+                                    ],
+                                    locationStr: selectedBeneficiary.location_str,
+                                    country: selectedBeneficiary.country
+                                } : undefined
+                            }
+                        />
                         </Fieldset.Content>
                     </Fieldset.Root>
-                    {selectedChild?.id && (
+                    {selectedBeneficiary?.id && (
                         <div className="mt-8">
                             <ActivitiesTable
-                                beneficiaryType="CHILD"
-                                beneficiaryId={selectedChild.id}
+                                beneficiaryType="FAMILY"
+                                beneficiaryId={selectedBeneficiary.id}
                             />
                         </div>
                     )}
@@ -452,10 +441,10 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                     <Button
                         className='bg-red-500 w-1/3 text-white'
                         onClick={async () => {
-                            if (selectedChild?.id) {
+                            if (selectedBeneficiary?.id) {
                                 try {
                                     setIsDeleting(true);
-                                    await onDelete(selectedChild.id);
+                                    await onDelete(selectedBeneficiary.id);
                                     onClose();
                                 } catch (error) {
                                     console.error("Error deleting:", error);
@@ -463,7 +452,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     setIsDeleting(false);
                                 }
                             } else {
-                                console.error("Child ID is undefined");
+                                console.error("Beneficiary ID is undefined");
                             }
                         }}
                         disabled={isDeleting || isSaving}

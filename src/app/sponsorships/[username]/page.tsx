@@ -33,7 +33,7 @@ export default function FullProfileDynamic() {
 
   const fetchImages = async (beneficiaryId: string) => {
     try {
-      const response = await fetch(`/api/admin/children/images/${beneficiaryId}`);
+      const response = await fetch(`/api/admin/beneficiaries/images/${beneficiaryId}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }

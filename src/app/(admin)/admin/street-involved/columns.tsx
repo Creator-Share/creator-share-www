@@ -118,7 +118,13 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     ),
     cell: ({ row }) => {
       const person = row.original;
-      return <div>{person.birth_date ? new Date(person.birth_date).toLocaleDateString() : '-'}</div>;
+      return (
+        <div>
+          {person.birth_date
+            ? new Date(person.birth_date).toLocaleDateString()
+            : ""}
+        </div>
+      );
     },
   },
   {
@@ -158,7 +164,7 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     ),
     cell: ({ row }) => {
       const person = row.original;
-      return <div className="line-clamp-2">{person.introduction}</div>;
+      return <div>{person.introduction}</div>;
     },
   },
   {

@@ -35,8 +35,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     useEffect(() => {
         const fetchImages = async () => {
             try {
-                const endpoint = beneficiaryType === "ANIMAL" ? "animals" : "children";
-                const response = await fetch(`/api/admin/${endpoint}/images/${beneficiary.id}`);
+                const response = await fetch(`/api/admin/beneficiaries/images/${beneficiary.id}`);
                 if (response.ok) {
                     const data = await response.json();
                     setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));

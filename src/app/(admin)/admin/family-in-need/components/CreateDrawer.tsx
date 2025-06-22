@@ -15,10 +15,6 @@ import {  Text, Fieldset, Input, Stack, Textarea } from "@chakra-ui/react";
 import { Button } from '@/components/ui/button';
 import { Field } from "@/components/ui/field";
 import {
-    NativeSelectField,
-    NativeSelectRoot,
-} from "@/components/ui/native-select";
-import {
     FileUploadList,
     FileUploadRoot,
     FileUploadTrigger,
@@ -50,7 +46,6 @@ const CreateDrawer = ({
     setIsDrawerOpen,
     isDrawerOpen,
     handleInputChange,
-    handleSelectChange,
     handleLocationSelect,
     handleSubmit,
     setImageFiles,
@@ -60,8 +55,8 @@ const CreateDrawer = ({
 
     const handleAdd = async () => {
         
-        const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'country'] as const;
-        const emptyFields = requiredFields.filter(field => !formData[field]);
+        const requiredFields = ['name', 'username', 'gender', 'biography', 'introduction', 'budget_goal', 'country'] as const;
+        const emptyFields = requiredFields.filter(field => !formData[field as keyof Beneficiaries]);
         
         if (emptyFields.length > 0) {
             toaster.create({
@@ -91,7 +86,7 @@ const CreateDrawer = ({
             console.error("Error adding:", error);
             toaster.create({
                 title: "Error",
-                description: "Failed to add child",
+                description: "Failed to add family in need",
                 duration: 5000,
             });
         } finally {
@@ -106,20 +101,20 @@ const CreateDrawer = ({
             <DrawerBackdrop />
             <DrawerTrigger asChild>
                 <Button className="border-[2px] border-[#E0E0E0] rounded-md w-fit h-[40px] px-10 bg-[#1C3C8C] text-white">
-                    <GoPlusCircle className="mr-[3.5px]" /> List A Child
+                    <GoPlusCircle className="mr-[3.5px]" /> List A Family in Need
                 </Button>
             </DrawerTrigger>
             <DrawerContent>
                 <DrawerHeader>
                     <DrawerTitle>
-                        <Text fontSize="5xl"> Add a Child </Text>
+                        <Text fontSize="5xl"> Add a Family in Need </Text>
                     </DrawerTitle>
                 </DrawerHeader>
                 <DrawerBody>
                     <Fieldset.Root size="lg">
                         <Stack>
-                            <Fieldset.Legend>Child details</Fieldset.Legend>
-                            <Fieldset.HelperText>Please provide child details below.</Fieldset.HelperText>
+                            <Fieldset.Legend>Family in Need details</Fieldset.Legend>
+                            <Fieldset.HelperText>Please provide family in need details below.</Fieldset.HelperText>
                         </Stack>
                         <Fieldset.Content>
                             <Field label="Name" required errorText="This field is required">
@@ -132,23 +127,6 @@ const CreateDrawer = ({
                                     px={2} 
                                     onChange={handleInputChange}
                                 />
-                            </Field>
-                            <Field label="Gender" required errorText="This field is required">
-                                <NativeSelectRoot>
-                                    <NativeSelectField
-                                        className="border"
-                                        placeholder="Select Gender"
-                                        px={2}
-                                        name="gender"
-                                        onChange={(e) => handleSelectChange("gender", e.target.value)}
-                                    >
-                                        <option value="Boy">Boy</option>
-                                        <option value="Girl">Girl</option>
-                                    </NativeSelectField>
-                                </NativeSelectRoot>
-                            </Field>
-                            <Field label="Birth Day" required errorText="This field is required">
-                                <Input name="birth_date" type="date" className="border" px={2} onChange={handleInputChange} />
                             </Field>
                             <Field label="Biography" required errorText="This field is required">
                                 <Textarea name="biography" size="xl" className="border" px={2} py={2} onChange={handleInputChange} />
@@ -164,7 +142,14 @@ const CreateDrawer = ({
                                 />
                             </Field>
                             <Field label="Budget Goal" required errorText="This field is required">
-                                <Input name="budget_goal" type="text" className="border" px={2} onChange={handleInputChange} />
+                                <Input 
+                                    name="budget_goal" 
+                                    type="number" 
+                                    className="border" 
+                                    px={2} 
+                                    onChange={handleInputChange}
+                                    value={formData.budget_goal || ''}
+                                />
                             </Field>
                             <Field label="Upload Image">
                                 <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]} maxFiles={5}>

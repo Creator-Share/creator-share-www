@@ -69,7 +69,6 @@ const CreateDrawer = ({
       "biography",
       "introduction",
       "budget_goal",
-      "status",
       "country",
       "breed",
       "animal_type",
@@ -255,26 +254,6 @@ const CreateDrawer = ({
                   onChange={handleInputChange}
                   value={formData.budget_goal}
                 />
-              </Field>
-              <Field label="Status" required errorText="This field is required">
-                <NativeSelectRoot>
-                  <NativeSelectField
-                    className="border"
-                    placeholder="Select Status"
-                    px={2}
-                    name="status"
-                    value={formData.status}
-                    onChange={(e) =>
-                      handleSelectChange("status", e.target.value)
-                    }
-                  >
-                    <option value="New">New</option>
-                    <option value="Partially Funded">Partially Funded</option>
-                    <option value="Budget Filled">Budget Filled</option>
-                    <option value="Archived">Archived</option>
-                    <option value="Draft">Draft</option>
-                  </NativeSelectField>
-                </NativeSelectRoot>
               </Field>
               <Field label="Country" required errorText="This field is required">
                 <Input

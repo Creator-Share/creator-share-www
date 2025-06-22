@@ -37,12 +37,14 @@ export async function GET(req: Request) {
       if (parts.length === 1) {
         const singleAge = parts[0];
         filteredData = filteredData.filter((b) => {
+          if (!b.birth_date) return false;
           const age = calculateAge(new Date(b.birth_date).toISOString());
           return age === singleAge;
         });
       } else if (parts.length === 2) {
         const [minAge, maxAge] = parts;
         filteredData = filteredData.filter((b) => {
+          if (!b.birth_date) return false;
           const age = calculateAge(new Date(b.birth_date).toISOString());
           return age >= minAge && age <= maxAge;
         });

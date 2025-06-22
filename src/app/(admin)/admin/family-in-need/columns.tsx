@@ -104,24 +104,6 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     ),
   },
   {
-    accessorKey: "birth_date",
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
-      >
-        Birth Date
-        <LuArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
-    cell: ({ row }) => {
-      const person = row.original;
-      return <div>{person.birth_date ? new Date(person.birth_date).toLocaleDateString() : '-'}</div>;
-    },
-  },
-  {
     accessorKey: "biography",
     header: ({ column }) => (
       <Button
@@ -158,7 +140,7 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     ),
     cell: ({ row }) => {
       const person = row.original;
-      return <div className="line-clamp-2">{person.introduction}</div>;
+      return <div>{person.introduction}</div>;
     },
   },
   {
