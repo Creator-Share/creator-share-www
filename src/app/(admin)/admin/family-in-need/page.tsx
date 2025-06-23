@@ -12,6 +12,7 @@ import DeleteDialog from "./components/DeleteDialog";
 import { useBeneficiaryStore } from "@/store/beneficiaryStore";
 import { Beneficiaries } from "@/types/admin.types";
 import { dollarsToCents } from "@/utils/currency";
+import GoBackButton from "@/components/ui/goBack";
 
 const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), { ssr: false });
 const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
@@ -160,6 +161,7 @@ const FamilyInNeedTable = () => {
 
   return (
     <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
+      <GoBackButton />
       <Box className="grid grid-cols-2 mb-2">
         <Text className="text-3xl font-semibold leading-9">Manage Families in Need</Text>
         <Box className="justify-self-end flex gap-3">

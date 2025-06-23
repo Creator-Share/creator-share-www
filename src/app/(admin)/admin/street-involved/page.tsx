@@ -12,6 +12,7 @@ import DeleteDialog from "./components/DeleteDialog";
 import { useBeneficiaryStore } from "@/store/beneficiaryStore";
 import { Beneficiaries, BeneficiaryType } from "@/types/admin.types";
 import { dollarsToCents } from "@/utils/currency";
+import GoBackButton from "@/components/ui/goBack";
 
 const initialFormData: Partial<Beneficiaries> = {
   name: "",
@@ -191,6 +192,7 @@ const StreetInvolvedTable = () => {
 
   return (
     <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
+      <GoBackButton />
       <Box className="grid grid-cols-2 mb-2">
         <Text className="text-3xl font-semibold leading-9">Manage Street Involved</Text>
         <Box className="justify-self-end flex gap-3">

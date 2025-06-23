@@ -12,6 +12,7 @@ import { toaster } from "@/components/ui/toaster";
 import CreateDrawer from "./components/CreateDrawer";
 import EditDrawer from "./components/EditDrawer";
 import DeleteDialog from "./components/DeleteDialog";
+import GoBackButton from "@/components/ui/goBack";
 
 type TableInstance = {
   getSelectedRowModel: () => { rows: Row<AnimalBeneficiary>[] };
@@ -328,6 +329,7 @@ const AnimalsTable = () => {
 
   return (
     <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
+      <GoBackButton />
       <Box className="grid grid-cols-2 mb-2">
         <Text className="text-3xl font-semibold leading-9">Animals</Text>
         <Box className="justify-self-end flex gap-3">
