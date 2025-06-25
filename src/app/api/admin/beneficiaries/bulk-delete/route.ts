@@ -9,10 +9,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No IDs provided" }, { status: 400 });
     }
 
+    // First, delete related activities
+    const { error: activitiesError } = await supabase
+      .from("activities")
+      .delete()
+      .in("been", ids)
+
+    if (activitiesError) {
+      return NextResponse.json({ error: activitiesError.message }, { status: 400 });
+    }
+
+    // Then, delete beneficiaries
     const { error } = await supabase
       .from("beneficiaries")
       .delete()
-      .in("id", ids);
+      .in("id", ids)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });

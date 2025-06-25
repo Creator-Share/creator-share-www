@@ -65,10 +65,10 @@ const StraySponsorPage = () => {
     setError(null);
 
     try {
-      let endpoint = "/api/animals/get";
+      let endpoint = "/api/beneficiaries/get";
       const queryParams = new URLSearchParams();
       if (filters.gender || (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 20)) || filters.status.length > 0) {
-        endpoint = "/api/animals/getByAgeAndGender";
+        endpoint = "/api/beneficiaries/getByAgeAndGender";
         if (filters.gender) queryParams.append("gender", filters.gender);
         if (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 20)) {
           queryParams.append("ageRange", filters.ageRange.join(','));

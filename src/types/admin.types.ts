@@ -47,17 +47,17 @@ export interface BeneficiaryMedia {
 }
 
 export type AnimalBeneficiary = {
-  id: string;
+  id?: string;
   name: string;
   username: string;
   biography: string;
   introduction: string;
-  budget_goal: number;
+  budget_goal: string | number;
   budget_raised: number;
-  status: string;
+  status: Status;
   country: string;
   location_str: string;
-  gender: string;
+  gender: Gender;
   video_url?: string;
   birth_date: string;
   active_subscriptions?: number;

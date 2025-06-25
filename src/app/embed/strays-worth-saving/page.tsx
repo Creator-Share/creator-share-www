@@ -51,7 +51,7 @@ export default function SponsorshipEmbedStraysPage() {
           }
           setAnimals(animalList);
           if (animalList.length > 0) {
-            const remaining = (animalList[0].budget_goal - animalList[0].budget_raised) / 100;
+            const remaining = (Number(animalList[0].budget_goal) - animalList[0].budget_raised) / 100;
             setAmount(remaining);
             setValue([remaining]);
             setInputValue(remaining.toString());
@@ -114,7 +114,7 @@ export default function SponsorshipEmbedStraysPage() {
       </Flex>
     );
   }
-  const remainingAmount = (animal.budget_goal - animal.budget_raised) / 100;
+  const remainingAmount = (Number(animal.budget_goal) - animal.budget_raised) / 100;
   const minimumAmount = 10;
   const maxSelectableAmount = remainingAmount > minimumAmount
     ? remainingAmount - minimumAmount < minimumAmount
@@ -271,7 +271,7 @@ export default function SponsorshipEmbedStraysPage() {
 
   const renderDisclaimer = () => {
     const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
-    if ((animal.budget_goal - animal.budget_raised - amount * 100) > 0) {
+    if ((Number(animal.budget_goal) - animal.budget_raised - amount * 100) > 0) {
       return (
         <>
           This stray has a monthly budget goal that must be met for their care.
@@ -422,7 +422,7 @@ export default function SponsorshipEmbedStraysPage() {
                 h="100%"
                 bg="#1C3C8C"
                 borderRadius="md"
-                width={`${Math.min((animal.budget_raised / animal.budget_goal) * 100, 100)}%`}
+                width={`${Math.min((animal.budget_raised / Number(animal.budget_goal)) * 100, 100)}%`}
                 transition="width 0.3s"
               />
             </Box>
@@ -434,7 +434,7 @@ export default function SponsorshipEmbedStraysPage() {
         </Flex>
         <Flex justify="flex-end" mb={2}>
           <Text color="blue.700" fontWeight="semibold" fontSize="md">
-            Monthly Goal: ${centsToDollars(animal.budget_goal)}
+            Monthly Goal: ${centsToDollars(Number(animal.budget_goal))}
           </Text>
         </Flex>
         <Box mb={2}>

@@ -16,16 +16,15 @@ import {
   NativeSelectField,
   NativeSelectRoot,
 } from "@/components/ui/native-select";
+
 import { AnimalBeneficiary } from "@/types/admin.types";
 
-type AnimalFormState = Omit<AnimalBeneficiary, "budget_goal"> & { budget_goal: string };
-
 type EditDrawerProps = {
-  formDataEdit: AnimalFormState;
-  setFormDataEdit: React.Dispatch<React.SetStateAction<AnimalFormState>>;
+  formDataEdit: AnimalBeneficiary;
+  setFormDataEdit: React.Dispatch<React.SetStateAction<AnimalBeneficiary>>;
   isDrawerOpen: boolean;
   onClose: () => void;
-  onSave: (animal: AnimalFormState) => Promise<void>;
+  onSave: (animal: AnimalBeneficiary) => Promise<void>;
   onDelete: (animalId: string) => Promise<void>;
 };
 
@@ -46,11 +45,31 @@ const EditDrawer = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormDataEdit((prev) => ({ ...prev, [name]: value }));
+    if (name === 'breed' || name === 'animal_type') {
+      setFormDataEdit((prev) => ({
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          [name]: value
+        }
+      }));
+    } else {
+      setFormDataEdit((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
-  const handleSelectChange = (name: keyof AnimalBeneficiary, value: string) => {
-    setFormDataEdit((prev) => ({ ...prev, [name]: value }));
+  const handleSelectChange = (name: string, value: string) => {
+    if (name === 'animal_type') {
+      setFormDataEdit((prev) => ({
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          [name]: value
+        }
+      }));
+    } else {
+      setFormDataEdit((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSave = async () => {
@@ -61,6 +80,7 @@ const EditDrawer = ({
   };
 
   const handleDelete = async () => {
+    if (!formDataEdit.id) return;
     setIsDeleting(true);
     await onDelete(formDataEdit.id);
     setIsDeleting(false);
@@ -145,7 +165,7 @@ const EditDrawer = ({
                   className="border"
                   px={2}
                   onChange={handleInputChange}
-                  value={formDataEdit.breed}
+                  value={formDataEdit.metadata?.breed || ""}
                 />
               </Field>
               <Field label="Animal Type" required errorText="This field is required">
@@ -155,7 +175,7 @@ const EditDrawer = ({
                     placeholder="Select Animal Type"
                     px={2}
                     name="animal_type"
-                    value={formDataEdit.animal_type}
+                    value={formDataEdit.metadata?.animal_type || ""}
                     onChange={(e) =>
                       handleSelectChange("animal_type", e.target.value)
                     }
