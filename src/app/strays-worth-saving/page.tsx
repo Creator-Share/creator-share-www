@@ -56,7 +56,6 @@ const StraySponsorPage = () => {
     };
     
     setFilters(prev => ({ ...prev, ...updatedFilters }));
-    // Also update the global filter store if status is being changed
     setStatus(updatedFilters.status);
   }, [setStatus, filters.status]);
 
@@ -65,30 +64,43 @@ const StraySponsorPage = () => {
     setError(null);
 
     try {
-      let endpoint = "/api/beneficiaries/get";
+      let endpoint = "/api/beneficiaries/getByAgeAndGender";
       const queryParams = new URLSearchParams();
-      if (filters.gender || (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 20)) || filters.status.length > 0) {
-        endpoint = "/api/beneficiaries/getByAgeAndGender";
-        if (filters.gender) queryParams.append("gender", filters.gender);
-        if (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 20)) {
-          queryParams.append("ageRange", filters.ageRange.join(','));
-        }
-        if (filters.status.length > 0) {
-          queryParams.append("status", filters.status.join(','));
-        }
+      
+      // Always include beneficiary_type and status
+      queryParams.append("beneficiary_type", "ANIMAL");
+      queryParams.append("status", filters.status.join(','));
+      
+      // Add optional filters
+      if (filters.gender) {
+        queryParams.append("gender", filters.gender);
+      }
+      if (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 20)) {
+        queryParams.append("ageRange", filters.ageRange.join(','));
       }
 
-      console.log('Fetching animals with query:', `${endpoint}?${queryParams.toString()}`);
-      console.log('Status filter:', filters.status);
-      const res = await fetch(`${endpoint}?${queryParams.toString()}`);
+      const url = `${endpoint}?${queryParams.toString()}`;
+      console.log('Fetching animals with URL:', url);
+      console.log('Filters:', {
+        beneficiary_type: "ANIMAL",
+        status: filters.status,
+        gender: filters.gender,
+        ageRange: filters.ageRange
+      });
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch animals data");
 
       const data = await res.json();
-      console.log('API response data:', data);
-      if (data.beneficiary && data.beneficiary.length > 0) {
-        console.log('First animal status:', data.beneficiary[0].status);
+      console.log('API response:', {
+        status: res.status,
+        statusText: res.statusText,
+        data: data
+      });
+      const animals = data.people || data.beneficiary || [];
+      if (animals.length > 0) {
+        console.log('First animal:', animals[0]);
       }
-      setAnimalsData(data.beneficiary || []);
+      setAnimalsData(animals);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unexpected error occurred");
     } finally {
