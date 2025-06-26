@@ -49,7 +49,6 @@ const StraySponsorPage = () => {
 
 
   const handleFilterChange = React.useCallback((newFilters: Partial<Filters>) => {
-    // Ensure we maintain the current status if not explicitly changed
     const updatedFilters = {
       ...newFilters,
       status: newFilters.status ?? filters.status
@@ -64,14 +63,12 @@ const StraySponsorPage = () => {
     setError(null);
 
     try {
-      let endpoint = "/api/beneficiaries/getByAgeAndGender";
+      const endpoint = "/api/beneficiaries/getByAgeAndGender";
       const queryParams = new URLSearchParams();
-      
-      // Always include beneficiary_type and status
+
       queryParams.append("beneficiary_type", "ANIMAL");
       queryParams.append("status", filters.status.join(','));
-      
-      // Add optional filters
+
       if (filters.gender) {
         queryParams.append("gender", filters.gender);
       }
