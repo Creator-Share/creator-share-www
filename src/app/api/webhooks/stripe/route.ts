@@ -4,7 +4,7 @@ import { createClient } from "@/utils/supabase/client";
 import { centsToDollars } from "@/utils/currency";
 import {
   sendSponsorshipConfirmationEmail,
-  sendPaymentFailedEmail,
+  sendPaymentFailedEmail
 } from "@/utils/email";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY! as string);
@@ -44,13 +44,247 @@ export async function POST(req: Request) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-
-        const beneficiaryId = session.metadata?.beneficiaryId;
+        const type = session.metadata?.type;
         const amount = parseFloat(session.metadata?.amount || "0");
-        const userId = session.metadata?.userId || null;
         const paymentType = session.metadata?.paymentType;
         const customerEmail = session.customer_details?.email;
         const interval = paymentType === "subscription" ? "month" : "year";
+
+        if (type === "partnership") {
+          const email = session.metadata?.email;
+          const project = session.metadata?.project;
+
+          if (!email || !amount || !project) {
+            console.error(
+              "Missing required partnership metadata:",
+              session.metadata
+            );
+            return NextResponse.json(
+              { error: "Invalid metadata" },
+              { status: 400 }
+            );
+          }
+
+          // Get payment method details
+          let last4: string | null = null;
+          let cardType: string | null = null;
+          let paymentMethodId: string | null = null;
+
+          console.log('Session:', {
+            customer: session.customer,
+            payment_intent: session.payment_intent,
+            subscription: session.subscription,
+            mode: session.mode
+          });
+
+          // Try to get payment method from setup intent first
+          if (session.setup_intent) {
+            const setupIntent = await stripe.setupIntents.retrieve(
+              session.setup_intent as string,
+              {
+                expand: ['payment_method'],
+              }
+            );
+            
+            console.log('SetupIntent:', {
+              id: setupIntent.id,
+              payment_method: setupIntent.payment_method
+            });
+            
+            if (typeof setupIntent.payment_method !== 'string' && setupIntent.payment_method?.card) {
+              last4 = setupIntent.payment_method.card.last4;
+              cardType = setupIntent.payment_method.card.brand;
+              paymentMethodId = setupIntent.payment_method.id;
+            }
+          }
+          // If no setup intent or no card details found, try payment intent
+          if ((!last4 || !cardType) && session.payment_intent) {
+            const paymentIntent = await stripe.paymentIntents.retrieve(
+              session.payment_intent as string,
+              {
+                expand: ['payment_method'],
+              }
+            );
+            
+            console.log('PaymentIntent:', {
+              id: paymentIntent.id,
+              payment_method: paymentIntent.payment_method,
+              card: typeof paymentIntent.payment_method !== 'string' ? paymentIntent.payment_method?.card : null
+            });
+            
+            if (typeof paymentIntent.payment_method !== 'string' && paymentIntent.payment_method?.card) {
+              last4 = paymentIntent.payment_method.card.last4;
+              cardType = paymentIntent.payment_method.card.brand;
+              paymentMethodId = paymentIntent.payment_method.id;
+            }
+          }
+          // If still no card details, try to get from customer's payment methods
+          if (!last4 || !cardType) {
+            const paymentMethods = await stripe.paymentMethods.list({
+              customer: session.customer as string,
+              type: 'card',
+            });
+            
+            console.log('Customer Payment Methods:', paymentMethods.data);
+            
+            if (paymentMethods.data.length > 0) {
+              last4 = paymentMethods.data[0].card?.last4 || null;
+              cardType = paymentMethods.data[0].card?.brand || null;
+              paymentMethodId = paymentMethods.data[0].id;
+            }
+          }
+
+          console.log('Card Details:', {
+            last4,
+            cardType,
+            paymentMethodId
+          });
+
+          // Update partnership status and details
+          const updateData = { 
+            status: 'active',
+            updated_at: new Date().toISOString(),
+            customer_id: session.customer as string,
+            card_number: last4,
+            card_type: cardType,
+            payment_intent: session.payment_intent ? session.payment_intent.toString() : null,
+            stripe_subscription_id: session.subscription as string,
+            current_period_start: new Date(),
+            current_period_end: new Date(
+              Date.now() +
+                (session.mode === "subscription" ? 30 : 365) * 24 * 60 * 60 * 1000
+            ),
+          };
+
+          console.log('Session customer:', session.customer);
+          console.log('Session subscription:', session.subscription);
+          console.log('Session payment_intent:', session.payment_intent);
+          console.log('Card details - last4:', last4, 'type:', cardType);
+
+          console.log('Updating partnership with:', updateData);
+
+          // First check if there's any existing partnership for this customer
+          const { data: partnerships, error: fetchError } = await supabase
+            .from('partnerships')
+            .select('*')
+            .or('customer_id.eq.' + session.customer + ',and(email.eq.' + email + ',status.eq.pending)')
+            .limit(1);
+
+          if (fetchError) {
+            console.error("Error fetching partnership:", fetchError);
+            return NextResponse.json(
+              { error: "Failed to fetch partnership" },
+              { status: 500 }
+            );
+          }
+
+          if (!partnerships || partnerships.length === 0) {
+            // Insert new partnership record if none found
+            const { error: insertError } = await supabase
+              .from('partnerships')
+              .insert({
+                email,
+                amount,
+                frequency: paymentType === "subscription" ? "monthly" : "annually",
+                project,
+                status: 'active',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                customer_id: session.customer as string,
+                card_number: last4,
+                card_type: cardType,
+                payment_intent: session.payment_intent ? session.payment_intent.toString() : null,
+                stripe_subscription_id: session.subscription as string,
+                current_period_start: new Date(),
+                current_period_end: new Date(
+                  Date.now() +
+                    (session.mode === "subscription" ? 30 : 365) * 24 * 60 * 60 * 1000
+                ),
+              });
+
+            if (insertError) {
+              console.error('Error creating partnership record:', insertError);
+              return NextResponse.json(
+                { error: "Failed to create partnership record" },
+                { status: 500 }
+              );
+            }
+          } else {
+            // Now update the partnership
+            const { data: updateResult, error: updateError } = await supabase
+              .from('partnerships')
+              .update(updateData)
+              .eq('id', partnerships[0].id)
+              .select();
+
+            console.log('Update result:', updateResult);
+            console.log('Update error:', updateError);
+
+            if (updateError) {
+              console.error("Error updating partnership status:", updateError);
+            }
+          }
+
+          // Create transaction record for partnership
+          const { error: transactionError } = await supabase
+            .from("transaction_ledger")
+            .insert({
+              description: `Partnership payment for ${project} project with amount of ${centsToDollars(amount)}`,
+              reference: session.invoice as string,
+              credit: amount,
+              subscription_type: session.mode === "subscription" ? "subscription" : "payment",
+              tx_action: "PARTNERSHIP",
+              customer_name: session.customer_details?.name || null,
+              customer_email: email || null,
+            });
+
+          if (transactionError) {
+            console.error("Error creating transaction:", transactionError);
+          }
+
+          // Send confirmation email for partnership
+          if (email) {
+            try {
+              const { sendPartnershipConfirmationEmail } = await import("@/utils/email");
+              const emailResult = await sendPartnershipConfirmationEmail(
+                email,
+                project,
+                amount,
+                session.mode === "subscription" ? "month" : "year"
+              );
+
+              // Log email attempt
+              await supabase.from("email_logs").insert({
+                email: email,
+                subject: `Thank you for your partnership with Creator Share Foundation!`,
+                status: emailResult.success ? "sent" : "failed",
+                error: emailResult.error ? JSON.stringify(emailResult.error) : null,
+                message_id: emailResult.messageId,
+                created_at: new Date(),
+              });
+            } catch (emailError) {
+              console.error("Error sending partnership email:", emailError);
+              
+              // Log failed email attempt
+              await supabase.from("email_logs").insert({
+                email: email,
+                subject: `Thank you for your partnership with Creator Share Foundation!`,
+                status: "failed",
+                error: emailError instanceof Error ? emailError.message : String(emailError),
+                created_at: new Date(),
+              });
+            }
+          }
+
+          return NextResponse.json(
+            { message: "Partnership processed successfully" },
+            { status: 200 }
+          );
+        }
+
+        // Handle regular sponsorship checkout
+        const beneficiaryId = session.metadata?.beneficiaryId;
+        const userId = session.metadata?.userId || null;
 
         if (!beneficiaryId || !amount) {
           console.error(
@@ -250,34 +484,152 @@ export async function POST(req: Request) {
 
       case "customer.subscription.created": {
         const subscription = event.data.object as Stripe.Subscription;
-        const { error: subscriptionError } = await supabase
-          .from("subscriptions")
-          .insert({
-            stripe_subscription_id: subscription.id,
-            user_id: subscription.metadata?.userId,
-            beneficiary_id: subscription.metadata?.beneficiaryId,
-            status:
-              subscription.status === "active" ? "complete" : "incomplete",
-            amount: subscription.items.data[0].price.unit_amount,
-            interval: subscription.items.data[0].price.recurring?.interval,
-            current_period_start: new Date(
-              subscription.current_period_start * 1000
-            ),
-            current_period_end: new Date(
-              subscription.current_period_end * 1000
-            ),
-            customer_id: subscription.customer as string,
+        const type = subscription.metadata?.type;
+
+        if (type === "partnership") {
+          const email = subscription.metadata?.email;
+          console.log('Subscription:', {
+            id: subscription.id,
+            customer: subscription.customer,
+            latest_invoice: subscription.latest_invoice,
+            metadata: subscription.metadata
           });
 
-        if (subscriptionError) {
-          console.error(
-            "Error creating subscription record:",
-            subscriptionError
-          );
-          return NextResponse.json(
-            { error: "Failed to create subscription record" },
-            { status: 500 }
-          );
+          if (email) {
+            // Get payment method details
+            let last4: string | null = null;
+            let cardType: string | null = null;
+            let paymentMethodId: string | null = null;
+
+            // Get latest invoice to get payment intent
+            const latestInvoice = await stripe.invoices.retrieve(subscription.latest_invoice as string);
+            const paymentIntent = latestInvoice.payment_intent as string;
+
+            if (paymentIntent) {
+              const pi = await stripe.paymentIntents.retrieve(
+                paymentIntent,
+                {
+                  expand: ['payment_method'],
+                }
+              );
+              
+              console.log('PaymentIntent:', {
+                id: pi.id,
+                payment_method: pi.payment_method,
+                card: typeof pi.payment_method !== 'string' ? pi.payment_method?.card : null
+              });
+              
+              if (typeof pi.payment_method !== 'string' && pi.payment_method?.card) {
+                last4 = pi.payment_method.card.last4;
+                cardType = pi.payment_method.card.brand;
+                paymentMethodId = pi.payment_method.id;
+              }
+            }
+
+            // If no card details found, try to get from customer's payment methods
+            if (!last4 || !cardType) {
+              const paymentMethods = await stripe.paymentMethods.list({
+                customer: subscription.customer as string,
+                type: 'card',
+              });
+              
+              console.log('Customer Payment Methods:', paymentMethods.data);
+              
+              if (paymentMethods.data.length > 0) {
+                last4 = paymentMethods.data[0].card?.last4 || null;
+                cardType = paymentMethods.data[0].card?.brand || null;
+                paymentMethodId = paymentMethods.data[0].id;
+              }
+            }
+
+            console.log('Card Details:', {
+              last4,
+              cardType,
+              paymentMethodId
+            });
+
+            // Update partnership record
+            const updateData = {
+              customer_id: subscription.customer as string,
+              card_number: last4,
+              card_type: cardType,
+              payment_intent: paymentIntent,
+              stripe_subscription_id: subscription.id,
+              current_period_start: new Date(subscription.current_period_start * 1000),
+              current_period_end: new Date(subscription.current_period_end * 1000),
+            };
+
+            console.log('Updating partnership with:', updateData);
+
+            // First get the partnership record
+            const { data: partnerships, error: fetchError } = await supabase
+              .from('partnerships')
+              .select('*')
+              .eq('email', email)
+              .eq('status', 'pending')
+              .limit(1);
+
+            if (fetchError) {
+              console.error("Error fetching partnership:", fetchError);
+              return NextResponse.json(
+                { error: "Failed to fetch partnership" },
+                { status: 500 }
+              );
+            }
+
+            if (!partnerships || partnerships.length === 0) {
+              console.error("No pending partnership found for email:", email);
+              return NextResponse.json(
+                { error: "No pending partnership found" },
+                { status: 404 }
+              );
+            }
+
+            // Now update the partnership
+            const { error: updateError } = await supabase
+              .from('partnerships')
+              .update(updateData)
+              .eq('id', partnerships[0].id);
+
+            if (updateError) {
+              console.error("Error updating partnership record:", updateError);
+              return NextResponse.json(
+                { error: "Failed to update partnership record" },
+                { status: 500 }
+              );
+            }
+          }
+        } else {
+          // Handle regular sponsorship subscription
+          const { error: subscriptionError } = await supabase
+            .from("subscriptions")
+            .insert({
+              stripe_subscription_id: subscription.id,
+              user_id: subscription.metadata?.userId,
+              beneficiary_id: subscription.metadata?.beneficiaryId,
+              status:
+                subscription.status === "active" ? "complete" : "incomplete",
+              amount: subscription.items.data[0].price.unit_amount,
+              interval: subscription.items.data[0].price.recurring?.interval,
+              current_period_start: new Date(
+                subscription.current_period_start * 1000
+              ),
+              current_period_end: new Date(
+                subscription.current_period_end * 1000
+              ),
+              customer_id: subscription.customer as string,
+            });
+
+          if (subscriptionError) {
+            console.error(
+              "Error creating subscription record:",
+              subscriptionError
+            );
+            return NextResponse.json(
+              { error: "Failed to create subscription record" },
+              { status: 500 }
+            );
+          }
         }
 
         return NextResponse.json(
@@ -290,7 +642,30 @@ export async function POST(req: Request) {
         const invoice = event.data.object as Stripe.Invoice;
         const customerEmail = invoice.customer_email;
         const subscriptionId = invoice.subscription as string;
+        const type = invoice.metadata?.type;
 
+        if (type === "partnership") {
+          // Update partnership status
+          const { error: updateError } = await supabase
+            .from('partnerships')
+            .update({ 
+              status: 'cancelled',
+              updated_at: new Date().toISOString()
+            })
+            .eq('email', customerEmail)
+            .eq('status', 'active');
+
+          if (updateError) {
+            console.error("Error updating partnership status:", updateError);
+          }
+
+          return NextResponse.json(
+            { message: "Partnership payment failure handled" },
+            { status: 200 }
+          );
+        }
+
+        // Handle regular sponsorship payment failure
         const { error: updateError } = await supabase
           .from("subscriptions")
           .update({ status: "incomplete" })
@@ -387,8 +762,32 @@ export async function POST(req: Request) {
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
+        const type = subscription.metadata?.type;
 
-        // Mark subscription as cancelled
+        if (type === "partnership") {
+          const email = subscription.metadata?.email;
+          if (email) {
+            const { error: updateError } = await supabase
+              .from('partnerships')
+              .update({ 
+                status: 'cancelled',
+                updated_at: new Date().toISOString()
+              })
+              .eq('email', email)
+              .eq('status', 'active');
+
+            if (updateError) {
+              console.error("Error updating partnership status:", updateError);
+            }
+          }
+
+          return NextResponse.json(
+            { message: "Partnership cancelled" },
+            { status: 200 }
+          );
+        }
+
+        // Handle regular sponsorship cancellation
         const { error: updateError } = await supabase
           .from("subscriptions")
           .update({
