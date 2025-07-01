@@ -264,6 +264,14 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
         animate: true,
         duration: ANIMATION_DURATION
       });
+      
+      // Wait for the map animation to complete before scrolling to the beneficiary
+      setTimeout(() => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, ANIMATION_DURATION * 1000 + 100); // Add a small buffer after the map animation
     }
     onMarkerClick(id);
   }, [beneficiaryData, onMarkerClick]);

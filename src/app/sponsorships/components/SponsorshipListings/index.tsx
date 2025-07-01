@@ -67,6 +67,58 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
     setCurrentPage(1); // Reset to first page when country or map bounds change
   }, [selectedCountry, mapBounds]);
 
+  // Effect to update page when selected beneficiary changes
+  useEffect(() => {
+    if (!selectedBeneficiaryId) return;
+
+    // Find the index of the selected beneficiary in the filtered list
+    const index = filteredBeneficiary.findIndex(b => b.id === selectedBeneficiaryId);
+
+    if (index === -1) return; // Not found in filtered list
+
+    // Calculate the page number that contains the selected beneficiary
+    const newPage = Math.floor(index / itemsPerPage) + 1;
+
+    if (newPage !== currentPage) {
+      setPageChangeFromSelection(true);
+      setCurrentPage(newPage);
+    }
+  }, [selectedBeneficiaryId, filteredBeneficiary, currentPage, itemsPerPage]);
+
+  // Track if page change was triggered by beneficiary selection
+  const [pageChangeFromSelection, setPageChangeFromSelection] = useState(false);
+
+  // Reset selectedBeneficiaryId when currentPage changes to allow manual pagination
+  useEffect(() => {
+    if (selectedBeneficiaryId && !pageChangeFromSelection) {
+      setSelectedBeneficiaryId(null);
+    }
+    // Don't reset pageChangeFromSelection here to avoid immediate clearing
+  }, [currentPage, pageChangeFromSelection, setSelectedBeneficiaryId]);
+
+  // Reset pageChangeFromSelection after a delay to allow the beneficiary to be shown
+  useEffect(() => {
+    if (pageChangeFromSelection) {
+      const timer = setTimeout(() => {
+        setPageChangeFromSelection(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [pageChangeFromSelection]);
+
+  // Remove the scroll effect from listings component since it's now handled in the map component
+
+  // Reset active beneficiary when selectedBeneficiaryId is cleared or page changes
+  useEffect(() => {
+    if (!selectedBeneficiaryId) {
+      setActiveBeneficiaryId(null);
+    }
+  }, [selectedBeneficiaryId]);
+
+  useEffect(() => {
+    setActiveBeneficiaryId(null);
+  }, [currentPage]);
+
   // Handle opening the dialog for a specific child
   const handleOpenDialog = (beneficiaryId?: string) => {
     if (!beneficiaryId) return;
@@ -84,18 +136,14 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
       if (nextBeneficiary.id) {
         setActiveBeneficiaryId(nextBeneficiary.id);
         setSelectedBeneficiaryId(nextBeneficiary.id);
-        if (!isInIframe) {
-          document.getElementById(nextBeneficiary.id)?.scrollIntoView({ behavior: 'smooth' });
-        }
+        // Remove scrollIntoView from here as it's handled by the effect
       }
     } else if (direction === 'previous' && currentIndex > 0) {
       const prevBeneficiary = visibleBeneficiary[currentIndex - 1];
       if (prevBeneficiary.id) {
         setActiveBeneficiaryId(prevBeneficiary.id);
         setSelectedBeneficiaryId(prevBeneficiary.id);
-        if (!isInIframe) {
-          document.getElementById(prevBeneficiary.id)?.scrollIntoView({ behavior: 'smooth' });
-        }
+        // Remove scrollIntoView from here as it's handled by the effect
       }
     }
   };
@@ -167,7 +215,11 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
         <Flex justify="center" pb={10} gap={2}>
           <Flex gap={2}>
             <Button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              onClick={() => {
+                setSelectedBeneficiaryId(null);
+                setCurrentPage(prev => Math.max(1, prev - 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
               disabled={currentPage === 1}
             >
               Previous
@@ -175,7 +227,11 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
               <Button
                 key={page}
-                onClick={() => setCurrentPage(page)}
+                onClick={() => {
+                  setSelectedBeneficiaryId(null);
+                  setCurrentPage(page);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
                 colorScheme={currentPage === page ? "blue" : undefined}
                 variant={currentPage === page ? "solid" : "outline"}
                 aria-current={currentPage === page ? "page" : undefined}
@@ -185,7 +241,11 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
               </Button>
             ))}
             <Button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              onClick={() => {
+                setSelectedBeneficiaryId(null);
+                setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
               disabled={currentPage === totalPages}
             >
               Next

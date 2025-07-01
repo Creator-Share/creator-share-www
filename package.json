@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@anthropic-ai/claude-code": "^1.0.38",
     "@chakra-ui/next-js": "^2.4.2",
     "@chakra-ui/react": "^3.3.1",
     "@emotion/react": "^11.14.0",

@@ -50,7 +50,7 @@ const SponsorChild = () => {
   }, []);
 
   const fetchChildren = React.useCallback(async (filters: Filters) => {
-    setLoading(true);
+    setLoading(true); 
     setError(null);
 
     try {
