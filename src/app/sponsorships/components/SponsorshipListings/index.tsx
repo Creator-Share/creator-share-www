@@ -94,7 +94,7 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
       setSelectedBeneficiaryId(null);
     }
     // Don't reset pageChangeFromSelection here to avoid immediate clearing
-  }, [currentPage, pageChangeFromSelection, setSelectedBeneficiaryId]);
+  }, [currentPage, pageChangeFromSelection, setSelectedBeneficiaryId, selectedBeneficiaryId]);
 
   // Reset pageChangeFromSelection after a delay to allow the beneficiary to be shown
   useEffect(() => {

@@ -3,6 +3,7 @@ import { Providers } from "@/components/Providers";
 import "@/styles/globals.css";
 import { PageWrapper } from "@/components/PageWrapper";
 import { Toaster } from "@/components/ui/toaster";
+import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
   title: "Creator Share",
@@ -19,6 +20,7 @@ export default function RootLayout({
       <body className="bg-[#F5F5F5]">
         <Providers>
           <PageWrapper>{children}</PageWrapper>
+          <Footer />
           <Toaster />
         </Providers>
       </body>
