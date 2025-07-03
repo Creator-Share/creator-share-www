@@ -67,11 +67,12 @@ export async function POST(req: Request) {
 
     // Common session configuration
     const sessionConfig: Stripe.Checkout.SessionCreateParams = {
-      payment_method_types: ["card"],
+      payment_method_types: ["card", "paypal"],
       mode: "subscription",
       line_items: [{ price: price.id, quantity: 1 }],
+      billing_address_collection: "required",
       payment_method_options: {
-        card: { request_three_d_secure: "automatic" },
+        card: { request_three_d_secure: "automatic" }
       },
       customer_email: email,
       metadata: type === "partnership" ? {
@@ -112,12 +113,6 @@ export async function POST(req: Request) {
     }
 
     const session = await stripe.checkout.sessions.create(sessionConfig);
-
-    // Remove partnership record creation from checkout session creation
-    // Partnership records will be created/updated in webhook handler upon payment success
-    if (type === "partnership") {
-      // Do nothing here for partnership record creation
-    }
 
     return NextResponse.json({
       url: session.url,
