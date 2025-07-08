@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text, Image, Flex, Input, InputAddon, Progress, HStack } from "@chakra-ui/react";
 import { Button } from "@/components/ui/button";
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { Tooltip } from "@/components/ui/tooltip";
 import {
     DialogBody,
@@ -25,7 +26,6 @@ import { paymentOptionsCollection } from "./config";
 import { Beneficiaries } from "@/types";
 import { useAuthStore } from "@/store/authStore";
 import { BeneficiaryMedia } from "@/types/admin.types";
-
 
 interface SponsorDialogProps {
     people: Beneficiaries;
@@ -72,6 +72,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     const user = useAuthStore((state) => state.user);
     const [images, setImages] = useState<BeneficiaryMedia[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+    const allowBelowMinimum = remainingAmount < minimumAmount && amount === remainingAmount;
 
     useEffect(() => {
         setAmount(remainingAmount);
@@ -81,8 +82,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
 
         const fetchImages = async () => {
             try {
-                const endpoint = beneficiaryType === "ANIMAL" ? "animals" : "children";
-                const response = await fetch(`/api/admin/${endpoint}/images/${people.id}`);
+                const response = await fetch(`/api/beneficiaries/images/${people.id}`);
                 if (response.ok) {
                     const data = await response.json();
                     setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) =>
@@ -174,7 +174,8 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         setValue([newValue]);
     };
 
-    const handleSponsor = async () => {
+
+    const handleStripePayment = async () => {
         // Allow sponsoring below minimum only if it's the final remaining amount
         if (amount < minimumAmount && !(remainingAmount < minimumAmount && amount === remainingAmount)) {
             toaster.create({
@@ -257,6 +258,82 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         }
     };
 
+    const handleCreateOrder = async (_: Record<string, unknown>, actions: { order: { create: (options: { purchase_units: Array<{ description: string; amount: { value: string; currency_code: string } }> }) => Promise<string> } }) => {
+        if (!amount || (amount < minimumAmount && !allowBelowMinimum)) {
+            toaster.create({
+                title: "Invalid Amount",
+                description: `Minimum amount is $${minimumAmount}.`,
+            });
+            throw new Error("Invalid amount");
+        }
+
+        return actions.order.create({
+            purchase_units: [{
+                description: `${selectedOption === "subscription" ? "Monthly" : "Yearly"} Sponsorship for ${people.name}`,
+                amount: {
+                    value: amount.toFixed(2),
+                    currency_code: "USD"
+                }
+            }]
+        });
+    };
+
+    const handlePayPalApproval = async (data: { orderID: string }) => {
+        try {
+            const response = await fetch("/api/paypal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    beneficiaryId: people.id,
+                    beneficiaryName: people.name,
+                    amount: amount,
+                    paymentType: selectedOption,
+                    location: people.country,
+                    userId: user?.id,
+                    email: user?.email,
+                    orderID: data.orderID
+                }),
+            });
+
+            let responseData;
+            try {
+                const responseText = await response.text();
+                responseData = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Error parsing PayPal response:', parseError);
+                throw new Error('Invalid response from payment server');
+            }
+
+            if (!response.ok) {
+                console.error('PayPal error response:', responseData);
+                throw new Error(responseData.error || "Failed to process payment");
+            }
+
+            toaster.create({
+                title: "Success",
+                description: "Your payment has been processed successfully!",
+            });
+            
+            window.location.href = `/payments/success?order_id=${data.orderID}`;
+        } catch (error) {
+            const err = error as Error;
+            console.error("PayPal Error:", error);
+            toaster.create({
+                title: "Payment Error",
+                description: err.message || "Failed to process payment. Please try again.",
+            });
+            window.location.href = "/payments/failed";
+        }
+    };
+
+    const handlePayPalError = (err: Error) => {
+        console.error("PayPal Error:", err);
+        toaster.create({
+            title: "Payment Error",
+            description: "Something went wrong with PayPal. Please try again.",
+        });
+    };
+
     const handleSelectChange = (value: string) => {
         setSelectedOption(value);
     };
@@ -312,9 +389,12 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         e.preventDefault();
         e.stopPropagation();
 
-        if (onPrevious) {
+        // Prevent the dialog from closing
+        e.nativeEvent.stopImmediatePropagation();
+
+        // Ensure dialog stays open during navigation
+        if (onPrevious && isOpen) {
             onPrevious();
-            // No scrolling - we want the dialog to stay in place
         }
     };
 
@@ -322,7 +402,11 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         e.preventDefault();
         e.stopPropagation();
 
-        if (onNext) {
+        // Prevent the dialog from closing
+        e.nativeEvent.stopImmediatePropagation();
+
+        // Ensure dialog stays open during navigation
+        if (onNext && isOpen) {
             onNext();
         }
     };
@@ -331,7 +415,10 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         <DialogRoot
             open={isOpen}
             onOpenChange={(details) => {
-                onOpenChange?.(details.open);
+                // Only allow closing if we're not in the middle of navigation
+                if (!details.open) {
+                    onOpenChange?.(false);
+                }
             }}
             size={isInIframe ? { base: "lg", md: "lg" } : { base: "full", md: "xl" }}
             placement={isInIframe ? "top" : "center"}
@@ -496,7 +583,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                                 step={1}
                                                 variant="solid"
                                                 disabled
-                                                onValueChange={() => {}}
+                                                onValueChange={() => { }}
                                             />
                                             <Text textAlign="center" mt={2}>
                                                 You can sponsor the final ${remainingAmount} to fully fund this beneficiary, even though it is below the usual minimum.
@@ -568,36 +655,51 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                     </SelectRoot>
                                 </Box>
                             </Box>
-                            <Flex gap={4}>
-                                <Button
-                                    onClick={() => document.getElementById('closeDialog')?.click()}
-                                    className="flex-1 py-3 bg-[#D1D1D1] text-[#858585]"
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    onClick={handleSponsor}
-                                    loading={loading}
-                                    loadingText="Processing..."
-                                    disabled={
-                                        loading ||
-                                        (
-                                            remainingAmount < minimumAmount
+                            <Box>
+                                <Flex gap={4} mb={4}>
+                                    <Button
+                                        onClick={() => document.getElementById('closeDialog')?.click()}
+                                        className="flex-1 py-3 bg-[#D1D1D1] text-[#858585]"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        onClick={handleStripePayment}
+                                        loading={loading}
+                                        loadingText="Processing..."
+                                        disabled={
+                                            loading ||
+                                            (
+                                                remainingAmount < minimumAmount
+                                                    ? amount !== remainingAmount
+                                                    : amount < minimumAmount
+                                            )
+                                        }
+                                        className={`flex-1 py-3 bg-blue-700 text-white hover:bg-blue-800${(remainingAmount < minimumAmount
                                                 ? amount !== remainingAmount
-                                                : amount < minimumAmount
-                                        )
-                                    }
-                                    className={`flex-1 py-3 bg-blue-700 text-white hover:bg-blue-800${
-                                        (remainingAmount < minimumAmount
-                                            ? amount !== remainingAmount
-                                            : amount < minimumAmount)
-                                            ? ' opacity-50 cursor-not-allowed'
-                                            : ''
-                                    }`}
-                                >
-                                    Checkout
-                                </Button>
-                            </Flex>
+                                                : amount < minimumAmount)
+                                                ? ' opacity-50 cursor-not-allowed'
+                                                : ''
+                                            }`}
+                                    >
+                                        Pay with Card
+                                    </Button>
+                                </Flex>
+                                <PayPalScriptProvider options={{ 
+                                        "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
+                                        currency: "USD",
+                                        intent: "capture"
+                                    }}>
+                                        <PayPalButtons
+                                            style={{
+                                                layout: "horizontal"
+                                            }}
+                                            createOrder={handleCreateOrder}
+                                            onApprove={handlePayPalApproval}
+                                            onError={handlePayPalError}
+                                        />
+                                    </PayPalScriptProvider>
+                            </Box>
                         </Box>
                     </Box>
                     <Text

@@ -122,45 +122,41 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
   // Handle opening the dialog for a specific child
   const handleOpenDialog = (beneficiaryId?: string) => {
     if (!beneficiaryId) return;
-    setActiveBeneficiaryId(beneficiaryId);
-    setDialogOpen(true);
+    const index = visibleBeneficiary.findIndex(beneficiary => beneficiary.id === beneficiaryId);
+    if (index !== -1) {
+      setCurrentDialogIndex(index);
+      setActiveBeneficiaryId(beneficiaryId);
+      setDialogOpen(true);
+    }
   };
 
+  const [currentDialogIndex, setCurrentDialogIndex] = useState<number>(0);
+
   const handleDialogNavigation = (direction: 'next' | 'previous') => {
-    if (!activeBeneficiaryId) return;
+    let newIndex = currentDialogIndex;
 
-    const currentIndex = visibleBeneficiary.findIndex(beneficiary => beneficiary.id === activeBeneficiaryId);
+    if (direction === 'next' && newIndex < visibleBeneficiary.length - 1) {
+      newIndex = newIndex + 1;
+    } else if (direction === 'previous' && newIndex > 0) {
+      newIndex = newIndex - 1;
+    }
 
-    if (direction === 'next' && currentIndex < visibleBeneficiary.length - 1) {
-      const nextBeneficiary = visibleBeneficiary[currentIndex + 1];
-      if (nextBeneficiary.id) {
-        setActiveBeneficiaryId(nextBeneficiary.id);
-        setSelectedBeneficiaryId(nextBeneficiary.id);
-        // Remove scrollIntoView from here as it's handled by the effect
-      }
-    } else if (direction === 'previous' && currentIndex > 0) {
-      const prevBeneficiary = visibleBeneficiary[currentIndex - 1];
-      if (prevBeneficiary.id) {
-        setActiveBeneficiaryId(prevBeneficiary.id);
-        setSelectedBeneficiaryId(prevBeneficiary.id);
-        // Remove scrollIntoView from here as it's handled by the effect
+    if (newIndex !== currentDialogIndex) {
+      const targetBeneficiary = visibleBeneficiary[newIndex];
+      if (targetBeneficiary?.id) {
+        setCurrentDialogIndex(newIndex);
+        setActiveBeneficiaryId(targetBeneficiary.id);
+        setSelectedBeneficiaryId(targetBeneficiary.id);
       }
     }
   };
 
-  // Get the active child data
-  const activeBeneficiary = activeBeneficiaryId
-    ? visibleBeneficiary.find(beneficiary => beneficiary.id === activeBeneficiaryId)
-    : null;
 
   // Get navigation props for the dialog
   const getDialogNavigationProps = () => {
-    if (!activeBeneficiaryId) return { hasNext: false, hasPrevious: false };
-
-    const currentIndex = visibleBeneficiary.findIndex(beneficiary => beneficiary.id === activeBeneficiaryId);
     return {
-      hasNext: currentIndex < visibleBeneficiary.length - 1,
-      hasPrevious: currentIndex > 0,
+      hasNext: currentDialogIndex < visibleBeneficiary.length - 1,
+      hasPrevious: currentDialogIndex > 0,
     };
   };
 
@@ -177,18 +173,16 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
       style={{ minHeight: visibleBeneficiary.length ? 'auto' : '100px' }}
       suppressHydrationWarning={true}
     >
-      {activeBeneficiary && (
-        <SponsorDialog
-          people={activeBeneficiary}
-          isOpen={dialogOpen}
-          onOpenChange={(open) => setDialogOpen(open)}
-          onNext={() => handleDialogNavigation('next')}
-          onPrevious={() => handleDialogNavigation('previous')}
-          {...getDialogNavigationProps()}
-          trigger={<div style={{ display: 'none' }} />}
-          beneficiaryType={beneficiaryType}
-        />
-      )}
+      <SponsorDialog
+        people={visibleBeneficiary[currentDialogIndex] || visibleBeneficiary[0]}
+        isOpen={dialogOpen}
+        onOpenChange={(open) => setDialogOpen(open)}
+        onNext={() => handleDialogNavigation('next')}
+        onPrevious={() => handleDialogNavigation('previous')}
+        {...getDialogNavigationProps()}
+        trigger={<div style={{ display: 'none' }} />}
+        beneficiaryType={beneficiaryType}
+      />
 
       <Box pt={10} pb={6}>
         <SimpleGrid columns={{ base: 1, md: 1 }} gap="1.5rem">
