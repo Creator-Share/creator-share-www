@@ -3,12 +3,13 @@ import { useEffect, useState } from "react";
 import { Box, Flex, Link, Button, Image, VStack, Menu, Portal } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useAuthStore } from "@/store/authStore";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ColorModeButton } from "./ui/color-mode";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { IoClose } from "react-icons/io5";
 
 const Links = [
+  { name: "Home", href: "/" },
   // { name: "Lives", href: "/lives" },
   // { name: "Projects", href: "/projects" },
   // { name: "Causes", href: "/causes" },
@@ -18,8 +19,8 @@ const Links = [
   { name: "Strays Worth Saving", href: "/strays-worth-saving" },
   // { name: "Sponsor-a-Family", href: "/family-in-need" },
   // { name: "Street Involved", href: "/street-involved" },
-  // { name: "Child Laborer", href: "/child-labor" },
-  { name: "I-Frame Test", href: "/iframe-test" },
+  // { name: "Child Laborers", href: "/child-labor" },
+  // { name: "I-Frame Test", href: "/iframe-test" },
 ];
 
 export function PageNavbar() {
@@ -29,6 +30,7 @@ export function PageNavbar() {
   const logout = useAuthStore((state) => state.logout);
   const fetchUser = useAuthStore((state) => state.fetchUser);
   const router = useRouter();
+  const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -74,20 +76,42 @@ export function PageNavbar() {
 
         {/* Desktop Menu */}
         <Flex as="nav" gap={4} display={{ base: "none", md: "flex" }}>
-          {Links.map((link) => (
-            <Link
-              as={NextLink}
-              key={link.name}
-              href={link.href}
-              px={2}
-              py={1}
-              rounded="md"
-              className="hover:bg-gray-100 dark:hover:bg-[#2B7FF9]"
-              _hover={{ textDecoration: "none" }}
-            >
-              {link.name}
-            </Link>
-          ))}
+          {Links.map((link) => {
+            const isActive = pathname === link.href;
+            return (
+              <Link
+                as={NextLink}
+                key={link.name}
+                href={link.href}
+                px={3}
+                py={2}
+                rounded="md"
+                transition="all 0.2s ease-in-out"
+                bg={isActive ? "blue.500" : "transparent"}
+                color={isActive ? "white" : "inherit"}
+                _hover={{
+                  textDecoration: "none",
+                  bg: isActive ? "blue.600" : "gray.200",
+                  _dark: {
+                    bg: isActive ? "blue.600" : "gray.700",
+                  },
+                }}
+                _focus={{
+                  boxShadow: "none",
+                  outline: "none",
+                }}
+                _focusVisible={{
+                  boxShadow: "none",
+                  outline: "none",
+                }}
+                _dark={{
+                  color: isActive ? "white" : "inherit",
+                }}
+              >
+                {link.name}
+              </Link>
+            );
+          })}
         </Flex>
 
         {/* Right Actions */}
@@ -172,17 +196,41 @@ export function PageNavbar() {
           pointerEvents="auto"
         >
           <VStack gap={4} py={6}>
-            {Links.map((link) => (
-              <Link
-                as={NextLink}
-                key={link.name}
-                href={link.href}
-                className="block px-4 py-2 text-center hover:bg-gray-100 w-full"
-                onClick={() => setIsOpen(false)}
-              >
-                {link.name}
-              </Link>
-            ))}
+            {Links.map((link) => {
+              const isActive = pathname === link.href;
+              return (
+                <Link
+                  as={NextLink}
+                  key={link.name}
+                  href={link.href}
+                  w="full"
+                  px={4}
+                  py={2}
+                  textAlign="center"
+                  color="white"
+                  rounded="md"
+                  bg={isActive ? "rgba(255, 255, 255, 0.2)" : "transparent"}
+                  transition="all 0.2s ease-in-out"
+                  _hover={{
+                    textDecoration: "none",
+                    bg: isActive
+                      ? "rgba(255, 255, 255, 0.3)"
+                      : "rgba(255, 255, 255, 0.2)",
+                  }}
+                  _focus={{
+                    boxShadow: "none",
+                    outline: "none",
+                  }}
+                  _focusVisible={{
+                    boxShadow: "none",
+                    outline: "none",
+                  }}
+                  onClick={() => setIsOpen(false)}
+                >
+                  {link.name}
+                </Link>
+              );
+            })}
             <ColorModeButton />
             {user ? (
               <>
