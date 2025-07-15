@@ -9,6 +9,7 @@ import { GiHamburgerMenu } from "react-icons/gi";
 import { IoClose } from "react-icons/io5";
 
 const Links = [
+  { name: "Home", href: "/" },
   // { name: "Lives", href: "/lives" },
   // { name: "Projects", href: "/projects" },
   // { name: "Causes", href: "/causes" },
@@ -19,7 +20,7 @@ const Links = [
   // { name: "Sponsor-a-Family", href: "/family-in-need" },
   // { name: "Street Involved", href: "/street-involved" },
   // { name: "Child Laborer", href: "/child-labor" },
-  { name: "I-Frame Test", href: "/iframe-test" },
+  // { name: "I-Frame Test", href: "/iframe-test" },
 ];
 
 export function PageNavbar() {
