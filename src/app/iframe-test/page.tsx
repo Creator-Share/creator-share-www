@@ -202,15 +202,14 @@ window.addEventListener('load', function() {
           </div>
         )}
         
-        <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
+        <div className="border rounded-xl overflow-hidden bg-white shadow-sm max-h-screen">
           <iframe
             ref={iframeRef}
             src="http://localhost:3000/sponsorships?embedded=true&parentOrigin=http://localhost:3000"
-            className="w-full"
+            className="w-full max-h-screen"
             style={{
               border: 'none',
               width: '100%',
-              height: '500px',
               display: 'block',
               transition: 'height 0.3s ease'
             }}

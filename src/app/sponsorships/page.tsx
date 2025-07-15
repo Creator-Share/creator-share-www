@@ -50,14 +50,14 @@ const SponsorChild = () => {
   }, []);
 
   const fetchChildren = React.useCallback(async (filters: Filters) => {
-    setLoading(true);
+    setLoading(true); 
     setError(null);
 
     try {
-      let endpoint = "/api/children/get";
+      let endpoint = "/api/beneficiaries/get";
       const queryParams = new URLSearchParams();
       if (filters.gender || (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) || filters.status.length > 0) {
-        endpoint = "/api/children/getByAgeAndGender";
+        endpoint = "/api/beneficiaries/getByAgeAndGender";
         if (filters.gender) queryParams.append("gender", filters.gender);
         if (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) {
           queryParams.append("ageRange", filters.ageRange.join(','));
@@ -177,7 +177,7 @@ const SponsorChild = () => {
   return (
     <Box 
       ref={contentRef}
-      className="flex flex-col items-center justify-center px-4 md:px-32 py-12 md:py-16"
+      className="flex flex-col items-center justify-center px-4 md:px-10 py-12 md:py-16"
       suppressHydrationWarning={true}
     >
       <Box className="text-center justify-center my-12">

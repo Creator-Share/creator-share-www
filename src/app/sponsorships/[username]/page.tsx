@@ -33,7 +33,7 @@ export default function FullProfileDynamic() {
 
   const fetchImages = async (beneficiaryId: string) => {
     try {
-      const response = await fetch(`/api/admin/children/images/${beneficiaryId}`);
+      const response = await fetch(`/api/admin/beneficiaries/images/${beneficiaryId}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -55,15 +55,12 @@ export default function FullProfileDynamic() {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch(`/api/children/get/username/${username}`);
+        const res = await fetch(`/api/beneficiaries/get/username/${username}`);
         if (!res.ok) {
           throw new Error("Beneficiary not found");
         }
         const data = await res.json();
-        console.log("Full API response:", data);
         const { child } = data;
-        console.log("Beneficiary data:", child);
-        console.log("Image URL:", child?.image_url);
         if (!child) {
           throw new Error("Beneficiary data is empty");
         }
@@ -73,7 +70,7 @@ export default function FullProfileDynamic() {
 
           const activitiesData = await fetchActivitiesByBeneficiaryId(child.id);
           setActivities(activitiesData);
-          const res = await fetch('/api/children/get');
+          const res = await fetch('/api/beneficiaries/get');
           const data = await res.json();
           if (data.people) {
             setBeneficiaries(data.people);

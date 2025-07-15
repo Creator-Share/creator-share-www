@@ -1,6 +1,6 @@
 export type Gender = "Boy" | "Girl";
-export type PersonStatus = "New" | "Partially Funded" | "Budget Fulfilled" | "Archived" | "Draft";
-export type BeneficiaryType = "CHILD" | "ANIMAL" | "FAMILY";
+export type Status = "New" | "Partially Funded" | "Budget Fulfilled" | "Archived" | "Draft";
+export type BeneficiaryType = "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED" | "CHILD_LABORER";
 
 export interface Geography {
   coordinates: [number, number];
@@ -11,12 +11,12 @@ export interface Beneficiaries {
   id?: string;
   name: string;
   username: string;
-  gender: Gender;
-  birth_date: string;
+  gender?: Gender;
+  birth_date?: string;
   biography: string;
   budget_goal: number;
   budget_raised: number;
-  status: PersonStatus;
+  status: Status;
   country: string;
   location_geo: Geography | null;
   location_str: string;
@@ -47,17 +47,17 @@ export interface BeneficiaryMedia {
 }
 
 export type AnimalBeneficiary = {
-  id: string;
+  id?: string;
   name: string;
   username: string;
   biography: string;
   introduction: string;
-  budget_goal: number;
+  budget_goal: string | number;
   budget_raised: number;
-  status: string;
+  status: Status;
   country: string;
   location_str: string;
-  gender: string;
+  gender: Gender;
   video_url?: string;
   birth_date: string;
   active_subscriptions?: number;

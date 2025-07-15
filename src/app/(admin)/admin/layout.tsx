@@ -17,11 +17,13 @@ export default async function AdminLayout({
   const { data: roleData } = await supabase
     .from("role_assignments")
     .select("roles:roles!role_assignments_role_id_fkey(name)")
-    .eq("user_id", user.id)  as unknown as { data: RoleAssignment[]; };
+    .eq("user_id", user.id) as unknown as { data: RoleAssignment[]; };
 
-  if ( !roleData || roleData.length === 0 || roleData[0]?.roles?.name !== "SUPER_ADMIN") {
+  if (!roleData || roleData.length === 0 || roleData[0]?.roles?.name !== "SUPER_ADMIN") {
     redirect('/not-found')
   }
 
-  return <>{children}</>
+  return <>
+    {children}
+  </>
 }

@@ -21,7 +21,7 @@ const ReturnContent = () => {
   useEffect(() => {
     // Function to check if we're in an iframe
     const isInIframe = window.self !== window.top;
-    
+
     const fetchSession = async () => {
       const sessionId = searchParams.get('session_id');
       if (!sessionId) {
@@ -31,45 +31,35 @@ const ReturnContent = () => {
       }
 
       try {
-        // For embedded checkout, we might not need to fetch the session
-        // If we're on the return page with a session_id, the payment likely succeeded
         if (isEmbedded && isInIframe) {
-          console.log('Embedded checkout detected, assuming payment success');
           setStatus('complete');
           setChildDetails({
             name: 'your sponsored child',
             location: '',
             email: ''
           });
-          
+
           // Notify parent frame of success
-          window.parent.postMessage({ 
+          window.parent.postMessage({
             type: 'sponsorship_complete',
             childName: 'your sponsored child'
           }, '*');
-          
+
           setIsLoading(false);
           return;
         }
-        
-        // For non-embedded checkout, fetch the session details
         const response = await fetch(`/api/stripe/session?id=${sessionId}`);
         const data = await response.json();
-        
+
         if (!response.ok) {
-          // If session not found and we haven't retried too many times, retry after a delay
-          // This helps when the webhook hasn't processed the session yet
           if (data.code === 'SESSION_NOT_FOUND' && retryCount < 3) {
-            console.log(`Session not found, retrying in 2 seconds (attempt ${retryCount + 1}/3)...`);
             setTimeout(() => {
               setRetryCount(prev => prev + 1);
             }, 2000);
             return;
           }
-          
+
           if (data.code === 'SESSION_NOT_FOUND') {
-            // If we've retried and still can't find the session, assume payment was successful
-            // This is a fallback for when the session exists in Stripe but not in our database yet
             setStatus('complete');
             setChildDetails({
               name: 'your sponsored child',
@@ -79,12 +69,12 @@ const ReturnContent = () => {
             setIsLoading(false);
             return;
           }
-          
+
           throw new Error(data.error || 'Failed to fetch session');
         }
-        
+
         const { session, status: sessionStatus } = data;
-        
+
         setStatus(sessionStatus || session.status);
         setChildDetails({
           name: session.metadata?.childName || 'your sponsored child',
@@ -94,7 +84,7 @@ const ReturnContent = () => {
 
         // Notify parent frame of success if in embedded mode
         if (isEmbedded && (sessionStatus === 'complete' || session.status === 'complete')) {
-          window.parent.postMessage({ 
+          window.parent.postMessage({
             type: 'sponsorship_complete',
             childName: session.metadata?.childName
           }, '*');
@@ -144,8 +134,8 @@ const ReturnContent = () => {
       <Box className="p-8 text-center">
         <Spinner size="xl" color="blue.500" mb={4} />
         <Text>
-          {retryCount > 0 
-            ? `Verifying payment status (attempt ${retryCount}/3)...` 
+          {retryCount > 0
+            ? `Verifying payment status (attempt ${retryCount}/3)...`
             : 'Loading payment status...'}
         </Text>
       </Box>

@@ -5,13 +5,14 @@ import { Beneficiaries } from "@/types/admin.types";
 import { Box, Text } from "@chakra-ui/react";
 import ChakraSelect from "./components/SelectBeneficiary";
 import ActivitiesTable from "./components/ActivitiesTable";
+import GoBackButton from "@/components/ui/goBack";
 
 const ActivitiesAdminPage: React.FC = () => {
   const [children, setChildren] = useState<Beneficiaries[]>([]);
   const [selectedChild, setSelectedChild] = useState<string[]>([]);
   useEffect(() => {
     const fetchChildren = async () => {
-      const res = await fetch("/api/admin/children/retrieve");
+      const res = await fetch("/api/admin/beneficiaries/retrieve");
       const data = await res.json();
       setChildren(data.children || []);
     };
@@ -20,6 +21,7 @@ const ActivitiesAdminPage: React.FC = () => {
 
   return (
     <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
+      <GoBackButton />
       <Text className="text-3xl font-semibold leading-9 mb-6">Activities</Text>
       <Box className="mb-6">
         <ChakraSelect

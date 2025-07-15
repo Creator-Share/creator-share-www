@@ -7,10 +7,14 @@ import { Box, Text, Button, Spinner, Center, Flex, VStack } from "@chakra-ui/rea
 const SuccessPageContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [beneficiaryDetails, setBeneficiaryDetails] = useState({
+  const [paymentDetails, setPaymentDetails] = useState({
+    type: '',
     name: '',
     location: '',
-    email: ''
+    email: '',
+    project: '',
+    amount: '',
+    frequency: ''
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +35,6 @@ const SuccessPageContent = () => {
         
         if (!response.ok) {
           if (data.code === 'SESSION_NOT_FOUND' && retryCount < 3) {
-            console.log(`Session not found, retrying in 2 seconds (attempt ${retryCount + 1}/3)...`);
             setTimeout(() => {
               setRetryCount(prev => prev + 1);
             }, 2000);
@@ -39,11 +42,14 @@ const SuccessPageContent = () => {
           }
           
           if (data.code === 'SESSION_NOT_FOUND') {
-            console.log('Session not found after retries, assuming payment success');
-            setBeneficiaryDetails({
+            setPaymentDetails({
+              type: '',
               name: 'your sponsored child',
               location: '',
-              email: ''
+              email: '',
+              project: '',
+              amount: '',
+              frequency: ''
             });
             setIsLoading(false);
             return;
@@ -53,17 +59,27 @@ const SuccessPageContent = () => {
         }
         
         const { session } = data;
-        setBeneficiaryDetails({
-          name: session.metadata?.childName || 'your sponsored child',
-          location: session.metadata?.childLocation || '',
-          email: session.customer_details?.email || ''
+        const isPartnership = session.metadata?.type === 'partnership';
+        
+        setPaymentDetails({
+          type: isPartnership ? 'partnership' : 'sponsorship',
+          name: isPartnership ? '' : (session.metadata?.childName || 'your sponsored child'),
+          location: isPartnership ? '' : (session.metadata?.childLocation || ''),
+          email: session.customer_details?.email || '',
+          project: isPartnership ? session.metadata?.project || 'Area of greatest need' : '',
+          amount: session.metadata?.amount ? `$${parseInt(session.metadata.amount) / 100}` : '',
+          frequency: session.metadata?.paymentType === 'subscription' ? 'Monthly' : 'Yearly'
         });
       } catch (error) {
         console.error('Error fetching session:', error);
-        setBeneficiaryDetails({
+        setPaymentDetails({
+          type: '',
           name: 'your sponsored child',
           location: '',
-          email: ''
+          email: '',
+          project: '',
+          amount: '',
+          frequency: ''
         });
       } finally {
         setIsLoading(false);
@@ -88,7 +104,7 @@ const SuccessPageContent = () => {
     );
   }
 
-  if (error && !beneficiaryDetails.name) {
+  if (error && !paymentDetails.name) {
     return (
       <Box className="p-8 text-center">
         <Text className="text-xl mb-4 text-red-600">
@@ -145,7 +161,11 @@ const SuccessPageContent = () => {
           Thank You for Changing a Life!
         </Text>
         <Text mb={6} color="gray.600" fontSize="sm" className="text-center">
-          Your generous sponsorship payment has been successfully processed. Because of you, {beneficiaryDetails.name} is one step closer to a brighter future.
+          {paymentDetails.type === 'partnership' ? (
+            <>Your generous partnership payment has been successfully processed. Your support helps us continue our mission to help children in need.</>
+          ) : (
+            <>Your generous sponsorship payment has been successfully processed. Because of you, {paymentDetails.name} is one step closer to a brighter future.</>
+          )}
         </Text>
         <Box mb={6}>
           <Text 
@@ -154,35 +174,58 @@ const SuccessPageContent = () => {
             color="#2c3e50"
             className="text-center"
           >
-            Sponsorship Details
+            {paymentDetails.type === 'partnership' ? 'Partnership Details' : 'Sponsorship Details'}
           </Text>
           
           <VStack gap={3} align="stretch">
-            <Flex justify="space-between" fontSize="sm">
-              <Text fontWeight={"semibold"}>Beneficiary's Name</Text>
-              <Text fontWeight="medium" color="gray.500">{beneficiaryDetails.name}</Text>
-            </Flex>
-            
-            {beneficiaryDetails.location && (
-              <Flex justify="space-between" fontSize="sm">
-                <Text fontWeight={"semibold"}>Location</Text>
-                <Text fontWeight="medium" color="gray.500">{beneficiaryDetails.location}</Text>
-              </Flex>
-            )}
-            
-            {beneficiaryDetails.email && (
-              <Flex justify="space-between" fontSize="sm">
-                <Text textAlign={"start"} fontWeight={"semibold"}>Confirmation Email</Text>
-                <Text fontWeight="medium" textAlign={"end"} color="blue.500">Sent to {beneficiaryDetails.email}</Text>
-              </Flex>
+            {paymentDetails.type === 'partnership' ? (
+              <>
+                <Flex justify="space-between" fontSize="sm">
+                  <Text fontWeight={"semibold"}>Project</Text>
+                  <Text fontWeight="medium" color="gray.500">{paymentDetails.project}</Text>
+                </Flex>
+                <Flex justify="space-between" fontSize="sm">
+                  <Text fontWeight={"semibold"}>Amount</Text>
+                  <Text fontWeight="medium" color="gray.500">{paymentDetails.amount} {paymentDetails.frequency}</Text>
+                </Flex>
+                {paymentDetails.email && (
+                  <Flex justify="space-between" fontSize="sm">
+                    <Text textAlign={"start"} fontWeight={"semibold"}>Confirmation Email</Text>
+                    <Text fontWeight="medium" textAlign={"end"} color="blue.500">Sent to {paymentDetails.email}</Text>
+                  </Flex>
+                )}
+              </>
+            ) : (
+              <>
+                <Flex justify="space-between" fontSize="sm">
+                  <Text fontWeight={"semibold"}>Beneficiary's Name</Text>
+                  <Text fontWeight="medium" color="gray.500">{paymentDetails.name}</Text>
+                </Flex>
+                {paymentDetails.location && (
+                  <Flex justify="space-between" fontSize="sm">
+                    <Text fontWeight={"semibold"}>Location</Text>
+                    <Text fontWeight="medium" color="gray.500">{paymentDetails.location}</Text>
+                  </Flex>
+                )}
+                {paymentDetails.email && (
+                  <Flex justify="space-between" fontSize="sm">
+                    <Text textAlign={"start"} fontWeight={"semibold"}>Confirmation Email</Text>
+                    <Text fontWeight="medium" textAlign={"end"} color="blue.500">Sent to {paymentDetails.email}</Text>
+                  </Flex>
+                )}
+              </>
             )}
           </VStack>
         </Box>
         <Text fontSize="sm" color="gray.600" mb={6} className="text-center">
-          You'll receive updates about {beneficiaryDetails.name}'s progress and how your support is making a difference.
+          {paymentDetails.type === 'partnership' ? (
+            "You'll receive updates about how your partnership is making a difference in children's lives."
+          ) : (
+            `You'll receive updates about ${paymentDetails.name}'s progress and how your support is making a difference.`
+          )}
         </Text>
         <Button
-          onClick={() => router.push('/')}
+          onClick={() => router.push(paymentDetails.type === 'partnership' ? '/partnerships' : '/sponsorships')}
           colorScheme="blue"
           size="md"
           width="full"
@@ -192,7 +235,7 @@ const SuccessPageContent = () => {
           fontWeight={"semibold"}
           _hover={{ bg: "#34495e" }}
         >
-          Back to Home
+          {paymentDetails.type === 'partnership' ? 'Back to Partnerships' : 'Back to Sponsorships'}
         </Button>
       </Box>
     </Center>

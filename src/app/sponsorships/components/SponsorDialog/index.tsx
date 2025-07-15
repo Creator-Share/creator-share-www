@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text, Image, Flex, Input, InputAddon, Progress, HStack } from "@chakra-ui/react";
 import { Button } from "@/components/ui/button";
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { Tooltip } from "@/components/ui/tooltip";
 import {
     DialogBody,
@@ -26,7 +27,6 @@ import { Beneficiaries } from "@/types";
 import { useAuthStore } from "@/store/authStore";
 import { BeneficiaryMedia } from "@/types/admin.types";
 
-
 interface SponsorDialogProps {
     people: Beneficiaries;
     trigger: React.ReactNode;
@@ -37,6 +37,7 @@ interface SponsorDialogProps {
     hasPrevious?: boolean;
     isOpen?: boolean;
     onOpenChange?: (open: boolean) => void;
+    beneficiaryType?: "CHILD" | "ANIMAL";
 }
 
 const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
@@ -44,17 +45,26 @@ const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/mis
 // Check if we're in an iframe
 const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
-const SponsorDialog: React.FC<SponsorDialogProps> = ({ 
-    people, 
-    trigger = false, 
-    onNext, 
+const SponsorDialog: React.FC<SponsorDialogProps> = ({
+    people,
+    trigger = false,
+    onNext,
     onPrevious,
     hasNext = false,
     hasPrevious = false,
     isOpen = false,
-    onOpenChange
+    onOpenChange,
+    beneficiaryType = "CHILD"
 }) => {
     const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
+    const minimumAmount = 10;
+    // To avoid a leftover below minimum, cap the max selectable amount so that leftover is 0 or >= minimum
+    const maxSelectableAmount = remainingAmount > minimumAmount
+        ? remainingAmount - minimumAmount < minimumAmount
+            ? remainingAmount
+            : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
+        : remainingAmount;
+
     const [amount, setAmount] = useState<number>(remainingAmount);
     const [selectedOption, setSelectedOption] = useState<string>(paymentOptionsCollection.items[0].value);
     const [value, setValue] = useState<number[]>([remainingAmount]);
@@ -62,19 +72,20 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     const user = useAuthStore((state) => state.user);
     const [images, setImages] = useState<BeneficiaryMedia[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+    const allowBelowMinimum = remainingAmount < minimumAmount && amount === remainingAmount;
 
     useEffect(() => {
         setAmount(remainingAmount);
         setValue([remainingAmount]);
         setCurrentImageIndex(0);
         setSelectedOption(paymentOptionsCollection.items[0].value);
-        
+
         const fetchImages = async () => {
             try {
-                const response = await fetch(`/api/admin/children/images/${people.id}`);
+                const response = await fetch(`/api/beneficiaries/images/${people.id}`);
                 if (response.ok) {
                     const data = await response.json();
-                    setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => 
+                    setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) =>
                         a.order_index - b.order_index
                     ));
                 }
@@ -84,18 +95,18 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         };
 
         fetchImages();
-        
+
         // Send dialog position to parent after a short delay to allow rendering
         if (isInIframe && isOpen) {
             setTimeout(() => {
                 try {
                     const dialogElement = document.querySelector('[role="alertdialog"]');
                     const dialogRect = dialogElement?.getBoundingClientRect();
-                    
+
                     if (dialogRect) {
                         const urlParams = new URLSearchParams(window.location.search);
                         const parentOrigin = urlParams.get('parentOrigin') || '*';
-                        
+
                         window.parent.postMessage({
                             type: 'makeDialogSticky',
                             from: 'sponsor-dialog-update',
@@ -106,15 +117,15 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                 width: dialogRect.width
                             }
                         }, parentOrigin);
-                        
+
                     }
                 } catch (e) {
                     console.error('[Child Frame] Error sending dialog position:', e);
                 }
             }, 200);
         }
-    }, [people.id, remainingAmount, people.name, isOpen]);
-    
+    }, [people.id, remainingAmount, people.name, isOpen, beneficiaryType]);
+
     // Effect for making the dialog sticky when it opens
     useEffect(() => {
         if (isInIframe && isOpen) {
@@ -122,11 +133,11 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 // Send a message to parent window to make the dialog sticky
                 const urlParams = new URLSearchParams(window.location.search);
                 const parentOrigin = urlParams.get('parentOrigin') || '*';
-                
+
                 // Send dialog position information to parent
                 const dialogElement = document.querySelector('[role="alertdialog"]');
                 const dialogRect = dialogElement?.getBoundingClientRect();
-                
+
                 window.parent.postMessage({
                     type: 'makeDialogSticky',
                     from: 'sponsor-dialog',
@@ -137,10 +148,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                         width: dialogRect.width
                     } : null
                 }, parentOrigin);
-                
-                console.log('[Child Frame] Sent makeDialogSticky request to parent');
             } catch (e) {
-                // Ignore errors from cross-origin restrictions
                 console.error('[Child Frame] Error sending makeDialogSticky:', e);
             }
         }
@@ -159,19 +167,20 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
             setValue([0]);
             return;
         }
-        
+
         let newValue = parseInt(inputValue) || 0;
         newValue = Math.min(newValue, remainingAmount);
         setAmount(newValue);
         setValue([newValue]);
     };
 
-    const handleSponsor = async () => {
-        // Minimum amount should be $10 (1000 cents)
-        if (amount < 10) {
+
+    const handleStripePayment = async () => {
+        // Allow sponsoring below minimum only if it's the final remaining amount
+        if (amount < minimumAmount && !(remainingAmount < minimumAmount && amount === remainingAmount)) {
             toaster.create({
                 title: "Invalid Amount",
-                description: "Minimum sponsorship amount is $10.",
+                description: `Minimum sponsorship amount is $${minimumAmount}.`,
             });
             return;
         }
@@ -195,8 +204,8 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 location: people.country,
                 userId: user?.id,
                 isEmbedded: window.self !== window.top,
+                allowBelowMinimum: remainingAmount < minimumAmount && amount === remainingAmount
             };
-            console.log("SponsorDialog: Stripe payload", payload);
 
             const res = await fetch("/api/stripe", {
                 method: "POST",
@@ -249,21 +258,97 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         }
     };
 
+    const handleCreateOrder = async (_: Record<string, unknown>, actions: { order: { create: (options: { purchase_units: Array<{ description: string; amount: { value: string; currency_code: string } }> }) => Promise<string> } }) => {
+        if (!amount || (amount < minimumAmount && !allowBelowMinimum)) {
+            toaster.create({
+                title: "Invalid Amount",
+                description: `Minimum amount is $${minimumAmount}.`,
+            });
+            throw new Error("Invalid amount");
+        }
+
+        return actions.order.create({
+            purchase_units: [{
+                description: `${selectedOption === "subscription" ? "Monthly" : "Yearly"} Sponsorship for ${people.name}`,
+                amount: {
+                    value: amount.toFixed(2),
+                    currency_code: "USD"
+                }
+            }]
+        });
+    };
+
+    const handlePayPalApproval = async (data: { orderID: string }) => {
+        try {
+            const response = await fetch("/api/paypal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    beneficiaryId: people.id,
+                    beneficiaryName: people.name,
+                    amount: amount,
+                    paymentType: selectedOption,
+                    location: people.country,
+                    userId: user?.id,
+                    email: user?.email,
+                    orderID: data.orderID
+                }),
+            });
+
+            let responseData;
+            try {
+                const responseText = await response.text();
+                responseData = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Error parsing PayPal response:', parseError);
+                throw new Error('Invalid response from payment server');
+            }
+
+            if (!response.ok) {
+                console.error('PayPal error response:', responseData);
+                throw new Error(responseData.error || "Failed to process payment");
+            }
+
+            toaster.create({
+                title: "Success",
+                description: "Your payment has been processed successfully!",
+            });
+            
+            window.location.href = `/payments/success?order_id=${data.orderID}`;
+        } catch (error) {
+            const err = error as Error;
+            console.error("PayPal Error:", error);
+            toaster.create({
+                title: "Payment Error",
+                description: err.message || "Failed to process payment. Please try again.",
+            });
+            window.location.href = "/payments/failed";
+        }
+    };
+
+    const handlePayPalError = (err: Error) => {
+        console.error("PayPal Error:", err);
+        toaster.create({
+            title: "Payment Error",
+            description: "Something went wrong with PayPal. Please try again.",
+        });
+    };
+
     const handleSelectChange = (value: string) => {
         setSelectedOption(value);
     };
 
     const renderDisclaimer = () => {
         const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
-        
+
         if ((people.budget_goal - people.budget_raised - amount * 100) > 0) {
             return (
                 <>
-                    This  has a monthly budget goal that must be met for enrollment in school.
+                    This {beneficiaryType === "ANIMAL" ? "animal" : "child"} has a monthly budget goal that must be met for {beneficiaryType === "ANIMAL" ? "care and medical needs" : "enrollment in school"}.
                     {selectedOption === "payment" && (
                         <>
                             <br />
-                            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this .
+                            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this {beneficiaryType === "ANIMAL" ? "animal" : "child"}.
                         </>
                     )}
                     <br />
@@ -273,7 +358,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         } else if (people.budget_raised > 0) {
             return (
                 <>
-                    This  is partially sponsored. Your contribution will help reach their monthly budget goal!
+                    This {beneficiaryType === "ANIMAL" ? "animal" : "child"} is partially sponsored. Your contribution will help reach their monthly budget goal!
                     {selectedOption === "payment" && (
                         <>
                             <br />
@@ -285,7 +370,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         }
         return (
             <>
-                Your sponsorship will be applied towards the 's monthly budget goals.
+                Your {beneficiaryType === "ANIMAL" ? "adoption" : "sponsorship"} will be applied towards the {beneficiaryType === "ANIMAL" ? "animal" : "child"}'s monthly budget goals.
                 {selectedOption === "payment" && (
                     <>
                         <br />
@@ -303,18 +388,25 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
     const handlePrevious = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        
-        if (onPrevious) {
+
+        // Prevent the dialog from closing
+        e.nativeEvent.stopImmediatePropagation();
+
+        // Ensure dialog stays open during navigation
+        if (onPrevious && isOpen) {
             onPrevious();
-            // No scrolling - we want the dialog to stay in place
         }
     };
 
     const handleNext = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        
-        if (onNext) {
+
+        // Prevent the dialog from closing
+        e.nativeEvent.stopImmediatePropagation();
+
+        // Ensure dialog stays open during navigation
+        if (onNext && isOpen) {
             onNext();
         }
     };
@@ -323,7 +415,10 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
         <DialogRoot
             open={isOpen}
             onOpenChange={(details) => {
-                onOpenChange?.(details.open);
+                // Only allow closing if we're not in the middle of navigation
+                if (!details.open) {
+                    onOpenChange?.(false);
+                }
             }}
             size={isInIframe ? { base: "lg", md: "lg" } : { base: "full", md: "xl" }}
             placement={isInIframe ? "top" : "center"}
@@ -338,11 +433,11 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                     <DialogCloseTrigger id="closeDialog" />
                 </DialogHeader>
                 <DialogBody suppressHydrationWarning={true}>
-                    <Box 
-                        className={isInIframe 
-                            ? "flex flex-col gap-4 p-3" 
+                    <Box
+                        className={isInIframe
+                            ? "flex flex-col gap-4 p-3"
                             : "flex flex-col md:flex-row gap-8 p-5"
-                        } 
+                        }
                         suppressHydrationWarning={true}
                     >
                         <Box className="w-full md:w-[359px]">
@@ -350,18 +445,18 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                 <Image
                                     src={images[currentImageIndex]?.image_url || people.image_url || placeholderImage}
                                     alt={people.name}
-                                    className={isInIframe 
-                                        ? "rounded-xl h-[300px] w-full object-cover" 
+                                    className={isInIframe
+                                        ? "rounded-xl h-[300px] w-full object-cover"
                                         : "rounded-xl md:h-[479px] w-full object-cover"
                                     }
                                 />
                                 {images.length > 1 && (
                                     <>
-                                        <Flex 
-                                            position="absolute" 
-                                            bottom="4" 
-                                            left="50%" 
-                                            transform="translateX(-50%)" 
+                                        <Flex
+                                            position="absolute"
+                                            bottom="4"
+                                            left="50%"
+                                            transform="translateX(-50%)"
                                             gap={2}
                                         >
                                             {images.map((_, index) => (
@@ -460,37 +555,81 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                 <Text mt={1} className="font-semibold text-base mb-[10px]">
                                     Amount
                                 </Text>
-                                <Flex
-                                    className="border rounded-xl"
-                                    mb={4}
-                                    align="center"
-                                    justify="center"
-                                    gap={2}
-                                >
-                                    <InputAddon className="bg-[#D6D6D6] px-[15px] py-[5px] m-1 text-[#959090] text-base font-medium">
-                                        $
-                                    </InputAddon>
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        max={remainingAmount}
-                                        value={amount || ''}
-                                        onChange={handleAmountChange}
-                                        className="px-4 h-[50px]"
-                                        placeholder="Enter Amount"
-                                    />
-                                </Flex>
-                                <Box my={4}>
-                                    <Slider
-                                        value={value}
-                                        min={0}
-                                        max={remainingAmount}
-                                        step={5}
-                                        variant="solid"
-                                        onValueChange={handleSliderChange}
-                                    />
-                                    <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
-                                </Box>
+                                {remainingAmount < minimumAmount ? (
+                                    <Box mb={4}>
+                                        <Flex
+                                            className="border rounded-xl"
+                                            mb={4}
+                                            align="center"
+                                            justify="center"
+                                            gap={2}
+                                        >
+                                            <InputAddon className="bg-[#D6D6D6] px-[15px] py-[5px] m-1 text-[#959090] text-base font-medium">
+                                                $
+                                            </InputAddon>
+                                            <Input
+                                                type="number"
+                                                value={remainingAmount}
+                                                readOnly
+                                                className="px-4 h-[50px] bg-gray-100"
+                                                placeholder="Enter Amount"
+                                            />
+                                        </Flex>
+                                        <Box my={4}>
+                                            <Slider
+                                                value={[remainingAmount]}
+                                                min={remainingAmount}
+                                                max={remainingAmount}
+                                                step={1}
+                                                variant="solid"
+                                                disabled
+                                                onValueChange={() => { }}
+                                            />
+                                            <Text textAlign="center" mt={2}>
+                                                You can sponsor the final ${remainingAmount} to fully fund this beneficiary, even though it is below the usual minimum.
+                                            </Text>
+                                        </Box>
+                                    </Box>
+                                ) : (
+                                    <>
+                                        <Flex
+                                            className="border rounded-xl"
+                                            mb={4}
+                                            align="center"
+                                            justify="center"
+                                            gap={2}
+                                        >
+                                            <InputAddon className="bg-[#D6D6D6] px-[15px] py-[5px] m-1 text-[#959090] text-base font-medium">
+                                                $
+                                            </InputAddon>
+                                            <Input
+                                                type="number"
+                                                min="1"
+                                                max={maxSelectableAmount}
+                                                value={amount || ''}
+                                                onChange={handleAmountChange}
+                                                className="px-4 h-[50px]"
+                                                placeholder="Enter Amount"
+                                            />
+                                        </Flex>
+                                        <Box my={4}>
+                                            <Slider
+                                                value={value}
+                                                min={0}
+                                                max={maxSelectableAmount}
+                                                step={5}
+                                                variant="solid"
+                                                onValueChange={handleSliderChange}
+                                            />
+                                            <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
+                                            {amount > 0 && amount < minimumAmount && (
+                                                <Text color="gray.400" fontSize="sm" textAlign="center" mt={1}>
+                                                    Minimum sponsorship amount is ${minimumAmount}.
+                                                </Text>
+                                            )}
+                                        </Box>
+                                    </>
+                                )}
                                 <Box>
                                     <Text className="font-semibold text-base">Frequency</Text>
                                     <SelectRoot
@@ -516,28 +655,56 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                                     </SelectRoot>
                                 </Box>
                             </Box>
-                            <Flex gap={4}>
-                                <Button
-                                    onClick={() => document.getElementById('closeDialog')?.click()}
-                                    className="flex-1 py-3 bg-[#D1D1D1] text-[#858585]"
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    onClick={handleSponsor}
-                                    loading={loading}
-                                    loadingText="Processing..."
-                                    disabled={loading}
-                                    className="flex-1 py-3 bg-blue-700 text-white hover:bg-blue-800"
-                                >
-                                    Checkout
-                                </Button>
-                            </Flex>
+                            <Box>
+                                <Flex gap={4} mb={4}>
+                                    <Button
+                                        onClick={() => document.getElementById('closeDialog')?.click()}
+                                        className="flex-1 py-3 bg-[#D1D1D1] text-[#858585]"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        onClick={handleStripePayment}
+                                        loading={loading}
+                                        loadingText="Processing..."
+                                        disabled={
+                                            loading ||
+                                            (
+                                                remainingAmount < minimumAmount
+                                                    ? amount !== remainingAmount
+                                                    : amount < minimumAmount
+                                            )
+                                        }
+                                        className={`flex-1 py-3 bg-blue-700 text-white hover:bg-blue-800${(remainingAmount < minimumAmount
+                                                ? amount !== remainingAmount
+                                                : amount < minimumAmount)
+                                                ? ' opacity-50 cursor-not-allowed'
+                                                : ''
+                                            }`}
+                                    >
+                                        Pay with Card
+                                    </Button>
+                                </Flex>
+                                <PayPalScriptProvider options={{ 
+                                        "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
+                                        currency: "USD",
+                                        intent: "capture"
+                                    }}>
+                                        <PayPalButtons
+                                            style={{
+                                                layout: "horizontal"
+                                            }}
+                                            createOrder={handleCreateOrder}
+                                            onApprove={handlePayPalApproval}
+                                            onError={handlePayPalError}
+                                        />
+                                    </PayPalScriptProvider>
+                            </Box>
                         </Box>
                     </Box>
-                    <Text 
-                        color="gray.500" 
-                        textAlign="center" 
+                    <Text
+                        color="gray.500"
+                        textAlign="center"
                         p={1}
                         fontSize={isInIframe ? "xs" : "sm"}
                     >

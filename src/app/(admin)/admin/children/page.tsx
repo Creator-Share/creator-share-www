@@ -4,13 +4,14 @@ import { DataTable } from "@/components/admin-ui/Tables/data-table";
 import { ColumnDef, Row } from "@tanstack/react-table";
 import { columns } from "./columns";
 import dynamic from "next/dynamic";
-// import BulkUploadDrawer from "./components/BulkUploadDrawer";
 import { Box, Button, Text } from "@chakra-ui/react";
 import { MdDeleteOutline } from "react-icons/md";
 import { toaster } from "@/components/ui/toaster";
 import DeleteDialog from "./components/DeleteDialog";
-import { useChildrenStore } from "@/store/childrenStore";
+import { useBeneficiaryStore } from "@/store/beneficiaryStore";
 import { Beneficiaries } from "@/types/admin.types";
+import { dollarsToCents } from "@/utils/currency";
+import GoBackButton from "@/components/ui/goBack";
 
 const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), { ssr: false });
 const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
@@ -21,42 +22,62 @@ type TableInstance = {
 };
 
 const ChildrenTable = () => {
+  const initialFormData: Beneficiaries = {
+    name: "",
+    username: "",
+    gender: "Boy",
+    birth_date: "",
+    biography: "",
+    budget_goal: 0,
+    budget_raised: 0,
+    status: "Draft",
+    country: "",
+    location_geo: null,
+    location_str: "",
+    video_url: "",
+    introduction: "",
+    active_subscriptions: 0,
+    metadata: {},
+    beneficiary_type: "CHILD"
+  };
+
   const {
     data,
     loading,
-    formData,
+    formData = initialFormData,
     formDataEdit,
-    selectedChild,
+    selectedBeneficiary,
     imageFiles,
     videoFiles,
     selectedRowsForDeletion,
     setFormData,
     setFormDataEdit,
-    setSelectedChild,
+    setSelectedBeneficiary,
     setImageFiles,
     setVideoFiles,
     setSelectedRowsForDeletion,
-    fetchChildren,
-    createChild,
-    updateChild,
-    deleteChild,
+    fetchBeneficiaries,
+    createBeneficiary,
+    updateBeneficiary,
+    deleteBeneficiary,
     bulkDelete,
-  } = useChildrenStore();
+  } = useBeneficiaryStore();
 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
-  // const [isBulkUploadDrawerOpen, setIsBulkUploadDrawerOpen] = useState(false);
   const [selectedCount, setSelectedCount] = useState(0);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const tableRef = useRef<TableInstance | null>(null);
 
   useEffect(() => {
-    fetchChildren();
-  }, [fetchChildren]);
+    fetchBeneficiaries("CHILD");
+  }, [fetchBeneficiaries]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    // Convert budget_goal to number if it's the budget field
+    const processedValue = name === 'budget_goal' ? parseFloat(value) || 0 : value;
+    setFormData({ ...formData, [name]: processedValue });
   };
 
   const handleSelectChange = (name: string, value: string) => {
@@ -73,7 +94,24 @@ const ChildrenTable = () => {
   };
 
   const handleSubmit = async (): Promise<boolean> => {
-    const success = await createChild(formData, imageFiles, videoFiles);
+    // Ensure all required fields are present before submitting
+    if (!formData.name || !formData.username || !formData.gender || !formData.birth_date || 
+        !formData.biography || !formData.status || !formData.country || 
+        !formData.location_str || !formData.introduction) {
+      toaster.create({
+        title: "Error",
+        description: "Please fill in all required fields",
+        duration: 5000,
+      });
+      return false;
+    }
+    
+    // Convert budget_goal to cents before submission
+    const formDataWithCents = {
+      ...formData,
+      budget_goal: parseInt(dollarsToCents(formData.budget_goal || 0))
+    };
+    const success = await createBeneficiary("CHILD", formDataWithCents, imageFiles, videoFiles);
     if (success) {
       setIsCreateDrawerOpen(false);
       toaster.create({
@@ -92,8 +130,8 @@ const ChildrenTable = () => {
     }
   };
 
-  const handleSave = async (updatedChild: Beneficiaries) => {
-    await updateChild(updatedChild);
+  const handleSave = async (updated: Partial<Beneficiaries>) => {
+    await updateBeneficiary("CHILD", updated);
     setIsEditDrawerOpen(false);
     toaster.create({
       title: "Success",
@@ -120,7 +158,7 @@ const ChildrenTable = () => {
 
   const confirmDelete = async () => {
     const beneficiaryIds = selectedRowsForDeletion.map((b) => b.id).filter((id): id is string => typeof id === "string");
-    await bulkDelete(beneficiaryIds);
+    await bulkDelete("CHILD", beneficiaryIds);
     if (tableRef.current) {
       tableRef.current.getTableInstance().toggleAllRowsSelected(false);
     }
@@ -135,7 +173,7 @@ const ChildrenTable = () => {
   };
 
   const handleDelete = async (beneficiaryId: string) => {
-    await deleteChild(beneficiaryId);
+    await deleteBeneficiary("CHILD", beneficiaryId);
     setIsEditDrawerOpen(false);
     toaster.create({
       title: "Success",
@@ -152,6 +190,7 @@ const ChildrenTable = () => {
 
   return (
     <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
+      <GoBackButton />
       <Box className="grid grid-cols-2 mb-2">
         <Text className="text-3xl font-semibold leading-9">Manage Children</Text>
         <Box className="justify-self-end flex gap-3">
@@ -159,11 +198,14 @@ const ChildrenTable = () => {
             formData={formData}
             isDrawerOpen={isCreateDrawerOpen}
             setIsDrawerOpen={setIsCreateDrawerOpen}
-            setFormData={(value) =>
-              typeof value === "function"
-                ? setFormData(value(formData))
-                : setFormData(value)
-            }
+            setFormData={(value) => {
+              if (typeof value === 'function') {
+                const currentValue = value(formData);
+                setFormData(currentValue);
+              } else {
+                setFormData(value);
+              }
+            }}
             handleInputChange={handleInputChange}
             handleSelectChange={handleSelectChange}
             handleLocationSelect={handleLocationSelect}
@@ -182,13 +224,6 @@ const ChildrenTable = () => {
             }
             handleDrawerClose={() => setIsCreateDrawerOpen(false)}
           />
-          {/* <BulkUploadDrawer
-            isDrawerOpen={isBulkUploadDrawerOpen}
-            setIsDrawerOpen={setIsBulkUploadDrawerOpen}
-            onUploadSuccess={(newChildren) => {
-              fetchChildren();
-            }}
-          /> */}
           {selectedCount > 0 && (
             <Button onClick={handleBulkDelete} className="border-[2px] border-[#E0E0E0] bg-red-500 text-white w-fit h-[40px] px-4">
               <MdDeleteOutline className="mr-[3.5px]" /> Bulk Delete ({selectedCount})
@@ -205,19 +240,22 @@ const ChildrenTable = () => {
           setSelectedCount(Object.keys(rowSelection).length)
         }
         onRowClick={(data: unknown) => {
-          setSelectedChild(data as Beneficiaries);
+          setSelectedBeneficiary(data as Beneficiaries);
           setIsEditDrawerOpen(true);
         }}
       />
-      {isEditDrawerOpen && selectedChild && (
+      {isEditDrawerOpen && selectedBeneficiary && (
         <EditDrawer
-          selectedChild={selectedChild}
-          formDataEdit={formDataEdit}
-          setFormDataEdit={(value) =>
-            typeof value === "function"
-              ? setFormDataEdit(value(formDataEdit))
-              : setFormDataEdit(value)
-          }
+          selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
+          formDataEdit={formDataEdit as Partial<Beneficiaries>}
+          setFormDataEdit={(value) => {
+            if (typeof value === 'function') {
+              const currentValue = value(formDataEdit);
+              setFormDataEdit(currentValue);
+            } else {
+              setFormDataEdit(value);
+            }
+          }}
           isDrawerOpen={isEditDrawerOpen}
           onClose={() => setIsEditDrawerOpen(false)}
           onSave={handleSave}

@@ -8,7 +8,7 @@ export const useFilterStore = create<FilterState>((set) => ({
   setGender: (gender) => set({ selectedGender: gender }),
   setAgeRange: (ageRange) => set({ selectedAgeRange: ageRange }),
   setStatus: (status) => set({ selectedStatus: status }),
-  clearFilters: () => set({ selectedGender: "", selectedAgeRange: [0, 14], selectedStatus: [] }),
+  clearFilters: () => {
+    set({ selectedGender: "", selectedAgeRange: [0, 14], selectedStatus: ["New", "Partially Funded"] });
+  },
 }));
-
-

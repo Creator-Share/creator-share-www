@@ -1,0 +1,238 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { ColumnDef } from "@tanstack/react-table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { LuArrowUpDown } from "react-icons/lu";
+import { IoCopyOutline } from "react-icons/io5";
+import { Beneficiaries } from "@/types/admin.types";
+import { centsToDollars } from "@/utils/currency";
+
+export const columns: ColumnDef<Beneficiaries>[] = [
+  {
+    id: "select",
+    meta: { excludeFromClick: true },
+    header: ({ table }) => {
+      const isAllSelected = table.getIsAllPageRowsSelected();
+      const isSomeSelected = table.getIsSomePageRowsSelected();
+      return (
+        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            key={`header-${isAllSelected}-${isSomeSelected}`}
+            className="h-5 w-5 border border-black"
+            checked={isAllSelected}
+            _indeterminate={isSomeSelected && !isAllSelected ? {} : undefined}
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          />
+        </div>
+      );
+    },
+    cell: ({ row }) => {
+      return (
+        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            key={`${row.id}-${row.getIsSelected()}`}
+            className="h-5 w-5 border border-black"
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+          />
+        </div>
+      );
+    },
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
+    accessorKey: "id",
+    meta: { excludeFromClick: true },
+    header: ({ column }) => {
+      const meta = column.columnDef.meta as { excludeFromClick?: boolean };
+      if (meta?.excludeFromClick) {
+        return null;
+      }
+      return (
+        <Button
+          variant="ghost"
+          onClick={() =>
+            column.toggleSorting(column.getIsSorted() === "asc")
+          }
+        >
+          ID
+          <LuArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      );
+    },
+    cell: ({ row }) => {
+      const person = row.original;
+      return (
+        <div className="flex items-center justify-center" title={person.id}>
+          <IoCopyOutline
+            className="ml-1 h-4 w-4 cursor-pointer"
+            onClick={() => person.id && navigator.clipboard.writeText(person.id)}
+          />
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "name",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Name
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+  },
+  {
+    accessorKey: "username",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Username
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+  },
+  {
+    accessorKey: "biography",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Biography
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => {
+      const person = row.original;
+      return (
+        <div className="line-clamp-2">
+          {person.biography}
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "introduction",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Introduction
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => {
+      const person = row.original;
+      return <div>{person.introduction}</div>;
+    },
+  },
+  {
+    accessorKey: "budget_goal",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Budget Goal
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => {
+      const person = row.original;
+      return <div>${centsToDollars(person.budget_goal)}</div>;
+    },
+  },
+  {
+    accessorKey: "budget_raised",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Budget Raised
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => {
+      const person = row.original;
+      return <div>${centsToDollars(person.budget_raised)}</div>;
+    },
+  },
+  {
+    accessorKey: "status",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Status
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+  },
+  {
+    accessorKey: "country",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Country
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+  },
+  {
+    accessorKey: "location_str",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Location
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+  },
+  {
+    accessorKey: "gender",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Gender
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+  },
+];

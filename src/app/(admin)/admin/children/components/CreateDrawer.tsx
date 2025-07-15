@@ -30,10 +30,10 @@ import { GoPlusCircle } from "react-icons/go";
 import { toaster } from "@/components/ui/toaster";
 
 type CreateDrawerProps = {
-    formData: Beneficiaries;
+    formData: Partial<Beneficiaries>;
     isDrawerOpen: boolean;
     setIsDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
-    setFormData: React.Dispatch<React.SetStateAction<Beneficiaries>>;
+    setFormData: React.Dispatch<React.SetStateAction<Partial<Beneficiaries>>>;
     handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
     handleSelectChange: (name: keyof Beneficiaries, value: string) => void;
     handleLocationSelect: (geo: [number, number], locationStr: string, country: string) => void;
@@ -60,8 +60,8 @@ const CreateDrawer = ({
 
     const handleAdd = async () => {
         
-        const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'status', 'country'] as const;
-        const emptyFields = requiredFields.filter(field => !formData[field as keyof Beneficiaries]);
+        const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'country'] as const;
+        const emptyFields = requiredFields.filter(field => !formData[field]);
         
         if (emptyFields.length > 0) {
             toaster.create({
@@ -165,23 +165,6 @@ const CreateDrawer = ({
                             </Field>
                             <Field label="Budget Goal" required errorText="This field is required">
                                 <Input name="budget_goal" type="text" className="border" px={2} onChange={handleInputChange} />
-                            </Field>
-                            <Field label="Status" required errorText="This field is required">
-                                <NativeSelectRoot>
-                                    <NativeSelectField
-                                        className="border"
-                                        placeholder="Select Status"
-                                        px={2}
-                                        name="status"
-                                        onChange={(e) => handleSelectChange("status", e.target.value)}
-                                    >
-                                        <option value="New">New</option>
-                                        <option value="Partially Funded">Partially Funded</option>
-                                        <option value="Budget Filled">Budget Filled</option>
-                                        <option value="Archived">Archived</option>
-                                        <option value="Draft">Draft</option>
-                                    </NativeSelectField>
-                                </NativeSelectRoot>
                             </Field>
                             <Field label="Upload Image">
                                 <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]} maxFiles={5}>

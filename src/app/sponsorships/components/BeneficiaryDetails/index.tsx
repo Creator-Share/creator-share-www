@@ -18,7 +18,7 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryCardProps> = ({ beneficiary })
     useEffect(() => {
         const fetchImages = async () => {
             try {
-                const response = await fetch(`/api/admin/children/images/${beneficiary.id}`);
+                const response = await fetch(`/api/admin/beneficiaries/images/${beneficiary.id}`);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }

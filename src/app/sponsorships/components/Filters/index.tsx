@@ -16,7 +16,8 @@ import { genders, status as statusOptions } from "./config";
 
 const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({ 
   onFilterChange,
-  variant = 'default'
+  variant = 'default',
+  beneficiaryType = 'CHILD'
 }) => {
   const {
     selectedGender,
@@ -28,41 +29,48 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
     clearFilters,
   } = useFilterStore();
   const [minAge, setMinAge] = useState<number>(selectedAgeRange[0] || 0);
-  const [maxAge, setMaxAge] = useState<number>(selectedAgeRange[1] || 14);
+  const defaultMaxAge = beneficiaryType === 'ANIMAL' ? 20 : 14;
+  const [maxAge, setMaxAge] = useState<number>(selectedAgeRange[1] || defaultMaxAge);
 
   useEffect(() => {
     setMinAge(selectedAgeRange[0] || 0);
-    setMaxAge(selectedAgeRange[1] || 14);
-  }, [selectedAgeRange]);
+    setMaxAge(selectedAgeRange[1] || defaultMaxAge);
+  }, [selectedAgeRange, defaultMaxAge]);
 
   const handleFilterChange = (updatedFilters: {
     gender?: string;
     ageRange?: [number, number];
     status?: string[];
   }) => {
-    if (updatedFilters.gender !== undefined) {
-      setGender(updatedFilters.gender);
-    }
-    if (updatedFilters.ageRange !== undefined) {
-      setAgeRange(updatedFilters.ageRange);
-    }
-    if (updatedFilters.status !== undefined) {
-      setStatus(updatedFilters.status);
-    }
+    // Always include the current status if not explicitly changed
+    const newStatus = updatedFilters.status ?? selectedStatus;
+    console.log('New status:', newStatus);
 
-    onFilterChange({
+    const newFilters = {
       gender: updatedFilters.gender ?? selectedGender,
       ageRange: updatedFilters.ageRange ?? selectedAgeRange,
-      status: updatedFilters.status ?? selectedStatus,
-    });
+      status: newStatus,
+    };
+
+    if (updatedFilters.gender !== undefined) {
+      setGender(newFilters.gender);
+    }
+    if (updatedFilters.ageRange !== undefined) {
+      setAgeRange(newFilters.ageRange);
+    }
+    setStatus(newStatus);
+
+    onFilterChange(newFilters);
   };
 
   const handleClearFilters = (e: React.MouseEvent) => {
     e.preventDefault();
+    const defaultStatus = ["New", "Partially Funded"];
     clearFilters();
     setMinAge(0);
-    setMaxAge(14);
-    onFilterChange({ gender: "", ageRange: [0, 14], status: [] });
+    setMaxAge(defaultMaxAge);
+    setStatus(defaultStatus);
+    onFilterChange({ gender: "", ageRange: [0, defaultMaxAge], status: defaultStatus });
   };
 
   return (
@@ -107,7 +115,7 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
         {/* Status Select Dropdown */}
         <SelectRoot
           collection={statusOptions}
-          value={selectedStatus && selectedStatus.length > 0 ? selectedStatus : undefined}
+          value={selectedStatus}
           onValueChange={(details) => {
             const values = details.items.map(item => item.value);
             handleFilterChange({ status: values });
@@ -121,8 +129,11 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
           <SelectTrigger>
             <SelectValueText placeholder="Select Status">
               {() => {
-                const selected = statusOptions.items.find(item => selectedStatus.includes(item.value));
-                return selected ? selected.label : "Select Status";
+                const selected = statusOptions.items
+                  .filter(item => selectedStatus.includes(item.value))
+                  .map(item => item.label)
+                  .join(", ");
+                return selected || "Select Status";
               }}
             </SelectValueText>
           </SelectTrigger>
@@ -143,7 +154,7 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
             <Slider
               value={[minAge, maxAge]}
               min={0}
-              max={14}
+              max={defaultMaxAge}
               step={1}
               onValueChange={(details) => {
                 if (details.value && details.value.length >= 2) {

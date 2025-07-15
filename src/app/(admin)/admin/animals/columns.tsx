@@ -158,7 +158,7 @@ export const columns: ColumnDef<AnimalBeneficiary>[] = [
     ),
     cell: ({ row }) => {
       const animal = row.original;
-      return <div>${centsToDollars(animal.budget_goal)}</div>;
+      return <div>${centsToDollars(typeof animal.budget_goal === 'string' ? parseInt(animal.budget_goal) : animal.budget_goal)}</div>;
     },
   },
   {
@@ -222,7 +222,7 @@ export const columns: ColumnDef<AnimalBeneficiary>[] = [
     ),
   },
   {
-    accessorKey: "breed",
+    accessorKey: "metadata.breed",
     header: ({ column }) => (
       <Button
         variant="ghost"
@@ -236,11 +236,11 @@ export const columns: ColumnDef<AnimalBeneficiary>[] = [
     ),
     cell: ({ row }) => {
       const animal = row.original;
-      return <div>{animal.breed}</div>;
+      return <div>{animal.metadata?.breed || ""}</div>;
     },
   },
   {
-    accessorKey: "animal_type",
+    accessorKey: "metadata.animal_type",
     header: ({ column }) => (
       <Button
         variant="ghost"
@@ -254,7 +254,7 @@ export const columns: ColumnDef<AnimalBeneficiary>[] = [
     ),
     cell: ({ row }) => {
       const animal = row.original;
-      return <div>{animal.animal_type}</div>;
+      return <div>{animal.metadata?.animal_type || ""}</div>;
     },
   },
 ];

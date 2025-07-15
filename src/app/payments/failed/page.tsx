@@ -25,20 +25,17 @@ const FailedPageContent = () => {
       try {
         const response = await fetch(`/api/stripe/session?id=${sessionId}`);
         const data = await response.json();
-        
+
         if (!response.ok) {
           if (data.code === 'SESSION_NOT_FOUND' && retryCount < 2) {
-            console.log(`Session not found, retrying in 1 second (attempt ${retryCount + 1}/2)...`);
             setTimeout(() => {
               setRetryCount(prev => prev + 1);
             }, 1000);
             return;
           }
-          
-          // For failed payments, we don't need to retry as much
           throw new Error(data.error || 'Failed to fetch session');
         }
-        
+
         const { session } = data;
         setChildDetails({
           name: session.metadata?.childName || 'this beneficiary',
@@ -68,25 +65,25 @@ const FailedPageContent = () => {
 
   return (
     <Center className="bg-gray-50 items-center justify-center min-h-screen">
-      <Box 
-        maxW="md" 
-        w="full" 
-        bg="white" 
-        p={8} 
-        borderRadius="2xl" 
-        boxShadow="md" 
+      <Box
+        maxW="md"
+        w="full"
+        bg="white"
+        p={8}
+        borderRadius="2xl"
+        boxShadow="md"
         className="text-center mx-4"
       >
         {/* Error Icon */}
         <Center mb={6}>
-          <Box 
-            borderRadius="full" 
-            bg="#F7CACA" 
-            p={4} 
-            width="80px" 
-            height="80px" 
-            display="flex" 
-            alignItems="center" 
+          <Box
+            borderRadius="full"
+            bg="#F7CACA"
+            p={4}
+            width="80px"
+            height="80px"
+            display="flex"
+            alignItems="center"
             justifyContent="center"
           >
             <Box as="span" color="#F30000" fontSize="3xl" fontWeight="bold">✕</Box>
@@ -94,10 +91,10 @@ const FailedPageContent = () => {
         </Center>
 
         {/* Heading */}
-        <Text 
-          fontSize="2xl" 
-          fontWeight="bold" 
-          mb={4} 
+        <Text
+          fontSize="2xl"
+          fontWeight="bold"
+          mb={4}
           color="#1C3C8C"
           className="text-center"
         >
@@ -128,9 +125,9 @@ const FailedPageContent = () => {
           >
             Retry Payment
           </Button>
-          
-          <Link 
-            as={NextLink} 
+
+          <Link
+            as={NextLink}
             href="/sponsorships"
             fontSize="sm"
             fontWeight="medium"

@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { DataTable } from "@/components/admin-ui/Tables/data-table";
 import { ColumnDef, Row } from "@tanstack/react-table";
 import { columns } from "./columns";
-import { AnimalBeneficiary } from "@/types/admin.types";
+import { AnimalBeneficiary, Gender, Status } from "@/types/admin.types";
 import { centsToDollars, dollarsToCents } from "@/utils/currency";
 import { Box, Button, Text } from "@chakra-ui/react";
 import { MdDeleteOutline } from "react-icons/md";
@@ -12,16 +12,11 @@ import { toaster } from "@/components/ui/toaster";
 import CreateDrawer from "./components/CreateDrawer";
 import EditDrawer from "./components/EditDrawer";
 import DeleteDialog from "./components/DeleteDialog";
+import GoBackButton from "@/components/ui/goBack";
 
 type TableInstance = {
   getSelectedRowModel: () => { rows: Row<AnimalBeneficiary>[] };
   getTableInstance: () => { toggleAllRowsSelected: (value: boolean) => void };
-};
-
-type AnimalFormState = Omit<AnimalBeneficiary, "budget_goal" | "birth_date" | "gender"> & {
-  budget_goal: string;
-  birth_date: string;
-  gender: string;
 };
 
 const AnimalsTable = () => {
@@ -30,42 +25,42 @@ const AnimalsTable = () => {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
-  const [formData, setFormData] = useState<AnimalFormState>({
-    id: "",
+  const [formData, setFormData] = useState<AnimalBeneficiary>({
     name: "",
     username: "",
-    gender: "",
+    gender: "Boy",
     birth_date: "",
     biography: "",
     introduction: "",
     budget_goal: "",
     budget_raised: 0,
-    status: "",
+    status: "New",
     country: "",
     location_str: "",
     beneficiary_type: "ANIMAL",
-    metadata: {},
-    breed: "",
-    animal_type: "",
+    metadata: {
+      breed: "",
+      animal_type: "",
+    },
   });
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
-  const [formDataEdit, setFormDataEdit] = useState<AnimalFormState>({
-    id: "",
+  const [formDataEdit, setFormDataEdit] = useState<AnimalBeneficiary>({
     name: "",
     username: "",
-    gender: "",
+    gender: "Boy",
     birth_date: "",
     biography: "",
     introduction: "",
     budget_goal: "",
     budget_raised: 0,
-    status: "",
+    status: "New",
     country: "",
     location_str: "",
     beneficiary_type: "ANIMAL",
-    metadata: {},
-    breed: "",
-    animal_type: "",
+    metadata: {
+      breed: "",
+      animal_type: "",
+    },
   });
   const [selectedCount, setSelectedCount] = useState(0);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -75,21 +70,31 @@ const AnimalsTable = () => {
   useEffect(() => {
     async function fetchData() {
       try {
-        const response = await fetch('/api/admin/animals/retrieve');
+        const response = await fetch('/api/admin/beneficiaries/retrieve?beneficiary_type=ANIMAL');
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
         const fetchedData = await response.json();
-        const animalsArr = Array.isArray(fetchedData.animals) ? fetchedData.animals : [];
-        type AnimalMetadata = { breed?: string; animal_type?: string };
-        setData(animalsArr.map((animal: AnimalBeneficiary) => ({
-          ...animal,
-          budget_goal: String(centsToDollars(animal.budget_goal)),
-          breed: animal.breed || (animal.metadata && (animal.metadata as AnimalMetadata).breed) || "",
-          animal_type: animal.animal_type || (animal.metadata && (animal.metadata as AnimalMetadata).animal_type) || "",
-        })));
+        const animalsArr = Array.isArray(fetchedData.beneficiaries) ? fetchedData.beneficiaries : [];
+        setData(animalsArr.map((animal: AnimalBeneficiary) => {
+          const metadata = animal.metadata || {};
+          return {
+            ...animal,
+            budget_goal: String(centsToDollars(typeof animal.budget_goal === 'string' ? parseInt(animal.budget_goal) : animal.budget_goal)),
+            metadata: {
+              ...metadata,
+              breed: metadata.breed || "",
+              animal_type: metadata.animal_type || "",
+            }
+          };
+        }));
       } catch (error) {
         console.error("Error fetching animals:", error);
+        toaster.create({
+          title: "Error",
+          description: "Failed to load animals. Please refresh the page.",
+          duration: 5000,
+        });
       }
       setLoading(false);
     }
@@ -98,59 +103,105 @@ const AnimalsTable = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (name === 'breed' || name === 'animal_type') {
+      setFormData((prev: AnimalBeneficiary) => ({
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          [name]: value
+        }
+      }));
+    } else {
+      setFormData((prev: AnimalBeneficiary) => ({ ...prev, [name]: value }));
+    }
   };
 
-  const handleSelectChange = (name: keyof AnimalBeneficiary, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const handleSelectChange = (name: string, value: string) => {
+    if (name === 'animal_type') {
+      setFormData((prev: AnimalBeneficiary) => ({
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          [name]: value
+        }
+      }));
+    } else {
+      setFormData((prev: AnimalBeneficiary) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleDrawerClose = () => {
     setIsCreateDrawerOpen(false);
     setFormData({
-      id: "",
       name: "",
       username: "",
-      gender: "",
+      gender: "Boy",
       birth_date: "",
       biography: "",
       introduction: "",
       budget_goal: "",
       budget_raised: 0,
-      status: "",
+      status: "New",
       country: "",
       location_str: "",
       beneficiary_type: "ANIMAL",
-      metadata: {},
-      breed: "",
-      animal_type: "",
+      metadata: {
+        breed: "",
+        animal_type: "",
+      },
     });
   };
 
   const handleSubmit = async () => {
     try {
+      // Extract everything except metadata
+      const { metadata, ...formFields } = formData;
+      
       const animalData = {
-        ...formData,
-        budget_goal: Math.round(Number(formData.budget_goal) * 100),
+        ...formFields,
+        name: formData.name || "Unnamed Animal",
+        username: formData.username || "",
+        biography: formData.biography || "",
+        introduction: formData.introduction || "",
+        budget_goal: Math.round(Number(formData.budget_goal) * 100) || 0,
+        budget_raised: Number(formData.budget_raised) || 0,
+        status: "New",
+        country: formData.country || "Unknown Country",
+        location_str: formData.location_str || "Unknown Location",
+        location_geo: null,
+        video_url: "",
+        active_subscriptions: 0,
+        beneficiary_type: "ANIMAL",
         metadata: {
-          breed: formData.breed,
-          animal_type: formData.animal_type,
+          ...(metadata || {}),
+          breed: metadata?.breed || "",
+          animal_type: metadata?.animal_type || "",
         },
       };
-      const response = await fetch("/api/admin/animals/create", {
+      const response = await fetch("/api/admin/beneficiaries/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(animalData),
       });
-      if (!response.ok) {
-        throw new Error("Failed to create animal beneficiary");
+      const responseData = await response.json();
+      if (!response.ok || !responseData.beneficiary) {
+        throw new Error(responseData.error || "Failed to create animal beneficiary");
       }
-      const { animal } = await response.json();
+      const { beneficiary } = responseData;
+      
+      // Add the new animal to the data array first
+      setData((prev: AnimalBeneficiary[]) => [
+        ...prev,
+        { 
+          ...beneficiary, 
+          budget_goal: String(dollarsToCents(typeof beneficiary.budget_goal === 'string' ? parseInt(beneficiary.budget_goal) : beneficiary.budget_goal)),
+          video_url: beneficiary.video_url || ""
+        },
+      ]);
 
-      // Upload images to Supabase storage and insert media records
-      if (imageFiles.length > 0) {
+      if (imageFiles.length > 0 && beneficiary.id) {
         const supabase = (await import("@/utils/supabase/client")).createClient();
         const imageUrls: string[] = [];
         for (const imageFile of imageFiles) {
@@ -174,22 +225,23 @@ const AnimalsTable = () => {
           }
         }
         if (imageUrls.length > 0) {
-          await fetch("/api/admin/animals/images/create", {
+          await fetch("/api/admin/beneficiaries/images/create", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               images: imageUrls.map((url, index) => ({
-                beneficiary_id: animal.id,
+                beneficiary_id: beneficiary.id,
                 image_url: url,
                 order_index: index,
               })),
+              beneficiary_type: "ANIMAL",
             }),
           });
         }
       }
 
       // Upload video to Supabase storage and update animal record
-      if (videoFiles.length > 0) {
+      if (videoFiles.length > 0 && beneficiary.id) {
         const supabase = (await import("@/utils/supabase/client")).createClient();
         const videoFile = videoFiles[0];
         const fileName = `${Date.now()}-${videoFile.name}`;
@@ -205,28 +257,61 @@ const AnimalsTable = () => {
             .from("beneficiaries")
             .getPublicUrl(filePath);
           if (urlData?.publicUrl) {
-            await fetch("/api/admin/animals/update", {
+            const videoResponse = await fetch("/api/admin/beneficiaries/update/" + beneficiary.id, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                id: animal.id,
                 video_url: urlData.publicUrl,
+                beneficiary_type: "ANIMAL",
               }),
             });
+            if (videoResponse.ok) {
+              const updatedData = await videoResponse.json();
+              if (updatedData.beneficiary) {
+                const updatedAnimal = updatedData.beneficiary;
+                setData((prev: AnimalBeneficiary[]) => prev.map(a => 
+                  a.id === updatedAnimal.id 
+                    ? { 
+                        ...updatedAnimal, 
+                        budget_goal: String(dollarsToCents(updatedAnimal.budget_goal)),
+                        video_url: updatedAnimal.video_url || ""
+                      }
+                    : a
+                ));
+                setImageFiles([]);
+                setVideoFiles([]);
+                handleDrawerClose();
+                toaster.create({
+                  title: "Success",
+                  description: "Animal created successfully.",
+                  duration: 5000,
+                });
+                return true;
+              }
+            }
           }
         }
       }
 
-      setData((prev) => [
-        ...prev,
-        { ...animal, budget_goal: String(dollarsToCents(animal.budget_goal)) },
-      ]);
-      setImageFiles([]);
-      setVideoFiles([]);
-      handleDrawerClose();
-      return true;
+      if (!videoFiles.length) {
+        setImageFiles([]);
+        setVideoFiles([]);
+        handleDrawerClose();
+        toaster.create({
+          title: "Success",
+          description: "Animal created successfully.",
+          duration: 5000,
+        });
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error("Error creating animal beneficiary:", error);
+      toaster.create({
+        title: "Error",
+        description: "Failed to create animal. Please try again.",
+        duration: 5000,
+      });
       return false;
     }
   };
@@ -241,10 +326,14 @@ const AnimalsTable = () => {
             : Number(animal.budget_goal)
         )
       ),
-      breed: animal.breed || animal.metadata?.breed || "",
-      animal_type: animal.animal_type || animal.metadata?.animal_type || "",
       birth_date: animal.birth_date || "",
-      gender: animal.gender || "",
+      gender: (animal.gender as Gender) || "Boy",
+      status: (animal.status as Status) || "New",
+      metadata: {
+        ...(animal.metadata || {}),
+        breed: animal.metadata?.breed || "",
+        animal_type: animal.metadata?.animal_type || "",
+      },
     });
     setIsEditDrawerOpen(true);
   };
@@ -252,71 +341,102 @@ const AnimalsTable = () => {
   const handleEditDrawerClose = () => {
     setIsEditDrawerOpen(false);
     setFormDataEdit({
-      id: "",
       name: "",
       username: "",
-      gender: "",
+      gender: "Boy",
       birth_date: "",
       biography: "",
       introduction: "",
       budget_goal: "",
       budget_raised: 0,
-      status: "",
+      status: "New",
       country: "",
       location_str: "",
       beneficiary_type: "ANIMAL",
-      metadata: {},
-      breed: "",
-      animal_type: "",
+      metadata: {
+        breed: "",
+        animal_type: "",
+      },
     });
   };
 
-  const handleSave = async (updatedAnimal: AnimalFormState) => {
+  const handleSave = async (updatedAnimal: AnimalBeneficiary) => {
     try {
+      // Extract everything except metadata
+      const { metadata, ...formFields } = updatedAnimal;
+      
       const animalData = {
-        ...updatedAnimal,
+        ...formFields,
         budget_goal: Math.round(Number(updatedAnimal.budget_goal) * 100),
         metadata: {
-          breed: updatedAnimal.breed,
-          animal_type: updatedAnimal.animal_type,
+          ...(metadata || {}),
+          breed: metadata?.breed || "",
+          animal_type: metadata?.animal_type || "",
         },
       };
-      const response = await fetch(`/api/admin/animals/update/${updatedAnimal.id}`, {
+      const response = await fetch(`/api/admin/beneficiaries/update/${updatedAnimal.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(animalData),
+        body: JSON.stringify({ ...animalData, beneficiary_type: "ANIMAL" }),
       });
       if (!response.ok) {
         throw new Error("Failed to update animal beneficiary");
       }
-      const { animal } = await response.json();
-      setData((prev) =>
+      const { beneficiary } = await response.json();
+      if (!beneficiary) {
+        throw new Error("No animal data returned from update endpoint");
+      }
+      setData((prev: AnimalBeneficiary[]) =>
         prev.map((a) =>
-          a.id === animal.id
-            ? { ...animal, budget_goal: Number(animal.budget_goal) }
+          a.id === beneficiary.id
+            ? { 
+                ...beneficiary, 
+                budget_goal: Number(beneficiary.budget_goal),
+                video_url: beneficiary.video_url || ""
+              }
             : a
         )
       );
       handleEditDrawerClose();
+      toaster.create({
+        title: "Success",
+        description: "Animal updated successfully.",
+        duration: 5000,
+      });
     } catch (error) {
       console.error("Error updating animal beneficiary:", error);
+      toaster.create({
+        title: "Error",
+        description: "Failed to update animal. Please try again.",
+        duration: 5000,
+      });
     }
   };
 
   const handleDelete = async (animalId: string) => {
     try {
-      const response = await fetch(`/api/admin/animals/delete/${animalId}`, {
+      const response = await fetch(`/api/admin/beneficiaries/delete/${animalId}`, {
         method: "DELETE",
       });
       if (!response.ok) {
         throw new Error("Failed to delete animal beneficiary");
       }
-      setData((prev) => prev.filter((a) => a.id !== animalId));
+      setData((prev: AnimalBeneficiary[]) => prev.filter((a) => a.id !== animalId));
       handleEditDrawerClose();
+      toaster.create({
+        title: "Success",
+        description: "Animal deleted successfully.",
+        duration: 5000,
+      });
     } catch (error) {
       console.error("Error deleting animal beneficiary:", error);
+      toaster.create({
+        title: "Error",
+        description: "Failed to delete animal. Please try again.",
+        duration: 5000,
+      });
     }
   };
 
@@ -328,6 +448,7 @@ const AnimalsTable = () => {
 
   return (
     <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
+      <GoBackButton />
       <Box className="grid grid-cols-2 mb-2">
         <Text className="text-3xl font-semibold leading-9">Animals</Text>
         <Box className="justify-self-end flex gap-3">
@@ -389,17 +510,17 @@ const AnimalsTable = () => {
         onConfirm={async () => {
           const animalIds = selectedRowsForDeletion.map((row) => row.original.id);
           try {
-            const response = await fetch("/api/admin/animals/bulk-delete", {
+            const response = await fetch("/api/admin/beneficiaries/bulk-delete", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({ animalIds }),
+              body: JSON.stringify({ beneficiary_type: "ANIMAL", ids: animalIds }),
             });
             if (!response.ok) {
               throw new Error("Bulk delete failed");
             }
-            setData((prev) => prev.filter((a) => !animalIds.includes(a.id)));
+            setData((prev: AnimalBeneficiary[]) => prev.filter((a) => !animalIds.includes(a.id)));
             setSelectedRowsForDeletion([]);
             setSelectedCount(0);
             setIsDeleteDialogOpen(false);

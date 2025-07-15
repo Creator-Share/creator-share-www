@@ -26,16 +26,17 @@ import MapPicker from './MapPicker';
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import { toaster } from "@/components/ui/toaster";
+import { dollarsToCents } from "@/utils/currency";
 import { HiUpload, HiX } from "react-icons/hi";
 import ActivitiesTable from "../../activities/components/ActivitiesTable";
 
 interface EditDrawerProps {
-    selectedChild: Beneficiaries | null;
-    formDataEdit: Beneficiaries;
-    setFormDataEdit: React.Dispatch<React.SetStateAction<Beneficiaries>>;
+    selectedChild: Partial<Beneficiaries>;
+    formDataEdit: Partial<Beneficiaries>;
+    setFormDataEdit: React.Dispatch<React.SetStateAction<Partial<Beneficiaries>>>;
     isDrawerOpen: boolean;
     onClose: () => void;
-    onSave: (updatedChild: Beneficiaries) => void;
+    onSave: (updatedChild: Partial<Beneficiaries>) => void;
     onDelete: (childId: string) => Promise<void>;
     imageFiles: File[];
     setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
@@ -55,26 +56,8 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     setImageFiles,
     setVideoFiles
 }) => {
-    const [formDataEdit, setFormDataEdit] = useState<Beneficiaries>(() =>
-        selectedChild || {
-            id: "",
-            name: "",
-            username: "",
-            gender: "Boy",
-            birth_date: "",
-            biography: "",
-            budget_goal: 0,
-            budget_raised: 0,
-            status: "New",
-            country: "",
-            location_geo: null,
-            location_str: "",
-            video_url: "",
-            introduction: "",
-            active_subscriptions: 0,
-            metadata: {},
-            beneficiary_type: "CHILD",
-        }
+    const [formDataEdit, setFormDataEdit] = useState<Partial<Beneficiaries>>(
+        selectedChild || {}
     );
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -103,18 +86,25 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
 
     useEffect(() => {
         if (selectedChild) {
-            setFormDataEdit(selectedChild);
+            // Convert budget_goal from cents to dollars for display
+            const formattedData = {
+                ...selectedChild,
+                budget_goal: selectedChild.budget_goal ? selectedChild.budget_goal / 100 : 0
+            };
+            setFormDataEdit(formattedData);
             setVideoUrl(selectedChild.video_url || null);
         }
     }, [selectedChild]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        setFormDataEdit((prev: Beneficiaries) => ({ ...prev, [name]: value }));
+        // Convert budget_goal to number if it's the budget field
+        const processedValue = name === 'budget_goal' ? parseFloat(value) || 0 : value;
+        setFormDataEdit((prev) => ({ ...prev, [name]: processedValue }));
     };
 
     const handleSelectChange = (name: string, value: string) => {
-        setFormDataEdit((prev: Beneficiaries) => ({ ...prev, [name]: value }));
+        setFormDataEdit((prev) => ({ ...prev, [name]: value }));
     };
 
     const handleSave = async () => {
@@ -133,7 +123,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
         try {
             setIsSaving(true);
             const updatedData = { ...formDataEdit };
-            const budgetGoalInCents = Math.round(parseFloat(formDataEdit.budget_goal.toString()) * 100);
+            const budgetGoalInCents = parseInt(dollarsToCents(formDataEdit.budget_goal || 0));
             if (imageFiles.length > 0) {
                 const supabase = createClient();
                 const imageUrls = [];
@@ -200,7 +190,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     };
 
     const handleLocationSelect = (geo: [number, number], locationStr: string, country: string) => {
-        setFormDataEdit((prev: Beneficiaries) => ({
+        setFormDataEdit((prev) => ({
             ...prev,
             location_geo: { type: "Point", coordinates: [geo[1], geo[0]] },
             location_str: locationStr,
@@ -210,7 +200,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
 
     const fetchImages = useCallback(async () => {
         if (selectedChild?.id) {
-            const response = await fetch(`/api/admin/children/images/${selectedChild.id}`);
+            const response = await fetch(`/api/admin/beneficiaries/images/${selectedChild.id}`);
             if (response.ok) {
                 const images = await response.json();
                 setAllImages(images);
@@ -225,7 +215,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     const handleDeleteImage = async (imageId: string) => {
         try {
             setIsImageLoading(true);
-            const response = await fetch('/api/admin/children/images/delete', {
+            const response = await fetch('/api/admin/beneficiaries/images/delete', {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -339,14 +329,14 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     value={formDataEdit.introduction || ''}
                                 />
                             </Field>
-                            <Field label="Budget Goal">
+                            <Field label="Budget Goal" required errorText="This field is required">
                                 <Input
                                     name="budget_goal"
-                                    type="text"
+                                    type="number"
                                     className="border"
                                     px={2}
                                     onChange={handleInputChange}
-                                    value={formDataEdit.budget_goal}
+                                    value={formDataEdit.budget_goal || ''}
                                 />
                             </Field>
                             <Field label="Status" required errorText="This field is required">
@@ -427,13 +417,13 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                             <MapPicker
                                 onSelectLocation={handleLocationSelect}
                                 initialLocation={
-                                    selectedChild.location_geo ? {
+                                    selectedChild?.location_geo ? {
                                         coordinates: [
                                             selectedChild.location_geo.coordinates[1],
                                             selectedChild.location_geo.coordinates[0]
                                         ],
-                                        locationStr: selectedChild.location_str,
-                                        country: selectedChild.country
+                                        locationStr: selectedChild.location_str || "",
+                                        country: selectedChild.country || ""
                                     } : undefined
                                 }
                             />

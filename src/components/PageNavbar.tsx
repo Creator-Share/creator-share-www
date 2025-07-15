@@ -15,7 +15,7 @@ const Links = [
   // { name: "My Community", href: "/local" },
   // { name: "Share Abundance", href: "/share" },
   { name: "Sponsorships", href: "/sponsorships" },
-  // { name: "Sponsor-a-Puppy", href: "/sponsor-a-puppy" },
+  { name: "Strays Worth Saving", href: "/strays-worth-saving" },
   // { name: "Sponsor-a-Family", href: "/family-in-need" },
   // { name: "Street Involved", href: "/street-involved" },
   // { name: "Child Laborer", href: "/child-labor" },
@@ -107,7 +107,6 @@ export function PageNavbar() {
                       <Menu.Item
                         value="admin"
                         onClick={() => {
-                          console.log("Admin Dashboard clicked");
                           router.push("/admin");
                         }}
                       >
@@ -117,7 +116,6 @@ export function PageNavbar() {
                     <Menu.Item
                       value="user-dashboard"
                       onClick={() => {
-                        console.log("User Dashboard clicked");
                         router.push("/app");
                       }}
                     >
@@ -126,7 +124,6 @@ export function PageNavbar() {
                     <Menu.Item
                       value="logout"
                       onClick={() => {
-                        console.log("Logout clicked");
                         handleLogout();
                       }}
                     >

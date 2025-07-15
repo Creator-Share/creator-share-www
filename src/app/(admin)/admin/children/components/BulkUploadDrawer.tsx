@@ -77,7 +77,7 @@ const BulkUploadDrawer = ({
             setIsUploading(true);
             const processedData = await processCSV(csvFile);
             
-            const response = await fetch('/api/admin/children/bulk-upload', {
+            const response = await fetch('/api/admin/beneficiaries/bulk-upload', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
