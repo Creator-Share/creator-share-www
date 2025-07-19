@@ -204,7 +204,9 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 location: people.country,
                 userId: user?.id,
                 isEmbedded: window.self !== window.top,
-                allowBelowMinimum: remainingAmount < minimumAmount && amount === remainingAmount
+                allowBelowMinimum: remainingAmount < minimumAmount && amount === remainingAmount,
+                email: user?.email || undefined,
+                type: "sponsorship" // or "partnership" if applicable in your UI logic
             };
 
             const res = await fetch("/api/stripe", {

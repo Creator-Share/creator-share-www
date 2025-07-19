@@ -67,7 +67,7 @@ export async function POST(req: Request) {
 
     // Common session configuration
     const sessionConfig: Stripe.Checkout.SessionCreateParams = {
-      payment_method_types: ["card", "paypal"],
+      payment_method_types: ["card"],
       mode: "subscription",
       line_items: [{ price: price.id, quantity: 1 }],
       billing_address_collection: "required",
