@@ -185,17 +185,28 @@ export async function POST(req: Request) {
         // Use billing_agreement_id or subscription id for idempotency
         const recurringReference = sub.billing_agreement_id || sub.id;
 
-          const { error: transactionError } = await supabase
-            .from("transaction_ledger")
-            .insert({
-              user_id: null,
-              credit: amount,
+        // Fetch beneficiary name from DB if beneficiaryId is present
+        const { data: beneficiary, error: beneficiaryError } = beneficiaryId
+          ? await supabase
+              .from("beneficiaries")
+              .select("name")
+              .eq("id", beneficiaryId)
+              .single()
+          : { data: null, error: null };
+        const beneficiaryName =
+          !beneficiaryError && beneficiary && beneficiary.name
+            ? beneficiary.name
+            : beneficiaryId;
+
+        const { error: transactionError } = await supabase
+          .from("transaction_ledger")
+          .insert({
+            user_id: null,
+            credit: amount,
               customer_email: payerEmail,
               customer_name: payerName,
               reference: recurringReference,
-              description: `PayPal recurring sponsorship payment${
-                beneficiaryId ? ` for beneficiary ${beneficiaryId}` : ""
-              } with amount of ${amount}`,
+              description: `PayPal recurring sponsorship payment${beneficiaryName ? ` for beneficiary ${beneficiaryName}` : ""} with amount of ${amount}`,
               tx_action: "SPONSORSHIP",
               subscription_type: "subscription",
               beneficiary_id: /^[0-9a-fA-F-]{36}$/.test(beneficiaryId || "")

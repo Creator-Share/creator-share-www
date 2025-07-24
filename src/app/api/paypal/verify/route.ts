@@ -50,7 +50,24 @@ export async function GET(req: Request) {
       if (!res.ok) {
         return NextResponse.json({ error: data }, { status: 400 });
       }
-      return NextResponse.json(data);
+      // If custom_id is present, fetch beneficiary name from DB
+      let beneficiaryName: string | undefined = undefined;
+      if (data.custom_id) {
+        const { createClient } = await import("@/utils/supabase/client");
+        const supabase = createClient();
+        const { data: beneficiary, error } = await supabase
+          .from("beneficiaries")
+          .select("name")
+          .eq("id", data.custom_id)
+          .single();
+        if (!error && beneficiary && beneficiary.name) {
+          beneficiaryName = beneficiary.name;
+        }
+      }
+      return NextResponse.json({
+        ...data,
+        beneficiary_name: beneficiaryName,
+      });
     } else if (token) {
       // Fetch order details
       const res = await fetch(`${PAYPAL_API_URL}/v2/checkout/orders/${token}`, {
