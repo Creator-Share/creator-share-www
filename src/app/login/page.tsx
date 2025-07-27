@@ -10,7 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { useState, useEffect } from "react";
-import { loginForm } from "@/types";
+import { loginForm } from "@/types/authTypes";
 import ToS from "@/components/ui/ToS";
 import { toaster } from "@/components/ui/toaster";
 

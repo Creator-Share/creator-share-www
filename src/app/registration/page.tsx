@@ -13,14 +13,9 @@ import { create } from "zustand";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
+import { FormValues } from "@/types/authTypes";
 
-interface FormValues {
-    first_name: string;
-    last_name: string;
-    email: string;
-    password: string;
-    confirmPassword: string;
-}
+
 
 const useFormStore = create<{
     isDisabled: boolean;

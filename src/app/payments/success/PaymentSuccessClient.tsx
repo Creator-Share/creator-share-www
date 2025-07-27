@@ -2,54 +2,9 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { FaPaypal, FaStripe } from "react-icons/fa";
-
-type StripeSessionDetails = {
-  id: string;
-  amount_total?: number | null;
-  currency?: string | null;
-  customer_email?: string | null;
-  payment_status?: string | null;
-  subscription?: unknown;
-  payment_intent?: unknown;
-  customer?: unknown;
-  metadata?: Record<string, unknown> | null;
-  status?: string | null;
-  url?: string | null;
-  error?: string;
-};
-
-type PayPalDetails = {
-  id?: string;
-  status?: string;
-  plan_id?: string;
-  subscriber?: {
-    email_address?: string;
-    payer_id?: string;
-    name?: { given_name?: string; surname?: string };
-    [key: string]: unknown;
-  };
-  create_time?: string;
-  update_time?: string;
-  custom_id?: string;
-  beneficiary_name?: string;
-  [key: string]: unknown;
-};
-
-type StripeStatus = {
-  provider: "stripe";
-  status: "success" | "error";
-  message: string;
-  details?: StripeSessionDetails;
-};
-
-type PayPalStatus = {
-  provider: "paypal";
-  status: "success" | "error";
-  message: string;
-  details?: PayPalDetails;
-};
-
-type PaymentStatus = StripeStatus | PayPalStatus | { provider: "unknown"; status: "error"; message: string };
+import {
+  PaymentStatus,
+} from "@/types/payments.types";
 
 export default function PaymentSuccessClient() {
   const searchParams = useSearchParams();
@@ -147,16 +102,26 @@ export default function PaymentSuccessClient() {
     if (status?.provider === "paypal" && status.details && "beneficiary_name" in status.details) {
       return status.details.beneficiary_name || "—";
     }
-    // For Stripe, you may have to get from metadata or elsewhere
-    if (status?.provider === "stripe" && status.details && status.details.metadata && status.details.metadata.childName) {
-      return String(status.details.metadata.childName);
+    // For Stripe, use beneficiaryName from metadata if available
+    if (
+      status?.provider === "stripe" &&
+      status.details &&
+      status.details.metadata &&
+      status.details.metadata.beneficiaryName
+    ) {
+      return String(status.details.metadata.beneficiaryName);
     }
     return "—";
   };
 
   const getLocation = () => {
-    if (status?.provider === "stripe" && status.details && status.details.metadata && status.details.metadata.childLocation) {
-      return String(status.details.metadata.childLocation);
+    if (
+      status?.provider === "stripe" &&
+      status.details &&
+      status.details.metadata &&
+      status.details.metadata.location_str
+    ) {
+      return String(status.details.metadata.location_str);
     }
     // For PayPal, location is not available in the response, so use placeholder
     return "—";

@@ -8,11 +8,7 @@ import { useForm } from "react-hook-form";
 import Image from "next/image";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { create } from "zustand";
-
-interface FormValues {
-  password: string;
-  confirmPassword: string;
-}
+import { FormValues } from "@/types/authTypes";
 
 const useFormStore = create<{
   isDisabled: boolean;

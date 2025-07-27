@@ -1,4 +1,4 @@
-import { User } from "@supabase/supabase-js";
+
 
 export type Gender = "Boy" | "Girl";
 export type Status = "New" | "Partially Funded" | "Budget Fulfilled" | "Archived" | "Draft";
@@ -54,6 +54,7 @@ export interface Subscription {
   };
 }
 
+
 export interface Activity {
   id: string;
   description: string;
@@ -64,26 +65,10 @@ export interface Activity {
   videos_url?: string[];
 }
 
-//Auth types
-
-export interface loginForm {
-  email: string;
-  password: string;
-}
-
 export interface RoleAssignment {
   roles: {
     name: string;
   };
-}
-
-export interface AuthState {
-  user: User | null;
-  registrationEmail: string | null;
-  logout: () => Promise<void>;
-  setRegistrationEmail: (email: string) => void;
-  clearRegistrationEmail: () => void;
-  fetchUser: () => Promise<void>;
 }
 
 export interface FilterState {

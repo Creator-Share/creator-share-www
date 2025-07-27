@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { createClient } from "@/utils/supabase/client";
-import { AuthState } from "@/types";
-
+import { AuthState } from "@/types/authTypes";
 const supabase = createClient();
 
 export const useAuthStore = create<AuthState>((set) => {

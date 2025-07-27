@@ -2,20 +2,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { LuArrowUpDown } from "react-icons/lu";
 import { MdCancelPresentation } from "react-icons/md";
-
-export type Subscription = {
-  id: string;
-  child_id: string;
-  status: string;
-  amount: number;
-  interval: string;
-  current_period_start: string;
-  current_period_end: string;
-  stripe_subscription_id: string;
-  child: {
-    name: string;
-  };
-};
+import { Subscription } from "@/types";
 
 export const columns: ColumnDef<Subscription>[] = [
   {
@@ -30,7 +17,7 @@ export const columns: ColumnDef<Subscription>[] = [
       </Button>
     ),
     cell: ({ row }) => {
-      const child = row.original.child;
+      const child = row.original.beneificiary;
       return <div>{child?.name || 'N/A'}</div>;
     },
   },

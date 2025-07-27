@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { DataTable } from "@/components/admin-ui/Tables/data-table";
-import { columns, type Subscription } from "./columns";
+import { columns } from "./columns";
 import { createClient } from "@/utils/supabase/client";
 import { Box, Heading, Text } from "@chakra-ui/react";
 import { useAuthStore } from "@/store/authStore";
 import { ColumnDef } from "@tanstack/react-table";
+import { Subscription } from "@/types";
 
 const UserDashboard = () => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
