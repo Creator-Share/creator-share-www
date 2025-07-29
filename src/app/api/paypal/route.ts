@@ -59,7 +59,7 @@ async function getPayPalAccessToken() {
   }
 }
 
-async function createPayPalOrder(amount: number, accessToken: string) {
+async function createPayPalOrder(amount: number, accessToken: string, beneficiaryId?: string) {
   try {
     const response = await fetch(`${PAYPAL_API_URL}/v2/checkout/orders`, {
       method: 'POST',
@@ -70,10 +70,12 @@ async function createPayPalOrder(amount: number, accessToken: string) {
       body: JSON.stringify({
         intent: 'CAPTURE',
         purchase_units: [{
+          reference_id: beneficiaryId || undefined,
+          custom_id: beneficiaryId || undefined,
           amount: {
             currency_code: 'USD',
             value: amount.toFixed(2),
-          },
+          }
         }],
       }),
     });
@@ -144,6 +146,7 @@ async function capturePayPalOrder(orderID: string, accessToken: string) {
 
 export async function POST(request: Request) {
   try {
+    const body = await request.json();
     const {
       beneficiaryId,
       beneficiaryName,
@@ -151,10 +154,76 @@ export async function POST(request: Request) {
       // paymentType,
       // location,
       // userId,
-      orderID
-    } = await request.json();
+      orderID,
+      plan_id,
+      subscriber_email,
+      subscriber_name
+    } = body;
 
     const accessToken = await getPayPalAccessToken();
+
+    // If creating a subscription
+    if (plan_id) {
+      try {
+        // Build subscriber object per PayPal docs
+        type PayPalSubscriber = {
+          email_address?: string;
+          name?: {
+            given_name: string;
+            surname: string;
+          };
+        };
+        const subscriber: PayPalSubscriber = {};
+        if (subscriber_email) subscriber.email_address = subscriber_email;
+        if (subscriber_name) {
+          const [given_name, ...surnameArr] = subscriber_name.split(" ");
+          subscriber.name = {
+            given_name,
+            surname: surnameArr.join(" ") || "",
+          };
+        }
+
+        const response = await fetch(`${PAYPAL_API_URL}/v1/billing/subscriptions`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            plan_id,
+            custom_id: beneficiaryId || undefined,
+            subscriber,
+            application_context: {
+              brand_name: "Creator Share",
+              locale: "en-US",
+              shipping_preference: "NO_SHIPPING",
+              user_action: "SUBSCRIBE_NOW",
+              payment_method: {
+                payer_selected: "PAYPAL",
+                payee_preferred: "IMMEDIATE_PAYMENT_REQUIRED"
+              },
+              return_url: process.env.NEXT_PUBLIC_BASE_URL + "/payments/success",
+              cancel_url: process.env.NEXT_PUBLIC_BASE_URL + "/payments/failed",
+            },
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error("PayPal subscription creation error:", data);
+          return NextResponse.json({ error: data }, { status: 400 });
+        }
+
+        return NextResponse.json({ subscription: data });
+      } catch (error) {
+        console.error("Error creating PayPal subscription:", error);
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : "Unknown error" },
+          { status: 500 }
+        );
+      }
+    }
 
     // If orderID is present, this is a capture request
     if (orderID) {
@@ -229,8 +298,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // If no orderID, this is an order creation request
-    const orderData = await createPayPalOrder(amount, accessToken);
+    // If no orderID and no plan_id, this is an order creation request
+    const orderData = await createPayPalOrder(amount, accessToken, beneficiaryId);
 
     if (orderData.status !== 'CREATED') {
       return NextResponse.json(

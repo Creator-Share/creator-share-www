@@ -204,7 +204,9 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
                 location: people.country,
                 userId: user?.id,
                 isEmbedded: window.self !== window.top,
-                allowBelowMinimum: remainingAmount < minimumAmount && amount === remainingAmount
+                allowBelowMinimum: remainingAmount < minimumAmount && amount === remainingAmount,
+                email: user?.email || undefined,
+                type: "sponsorship" // or "partnership" if applicable in your UI logic
             };
 
             const res = await fetch("/api/stripe", {
@@ -280,6 +282,55 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({
 
     const handlePayPalApproval = async (data: { orderID: string }) => {
         try {
+            // If recurring, ensure plan exists and create subscription
+            if (selectedOption === "subscription" || selectedOption === "payment") {
+                // 1. Create or get plan for this beneficiary
+                const planRes = await fetch("/api/paypal/plan", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        beneficiary_id: people.id,
+                        name: `${selectedOption === "subscription" ? "Monthly" : "Yearly"} Sponsorship for ${people.name}`,
+                        description: `Recurring sponsorship for ${people.name}`,
+                        amount: amount,
+                        interval_unit: selectedOption === "subscription" ? "MONTH" : "YEAR",
+                        interval_count: 1,
+                        currency_code: "USD"
+                    }),
+                });
+                const planData = await planRes.json();
+                if (!planRes.ok) {
+                    throw new Error(planData.error?.message || "Failed to create/get PayPal plan");
+                }
+                const plan_id = planData.plan.id;
+
+                // 2. Create subscription
+                const subRes = await fetch("/api/paypal", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        plan_id,
+                        beneficiaryId: people.id,
+                        subscriber_email: user?.email,
+                        subscriber_name: user?.email || "",
+                    }),
+                });
+                const subData = await subRes.json();
+                if (!subRes.ok) {
+                    throw new Error(subData.error?.message || "Failed to create PayPal subscription");
+                }
+                // Redirect user to PayPal approval link
+                type PayPalLink = { rel?: string; href?: string };
+                const approvalUrl = subData.subscription?.links?.find((l: PayPalLink) => l.rel === "approve")?.href;
+                if (approvalUrl) {
+                    window.location.href = approvalUrl;
+                    return;
+                } else {
+                    throw new Error("No approval link returned from PayPal");
+                }
+            }
+
+            // Fallback: One-time payment (legacy flow)
             const response = await fetch("/api/paypal", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
