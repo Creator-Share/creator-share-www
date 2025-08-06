@@ -6,16 +6,12 @@ import {
   DialogBody,
   DialogCloseTrigger,
 } from "@/components/ui/dialog";
-import { Box, Text, Image, Spinner, Button } from "@chakra-ui/react";
-import SponsorshipDetails from "../SponsorshipDetails";
+import { Box, Text, Image, Spinner, Button, Flex } from "@chakra-ui/react";
 import SponsorDialog from "../SponsorDialog";
-import BeneficiaryActivity from "../SponsorshipActivity";
-import { FaCalendar, FaPerson } from "react-icons/fa6";
-import { FaLocationDot } from "react-icons/fa6";
-import { calculateAge } from "@/utils/ageCalculator";
+import { FaCalendar, FaUser, FaLocationDot, FaCircleInfo, FaLink, FaShare } from "react-icons/fa6";
+import { centsToDollars } from "@/utils/currency";
 import { Beneficiaries } from "@/types/index";
 import { fetchActivitiesByBeneficiaryId, fetchSponsorshipDetailsByBeneficiaryId } from "@/actions";
-
 
 interface BeneficiaryActivityModalProps {
   open: boolean;
@@ -34,23 +30,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   const getStatusText = (status: string) => {
     switch (status) {
       case "Budget Fulfilled":
-        return (
-          <Box className="flex flex-col items-center">
-            <Image src="/fulfilled.png" alt="Fulfilled" width={73} height={84} className="mb-2" />
-            <Text className="text-[#03150E] font-bold text-center">Sponsored</Text>
-          </Box>
-        );
+        return "Sponsored";
       case "Partially Funded":
-        return (
-          <Box className="flex flex-col items-center">
-            <Image src="/pending.png" alt="Pending" width={73} height={84} className="mb-2" />
-            <Text className="text-[#767070] text-center">On Going</Text>
-          </Box>
-        );
+        return "On Going";
       case "New":
-        return <Text className="text-[#767070] text-center">Sponsor</Text>;
+        return "Not funded";
       default:
-        return <Text className="text-[#767070] text-center">Nothing to show</Text>;
+        return "Not funded";
     }
   };
 
@@ -70,88 +56,159 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 
   return (
     <DialogRoot open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-[#F5F5F5] rounded-2xl max-w-[700px] w-full relative">
-        <DialogHeader className="absolute right-4 top-4">
-          <DialogCloseTrigger />
+      <DialogContent className="max-w-[800px] w-full relative rounded-2xl">
+        <DialogHeader className="bg-[#D9D9D9] flex justify-between items-center p-6 pb-2">
+          <Text className="text-2xl font-bold text-gray-800">Child Details</Text>
+          <DialogCloseTrigger>
+            <Box className="text-2xl cursor-pointer">×</Box>
+          </DialogCloseTrigger>
         </DialogHeader>
-        <DialogBody className="p-8">
+        <DialogBody className="p-0">
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-60 z-50 rounded-2xl">
               <Spinner size="xl" color="#1C3C8C" />
             </div>
           )}
-          <Box>
-            <Box className="flex gap-6 md:flex-row flex-col">
-              <div className="flex flex-1 items-center bg-white rounded-xl p-6 shadow-sm">
-                <Image
-                  src={beneficiary.image_url || "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="}
-                  alt={beneficiary.name}
-                  className="object-cover rounded-full"
-                  width={115}
-                  height={115}
-                />
-                <div className="ml-6">
-                  <div className="text-2xl font-bold text-[#03150E] mb-1">{beneficiary.name}</div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[#767070] text-base md:items-center md:flex-row flex-col items-start">
-                    <div className="flex items-center gap-1 md:flex-row flex-col">
-                      <div className="flex flex-row gap-1">
-                        <FaCalendar className="mt-1"/>
-                        <span>
-                          {beneficiary.birth_date
-                            ? new Date(beneficiary.birth_date).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })
-                            : "N/A"}
-                        </span>
-                      </div>
-                      <span className="ml-2 text-xs text-[#767070]">
-                        {beneficiary.birth_date ? `${calculateAge(beneficiary.birth_date)} yrs old` : ""}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <FaPerson />
-                      <span>{beneficiary.gender}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <FaLocationDot />
-                      <span>{beneficiary.country}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-col items-center justify-center bg-white rounded-xl p-6 min-w-[200px] shadow-sm">
+          <Box
+            className="md:grid md:grid-cols-2 px-8"
+            style={{
+              background: 'linear-gradient(to bottom, #D9D9D9 0%, #D9D9D9 50%, transparent 50%, transparent 100%)'
+            }}
+          >
+            <Image
+              src={beneficiary.image_url || "/placeholder-child.jpg"}
+              alt={beneficiary.name}
+              width={179.34}
+              height={179.34}
+              className="rounded-full object-cover border-4 border-white bg-gray-200"
+            />
+            <Flex flex="1" minW="0" direction="column" align="flex-end" justify="flex-end" gap={2}>
+              <Flex align="center" gap={2} mb={2}>
+                <Text fontSize="lg">Sponsorship status</Text>
+                <FaCircleInfo />
+              </Flex>
+              <Box className="px-3 py-1 bg-gray-200 rounded text-gray-700 font-semibold text-sm">
                 {getStatusText(beneficiary.status)}
-              </div>
-            </Box>
-            <Box className="my-4 flex gap-3 md:flex-row flex-col">
-              <Button
-                className="bg-white text-[#1C3C8C] hover:text-white hover:bg-[#1C3C8C] px-8 py-3 rounded-lg font-medium"
-                onClick={() => window.location.assign(`/sponsorships/${beneficiary.username}`)}
-              >
-                See Full Profile
-              </Button>
-              <Button
-                className="bg-[#1C3C8C] text-white hover:bg-[#15307A] px-8 py-3 rounded-lg font-medium"
-                onClick={() => setSponsorDialogOpen(true)}
-              >
-                Sponsor {beneficiary.name}
-              </Button>
-              <SponsorDialog
-                people={beneficiary}
-                isOpen={sponsorDialogOpen}
-                onOpenChange={setSponsorDialogOpen}
-                trigger={<div style={{ display: "none" }} />}
-              />
-            </Box>
+              </Box>
+            </Flex>
+          </Box>
+          <Box py={4}>
+            <Box className="grid grid-cols-2" gap={6} mb={6} px={8}>
+              {/* Profile Info */}
+              <Box className="col-span-2" gap={6}>
+                <Box>
+                  <Text className="text-xl font-bold text-gray-800 mb-2">{beneficiary.name || "Full Name"}</Text>
+                  <Flex align="center" gap={2} mb={1}>
+                    <FaCalendar />
+                    <Text fontSize="md">
+                      {beneficiary.birth_date ? new Date(beneficiary.birth_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "DOB"}
+                    </Text>
+                    <FaUser className="ml-4" />
+                    <Text fontSize="md">{beneficiary.gender || "Gender"}</Text>
+                  </Flex>
+                  <Flex align="center" gap={2}>
+                    <FaLocationDot />
+                    <Text fontSize="md">{beneficiary.country || "Location"}</Text>
+                  </Flex>
+                  <Box className="md:grid md:grid-cols-2 gap-4">
+                    <Flex className="justify-center w-full md:justify-start">
+                      <Button
+                        className="w-full md:w-50%"
+                        bg="black"
+                        color="white"
+                        onClick={() => setSponsorDialogOpen(true)}
+                        height="40px"
+                        _hover={{ bg: "black" }}
+                        mt={4}
+                      >
+                        Sponsor Child
+                      </Button>
+                    </Flex>
+                    <Flex mt={4} gap={4} className="justify-center md:justify-end md:tems-end">
+                      <Button className="border border-[#000000] p-4" height="40px" variant="outline" size="sm">
+                        <FaLink style={{ marginRight: 6 }} />
+                        Copy Link
+                      </Button>
+                      <Button className="border border-[#000000] p-4" variant="outline" size="sm" height="40px">
+                        <FaShare style={{ marginRight: 6 }} />
+                        Share Profile
+                      </Button>
+                    </Flex>
+                  </Box>
 
-            <Box mb={8}>
-              <SponsorshipDetails beneficiaryId={beneficiary.id} />
+                </Box>
+              </Box>
             </Box>
-            <Box mb={8}>
-              <Text fontSize="lg" fontWeight="semibold" mb={4}>
-                Quick Updates
-              </Text>
-              <BeneficiaryActivity beneficiaryId={beneficiary.id} username={beneficiary.username} />
+            <Box className="flex flex-col gap-4 md:grid md:grid-cols-3 md:gap-4" px={8}>
+              {/* Medical History */}
+              <Box
+                bg="#E0E0E0"
+                p={4}
+                borderRadius="xl"
+                className="col-span-2"
+              >
+                <Text fontSize="lg" fontWeight="bold" mb={2}>Medical History</Text>
+                <Text color="gray.600" fontSize="sm">
+                  ullamcorper Donec orci tincidunt sollicitudin. vitae elit nibh tempor laoreet nec quam vitae sapien tincidunt placerat Nunc eget lobortis, lacus, quis leo. ex
+                </Text>
+              </Box>
+              {/* Sponsorship Target */}
+              <Box
+                bg="#E0E0E0"
+                p={4}
+                borderRadius="xl"
+              >
+                <Text fontSize="lg" fontWeight="bold" mb={2}>Sponsorship Target</Text>
+                <Text fontSize="2xl" fontWeight="bold" mb={2}>
+                  {beneficiary.budget_goal > 0
+                    ? Math.round((beneficiary.budget_raised / beneficiary.budget_goal) * 100)
+                    : 0}%
+                </Text>
+                <Box className="w-full bg-gray-100 h-2 rounded-full mb-3">
+                  <Box
+                    className="bg-gray-500 h-full rounded-full"
+                    style={{
+                      width: `${beneficiary.budget_goal > 0
+                        ? Math.min((beneficiary.budget_raised / beneficiary.budget_goal) * 100, 100)
+                        : 0}%`
+                    }}
+                  />
+                </Box>
+                <Text color="gray.600" fontSize="sm">${centsToDollars(beneficiary.budget_raised)}  of ${centsToDollars(beneficiary.budget_goal)} funded</Text>
+              </Box>
+            </Box>
+            <Box className="flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-4 mt-4" px={8}>
+              {/* Child Bio */}
+              <Box
+                bg="white"
+                p={4}
+                borderRadius="xl"
+              >
+                <Text fontSize="lg" fontWeight="bold" mb={2}>Child Bio</Text>
+                <Text color="gray.600" fontSize="sm">
+                  {beneficiary.biography}
+                </Text>
+              </Box>
+              {/* Video Placeholder */}
+              <Box
+                bg="white"
+                p={4}
+                borderRadius="xl"
+              >
+                <svg width="64" height="64" fill="none" viewBox="0 0 64 64">
+                  <rect width="64" height="64" rx="16" fill="#F3F4F6" />
+                  <path d="M24 20V44L44 32L24 20Z" fill="#D1D5DB" />
+                </svg>
+              </Box>
             </Box>
           </Box>
+
+          <SponsorDialog
+            people={beneficiary}
+            isOpen={sponsorDialogOpen}
+            onOpenChange={setSponsorDialogOpen}
+            trigger={<div style={{ display: "none" }} />}
+          />
         </DialogBody>
       </DialogContent>
     </DialogRoot>
