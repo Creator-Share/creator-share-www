@@ -17,7 +17,7 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [activeBeneficiaryId, setActiveBeneficiaryId] = useState<string | null>(null);
   const isInIframe = window.self !== window.top;
-  const itemsPerPage = 4; // Show fewer items per page to test pagination
+  const itemsPerPage = 6; // Show fewer items per page to test pagination
 
   const filteredBeneficiary = React.useMemo(() => {
     const safeBeneficiaryData = Array.isArray(beneficiaryData) ? beneficiaryData : [];
@@ -167,7 +167,7 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
     <Box
       ref={ref}
       width="100%"
-      className="border bg-white rounded-xl"
+      className="border bg-white rounded-2xl"
       px={{ base: 3, md: 8 }}
       mt={4}
       style={{ minHeight: visibleBeneficiary.length ? 'auto' : '100px' }}
@@ -185,7 +185,7 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
       />
 
       <Box pt={10} pb={6}>
-        <SimpleGrid columns={{ base: 1, md: 1 }} gap="1.5rem">
+        <SimpleGrid columns={{ base: 1, md: 3 }} gap="1.5rem">
           {visibleBeneficiary.map((beneficiary) =>
             beneficiary.id ? (
               <Box key={beneficiary.id}>
