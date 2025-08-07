@@ -409,7 +409,7 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
   }
 
   return (
-    <Box className="h-[932px] md:h-[450px] w-full mb-8 rounded-xl relative" suppressHydrationWarning={true}>
+    <Box className="h-[276px] md:h-[450px] w-full mb-8 rounded-xl relative" suppressHydrationWarning={true}>
       <MapContainer
         ref={mapRef}
         center={[0, 0]}
