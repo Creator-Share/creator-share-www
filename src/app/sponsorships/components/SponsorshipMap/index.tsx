@@ -62,14 +62,27 @@ const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void
       }
       
       updateTimeoutRef.current = setTimeout(() => {
-        onBoundsChange(map.getBounds());
-        localStorage.setItem(
-          "mapState",
-          JSON.stringify({
-            center: map.getCenter(),
-            zoom: map.getZoom(),
-          })
-        );
+        try {
+          const bounds = map.getBounds();
+          onBoundsChange(bounds);
+        } catch (err) {
+          // Prevent runtime error if map is not ready or container is not visible
+          if (process.env.NODE_ENV !== "production") {
+            // eslint-disable-next-line no-console
+            console.warn("MapEventHandler: map.getBounds() failed", err);
+          }
+        }
+        try {
+          localStorage.setItem(
+            "mapState",
+            JSON.stringify({
+              center: map.getCenter(),
+              zoom: map.getZoom(),
+            })
+          );
+        } catch {
+          // Ignore localStorage errors
+        }
       }, 300);
     };
 
@@ -404,13 +417,12 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
         duration: ANIMATION_DURATION
       });
 
-      // Wait for the map animation to complete before scrolling to the beneficiary
       setTimeout(() => {
         const element = document.getElementById(id);
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-      }, ANIMATION_DURATION * 1000 + 100); // Add a small buffer after the map animation
+      }, ANIMATION_DURATION * 1000 + 100);
     }
     onMarkerClick(id);
   }, [beneficiaryData, onMarkerClick]);

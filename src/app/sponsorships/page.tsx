@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Box, Flex, Text, Spinner } from '@chakra-ui/react';
+import { Box, Flex, Text, Spinner, Button } from '@chakra-ui/react';
 import dynamic from 'next/dynamic';
 import { Beneficiaries } from '@/types';
+import { FaCaretDown, FaCaretUp, FaCompass } from 'react-icons/fa';
 
 const SponsorshipMap = dynamic(() => import('./components/SponsorshipMap'), {
   ssr: false,
@@ -14,7 +15,7 @@ const SponsorshipMap = dynamic(() => import('./components/SponsorshipMap'), {
 
 const Filters = dynamic(() => import('./components/Filters'));
 const ChildListings = dynamic(() => import('./components/SponsorshipListings'));
-const ChildListingsSkeleton = dynamic(() => 
+const ChildListingsSkeleton = dynamic(() =>
   import('./components/SponsorshipListings/Skeleton').then(mod => mod.ChildListingsSkeleton)
 );
 
@@ -29,11 +30,11 @@ const SponsorChild = () => {
   const [currentBounds, setCurrentBounds] = useState<L.LatLngBounds | undefined>(undefined);
   const [childrenData, setChildrenData] = useState<Beneficiaries[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0, 14], status: ["New", "Partially Funded"] });
-
+  const [showMap, setShowMap] = useState<boolean>(true);
   const listingsRef = useRef<HTMLDivElement>(null);
   const childListingsRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -50,7 +51,7 @@ const SponsorChild = () => {
   }, []);
 
   const fetchChildren = React.useCallback(async (filters: Filters) => {
-    setLoading(true); 
+    setLoading(true);
     setError(null);
 
     try {
@@ -91,7 +92,7 @@ const SponsorChild = () => {
   const handleMarkerClick = React.useCallback((id: string) => {
     setSelectedChildId(id);
     const selectedPerson = childrenData.find((child) => child.id === id);
-    
+
     if (selectedPerson) {
       setSelectedCountry(selectedPerson.country);
 
@@ -134,8 +135,8 @@ const SponsorChild = () => {
     try {
       const handleMessage = (event: MessageEvent) => {
         // TODO: Respect .env instead of hardcode
-        if (!event.origin.includes('share-tanzania.webflow.io') && 
-            !event.origin.includes('localhost:3000')) {
+        if (!event.origin.includes('share-tanzania.webflow.io') &&
+          !event.origin.includes('localhost:3000')) {
           return;
         }
 
@@ -146,7 +147,7 @@ const SponsorChild = () => {
 
       window.addEventListener('message', handleMessage);
 
-      
+
       const debouncedSendHeight = () => {
         if (resizeTimeout) clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(sendHeight, 100);
@@ -155,7 +156,7 @@ const SponsorChild = () => {
       const observer = new ResizeObserver(debouncedSendHeight);
       resizeObserver = observer;
 
-     
+
       observer.observe(document.documentElement);
 
       window.addEventListener('load', sendHeight);
@@ -175,7 +176,7 @@ const SponsorChild = () => {
   }, [sendHeight]);
 
   return (
-    <Box 
+    <Box
       ref={contentRef}
       className="flex flex-col items-center justify-center px-4 md:px-10 py-12 md:py-16"
       suppressHydrationWarning={true}
@@ -198,31 +199,43 @@ const SponsorChild = () => {
         </Text>
       )}
 
-      <Flex 
-        width="100%" 
+      <Flex
+        width="100%"
         direction={{ base: "column", md: "row" }}
         gap={{ base: 0, md: 4 }}
         position="relative"
       >
-        <Box 
-          flex="1"
+        <Box
+          className='flex flex-col w-full'
           position="sticky"
           top="20px"
           height="fit-content"
           zIndex={10}
         >
-          <SponsorshipMap
-            beneficiaryData={childrenData}
-            onMarkerClick={handleMarkerClick}
-            onBoundsChange={handleBoundsChange}
-            onResetView={onResetView}
-            onFilterChange={handleFilterChange}
-          />
-          
-          <Box 
-            position="absolute" 
-            bottom={12} 
-            right={4} 
+          <Button className='justify-end' onClick={() => setShowMap((prev) => !prev)} mb={4}>
+            {showMap ? (
+              <>
+                <FaCompass/> Hide Map <FaCaretUp />
+              </>
+            ) : (
+              <>
+                <FaCompass/> Show Map <FaCaretDown />
+              </>
+            )}
+          </Button>
+          {showMap && (
+            <>
+            <SponsorshipMap
+              beneficiaryData={childrenData}
+              onMarkerClick={handleMarkerClick}
+              onBoundsChange={handleBoundsChange}
+              onResetView={onResetView}
+              onFilterChange={handleFilterChange}
+            />
+            <Box
+            position="absolute"
+            bottom={12}
+            right={4}
             zIndex={1000}
             className="bg-white bg-opacity-90 backdrop-blur-sm rounded-xl p-2 shadow-md"
           >
@@ -230,6 +243,8 @@ const SponsorChild = () => {
               {childrenData.length} Children Available
             </Text>
           </Box>
+          </>
+          )}
         </Box>
       </Flex>
 

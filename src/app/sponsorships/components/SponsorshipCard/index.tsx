@@ -78,9 +78,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
             height="100%"
             display="flex"
             flexDirection="column"
-            cursor="pointer"
-            onClick={handleViewActivity}
-            transform="translateZ(0)" // Force hardware acceleration
+            transform="translateZ(0)"
         >
             {/* Card Header: Image with Target Badge */}
             <Box position="relative" flexShrink={0}>
@@ -231,19 +229,19 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                 {/* Information Row */}
                 <Flex gap={4} mb={4} flexWrap="wrap">
                     <Flex align="center" gap={1}>
-                        <FaCalendar />
+                        <FaCalendar className="text-[#CC9200]" />
                         <Text fontSize="sm">
                             {age ? `${age} years` : "DOB"}
                         </Text>
                     </Flex>
                     <Flex align="center" gap={1}>
-                        <FaPerson />
+                        <FaPerson className="text-[#CC9200]" />
                         <Text fontSize="sm">
                             {beneficiary.gender || "Gender"}
                         </Text>
                     </Flex>
                     <Flex align="center" gap={1}>
-                        <FaLocationDot />
+                        <FaLocationDot className="text-[#CC9200]" />
                         <Text fontSize="sm">
                             {beneficiary.country || "Location"}
                         </Text>
@@ -252,9 +250,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
                 {/* Info Section */}
                 <Box mb={4} flex="1"> {/* Add flex="1" to take available space */}
-                    <Text fontSize="lg" fontWeight="semibold" mb={2} className="text-gray-800">
-                        Info
-                    </Text>
                     <Text
                         fontSize="sm"
                         style={{
@@ -273,7 +268,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
             {/* Learn More Section */}
             <Box>
                 <Text
-                    className="w-full text-black cursor-pointer text-sm flex justify-center p-4 gap-1 hover:bg-black hover:text-white"
+                    className="w-full text-[#CC9200] cursor-pointer text-sm flex justify-center p-4 gap-1 hover:bg-[#CC9200] hover:text-white"
                     onClick={handleViewActivity}
                 >
                     More about {beneficiary.name?.split(" ")[0] || "this person"}
