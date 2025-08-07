@@ -35,15 +35,59 @@ const SponsorChild = () => {
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0, 14], status: ["New", "Partially Funded"] });
   const [showMap, setShowMap] = useState<boolean>(true);
+  const [isMapSticky, setIsMapSticky] = useState(false);
   const listingsRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
   const childListingsRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     import("leaflet")
       .then(setL)
       .catch(error => console.error('Error loading Leaflet:', error));
   }, []);
+
+  // Fixed scroll listener to detect when we reach the listings section
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!listingsRef.current) return;
+      
+      // Clear existing timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      
+      // Debounce scroll events
+      scrollTimeoutRef.current = setTimeout(() => {
+        if (!listingsRef.current) return;
+        
+        const listingsRect = listingsRef.current.getBoundingClientRect();
+        
+        // Make map sticky only when the top of the listings section 
+        // reaches the top of the viewport (not just the bottom)
+        setIsMapSticky(listingsRect.top <= 0);
+      }, 10);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Check initial state
+    handleScroll();
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Reset sticky state when map visibility changes
+  useEffect(() => {
+    if (!showMap) {
+      setIsMapSticky(false);
+    }
+  }, [showMap]);
 
   const handleFilterChange = React.useCallback((newFilters: Partial<Filters>) => {
 
@@ -176,11 +220,7 @@ const SponsorChild = () => {
   }, [sendHeight]);
 
   return (
-    <Box
-      ref={contentRef}
-      className="flex flex-col items-center justify-center px-4 md:px-10 py-12 md:py-16"
-      suppressHydrationWarning={true}
-    >
+    <Box className='px-6 py-6 md:px-12 md:py-12'>
       <Box className="text-center justify-center my-12">
         <Text className="text-[#1C3C8C] font-semibold text-5xl mb-4">
           Sponsoring a Child with Creator Share
@@ -199,32 +239,44 @@ const SponsorChild = () => {
         </Text>
       )}
 
-      <Flex
-        width="100%"
-        direction={{ base: "column", md: "row" }}
-        gap={{ base: 0, md: 4 }}
-        position="relative"
+      {/* Map container - will become sticky when we reach listings */}
+      <Box
+        ref={mapRef}
+        position={{ base: isMapSticky ? "fixed" : "relative", md: "relative" }}
+        top={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
+        left={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
+        right={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
+        width={{ base: isMapSticky ? "100%" : "auto", md: "auto" }}
+        height={{ base: "auto", md: "auto" }}
+        zIndex={{ base: isMapSticky ? 50 : 10, md: 10 }}
+        bg={{ base: isMapSticky ? "transparent" : "transparent", md: "transparent" }}
+        borderColor={{ base: isMapSticky ? "gray.200" : "transparent", md: "transparent" }}
+        pb={{ base: isMapSticky ? 4 : 0, md: 0 }}
+        px={{ base: isMapSticky ? 6 : 0, md: 0 }}
+        transition="all 0.3s ease"
+        className='flex flex-col w-full'
+        style={{
+          transform: isMapSticky ? 'translateZ(0)' : 'none'
+        }}
       >
-        <Box
-          className='flex flex-col w-full'
-          position="sticky"
-          top="20px"
-          height="fit-content"
-          zIndex={10}
+        <Button 
+          className='px-2 py-2 w-fit text-end' 
+          onClick={() => setShowMap((prev) => !prev)} 
+          my={4}
+          bg={{ base: isMapSticky ? "white" : "transparent", md: "transparent" }}
         >
-          <Button className='justify-end' onClick={() => setShowMap((prev) => !prev)} mb={4}>
-            {showMap ? (
-              <>
-                <FaCompass/> Hide Map <FaCaretUp />
-              </>
-            ) : (
-              <>
-                <FaCompass/> Show Map <FaCaretDown />
-              </>
-            )}
-          </Button>
-          {showMap && (
+          {showMap ? (
             <>
+              <FaCompass/> Hide Map <FaCaretUp />
+            </>
+          ) : (
+            <>
+              <FaCompass/> Show Map <FaCaretDown />
+            </>
+          )}
+        </Button>
+        {showMap && (
+          <>
             <SponsorshipMap
               beneficiaryData={childrenData}
               onMarkerClick={handleMarkerClick}
@@ -233,23 +285,23 @@ const SponsorChild = () => {
               onFilterChange={handleFilterChange}
             />
             <Box
-            position="absolute"
-            bottom={12}
-            right={4}
-            zIndex={1000}
-            className="bg-white bg-opacity-90 backdrop-blur-sm rounded-xl p-2 shadow-md"
-          >
-            <Text fontSize="sm" fontWeight="bold">
-              {childrenData.length} Children Available
-            </Text>
-          </Box>
+              position="absolute"
+              bottom={12}
+              right={4}
+              zIndex={1000}
+              className="bg-white bg-opacity-90 backdrop-blur-sm rounded-xl p-2 shadow-md my-4 mx-4"
+            >
+              <Text fontSize="sm" fontWeight="bold">
+                {childrenData.length} Children Available
+              </Text>
+            </Box>
           </>
-          )}
-        </Box>
-      </Flex>
+        )}
+      </Box>
 
-      {selectedCountry && (
-        <div ref={listingsRef}>
+      {/* Content area */}
+      <Box>
+        {selectedCountry && (
           <Box width="100%">
             <Text
               mb={8}
@@ -262,35 +314,37 @@ const SponsorChild = () => {
               Showing results from {selectedCountry}
             </Text>
           </Box>
-        </div>
-      )}
+        )}
 
-      {loading ? (
-        <Flex justify="center" align="center" minH="20vh">
-          <Spinner size="xl" mr={4} />
-          <ChildListingsSkeleton />
-        </Flex>
-      ) : (
-        <>
-          {childrenData.length > 0 ? (
-            <ChildListings
-              ref={childListingsRef}
-              beneficiaryData={childrenData}
-              selectedBeneficiaryId={selectedChildId}
-              selectedCountry={selectedCountry}
-              mapBounds={currentBounds}
-              setSelectedBeneficiaryId={setSelectedChildId}
-            />
-          ) : (
+        {/* The actual listings section - this is where sticky behavior triggers */}
+        <div ref={listingsRef}>
+          {loading ? (
             <Flex justify="center" align="center" minH="20vh">
-              <Text fontSize="xl" color="gray.500">
-                No children listed in this area.
-              </Text>
+              <Spinner size="xl" mr={4} />
+              <ChildListingsSkeleton />
             </Flex>
+          ) : (
+            <>
+              {childrenData.length > 0 ? (
+                <ChildListings
+                  ref={childListingsRef}
+                  beneficiaryData={childrenData}
+                  selectedBeneficiaryId={selectedChildId}
+                  selectedCountry={selectedCountry}
+                  mapBounds={currentBounds}
+                  setSelectedBeneficiaryId={setSelectedChildId}
+                />
+              ) : (
+                <Flex justify="center" align="center" minH="20vh">
+                  <Text fontSize="xl" color="gray.500">
+                    No children listed in this area.
+                  </Text>
+                </Flex>
+              )}
+            </>
           )}
-        </>
-      )}
-
+        </div>
+      </Box>
     </Box>
   );
 };

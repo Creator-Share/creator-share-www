@@ -64,8 +64,10 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
   }, [isInIframe]);
 
   useEffect(() => {
-    setCurrentPage(1); // Reset to first page when country or map bounds change
-  }, [selectedCountry, mapBounds]);
+    // Only reset to first page if not jumping to a selected beneficiary
+    setCurrentPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCountry, JSON.stringify(mapBounds || {})]);
 
   // Effect to update page when selected beneficiary changes
   useEffect(() => {
@@ -95,6 +97,20 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
     }
     // Don't reset pageChangeFromSelection here to avoid immediate clearing
   }, [currentPage, pageChangeFromSelection, setSelectedBeneficiaryId, selectedBeneficiaryId]);
+
+  // Scroll to selected beneficiary after page change (from map click)
+  useEffect(() => {
+    if (selectedBeneficiaryId && pageChangeFromSelection) {
+      // Wait for DOM update
+      setTimeout(() => {
+        const el = document.getElementById(selectedBeneficiaryId);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        setPageChangeFromSelection(false);
+      }, 100);
+    }
+  }, [selectedBeneficiaryId, pageChangeFromSelection]);
 
   // Reset pageChangeFromSelection after a delay to allow the beneficiary to be shown
   useEffect(() => {

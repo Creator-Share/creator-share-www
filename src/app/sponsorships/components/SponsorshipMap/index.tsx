@@ -403,9 +403,9 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
   onFilterChange,
   beneficiaryType = "CHILD"
 }) => {
-  const [isReady, setIsReady] = useState(false);
+  const [isReady, setIsReady] = useState<boolean>(false);
   const leafletMapRef = useRef<L.Map | null>(null);
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
 
   const handleMarkerClick = useCallback((id: string) => {
     const beneficiary = beneficiaryData.find((b) => b.id === id);
