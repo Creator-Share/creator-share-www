@@ -173,16 +173,18 @@ const BeneficiaryListings = React.forwardRef<HTMLDivElement, BeneficiaryListings
       style={{ minHeight: visibleBeneficiary.length ? 'auto' : '100px' }}
       suppressHydrationWarning={true}
     >
-      <SponsorDialog
-        people={visibleBeneficiary[currentDialogIndex] || visibleBeneficiary[0]}
-        isOpen={dialogOpen}
-        onOpenChange={(open) => setDialogOpen(open)}
-        onNext={() => handleDialogNavigation('next')}
-        onPrevious={() => handleDialogNavigation('previous')}
-        {...getDialogNavigationProps()}
-        trigger={<div style={{ display: 'none' }} />}
-        beneficiaryType={beneficiaryType}
-      />
+      {visibleBeneficiary.length > 0 && (
+        <SponsorDialog
+          people={visibleBeneficiary[currentDialogIndex] || visibleBeneficiary[0]}
+          isOpen={dialogOpen}
+          onOpenChange={(open) => setDialogOpen(open)}
+          onNext={() => handleDialogNavigation('next')}
+          onPrevious={() => handleDialogNavigation('previous')}
+          {...getDialogNavigationProps()}
+          trigger={<div style={{ display: 'none' }} />}
+          beneficiaryType={beneficiaryType}
+        />
+      )}
 
       <Box pt={10} pb={6}>
         <SimpleGrid columns={{ base: 1, md: 3 }} gap="1.5rem">

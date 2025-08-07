@@ -23,7 +23,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     beneficiary,
     isSelected,
     id,
-    onOpenDialog,
     beneficiaryType = "CHILD"
 }) => {
     const [images, setImages] = useState<BeneficiaryMedia[]>([]);
@@ -52,13 +51,9 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         setDialogImageIndex(currentImageIndex);
     }, [currentImageIndex]);
 
-    
+
 
     const age = calculateAge(new Date(beneficiary.birth_date).toISOString());
-
-    // const handleNextImage = () => {
-    //     setCurrentImageIndex((prev) => (prev + 1) % images.length);
-    // };
 
     const handleDialogNextImage = () => {
         setDialogImageIndex((prev) => (prev + 1) % images.length);
@@ -69,14 +64,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     const handleViewActivity = (e: React.MouseEvent) => {
         e.preventDefault();
         setShowActivityModal(true);
-    };
-
-    const handleSponsorClick = () => {
-        if (onOpenDialog) {
-            onOpenDialog();
-        } else {
-            console.warn("onOpenDialog prop is not defined in BeneficiaryCard");
-        }
     };
 
     return (
@@ -106,7 +93,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                                 width={500}
                                 height={500}
                                 style={{ objectFit: "cover", objectPosition: "center 20%" }} // Changed to center
-                                className="w-full h-64 rounded-[20px] p-4 transition-transform duration-300 hover:scale-105"
+                                className="w-full h-64 rounded-t-[20px] transition-transform duration-300 hover:scale-105"
                             />
                             {/* Target Badge - positioned relative to the image container */}
                             <Box
@@ -127,7 +114,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                                     ${centsToDollars(beneficiary.budget_goal)}
                                 </Badge>
                             </Box>
-                            
+
                             {/* Image Navigation Dots */}
                             {images.length > 0 && (
                                 <Flex
@@ -235,7 +222,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
             </Box>
 
             {/* Card Content */}
-            <Box p={4} flex="1" display="flex" flexDirection="column"> {/* Add flex="1" and display="flex" flexDirection="column" */}
+            <Box p={6} flex="1" display="flex" flexDirection="column" className="items-center text-center justify-center">
                 {/* Full Name Heading */}
                 <Text fontSize="xl" fontWeight="bold" mb={3} className="text-gray-800">
                     {beneficiary.name || "Full Name"}
@@ -244,19 +231,19 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                 {/* Information Row */}
                 <Flex gap={4} mb={4} flexWrap="wrap">
                     <Flex align="center" gap={1}>
-                        <FaCalendar/>
+                        <FaCalendar />
                         <Text fontSize="sm">
                             {age ? `${age} years` : "DOB"}
                         </Text>
                     </Flex>
                     <Flex align="center" gap={1}>
-                        <FaPerson/>
+                        <FaPerson />
                         <Text fontSize="sm">
                             {beneficiary.gender || "Gender"}
                         </Text>
                     </Flex>
                     <Flex align="center" gap={1}>
-                        <FaLocationDot/>
+                        <FaLocationDot />
                         <Text fontSize="sm">
                             {beneficiary.country || "Location"}
                         </Text>
@@ -268,8 +255,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                     <Text fontSize="lg" fontWeight="semibold" mb={2} className="text-gray-800">
                         Info
                     </Text>
-                    <Text 
-                        fontSize="sm" 
+                    <Text
+                        fontSize="sm"
                         style={{
                             display: '-webkit-box',
                             WebkitLineClamp: 3,
@@ -282,87 +269,16 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                         {beneficiary.biography || "Brief description"}
                     </Text>
                 </Box>
-
-                {/* Action Buttons - Push to bottom */}
-                <Box mt="auto" pt={4}>
-                    <Flex gap={2}>
-                        {beneficiary.status !== "Budget Fulfilled" ? (
-                            <Button
-                                onClick={(e) => {
-                                    e.stopPropagation(); // Prevent card click when clicking button
-                                    handleSponsorClick();
-                                }}
-                                className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-                                size="sm"
-                            >
-                                {beneficiaryType === "ANIMAL" ? "Adopt" : "Sponsor"}
-                            </Button>
-                        ) : (
-                            <Button
-                                className="flex-1 bg-gray-400 text-white cursor-not-allowed"
-                                disabled
-                                size="sm"
-                            >
-                                {beneficiaryType === "ANIMAL" ? "Adopted" : "Budget Fulfilled"}
-                            </Button>
-                        )}
-                    </Flex>
-                </Box>
-
-                {/* Learn More Section */}
-                {/* <Box mt={3}>
-                    <Text
-                        className="text-blue-600 cursor-pointer text-sm flex items-center gap-1"
-                        onClick={() => setIsLearnMoreOpen(!isLearnMoreOpen)}
-                    >
-                        More about {beneficiary.name?.split(" ")[0] || "this person"} {isLearnMoreOpen ? <FaCaretUp /> : <FaCaretDown />}
-                    </Text>
-                </Box> */}
             </Box>
-
-            {/* Collapsible Content */}
-            {/* <Collapsible.Root
-                open={isLearnMoreOpen}
-                onOpenChange={() => setIsLearnMoreOpen(!isLearnMoreOpen)}
-                style={{ overflow: 'hidden', transition: 'height 0.3s ease' }}
-            >
-                <Collapsible.Content>
-                    <Box p={4} bg="gray.50" borderTop="1px solid" borderColor="gray.200">
-                        <Text fontSize="md" fontWeight="semibold" mb={2} color="blue.600">
-                            About {beneficiary.name?.split(" ")[0] || "this person"}
-                        </Text>
-                        <Text fontSize="sm" className="text-gray-700 mb-4">
-                            {beneficiary.biography || "No biography available."}
-                        </Text>
-
-                        {beneficiary.video_url && (
-                            <Box mt={4} mb={4}>
-                                <video width="100%" height="auto" controls preload="none" className="border rounded-lg">
-                                    <source src={beneficiary.video_url} type="video/mp4" />
-                                </video>
-                            </Box>
-                        )}
- 
-                        {beneficiary.status !== "Budget Fulfilled" ? (
-                            <Button
-                                className="w-full bg-blue-600 text-white hover:bg-blue-700"
-                                onClick={handleSponsorClick}
-                                size="sm"
-                            >
-                                {beneficiaryType === "ANIMAL" ? "Adopt" : "Sponsor"} {beneficiary.name?.split(" ")[0] || "this person"}
-                            </Button>
-                        ) : (
-                            <Button
-                                className="w-full bg-gray-400 text-white cursor-not-allowed"
-                                disabled
-                                size="sm"
-                            >
-                                {beneficiaryType === "ANIMAL" ? "Adopted" : "Budget Fulfilled"}
-                            </Button>
-                        )}
-                    </Box>
-                </Collapsible.Content>
-            </Collapsible.Root> */}
+            {/* Learn More Section */}
+            <Box>
+                <Text
+                    className="w-full text-black cursor-pointer text-sm flex justify-center p-4 gap-1 hover:bg-black hover:text-white"
+                    onClick={handleViewActivity}
+                >
+                    More about {beneficiary.name?.split(" ")[0] || "this person"}
+                </Text>
+            </Box>
 
             <BeneficiaryActivityModal
                 open={showActivityModal}
