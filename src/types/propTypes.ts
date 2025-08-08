@@ -47,6 +47,7 @@ export interface BeneficiaryCardProps {
 export interface SponsorshipDetailsProps {
   beneficiaryId?: string;
   hideStatus?: boolean;
+  hideAmount?: boolean
 }
 
 export interface SponsorDialogProps {

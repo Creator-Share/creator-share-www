@@ -9,9 +9,10 @@ import {
 import { Box, Text, Image, Spinner, Button, Flex } from "@chakra-ui/react";
 import SponsorDialog from "../SponsorDialog";
 import { FaCalendar, FaUser, FaLocationDot, FaCircleInfo, FaLink, FaShare } from "react-icons/fa6";
-import { centsToDollars } from "@/utils/currency";
 import { Beneficiaries } from "@/types/index";
 import { fetchActivitiesByBeneficiaryId, fetchSponsorshipDetailsByBeneficiaryId } from "@/actions";
+import SponsorshipDetails from "../SponsorshipDetails";
+import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox";
 
 interface BeneficiaryActivityModalProps {
   open: boolean;
@@ -57,10 +58,10 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   return (
     <DialogRoot open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-[800px] w-full relative rounded-2xl">
-        <DialogHeader className="bg-[#D9D9D9] flex justify-between items-center p-6 pb-2">
+        <DialogHeader className="flex justify-between items-center p-6 pb-2">
           <Text className="text-2xl font-bold text-gray-800">Child Details</Text>
           <DialogCloseTrigger>
-            <Box className="text-2xl cursor-pointer">×</Box>
+            <Box className="text-lg font-semibold cursor-pointer border-2 border-[#000000] rounded-full px-2">×</Box>
           </DialogCloseTrigger>
         </DialogHeader>
         <DialogBody className="p-0">
@@ -70,103 +71,79 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             </div>
           )}
           <Box
-            className="md:grid md:grid-cols-2 px-8"
-            style={{
-              background: 'linear-gradient(to bottom, #D9D9D9 0%, #D9D9D9 50%, transparent 50%, transparent 100%)'
-            }}
+            className="px-8 md:grid md:grid-cols-2 md:gap-4"
           >
-            <Image
-              src={beneficiary.image_url || "/placeholder-child.jpg"}
-              alt={beneficiary.name}
-              width={179.34}
-              height={179.34}
-              className="rounded-full object-cover border-4 border-white bg-gray-200"
-            />
-            <Flex flex="1" minW="0" direction="column" align="flex-end" justify="flex-end" gap={2}>
-              <Flex align="center" gap={2} mb={2}>
-                <Text fontSize="lg">Sponsorship status</Text>
+            <Box className="h-[523px] border border-[#0654C6] rounded-[10px] flex flex-col text-center gap-[11px] relative">
+              {/* Status Overlay */}
+              <Box className="absolute top-2 right-2 z-10 bg-[#CDE1FE] text-[#0654C6] rounded-[10px] p-[10px] flex items-center gap-2">
                 <FaCircleInfo />
-              </Flex>
-              <Box className="px-3 py-1 bg-gray-200 rounded text-gray-700 font-semibold text-sm">
-                {getStatusText(beneficiary.status)}
+                <Text className="text-xs font-medium">
+                  {getStatusText(beneficiary.status)}
+                </Text>
               </Box>
-            </Flex>
-          </Box>
-          <Box py={4}>
-            <Box className="grid grid-cols-2" gap={6} mb={6} px={8}>
-              {/* Profile Info */}
-              <Box className="col-span-2" gap={6}>
-                <Box>
-                  <Text className="text-xl font-bold text-gray-800 mb-2">{beneficiary.name || "Full Name"}</Text>
-                  <Flex align="center" gap={2} mb={1}>
-                    <FaCalendar />
-                    <Text fontSize="md">
-                      {beneficiary.birth_date ? new Date(beneficiary.birth_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "DOB"}
-                    </Text>
-                    <FaUser className="ml-4" />
-                    <Text fontSize="md">{beneficiary.gender || "Gender"}</Text>
-                  </Flex>
-                  <Flex align="center" gap={2}>
-                    <FaLocationDot />
-                    <Text fontSize="md">{beneficiary.country || "Location"}</Text>
-                  </Flex>
-                  <Box className="md:grid md:grid-cols-2 gap-4">
-                    <Flex className="justify-center w-full md:justify-start">
-                      <Button
-                        className="w-full md:w-50%"
-                        bg="black"
-                        color="white"
-                        onClick={() => setSponsorDialogOpen(true)}
-                        height="40px"
-                        _hover={{ bg: "black" }}
-                        mt={4}
-                      >
-                        Sponsor Child
-                      </Button>
-                    </Flex>
-                    <Flex mt={4} gap={4} className="justify-center md:justify-end md:tems-end">
-                      <Button className="border border-[#000000] p-4" height="40px" variant="outline" size="sm">
-                        <FaLink style={{ marginRight: 6 }} />
-                        Copy Link
-                      </Button>
-                      <Button className="border border-[#000000] p-4" variant="outline" size="sm" height="40px">
-                        <FaShare style={{ marginRight: 6 }} />
-                        Share Profile
-                      </Button>
-                    </Flex>
-                  </Box>
 
-                </Box>
+              <Image
+                src={beneficiary.image_url || "/placeholder-child.jpg"}
+                alt={beneficiary.name || "Child"}
+                width={500}
+                height={293}
+                className="rounded-t-[10px] object-cover"
+              />
+              <Box className="text-center">
+                <Text className="text-xl font-bold text-gray-800 mb-2">{beneficiary.name || "Full Name"}</Text>
+                <Flex align="center" gap={2} mb={1} justify="center">
+                  <FaCalendar className="text-[#CC9200]" />
+                  <Text fontSize="md">
+                    {beneficiary.birth_date ? new Date(beneficiary.birth_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "DOB"}
+                  </Text>
+                  <FaUser className="text-[#CC9200]" />
+                  <Text fontSize="md">{beneficiary.gender || "Gender"}</Text>
+                  <FaLocationDot className="text-[#CC9200]" />
+                  <Text fontSize="md">{beneficiary.country || "Location"}</Text>
+                </Flex>
+              </Box>
+              <Box className="mx-8">
+                <Flex className="justify-center w-full md:justify-start">
+                  <Button
+                    className="w-full md:w-50%"
+                    bg="#0654C6"
+                    color="white"
+                    onClick={() => setSponsorDialogOpen(true)}
+                    height="40px"
+                    _hover={{ bg: "black" }}
+                    mt={4}
+                  >
+                    Sponsor Child
+                  </Button>
+                </Flex>
+                <Flex mt={4} gap={4} className="justify-center md:justify-end md:tems-end">
+                  <Button className="border border-[#000000] p-4" height="40px" variant="outline" _hover={{ bg: "black", color: "white" }} size="sm">
+                    <FaLink style={{ marginRight: 6 }} />
+                    Copy Link
+                  </Button>
+                  <Button className="border border-[#000000] p-4" variant="outline" size="sm" height="40px" _hover={{ bg: "black", color: "white" }}>
+                    <FaShare style={{ marginRight: 6 }} />
+                    Share Profile
+                  </Button>
+                </Flex>
               </Box>
             </Box>
-            <Box className="flex flex-col gap-4 md:grid md:grid-cols-3 md:gap-4" px={8}>
-              {/* Medical History */}
-              <Box
-                bg="#E0E0E0"
-                p={4}
-                borderRadius="xl"
-                className="col-span-2"
-              >
-                <Text fontSize="lg" fontWeight="bold" mb={2}>Medical History</Text>
-                <Text color="gray.600" fontSize="sm">
-                  ullamcorper Donec orci tincidunt sollicitudin. vitae elit nibh tempor laoreet nec quam vitae sapien tincidunt placerat Nunc eget lobortis, lacus, quis leo. ex
-                </Text>
-              </Box>
+            <Box my={4}
+              borderRadius="xl"
+              className="h-[523px]">
               {/* Sponsorship Target */}
-              <Box
-                bg="#E0E0E0"
-                p={4}
-                borderRadius="xl"
-              >
-                <Text fontSize="lg" fontWeight="bold" mb={2}>Sponsorship Target</Text>
-                <Text fontSize="2xl" fontWeight="bold" mb={2}>
-                  {beneficiary.budget_goal > 0
-                    ? Math.round((beneficiary.budget_raised / beneficiary.budget_goal) * 100)
-                    : 0}%
-                </Text>
-                <Box className="w-full bg-gray-100 h-2 rounded-full mb-3">
+              <Box mb={2}>
+                <Box className="flex justify-between">
+                  <Text className="text-sm text-[#52667A] font-normal" mb={2}>Sponsorship Target</Text>
+                  <Text className="text-sm font-normal" mb={2}>
+                    {beneficiary.budget_goal > 0
+                      ? Math.round((beneficiary.budget_raised / beneficiary.budget_goal) * 100)
+                      : 0}%
+                  </Text>
+                </Box>
+                <Box className="w-full bg-[#FED9CD] h-2 rounded-full mb-3">
                   <Box
-                    className="bg-gray-500 h-full rounded-full"
+                    className="bg-[#C63306] h-full rounded-full"
                     style={{
                       width: `${beneficiary.budget_goal > 0
                         ? Math.min((beneficiary.budget_raised / beneficiary.budget_goal) * 100, 100)
@@ -174,32 +151,73 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                     }}
                   />
                 </Box>
-                <Text color="gray.600" fontSize="sm">${centsToDollars(beneficiary.budget_raised)}  of ${centsToDollars(beneficiary.budget_goal)} funded</Text>
               </Box>
-            </Box>
-            <Box className="flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-4 mt-4" px={8}>
-              {/* Child Bio */}
               <Box
-                bg="white"
+                bg="#CDE1FE"
                 p={4}
                 borderRadius="xl"
               >
-                <Text fontSize="lg" fontWeight="bold" mb={2}>Child Bio</Text>
-                <Text color="gray.600" fontSize="sm">
-                  {beneficiary.biography}
-                </Text>
+                <Box className="h-[120px] overflow-hidden overflow-y-scroll">
+                  <Text fontSize="lg" fontWeight="bold" mb={2}>Child Bio</Text>
+                  <Text color="gray.600" fontSize="sm">
+                    {beneficiary.biography}
+                  </Text>
+                </Box>
+                <Box className="h-[120px] mt-2">
+                  <Text fontSize="lg" fontWeight="bold" mb={2}>Medical History</Text>
+                  <Text color="gray.600" fontSize="sm">
+                    ullamcorper Donec orci tincidunt sollicitudin. vitae elit nibh tempor laoreet nec quam vitae sapien tincidunt placerat Nunc eget lobortis, lacus, quis leo. ex
+                  </Text>
+                </Box>
               </Box>
               {/* Video Placeholder */}
               <Box
                 bg="white"
-                p={4}
                 borderRadius="xl"
+                mt={4}
+                className="flex justify-center items-center min-h-[160px]"
               >
-                <svg width="64" height="64" fill="none" viewBox="0 0 64 64">
-                  <rect width="64" height="64" rx="16" fill="#F3F4F6" />
-                  <path d="M24 20V44L44 32L24 20Z" fill="#D1D5DB" />
-                </svg>
+                {beneficiary.video_url && beneficiary.video_url.trim() !== "" ? (
+                  <video className="rounded-xl max-h-40 w-full" src={beneficiary.video_url} controls />
+                ) : (
+                  <Text className="text-center text-gray-500">No Media Available</Text>
+                )}
               </Box>
+            </Box>
+          </Box>
+          <Box mb={4}>
+            <Box className="px-8 md:grid md:grid-cols-2 md:items-stretch gap-4">
+              <Box className="">
+                <SponsorshipDetails beneficiaryId={beneficiary.id} hideStatus hideAmount />
+              </Box>
+              <Box className="my-3 md:my-0">
+                <BeneficiarySubscribeBox beneficiary={beneficiary} />
+              </Box>
+            </Box>
+            <Box className="px-8 md:grid md:grid-cols-2 gap-4 md:px-8">
+              <Flex className="justify-center w-full md:justify-start">
+                <Button
+                  className="w-full md:w-50%"
+                  bg="#0654C6"
+                  color="white"
+                  onClick={() => setSponsorDialogOpen(true)}
+                  height="40px"
+                  _hover={{ bg: "black" }}
+                  mt={4}
+                >
+                  Sponsor Child
+                </Button>
+              </Flex>
+              <Flex mt={4} gap={4} className="justify-center md:justify-end md:tems-end">
+                <Button className="border border-[#000000] p-4" height="40px" variant="outline" size="sm" _hover={{ bg: "black", color: "white" }}>
+                  <FaLink style={{ marginRight: 6 }} />
+                  Copy Link
+                </Button>
+                <Button className="border border-[#000000] p-4" variant="outline" size="sm" height="40px" _hover={{ bg: "black", color: "white" }}>
+                  <FaShare style={{ marginRight: 6 }} />
+                  Share Profile
+                </Button>
+              </Flex>
             </Box>
           </Box>
 
