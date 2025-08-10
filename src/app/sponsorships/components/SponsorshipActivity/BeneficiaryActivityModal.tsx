@@ -158,7 +158,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 
   return (
     <DialogRoot open={open} onOpenChange={onClose}>
-      <DialogContent className="min-w-[1000px] w-full relative rounded-2xl">
+      <DialogContent className="max-w-[400px] md:min-w-[1000px] md:max-w-[1000px] w-full relative rounded-2xl">
         <DialogHeader className="flex justify-between items-center p-6 pb-2">
           <Text className="text-2xl font-bold text-gray-800">Child Details</Text>
           <DialogCloseTrigger>
@@ -273,7 +273,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 p={4}
                 borderRadius="xl"
               >
-                <Box className="h-max-[240px] overflow-hidden overflow-y-scroll">
+                <Box className="max-h-[240px] overflow-hidden overflow-y-scroll">
                   <Text fontSize="lg" fontWeight="bold" mb={2}>Child Bio</Text>
                   <Text color="gray.600" fontSize="sm">
                     {beneficiary.biography}

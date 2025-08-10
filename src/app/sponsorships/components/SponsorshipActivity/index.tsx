@@ -30,7 +30,7 @@ const BeneficiaryActivity = ({
   }, [beneficiaryId]);
 
   return (
-    <Box borderWidth="1px" borderRadius="md" p={4} boxShadow="md" maxHeight="400px" overflowY="auto">
+    <Box borderWidth="1px" borderRadius="md" p={4} boxShadow="md" maxHeight="200px" overflowY="auto">
       <Text fontSize="lg" fontWeight="bold" mb={4}>
         Activities
       </Text>
