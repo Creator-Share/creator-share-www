@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Box, Flex, Text, Spinner, Button } from '@chakra-ui/react';
+import { Box, Flex, Text, Button } from '@chakra-ui/react';
 import dynamic from 'next/dynamic';
 import { Beneficiaries } from '@/types';
 import { FaCaretDown, FaCaretUp, FaCompass } from 'react-icons/fa';
@@ -319,10 +319,9 @@ const SponsorChild = () => {
         {/* The actual listings section - this is where sticky behavior triggers */}
         <div ref={listingsRef}>
           {loading ? (
-            <Flex justify="center" align="center" minH="20vh">
-              <Spinner size="xl" mr={4} />
+            <Box className="flex justify-center items-center min-h-20vh">
               <ChildListingsSkeleton />
-            </Flex>
+            </Box>
           ) : (
             <>
               {childrenData.length > 0 ? (

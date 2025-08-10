@@ -11,7 +11,7 @@ export const ChildListingsSkeleton = () => {
       suppressHydrationWarning={true}
     >
       <Box pt={10} pb={6}>
-        <SimpleGrid columns={{ base: 1, md: 3 }} gap="1.5rem">
+        <SimpleGrid columns={{ base: 1, md: 3 }} gap="1.5rem" className="w-full">
           {[1, 2, 3, 4, 5, 6].map((index) => (
             <Box key={index}>
               <BeneficiaryCardSkeleton />
