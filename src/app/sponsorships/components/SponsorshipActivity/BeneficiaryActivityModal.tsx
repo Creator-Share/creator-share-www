@@ -11,8 +11,9 @@ import SponsorDialog from "../SponsorDialog";
 import { FaCalendar, FaUser, FaLocationDot, FaCircleInfo, FaLink, FaShare } from "react-icons/fa6";
 import { Beneficiaries } from "@/types/index";
 import { fetchActivitiesByBeneficiaryId, fetchSponsorshipDetailsByBeneficiaryId } from "@/actions";
-import SponsorshipDetails from "../SponsorshipDetails";
+import BeneficiaryActivity from "../SponsorshipActivity";
 import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox";
+import { toaster } from "@/components/ui/toaster";
 
 interface BeneficiaryActivityModalProps {
   open: boolean;
@@ -27,19 +28,119 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const [sponsorDialogOpen, setSponsorDialogOpen] = useState(false);
+  const [toastCount, setToastCount] = useState(0);
+  const [lastToastTime, setLastToastTime] = useState(0);
 
   const getStatusText = (status: string) => {
     switch (status) {
       case "Budget Fulfilled":
         return "Sponsored";
       case "Partially Funded":
-        return "On Going";
+        return "Ongoing";
       case "New":
         return "Not funded";
       default:
         return "Not funded";
     }
   };
+
+  const handleCopyLink = async () => {
+    const now = Date.now();
+    if (now - lastToastTime < 2000 || toastCount >= 3) {
+      return;
+    }
+
+    try {
+      const profileUrl = `${window.location.origin}/sponsorships/${beneficiary.username}`;
+
+      await navigator.clipboard.writeText(profileUrl);
+
+      setToastCount(prev => prev + 1);
+      setLastToastTime(now);
+
+      toaster.create({
+        title: "Link Copied!",
+        description: "Profile link has been copied to clipboard",
+        duration: 3000,
+      });
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+      const textArea = document.createElement('textarea');
+      const profileUrl = `${window.location.origin}/sponsorships/${beneficiary.username}`;
+      textArea.value = profileUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+
+      setToastCount(prev => prev + 1);
+      setLastToastTime(now);
+
+      toaster.create({
+        title: "Link Copied!",
+        description: "Profile link has been copied to clipboard",
+        duration: 3000,
+      });
+    }
+  };
+
+  const handleShareProfile = async () => {
+    const profileUrl = `${window.location.origin}/sponsorships/${beneficiary.username}`;
+    const shareText = `Check out ${beneficiary.name}'s profile on Creator Share. Help make a difference in their life!`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${beneficiary.name} - Creator Share`,
+          text: shareText,
+          url: profileUrl,
+        });
+
+        toaster.create({
+          title: "Shared Successfully!",
+          description: "Profile has been shared",
+          duration: 3000,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Share failed:', error);
+          toaster.create({
+            title: "Share Failed",
+            description: "Unable to share profile. Please try copying the link instead.",
+            duration: 3000,
+          });
+        }
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(`${shareText}\n\n${profileUrl}`);
+        toaster.create({
+          title: "Link Copied!",
+          description: "Profile link and description copied to clipboard",
+          duration: 3000,
+        });
+      } catch {
+        const textArea = document.createElement('textarea');
+        textArea.value = `${shareText}\n\n${profileUrl}`;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+
+        toaster.create({
+          title: "Link Copied!",
+          description: "Profile link and description copied to clipboard",
+          duration: 3000,
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!open) {
+      setToastCount(0);
+      setLastToastTime(0);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -57,7 +158,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 
   return (
     <DialogRoot open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-[800px] w-full relative rounded-2xl">
+      <DialogContent className="min-w-[1000px] w-full relative rounded-2xl">
         <DialogHeader className="flex justify-between items-center p-6 pb-2">
           <Text className="text-2xl font-bold text-gray-800">Child Details</Text>
           <DialogCloseTrigger>
@@ -87,7 +188,8 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 alt={beneficiary.name || "Child"}
                 width={500}
                 height={293}
-                className="rounded-t-[10px] object-cover"
+                className="rounded-t-[10px]"
+                style={{ objectFit: "cover", objectPosition: "center 20%" }}
               />
               <Box className="text-center">
                 <Text className="text-xl font-bold text-gray-800 mb-2">{beneficiary.name || "Full Name"}</Text>
@@ -103,7 +205,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 </Flex>
               </Box>
               <Box className="mx-8">
-                <Flex className="justify-center w-full md:justify-start">
+                <Flex className="justify-center w-full">
                   <Button
                     className="w-full md:w-50%"
                     bg="#0654C6"
@@ -116,15 +218,29 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                     Sponsor Child
                   </Button>
                 </Flex>
-                <Flex mt={4} gap={4} className="justify-center md:justify-end md:tems-end">
-                  <Button className="border border-[#000000] p-4" height="40px" variant="outline" _hover={{ bg: "black", color: "white" }} size="sm">
-                    <FaLink style={{ marginRight: 6 }} />
-                    Copy Link
-                  </Button>
-                  <Button className="border border-[#000000] p-4" variant="outline" size="sm" height="40px" _hover={{ bg: "black", color: "white" }}>
-                    <FaShare style={{ marginRight: 6 }} />
-                    Share Profile
-                  </Button>
+                <Flex mt={4} className="justify-center w-full">
+                  <Flex gap={4} className="w-full md:w-50%">
+                    <Button
+                      className="flex-1"
+                      height="40px"
+                      variant="outline"
+                      _hover={{ bg: "black", color: "white" }}
+                      onClick={handleCopyLink}
+                    >
+                      <FaLink style={{ marginRight: 6 }} />
+                      Copy Link
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      height="40px"
+                      variant="outline"
+                      _hover={{ bg: "black", color: "white" }}
+                      onClick={handleShareProfile}
+                    >
+                      <FaShare style={{ marginRight: 6 }} />
+                      Share Profile
+                    </Button>
+                  </Flex>
                 </Flex>
               </Box>
             </Box>
@@ -157,20 +273,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 p={4}
                 borderRadius="xl"
               >
-                <Box className="h-[120px] overflow-hidden overflow-y-scroll">
+                <Box className="h-max-[240px] overflow-hidden overflow-y-scroll">
                   <Text fontSize="lg" fontWeight="bold" mb={2}>Child Bio</Text>
                   <Text color="gray.600" fontSize="sm">
                     {beneficiary.biography}
                   </Text>
                 </Box>
-                <Box className="h-[120px] mt-2">
-                  <Text fontSize="lg" fontWeight="bold" mb={2}>Medical History</Text>
-                  <Text color="gray.600" fontSize="sm">
-                    ullamcorper Donec orci tincidunt sollicitudin. vitae elit nibh tempor laoreet nec quam vitae sapien tincidunt placerat Nunc eget lobortis, lacus, quis leo. ex
-                  </Text>
-                </Box>
               </Box>
-              {/* Video Placeholder */}
               <Box
                 bg="white"
                 borderRadius="xl"
@@ -188,7 +297,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           <Box mb={4}>
             <Box className="px-8 md:grid md:grid-cols-2 md:items-stretch gap-4">
               <Box className="">
-                <SponsorshipDetails beneficiaryId={beneficiary.id} hideStatus hideAmount />
+                <BeneficiaryActivity beneficiaryId={beneficiary.id} username={beneficiary.username} />
               </Box>
               <Box className="my-3 md:my-0">
                 <BeneficiarySubscribeBox beneficiary={beneficiary} />
@@ -209,11 +318,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 </Button>
               </Flex>
               <Flex mt={4} gap={4} className="justify-center md:justify-end md:tems-end">
-                <Button className="border border-[#000000] p-4" height="40px" variant="outline" size="sm" _hover={{ bg: "black", color: "white" }}>
+                <Button className="border border-[#000000] p-4" height="40px" variant="outline" size="sm" _hover={{ bg: "black", color: "white" }} onClick={handleCopyLink}>
                   <FaLink style={{ marginRight: 6 }} />
                   Copy Link
                 </Button>
-                <Button className="border border-[#000000] p-4" variant="outline" size="sm" height="40px" _hover={{ bg: "black", color: "white" }}>
+                <Button className="border border-[#000000] p-4" variant="outline" size="sm" height="40px" _hover={{ bg: "black", color: "white" }} onClick={handleShareProfile}>
                   <FaShare style={{ marginRight: 6 }} />
                   Share Profile
                 </Button>

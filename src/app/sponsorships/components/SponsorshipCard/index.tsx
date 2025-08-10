@@ -261,7 +261,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                             lineHeight: '1.4'
                         }}
                     >
-                        {beneficiary.biography || "Brief description"}
+                        {beneficiary?.biography}
                     </Text>
                 </Box>
             </Box>
