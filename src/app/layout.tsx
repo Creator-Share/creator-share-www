@@ -17,9 +17,11 @@ export default function RootLayout({
 }) {
   return (
     <html suppressHydrationWarning>
-      <body className="bg-[#F5F5F5]">
+      <body className="bg-[#F5F5F5] flex flex-col min-h-screen">
         <Providers>
-          <PageWrapper>{children}</PageWrapper>
+          <main className="flex-1">
+            <PageWrapper>{children}</PageWrapper>
+          </main>
           <Footer />
           <Toaster />
         </Providers>

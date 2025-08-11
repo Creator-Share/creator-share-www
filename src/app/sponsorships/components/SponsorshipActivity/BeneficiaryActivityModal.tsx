@@ -182,7 +182,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   {getStatusText(beneficiary.status)}
                 </Text>
               </Box>
-
               <Image
                 src={beneficiary.image_url || "/placeholder-child.jpg"}
                 alt={beneficiary.name || "Child"}
@@ -194,13 +193,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
               <Box className="text-center">
                 <Text className="text-xl font-bold text-gray-800 mb-2">{beneficiary.name || "Full Name"}</Text>
                 <Flex align="center" gap={2} mb={1} justify="center">
-                  <FaCalendar className="text-[#CC9200]" />
+                  <FaCalendar className="text-[#0654C6]" />
                   <Text fontSize="md">
                     {beneficiary.birth_date ? new Date(beneficiary.birth_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "DOB"}
                   </Text>
-                  <FaUser className="text-[#CC9200]" />
+                  <FaUser className="text-[#0654C6]" />
                   <Text fontSize="md">{beneficiary.gender || "Gender"}</Text>
-                  <FaLocationDot className="text-[#CC9200]" />
+                  <FaLocationDot className="text-[#0654C6]" />
                   <Text fontSize="md">{beneficiary.country || "Location"}</Text>
                 </Flex>
               </Box>
@@ -226,6 +225,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                       variant="outline"
                       _hover={{ bg: "black", color: "white" }}
                       onClick={handleCopyLink}
+                      bg='#CDE1FE'
                     >
                       <FaLink style={{ marginRight: 6 }} />
                       Copy Link
@@ -236,6 +236,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                       variant="outline"
                       _hover={{ bg: "black", color: "white" }}
                       onClick={handleShareProfile}
+                      bg='#CDE1FE'
                     >
                       <FaShare style={{ marginRight: 6 }} />
                       Share Profile
@@ -257,9 +258,9 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                       : 0}%
                   </Text>
                 </Box>
-                <Box className="w-full bg-[#FED9CD] h-2 rounded-full mb-3">
+                <Box className="w-full bg-[#CDE1FE] h-2 rounded-full mb-3">
                   <Box
-                    className="bg-[#C63306] h-full rounded-full"
+                    className="bg-[#0654C6] h-full rounded-full"
                     style={{
                       width: `${beneficiary.budget_goal > 0
                         ? Math.min((beneficiary.budget_raised / beneficiary.budget_goal) * 100, 100)
@@ -305,17 +306,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             </Box>
             <Box className="px-8 md:grid md:grid-cols-2 gap-4 md:px-8">
               <Flex className="justify-center w-full md:justify-start">
-                <Button
-                  className="w-full md:w-50%"
-                  bg="#0654C6"
-                  color="white"
-                  onClick={() => setSponsorDialogOpen(true)}
-                  height="40px"
-                  _hover={{ bg: "black" }}
-                  mt={4}
-                >
-                  Sponsor Child
-                </Button>
               </Flex>
               <Flex mt={4} gap={4} className="justify-center md:justify-end md:tems-end">
                 <Button className="border border-[#000000] p-4" height="40px" variant="outline" size="sm" _hover={{ bg: "black", color: "white" }} onClick={handleCopyLink}>
@@ -325,6 +315,16 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 <Button className="border border-[#000000] p-4" variant="outline" size="sm" height="40px" _hover={{ bg: "black", color: "white" }} onClick={handleShareProfile}>
                   <FaShare style={{ marginRight: 6 }} />
                   Share Profile
+                </Button>
+                <Button
+                  className="w-64"
+                  bg="#0654C6"
+                  color="white"
+                  size='md'
+                  onClick={() => setSponsorDialogOpen(true)}
+                  _hover={{ bg: "black" }}
+                >
+                  Sponsor Child
                 </Button>
               </Flex>
             </Box>

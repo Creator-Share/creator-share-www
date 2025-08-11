@@ -189,7 +189,7 @@ const ChildrenTable = () => {
   }
 
   return (
-    <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
+    <Box className="container mx-auto mt-12">
       <GoBackButton />
       <Box className="grid grid-cols-2 mb-2">
         <Text className="text-3xl font-semibold leading-9">Manage Children</Text>

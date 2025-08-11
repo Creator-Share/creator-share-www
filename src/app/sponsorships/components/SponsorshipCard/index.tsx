@@ -69,8 +69,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     return (
         <Box
             id={id}
-            borderColor={isSelected ? "blue.500" : "#000000"}
-            className={`bg-white mb-6 border rounded-[20px] ${isSelected ? 'highlight-child' : ''} hover:shadow-xl hover:shadow-black/20 transition-all duration-300 hover:scale-105`}
+            borderColor={isSelected ? "blue.500" : "none"}
+            className={`bg-white mb-6 border rounded-[20px] shadow-md ${isSelected ? 'highlight-child' : ''} hover:shadow-xl hover:shadow-black/20 transition-all duration-300 hover:scale-105`}
             suppressHydrationWarning={true}
             style={{ overflow: "hidden" }}
             maxW="sm"
@@ -96,20 +96,18 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                             {/* Target Badge - positioned relative to the image container */}
                             <Box
                                 position="absolute"
-                                bottom="6"
-                                right="6"
+                                top="0"
+                                right="0"
                                 zIndex={10}
                             >
                                 <Badge
-                                    bg="black"
-                                    color="white"
-                                    borderRadius="md"
-                                    px={2}
-                                    py={1}
-                                    fontSize="sm"
-                                    fontWeight="medium"
+                                    bg="#CDE1FE"
+                                    color="#011532"
+                                    borderRadius="0"
+                                    borderTopRightRadius="20px"
+                                    className="p-[10px] text-sm font-medium"
                                 >
-                                    ${centsToDollars(beneficiary.budget_goal)}
+                                    Goal <span className="text-xl font-semibold">${centsToDollars(beneficiary.budget_goal)}</span>
                                 </Badge>
                             </Box>
 
@@ -223,25 +221,25 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
             <Box p={6} flex="1" display="flex" flexDirection="column" className="items-center text-center justify-center">
                 {/* Full Name Heading */}
                 <Text fontSize="xl" fontWeight="bold" mb={3} className="text-gray-800">
-                    {beneficiary.name || "Full Name"}
+                    {beneficiary.name?.split(" ")[0] || "Name"}
                 </Text>
 
                 {/* Information Row */}
-                <Flex gap={4} mb={4} flexWrap="wrap">
+                <Flex gap={4} mb={4} flexWrap="wrap" className="text-[#666666]">
                     <Flex align="center" gap={1}>
-                        <FaCalendar className="text-[#CC9200]" />
+                        <FaCalendar />
                         <Text fontSize="sm">
                             {age ? `${age} years` : "DOB"}
                         </Text>
                     </Flex>
                     <Flex align="center" gap={1}>
-                        <FaPerson className="text-[#CC9200]" />
+                        <FaPerson />
                         <Text fontSize="sm">
                             {beneficiary.gender || "Gender"}
                         </Text>
                     </Flex>
                     <Flex align="center" gap={1}>
-                        <FaLocationDot className="text-[#CC9200]" />
+                        <FaLocationDot />
                         <Text fontSize="sm">
                             {beneficiary.country || "Location"}
                         </Text>
@@ -258,7 +256,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
                             WebkitBoxOrient: 'vertical',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
-                            lineHeight: '1.4'
+                            lineHeight: '1.4',
+                            color: '#666666'
                         }}
                     >
                         {beneficiary?.biography}
@@ -268,7 +267,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
             {/* Learn More Section */}
             <Box>
                 <Text
-                    className="w-full text-[#CC9200] cursor-pointer text-sm flex justify-center p-4 gap-1 hover:bg-[#CC9200] hover:text-white"
+                    className="w-full text-[#1D2B4D] cursor-pointer text-sm flex justify-center p-4 gap-1 hover:bg-[#1D2B4D] hover:text-white"
                     onClick={handleViewActivity}
                 >
                     More about {beneficiary.name?.split(" ")[0] || "this person"}
