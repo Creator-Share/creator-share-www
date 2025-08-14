@@ -58,7 +58,7 @@ export default function PaymentSuccessClient() {
 
   useEffect(() => {
     const sessionId = searchParams.get("session_id");
-    const paypalSubscriptionId = searchParams.get("subscription_id");
+    const paypalSubscriptionId = searchParams.get("sponsorship_id");
     const paypalToken = searchParams.get("token") || searchParams.get("ba_token");
 
     if (sessionId) {
@@ -81,7 +81,7 @@ export default function PaymentSuccessClient() {
           });
         });
     } else if (paypalSubscriptionId || paypalToken) {
-      fetch(`/api/paypal/verify?subscription_id=${paypalSubscriptionId || ""}&token=${paypalToken || ""}`)
+      fetch(`/api/paypal/verify?sponsorship_id=${paypalSubscriptionId || ""}&token=${paypalToken || ""}`)
         .then(async (res) => {
           if (!res.ok) throw new Error("Invalid PayPal session");
           const data = await res.json();

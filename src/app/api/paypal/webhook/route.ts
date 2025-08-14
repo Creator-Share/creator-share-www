@@ -305,7 +305,7 @@ export async function POST(req: Request) {
         // Debug log for status mapping and insert payload
         console.log("PayPal subscription insert payload:", {
           user_id: userId,
-          stripe_subscription_id: paypalSubscriptionId,
+          sponsorship_id: paypalSubscriptionId,
           status: mappedStatus,
           amount: amount,
           interval: interval,
@@ -321,7 +321,7 @@ export async function POST(req: Request) {
           .from("subscriptions")
           .insert({
             user_id: userId,
-            stripe_subscription_id: paypalSubscriptionId,
+            sponsorship_id: paypalSubscriptionId,
             status: 'incomplete',
             amount: amount ?? 0,
             interval: interval ?? undefined,
@@ -330,6 +330,7 @@ export async function POST(req: Request) {
             customer_id: customerId,
             created_at: new Date(),
             beneficiary_id: beneficiaryId,
+            sponsorship_method: "PAYPAL",
           });
 
         if (insertError) {
@@ -360,7 +361,7 @@ export async function POST(req: Request) {
             status: "cancelled",
             canceled_at: new Date(),
           })
-          .eq("stripe_subscription_id", paypalSubscriptionId);
+          .eq("sponsorship_id", paypalSubscriptionId);
 
         if (updateError) {
           console.error("Error cancelling PayPal subscription:", updateError);

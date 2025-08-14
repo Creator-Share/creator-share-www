@@ -79,7 +79,7 @@ create table "public"."partnerships" (
     "updated_at" timestamp with time zone not null default timezone('utc'::text, now()),
     "customer_id" text,
     "card_number" text,
-    "stripe_subscription_id" text,
+    "sponsorship_id" text,
     "current_period_start" timestamp with time zone,
     "current_period_end" timestamp with time zone,
     "card_type" text,

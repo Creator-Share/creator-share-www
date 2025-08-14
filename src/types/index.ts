@@ -48,7 +48,7 @@ export interface Subscription {
   status: string;
   current_period_start: string;
   current_period_end: string;
-  stripe_subscription_id: string;
+  sponsorship_id: string;
   beneificiary: {
     name: string;
   };

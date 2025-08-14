@@ -11,7 +11,7 @@ export type Subscription = {
   interval: string;
   current_period_start: string;
   current_period_end: string;
-  stripe_subscription_id: string;
+  sponsorship_id: string;
   child: {
     name: string;
   };
@@ -110,7 +110,7 @@ export const columns: ColumnDef<Subscription>[] = [
             onClick={(e) => {
               e.stopPropagation();
               if (confirm("Are you sure you want to cancel this subscription?")) {
-                handleCancelSubscription(subscription.stripe_subscription_id);
+                handleCancelSubscription(subscription.sponsorship_id);
               }
             }}
             size="sm"

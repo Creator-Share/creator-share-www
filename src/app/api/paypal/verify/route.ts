@@ -25,17 +25,17 @@ async function getPayPalAccessToken() {
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const subscriptionId = searchParams.get("subscription_id");
+  const subscriptionId = searchParams.get("sponsorship_id");
   const token = searchParams.get("token");
 
   if (!subscriptionId && !token) {
-    return NextResponse.json({ error: "Missing subscription_id or token" }, { status: 400 });
+    return NextResponse.json({ error: "Missing sponsorship_id or token" }, { status: 400 });
   }
 
   try {
     const accessToken = await getPayPalAccessToken();
 
-    // Prefer subscription_id, fallback to token (order id)
+    // Prefer sponsorship_id, fallback to token (order id)
     if (subscriptionId) {
       // Fetch subscription details
       const res = await fetch(`${PAYPAL_API_URL}/v1/billing/subscriptions/${subscriptionId}`, {

@@ -18,7 +18,7 @@ create table "public"."subscriptions" (
     "created_at" timestamp with time zone not null default now(),
     "user_id" uuid,
     "child_id" uuid,
-    "stripe_subscription_id" text,
+    "sponsorship_id" text,
     "status" "SubscriptionStatus",
     "amount" integer,
     "interval" text,

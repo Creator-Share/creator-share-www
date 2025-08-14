@@ -304,30 +304,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 <BeneficiarySubscribeBox beneficiary={beneficiary} />
               </Box>
             </Box>
-            <Box className="px-8 md:grid md:grid-cols-2 gap-4 md:px-8">
-              <Flex className="justify-center w-full md:justify-start">
-              </Flex>
-              <Flex mt={4} gap={4} className="justify-center md:justify-end md:tems-end">
-                <Button className="border border-[#000000] p-4" height="40px" variant="outline" size="sm" _hover={{ bg: "black", color: "white" }} onClick={handleCopyLink}>
-                  <FaLink style={{ marginRight: 6 }} />
-                  Copy Link
-                </Button>
-                <Button className="border border-[#000000] p-4" variant="outline" size="sm" height="40px" _hover={{ bg: "black", color: "white" }} onClick={handleShareProfile}>
-                  <FaShare style={{ marginRight: 6 }} />
-                  Share Profile
-                </Button>
-                <Button
-                  className="w-64"
-                  bg="#0654C6"
-                  color="white"
-                  size='md'
-                  onClick={() => setSponsorDialogOpen(true)}
-                  _hover={{ bg: "black" }}
-                >
-                  Sponsor Child
-                </Button>
-              </Flex>
-            </Box>
           </Box>
 
           <SponsorDialog
