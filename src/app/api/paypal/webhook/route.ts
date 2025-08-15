@@ -302,7 +302,6 @@ export async function POST(req: Request) {
 
         console.log("Mapped PayPal status:", status, "->", mappedStatus);
 
-        // Debug log for status mapping and insert payload
         console.log("PayPal subscription insert payload:", {
           user_id: userId,
           sponsorship_id: paypalSubscriptionId,

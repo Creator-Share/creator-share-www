@@ -6,14 +6,18 @@ import {
   DialogBody,
   DialogCloseTrigger,
 } from "@/components/ui/dialog";
-import { Box, Text, Image, Spinner, Button, Flex } from "@chakra-ui/react";
-import SponsorDialog from "../SponsorDialog";
 import { FaCalendar, FaUser, FaLocationDot, FaCircleInfo, FaLink, FaShare } from "react-icons/fa6";
 import { Beneficiaries } from "@/types/index";
 import { fetchActivitiesByBeneficiaryId, fetchSponsorshipDetailsByBeneficiaryId } from "@/actions";
 import BeneficiaryActivity from "../SponsorshipActivity";
 import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox";
 import { toaster } from "@/components/ui/toaster";
+import { Box, Text, Image, Spinner, Flex, Input, InputAddon } from "@chakra-ui/react";
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
+import { SelectRoot, SelectTrigger, SelectValueText, SelectContent, SelectItem } from "@/components/ui/select";
+import { useAuthStore } from "@/store/authStore";
+import { paymentOptionsCollection } from "../SponsorDialog/config";
+import { Button } from "@/components/ui/button";
 
 interface BeneficiaryActivityModalProps {
   open: boolean;
@@ -26,10 +30,23 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   onClose,
   beneficiary,
 }) => {
-  const [loading, setLoading] = useState(true);
-  const [sponsorDialogOpen, setSponsorDialogOpen] = useState(false);
   const [toastCount, setToastCount] = useState(0);
   const [lastToastTime, setLastToastTime] = useState(0);
+  const user = useAuthStore((state) => state.user);
+  const remainingAmount = (beneficiary.budget_goal - beneficiary.budget_raised) / 100;
+  const minimumAmount = 10;
+  const maxSelectableAmount =
+    remainingAmount > minimumAmount
+      ? (remainingAmount - minimumAmount < minimumAmount
+        ? remainingAmount
+        : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount))
+      : remainingAmount;
+
+  const [amount, setAmount] = useState<number>(remainingAmount);
+  const [selectedOption, setSelectedOption] = useState<string>(paymentOptionsCollection.items[0].value);
+  const [value, setValue] = useState<number[]>([remainingAmount]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const allowBelowMinimum = remainingAmount < minimumAmount && amount === remainingAmount;
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -156,6 +173,215 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     fetchData();
   }, [open, beneficiary.id]);
 
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputValue = e.target.value;
+    if (inputValue === '') {
+      setAmount(0);
+      setValue([0]);
+      return;
+    }
+    let newValue = parseInt(inputValue) || 0;
+    newValue = Math.min(newValue, remainingAmount);
+    setAmount(newValue);
+    setValue([newValue]);
+  };
+
+  const handleSelectChange = (value: string) => {
+    setSelectedOption(value);
+  };
+
+  const handleStripePayment = async () => {
+    if (amount < minimumAmount && !(remainingAmount < minimumAmount && amount === remainingAmount)) {
+      toaster.create({ title: "Invalid Amount", description: `Minimum sponsorship amount is $${minimumAmount}.` });
+      return;
+    }
+    if (amount > remainingAmount) {
+      toaster.create({ title: "Invalid Amount", description: "Amount exceeds the remaining budget needed." });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        beneficiaryId: beneficiary.id,
+        beneficiaryName: beneficiary.name,
+        beneficiaryImage: beneficiary.image_url || "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=",
+        amount: amount * 100,
+        paymentType: selectedOption,
+        location: beneficiary.country,
+        userId: user?.id,
+        isEmbedded: window.self !== window.top,
+        allowBelowMinimum: remainingAmount < minimumAmount && amount === remainingAmount,
+        email: user?.email || undefined,
+        type: "sponsorship",
+      };
+
+      const res = await fetch("/api/stripe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        toaster.create({ title: "Payment Error", description: data?.error || "Something went wrong. Please try again." });
+        return;
+      }
+
+      const { clientSecret, url } = data;
+      if (window.self !== window.top) {
+        if (clientSecret) window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}`;
+        else if (url) window.location.href = url;
+        else toaster.create({ title: "Payment Error", description: "No checkout information returned. Please try again." });
+      } else {
+        if (url) window.location.href = url;
+        else toaster.create({ title: "Payment Error", description: "No checkout URL returned. Please try again." });
+      }
+    } catch (err) {
+      toaster.create({ title: "Payment Error", description: "Something went wrong. Please try again." });
+      console.error("Payment Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateOrder = async (_: Record<string, unknown>, actions: { order: { create: (options: { purchase_units: Array<{ description: string; amount: { value: string; currency_code: string } }> }) => Promise<string> } }) => {
+    if (!amount || (amount < minimumAmount && !allowBelowMinimum)) {
+      toaster.create({ title: "Invalid Amount", description: `Minimum amount is $${minimumAmount}.` });
+      throw new Error("Invalid amount");
+    }
+    return actions.order.create({
+      purchase_units: [{
+        description: `${selectedOption === "subscription" ? "Monthly" : "Yearly"} Sponsorship for ${beneficiary.name}`,
+        amount: { value: amount.toFixed(2), currency_code: "USD" }
+      }]
+    });
+  };
+
+  const handlePayPalApproval = async (data: { orderID: string }) => {
+    try {
+      if (selectedOption === "subscription" || selectedOption === "payment") {
+        const planRes = await fetch("/api/paypal/plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            beneficiary_id: beneficiary.id,
+            name: `${selectedOption === "subscription" ? "Monthly" : "Yearly"} Sponsorship for ${beneficiary.name}`,
+            description: `Recurring sponsorship for ${beneficiary.name}`,
+            amount: amount,
+            interval_unit: selectedOption === "subscription" ? "MONTH" : "YEAR",
+            interval_count: 1,
+            currency_code: "USD"
+          }),
+        });
+        const planData = await planRes.json();
+        if (!planRes.ok) throw new Error(planData.error?.message || "Failed to create/get PayPal plan");
+        const plan_id = planData.plan.id;
+
+        const subRes = await fetch("/api/paypal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            plan_id,
+            beneficiaryId: beneficiary.id,
+            subscriber_email: user?.email,
+            subscriber_name: user?.email || "",
+          }),
+        });
+        const subData = await subRes.json();
+        if (!subRes.ok) throw new Error(subData.error?.message || "Failed to create PayPal subscription");
+
+        type PayPalLink = { rel?: string; href?: string };
+        const approvalUrl = subData.subscription?.links?.find((l: PayPalLink) => l.rel === "approve")?.href;
+        if (approvalUrl) {
+          window.location.href = approvalUrl;
+          return;
+        }
+        throw new Error("No approval link returned from PayPal");
+      }
+
+      // One-time legacy flow
+      const response = await fetch("/api/paypal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          beneficiaryId: beneficiary.id,
+          beneficiaryName: beneficiary.name,
+          amount: amount,
+          paymentType: selectedOption,
+          location: beneficiary.country,
+          userId: user?.id,
+          email: user?.email,
+          orderID: data.orderID
+        }),
+      });
+
+      const responseText = await response.text();
+      const responseData = JSON.parse(responseText);
+
+      if (!response.ok) {
+        console.error('PayPal error response:', responseData);
+        throw new Error(responseData.error || "Failed to process payment");
+      }
+
+      toaster.create({ title: "Success", description: "Your payment has been processed successfully!" });
+      window.location.href = `/payments/success?order_id=${data.orderID}`;
+    } catch (error) {
+      const err = error as Error;
+      console.error("PayPal Error:", error);
+      toaster.create({ title: "Payment Error", description: err.message || "Failed to process payment. Please try again." });
+      window.location.href = "/payments/failed";
+    }
+  };
+
+  const handlePayPalError = (err: Error) => {
+    console.error("PayPal Error:", err);
+    toaster.create({ title: "Payment Error", description: "Something went wrong with PayPal. Please try again." });
+  };
+
+  const renderDisclaimer = () => {
+    const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
+    if ((beneficiary.budget_goal - beneficiary.budget_raised - amount * 100) > 0) {
+      return (
+        <>
+          This child has a monthly budget goal that must be met for enrollment in school.
+          {selectedOption === "payment" && (
+            <>
+              <br />
+              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+            </>
+          )}
+          <br />
+          Additional sponsors are required to meet this goal.
+        </>
+      );
+    } else if (beneficiary.budget_raised > 0) {
+      return (
+        <>
+          This child is partially sponsored. Your contribution will help reach their monthly budget goal!
+          {selectedOption === "payment" && (
+            <>
+              <br />
+              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+            </>
+          )}
+        </>
+      );
+    }
+    return (
+      <>
+        Your sponsorship will be applied towards the child's monthly budget goals.
+        {selectedOption === "payment" && (
+          <>
+            <br />
+            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+          </>
+        )}
+      </>
+    );
+  };
+
   return (
     <DialogRoot open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-[400px] md:min-w-[1000px] md:max-w-[1000px] w-full relative rounded-2xl">
@@ -172,11 +398,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             </div>
           )}
           <Box
-            className="px-8 md:grid md:grid-cols-2 md:gap-4"
+            className="px-8 md:grid md:grid-cols-12 md:gap-4 md:my-2.5"
           >
-            <Box className="h-[523px] border border-[#0654C6] rounded-[10px] flex flex-col text-center gap-[11px] relative">
+            <Box className="border border-[#0654C6] rounded-[10px] flex flex-col text-center gap-[11px] relative md:max-h-[523px] md:col-span-5">
               {/* Status Overlay */}
-              <Box className="absolute top-2 right-2 z-10 bg-[#CDE1FE] text-[#0654C6] rounded-[10px] p-[10px] flex items-center gap-2">
+              <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#0654C6] rounded-[10px] p-[10px] flex items-center gap-2">
                 <FaCircleInfo />
                 <Text className="text-xs font-medium">
                   {getStatusText(beneficiary.status)}
@@ -186,11 +412,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 src={beneficiary.image_url || "/placeholder-child.jpg"}
                 alt={beneficiary.name || "Child"}
                 width={500}
-                height={293}
-                className="rounded-t-[10px]"
+                height={405}
+                className="rounded-[15px] p-2"
                 style={{ objectFit: "cover", objectPosition: "center 20%" }}
               />
-              <Box className="text-center">
+              <Box className="text-center mb-4 md:mb-0">
                 <Text className="text-xl font-bold text-gray-800 mb-2">{beneficiary.name || "Full Name"}</Text>
                 <Flex align="center" gap={2} mb={1} justify="center">
                   <FaCalendar className="text-[#0654C6]" />
@@ -203,64 +429,23 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   <Text fontSize="md">{beneficiary.country || "Location"}</Text>
                 </Flex>
               </Box>
-              <Box className="mx-8">
-                <Flex className="justify-center w-full">
-                  <Button
-                    className="w-full md:w-50%"
-                    bg="#0654C6"
-                    color="white"
-                    onClick={() => setSponsorDialogOpen(true)}
-                    height="40px"
-                    _hover={{ bg: "black" }}
-                    mt={4}
-                  >
-                    Sponsor Child
-                  </Button>
-                </Flex>
-                <Flex mt={4} className="justify-center w-full">
-                  <Flex gap={4} className="w-full md:w-50%">
-                    <Button
-                      className="flex-1"
-                      height="40px"
-                      variant="outline"
-                      _hover={{ bg: "black", color: "white" }}
-                      onClick={handleCopyLink}
-                      bg='#CDE1FE'
-                    >
-                      <FaLink style={{ marginRight: 6 }} />
-                      Copy Link
-                    </Button>
-                    <Button
-                      className="flex-1"
-                      height="40px"
-                      variant="outline"
-                      _hover={{ bg: "black", color: "white" }}
-                      onClick={handleShareProfile}
-                      bg='#CDE1FE'
-                    >
-                      <FaShare style={{ marginRight: 6 }} />
-                      Share Profile
-                    </Button>
-                  </Flex>
-                </Flex>
-              </Box>
             </Box>
-            <Box my={4}
+            <Box
               borderRadius="xl"
-              className="h-[523px]">
+              className="h-[523px] mt-3 mb-2.5 md:my-0 md:col-span-7 md:gap-4">
               {/* Sponsorship Target */}
-              <Box mb={2}>
+              <Box mb={2} gap={10}>
                 <Box className="flex justify-between">
-                  <Text className="text-sm text-[#52667A] font-normal" mb={2}>Sponsorship Target</Text>
-                  <Text className="text-sm font-normal" mb={2}>
+                  <Text className="text-base text-[#52667A] font-normal" mb={2}>Sponsorship Target</Text>
+                  <Text className="text-base font-semibold" mb={2}>
                     {beneficiary.budget_goal > 0
                       ? Math.round((beneficiary.budget_raised / beneficiary.budget_goal) * 100)
                       : 0}%
                   </Text>
                 </Box>
-                <Box className="w-full bg-[#CDE1FE] h-2 rounded-full mb-3">
+                <Box className="w-full bg-[#CDE1FE] h-[13px] rounded-full mb-3">
                   <Box
-                    className="bg-[#0654C6] h-full rounded-full"
+                    className="bg-[#0654C6] h-[13px] rounded-full"
                     style={{
                       width: `${beneficiary.budget_goal > 0
                         ? Math.min((beneficiary.budget_raised / beneficiary.budget_goal) * 100, 100)
@@ -268,24 +453,164 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                     }}
                   />
                 </Box>
+                <Text className="text-sm text-[#52667A] font-normal">
+                  {`$${((beneficiary.budget_raised || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })} of $${((beneficiary.budget_goal || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                </Text>
               </Box>
+
+              <Box className="grid grid-cols-2 gap-2">
+                <Box>
+                  <Text mt={1} className="font-medium text-sm mb-[10px]">
+                    Amount
+                  </Text>
+
+                  {remainingAmount < minimumAmount ? (
+                    <Box>
+                      <Flex className="border rounded-xl" align="center" justify="center" gap={2}>
+                        <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">$</InputAddon>
+                        <Input type="number" value={remainingAmount} readOnly className="px-4 h-[50px] bg-gray-100" placeholder="Enter Amount" />
+                      </Flex>
+                    </Box>
+                  ) : (
+                    <>
+                      <Flex className="border rounded-xl" align="center" justify="center" gap={2}>
+                        <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">$</InputAddon>
+                        <Input
+                          type="number"
+                          min="1"
+                          max={maxSelectableAmount}
+                          value={amount || ''}
+                          onChange={handleAmountChange}
+                          className="px-4 h-[48px]"
+                          placeholder="Enter Amount"
+                        />
+                      </Flex>
+                      <Box my={4}>
+                        {amount > 0 && amount < minimumAmount && (
+                          <Text color="gray.400" fontSize="sm" textAlign="center" mt={1}>
+                            Minimum sponsorship amount is ${minimumAmount}.
+                          </Text>
+                        )}
+                      </Box>
+                    </>
+                  )}
+                </Box>
+                <Box>
+                  <Text className="font-medium text-sm mb-[10px]" mt={1}>Frequency</Text>
+                  <SelectRoot
+                    collection={paymentOptionsCollection}
+                    className="border rounded-xl"
+                    mt={2}
+                    mb={4}
+                    px={1}
+                    py={1}
+                    value={[selectedOption]}
+                    onValueChange={(details) => handleSelectChange(details.value[0])}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValueText />
+                    </SelectTrigger>
+                    <SelectContent className="z-[9999]">
+                      {paymentOptionsCollection.items.map((option) => (
+                        <SelectItem key={option.value} item={option}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </SelectRoot>
+                </Box>
+              </Box>
+              <Box className="grid grid-cols-2 gap-2.5 mb-1.5">
+                <Button
+                  onClick={handleStripePayment}
+                  loading={loading}
+                  loadingText="Processing..."
+                  disabled={
+                    loading ||
+                    (
+                      remainingAmount < minimumAmount
+                        ? amount !== remainingAmount
+                        : amount < minimumAmount
+                    )
+                  }
+                  className={`flex-1 py-2 bg-blue-700 text-white hover:bg-blue-800${(remainingAmount < minimumAmount
+                    ? amount !== remainingAmount
+                    : amount < minimumAmount)
+                    ? ' opacity-50 cursor-not-allowed'
+                    : ''
+                    }`}
+                >
+                  Pay with Card
+                </Button>
+                <PayPalScriptProvider options={{
+                  "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
+                  currency: "USD",
+                  intent: "capture"
+                }}>
+                  <PayPalButtons
+                    style={{
+                      layout: "horizontal",
+                      tagline: false,
+                      height: 40
+                    }}
+                    createOrder={handleCreateOrder}
+                    onApprove={handlePayPalApproval}
+                    onError={handlePayPalError}
+                  />
+                </PayPalScriptProvider>
+              </Box>
+
               <Box
                 bg="#CDE1FE"
                 p={4}
                 borderRadius="xl"
               >
-                <Box className="max-h-[240px] overflow-hidden overflow-y-scroll">
+                <Box className="max-h-[200px] overflow-hidden overflow-y-scroll">
                   <Text fontSize="lg" fontWeight="bold" mb={2}>Child Bio</Text>
-                  <Text color="gray.600" fontSize="sm">
+                  <Text color="gray.600" fontSize="base">
                     {beneficiary.biography}
                   </Text>
                 </Box>
               </Box>
+              <Flex mt={4} className="justify-center w-full">
+                <Flex gap={4} className="w-full md:w-50%">
+                  <Button
+                    className="flex-1 border border-black"
+                    height="40px"
+                    variant="outline"
+                    _hover={{ bg: "black", color: "white" }}
+                    onClick={handleCopyLink}
+                    bg='white'
+                  >
+                    <FaLink style={{ marginRight: 6 }} />
+                    Copy Link
+                  </Button>
+                  <Button
+                    className="flex-1 border border-black"
+                    height="40px"
+                    variant="outline"
+                    _hover={{ bg: "black", color: "white" }}
+                    onClick={handleShareProfile}
+                    bg='white'
+                  >
+                    <FaShare style={{ marginRight: 6 }} />
+                    Share Profile
+                  </Button>
+                </Flex>
+              </Flex>
+            </Box>
+          </Box>
+          <Box className="border mx-8 mb-2.5" />
+          <Box className="px-8 md:grid md:grid-cols-2 md:items-stretch gap-4">
+            <Box>
+              <BeneficiaryActivity beneficiaryId={beneficiary.id} username={beneficiary.username} />
+            </Box>
+            <Box className="my-3 md:my-0">
               <Box
                 bg="white"
                 borderRadius="xl"
                 mt={4}
-                className="flex justify-center items-center min-h-[160px]"
+                className="flex justify-center items-center md:min-h-[191px] mb-2"
               >
                 {beneficiary.video_url && beneficiary.video_url.trim() !== "" ? (
                   <video className="rounded-xl max-h-40 w-full" src={beneficiary.video_url} controls />
@@ -293,25 +618,14 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   <Text className="text-center text-gray-500">No Media Available</Text>
                 )}
               </Box>
+              <BeneficiarySubscribeBox beneficiary={beneficiary} />
             </Box>
           </Box>
-          <Box mb={4}>
-            <Box className="px-8 md:grid md:grid-cols-2 md:items-stretch gap-4">
-              <Box className="">
-                <BeneficiaryActivity beneficiaryId={beneficiary.id} username={beneficiary.username} />
-              </Box>
-              <Box className="my-3 md:my-0">
-                <BeneficiarySubscribeBox beneficiary={beneficiary} />
-              </Box>
-            </Box>
+          <Box className="px-8 my-4">
+            <Text color="gray.500" textAlign="center" p={1} fontSize="sm">
+              {renderDisclaimer()}
+            </Text>
           </Box>
-
-          <SponsorDialog
-            people={beneficiary}
-            isOpen={sponsorDialogOpen}
-            onOpenChange={setSponsorDialogOpen}
-            trigger={<div style={{ display: "none" }} />}
-          />
         </DialogBody>
       </DialogContent>
     </DialogRoot>

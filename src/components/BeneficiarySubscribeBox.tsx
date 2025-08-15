@@ -46,8 +46,8 @@ const BeneficiarySubscribeBox: React.FC<BeneficiarySubscribeBoxProps> = ({
   };
 
   return (
-    <Box flex="1" minW="280px" bg="#223767" color="white" p={6} borderRadius="md" boxShadow="sm" className="flex flex-col justify-center text-center">
-      <Text fontWeight="bold" fontSize="lg" mb={2}>
+    <Box flex="1" minW="280px" bg="#223767" color="white" px={6} borderRadius="md" boxShadow="sm" className="flex flex-col justify-center text-center md:min-h-[229px] md:max-h-[229px]">
+      <Text fontWeight="semibold" fontSize="base" mb={2}>
         Sign up to receive FREE monthly updates on {beneficiary.name}
       </Text>
       <Text fontSize="sm" mb={4}>
