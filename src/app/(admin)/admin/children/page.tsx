@@ -4,7 +4,7 @@ import { DataTable } from "@/components/admin-ui/Tables/data-table";
 import { ColumnDef, Row } from "@tanstack/react-table";
 import { columns } from "./columns";
 import dynamic from "next/dynamic";
-import { Box, Button, Text } from "@chakra-ui/react";
+import { Box, Button, Text, Progress, Badge, Input } from "@chakra-ui/react";
 import { MdDeleteOutline } from "react-icons/md";
 import { toaster } from "@/components/ui/toaster";
 import DeleteDialog from "./components/DeleteDialog";
@@ -67,6 +67,7 @@ const ChildrenTable = () => {
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
   const [selectedCount, setSelectedCount] = useState(0);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [mobileSearch, setMobileSearch] = useState("");
   const tableRef = useRef<TableInstance | null>(null);
 
   useEffect(() => {
@@ -95,9 +96,9 @@ const ChildrenTable = () => {
 
   const handleSubmit = async (): Promise<boolean> => {
     // Ensure all required fields are present before submitting
-    if (!formData.name || !formData.username || !formData.gender || !formData.birth_date || 
-        !formData.biography || !formData.status || !formData.country || 
-        !formData.location_str || !formData.introduction) {
+    if (!formData.name || !formData.username || !formData.gender || !formData.birth_date ||
+      !formData.biography || !formData.status || !formData.country ||
+      !formData.location_str || !formData.introduction) {
       toaster.create({
         title: "Error",
         description: "Please fill in all required fields",
@@ -105,7 +106,7 @@ const ChildrenTable = () => {
       });
       return false;
     }
-    
+
     // Convert budget_goal to cents before submission
     const formDataWithCents = {
       ...formData,
@@ -189,27 +190,79 @@ const ChildrenTable = () => {
   }
 
   return (
-    <Box className="container mx-auto mt-12">
+    <Box>
       <GoBackButton />
-      <Box className="grid grid-cols-2 mb-2">
-        <Text className="text-3xl font-semibold leading-9">Manage Children</Text>
-        <Box className="justify-self-end flex gap-3">
-          <CreateDrawer
-            formData={formData}
-            isDrawerOpen={isCreateDrawerOpen}
-            setIsDrawerOpen={setIsCreateDrawerOpen}
-            setFormData={(value) => {
+      <Box className="hidden md:block container mx-auto mt-12">
+
+        <Box className="grid grid-cols-2 mb-2">
+          <Text className="text-3xl font-semibold leading-9">Manage Children</Text>
+          <Box className="justify-self-end flex gap-3">
+            <CreateDrawer
+              formData={formData}
+              isDrawerOpen={isCreateDrawerOpen}
+              setIsDrawerOpen={setIsCreateDrawerOpen}
+              setFormData={(value) => {
+                if (typeof value === 'function') {
+                  const currentValue = value(formData);
+                  setFormData(currentValue);
+                } else {
+                  setFormData(value);
+                }
+              }}
+              handleInputChange={handleInputChange}
+              handleSelectChange={handleSelectChange}
+              handleLocationSelect={handleLocationSelect}
+              handleSubmit={handleSubmit}
+              imageFiles={imageFiles}
+              setImageFiles={(value) =>
+                typeof value === "function"
+                  ? setImageFiles(value(imageFiles))
+                  : setImageFiles(value)
+              }
+              videoFiles={videoFiles}
+              setVideoFiles={(value) =>
+                typeof value === "function"
+                  ? setVideoFiles(value(videoFiles))
+                  : setVideoFiles(value)
+              }
+              handleDrawerClose={() => setIsCreateDrawerOpen(false)}
+            />
+            {selectedCount > 0 && (
+              <Button onClick={handleBulkDelete} className="border-[2px] border-[#E0E0E0] bg-red-500 text-white w-fit h-[40px] px-4">
+                <MdDeleteOutline className="mr-[3.5px]" /> Bulk Delete ({selectedCount})
+              </Button>
+            )}
+          </Box>
+        </Box>
+        <DataTable
+          ref={tableRef}
+          columns={columns as ColumnDef<unknown, unknown>[]}
+          data={data}
+          controls="bottom"
+          onRowSelectionChange={(rowSelection) =>
+            setSelectedCount(Object.keys(rowSelection).length)
+          }
+          onRowClick={(data: unknown) => {
+            setSelectedBeneficiary(data as Beneficiaries);
+            setIsEditDrawerOpen(true);
+          }}
+        />
+        {isEditDrawerOpen && selectedBeneficiary && (
+          <EditDrawer
+            selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
+            formDataEdit={formDataEdit as Partial<Beneficiaries>}
+            setFormDataEdit={(value) => {
               if (typeof value === 'function') {
-                const currentValue = value(formData);
-                setFormData(currentValue);
+                const currentValue = value(formDataEdit);
+                setFormDataEdit(currentValue);
               } else {
-                setFormData(value);
+                setFormDataEdit(value);
               }
             }}
-            handleInputChange={handleInputChange}
-            handleSelectChange={handleSelectChange}
-            handleLocationSelect={handleLocationSelect}
-            handleSubmit={handleSubmit}
+            isDrawerOpen={isEditDrawerOpen}
+            onClose={() => setIsEditDrawerOpen(false)}
+            onSave={handleSave}
+            onDelete={handleDelete}
             imageFiles={imageFiles}
             setImageFiles={(value) =>
               typeof value === "function"
@@ -222,64 +275,147 @@ const ChildrenTable = () => {
                 ? setVideoFiles(value(videoFiles))
                 : setVideoFiles(value)
             }
-            handleDrawerClose={() => setIsCreateDrawerOpen(false)}
           />
-          {selectedCount > 0 && (
-            <Button onClick={handleBulkDelete} className="border-[2px] border-[#E0E0E0] bg-red-500 text-white w-fit h-[40px] px-4">
-              <MdDeleteOutline className="mr-[3.5px]" /> Bulk Delete ({selectedCount})
-            </Button>
-          )}
+        )}
+        <DeleteDialog
+          isOpen={isDeleteDialogOpen}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onConfirm={confirmDelete}
+          itemCount={selectedRowsForDeletion.length}
+        />
+
+      </Box>
+      <Box className="md:hidden">
+        <Box className="container mx-auto p-4 space-y-4">
+          <GoBackButton />
+          <Text className="text-2xl font-semibold">Manage Children</Text>
+
+          <Box className="flex gap-2">
+            <CreateDrawer
+              formData={formData}
+              isDrawerOpen={isCreateDrawerOpen}
+              setIsDrawerOpen={setIsCreateDrawerOpen}
+              setFormData={(value) => {
+                if (typeof value === 'function') {
+                  const currentValue = value(formData);
+                  setFormData(currentValue);
+                } else {
+                  setFormData(value);
+                }
+              }}
+              handleInputChange={handleInputChange}
+              handleSelectChange={handleSelectChange}
+              handleLocationSelect={handleLocationSelect}
+              handleSubmit={handleSubmit}
+              imageFiles={imageFiles}
+              setImageFiles={(value) =>
+                typeof value === "function"
+                  ? setImageFiles(value(imageFiles))
+                  : setImageFiles(value)
+              }
+              videoFiles={videoFiles}
+              setVideoFiles={(value) =>
+                typeof value === "function"
+                  ? setVideoFiles(value(videoFiles))
+                  : setVideoFiles(value)
+              }
+              handleDrawerClose={() => setIsCreateDrawerOpen(false)}
+            />
+          </Box>
+
+            <Input
+              placeholder="Search by name or username"
+              value={mobileSearch}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMobileSearch(e.target.value)}
+              className="border"
+              px={3}
+              py={2}
+            />
+
+          <Box className="space-y-3">
+            {data
+              .filter((b) =>
+                (b.name?.toLowerCase() || "").includes(mobileSearch.toLowerCase()) ||
+                (b.username?.toLowerCase() || "").includes(mobileSearch.toLowerCase())
+              )
+              .map((b) => {
+                const goal = Number(b.budget_goal || 0);
+                const raised = Number(b.budget_raised || 0);
+                const progress = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
+                return (
+                  <Box key={b.id || b.username} className="border rounded-xl p-4 bg-white space-y-3">
+                    <Box className="flex items-start justify-between gap-2">
+                      <Box>
+                        <Text className="text-lg font-semibold leading-6">{b.name}</Text>
+                        <Text className="text-xs text-gray-500">@{b.username}</Text>
+                      </Box>
+                      <Badge colorPalette="blue">{b.status}</Badge>
+                    </Box>
+
+                    <Box className="text-sm text-gray-600">
+                      <Text>{b.country}{b.location_str ? ` • ${b.location_str}` : ''}</Text>
+                    </Box>
+
+                    <Box className="space-y-1">
+                      <Box className="flex justify-between text-sm">
+                        <Text>Raised</Text>
+                        <Text>
+                          ${(b.budget_raised / 100).toFixed(2)} / ${(b.budget_goal / 100).toFixed(2)}
+                        </Text>
+                      </Box>
+                      <Progress.Root value={progress}>
+                        <Progress.Track className="rounded-xl h-2">
+                          <Progress.Range className="bg-[#1C3C8C]" />
+                        </Progress.Track>
+                      </Progress.Root>
+                    </Box>
+
+                    <Box className="flex gap-2 pt-1">
+                      <Button
+                        className="flex-1 bg-[#1C3C8C] text-white"
+                        onClick={() => {
+                          setSelectedBeneficiary(b as Beneficiaries);
+                          setIsEditDrawerOpen(true);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                    </Box>
+                  </Box>
+                );
+              })}
+          </Box>
+
+          <EditDrawer
+            selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
+            formDataEdit={formDataEdit as Partial<Beneficiaries>}
+            setFormDataEdit={(value) => {
+              if (typeof value === 'function') {
+                const currentValue = value(formDataEdit);
+                setFormDataEdit(currentValue);
+              } else {
+                setFormDataEdit(value);
+              }
+            }}
+            isDrawerOpen={isEditDrawerOpen}
+            onClose={() => setIsEditDrawerOpen(false)}
+            onSave={handleSave}
+            onDelete={handleDelete}
+            imageFiles={imageFiles}
+            setImageFiles={(value) =>
+              typeof value === "function"
+                ? setImageFiles(value(imageFiles))
+                : setImageFiles(value)
+            }
+            videoFiles={videoFiles}
+            setVideoFiles={(value) =>
+              typeof value === "function"
+                ? setVideoFiles(value(videoFiles))
+                : setVideoFiles(value)
+            }
+          />
         </Box>
       </Box>
-      <DataTable
-        ref={tableRef}
-        columns={columns as ColumnDef<unknown, unknown>[]}
-        data={data}
-        controls="bottom"
-        onRowSelectionChange={(rowSelection) =>
-          setSelectedCount(Object.keys(rowSelection).length)
-        }
-        onRowClick={(data: unknown) => {
-          setSelectedBeneficiary(data as Beneficiaries);
-          setIsEditDrawerOpen(true);
-        }}
-      />
-      {isEditDrawerOpen && selectedBeneficiary && (
-        <EditDrawer
-          selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
-          formDataEdit={formDataEdit as Partial<Beneficiaries>}
-          setFormDataEdit={(value) => {
-            if (typeof value === 'function') {
-              const currentValue = value(formDataEdit);
-              setFormDataEdit(currentValue);
-            } else {
-              setFormDataEdit(value);
-            }
-          }}
-          isDrawerOpen={isEditDrawerOpen}
-          onClose={() => setIsEditDrawerOpen(false)}
-          onSave={handleSave}
-          onDelete={handleDelete}
-          imageFiles={imageFiles}
-          setImageFiles={(value) =>
-            typeof value === "function"
-              ? setImageFiles(value(imageFiles))
-              : setImageFiles(value)
-          }
-          videoFiles={videoFiles}
-          setVideoFiles={(value) =>
-            typeof value === "function"
-              ? setVideoFiles(value(videoFiles))
-              : setVideoFiles(value)
-          }
-        />
-      )}
-      <DeleteDialog
-        isOpen={isDeleteDialogOpen}
-        onClose={() => setIsDeleteDialogOpen(false)}
-        onConfirm={confirmDelete}
-        itemCount={selectedRowsForDeletion.length}
-      />
     </Box>
   );
 };
