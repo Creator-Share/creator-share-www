@@ -5,6 +5,7 @@ import { ColumnDef, Row } from "@tanstack/react-table";
 import { columns } from "./columns";
 import dynamic from "next/dynamic";
 import { Box, Button, Text, Progress, Badge, Input } from "@chakra-ui/react";
+import Image from "next/image";
 import { MdDeleteOutline } from "react-icons/md";
 import { toaster } from "@/components/ui/toaster";
 import DeleteDialog from "./components/DeleteDialog";
@@ -38,7 +39,8 @@ const ChildrenTable = () => {
     introduction: "",
     active_subscriptions: 0,
     metadata: {},
-    beneficiary_type: "CHILD"
+    beneficiary_type: "CHILD",
+    image_url: ""
   };
 
   const {
@@ -68,11 +70,76 @@ const ChildrenTable = () => {
   const [selectedCount, setSelectedCount] = useState(0);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState("");
+  const [beneficiaryImages, setBeneficiaryImages] = useState<Record<string, string>>({});
+  const [loadingImages, setLoadingImages] = useState<Record<string, boolean>>({});
   const tableRef = useRef<TableInstance | null>(null);
+  const fetchedImagesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     fetchBeneficiaries("CHILD");
   }, [fetchBeneficiaries]);
+
+  // Fetch images for all beneficiaries when data changes
+  useEffect(() => {
+    const fetchImages = async () => {
+      if (!data?.length) return;
+      
+      // Get all unique IDs that haven't been fetched yet
+      const idsToFetch = data
+        .map(b => b.id)
+        .filter((id): id is string => !!id && !fetchedImagesRef.current.has(id));
+      
+      if (!idsToFetch.length) return;
+
+      // Set initial loading state for all
+      setLoadingImages(prev => ({
+        ...prev,
+        ...Object.fromEntries(idsToFetch.map(id => [id, true]))
+      }));
+
+      // Fetch all images in parallel
+      await Promise.all(
+        idsToFetch.map(async (id) => {
+          fetchedImagesRef.current.add(id);
+          try {
+            const response = await fetch(`/api/admin/beneficiaries/images/${id}`);
+            if (response.ok) {
+              const images = await response.json();
+              if (images && images.length > 0) {
+                setBeneficiaryImages(prev => ({
+                  ...prev,
+                  [id]: images[0].image_url
+                }));
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching beneficiary image:', error);
+          } finally {
+            setLoadingImages(prev => ({ ...prev, [id]: false }));
+          }
+        })
+      );
+    };
+
+    fetchImages();
+
+    return () => {
+      fetchedImagesRef.current = new Set();
+      setBeneficiaryImages({});
+      setLoadingImages({});
+    };
+  }, [data]);
+
+  // Open EditDrawer only when selectedBeneficiary is set and valid
+  useEffect(() => {
+    if (
+      selectedBeneficiary &&
+      typeof selectedBeneficiary === "object" &&
+      selectedBeneficiary.id
+    ) {
+      setIsEditDrawerOpen(true);
+    }
+  }, [selectedBeneficiary]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -244,7 +311,6 @@ const ChildrenTable = () => {
           }
           onRowClick={(data: unknown) => {
             setSelectedBeneficiary(data as Beneficiaries);
-            setIsEditDrawerOpen(true);
           }}
         />
         {isEditDrawerOpen && selectedBeneficiary && (
@@ -287,9 +353,7 @@ const ChildrenTable = () => {
       </Box>
       <Box className="md:hidden">
         <Box className="container mx-auto p-4 space-y-4">
-          <GoBackButton />
           <Text className="text-2xl font-semibold">Manage Children</Text>
-
           <Box className="flex gap-2">
             <CreateDrawer
               formData={formData}
@@ -344,12 +408,34 @@ const ChildrenTable = () => {
                 const progress = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
                 return (
                   <Box key={b.id || b.username} className="border rounded-xl p-4 bg-white space-y-3">
-                    <Box className="flex items-start justify-between gap-2">
+                    <Box className="flex items-start gap-4">
+                      <Box className="relative w-[80px] h-[80px]">
+                        {!b.id ? (
+                          <div className="w-full h-full rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 text-sm text-center p-2">
+                            No Image Available
+                          </div>
+                        ) : loadingImages[b.id] ? (
+                          <div className="w-full h-full bg-gray-200 rounded-lg animate-pulse" />
+                        ) : beneficiaryImages[b.id] ? (
+                          <Image
+                            src={beneficiaryImages[b.id]}
+                            alt={`${b.name}'s photo`}
+                            fill
+                            className="rounded-lg object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 text-sm text-center p-2">
+                            No Image Available
+                          </div>
+                        )}
+                      </Box>
+                      <Box className="flex-1 flex items-start justify-between">
                       <Box>
                         <Text className="text-lg font-semibold leading-6">{b.name}</Text>
                         <Text className="text-xs text-gray-500">@{b.username}</Text>
                       </Box>
                       <Badge colorPalette="blue">{b.status}</Badge>
+                      </Box>
                     </Box>
 
                     <Box className="text-sm text-gray-600">
@@ -375,7 +461,6 @@ const ChildrenTable = () => {
                         className="flex-1 bg-[#1C3C8C] text-white"
                         onClick={() => {
                           setSelectedBeneficiary(b as Beneficiaries);
-                          setIsEditDrawerOpen(true);
                         }}
                       >
                         Edit

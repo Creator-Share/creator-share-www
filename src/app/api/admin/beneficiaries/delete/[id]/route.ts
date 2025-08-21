@@ -5,6 +5,16 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   const supabase = await createClient();
   const { id } = await params;
   try {
+    const { error: activitiesError } = await supabase
+      .from("activities")
+      .delete()
+      .eq("beneficiary_id", id);
+
+    if (activitiesError) {
+      return NextResponse.json({ error: activitiesError.message }, { status: 400 });
+    }
+
+    // Then, delete the beneficiary
     const { error } = await supabase
       .from("beneficiaries")
       .delete()

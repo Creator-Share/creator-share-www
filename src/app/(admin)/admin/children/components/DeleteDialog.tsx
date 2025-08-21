@@ -23,7 +23,7 @@ const DeleteDialog: React.FC<DeleteDialogProps> = ({
   itemCount,
 }) => {
   return (
-    <DialogRoot open={isOpen}>
+    <DialogRoot open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
           <Text className="text-xl font-semibold">Confirm Deletion</Text>
@@ -53,4 +53,4 @@ const DeleteDialog: React.FC<DeleteDialogProps> = ({
   );
 };
 
-export default DeleteDialog; 
+export default DeleteDialog;

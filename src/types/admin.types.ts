@@ -25,6 +25,7 @@ export interface Beneficiaries {
   active_subscriptions: number;
   metadata: Record<string, unknown>;
   beneficiary_type: BeneficiaryType;
+  image_url?: string;
 }
 
 export interface Activity {
