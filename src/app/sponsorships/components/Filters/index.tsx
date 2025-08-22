@@ -89,7 +89,7 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
         className={variant === "sidebar" ? "flex-col" : "flex-col md:flex-row"}
         gap={4}
         position="relative"
-        alignItems="stretch"
+        alignItems="center"
         width="100%"
       >
         {/* Gender Select Dropdown */}
@@ -194,17 +194,22 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
         <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
           <Button
             onClick={handleClearFilters}
-            className={`bg-[#1C3C8C] text-base font-semibold text-[#F8FAFC] ${
-              isDefaultFilters
-                ? "opacity-50 cursor-not-allowed pointer-events-none"
-                : ""
-            }`}
-            px={4}
-            py={6}
+            size="md"
+            fontWeight="semibold"
             width={{ base: "100%", md: "100%" }}
+            bg="#1C3C8C"
+            color="white"
+            _hover={{ bg: "#1C2B7A" }}
+            _active={{ bg: "#182765" }}
             disabled={isDefaultFilters}
+            _disabled={{
+              bg: "gray.300",
+              color: "white",
+              cursor: "not-allowed",
+              _dark: { bg: "gray.600", color: "gray.200" },
+            }}
           >
-            Clear Filter
+            Show All Children
           </Button>
         </Box>
       </Flex>
