@@ -1,6 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Box, Flex, Link, Button, Image, VStack, Menu, Portal } from "@chakra-ui/react";
+import {
+  Box,
+  Flex,
+  Link,
+  Button,
+  Image,
+  VStack,
+  Menu,
+  Portal,
+} from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { usePathname, useRouter } from "next/navigation";
@@ -66,11 +75,16 @@ export function PageNavbar() {
 
   return (
     <Box className="w-full z-[1000] bg-[#FFFFFF]">
-      <Flex className="container mx-auto px-4 h-16 flex justify-between items-center relative">
+      <Flex className="w-full max-w-[1200px] mx-auto px-6 md:px-8 h-16 flex justify-between items-center relative">
         {/* Logo Centered */}
-        <Box className="w-full md:w-[10%]">
+        <Box className="flex items-center flex-shrink-0">
           <NextLink href="/" passHref>
-            <Image src="/logo_text.svg" alt="Logo" height="55px" mx="auto" />
+            <Image
+              src="/logo_text.svg"
+              alt="Creator Share"
+              height="48px"
+              objectFit="contain"
+            />
           </NextLink>
         </Box>
 
@@ -241,7 +255,12 @@ export function PageNavbar() {
                     </Button>
                   </NextLink>
                 )}
-                <Button size="sm" variant="ghost" onClick={handleLogout} className="w-full">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleLogout}
+                  className="w-full"
+                >
                   Logout
                 </Button>
                 <NextLink href="/app" passHref>
