@@ -187,10 +187,22 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 
   useEffect(() => {
     if (!open) {
+      // Clear all transient state when closing so next open starts fresh
       setToastCount(0);
       setLastToastTime(0);
+      setPrimaryImageUrl(null);
+      // Reset amount controls back to current beneficiary's defaults
+      setAmount(remainingAmount);
+      setValue([remainingAmount]);
+      setSelectedOption(paymentOptionsCollection.items[0].value);
+      setLoading(false);
     }
-  }, [open]);
+  }, [open, remainingAmount]);
+
+  // Also clear image when switching beneficiaries to avoid flashing old image
+  useEffect(() => {
+    setPrimaryImageUrl(null);
+  }, [beneficiary.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -507,7 +519,12 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   };
 
   return (
-    <DialogRoot open={open} onOpenChange={onClose}>
+    <DialogRoot
+      open={open}
+      onOpenChange={(details) => {
+        if (!details.open) onClose();
+      }}
+    >
       <DialogContent className="max-w-[400px] md:min-w-[1000px] md:max-w-[1000px] w-full relative rounded-2xl">
         <DialogHeader className="flex justify-between items-center p-6 pb-2">
           <Text className="text-2xl font-bold text-gray-800">
