@@ -42,6 +42,7 @@ import {
 import { useAuthStore } from "@/store/authStore";
 import { paymentOptionsCollection } from "../Payments/config";
 import { Button } from "@/components/ui/button";
+import { BeneficiaryMedia } from "@/types/admin.types";
 
 interface BeneficiaryActivityModalProps {
   open: boolean;
@@ -75,6 +76,9 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const allowBelowMinimum =
     remainingAmount < minimumAmount && amount === remainingAmount;
+  const [primaryImageUrl, setPrimaryImageUrl] = useState<string | null>(null);
+  const fallbackPlaceholder =
+    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -195,6 +199,23 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       try {
         await fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id);
         await fetchActivitiesByBeneficiaryId(beneficiary.id);
+        // Fetch primary image
+        try {
+          const res = await fetch(
+            `/api/admin/beneficiaries/images/${beneficiary.id}`
+          );
+          if (res.ok) {
+            const data: BeneficiaryMedia[] = await res.json();
+            const sorted = Array.isArray(data)
+              ? data.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+              : [];
+            setPrimaryImageUrl(sorted[0]?.image_url || null);
+          } else {
+            setPrimaryImageUrl(null);
+          }
+        } catch {
+          setPrimaryImageUrl(null);
+        }
       } catch {}
       setLoading(false);
     };
@@ -514,7 +535,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 </Text>
               </Box>
               <Image
-                src={beneficiary.image_url || "/placeholder-child.jpg"}
+                src={
+                  primaryImageUrl ||
+                  beneficiary.image_url ||
+                  fallbackPlaceholder
+                }
                 alt={beneficiary.name || "Child"}
                 width={500}
                 height={405}
