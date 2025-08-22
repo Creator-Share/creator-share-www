@@ -15,7 +15,7 @@ import {
 import { useParams } from "next/navigation";
 import SponsorshipDetails from "../components/SponsorshipDetails";
 import { Activity, Beneficiaries, BeneficiaryMedia } from "@/types";
-import SponsorDialog from "../components/SponsorDialog";
+import BeneficiaryActivityModal from "../components/SponsorshipActivity/BeneficiaryActivityModal";
 import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox";
 
 export default function FullProfileDynamic() {
@@ -23,17 +23,20 @@ export default function FullProfileDynamic() {
   const [beneficiary, setBeneficiary] = useState<Beneficiaries | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [sponsorDialogOpen, setSponsorDialogOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [images, setImages] = useState<BeneficiaryMedia[]>([]);
   const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([]);
   const [currentBeneficiaryIndex, setCurrentBeneficiaryIndex] = useState(0);
   const [activities, setActivities] = useState<Activity[]>([]);
 
-  const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+  const placeholderImage =
+    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
   const fetchImages = async (beneficiaryId: string) => {
     try {
-      const response = await fetch(`/api/admin/beneficiaries/images/${beneficiaryId}`);
+      const response = await fetch(
+        `/api/admin/beneficiaries/images/${beneficiaryId}`
+      );
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -43,7 +46,12 @@ export default function FullProfileDynamic() {
         return;
       }
       if (data.length > 0) {
-        setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
+        setImages(
+          data.sort(
+            (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
+              a.order_index - b.order_index
+          )
+        );
       }
     } catch (error) {
       console.error("Error fetching images:", error);
@@ -70,11 +78,13 @@ export default function FullProfileDynamic() {
 
           const activitiesData = await fetchActivitiesByBeneficiaryId(child.id);
           setActivities(activitiesData);
-          const res = await fetch('/api/beneficiaries/get');
+          const res = await fetch("/api/beneficiaries/get");
           const data = await res.json();
           if (data.people) {
             setBeneficiaries(data.people);
-            const index = data.people.findIndex((b: Beneficiaries) => b.username === username);
+            const index = data.people.findIndex(
+              (b: Beneficiaries) => b.username === username
+            );
             if (index !== -1) {
               setCurrentBeneficiaryIndex(index);
             }
@@ -83,7 +93,7 @@ export default function FullProfileDynamic() {
       } catch (err) {
         setError("Beneficiary not found.");
         setBeneficiary(null);
-        console.error(err)
+        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -102,7 +112,9 @@ export default function FullProfileDynamic() {
   if (error || !beneficiary) {
     return (
       <Flex minH="100vh" align="center" justify="center">
-        <Text color="red.500" fontSize="xl">{error || "Beneficiary not found."}</Text>
+        <Text color="red.500" fontSize="xl">
+          {error || "Beneficiary not found."}
+        </Text>
       </Flex>
     );
   }
@@ -121,20 +133,31 @@ export default function FullProfileDynamic() {
             }}
             disabled={currentBeneficiaryIndex === 0}
             variant="outline"
-            className={`px-4 py-2 ${currentBeneficiaryIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`px-4 py-2 ${
+              currentBeneficiaryIndex === 0
+                ? "opacity-50 cursor-not-allowed"
+                : ""
+            }`}
           >
             ← Previous Beneficiary
           </Button>
           <Button
             onClick={() => {
               const newIndex = currentBeneficiaryIndex + 1;
-              if (newIndex < beneficiaries.length && beneficiaries[newIndex]?.username) {
+              if (
+                newIndex < beneficiaries.length &&
+                beneficiaries[newIndex]?.username
+              ) {
                 window.location.href = `/sponsorships/${beneficiaries[newIndex].username}`;
               }
             }}
             disabled={currentBeneficiaryIndex === beneficiaries.length - 1}
             variant="outline"
-            className={`px-4 py-2 ${currentBeneficiaryIndex === beneficiaries.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`px-4 py-2 ${
+              currentBeneficiaryIndex === beneficiaries.length - 1
+                ? "opacity-50 cursor-not-allowed"
+                : ""
+            }`}
           >
             Next Beneficiary →
           </Button>
@@ -142,7 +165,11 @@ export default function FullProfileDynamic() {
 
         {/* Header */}
         <Flex justify="space-between" align="center" mb={6}>
-          <Heading as="h1" className="font-bold text-2xl md:text-[55px]" color="#2B7FF9">
+          <Heading
+            as="h1"
+            className="font-bold text-2xl md:text-[55px]"
+            color="#2B7FF9"
+          >
             {beneficiary.name}
           </Heading>
           <Button
@@ -151,19 +178,24 @@ export default function FullProfileDynamic() {
             px={6}
             py={2}
             _hover={{ bg: "#1C2B7A" }}
-            onClick={() => setSponsorDialogOpen(true)}
+            onClick={() => setActivityOpen(true)}
             className="font-semibold text-[15px]"
           >
-            Sponsor Me
+            Sponsor this child
           </Button>
-          <SponsorDialog
-            people={beneficiary}
-            isOpen={sponsorDialogOpen}
-            onOpenChange={setSponsorDialogOpen}
-            trigger={<div style={{ display: "none" }} />}
+          <BeneficiaryActivityModal
+            open={activityOpen}
+            onClose={() => setActivityOpen(false)}
+            beneficiary={beneficiary}
           />
         </Flex>
-        <Box mb={8} rounded="xl" overflow="hidden" position="relative" h={{ base: "300px", md: "440px" }}>
+        <Box
+          mb={8}
+          rounded="xl"
+          overflow="hidden"
+          position="relative"
+          h={{ base: "300px", md: "440px" }}
+        >
           <Image
             src={images.length > 0 ? images[0].image_url : placeholderImage}
             alt={beneficiary.name}
@@ -178,10 +210,18 @@ export default function FullProfileDynamic() {
             About Me
           </Heading>
           <Text className="text-[#767070] text-base">
-            {beneficiary.biography || beneficiary.introduction || "No biography available."}
+            {beneficiary.biography ||
+              beneficiary.introduction ||
+              "No biography available."}
           </Text>
         </Box>
-        <Heading as="h3" size="lg" color="#2B7FF9" mb={6} className="font-bold text-2xl">
+        <Heading
+          as="h3"
+          size="lg"
+          color="#2B7FF9"
+          mb={6}
+          className="font-bold text-2xl"
+        >
           Latest Updates on {beneficiary.name}
         </Heading>
         <Box className="md:grid md:grid-cols-5 gap-4">
@@ -194,25 +234,39 @@ export default function FullProfileDynamic() {
                     href={`/sponsorships/${username}/activity/${activity.id}`}
                     style={{ textDecoration: "none" }}
                   >
-                    <Flex bg="white" rounded="xl" overflow="hidden" boxShadow="sm" _hover={{ bg: "gray.50" }}>
+                    <Flex
+                      bg="white"
+                      rounded="xl"
+                      overflow="hidden"
+                      boxShadow="sm"
+                      _hover={{ bg: "gray.50" }}
+                    >
                       <Box flex="1" p={4}>
-                        <Text color="gray.700" mb={2}>{activity.description}</Text>
+                        <Text color="gray.700" mb={2}>
+                          {activity.description}
+                        </Text>
                         <Text color="gray.500" fontSize="xs">
-                          📅 {new Date(activity.created_at).toLocaleString("en-GB", {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: false,
-                          })}
+                          📅{" "}
+                          {new Date(activity.created_at).toLocaleString(
+                            "en-GB",
+                            {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            }
+                          )}
                         </Text>
                       </Box>
                     </Flex>
                   </Link>
                 ))
               ) : (
-                <Text color="gray.500" textAlign="center">No activities available yet.</Text>
+                <Text color="gray.500" textAlign="center">
+                  No activities available yet.
+                </Text>
               )}
             </VStack>
           </Box>

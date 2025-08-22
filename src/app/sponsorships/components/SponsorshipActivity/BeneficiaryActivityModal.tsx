@@ -6,17 +6,41 @@ import {
   DialogBody,
   DialogCloseTrigger,
 } from "@/components/ui/dialog";
-import { FaCalendar, FaUser, FaLocationDot, FaCircleInfo, FaLink, FaShare } from "react-icons/fa6";
+import {
+  FaCalendar,
+  FaUser,
+  FaLocationDot,
+  FaCircleInfo,
+  FaLink,
+  FaShare,
+} from "react-icons/fa6";
 import { Beneficiaries } from "@/types/index";
-import { fetchActivitiesByBeneficiaryId, fetchSponsorshipDetailsByBeneficiaryId } from "@/actions";
+import {
+  fetchActivitiesByBeneficiaryId,
+  fetchSponsorshipDetailsByBeneficiaryId,
+} from "@/actions";
 import BeneficiaryActivity from "../SponsorshipActivity";
 import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox";
 import { toaster } from "@/components/ui/toaster";
-import { Box, Text, Image, Spinner, Flex, Input, InputAddon } from "@chakra-ui/react";
-import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
-import { SelectRoot, SelectTrigger, SelectValueText, SelectContent, SelectItem } from "@/components/ui/select";
+import {
+  Box,
+  Text,
+  Image,
+  Spinner,
+  Flex,
+  Input,
+  InputAddon,
+} from "@chakra-ui/react";
+import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+import {
+  SelectRoot,
+  SelectTrigger,
+  SelectValueText,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { useAuthStore } from "@/store/authStore";
-import { paymentOptionsCollection } from "../SponsorDialog/config";
+import { paymentOptionsCollection } from "../Payments/config";
 import { Button } from "@/components/ui/button";
 
 interface BeneficiaryActivityModalProps {
@@ -33,20 +57,24 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   const [toastCount, setToastCount] = useState(0);
   const [lastToastTime, setLastToastTime] = useState(0);
   const user = useAuthStore((state) => state.user);
-  const remainingAmount = (beneficiary.budget_goal - beneficiary.budget_raised) / 100;
+  const remainingAmount =
+    (beneficiary.budget_goal - beneficiary.budget_raised) / 100;
   const minimumAmount = 10;
   const maxSelectableAmount =
     remainingAmount > minimumAmount
-      ? (remainingAmount - minimumAmount < minimumAmount
+      ? remainingAmount - minimumAmount < minimumAmount
         ? remainingAmount
-        : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount))
+        : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
       : remainingAmount;
 
   const [amount, setAmount] = useState<number>(remainingAmount);
-  const [selectedOption, setSelectedOption] = useState<string>(paymentOptionsCollection.items[0].value);
+  const [selectedOption, setSelectedOption] = useState<string>(
+    paymentOptionsCollection.items[0].value
+  );
   const [value, setValue] = useState<number[]>([remainingAmount]);
   const [loading, setLoading] = useState<boolean>(false);
-  const allowBelowMinimum = remainingAmount < minimumAmount && amount === remainingAmount;
+  const allowBelowMinimum =
+    remainingAmount < minimumAmount && amount === remainingAmount;
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -72,7 +100,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 
       await navigator.clipboard.writeText(profileUrl);
 
-      setToastCount(prev => prev + 1);
+      setToastCount((prev) => prev + 1);
       setLastToastTime(now);
 
       toaster.create({
@@ -81,16 +109,16 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         duration: 3000,
       });
     } catch (err) {
-      console.error('Failed to copy link:', err);
-      const textArea = document.createElement('textarea');
+      console.error("Failed to copy link:", err);
+      const textArea = document.createElement("textarea");
       const profileUrl = `${window.location.origin}/sponsorships/${beneficiary.username}`;
       textArea.value = profileUrl;
       document.body.appendChild(textArea);
       textArea.select();
-      document.execCommand('copy');
+      document.execCommand("copy");
       document.body.removeChild(textArea);
 
-      setToastCount(prev => prev + 1);
+      setToastCount((prev) => prev + 1);
       setLastToastTime(now);
 
       toaster.create({
@@ -118,11 +146,12 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           duration: 3000,
         });
       } catch (error) {
-        if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Share failed:', error);
+        if (error instanceof Error && error.name !== "AbortError") {
+          console.error("Share failed:", error);
           toaster.create({
             title: "Share Failed",
-            description: "Unable to share profile. Please try copying the link instead.",
+            description:
+              "Unable to share profile. Please try copying the link instead.",
             duration: 3000,
           });
         }
@@ -136,11 +165,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           duration: 3000,
         });
       } catch {
-        const textArea = document.createElement('textarea');
+        const textArea = document.createElement("textarea");
         textArea.value = `${shareText}\n\n${profileUrl}`;
         document.body.appendChild(textArea);
         textArea.select();
-        document.execCommand('copy');
+        document.execCommand("copy");
         document.body.removeChild(textArea);
 
         toaster.create({
@@ -166,17 +195,15 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       try {
         await fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id);
         await fetchActivitiesByBeneficiaryId(beneficiary.id);
-      } catch {
-      }
+      } catch {}
       setLoading(false);
     };
     fetchData();
   }, [open, beneficiary.id]);
 
-
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const inputValue = e.target.value;
-    if (inputValue === '') {
+    if (inputValue === "") {
       setAmount(0);
       setValue([0]);
       return;
@@ -192,12 +219,21 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   };
 
   const handleStripePayment = async () => {
-    if (amount < minimumAmount && !(remainingAmount < minimumAmount && amount === remainingAmount)) {
-      toaster.create({ title: "Invalid Amount", description: `Minimum sponsorship amount is $${minimumAmount}.` });
+    if (
+      amount < minimumAmount &&
+      !(remainingAmount < minimumAmount && amount === remainingAmount)
+    ) {
+      toaster.create({
+        title: "Invalid Amount",
+        description: `Minimum sponsorship amount is $${minimumAmount}.`,
+      });
       return;
     }
     if (amount > remainingAmount) {
-      toaster.create({ title: "Invalid Amount", description: "Amount exceeds the remaining budget needed." });
+      toaster.create({
+        title: "Invalid Amount",
+        description: "Amount exceeds the remaining budget needed.",
+      });
       return;
     }
 
@@ -206,13 +242,16 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       const payload = {
         beneficiaryId: beneficiary.id,
         beneficiaryName: beneficiary.name,
-        beneficiaryImage: beneficiary.image_url || "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=",
+        beneficiaryImage:
+          beneficiary.image_url ||
+          "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=",
         amount: amount * 100,
         paymentType: selectedOption,
         location: beneficiary.country,
         userId: user?.id,
         isEmbedded: window.self !== window.top,
-        allowBelowMinimum: remainingAmount < minimumAmount && amount === remainingAmount,
+        allowBelowMinimum:
+          remainingAmount < minimumAmount && amount === remainingAmount,
         email: user?.email || undefined,
         type: "sponsorship",
       };
@@ -225,37 +264,71 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       const data = await res.json();
 
       if (!res.ok) {
-        toaster.create({ title: "Payment Error", description: data?.error || "Something went wrong. Please try again." });
+        toaster.create({
+          title: "Payment Error",
+          description: data?.error || "Something went wrong. Please try again.",
+        });
         return;
       }
 
       const { clientSecret, url } = data;
       if (window.self !== window.top) {
-        if (clientSecret) window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}`;
+        if (clientSecret)
+          window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}`;
         else if (url) window.location.href = url;
-        else toaster.create({ title: "Payment Error", description: "No checkout information returned. Please try again." });
+        else
+          toaster.create({
+            title: "Payment Error",
+            description: "No checkout information returned. Please try again.",
+          });
       } else {
         if (url) window.location.href = url;
-        else toaster.create({ title: "Payment Error", description: "No checkout URL returned. Please try again." });
+        else
+          toaster.create({
+            title: "Payment Error",
+            description: "No checkout URL returned. Please try again.",
+          });
       }
     } catch (err) {
-      toaster.create({ title: "Payment Error", description: "Something went wrong. Please try again." });
+      toaster.create({
+        title: "Payment Error",
+        description: "Something went wrong. Please try again.",
+      });
       console.error("Payment Error:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreateOrder = async (_: Record<string, unknown>, actions: { order: { create: (options: { purchase_units: Array<{ description: string; amount: { value: string; currency_code: string } }> }) => Promise<string> } }) => {
+  const handleCreateOrder = async (
+    _: Record<string, unknown>,
+    actions: {
+      order: {
+        create: (options: {
+          purchase_units: Array<{
+            description: string;
+            amount: { value: string; currency_code: string };
+          }>;
+        }) => Promise<string>;
+      };
+    }
+  ) => {
     if (!amount || (amount < minimumAmount && !allowBelowMinimum)) {
-      toaster.create({ title: "Invalid Amount", description: `Minimum amount is $${minimumAmount}.` });
+      toaster.create({
+        title: "Invalid Amount",
+        description: `Minimum amount is $${minimumAmount}.`,
+      });
       throw new Error("Invalid amount");
     }
     return actions.order.create({
-      purchase_units: [{
-        description: `${selectedOption === "subscription" ? "Monthly" : "Yearly"} Sponsorship for ${beneficiary.name}`,
-        amount: { value: amount.toFixed(2), currency_code: "USD" }
-      }]
+      purchase_units: [
+        {
+          description: `${
+            selectedOption === "subscription" ? "Monthly" : "Yearly"
+          } Sponsorship for ${beneficiary.name}`,
+          amount: { value: amount.toFixed(2), currency_code: "USD" },
+        },
+      ],
     });
   };
 
@@ -267,16 +340,21 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             beneficiary_id: beneficiary.id,
-            name: `${selectedOption === "subscription" ? "Monthly" : "Yearly"} Sponsorship for ${beneficiary.name}`,
+            name: `${
+              selectedOption === "subscription" ? "Monthly" : "Yearly"
+            } Sponsorship for ${beneficiary.name}`,
             description: `Recurring sponsorship for ${beneficiary.name}`,
             amount: amount,
             interval_unit: selectedOption === "subscription" ? "MONTH" : "YEAR",
             interval_count: 1,
-            currency_code: "USD"
+            currency_code: "USD",
           }),
         });
         const planData = await planRes.json();
-        if (!planRes.ok) throw new Error(planData.error?.message || "Failed to create/get PayPal plan");
+        if (!planRes.ok)
+          throw new Error(
+            planData.error?.message || "Failed to create/get PayPal plan"
+          );
         const plan_id = planData.plan.id;
 
         const subRes = await fetch("/api/paypal", {
@@ -290,10 +368,15 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           }),
         });
         const subData = await subRes.json();
-        if (!subRes.ok) throw new Error(subData.error?.message || "Failed to create PayPal subscription");
+        if (!subRes.ok)
+          throw new Error(
+            subData.error?.message || "Failed to create PayPal subscription"
+          );
 
         type PayPalLink = { rel?: string; href?: string };
-        const approvalUrl = subData.subscription?.links?.find((l: PayPalLink) => l.rel === "approve")?.href;
+        const approvalUrl = subData.subscription?.links?.find(
+          (l: PayPalLink) => l.rel === "approve"
+        )?.href;
         if (approvalUrl) {
           window.location.href = approvalUrl;
           return;
@@ -313,7 +396,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           location: beneficiary.country,
           userId: user?.id,
           email: user?.email,
-          orderID: data.orderID
+          orderID: data.orderID,
         }),
       });
 
@@ -321,35 +404,51 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       const responseData = JSON.parse(responseText);
 
       if (!response.ok) {
-        console.error('PayPal error response:', responseData);
+        console.error("PayPal error response:", responseData);
         throw new Error(responseData.error || "Failed to process payment");
       }
 
-      toaster.create({ title: "Success", description: "Your payment has been processed successfully!" });
+      toaster.create({
+        title: "Success",
+        description: "Your payment has been processed successfully!",
+      });
       window.location.href = `/payments/success?order_id=${data.orderID}`;
     } catch (error) {
       const err = error as Error;
       console.error("PayPal Error:", error);
-      toaster.create({ title: "Payment Error", description: err.message || "Failed to process payment. Please try again." });
+      toaster.create({
+        title: "Payment Error",
+        description:
+          err.message || "Failed to process payment. Please try again.",
+      });
       window.location.href = "/payments/failed";
     }
   };
 
   const handlePayPalError = (err: Error) => {
     console.error("PayPal Error:", err);
-    toaster.create({ title: "Payment Error", description: "Something went wrong with PayPal. Please try again." });
+    toaster.create({
+      title: "Payment Error",
+      description: "Something went wrong with PayPal. Please try again.",
+    });
   };
 
   const renderDisclaimer = () => {
-    const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
-    if ((beneficiary.budget_goal - beneficiary.budget_raised - amount * 100) > 0) {
+    const monthlyAmount =
+      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
+    if (
+      beneficiary.budget_goal - beneficiary.budget_raised - amount * 100 >
+      0
+    ) {
       return (
         <>
-          This child has a monthly budget goal that must be met for enrollment in school.
+          This child has a monthly budget goal that must be met for enrollment
+          in school.
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+              monthly for this child.
             </>
           )}
           <br />
@@ -359,11 +458,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     } else if (beneficiary.budget_raised > 0) {
       return (
         <>
-          This child is partially sponsored. Your contribution will help reach their monthly budget goal!
+          This child is partially sponsored. Your contribution will help reach
+          their monthly budget goal!
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+              monthly for this child.
             </>
           )}
         </>
@@ -371,11 +472,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     }
     return (
       <>
-        Your sponsorship will be applied towards the child's monthly budget goals.
+        Your sponsorship will be applied towards the child's monthly budget
+        goals.
         {selectedOption === "payment" && (
           <>
             <br />
-            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+            Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+            monthly for this child.
           </>
         )}
       </>
@@ -386,9 +489,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     <DialogRoot open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-[400px] md:min-w-[1000px] md:max-w-[1000px] w-full relative rounded-2xl">
         <DialogHeader className="flex justify-between items-center p-6 pb-2">
-          <Text className="text-2xl font-bold text-gray-800">Child Details</Text>
+          <Text className="text-2xl font-bold text-gray-800">
+            Child Details
+          </Text>
           <DialogCloseTrigger>
-            <Box className="text-lg font-semibold cursor-pointer border-2 border-[#000000] rounded-full px-2">×</Box>
+            <Box className="text-lg font-semibold cursor-pointer border-2 border-[#000000] rounded-full px-2">
+              ×
+            </Box>
           </DialogCloseTrigger>
         </DialogHeader>
         <DialogBody className="p-0">
@@ -397,9 +504,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
               <Spinner size="xl" color="#1C3C8C" />
             </div>
           )}
-          <Box
-            className="px-8 md:grid md:grid-cols-12 md:gap-4 md:my-2.5"
-          >
+          <Box className="px-8 md:grid md:grid-cols-12 md:gap-4 md:my-2.5">
             <Box className="border border-[#0654C6] rounded-[10px] flex flex-col text-center gap-[11px] relative md:max-h-[523px] md:col-span-5">
               {/* Status Overlay */}
               <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#0654C6] rounded-[10px] p-[10px] flex items-center gap-2">
@@ -417,11 +522,18 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 style={{ objectFit: "cover", objectPosition: "center 20%" }}
               />
               <Box className="text-center mb-4 md:mb-0">
-                <Text className="text-xl font-bold text-gray-800 mb-2">{beneficiary.name || "Full Name"}</Text>
+                <Text className="text-xl font-bold text-gray-800 mb-2">
+                  {beneficiary.name || "Full Name"}
+                </Text>
                 <Flex align="center" gap={2} mb={1} justify="center">
                   <FaCalendar className="text-[#0654C6]" />
                   <Text fontSize="md">
-                    {beneficiary.birth_date ? new Date(beneficiary.birth_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "DOB"}
+                    {beneficiary.birth_date
+                      ? new Date(beneficiary.birth_date).toLocaleDateString(
+                          "en-GB",
+                          { day: "numeric", month: "long", year: "numeric" }
+                        )
+                      : "DOB"}
                   </Text>
                   <FaUser className="text-[#0654C6]" />
                   <Text fontSize="md">{beneficiary.gender || "Gender"}</Text>
@@ -432,29 +544,49 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             </Box>
             <Box
               borderRadius="xl"
-              className="h-[523px] mt-3 mb-2.5 md:my-0 md:col-span-7 md:gap-4">
+              className="h-[523px] mt-3 mb-2.5 md:my-0 md:col-span-7 md:gap-4"
+            >
               {/* Sponsorship Target */}
               <Box mb={2} gap={10}>
                 <Box className="flex justify-between">
-                  <Text className="text-base text-[#52667A] font-normal" mb={2}>Sponsorship Target</Text>
+                  <Text className="text-base text-[#52667A] font-normal" mb={2}>
+                    Sponsorship Target
+                  </Text>
                   <Text className="text-base font-semibold" mb={2}>
                     {beneficiary.budget_goal > 0
-                      ? Math.round((beneficiary.budget_raised / beneficiary.budget_goal) * 100)
-                      : 0}%
+                      ? Math.round(
+                          (beneficiary.budget_raised /
+                            beneficiary.budget_goal) *
+                            100
+                        )
+                      : 0}
+                    %
                   </Text>
                 </Box>
                 <Box className="w-full bg-[#CDE1FE] h-[13px] rounded-full mb-3">
                   <Box
                     className="bg-[#0654C6] h-[13px] rounded-full"
                     style={{
-                      width: `${beneficiary.budget_goal > 0
-                        ? Math.min((beneficiary.budget_raised / beneficiary.budget_goal) * 100, 100)
-                        : 0}%`
+                      width: `${
+                        beneficiary.budget_goal > 0
+                          ? Math.min(
+                              (beneficiary.budget_raised /
+                                beneficiary.budget_goal) *
+                                100,
+                              100
+                            )
+                          : 0
+                      }%`,
                     }}
                   />
                 </Box>
                 <Text className="text-sm text-[#52667A] font-normal">
-                  {`$${((beneficiary.budget_raised || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })} of $${((beneficiary.budget_goal || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                  {`$${((beneficiary.budget_raised || 0) / 100).toLocaleString(
+                    undefined,
+                    { maximumFractionDigits: 0 }
+                  )} of $${(
+                    (beneficiary.budget_goal || 0) / 100
+                  ).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                 </Text>
               </Box>
 
@@ -466,20 +598,40 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 
                   {remainingAmount < minimumAmount ? (
                     <Box>
-                      <Flex className="border rounded-xl" align="center" justify="center" gap={2}>
-                        <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">$</InputAddon>
-                        <Input type="number" value={remainingAmount} readOnly className="px-4 h-[50px] bg-gray-100" placeholder="Enter Amount" />
+                      <Flex
+                        className="border rounded-xl"
+                        align="center"
+                        justify="center"
+                        gap={2}
+                      >
+                        <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">
+                          $
+                        </InputAddon>
+                        <Input
+                          type="number"
+                          value={remainingAmount}
+                          readOnly
+                          className="px-4 h-[50px] bg-gray-100"
+                          placeholder="Enter Amount"
+                        />
                       </Flex>
                     </Box>
                   ) : (
                     <>
-                      <Flex className="border rounded-xl" align="center" justify="center" gap={2}>
-                        <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">$</InputAddon>
+                      <Flex
+                        className="border rounded-xl"
+                        align="center"
+                        justify="center"
+                        gap={2}
+                      >
+                        <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">
+                          $
+                        </InputAddon>
                         <Input
                           type="number"
                           min="1"
                           max={maxSelectableAmount}
-                          value={amount || ''}
+                          value={amount || ""}
                           onChange={handleAmountChange}
                           className="px-4 h-[48px]"
                           placeholder="Enter Amount"
@@ -487,7 +639,12 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                       </Flex>
                       <Box my={4}>
                         {amount > 0 && amount < minimumAmount && (
-                          <Text color="gray.400" fontSize="sm" textAlign="center" mt={1}>
+                          <Text
+                            color="gray.400"
+                            fontSize="sm"
+                            textAlign="center"
+                            mt={1}
+                          >
                             Minimum sponsorship amount is ${minimumAmount}.
                           </Text>
                         )}
@@ -496,7 +653,9 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   )}
                 </Box>
                 <Box>
-                  <Text className="font-medium text-sm mb-[10px]" mt={1}>Frequency</Text>
+                  <Text className="font-medium text-sm mb-[10px]" mt={1}>
+                    Frequency
+                  </Text>
                   <SelectRoot
                     collection={paymentOptionsCollection}
                     className="border rounded-xl"
@@ -505,7 +664,9 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                     px={1}
                     py={1}
                     value={[selectedOption]}
-                    onValueChange={(details) => handleSelectChange(details.value[0])}
+                    onValueChange={(details) =>
+                      handleSelectChange(details.value[0])
+                    }
                   >
                     <SelectTrigger className="w-full">
                       <SelectValueText />
@@ -527,31 +688,35 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   loadingText="Processing..."
                   disabled={
                     loading ||
+                    (remainingAmount < minimumAmount
+                      ? amount !== remainingAmount
+                      : amount < minimumAmount)
+                  }
+                  className={`flex-1 py-2 bg-blue-700 text-white hover:bg-blue-800${
                     (
                       remainingAmount < minimumAmount
                         ? amount !== remainingAmount
                         : amount < minimumAmount
                     )
-                  }
-                  className={`flex-1 py-2 bg-blue-700 text-white hover:bg-blue-800${(remainingAmount < minimumAmount
-                    ? amount !== remainingAmount
-                    : amount < minimumAmount)
-                    ? ' opacity-50 cursor-not-allowed'
-                    : ''
-                    }`}
+                      ? " opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
                 >
-                  Pay with Card
+                  Sponsor this child
                 </Button>
-                <PayPalScriptProvider options={{
-                  "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
-                  currency: "USD",
-                  intent: "capture"
-                }}>
+                <PayPalScriptProvider
+                  options={{
+                    "client-id": process.env
+                      .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
+                    currency: "USD",
+                    intent: "capture",
+                  }}
+                >
                   <PayPalButtons
                     style={{
                       layout: "horizontal",
                       tagline: false,
-                      height: 40
+                      height: 40,
                     }}
                     createOrder={handleCreateOrder}
                     onApprove={handlePayPalApproval}
@@ -560,13 +725,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 </PayPalScriptProvider>
               </Box>
 
-              <Box
-                bg="#CDE1FE"
-                p={4}
-                borderRadius="xl"
-              >
+              <Box bg="#CDE1FE" p={4} borderRadius="xl">
                 <Box className="max-h-[200px] overflow-hidden overflow-y-scroll">
-                  <Text fontSize="lg" fontWeight="bold" mb={2}>Child Bio</Text>
+                  <Text fontSize="lg" fontWeight="bold" mb={2}>
+                    Child Bio
+                  </Text>
                   <Text color="gray.600" fontSize="base">
                     {beneficiary.biography}
                   </Text>
@@ -580,7 +743,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                     variant="outline"
                     _hover={{ bg: "black", color: "white" }}
                     onClick={handleCopyLink}
-                    bg='white'
+                    bg="white"
                   >
                     <FaLink style={{ marginRight: 6 }} />
                     Copy Link
@@ -591,7 +754,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                     variant="outline"
                     _hover={{ bg: "black", color: "white" }}
                     onClick={handleShareProfile}
-                    bg='white'
+                    bg="white"
                   >
                     <FaShare style={{ marginRight: 6 }} />
                     Share Profile
@@ -603,7 +766,10 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           <Box className="border mx-8 mb-2.5" />
           <Box className="px-8 md:grid md:grid-cols-2 md:items-stretch gap-4">
             <Box>
-              <BeneficiaryActivity beneficiaryId={beneficiary.id} username={beneficiary.username} />
+              <BeneficiaryActivity
+                beneficiaryId={beneficiary.id}
+                username={beneficiary.username}
+              />
             </Box>
             <Box className="my-3 md:my-0">
               <Box
@@ -612,10 +778,17 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 mt={4}
                 className="flex justify-center items-center md:min-h-[191px] mb-2"
               >
-                {beneficiary.video_url && beneficiary.video_url.trim() !== "" ? (
-                  <video className="rounded-xl max-h-40 w-full" src={beneficiary.video_url} controls />
+                {beneficiary.video_url &&
+                beneficiary.video_url.trim() !== "" ? (
+                  <video
+                    className="rounded-xl max-h-40 w-full"
+                    src={beneficiary.video_url}
+                    controls
+                  />
                 ) : (
-                  <Text className="text-center text-gray-500">No Media Available</Text>
+                  <Text className="text-center text-gray-500">
+                    No Media Available
+                  </Text>
                 )}
               </Box>
               <BeneficiarySubscribeBox beneficiary={beneficiary} />
