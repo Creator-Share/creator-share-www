@@ -1,8 +1,20 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import { Box, Button } from "@chakra-ui/react";
-import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Tooltip,
+  useMap,
+} from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-markercluster";
 import L, { LatLngBounds } from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -11,14 +23,15 @@ import Filters from "../Filters";
 
 const ANIMATION_DURATION = 1;
 
-const createCustomIcon = () => L.divIcon({
-  html: `<div style="background: transparent; border: none;">
+const createCustomIcon = () =>
+  L.divIcon({
+    html: `<div style="background: transparent; border: none;">
            <img src="/CreatorSharePin.svg" alt="Beneficiary Marker" style="width: 30px; height: 30px;" />
          </div>`,
-  className: "custom-child-marker-no-numbers",
-  iconSize: [30, 30],
-  iconAnchor: [15, 30]
-});
+    className: "custom-child-marker-no-numbers",
+    iconSize: [30, 30],
+    iconAnchor: [15, 30],
+  });
 
 /**
  * iconCreateFunction for MarkerClusterGroup expects a cluster argument with getChildCount().
@@ -43,7 +56,9 @@ const createClusterCustomIcon = (cluster: L.MarkerCluster): L.DivIcon => {
   });
 };
 
-const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void }> = ({ onBoundsChange }) => {
+const MapEventHandler: React.FC<{
+  onBoundsChange: (bounds: LatLngBounds) => void;
+}> = ({ onBoundsChange }) => {
   const map = useMap();
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -53,14 +68,14 @@ const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void
       const { center, zoom } = JSON.parse(savedState);
       map.setView(center, zoom, {
         animate: true,
-        duration: ANIMATION_DURATION
+        duration: ANIMATION_DURATION,
       });
     }
     const updateBounds = () => {
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
       }
-      
+
       updateTimeoutRef.current = setTimeout(() => {
         try {
           const bounds = map.getBounds();
@@ -98,34 +113,39 @@ const MapEventHandler: React.FC<{ onBoundsChange: (bounds: LatLngBounds) => void
   return null;
 };
 
-const FitBounds: React.FC<{ beneficiaryData: BeneficiaryMapProps["beneficiaryData"] }> = ({ beneficiaryData }) => {
+const FitBounds: React.FC<{
+  beneficiaryData: BeneficiaryMapProps["beneficiaryData"];
+}> = ({ beneficiaryData }) => {
   const map = useMap();
 
   useEffect(() => {
     if (beneficiaryData.length > 0) {
       const validCoords = beneficiaryData
-        .filter(child => child.location_geo && Array.isArray(child.location_geo.coordinates))
-        .map(child => [
+        .filter(
+          (child) =>
+            child.location_geo && Array.isArray(child.location_geo.coordinates)
+        )
+        .map((child) => [
           child.location_geo!.coordinates[1],
           child.location_geo!.coordinates[0],
         ]);
       if (validCoords.length > 0) {
         const bounds = L.latLngBounds(validCoords as [number, number][]);
-        map.fitBounds(bounds, { 
+        map.fitBounds(bounds, {
           padding: [50, 50],
           animate: true,
-          duration: ANIMATION_DURATION
+          duration: ANIMATION_DURATION,
         });
       } else {
         map.setView([0, 0], 2, {
           animate: true,
-          duration: ANIMATION_DURATION
+          duration: ANIMATION_DURATION,
         });
       }
     } else {
       map.setView([0, 0], 2, {
         animate: true,
-        duration: ANIMATION_DURATION
+        duration: ANIMATION_DURATION,
       });
     }
   }, [beneficiaryData, map]);
@@ -133,12 +153,17 @@ const FitBounds: React.FC<{ beneficiaryData: BeneficiaryMapProps["beneficiaryDat
   return null;
 };
 
-const ZoomController: React.FC<{ 
-  beneficiaryData: BeneficiaryMapProps["beneficiaryData"],
-  onBoundsChange: (bounds: LatLngBounds) => void,
-  onResetView?: () => void,
-  beneficiaryType?: "CHILD" | "ANIMAL"
-}> = ({ beneficiaryData, onBoundsChange, onResetView, beneficiaryType = "CHILD" }) => {
+const ZoomController: React.FC<{
+  beneficiaryData: BeneficiaryMapProps["beneficiaryData"];
+  onBoundsChange: (bounds: LatLngBounds) => void;
+  onResetView?: () => void;
+  beneficiaryType?: "CHILD" | "ANIMAL";
+}> = ({
+  beneficiaryData,
+  onBoundsChange,
+  onResetView,
+  beneficiaryType = "CHILD",
+}) => {
   const map = useMap();
   const [showReset, setShowReset] = useState(false);
 
@@ -158,104 +183,111 @@ const ZoomController: React.FC<{
 
     if (beneficiaryData.length > 0) {
       const validCoords = beneficiaryData
-        .filter(child => child.location_geo && Array.isArray(child.location_geo.coordinates))
-        .map(child => [
+        .filter(
+          (child) =>
+            child.location_geo && Array.isArray(child.location_geo.coordinates)
+        )
+        .map((child) => [
           child.location_geo!.coordinates[1],
           child.location_geo!.coordinates[0],
         ]);
       if (validCoords.length > 0) {
         const bounds = L.latLngBounds(validCoords as [number, number][]);
-        map.fitBounds(bounds, { 
+        map.fitBounds(bounds, {
           padding: [50, 50],
           animate: true,
-          duration: ANIMATION_DURATION
+          duration: ANIMATION_DURATION,
         });
         onBoundsChange(bounds);
       } else {
         map.setView([0, 0], 2, {
           animate: true,
-          duration: ANIMATION_DURATION
+          duration: ANIMATION_DURATION,
         });
       }
     } else {
       map.setView([0, 0], 2, {
         animate: true,
-        duration: ANIMATION_DURATION
+        duration: ANIMATION_DURATION,
       });
     }
     if (onResetView) onResetView();
   };
 
-  return showReset ? (
-    <Box position="absolute" bottom={4} left={4} zIndex={1000}>
-      <Button size="sm" className="bg-white text-dark px-8" onClick={handleResetView}>
-        View All {beneficiaryType === "ANIMAL" ? "Animals" : "Children"}
-      </Button>
-    </Box>
-  ) : null;
+  // View All button is temporarily disabled while map view is removed from the UX.
+  // We'll re-enable this when multiple locations are reintroduced.
+  return null;
 };
 
 const CustomZoomControl = () => {
   const map = useMap();
-  
-  useEffect(() => {
 
+  useEffect(() => {
     if (map.zoomControl) {
       map.zoomControl.remove();
     }
 
     const zoomControl = L.control.zoom({
-      position: 'topright',
-      zoomInTitle: 'Zoom in',
-      zoomOutTitle: 'Zoom out'
+      position: "topright",
+      zoomInTitle: "Zoom in",
+      zoomOutTitle: "Zoom out",
     });
-    
+
     zoomControl.addTo(map);
 
     map.options.zoomAnimation = true;
-    
-    const zoomControlContainer = document.querySelector('.leaflet-control-zoom');
+
+    const zoomControlContainer = document.querySelector(
+      ".leaflet-control-zoom"
+    );
     if (zoomControlContainer) {
       const container = zoomControlContainer as HTMLElement;
-      container.style.marginBottom = '80px';
-      container.style.marginRight = '20px';
+      container.style.marginBottom = "80px";
+      container.style.marginRight = "20px";
 
-      const zoomInButton = container.querySelector('.leaflet-control-zoom-in');
-      const zoomOutButton = container.querySelector('.leaflet-control-zoom-out');
-      
+      const zoomInButton = container.querySelector(".leaflet-control-zoom-in");
+      const zoomOutButton = container.querySelector(
+        ".leaflet-control-zoom-out"
+      );
+
       if (zoomInButton) {
-        zoomInButton.addEventListener('click', () => {
+        zoomInButton.addEventListener("click", () => {
           const currentZoom = map.getZoom();
           map.setZoom(currentZoom + 1, {
             animate: true,
-            duration: ANIMATION_DURATION
+            duration: ANIMATION_DURATION,
           });
         });
       }
-      
+
       if (zoomOutButton) {
-        zoomOutButton.addEventListener('click', () => {
+        zoomOutButton.addEventListener("click", () => {
           const currentZoom = map.getZoom();
           map.setZoom(currentZoom - 1, {
             animate: true,
-            duration: ANIMATION_DURATION
+            duration: ANIMATION_DURATION,
           });
         });
       }
     }
-    
+
     return () => {
       zoomControl.remove();
     };
   }, [map]);
-  
+
   return null;
 };
 
 // New component for handling two-finger scrolling and touch gestures
 const TouchGestureHandler: React.FC = () => {
   const map = useMap();
-  const touchStartRef = useRef<{ x: number; y: number; distance: number; center: { x: number; y: number } } | null>(null);
+  const touchStartRef = useRef<{
+    x: number;
+    y: number;
+    distance: number;
+    center: { x: number; y: number };
+  } | null>(null);
   const isPinchingRef = useRef(false);
 
   useEffect(() => {
@@ -263,7 +295,8 @@ const TouchGestureHandler: React.FC = () => {
 
     // --- Two-finger scroll logic ---
     // Disable dragging by default on touch devices, enable only with two fingers
-    const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    const isTouchDevice =
+      "ontouchstart" in window || navigator.maxTouchPoints > 0;
 
     if (isTouchDevice) {
       map.dragging.disable();
@@ -280,7 +313,7 @@ const TouchGestureHandler: React.FC = () => {
       if (touches.length < 2) return { x: 0, y: 0 };
       return {
         x: (touches[0].clientX + touches[1].clientX) / 2,
-        y: (touches[0].clientY + touches[1].clientY) / 2
+        y: (touches[0].clientY + touches[1].clientY) / 2,
       };
     };
 
@@ -298,7 +331,7 @@ const TouchGestureHandler: React.FC = () => {
           x: getCenter(e.touches).x,
           y: getCenter(e.touches).y,
           distance: getDistance(e.touches),
-          center: getCenter(e.touches)
+          center: getCenter(e.touches),
         };
         // Prevent default to avoid conflicts with Leaflet's touch handling
         e.preventDefault();
@@ -313,7 +346,11 @@ const TouchGestureHandler: React.FC = () => {
           map.dragging.disable();
         }
       }
-      if (e.touches.length === 2 && touchStartRef.current && isPinchingRef.current) {
+      if (
+        e.touches.length === 2 &&
+        touchStartRef.current &&
+        isPinchingRef.current
+      ) {
         const currentDistance = getDistance(e.touches);
         const currentCenter = getCenter(e.touches);
 
@@ -326,13 +363,21 @@ const TouchGestureHandler: React.FC = () => {
         const latlng = map.containerPointToLatLng(containerPoint);
 
         // Apply zoom
-        const newZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), map.getZoom() + zoomChange));
+        const newZoom = Math.max(
+          map.getMinZoom(),
+          Math.min(map.getMaxZoom(), map.getZoom() + zoomChange)
+        );
         map.setZoom(newZoom, { animate: false });
 
         // Update the center to maintain the pinch center point
         const newContainerPoint = map.latLngToContainerPoint(latlng);
-        const offset = L.point(currentCenter.x - newContainerPoint.x, currentCenter.y - newContainerPoint.y);
-        const newLatLng = map.containerPointToLatLng(newContainerPoint.add(offset));
+        const offset = L.point(
+          currentCenter.x - newContainerPoint.x,
+          currentCenter.y - newContainerPoint.y
+        );
+        const newLatLng = map.containerPointToLatLng(
+          newContainerPoint.add(offset)
+        );
         map.panTo(newLatLng, { animate: false });
 
         // Update touch start reference
@@ -340,7 +385,7 @@ const TouchGestureHandler: React.FC = () => {
           x: currentCenter.x,
           y: currentCenter.y,
           distance: currentDistance,
-          center: currentCenter
+          center: currentCenter,
         };
 
         e.preventDefault();
@@ -360,9 +405,15 @@ const TouchGestureHandler: React.FC = () => {
     };
 
     // Add touch event listeners
-    mapContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
-    mapContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
-    mapContainer.addEventListener('touchend', handleTouchEnd, { passive: false });
+    mapContainer.addEventListener("touchstart", handleTouchStart, {
+      passive: false,
+    });
+    mapContainer.addEventListener("touchmove", handleTouchMove, {
+      passive: false,
+    });
+    mapContainer.addEventListener("touchend", handleTouchEnd, {
+      passive: false,
+    });
 
     // Enable touch gestures in Leaflet
     map.touchZoom.enable();
@@ -374,9 +425,9 @@ const TouchGestureHandler: React.FC = () => {
     map.setMaxZoom(18);
 
     return () => {
-      mapContainer.removeEventListener('touchstart', handleTouchStart);
-      mapContainer.removeEventListener('touchmove', handleTouchMove);
-      mapContainer.removeEventListener('touchend', handleTouchEnd);
+      mapContainer.removeEventListener("touchstart", handleTouchStart);
+      mapContainer.removeEventListener("touchmove", handleTouchMove);
+      mapContainer.removeEventListener("touchend", handleTouchEnd);
       if (isTouchDevice) {
         map.dragging.enable(); // Restore dragging for non-touch devices
       }
@@ -387,45 +438,51 @@ const TouchGestureHandler: React.FC = () => {
 };
 
 interface ExtendedBeneficiaryMapProps extends BeneficiaryMapProps {
-  onFilterChange: (filters: Partial<{
-    gender: string;
-    ageRange: [number, number];
-    status: string[];
-  }>) => void;
+  onFilterChange: (
+    filters: Partial<{
+      gender: string;
+      ageRange: [number, number];
+      status: string[];
+    }>
+  ) => void;
   beneficiaryType?: "CHILD" | "ANIMAL";
 }
 
-const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({ 
-  beneficiaryData, 
-  onMarkerClick, 
-  onBoundsChange, 
+const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
+  beneficiaryData,
+  onMarkerClick,
+  onBoundsChange,
   onResetView,
   onFilterChange,
-  beneficiaryType = "CHILD"
+  beneficiaryType = "CHILD",
 }) => {
   const [isReady, setIsReady] = useState<boolean>(false);
   const leafletMapRef = useRef<L.Map | null>(null);
+  // Sidebar filter toggle not used while map is disabled in the Sponsorships page UI
   const [showFilters, setShowFilters] = useState<boolean>(false);
 
-  const handleMarkerClick = useCallback((id: string) => {
-    const beneficiary = beneficiaryData.find((b) => b.id === id);
-    const mapInstance = leafletMapRef.current;
-    if (beneficiary && beneficiary.location_geo && mapInstance) {
-      const { coordinates } = beneficiary.location_geo;
-      mapInstance.setView([coordinates[1], coordinates[0]], 12, {
-        animate: true,
-        duration: ANIMATION_DURATION
-      });
+  const handleMarkerClick = useCallback(
+    (id: string) => {
+      const beneficiary = beneficiaryData.find((b) => b.id === id);
+      const mapInstance = leafletMapRef.current;
+      if (beneficiary && beneficiary.location_geo && mapInstance) {
+        const { coordinates } = beneficiary.location_geo;
+        mapInstance.setView([coordinates[1], coordinates[0]], 12, {
+          animate: true,
+          duration: ANIMATION_DURATION,
+        });
 
-      setTimeout(() => {
-        const element = document.getElementById(id);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, ANIMATION_DURATION * 1000 + 100);
-    }
-    onMarkerClick(id);
-  }, [beneficiaryData, onMarkerClick]);
+        setTimeout(() => {
+          const element = document.getElementById(id);
+          if (element) {
+            element.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, ANIMATION_DURATION * 1000 + 100);
+      }
+      onMarkerClick(id);
+    },
+    [beneficiaryData, onMarkerClick]
+  );
 
   const checkBeneficiariesInView = useCallback(() => {
     const mapInstance = leafletMapRef.current;
@@ -435,7 +492,7 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
     const beneficiariesInView = beneficiaryData.filter((beneficiary) => {
       if (!beneficiary.location_geo) return false;
       const beneficiaryLatLng = L.latLng(
-        beneficiary.location_geo.coordinates[1], 
+        beneficiary.location_geo.coordinates[1],
         beneficiary.location_geo.coordinates[0]
       );
       return currentBounds.contains(beneficiaryLatLng);
@@ -445,7 +502,10 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
       const firstBeneficiary = beneficiaryData[0];
       if (firstBeneficiary.location_geo) {
         mapInstance.setView(
-          [firstBeneficiary.location_geo.coordinates[1], firstBeneficiary.location_geo.coordinates[0]],
+          [
+            firstBeneficiary.location_geo.coordinates[1],
+            firstBeneficiary.location_geo.coordinates[0],
+          ],
           mapInstance.getZoom(),
           { animate: true, duration: 1 }
         );
@@ -460,10 +520,10 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
         checkBeneficiariesInView();
       };
 
-      mapInstance.on('moveend', handleMoveEnd);
+      mapInstance.on("moveend", handleMoveEnd);
 
       return () => {
-        mapInstance.off('moveend', handleMoveEnd);
+        mapInstance.off("moveend", handleMoveEnd);
       };
     }
   }, [checkBeneficiariesInView]);
@@ -472,29 +532,35 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
     if (!beneficiaryData || beneficiaryData.length === 0) {
       return [];
     }
-    
-    const validBeneficiaries = beneficiaryData.filter((beneficiary) => 
-      beneficiary && 
-      beneficiary.location_geo && 
-      beneficiary.location_geo.coordinates && 
-      beneficiary.location_geo.coordinates.length === 2 &&
-      typeof beneficiary.location_geo.coordinates[0] === 'number' &&
-      typeof beneficiary.location_geo.coordinates[1] === 'number' &&
-      beneficiary.name && beneficiary.name.trim() !== '' &&
-      beneficiary.country && beneficiary.country.trim() !== ''
+
+    const validBeneficiaries = beneficiaryData.filter(
+      (beneficiary) =>
+        beneficiary &&
+        beneficiary.location_geo &&
+        beneficiary.location_geo.coordinates &&
+        beneficiary.location_geo.coordinates.length === 2 &&
+        typeof beneficiary.location_geo.coordinates[0] === "number" &&
+        typeof beneficiary.location_geo.coordinates[1] === "number" &&
+        beneficiary.name &&
+        beneficiary.name.trim() !== "" &&
+        beneficiary.country &&
+        beneficiary.country.trim() !== ""
     );
-    
+
     return validBeneficiaries.map((beneficiary) => (
       <Marker
         key={beneficiary.id}
-        position={[beneficiary.location_geo!.coordinates[1], beneficiary.location_geo!.coordinates[0]]}
+        position={[
+          beneficiary.location_geo!.coordinates[1],
+          beneficiary.location_geo!.coordinates[0],
+        ]}
         icon={createCustomIcon()}
         eventHandlers={{
           click: () => handleMarkerClick(beneficiary.id),
         }}
       >
         <Tooltip direction="top">
-          {beneficiary.name || 'Unknown'} - {beneficiary.country || 'Unknown'}
+          {beneficiary.name || "Unknown"} - {beneficiary.country || "Unknown"}
         </Tooltip>
       </Marker>
     ));
@@ -507,7 +573,7 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
   }, []);
 
   useEffect(() => {
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.innerHTML = `
       .leaflet-marker-icon::before,
       .leaflet-marker-icon::after,
@@ -531,14 +597,17 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
       }
     `;
     document.head.appendChild(style);
-    
+
     return () => {
       document.head.removeChild(style);
     };
   }, []);
 
   useEffect(() => {
-    if (leafletMapRef.current && (!beneficiaryData || beneficiaryData.length === 0)) {
+    if (
+      leafletMapRef.current &&
+      (!beneficiaryData || beneficiaryData.length === 0)
+    ) {
       const map = leafletMapRef.current;
       map.eachLayer((layer: L.Layer) => {
         if (!(layer instanceof L.TileLayer)) {
@@ -548,7 +617,8 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
       const tileLayer = L.tileLayer(
         `https://api.maptiler.com/maps/basic-v2/{z}/{x}/{y}.png?key=Wm5rwQ7T3kAi2Z07eCBa&lang=en`,
         {
-          attribution: '&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
+          attribution:
+            '&copy; <a href="https://www.maptiler.com/">MapTiler</a>',
         }
       );
       tileLayer.addTo(map);
@@ -560,10 +630,15 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
   }
 
   return (
-    <Box className="h-[276px] md:h-[450px] w-full mb-8 rounded-xl relative" suppressHydrationWarning={true}>
+    <Box
+      className="h-[276px] md:h-[450px] w-full mb-8 rounded-xl relative"
+      suppressHydrationWarning={true}
+    >
       <MapContainer
         whenReady={
-          ((event: L.LeafletEvent) => { leafletMapRef.current = event.target as L.Map; }) as unknown as () => void
+          ((event: L.LeafletEvent) => {
+            leafletMapRef.current = event.target as L.Map;
+          }) as unknown as () => void
         }
         center={[0, 0]}
         zoom={2}
@@ -594,8 +669,10 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
         />
         <TouchGestureHandler />
         {beneficiaryData && beneficiaryData.length > 0 ? (
-          <MarkerClusterGroup 
-            key={`cluster-${beneficiaryData.length}-${beneficiaryData.map((b) => b.id).join('-')}`}
+          <MarkerClusterGroup
+            key={`cluster-${beneficiaryData.length}-${beneficiaryData
+              .map((b) => b.id)
+              .join("-")}`}
             chunkedLoading
             maxClusterRadius={150}
             showCoverageOnHover={false}
@@ -607,27 +684,24 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
           </MarkerClusterGroup>
         ) : null}
       </MapContainer>
-      
-      <Box 
-        position="absolute" 
-        top={4} 
-        left={4} 
-        zIndex={1000}
-      >
-        <Button 
-          size="sm" 
+
+      <Box position="absolute" top={4} left={4} zIndex={1000}>
+        <Button
+          size="sm"
           className="bg-white text-dark px-4 shadow-md"
           onClick={() => setShowFilters(!showFilters)}
         >
-          {showFilters ? "Hide Filters" : `Filter ${beneficiaryType === "ANIMAL" ? "Animals" : "Children"}`}
+          {showFilters
+            ? "Hide Filters"
+            : `Filter ${beneficiaryType === "ANIMAL" ? "Animals" : "Children"}`}
         </Button>
       </Box>
-      
+
       {showFilters && (
-        <Box 
-          position="absolute" 
-          top={16} 
-          left={4} 
+        <Box
+          position="absolute"
+          top={16}
+          left={4}
           zIndex={1000}
           className="bg-transparent bg-opacity-95 backdrop-blur-sm p-4 rounded-xl shadow-md"
           width="300px"

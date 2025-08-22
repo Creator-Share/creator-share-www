@@ -1,7 +1,12 @@
 import { User } from "@supabase/supabase-js";
 
 export type Gender = "Boy" | "Girl";
-export type Status = "New" | "Partially Funded" | "Budget Fulfilled" | "Archived" | "Draft";
+export type Status =
+  | "New"
+  | "Partially Funded"
+  | "Budget Fulfilled"
+  | "Archived"
+  | "Draft";
 export type BeneficiaryType = "CHILD" | "ANIMAL" | "FAMILY";
 
 type Geography = {
@@ -36,9 +41,8 @@ export interface BeneficiaryMedia {
   image_url: string;
   order_index: number;
   created_at: string;
-  activity_id?: string;  // Fixed typo in property name
+  activity_id?: string; // Fixed typo in property name
 }
-
 
 export interface Subscription {
   id: string;
@@ -93,5 +97,6 @@ export interface FilterState {
   setGender: (gender: string) => void;
   setAgeRange: (ageRange: [number, number]) => void;
   setStatus: (status: string[]) => void;
-  clearFilters: () => void;
+  resetToDefaults: () => void;
+  isDirty: () => boolean;
 }

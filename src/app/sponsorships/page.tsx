@@ -1,22 +1,25 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, useRef } from 'react';
-import { Box, Flex, Text, Button } from '@chakra-ui/react';
-import dynamic from 'next/dynamic';
-import { Beneficiaries } from '@/types';
-import { FaCaretDown, FaCaretUp, FaCompass } from 'react-icons/fa';
+import React, { useEffect, useState, useRef } from "react";
+import { Box, Flex, Text, Button } from "@chakra-ui/react";
+import dynamic from "next/dynamic";
+import { Beneficiaries } from "@/types";
+import { FaCaretDown, FaCaretUp, FaCompass } from "react-icons/fa";
 
-const SponsorshipMap = dynamic(() => import('./components/SponsorshipMap'), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-[400px] bg-gray-100 animate-pulse rounded-lg" />
-  ),
-});
+// Map temporarily disabled from UI; keeping dynamic import commented for future multi-location rollout.
+// const SponsorshipMap = dynamic(() => import('./components/SponsorshipMap'), {
+//   ssr: false,
+//   loading: () => (
+//     <div className="w-full h-[400px] bg-gray-100 animate-pulse rounded-lg" />
+//   ),
+// });
 
-const Filters = dynamic(() => import('./components/Filters'));
-const ChildListings = dynamic(() => import('./components/SponsorshipListings'));
+const Filters = dynamic(() => import("./components/Filters"));
+const ChildListings = dynamic(() => import("./components/SponsorshipListings"));
 const ChildListingsSkeleton = dynamic(() =>
-  import('./components/SponsorshipListings/Skeleton').then(mod => mod.ChildListingsSkeleton)
+  import("./components/SponsorshipListings/Skeleton").then(
+    (mod) => mod.ChildListingsSkeleton
+  )
 );
 
 interface Filters {
@@ -27,14 +30,21 @@ interface Filters {
 
 const SponsorChild = () => {
   const [L, setL] = useState<typeof import("leaflet") | null>(null);
-  const [currentBounds, setCurrentBounds] = useState<L.LatLngBounds | undefined>(undefined);
+  const [currentBounds, setCurrentBounds] = useState<
+    L.LatLngBounds | undefined
+  >(undefined);
   const [childrenData, setChildrenData] = useState<Beneficiaries[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0, 14], status: ["New", "Partially Funded"] });
-  const [showMap, setShowMap] = useState<boolean>(true);
+  const [filters, setFilters] = useState<Filters>({
+    gender: "",
+    ageRange: [0, 14],
+    status: ["New", "Partially Funded"],
+  });
+  // Map visibility/state no longer needed with toolbar layout
+  // const [showMap, setShowMap] = useState<boolean>(true);
   const [isMapSticky, setIsMapSticky] = useState(false);
   const listingsRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
@@ -44,55 +54,55 @@ const SponsorChild = () => {
   useEffect(() => {
     import("leaflet")
       .then(setL)
-      .catch(error => console.error('Error loading Leaflet:', error));
+      .catch((error) => console.error("Error loading Leaflet:", error));
   }, []);
 
   // Fixed scroll listener to detect when we reach the listings section
   useEffect(() => {
     const handleScroll = () => {
       if (!listingsRef.current) return;
-      
+
       // Clear existing timeout
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
-      
+
       // Debounce scroll events
       scrollTimeoutRef.current = setTimeout(() => {
         if (!listingsRef.current) return;
-        
+
         const listingsRect = listingsRef.current.getBoundingClientRect();
-        
-        // Make map sticky only when the top of the listings section 
+
+        // Make map sticky only when the top of the listings section
         // reaches the top of the viewport (not just the bottom)
         setIsMapSticky(listingsRect.top <= 0);
       }, 10);
     };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
     // Check initial state
     handleScroll();
-    
+
     return () => {
-      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener("scroll", handleScroll);
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
     };
   }, []);
 
-  // Reset sticky state when map visibility changes
+  // Map visibility removed; keep sticky state false
   useEffect(() => {
-    if (!showMap) {
-      setIsMapSticky(false);
-    }
-  }, [showMap]);
-
-  const handleFilterChange = React.useCallback((newFilters: Partial<Filters>) => {
-
-    setFilters(prev => ({ ...prev, ...newFilters }));
+    setIsMapSticky(false);
   }, []);
+
+  const handleFilterChange = React.useCallback(
+    (newFilters: Partial<Filters>) => {
+      setFilters((prev) => ({ ...prev, ...newFilters }));
+    },
+    []
+  );
 
   const fetchChildren = React.useCallback(async (filters: Filters) => {
     setLoading(true);
@@ -101,14 +111,22 @@ const SponsorChild = () => {
     try {
       let endpoint = "/api/beneficiaries/get";
       const queryParams = new URLSearchParams();
-      if (filters.gender || (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) || filters.status.length > 0) {
+      if (
+        filters.gender ||
+        (filters.ageRange &&
+          (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) ||
+        filters.status.length > 0
+      ) {
         endpoint = "/api/beneficiaries/getByAgeAndGender";
         if (filters.gender) queryParams.append("gender", filters.gender);
-        if (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) {
-          queryParams.append("ageRange", filters.ageRange.join(','));
+        if (
+          filters.ageRange &&
+          (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)
+        ) {
+          queryParams.append("ageRange", filters.ageRange.join(","));
         }
         if (filters.status.length > 0) {
-          queryParams.append("status", filters.status.join(','));
+          queryParams.append("status", filters.status.join(","));
         }
       }
 
@@ -118,7 +136,9 @@ const SponsorChild = () => {
       const data = await res.json();
       setChildrenData(data.people || []);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unexpected error occurred");
+      setError(
+        err instanceof Error ? err.message : "Unexpected error occurred"
+      );
     } finally {
       setLoading(false);
     }
@@ -128,20 +148,25 @@ const SponsorChild = () => {
     fetchChildren(filters);
   }, [fetchChildren, filters]);
 
-  const handleBoundsChange = React.useCallback((bounds: L.LatLngBounds) => {
-    if (!L) return;
-    setCurrentBounds(bounds);
-  }, [L]);
+  const handleBoundsChange = React.useCallback(
+    (bounds: L.LatLngBounds) => {
+      if (!L) return;
+      setCurrentBounds(bounds);
+    },
+    [L]
+  );
 
-  const handleMarkerClick = React.useCallback((id: string) => {
-    setSelectedChildId(id);
-    const selectedPerson = childrenData.find((child) => child.id === id);
+  const handleMarkerClick = React.useCallback(
+    (id: string) => {
+      setSelectedChildId(id);
+      const selectedPerson = childrenData.find((child) => child.id === id);
 
-    if (selectedPerson) {
-      setSelectedCountry(selectedPerson.country);
-
-    }
-  }, [childrenData]);
+      if (selectedPerson) {
+        setSelectedCountry(selectedPerson.country);
+      }
+    },
+    [childrenData]
+  );
 
   const onResetView = React.useCallback(() => {
     setSelectedCountry(null);
@@ -158,15 +183,18 @@ const SponsorChild = () => {
         );
 
         const urlParams = new URLSearchParams(window.location.search);
-        const parentOrigin = urlParams.get('parentOrigin') || '*';
+        const parentOrigin = urlParams.get("parentOrigin") || "*";
 
-        window.parent.postMessage({
-          type: 'resize',
-          height: height
-        }, parentOrigin);
+        window.parent.postMessage(
+          {
+            type: "resize",
+            height: height,
+          },
+          parentOrigin
+        );
       });
     } catch (error) {
-      console.error('[Child Frame] Error sending height:', error);
+      console.error("[Child Frame] Error sending height:", error);
     }
   }, []);
 
@@ -179,18 +207,19 @@ const SponsorChild = () => {
     try {
       const handleMessage = (event: MessageEvent) => {
         // TODO: Respect .env instead of hardcode
-        if (!event.origin.includes('share-tanzania.webflow.io') &&
-          !event.origin.includes('localhost:3000')) {
+        if (
+          !event.origin.includes("share-tanzania.webflow.io") &&
+          !event.origin.includes("localhost:3000")
+        ) {
           return;
         }
 
-        if (event.data?.type === 'requestHeight') {
+        if (event.data?.type === "requestHeight") {
           sendHeight();
         }
       };
 
-      window.addEventListener('message', handleMessage);
-
+      window.addEventListener("message", handleMessage);
 
       const debouncedSendHeight = () => {
         if (resizeTimeout) clearTimeout(resizeTimeout);
@@ -200,33 +229,34 @@ const SponsorChild = () => {
       const observer = new ResizeObserver(debouncedSendHeight);
       resizeObserver = observer;
 
-
       observer.observe(document.documentElement);
 
-      window.addEventListener('load', sendHeight);
+      window.addEventListener("load", sendHeight);
       setTimeout(sendHeight, 100);
       setTimeout(sendHeight, 500);
       setTimeout(sendHeight, 1000);
 
       return () => {
-        window.removeEventListener('message', handleMessage);
-        window.removeEventListener('load', sendHeight);
+        window.removeEventListener("message", handleMessage);
+        window.removeEventListener("load", sendHeight);
         if (resizeObserver) resizeObserver.disconnect();
         if (resizeTimeout) clearTimeout(resizeTimeout);
       };
     } catch (error) {
-      console.error('[Child Frame] Error setting up resize handling:', error);
+      console.error("[Child Frame] Error setting up resize handling:", error);
     }
   }, [sendHeight]);
 
   return (
-    <Box className='px-6 py-6 md:px-12 md:py-12'>
+    <Box className="px-6 py-6 md:px-12 md:py-12">
       <Box className="text-center justify-center my-12">
         <Text className="text-[#1C3C8C] font-semibold text-5xl mb-4">
           Sponsoring a Child with Creator Share
         </Text>
         <Text className="text-base font-normal text-[#03150E99]">
-          Sponsoring a child brings hope to those facing isolation, poverty, or neglect. Your support provides a safe environment where vulnerable children.
+          Sponsoring a child brings hope to those facing isolation, poverty, or
+          neglect. Your support provides a safe environment where vulnerable
+          children.
         </Text>
       </Box>
 
@@ -236,64 +266,45 @@ const SponsorChild = () => {
         </Text>
       )}
 
-      {/* Map container - will become sticky when we reach listings */}
-      <Box
-        ref={mapRef}
-        position={{ base: isMapSticky ? "fixed" : "relative", md: "relative" }}
-        top={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
-        left={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
-        right={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
-        width={{ base: isMapSticky ? "100%" : "auto", md: "auto" }}
-        height={{ base: "auto", md: "auto" }}
-        zIndex={{ base: isMapSticky ? 50 : 10, md: 10 }}
-        bg={{ base: isMapSticky ? "transparent" : "transparent", md: "transparent" }}
-        borderColor={{ base: isMapSticky ? "gray.200" : "transparent", md: "transparent" }}
-        pb={{ base: isMapSticky ? 4 : 0, md: 0 }}
-        px={{ base: isMapSticky ? 6 : 0, md: 0 }}
-        transition="all 0.3s ease"
-        className='flex flex-col w-full'
-        style={{
-          transform: isMapSticky ? 'translateZ(0)' : 'none'
-        }}
-      >
-        <Button 
-          className='px-2 py-2 w-fit text-end' 
-          onClick={() => setShowMap((prev) => !prev)} 
-          my={4}
-          bg={{ base: isMapSticky ? "white" : "transparent", md: "transparent" }}
-        >
-          {showMap ? (
-            <>
-              <FaCompass/> Hide Map <FaCaretUp />
-            </>
-          ) : (
-            <>
-              <FaCompass/> Show Map <FaCaretDown />
-            </>
-          )}
-        </Button>
-        {showMap && (
-          <>
-            <SponsorshipMap
-              beneficiaryData={childrenData}
-              onMarkerClick={handleMarkerClick}
-              onBoundsChange={handleBoundsChange}
-              onResetView={onResetView}
-              onFilterChange={handleFilterChange}
-            />
-            <Box
-              position="absolute"
-              bottom={12}
-              right={4}
-              zIndex={1000}
-              className="bg-white bg-opacity-90 backdrop-blur-sm rounded-xl p-2 shadow-md my-4 mx-4"
-            >
-              <Text fontSize="sm" fontWeight="bold">
-                {childrenData.length} Children Available
-              </Text>
-            </Box>
-          </>
-        )}
+      {/* Map (temporarily disabled) - keeping embed for future multi-location rollout */}
+      {/**
+       * <Box
+       *   ref={mapRef}
+       *   position={{ base: isMapSticky ? "fixed" : "relative", md: "relative" }}
+       *   top={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
+       *   left={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
+       *   right={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
+       *   width={{ base: isMapSticky ? "100%" : "auto", md: "auto" }}
+       *   height={{ base: "auto", md: "auto" }}
+       *   zIndex={{ base: isMapSticky ? 50 : 10, md: 10 }}
+       *   bg={{ base: isMapSticky ? "transparent" : "transparent", md: "transparent" }}
+       *   borderColor={{ base: isMapSticky ? "gray.200" : "transparent", md: "transparent" }}
+       *   pb={{ base: isMapSticky ? 4 : 0, md: 0 }}
+       *   px={{ base: isMapSticky ? 6 : 0, md: 0 }}
+       *   transition="all 0.3s ease"
+       *   className='flex flex-col w-full'
+       *   style={{ transform: isMapSticky ? 'translateZ(0)' : 'none' }}
+       * >
+       *   <SponsorshipMap
+       *     beneficiaryData={childrenData}
+       *     onMarkerClick={handleMarkerClick}
+       *     onBoundsChange={handleBoundsChange}
+       *     onResetView={onResetView}
+       *     onFilterChange={handleFilterChange}
+       *   />
+       * </Box>
+       */}
+
+      {/* Toolbar: Always-visible filters replacing map UI. */}
+      <Box ref={mapRef} className="w-full">
+        <Box className="w-full max-w-7xl mx-auto">
+          <Box
+            className="bg-white border rounded-2xl shadow-sm"
+            p={{ base: 3, md: 4 }}
+          >
+            <Filters onFilterChange={handleFilterChange} />
+          </Box>
+        </Box>
       </Box>
 
       {/* Content area */}
