@@ -1,19 +1,34 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Box, Text, Image, Flex, Input, InputAddon, Spinner } from "@chakra-ui/react";
+import {
+  Box,
+  Text,
+  Image,
+  Flex,
+  Input,
+  InputAddon,
+  Spinner,
+} from "@chakra-ui/react";
 import { Button } from "@/components/ui/button";
-import { SelectRoot, SelectTrigger, SelectValueText, SelectContent, SelectItem } from "@/components/ui/select";
+import {
+  SelectRoot,
+  SelectTrigger,
+  SelectValueText,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { centsToDollars } from "@/utils/currency";
 import { toaster } from "@/components/ui/toaster";
-import { paymentOptionsCollection } from "@/app/sponsorships/components/SponsorDialog/config";
+import { paymentOptionsCollection } from "@/app/sponsorships/components/Payments/config";
 import { Beneficiaries } from "@/types";
 import { useAuthStore } from "@/store/authStore";
 import { BeneficiaryMedia } from "@/types/admin.types";
 
-const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+const isInIframe = typeof window !== "undefined" && window.self !== window.top;
 
-const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+const placeholderImage =
+  "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
 export default function SponsorshipEmbedChildrenPage() {
   const [children, setChildren] = useState<Beneficiaries[]>([]);
@@ -33,45 +48,55 @@ export default function SponsorshipEmbedChildrenPage() {
       setLoadingChildren(true);
       try {
         const queryParams = new URLSearchParams();
-        queryParams.append("status", ["New", "Partially Funded"].join(','));
-        queryParams.append("excludeStatus", ["Budget Fulfilled", "Fulfilled"].join(','));
+        queryParams.append("status", ["New", "Partially Funded"].join(","));
+        queryParams.append(
+          "excludeStatus",
+          ["Budget Fulfilled", "Fulfilled"].join(",")
+        );
         const url = `/api/beneficiaries/getByAgeAndGender?${queryParams.toString()}`;
-        console.log('Fetching children from:', url);
+        console.log("Fetching children from:", url);
         const res = await fetch(url, {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
         });
-        console.log('API Response Status:', res.status, res.statusText);
+        console.log("API Response Status:", res.status, res.statusText);
         if (res.ok) {
           const data = await res.json();
-          console.log('Fetched Children Data:', data);
+          console.log("Fetched Children Data:", data);
           if (!data.people || !Array.isArray(data.people)) {
-            console.error('Expected array of children in data.people, got:', data);
+            console.error(
+              "Expected array of children in data.people, got:",
+              data
+            );
             setChildren([]);
             return;
           }
           setChildren(data.people);
           if (data.people.length > 0) {
-            console.log('First Child:', data.people[0]);
-            const remaining = (data.people[0].budget_goal - data.people[0].budget_raised) / 100;
+            console.log("First Child:", data.people[0]);
+            const remaining =
+              (data.people[0].budget_goal - data.people[0].budget_raised) / 100;
             setAmount(remaining);
             setValue([remaining]);
             setInputValue(remaining.toString());
           } else {
-            console.log('No children data in response');
+            console.log("No children data in response");
           }
         } else {
           const errorText = await res.text();
-          console.error('API Error Status:', res.status);
-          console.error('API Error Text:', errorText);
+          console.error("API Error Status:", res.status);
+          console.error("API Error Text:", errorText);
           throw new Error(`API Error: ${res.status} - ${errorText}`);
         }
       } catch (e) {
-        console.error('Fetch Error:', e);
+        console.error("Fetch Error:", e);
         setChildren([]);
-        toaster.create({ title: "Error", description: "Failed to load children." });
+        toaster.create({
+          title: "Error",
+          description: "Failed to load children.",
+        });
       } finally {
         setLoadingChildren(false);
       }
@@ -84,10 +109,17 @@ export default function SponsorshipEmbedChildrenPage() {
 
     const timeout = setTimeout(async () => {
       try {
-        const response = await fetch(`/api/admin/beneficiaries/images/${children[currentIndex].id}`);
+        const response = await fetch(
+          `/api/admin/beneficiaries/images/${children[currentIndex].id}`
+        );
         if (response.ok) {
           const data = await response.json();
-          setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
+          setImages(
+            data.sort(
+              (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
+                a.order_index - b.order_index
+            )
+          );
           setCurrentImageIndex(0);
         } else {
           setImages([]);
@@ -102,13 +134,19 @@ export default function SponsorshipEmbedChildrenPage() {
     return () => clearTimeout(timeout);
   }, [currentIndex, children]);
 
-  console.log('Current State:', { children, loadingChildren, currentIndex });
+  console.log("Current State:", { children, loadingChildren, currentIndex });
 
-  console.log('Render State:', { loadingChildren, children });
+  console.log("Render State:", { loadingChildren, children });
 
   if (loadingChildren) {
     return (
-      <Flex minH="100vh" align="center" justify="center" direction="column" gap={4}>
+      <Flex
+        minH="100vh"
+        align="center"
+        justify="center"
+        direction="column"
+        gap={4}
+      >
         <Spinner size="xl" />
         <Text>Loading children data...</Text>
       </Flex>
@@ -116,25 +154,34 @@ export default function SponsorshipEmbedChildrenPage() {
   }
 
   const people = children[currentIndex];
-  console.log('Selected Child:', people);
+  console.log("Selected Child:", people);
 
   if (!people) {
     return (
-      <Flex minH="100vh" align="center" justify="center" direction="column" gap={4}>
+      <Flex
+        minH="100vh"
+        align="center"
+        justify="center"
+        direction="column"
+        gap={4}
+      >
         <Text>No children available for sponsorship</Text>
         <Text color="gray.500" fontSize="sm">
-          {children.length === 0 ? "No children data found" : "Error loading child data"}
+          {children.length === 0
+            ? "No children data found"
+            : "Error loading child data"}
         </Text>
       </Flex>
     );
   }
   const remainingAmount = (people.budget_goal - people.budget_raised) / 100;
   const minimumAmount = 10;
-  const maxSelectableAmount = remainingAmount > minimumAmount
-    ? remainingAmount - minimumAmount < minimumAmount
-      ? remainingAmount
-      : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
-    : remainingAmount;
+  const maxSelectableAmount =
+    remainingAmount > minimumAmount
+      ? remainingAmount - minimumAmount < minimumAmount
+        ? remainingAmount
+        : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
+      : remainingAmount;
 
   const handleSliderChange = (e: { value: number[] }) => {
     const newValue = Math.min(e.value[0], remainingAmount);
@@ -145,8 +192,8 @@ export default function SponsorshipEmbedChildrenPage() {
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    if (value === '' || /^\d+$/.test(value)) {
-      if (value !== '') {
+    if (value === "" || /^\d+$/.test(value)) {
+      if (value !== "") {
         const numericValue = parseInt(value);
         if (!isNaN(numericValue)) {
           if (numericValue > remainingAmount) {
@@ -155,16 +202,16 @@ export default function SponsorshipEmbedChildrenPage() {
             setValue([remainingAmount]);
             toaster.create({
               title: "Amount Adjusted",
-              description: `Maximum sponsorship amount is $${remainingAmount}.`
+              description: `Maximum sponsorship amount is $${remainingAmount}.`,
             });
             return;
           }
         }
       }
-      
+
       setInputValue(value);
 
-      if (value === '') {
+      if (value === "") {
         setAmount(0);
         setValue([0]);
       } else {
@@ -178,7 +225,10 @@ export default function SponsorshipEmbedChildrenPage() {
   };
 
   const handleSponsor = async () => {
-    if (amount < minimumAmount && !(remainingAmount < minimumAmount && amount === remainingAmount)) {
+    if (
+      amount < minimumAmount &&
+      !(remainingAmount < minimumAmount && amount === remainingAmount)
+    ) {
       toaster.create({
         title: "Invalid Amount",
         description: `Minimum sponsorship amount is $${minimumAmount}.`,
@@ -197,17 +247,21 @@ export default function SponsorshipEmbedChildrenPage() {
       const payload = {
         beneficiaryId: people.id,
         beneficiaryName: people.name,
-        beneficiaryImage: images[currentImageIndex]?.image_url || people.image_url || placeholderImage,
+        beneficiaryImage:
+          images[currentImageIndex]?.image_url ||
+          people.image_url ||
+          placeholderImage,
         amount: amount * 100,
         paymentType: selectedOption,
         location: people.country,
         userId: user?.id,
         isEmbedded: true,
-        allowBelowMinimum: remainingAmount < minimumAmount && amount === remainingAmount
+        allowBelowMinimum:
+          remainingAmount < minimumAmount && amount === remainingAmount,
       };
-      console.log('Sending payment request with payload:', payload);
-      if (selectedOption !== 'payment' && selectedOption !== 'subscription') {
-        console.error('Invalid payment type:', selectedOption);
+      console.log("Sending payment request with payload:", payload);
+      if (selectedOption !== "payment" && selectedOption !== "subscription") {
+        console.error("Invalid payment type:", selectedOption);
         toaster.create({
           title: "Payment Error",
           description: "Invalid payment frequency selected. Please try again.",
@@ -216,7 +270,7 @@ export default function SponsorshipEmbedChildrenPage() {
         return;
       }
       if (!people.country) {
-        console.error('Missing location in payload');
+        console.error("Missing location in payload");
         toaster.create({
           title: "Payment Error",
           description: "Missing location information. Please try again.",
@@ -226,19 +280,19 @@ export default function SponsorshipEmbedChildrenPage() {
       }
       const res = await fetch("/api/stripe", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json"
+          Accept: "application/json",
         },
-        credentials: 'include',
+        credentials: "include",
         body: JSON.stringify(payload),
       });
-      console.log('Payment API Response Status:', res.status);
+      console.log("Payment API Response Status:", res.status);
       const data = await res.json();
-      console.log('Payment API Response Data:', data);
-      
+      console.log("Payment API Response Data:", data);
+
       if (!res.ok) {
-        console.error('Payment API Error:', data);
+        console.error("Payment API Error:", data);
         toaster.create({
           title: "Payment Error",
           description: data?.error || "Something went wrong. Please try again.",
@@ -246,10 +300,10 @@ export default function SponsorshipEmbedChildrenPage() {
         setLoading(false);
         return;
       }
-      
+
       const { clientSecret, url } = data;
       if (!clientSecret && !url) {
-        console.error('Missing checkout information:', data);
+        console.error("Missing checkout information:", data);
         toaster.create({
           title: "Payment Error",
           description: "Failed to create checkout session. Please try again.",
@@ -261,24 +315,27 @@ export default function SponsorshipEmbedChildrenPage() {
       if (isInIframe) {
         try {
           const urlParams = new URLSearchParams(window.location.search);
-          const parentOrigin = urlParams.get('parentOrigin') || '*';
-          const checkoutUrl = clientSecret 
-            ? `/sponsorships/checkout?client_secret=${clientSecret}&parentOrigin=${encodeURIComponent(parentOrigin)}&embedded=true`
+          const parentOrigin = urlParams.get("parentOrigin") || "*";
+          const checkoutUrl = clientSecret
+            ? `/sponsorships/checkout?client_secret=${clientSecret}&parentOrigin=${encodeURIComponent(
+                parentOrigin
+              )}&embedded=true`
             : url;
 
-          console.log('Redirecting to:', checkoutUrl);
+          console.log("Redirecting to:", checkoutUrl);
           window.location.href = checkoutUrl;
           return;
         } catch (e) {
-          console.error('[Child Frame] Error handling checkout:', e);
+          console.error("[Child Frame] Error handling checkout:", e);
           toaster.create({
             title: "Payment Error",
             description: "Failed to process checkout. Please try again.",
           });
         }
       } else {
-        const checkoutUrl = url || `/sponsorships/checkout?client_secret=${clientSecret}`;
-        console.log('Redirecting to:', checkoutUrl);
+        const checkoutUrl =
+          url || `/sponsorships/checkout?client_secret=${clientSecret}`;
+        console.log("Redirecting to:", checkoutUrl);
         window.location.href = checkoutUrl;
         return;
       }
@@ -297,15 +354,18 @@ export default function SponsorshipEmbedChildrenPage() {
   };
 
   const renderDisclaimer = () => {
-    const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
-    if ((people.budget_goal - people.budget_raised - amount * 100) > 0) {
+    const monthlyAmount =
+      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
+    if (people.budget_goal - people.budget_raised - amount * 100 > 0) {
       return (
         <>
-          This child has a monthly budget goal that must be met for enrollment in school.
+          This child has a monthly budget goal that must be met for enrollment
+          in school.
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+              monthly for this child.
             </>
           )}
           <br />
@@ -315,11 +375,13 @@ export default function SponsorshipEmbedChildrenPage() {
     } else if (people.budget_raised > 0) {
       return (
         <>
-          This child is partially sponsored. Your contribution will help reach their monthly budget goal!
+          This child is partially sponsored. Your contribution will help reach
+          their monthly budget goal!
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+              monthly for this child.
             </>
           )}
         </>
@@ -327,11 +389,13 @@ export default function SponsorshipEmbedChildrenPage() {
     }
     return (
       <>
-        Your sponsorship will be applied towards the child's monthly budget goals.
+        Your sponsorship will be applied towards the child's monthly budget
+        goals.
         {selectedOption === "payment" && (
           <>
             <br />
-            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+            Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+            monthly for this child.
           </>
         )}
       </>
@@ -415,11 +479,15 @@ export default function SponsorshipEmbedChildrenPage() {
                 left="-2"
                 top="50%"
                 transform="translateY(-50%)"
-                onClick={() => setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)}
+                onClick={() =>
+                  setCurrentImageIndex(
+                    (prev) => (prev - 1 + images.length) % images.length
+                  )
+                }
                 size="sm"
                 variant="ghost"
                 color="#1C3C8C"
-                _hover={{ bg: 'gray.100' }}
+                _hover={{ bg: "gray.100" }}
               >
                 ←
               </Button>
@@ -428,11 +496,13 @@ export default function SponsorshipEmbedChildrenPage() {
                 right="-2"
                 top="50%"
                 transform="translateY(-50%)"
-                onClick={() => setCurrentImageIndex((prev) => (prev + 1) % images.length)}
+                onClick={() =>
+                  setCurrentImageIndex((prev) => (prev + 1) % images.length)
+                }
                 size="sm"
                 variant="ghost"
                 color="#1C3C8C"
-                _hover={{ bg: 'gray.100' }}
+                _hover={{ bg: "gray.100" }}
               >
                 →
               </Button>
@@ -444,18 +514,32 @@ export default function SponsorshipEmbedChildrenPage() {
         </Text>
         <Flex align="center" justify="space-between" mb={1}>
           <Box flex="1">
-            <Box w="100%" h="8px" bg="#E8E8EA" borderRadius="md" overflow="hidden" mb={1}>
+            <Box
+              w="100%"
+              h="8px"
+              bg="#E8E8EA"
+              borderRadius="md"
+              overflow="hidden"
+              mb={1}
+            >
               <Box
                 h="100%"
                 bg="#1C3C8C"
                 borderRadius="md"
-                width={`${Math.min((people.budget_raised / people.budget_goal) * 100, 100)}%`}
+                width={`${Math.min(
+                  (people.budget_raised / people.budget_goal) * 100,
+                  100
+                )}%`}
                 transition="width 0.3s"
               />
             </Box>
             <Flex justify="space-between" mt={1}>
-              <Text fontSize="xs" color="gray.500">Raised: ${centsToDollars(people.budget_raised)}</Text>
-              <Text fontSize="xs" color="gray.500">Pending: ${remainingAmount}</Text>
+              <Text fontSize="xs" color="gray.500">
+                Raised: ${centsToDollars(people.budget_raised)}
+              </Text>
+              <Text fontSize="xs" color="gray.500">
+                Pending: ${remainingAmount}
+              </Text>
             </Flex>
           </Box>
         </Flex>
@@ -465,7 +549,9 @@ export default function SponsorshipEmbedChildrenPage() {
           </Text>
         </Flex>
         <Box mb={2}>
-          <Text fontWeight="semibold" fontSize="sm" mb={1}>Amount</Text>
+          <Text fontWeight="semibold" fontSize="sm" mb={1}>
+            Amount
+          </Text>
           {remainingAmount < minimumAmount ? (
             <Box mb={4}>
               <Flex
@@ -475,7 +561,14 @@ export default function SponsorshipEmbedChildrenPage() {
                 mb={2}
                 bg="gray.100"
               >
-                <InputAddon bg="#F3F3F3" px={4} py={2} color="#959090" fontSize="md" border="none">
+                <InputAddon
+                  bg="#F3F3F3"
+                  px={4}
+                  py={2}
+                  color="#959090"
+                  fontSize="md"
+                  border="none"
+                >
                   $
                 </InputAddon>
                 <Input
@@ -501,14 +594,27 @@ export default function SponsorshipEmbedChildrenPage() {
                   onValueChange={() => {}}
                 />
                 <Text textAlign="center" mt={2}>
-                  You can sponsor the final ${remainingAmount} to fully fund this beneficiary, even though it is below the usual minimum.
+                  You can sponsor the final ${remainingAmount} to fully fund
+                  this beneficiary, even though it is below the usual minimum.
                 </Text>
               </Box>
             </Box>
           ) : (
             <>
-              <Flex align="center" border="1px solid #E8E8EA" borderRadius="md" mb={2}>
-                <InputAddon bg="#F3F3F3" px={4} py={2} color="#959090" fontSize="md" border="none">
+              <Flex
+                align="center"
+                border="1px solid #E8E8EA"
+                borderRadius="md"
+                mb={2}
+              >
+                <InputAddon
+                  bg="#F3F3F3"
+                  px={4}
+                  py={2}
+                  color="#959090"
+                  fontSize="md"
+                  border="none"
+                >
                   $
                 </InputAddon>
                 <Input
@@ -535,9 +641,16 @@ export default function SponsorshipEmbedChildrenPage() {
                   variant="solid"
                   onValueChange={handleSliderChange}
                 />
-                <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
+                <Text textAlign="center" mt={2}>
+                  Selected Amount: ${value[0]}
+                </Text>
                 {amount > 0 && amount < minimumAmount && (
-                  <Text color="gray.400" fontSize="sm" textAlign="center" mt={1}>
+                  <Text
+                    color="gray.400"
+                    fontSize="sm"
+                    textAlign="center"
+                    mt={1}
+                  >
                     Minimum sponsorship amount is ${minimumAmount}.
                   </Text>
                 )}
@@ -546,7 +659,9 @@ export default function SponsorshipEmbedChildrenPage() {
           )}
         </Box>
         <Box mb={2}>
-          <Text fontWeight="semibold" fontSize="sm" mb={1}>Frequency</Text>
+          <Text fontWeight="semibold" fontSize="sm" mb={1}>
+            Frequency
+          </Text>
           <SelectRoot
             collection={paymentOptionsCollection}
             className="border rounded-xl"
@@ -572,12 +687,16 @@ export default function SponsorshipEmbedChildrenPage() {
         <Flex gap={2} mb={2}>
           <a
             className={`flex-1 py-2 rounded-md text-center transition-colors duration-150
-              ${people.username
-                ? "bg-[#D1D1D1] text-[#1C3C8C] hover:bg-[#E8F0FF] cursor-pointer"
-                : "bg-[#D1D1D1] text-[#858585] opacity-50 cursor-not-allowed"
-              }`
+              ${
+                people.username
+                  ? "bg-[#D1D1D1] text-[#1C3C8C] hover:bg-[#E8F0FF] cursor-pointer"
+                  : "bg-[#D1D1D1] text-[#858585] opacity-50 cursor-not-allowed"
+              }`}
+            href={
+              people.username
+                ? `https://dev.creatorshare.com/sponsorships/${people.username}`
+                : undefined
             }
-            href={people.username ? `https://dev.creatorshare.com/sponsorships/${people.username}` : undefined}
             target="_blank"
             rel="noopener noreferrer"
             tabIndex={people.username ? 0 : -1}
@@ -591,11 +710,9 @@ export default function SponsorshipEmbedChildrenPage() {
             loadingText="Processing..."
             disabled={
               loading ||
-              (
-                remainingAmount < minimumAmount
-                  ? amount !== remainingAmount
-                  : amount < minimumAmount
-              )
+              (remainingAmount < minimumAmount
+                ? amount !== remainingAmount
+                : amount < minimumAmount)
             }
           >
             Checkout
@@ -618,7 +735,7 @@ export default function SponsorshipEmbedChildrenPage() {
             textAlign: "center",
             padding: "0.75rem 0",
             textDecoration: "none",
-            marginTop: "0.5rem"
+            marginTop: "0.5rem",
           }}
         >
           See more children

@@ -14,10 +14,10 @@ import { useFilterStore } from "@/store/filterStore";
 import { FiltersProps } from "@/types/propTypes";
 import { genders, status as statusOptions } from "./config";
 
-const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({ 
+const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
   onFilterChange,
-  variant = 'default',
-  beneficiaryType = 'CHILD'
+  variant = "default",
+  beneficiaryType = "CHILD",
 }) => {
   const {
     selectedGender,
@@ -26,11 +26,14 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
     setGender,
     setAgeRange,
     setStatus,
-    clearFilters,
+    resetToDefaults,
+    isDirty,
   } = useFilterStore();
   const [minAge, setMinAge] = useState<number>(selectedAgeRange[0] || 0);
-  const defaultMaxAge = beneficiaryType === 'ANIMAL' ? 20 : 14;
-  const [maxAge, setMaxAge] = useState<number>(selectedAgeRange[1] || defaultMaxAge);
+  const defaultMaxAge = beneficiaryType === "ANIMAL" ? 20 : 14;
+  const [maxAge, setMaxAge] = useState<number>(
+    selectedAgeRange[1] || defaultMaxAge
+  );
 
   useEffect(() => {
     setMinAge(selectedAgeRange[0] || 0);
@@ -44,7 +47,7 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
   }) => {
     // Always include the current status if not explicitly changed
     const newStatus = updatedFilters.status ?? selectedStatus;
-    console.log('New status:', newStatus);
+    console.log("New status:", newStatus);
 
     const newFilters = {
       gender: updatedFilters.gender ?? selectedGender,
@@ -65,88 +68,101 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
 
   const handleClearFilters = (e: React.MouseEvent) => {
     e.preventDefault();
-    const defaultStatus = ["New", "Partially Funded"];
-    clearFilters();
+    resetToDefaults();
     setMinAge(0);
     setMaxAge(defaultMaxAge);
-    setStatus(defaultStatus);
-    onFilterChange({ gender: "", ageRange: [0, defaultMaxAge], status: defaultStatus });
+    onFilterChange({
+      gender: "",
+      ageRange: [0, defaultMaxAge],
+      status: ["New", "Partially Funded"],
+    });
   };
+
+  // Determine if current filters differ from defaults to enable Clear button
+  // Call directly so it reflects the latest store state each render
+  const isDefaultFilters = !isDirty();
 
   return (
     <Box className="bg-transparent rounded-xl" width="100%">
-      <Flex 
-        align="center" 
-        className={variant === 'sidebar' ? "flex-col" : "flex-col md:flex-row"} 
+      <Flex
+        align="center"
+        className={variant === "sidebar" ? "flex-col" : "flex-col md:flex-row"}
         gap={4}
         position="relative"
-        alignItems="stretch"
+        alignItems="center"
+        width="100%"
       >
         {/* Gender Select Dropdown */}
-        <SelectRoot
-          collection={genders}
-          value={selectedGender ? [selectedGender] : undefined}
-          onValueChange={(details) => {
-            const value = details.items[0];
-            handleFilterChange({ gender: value?.value || "" });
-          }}
-          size="sm"
-          className="border rounded-xl"
-          px={4}
-          py={2}
-        >
-          <SelectTrigger>
-            <SelectValueText placeholder="Select Gender">
-              {() => {
-                const selected = genders.items.find(item => item.value === selectedGender);
-                return selected ? selected.label : "Select Gender";
-              }}
-            </SelectValueText>
-          </SelectTrigger>
-          <SelectContent>
-            {genders.items.map((gender) => (
-              <SelectItem item={gender} key={gender.value}>
-                {gender.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </SelectRoot>
+        <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+          <SelectRoot
+            collection={genders}
+            value={selectedGender ? [selectedGender] : undefined}
+            onValueChange={(details) => {
+              const value = details.items[0];
+              handleFilterChange({ gender: value?.value || "" });
+            }}
+            size="sm"
+            className="border rounded-xl w-full"
+            px={4}
+            py={2}
+          >
+            <SelectTrigger>
+              <SelectValueText placeholder="Select Gender">
+                {() => {
+                  const selected = genders.items.find(
+                    (item) => item.value === selectedGender
+                  );
+                  return selected ? selected.label : "Select Gender";
+                }}
+              </SelectValueText>
+            </SelectTrigger>
+            <SelectContent>
+              {genders.items.map((gender) => (
+                <SelectItem item={gender} key={gender.value}>
+                  {gender.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </SelectRoot>
+        </Box>
 
         {/* Status Select Dropdown */}
-        <SelectRoot
-          collection={statusOptions}
-          value={selectedStatus}
-          onValueChange={(details) => {
-            const values = details.items.map(item => item.value);
-            handleFilterChange({ status: values });
-          }}
-          size="sm"
-          className="border rounded-xl"
-          px={4}
-          py={2}
-          multiple
-        >
-          <SelectTrigger>
-            <SelectValueText placeholder="Select Status">
-              {() => {
-                const selected = statusOptions.items
-                  .filter(item => selectedStatus.includes(item.value))
-                  .map(item => item.label)
-                  .join(", ");
-                return selected || "Select Status";
-              }}
-            </SelectValueText>
-          </SelectTrigger>
-          <SelectContent>
-            {statusOptions.items.map((option) => (
-              <SelectItem item={option} key={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </SelectRoot>
+        <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+          <SelectRoot
+            collection={statusOptions}
+            value={selectedStatus}
+            onValueChange={(details) => {
+              const values = details.items.map((item) => item.value);
+              handleFilterChange({ status: values });
+            }}
+            size="sm"
+            className="border rounded-xl w-full"
+            px={4}
+            py={2}
+            multiple
+          >
+            <SelectTrigger>
+              <SelectValueText placeholder="Select Status">
+                {() => {
+                  const selected = statusOptions.items
+                    .filter((item) => selectedStatus.includes(item.value))
+                    .map((item) => item.label)
+                    .join(", ");
+                  return selected || "Select Status";
+                }}
+              </SelectValueText>
+            </SelectTrigger>
+            <SelectContent>
+              {statusOptions.items.map((option) => (
+                <SelectItem item={option} key={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </SelectRoot>
+        </Box>
 
-        <Box maxW="300px" w="100%" px={2}>
+        <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" px={2} minW={0}>
           <Text mb={2} fontSize="md" fontWeight="semibold">
             Age Range: {minAge} - {maxAge} years
           </Text>
@@ -160,12 +176,12 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
                 if (details.value && details.value.length >= 2) {
                   const [newMin, origMax] = details.value;
                   let newMax = origMax;
-                  
+
                   const minDistance = 1;
                   if (newMax - newMin < minDistance) {
                     newMax = Math.max(newMin + minDistance, maxAge);
                   }
-                  
+
                   setMinAge(newMin);
                   setMaxAge(newMax);
                   handleFilterChange({ ageRange: [newMin, newMax] });
@@ -175,14 +191,27 @@ const Filters: React.FC<FiltersProps & { variant?: 'default' | 'sidebar' }> = ({
             />
           </Box>
         </Box>
-        <Button
-          onClick={handleClearFilters}
-          className="bg-[#1C3C8C] text-base font-semibold text-[#F8FAFC]"
-          px={4}
-          py={6}
-        >
-          Clear Filter
-        </Button>
+        <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+          <Button
+            onClick={handleClearFilters}
+            size="md"
+            fontWeight="semibold"
+            width={{ base: "100%", md: "100%" }}
+            bg="#1C3C8C"
+            color="white"
+            _hover={{ bg: "#1C2B7A" }}
+            _active={{ bg: "#182765" }}
+            disabled={isDefaultFilters}
+            _disabled={{
+              bg: "gray.300",
+              color: "white",
+              cursor: "not-allowed",
+              _dark: { bg: "gray.600", color: "gray.200" },
+            }}
+          >
+            Show All Children
+          </Button>
+        </Box>
       </Flex>
     </Box>
   );

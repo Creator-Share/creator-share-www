@@ -1,18 +1,33 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Box, Text, Image, Flex, Input, InputAddon, Spinner } from "@chakra-ui/react";
+import {
+  Box,
+  Text,
+  Image,
+  Flex,
+  Input,
+  InputAddon,
+  Spinner,
+} from "@chakra-ui/react";
 import { Button } from "@/components/ui/button";
-import { SelectRoot, SelectTrigger, SelectValueText, SelectContent, SelectItem } from "@/components/ui/select";
+import {
+  SelectRoot,
+  SelectTrigger,
+  SelectValueText,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { centsToDollars } from "@/utils/currency";
 import { toaster } from "@/components/ui/toaster";
-import { paymentOptionsCollection } from "@/app/sponsorships/components/SponsorDialog/config";
+import { paymentOptionsCollection } from "@/app/sponsorships/components/Payments/config";
 import { useAuthStore } from "@/store/authStore";
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types";
 
-const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+const isInIframe = typeof window !== "undefined" && window.self !== window.top;
 
-const placeholderImage = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+const placeholderImage =
+  "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
 
 export default function SponsorshipEmbedStreetInvolvedPage() {
   const [streetInvolved, setStreetInvolved] = useState<Beneficiaries[]>([]);
@@ -24,7 +39,8 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
   const [selectedOption, setSelectedOption] = useState<string>("subscription");
   const [value, setValue] = useState<number[]>([0]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [loadingStreetInvolved, setLoadingStreetInvolved] = useState<boolean>(true);
+  const [loadingStreetInvolved, setLoadingStreetInvolved] =
+    useState<boolean>(true);
   const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
@@ -32,14 +48,17 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
       setLoadingStreetInvolved(true);
       try {
         const queryParams = new URLSearchParams();
-        queryParams.append("status", ["New", "Partially Funded"].join(','));
-        queryParams.append("excludeStatus", ["Budget Fulfilled", "Fulfilled"].join(','));
+        queryParams.append("status", ["New", "Partially Funded"].join(","));
+        queryParams.append(
+          "excludeStatus",
+          ["Budget Fulfilled", "Fulfilled"].join(",")
+        );
         queryParams.append("beneficiary_type", "STREET_INVOLVED");
         const url = `/api/beneficiaries/getByAgeAndGender?${queryParams.toString()}`;
         const res = await fetch(url, {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
         });
         if (res.ok) {
@@ -51,18 +70,25 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
           }
           setStreetInvolved(streetList);
           if (streetList.length > 0) {
-            const remaining = (streetList[0].budget_goal - streetList[0].budget_raised) / 100;
+            const remaining =
+              (streetList[0].budget_goal - streetList[0].budget_raised) / 100;
             setAmount(remaining);
             setValue([remaining]);
             setInputValue(remaining.toString());
           }
         } else {
           setStreetInvolved([]);
-          toaster.create({ title: "Error", description: "Failed to load street-involved beneficiaries." });
+          toaster.create({
+            title: "Error",
+            description: "Failed to load street-involved beneficiaries.",
+          });
         }
       } catch {
         setStreetInvolved([]);
-        toaster.create({ title: "Error", description: "Failed to load street-involved beneficiaries." });
+        toaster.create({
+          title: "Error",
+          description: "Failed to load street-involved beneficiaries.",
+        });
       } finally {
         setLoadingStreetInvolved(false);
       }
@@ -75,10 +101,17 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
 
     const timeout = setTimeout(async () => {
       try {
-        const response = await fetch(`/api/admin/beneficiaries/images/${streetInvolved[currentIndex].id}`);
+        const response = await fetch(
+          `/api/admin/beneficiaries/images/${streetInvolved[currentIndex].id}`
+        );
         if (response.ok) {
           const data = await response.json();
-          setImages(data.sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => a.order_index - b.order_index));
+          setImages(
+            data.sort(
+              (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
+                a.order_index - b.order_index
+            )
+          );
           setCurrentImageIndex(0);
         } else {
           setImages([]);
@@ -95,7 +128,13 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
 
   if (loadingStreetInvolved) {
     return (
-      <Flex minH="100vh" align="center" justify="center" direction="column" gap={4}>
+      <Flex
+        minH="100vh"
+        align="center"
+        justify="center"
+        direction="column"
+        gap={4}
+      >
         <Spinner size="xl" />
         <Text>Loading street-involved data...</Text>
       </Flex>
@@ -106,21 +145,30 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
 
   if (!street) {
     return (
-      <Flex minH="100vh" align="center" justify="center" direction="column" gap={4}>
+      <Flex
+        minH="100vh"
+        align="center"
+        justify="center"
+        direction="column"
+        gap={4}
+      >
         <Text>No street-involved beneficiaries available for sponsorship</Text>
         <Text color="gray.500" fontSize="sm">
-          {streetInvolved.length === 0 ? "No street-involved data found" : "Error loading street-involved data"}
+          {streetInvolved.length === 0
+            ? "No street-involved data found"
+            : "Error loading street-involved data"}
         </Text>
       </Flex>
     );
   }
   const remainingAmount = (street.budget_goal - street.budget_raised) / 100;
   const minimumAmount = 10;
-  const maxSelectableAmount = remainingAmount > minimumAmount
-    ? remainingAmount - minimumAmount < minimumAmount
-      ? remainingAmount
-      : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
-    : remainingAmount;
+  const maxSelectableAmount =
+    remainingAmount > minimumAmount
+      ? remainingAmount - minimumAmount < minimumAmount
+        ? remainingAmount
+        : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
+      : remainingAmount;
 
   const handleSliderChange = (e: { value: number[] }) => {
     const newValue = Math.min(e.value[0], remainingAmount);
@@ -131,8 +179,8 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    if (value === '' || /^\d+$/.test(value)) {
-      if (value !== '') {
+    if (value === "" || /^\d+$/.test(value)) {
+      if (value !== "") {
         const numericValue = parseInt(value);
         if (!isNaN(numericValue)) {
           if (numericValue > remainingAmount) {
@@ -141,16 +189,16 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
             setValue([remainingAmount]);
             toaster.create({
               title: "Amount Adjusted",
-              description: `Maximum sponsorship amount is $${remainingAmount}.`
+              description: `Maximum sponsorship amount is $${remainingAmount}.`,
             });
             return;
           }
         }
       }
-      
+
       setInputValue(value);
 
-      if (value === '') {
+      if (value === "") {
         setAmount(0);
         setValue([0]);
       } else {
@@ -164,7 +212,10 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
   };
 
   const handleSponsor = async () => {
-    if (amount < minimumAmount && !(remainingAmount < minimumAmount && amount === remainingAmount)) {
+    if (
+      amount < minimumAmount &&
+      !(remainingAmount < minimumAmount && amount === remainingAmount)
+    ) {
       toaster.create({
         title: "Invalid Amount",
         description: `Minimum sponsorship amount is $${minimumAmount}.`,
@@ -183,15 +234,17 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
       const payload = {
         beneficiaryId: street.id,
         beneficiaryName: street.name,
-        beneficiaryImage: images[currentImageIndex]?.image_url || placeholderImage,
+        beneficiaryImage:
+          images[currentImageIndex]?.image_url || placeholderImage,
         amount: amount * 100,
         paymentType: selectedOption,
         location: street.country,
         userId: user?.id,
         isEmbedded: true,
-        allowBelowMinimum: remainingAmount < minimumAmount && amount === remainingAmount
+        allowBelowMinimum:
+          remainingAmount < minimumAmount && amount === remainingAmount,
       };
-      if (selectedOption !== 'payment' && selectedOption !== 'subscription') {
+      if (selectedOption !== "payment" && selectedOption !== "subscription") {
         toaster.create({
           title: "Payment Error",
           description: "Invalid payment frequency selected. Please try again.",
@@ -209,11 +262,11 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
       }
       const res = await fetch("/api/stripe", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json"
+          Accept: "application/json",
         },
-        credentials: 'include',
+        credentials: "include",
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -238,9 +291,11 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
       if (isInIframe) {
         try {
           const urlParams = new URLSearchParams(window.location.search);
-          const parentOrigin = urlParams.get('parentOrigin') || '*';
-          const checkoutUrl = clientSecret 
-            ? `/sponsorships/checkout?client_secret=${clientSecret}&parentOrigin=${encodeURIComponent(parentOrigin)}&embedded=true`
+          const parentOrigin = urlParams.get("parentOrigin") || "*";
+          const checkoutUrl = clientSecret
+            ? `/sponsorships/checkout?client_secret=${clientSecret}&parentOrigin=${encodeURIComponent(
+                parentOrigin
+              )}&embedded=true`
             : url;
           window.location.href = checkoutUrl;
           return;
@@ -251,7 +306,8 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
           });
         }
       } else {
-        const checkoutUrl = url || `/sponsorships/checkout?client_secret=${clientSecret}`;
+        const checkoutUrl =
+          url || `/sponsorships/checkout?client_secret=${clientSecret}`;
         window.location.href = checkoutUrl;
         return;
       }
@@ -270,15 +326,18 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
   };
 
   const renderDisclaimer = () => {
-    const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
-    if ((street.budget_goal - street.budget_raised - amount * 100) > 0) {
+    const monthlyAmount =
+      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
+    if (street.budget_goal - street.budget_raised - amount * 100 > 0) {
       return (
         <>
-          This street-involved beneficiary has a monthly budget goal that must be met for their support.
+          This street-involved beneficiary has a monthly budget goal that must
+          be met for their support.
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this street-involved beneficiary.
+              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+              monthly for this street-involved beneficiary.
             </>
           )}
           <br />
@@ -288,11 +347,13 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
     } else if (street.budget_raised > 0) {
       return (
         <>
-          This street-involved beneficiary is partially sponsored. Your contribution will help reach their monthly budget goal!
+          This street-involved beneficiary is partially sponsored. Your
+          contribution will help reach their monthly budget goal!
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this street-involved beneficiary.
+              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+              monthly for this street-involved beneficiary.
             </>
           )}
         </>
@@ -300,11 +361,13 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
     }
     return (
       <>
-        Your sponsorship will be applied towards the street-involved beneficiary's monthly budget goals.
+        Your sponsorship will be applied towards the street-involved
+        beneficiary's monthly budget goals.
         {selectedOption === "payment" && (
           <>
             <br />
-            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this street-involved beneficiary.
+            Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+            monthly for this street-involved beneficiary.
           </>
         )}
       </>
@@ -388,11 +451,15 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
                 left="-2"
                 top="50%"
                 transform="translateY(-50%)"
-                onClick={() => setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)}
+                onClick={() =>
+                  setCurrentImageIndex(
+                    (prev) => (prev - 1 + images.length) % images.length
+                  )
+                }
                 size="sm"
                 variant="ghost"
                 color="#1C3C8C"
-                _hover={{ bg: 'gray.100' }}
+                _hover={{ bg: "gray.100" }}
               >
                 ←
               </Button>
@@ -401,11 +468,13 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
                 right="-2"
                 top="50%"
                 transform="translateY(-50%)"
-                onClick={() => setCurrentImageIndex((prev) => (prev + 1) % images.length)}
+                onClick={() =>
+                  setCurrentImageIndex((prev) => (prev + 1) % images.length)
+                }
                 size="sm"
                 variant="ghost"
                 color="#1C3C8C"
-                _hover={{ bg: 'gray.100' }}
+                _hover={{ bg: "gray.100" }}
               >
                 →
               </Button>
@@ -417,18 +486,32 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
         </Text>
         <Flex align="center" justify="space-between" mb={1}>
           <Box flex="1">
-            <Box w="100%" h="8px" bg="#E8E8EA" borderRadius="md" overflow="hidden" mb={1}>
+            <Box
+              w="100%"
+              h="8px"
+              bg="#E8E8EA"
+              borderRadius="md"
+              overflow="hidden"
+              mb={1}
+            >
               <Box
                 h="100%"
                 bg="#1C3C8C"
                 borderRadius="md"
-                width={`${Math.min((street.budget_raised / street.budget_goal) * 100, 100)}%`}
+                width={`${Math.min(
+                  (street.budget_raised / street.budget_goal) * 100,
+                  100
+                )}%`}
                 transition="width 0.3s"
               />
             </Box>
             <Flex justify="space-between" mt={1}>
-              <Text fontSize="xs" color="gray.500">Raised: ${centsToDollars(street.budget_raised)}</Text>
-              <Text fontSize="xs" color="gray.500">Pending: ${remainingAmount}</Text>
+              <Text fontSize="xs" color="gray.500">
+                Raised: ${centsToDollars(street.budget_raised)}
+              </Text>
+              <Text fontSize="xs" color="gray.500">
+                Pending: ${remainingAmount}
+              </Text>
             </Flex>
           </Box>
         </Flex>
@@ -438,7 +521,9 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
           </Text>
         </Flex>
         <Box mb={2}>
-          <Text fontWeight="semibold" fontSize="sm" mb={1}>Amount</Text>
+          <Text fontWeight="semibold" fontSize="sm" mb={1}>
+            Amount
+          </Text>
           {remainingAmount < minimumAmount ? (
             <Box mb={4}>
               <Flex
@@ -448,7 +533,14 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
                 mb={2}
                 bg="gray.100"
               >
-                <InputAddon bg="#F3F3F3" px={4} py={2} color="#959090" fontSize="md" border="none">
+                <InputAddon
+                  bg="#F3F3F3"
+                  px={4}
+                  py={2}
+                  color="#959090"
+                  fontSize="md"
+                  border="none"
+                >
                   $
                 </InputAddon>
                 <Input
@@ -474,14 +566,27 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
                   onValueChange={() => {}}
                 />
                 <Text textAlign="center" mt={2}>
-                  You can sponsor the final ${remainingAmount} to fully fund this beneficiary, even though it is below the usual minimum.
+                  You can sponsor the final ${remainingAmount} to fully fund
+                  this beneficiary, even though it is below the usual minimum.
                 </Text>
               </Box>
             </Box>
           ) : (
             <>
-              <Flex align="center" border="1px solid #E8E8EA" borderRadius="md" mb={2}>
-                <InputAddon bg="#F3F3F3" px={4} py={2} color="#959090" fontSize="md" border="none">
+              <Flex
+                align="center"
+                border="1px solid #E8E8EA"
+                borderRadius="md"
+                mb={2}
+              >
+                <InputAddon
+                  bg="#F3F3F3"
+                  px={4}
+                  py={2}
+                  color="#959090"
+                  fontSize="md"
+                  border="none"
+                >
                   $
                 </InputAddon>
                 <Input
@@ -508,9 +613,16 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
                   variant="solid"
                   onValueChange={handleSliderChange}
                 />
-                <Text textAlign="center" mt={2}>Selected Amount: ${value[0]}</Text>
+                <Text textAlign="center" mt={2}>
+                  Selected Amount: ${value[0]}
+                </Text>
                 {amount > 0 && amount < minimumAmount && (
-                  <Text color="gray.400" fontSize="sm" textAlign="center" mt={1}>
+                  <Text
+                    color="gray.400"
+                    fontSize="sm"
+                    textAlign="center"
+                    mt={1}
+                  >
                     Minimum sponsorship amount is ${minimumAmount}.
                   </Text>
                 )}
@@ -519,7 +631,9 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
           )}
         </Box>
         <Box mb={2}>
-          <Text fontWeight="semibold" fontSize="sm" mb={1}>Frequency</Text>
+          <Text fontWeight="semibold" fontSize="sm" mb={1}>
+            Frequency
+          </Text>
           <SelectRoot
             collection={paymentOptionsCollection}
             className="border rounded-xl"
@@ -545,12 +659,16 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
         <Flex gap={2} mb={2}>
           <a
             className={`flex-1 py-2 rounded-md text-center transition-colors duration-150
-              ${street.username
-                ? "bg-[#D1D1D1] text-[#1C3C8C] hover:bg-[#E8F0FF] cursor-pointer"
-                : "bg-[#D1D1D1] text-[#858585] opacity-50 cursor-not-allowed"
-              }`
+              ${
+                street.username
+                  ? "bg-[#D1D1D1] text-[#1C3C8C] hover:bg-[#E8F0FF] cursor-pointer"
+                  : "bg-[#D1D1D1] text-[#858585] opacity-50 cursor-not-allowed"
+              }`}
+            href={
+              street.username
+                ? `https://dev.creatorshare.com/sponsorships/${street.username}`
+                : undefined
             }
-            href={street.username ? `https://dev.creatorshare.com/sponsorships/${street.username}` : undefined}
             target="_blank"
             rel="noopener noreferrer"
             tabIndex={street.username ? 0 : -1}
@@ -564,11 +682,9 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
             loadingText="Processing..."
             disabled={
               loading ||
-              (
-                remainingAmount < minimumAmount
-                  ? amount !== remainingAmount
-                  : amount < minimumAmount
-              )
+              (remainingAmount < minimumAmount
+                ? amount !== remainingAmount
+                : amount < minimumAmount)
             }
           >
             Checkout
@@ -591,7 +707,7 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
             textAlign: "center",
             padding: "0.75rem 0",
             textDecoration: "none",
-            marginTop: "0.5rem"
+            marginTop: "0.5rem",
           }}
         >
           See more street-involved beneficiaries

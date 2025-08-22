@@ -148,7 +148,7 @@ export async function POST(req: Request) {
             card_number: last4,
             card_type: cardType,
             payment_intent: session.payment_intent ? session.payment_intent.toString() : null,
-            stripe_subscription_id: session.subscription as string,
+            sponsorship_id: session.subscription as string,
             current_period_start: new Date(),
             current_period_end: new Date(
               Date.now() +
@@ -194,7 +194,7 @@ export async function POST(req: Request) {
                 card_number: last4,
                 card_type: cardType,
                 payment_intent: session.payment_intent ? session.payment_intent.toString() : null,
-                stripe_subscription_id: session.subscription as string,
+                sponsorship_id: session.subscription as string,
                 current_period_start: new Date(),
                 current_period_end: new Date(
                   Date.now() +
@@ -418,7 +418,7 @@ export async function POST(req: Request) {
           const { error: subscriptionError } = await supabase
             .from("subscriptions")
             .insert({
-              stripe_subscription_id: session.subscription as string,
+              sponsorship_id: session.subscription as string,
               user_id: userId,
               beneficiary_id: beneficiaryId,
               status: "complete",
@@ -430,6 +430,7 @@ export async function POST(req: Request) {
                   (interval === "month" ? 30 : 365) * 24 * 60 * 60 * 1000
               ),
               customer_id: session.customer as string,
+              sponsorship_method: "STRIPE",
             });
 
           if (subscriptionError) {
@@ -554,7 +555,7 @@ export async function POST(req: Request) {
               card_number: last4,
               card_type: cardType,
               payment_intent: paymentIntent,
-              stripe_subscription_id: subscription.id,
+              sponsorship_id: subscription.id,
               current_period_start: new Date(subscription.current_period_start * 1000),
               current_period_end: new Date(subscription.current_period_end * 1000),
             };
@@ -604,7 +605,7 @@ export async function POST(req: Request) {
           const { error: subscriptionError } = await supabase
             .from("subscriptions")
             .insert({
-              stripe_subscription_id: subscription.id,
+              sponsorship_id: subscription.id,
               user_id: subscription.metadata?.userId,
               beneficiary_id: subscription.metadata?.beneficiaryId,
               status:
@@ -618,6 +619,7 @@ export async function POST(req: Request) {
                 subscription.current_period_end * 1000
               ),
               customer_id: subscription.customer as string,
+              sponsorship_method: "STRIPE",
             });
 
           if (subscriptionError) {
@@ -669,7 +671,7 @@ export async function POST(req: Request) {
         const { error: updateError } = await supabase
           .from("subscriptions")
           .update({ status: "incomplete" })
-          .eq("stripe_subscription_id", subscriptionId);
+          .eq("sponsorship_id", subscriptionId);
 
         if (updateError) {
           console.error("Error updating subscription status:", updateError);
@@ -678,7 +680,7 @@ export async function POST(req: Request) {
         const { data: subscriptionData } = await supabase
           .from("subscriptions")
           .select(`beneficiary_id`)
-          .eq("stripe_subscription_id", subscriptionId)
+          .eq("sponsorship_id", subscriptionId)
           .single();
 
         let beneficiaryName = "your sponsored beneficiary";
@@ -744,7 +746,7 @@ export async function POST(req: Request) {
               subscription.current_period_end * 1000
             ),
           })
-          .eq("stripe_subscription_id", subscription.id);
+          .eq("sponsorship_id", subscription.id);
 
         if (updateError) {
           console.error("Error updating subscription:", updateError);
@@ -794,7 +796,7 @@ export async function POST(req: Request) {
             status: "cancelled",
             canceled_at: new Date(),
           })
-          .eq("stripe_subscription_id", subscription.id);
+          .eq("sponsorship_id", subscription.id);
 
         if (updateError) {
           console.error("Error cancelling subscription:", updateError);
@@ -821,7 +823,7 @@ export async function POST(req: Request) {
           await supabase
             .from("subscriptions")
             .update({ status: "complete" })
-            .eq("stripe_subscription_id", subscriptionId);
+            .eq("sponsorship_id", subscriptionId);
         }
 
         return NextResponse.json(

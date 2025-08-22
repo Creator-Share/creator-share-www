@@ -1,5 +1,6 @@
 "use client"
 import React, { useEffect, useState, useCallback } from 'react'
+import DeleteDialog from './DeleteDialog';
 import {
     DrawerActionTrigger,
     DrawerBackdrop,
@@ -64,6 +65,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
     const [allImages, setAllImages] = useState<BeneficiaryMedia[]>([]);
     const [isImageLoading, setIsImageLoading] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
         const supabase = createClient();
@@ -444,38 +446,40 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                         <Button
                             className='bg-black w-[29.5%] text-white'
                             onClick={onClose}
-                            disabled={isDeleting || isSaving}
+                            disabled={isSaving}
                         >
                             Cancel
                         </Button>
                     </DrawerActionTrigger>
                     <Button
                         className='bg-red-500 w-1/3 text-white'
-                        onClick={async () => {
+                        onClick={() => setIsDeleteDialogOpen(true)}
+                        disabled={isDeleting || isSaving}
+                    >
+                        Delete
+                    </Button>
+                    <DeleteDialog
+                        isOpen={isDeleteDialogOpen}
+                        onClose={() => setIsDeleteDialogOpen(false)}
+                        onConfirm={async () => {
                             if (selectedChild?.id) {
                                 try {
                                     setIsDeleting(true);
                                     await onDelete(selectedChild.id);
-                                    onClose();
-                                } catch (error) {
-                                    console.error("Error deleting:", error);
+                                    setIsDeleteDialogOpen(false);
                                 } finally {
                                     setIsDeleting(false);
                                 }
-                            } else {
-                                console.error("Child ID is undefined");
                             }
                         }}
-                        disabled={isDeleting || isSaving}
-                    >
-                        {isDeleting ? 'Deleting...' : 'Delete'}
-                    </Button>
+                        itemCount={1}
+                    />
                     <Button
                         onClick={handleSave}
                         className="bg-[#1C3C8C] w-1/3 text-white"
                         loading={isSaving}
                         loadingText="Saving..."
-                        disabled={isDeleting}
+                            disabled={isSaving}
                     >
                         Save
                     </Button>

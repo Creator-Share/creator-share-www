@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     const { data: subscription } = await supabase
       .from("subscriptions")
       .select("*, beneficiaries!inner(name, location_str)")
-      .eq("stripe_subscription_id", sessionId)
+      .eq("sponsorship_id", sessionId)
       .single();
 
     if (subscription) {
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
     const { data: partialSubscriptions } = await supabase
       .from("subscriptions")
       .select("*, beneficiaries!inner(name, location_str)")
-      .ilike("stripe_subscription_id", `%${sessionId}%`)
+      .ilike("sponsorship_id", `%${sessionId}%`)
       .limit(1);
 
     if (partialSubscriptions && partialSubscriptions.length > 0) {

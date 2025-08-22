@@ -1,26 +1,38 @@
-import { Box, Flex, Skeleton } from "@chakra-ui/react";
+import { Box, Skeleton } from "@chakra-ui/react";
 
 export const BeneficiaryCardSkeleton = () => {
   return (
-    <Flex
-      direction={{ base: "column", md: "row" }}
-      align={{ base: "center", md: "flex-start" }}
-      borderRadius={{ base: 'md', md: 'md' }}
-      className="bg-white mb-6 p-0 border-0 md:border md:mb-0 md:p-0"
-    >
-      <Skeleton
-        className="mb-4 md:mb-0 rounded-t-md h-[400px] w-[550px] md:rounded-l-md md:rounded-t-none md:h-[273px] md:w-[450px]"
+    <Box className="bg-white rounded-lg border p-0 overflow-hidden">
+      {/* Image placeholder */}
+      <Skeleton 
+        height="200px" 
+        width="100%" 
+        className="rounded-t-lg"
       />
-      <Box className="md:grid md:grid-cols-2 pt-[20px] w-full md:w-screen">
-        <Box ml={{ md: 6 }} w="full">
-          <Skeleton height="2.5rem" width="200px" mb={2} />
-          <Box className="text-[#767070] bg-[#DFDFDF] rounded-xl md:bg-white p-4 mb-4">
-            <Skeleton height="1rem" mb={4} />
-            <Skeleton height="1rem" mb={4} />
-            <Skeleton height="1rem" />
-          </Box>
+      
+      {/* Content area */}
+      <Box p={4}>
+        {/* Name placeholder */}
+        <Skeleton height="1.5rem" width="80%" mb={3} />
+        
+        {/* Info icons row */}
+        <Box display="flex" gap={4} mb={3}>
+          <Skeleton height="1rem" width="60px" />
+          <Skeleton height="1rem" width="50px" />
+          <Skeleton height="1rem" width="80px" />
         </Box>
+        
+        {/* Info text */}
+        <Box mb={4}>
+          <Skeleton height="1rem" width="40px" mb={2} />
+          <Skeleton height="1rem" width="100%" mb={2} />
+          <Skeleton height="1rem" width="90%" mb={2} />
+          <Skeleton height="1rem" width="70%" />
+        </Box>
+        
+        {/* Sponsor button */}
+        <Skeleton height="2.5rem" width="100%" className="rounded-md" />
       </Box>
-    </Flex>
+    </Box>
   );
 }; 

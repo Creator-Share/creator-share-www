@@ -20,7 +20,7 @@ const formatDate = (date: string) => {
   return format(new Date(date), "d MMMM, yyyy h:mmaaa").replace('AM', 'AM').replace('PM', 'PM');
 };
 
-const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId, hideStatus }) => {
+const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId, hideStatus, hideAmount }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -36,7 +36,7 @@ const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId, 
   }, [beneficiaryId])
 
   return (
-    <div className="bg-[#FFFFFF] rounded-xl border border-[#E4EAE7] pb-2">
+    <div className="bg-[#FFFFFF] rounded-[10px] border border-[#E4EAE7] pb-2 min-h-72 max-h-72 overflow-hidden overflow-y-scroll">
       <div className="p-6">
         <h2 className="text-base font-bold text-[#03150E]">Sponsorship Details</h2>
       </div>
@@ -51,7 +51,9 @@ const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId, 
               <tr>
                 <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">DATE</th>
                 <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">DESCRIPTION</th>
-                <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">AMOUNT</th>
+                {!hideStatus && (
+                  <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">AMOUNT</th>
+                )}
                 {!hideStatus && (
                   <th className="text-left text-xs font-normal text-[#6B7772] py-3 px-4">STATUS</th>
                 )}
@@ -66,9 +68,11 @@ const SponsorshipDetails: React.FC<SponsorshipDetailsProps> = ({ beneficiaryId, 
                   <td className="py-3 px-4 text-sm font-bold text-[#222]">
                     {subscription.interval === 'year' ? 'Annual Sponsorship' : 'Monthly Sponsorship'}
                   </td>
-                  <td className="py-3 px-4 text-sm text-[#222]">
-                    ${centsToDollars(subscription.amount)}
-                  </td>
+                  {!hideAmount && (
+                    <td className="py-3 px-4 text-sm text-[#222]">
+                      ${centsToDollars(subscription.amount)}
+                    </td>
+                  )}
                   {!hideStatus && (
                     <td className="py-3 px-4 text-center">
                       <span className={`inline-block rounded-full px-4 py-1 text-xs font-medium ${getStatusStyle(subscription.status)}`}>

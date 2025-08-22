@@ -106,6 +106,7 @@ declare module '@paypal/react-paypal-js' {
       shape?: 'rect' | 'pill';
       label?: 'paypal' | 'checkout' | 'buynow' | 'pay' | 'subscribe';
       height?: number;
+      tagline?: boolean;
     };
   }
 

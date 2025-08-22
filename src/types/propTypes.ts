@@ -2,10 +2,13 @@ import { LatLngBounds } from "leaflet";
 import { Beneficiaries } from "./index";
 
 export interface FiltersProps {
-  onFilterChange: (filters: { gender: string; ageRange: [number, number]; status: string[] }) => void;
+  onFilterChange: (filters: {
+    gender: string;
+    ageRange: [number, number];
+    status: string[];
+  }) => void;
   beneficiaryType?: "CHILD" | "ANIMAL";
 }
-
 
 export interface BeneficiaryMapProps {
   beneficiaryData: {
@@ -33,30 +36,21 @@ export interface BeneficiaryListingsProps {
 }
 
 export interface BeneficiaryCardProps {
-    beneficiary: Beneficiaries;
-    isSelected?: boolean;
-    id: string;
-    onNext?: () => void;
-    onPrevious?: () => void;
-    hasNext?: boolean;
-    hasPrevious?: boolean;
-    onOpenDialog?: () => void;
-    beneficiaryType?: "CHILD" | "ANIMAL";
+  beneficiary: Beneficiaries;
+  isSelected?: boolean;
+  id: string;
+  onNext?: () => void;
+  onPrevious?: () => void;
+  hasNext?: boolean;
+  hasPrevious?: boolean;
+  onOpenDialog?: () => void;
+  beneficiaryType?: "CHILD" | "ANIMAL";
 }
 
 export interface SponsorshipDetailsProps {
   beneficiaryId?: string;
   hideStatus?: boolean;
+  hideAmount?: boolean;
 }
 
-export interface SponsorDialogProps {
-  people: Beneficiaries;
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  onNext: () => void;
-  onPrevious: () => void;
-  hasNext: boolean;
-  hasPrevious: boolean;
-  trigger: React.ReactElement;
-  beneficiaryType?: "CHILD" | "ANIMAL";
-}
+// SponsorDialogProps removed; SponsorDialog replaced by BeneficiaryActivityModal

@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const { data: subscription, error: fetchError } = await supabase
       .from("subscriptions")
       .select("*")
-      .eq("stripe_subscription_id", subscriptionId)
+      .eq("sponsorship_id", subscriptionId)
       .single();
       
     if (fetchError || !subscription) {
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
           status: "cancelled",
           canceled_at: new Date().toISOString()
         })
-        .eq("stripe_subscription_id", subscriptionId);
+        .eq("sponsorship_id", subscriptionId);
 
       if (error) {
         console.error("Database error when cancelling subscription:", error);
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
             status: "cancelled",
             canceled_at: new Date().toISOString()
           })
-          .eq("stripe_subscription_id", subscriptionId);
+          .eq("sponsorship_id", subscriptionId);
           
         if (error) {
           console.error("Database error when cancelling subscription:", error);
