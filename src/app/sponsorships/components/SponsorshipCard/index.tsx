@@ -85,6 +85,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
             color="#011532"
             borderRadius="0"
             borderTopRightRadius="20px"
+            borderBottomLeftRadius="20px"
             className="p-[10px] text-sm font-medium"
           >
             Goal{" "}
