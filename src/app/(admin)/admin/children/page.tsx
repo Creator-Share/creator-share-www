@@ -1,26 +1,19 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import { DataTable } from "@/components/admin-ui/Tables/data-table";
-import { ColumnDef, Row } from "@tanstack/react-table";
-import { columns } from "./columns";
 import dynamic from "next/dynamic";
-import { Box, Button, Text, Progress, Badge, Input } from "@chakra-ui/react";
-import Image from "next/image";
+import { Box, Button, Text, Input } from "@chakra-ui/react";
 import { MdDeleteOutline } from "react-icons/md";
 import { toaster } from "@/components/ui/toaster";
 import DeleteDialog from "./components/DeleteDialog";
+import BeneficiaryCard from "./components/BeneficiaryCard";
 import { useBeneficiaryStore } from "@/store/beneficiaryStore";
 import { Beneficiaries } from "@/types/admin.types";
 import { dollarsToCents } from "@/utils/currency";
 import GoBackButton from "@/components/ui/goBack";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), { ssr: false });
 const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
-
-type TableInstance = {
-  getSelectedRowModel: () => { rows: Row<Beneficiaries>[] };
-  getTableInstance: () => { toggleAllRowsSelected: (value: boolean) => void };
-};
 
 const ChildrenTable = () => {
   const initialFormData: Beneficiaries = {
@@ -69,10 +62,10 @@ const ChildrenTable = () => {
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
   const [selectedCount, setSelectedCount] = useState(0);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [mobileSearch, setMobileSearch] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [beneficiaryImages, setBeneficiaryImages] = useState<Record<string, string>>({});
   const [loadingImages, setLoadingImages] = useState<Record<string, boolean>>({});
-  const tableRef = useRef<TableInstance | null>(null);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const fetchedImagesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -141,9 +134,13 @@ const ChildrenTable = () => {
     }
   }, [selectedBeneficiary]);
 
+  // Update selected count when selectedItems changes
+  useEffect(() => {
+    setSelectedCount(selectedItems.size);
+  }, [selectedItems]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    // Convert budget_goal to number if it's the budget field
     const processedValue = name === 'budget_goal' ? parseFloat(value) || 0 : value;
     setFormData({ ...formData, [name]: processedValue });
   };
@@ -162,7 +159,6 @@ const ChildrenTable = () => {
   };
 
   const handleSubmit = async (): Promise<boolean> => {
-    // Ensure all required fields are present before submitting
     if (!formData.name || !formData.username || !formData.gender || !formData.birth_date ||
       !formData.biography || !formData.status || !formData.country ||
       !formData.location_str || !formData.introduction) {
@@ -174,7 +170,6 @@ const ChildrenTable = () => {
       return false;
     }
 
-    // Convert budget_goal to cents before submission
     const formDataWithCents = {
       ...formData,
       budget_goal: parseInt(dollarsToCents(formData.budget_goal || 0))
@@ -209,10 +204,7 @@ const ChildrenTable = () => {
   };
 
   const handleBulkDelete = () => {
-    if (!tableRef.current) return;
-    const selectedRowModel = tableRef.current.getSelectedRowModel();
-    const selectedRows = selectedRowModel.rows;
-    if (selectedRows.length === 0) {
+    if (selectedItems.size === 0) {
       toaster.create({
         title: "No Selection",
         description: "No rows selected for deletion.",
@@ -220,17 +212,16 @@ const ChildrenTable = () => {
       });
       return;
     }
-    setSelectedRowsForDeletion(selectedRows.map((row) => row.original));
+    
+    const selectedBeneficiaries = data.filter(b => b.id && selectedItems.has(b.id));
+    setSelectedRowsForDeletion(selectedBeneficiaries);
     setIsDeleteDialogOpen(true);
   };
 
   const confirmDelete = async () => {
     const beneficiaryIds = selectedRowsForDeletion.map((b) => b.id).filter((id): id is string => typeof id === "string");
     await bulkDelete("CHILD", beneficiaryIds);
-    if (tableRef.current) {
-      tableRef.current.getTableInstance().toggleAllRowsSelected(false);
-    }
-    setSelectedCount(0);
+    setSelectedItems(new Set());
     setSelectedRowsForDeletion([]);
     setIsDeleteDialogOpen(false);
     toaster.create({
@@ -250,20 +241,53 @@ const ChildrenTable = () => {
     });
   };
 
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = data.filter(b => b.id).map(b => b.id!);
+      setSelectedItems(new Set(allIds));
+    } else {
+      setSelectedItems(new Set());
+    }
+  };
+
+  const handleSelectItem = (id: string, checked: boolean) => {
+    const newSelected = new Set(selectedItems);
+    if (checked) {
+      newSelected.add(id);
+    } else {
+      newSelected.delete(id);
+    }
+    setSelectedItems(newSelected);
+  };
+
+  const handleEditBeneficiary = (beneficiary: Beneficiaries) => {
+    setSelectedBeneficiary(beneficiary);
+  };
+
+  const filteredData = data.filter((b) =>
+    (b.name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+    (b.username?.toLowerCase() || "").includes(searchTerm.toLowerCase())
+  );
+
+  const isAllSelected = data.length > 0 && selectedItems.size === data.filter(b => b.id).length;
+  const isSomeSelected = selectedItems.size > 0 && selectedItems.size < data.filter(b => b.id).length;
+
   if (loading) {
-    return <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
-      <div className="text-gray-500">Loading...</div>
-    </div>;
+    return (
+      <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
   }
 
   return (
     <Box>
       <GoBackButton />
-      <Box className="hidden md:block container mx-auto mt-12">
-
-        <Box className="grid grid-cols-2 mb-2">
+      <Box className="container mx-auto mt-12 p-4">
+        {/* Header */}
+        <Box className="grid grid-cols-1 lg:grid-cols-2 mb-6 gap-4">
           <Text className="text-3xl font-semibold leading-9">Manage Children</Text>
-          <Box className="justify-self-end flex gap-3">
+          <Box className="flex gap-3 justify-end">
             <CreateDrawer
               formData={formData}
               isDrawerOpen={isCreateDrawerOpen}
@@ -295,24 +319,69 @@ const ChildrenTable = () => {
               handleDrawerClose={() => setIsCreateDrawerOpen(false)}
             />
             {selectedCount > 0 && (
-              <Button onClick={handleBulkDelete} className="border-[2px] border-[#E0E0E0] bg-red-500 text-white w-fit h-[40px] px-4">
+              <Button 
+                onClick={handleBulkDelete} 
+                className="border-[2px] border-[#E0E0E0] bg-red-500 text-white w-fit h-[40px] px-4"
+              >
                 <MdDeleteOutline className="mr-[3.5px]" /> Bulk Delete ({selectedCount})
               </Button>
             )}
           </Box>
         </Box>
-        <DataTable
-          ref={tableRef}
-          columns={columns as ColumnDef<unknown, unknown>[]}
-          data={data}
-          controls="bottom"
-          onRowSelectionChange={(rowSelection) =>
-            setSelectedCount(Object.keys(rowSelection).length)
-          }
-          onRowClick={(data: unknown) => {
-            setSelectedBeneficiary(data as Beneficiaries);
-          }}
-        />
+
+        {/* Search and Select All */}
+        <Box className="mb-6 space-y-4">
+          <Input
+            placeholder="Search by name or username"
+            value={searchTerm}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+            className="border max-w-md"
+            px={3}
+            py={2}
+          />
+          
+          {data.length > 0 && (
+            <Box className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <Checkbox
+                checked={isAllSelected}
+                _indeterminate={isSomeSelected ? {} : undefined}
+                onCheckedChange={handleSelectAll}
+                className="h-5 w-5 border-2 border-gray-400"
+              />
+              <Text className="text-sm font-medium text-gray-700">
+                Select All ({selectedCount} selected)
+              </Text>
+              {selectedCount > 0 && (
+                <Text className="text-xs text-gray-500 ml-auto">
+                  {selectedCount} of {data.filter(b => b.id).length} children selected
+                </Text>
+              )}
+            </Box>
+          )}
+        </Box>
+
+        {/* Grid Layout */}
+        <Box className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredData.map((beneficiary) => (
+            <BeneficiaryCard
+              key={beneficiary.id || beneficiary.username}
+              beneficiary={beneficiary}
+              isSelected={beneficiary.id ? selectedItems.has(beneficiary.id) : false}
+              onSelect={handleSelectItem}
+              onEdit={handleEditBeneficiary}
+              beneficiaryImages={beneficiaryImages}
+              loadingImages={loadingImages}
+            />
+          ))}
+        </Box>
+
+        {filteredData.length === 0 && (
+          <Box className="text-center py-12">
+            <Text className="text-gray-500">No children found matching your search.</Text>
+          </Box>
+        )}
+
+        {/* Edit Drawer */}
         {isEditDrawerOpen && selectedBeneficiary && (
           <EditDrawer
             selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
@@ -343,163 +412,14 @@ const ChildrenTable = () => {
             }
           />
         )}
+        
+        {/* Delete Dialog */}
         <DeleteDialog
           isOpen={isDeleteDialogOpen}
           onClose={() => setIsDeleteDialogOpen(false)}
           onConfirm={confirmDelete}
           itemCount={selectedRowsForDeletion.length}
         />
-
-      </Box>
-      <Box className="md:hidden">
-        <Box className="container mx-auto p-4 space-y-4">
-          <Text className="text-2xl font-semibold">Manage Children</Text>
-          <Box className="flex gap-2">
-            <CreateDrawer
-              formData={formData}
-              isDrawerOpen={isCreateDrawerOpen}
-              setIsDrawerOpen={setIsCreateDrawerOpen}
-              setFormData={(value) => {
-                if (typeof value === 'function') {
-                  const currentValue = value(formData);
-                  setFormData(currentValue);
-                } else {
-                  setFormData(value);
-                }
-              }}
-              handleInputChange={handleInputChange}
-              handleSelectChange={handleSelectChange}
-              handleLocationSelect={handleLocationSelect}
-              handleSubmit={handleSubmit}
-              imageFiles={imageFiles}
-              setImageFiles={(value) =>
-                typeof value === "function"
-                  ? setImageFiles(value(imageFiles))
-                  : setImageFiles(value)
-              }
-              videoFiles={videoFiles}
-              setVideoFiles={(value) =>
-                typeof value === "function"
-                  ? setVideoFiles(value(videoFiles))
-                  : setVideoFiles(value)
-              }
-              handleDrawerClose={() => setIsCreateDrawerOpen(false)}
-            />
-          </Box>
-
-            <Input
-              placeholder="Search by name or username"
-              value={mobileSearch}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMobileSearch(e.target.value)}
-              className="border"
-              px={3}
-              py={2}
-            />
-
-          <Box className="space-y-3">
-            {data
-              .filter((b) =>
-                (b.name?.toLowerCase() || "").includes(mobileSearch.toLowerCase()) ||
-                (b.username?.toLowerCase() || "").includes(mobileSearch.toLowerCase())
-              )
-              .map((b) => {
-                const goal = Number(b.budget_goal || 0);
-                const raised = Number(b.budget_raised || 0);
-                const progress = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
-                return (
-                  <Box key={b.id || b.username} className="border rounded-xl p-4 bg-white space-y-3">
-                    <Box className="flex items-start gap-4">
-                      <Box className="relative w-[80px] h-[80px]">
-                        {!b.id ? (
-                          <div className="w-full h-full rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 text-sm text-center p-2">
-                            No Image Available
-                          </div>
-                        ) : loadingImages[b.id] ? (
-                          <div className="w-full h-full bg-gray-200 rounded-lg animate-pulse" />
-                        ) : beneficiaryImages[b.id] ? (
-                          <Image
-                            src={beneficiaryImages[b.id]}
-                            alt={`${b.name}'s photo`}
-                            fill
-                            className="rounded-lg object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 text-sm text-center p-2">
-                            No Image Available
-                          </div>
-                        )}
-                      </Box>
-                      <Box className="flex-1 flex items-start justify-between">
-                      <Box>
-                        <Text className="text-lg font-semibold leading-6">{b.name}</Text>
-                        <Text className="text-xs text-gray-500">@{b.username}</Text>
-                      </Box>
-                      <Badge colorPalette="blue">{b.status}</Badge>
-                      </Box>
-                    </Box>
-
-                    <Box className="text-sm text-gray-600">
-                      <Text>{b.country}{b.location_str ? ` • ${b.location_str}` : ''}</Text>
-                    </Box>
-
-                    <Box className="space-y-1">
-                      <Box className="flex justify-between text-sm">
-                        <Text>Raised</Text>
-                        <Text>
-                          ${(b.budget_raised / 100).toFixed(2)} / ${(b.budget_goal / 100).toFixed(2)}
-                        </Text>
-                      </Box>
-                      <Progress.Root value={progress}>
-                        <Progress.Track className="rounded-xl h-2">
-                          <Progress.Range className="bg-[#1C3C8C]" />
-                        </Progress.Track>
-                      </Progress.Root>
-                    </Box>
-
-                    <Box className="flex gap-2 pt-1">
-                      <Button
-                        className="flex-1 bg-[#1C3C8C] text-white"
-                        onClick={() => {
-                          setSelectedBeneficiary(b as Beneficiaries);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                    </Box>
-                  </Box>
-                );
-              })}
-          </Box>
-
-          <EditDrawer
-            selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
-            formDataEdit={formDataEdit as Partial<Beneficiaries>}
-            setFormDataEdit={(value) => {
-              if (typeof value === 'function') {
-                const currentValue = value(formDataEdit);
-                setFormDataEdit(currentValue);
-              } else {
-                setFormDataEdit(value);
-              }
-            }}
-            isDrawerOpen={isEditDrawerOpen}
-            onClose={() => setIsEditDrawerOpen(false)}
-            onSave={handleSave}
-            onDelete={handleDelete}
-            imageFiles={imageFiles}
-            setImageFiles={(value) =>
-              typeof value === "function"
-                ? setImageFiles(value(imageFiles))
-                : setImageFiles(value)
-            }
-            videoFiles={videoFiles}
-            setVideoFiles={(value) =>
-              typeof value === "function"
-                ? setVideoFiles(value(videoFiles))
-                : setVideoFiles(value)
-            }
-          />
-        </Box>
       </Box>
     </Box>
   );
