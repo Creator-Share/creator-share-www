@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { Box, Flex, Text, Button } from "@chakra-ui/react";
+import { Box, Flex, Text } from "@chakra-ui/react";
 import dynamic from "next/dynamic";
 import { Beneficiaries } from "@/types";
-import { FaCaretDown, FaCaretUp, FaCompass } from "react-icons/fa";
+// import { FaCaretDown, FaCaretUp, FaCompass } from "react-icons/fa";
 
 // Map temporarily disabled from UI; keeping dynamic import commented for future multi-location rollout.
 // const SponsorshipMap = dynamic(() => import('./components/SponsorshipMap'), {
@@ -29,12 +29,10 @@ interface Filters {
 }
 
 const SponsorChild = () => {
-  const [L, setL] = useState<typeof import("leaflet") | null>(null);
-  const [currentBounds, setCurrentBounds] = useState<
-    L.LatLngBounds | undefined
-  >(undefined);
+  // const [L, setL] = useState<typeof import("leaflet") | null>(null);
+  const [currentBounds] = useState<L.LatLngBounds | undefined>(undefined);
   const [childrenData, setChildrenData] = useState<Beneficiaries[]>([]);
-  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [selectedCountry] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
@@ -45,57 +43,17 @@ const SponsorChild = () => {
   });
   // Map visibility/state no longer needed with toolbar layout
   // const [showMap, setShowMap] = useState<boolean>(true);
-  const [isMapSticky, setIsMapSticky] = useState(false);
+  // const [isMapSticky] = useState(false);
   const listingsRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const childListingsRef = useRef<HTMLDivElement>(null);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    import("leaflet")
-      .then(setL)
-      .catch((error) => console.error("Error loading Leaflet:", error));
-  }, []);
+  // Leaflet is unused while map is disabled
 
-  // Fixed scroll listener to detect when we reach the listings section
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!listingsRef.current) return;
+  // Map sticky behavior disabled while map is hidden
 
-      // Clear existing timeout
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-
-      // Debounce scroll events
-      scrollTimeoutRef.current = setTimeout(() => {
-        if (!listingsRef.current) return;
-
-        const listingsRect = listingsRef.current.getBoundingClientRect();
-
-        // Make map sticky only when the top of the listings section
-        // reaches the top of the viewport (not just the bottom)
-        setIsMapSticky(listingsRect.top <= 0);
-      }, 10);
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-
-    // Check initial state
-    handleScroll();
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // Map visibility removed; keep sticky state false
-  useEffect(() => {
-    setIsMapSticky(false);
-  }, []);
+  // Map visibility removed; keep sticky state false (no-op)
 
   const handleFilterChange = React.useCallback(
     (newFilters: Partial<Filters>) => {
@@ -148,29 +106,7 @@ const SponsorChild = () => {
     fetchChildren(filters);
   }, [fetchChildren, filters]);
 
-  const handleBoundsChange = React.useCallback(
-    (bounds: L.LatLngBounds) => {
-      if (!L) return;
-      setCurrentBounds(bounds);
-    },
-    [L]
-  );
-
-  const handleMarkerClick = React.useCallback(
-    (id: string) => {
-      setSelectedChildId(id);
-      const selectedPerson = childrenData.find((child) => child.id === id);
-
-      if (selectedPerson) {
-        setSelectedCountry(selectedPerson.country);
-      }
-    },
-    [childrenData]
-  );
-
-  const onResetView = React.useCallback(() => {
-    setSelectedCountry(null);
-  }, []);
+  // Map handlers kept for future map re-enable but currently unused
 
   const sendHeight = React.useCallback(() => {
     if (window.self === window.top) return;

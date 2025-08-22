@@ -153,23 +153,13 @@ const FitBounds: React.FC<{
   return null;
 };
 
-const ZoomController: React.FC<{
-  beneficiaryData: BeneficiaryMapProps["beneficiaryData"];
-  onBoundsChange: (bounds: LatLngBounds) => void;
-  onResetView?: () => void;
-  beneficiaryType?: "CHILD" | "ANIMAL";
-}> = ({
-  beneficiaryData,
-  onBoundsChange,
-  onResetView,
-  beneficiaryType = "CHILD",
-}) => {
+const ZoomController: React.FC = () => {
   const map = useMap();
-  const [showReset, setShowReset] = useState(false);
+  // const [showReset] = useState(false);
 
   useEffect(() => {
     const handleZoom = () => {
-      setShowReset(map.getZoom() > 2);
+      // no-op while reset button is disabled
     };
 
     map.on("zoomend", handleZoom);
@@ -177,42 +167,6 @@ const ZoomController: React.FC<{
       map.off("zoomend", handleZoom);
     };
   }, [map]);
-
-  const handleResetView = () => {
-    localStorage.removeItem("mapState");
-
-    if (beneficiaryData.length > 0) {
-      const validCoords = beneficiaryData
-        .filter(
-          (child) =>
-            child.location_geo && Array.isArray(child.location_geo.coordinates)
-        )
-        .map((child) => [
-          child.location_geo!.coordinates[1],
-          child.location_geo!.coordinates[0],
-        ]);
-      if (validCoords.length > 0) {
-        const bounds = L.latLngBounds(validCoords as [number, number][]);
-        map.fitBounds(bounds, {
-          padding: [50, 50],
-          animate: true,
-          duration: ANIMATION_DURATION,
-        });
-        onBoundsChange(bounds);
-      } else {
-        map.setView([0, 0], 2, {
-          animate: true,
-          duration: ANIMATION_DURATION,
-        });
-      }
-    } else {
-      map.setView([0, 0], 2, {
-        animate: true,
-        duration: ANIMATION_DURATION,
-      });
-    }
-    if (onResetView) onResetView();
-  };
 
   // View All button is temporarily disabled while map view is removed from the UX.
   // We'll re-enable this when multiple locations are reintroduced.
@@ -452,7 +406,6 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
   beneficiaryData,
   onMarkerClick,
   onBoundsChange,
-  onResetView,
   onFilterChange,
   beneficiaryType = "CHILD",
 }) => {
@@ -661,12 +614,7 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
         <MapEventHandler onBoundsChange={onBoundsChange} />
         <FitBounds beneficiaryData={beneficiaryData} />
         <CustomZoomControl />
-        <ZoomController
-          beneficiaryData={beneficiaryData}
-          onBoundsChange={onBoundsChange}
-          onResetView={onResetView}
-          beneficiaryType={beneficiaryType}
-        />
+        <ZoomController />
         <TouchGestureHandler />
         {beneficiaryData && beneficiaryData.length > 0 ? (
           <MarkerClusterGroup
