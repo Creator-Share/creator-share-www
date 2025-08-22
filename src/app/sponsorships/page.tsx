@@ -226,10 +226,7 @@ const SponsorChild = () => {
           Sponsoring a Child with Creator Share
         </Text>
         <Text className="text-base font-normal text-[#03150E99]">
-          Sponsoring a child is a personal way to show God&apos;s love to a child in need. For $39 a month,
-        </Text>
-        <Text className="md:px-[200px] text-base font-normal text-[#03150E99]">
-          you&apos;ll help that child and other vulnerable children in their community to stand tall, free from poverty.
+          Sponsoring a child brings hope to those facing isolation, poverty, or neglect. Your support provides a safe environment where vulnerable children.
         </Text>
       </Box>
 
