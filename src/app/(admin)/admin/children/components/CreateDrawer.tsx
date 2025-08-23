@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/file-upload";
 import { HiUpload } from "react-icons/hi";
 import MapPicker from "./MapPicker";
+import ExpenseManager from "./ExpenseManager";
 import { Beneficiaries } from "@/types/admin.types";
 import { GoPlusCircle } from "react-icons/go";
 import { toaster } from "@/components/ui/toaster";
@@ -187,6 +188,11 @@ const CreateDrawer = ({
                                 </FileUploadRoot>
                             </Field>
                             <MapPicker onSelectLocation={handleLocationSelect} />
+                            
+                            {/* Expense Management Section */}
+                            <div className="mt-6">
+                                <ExpenseManager />
+                            </div>
                         </Fieldset.Content>
                     </Fieldset.Root>
                 </DrawerBody>

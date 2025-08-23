@@ -24,6 +24,7 @@ import {
     FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
+import ExpenseManager from './ExpenseManager';
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import { toaster } from "@/components/ui/toaster";
@@ -429,6 +430,18 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     } : undefined
                                 }
                             />
+                            
+                            {/* Expense Management Section */}
+                            {selectedChild?.id && (
+                                <div className="mt-6">
+                                    <ExpenseManager 
+                                        beneficiaryId={selectedChild.id}
+                                        onExpensesChange={(assignments) => {
+                                            console.log('Expense assignments updated:', assignments);
+                                        }}
+                                    />
+                                </div>
+                            )}
                         </Fieldset.Content>
                     </Fieldset.Root>
                     {selectedChild?.id && (

@@ -71,3 +71,28 @@ export type AnimalBeneficiary = {
   breed?: string;
   animal_type?: string;
 };
+
+export interface Expense {
+  id?: string;
+  created_at?: string;
+  name: string;
+  description: string;
+  organization_id?: string;
+  price: number;
+  icon?: string;
+}
+
+export interface ExpenseAssignment {
+  id?: string;
+  created_at?: string;
+  beneficiary_id: string;
+  expense_id: string;
+  weight: number;
+  fulfilled: boolean;
+  onetime_expense: boolean;
+  expenses?: Expense; // Add this to handle nested expense data
+}
+
+export interface ExpenseWithAssignment extends Expense {
+  assignment?: ExpenseAssignment;
+}
