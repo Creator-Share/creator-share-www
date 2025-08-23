@@ -27,7 +27,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ beneficiaryId, onExpens
     if (!beneficiaryId) return;
     
     try {
-      const response = await fetch(`/api/admin/expense-assignments?beneficiary_id=${beneficiaryId}`);
+      const response = await fetch(`/api/admin/expense-assignments/get?beneficiary_id=${beneficiaryId}`);
       if (response.ok) {
         const data = await response.json();
         setAssignments(data);
@@ -52,7 +52,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ beneficiaryId, onExpens
 
   const fetchExpenses = async () => {
     try {
-      const response = await fetch('/api/admin/expenses');
+      const response = await fetch('/api/admin/expenses/get');
       if (response.ok) {
         const data = await response.json();
         setExpenses(data);
@@ -74,7 +74,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ beneficiaryId, onExpens
 
     setLoading(true);
     try {
-      const response = await fetch('/api/admin/expenses', {
+      const response = await fetch('/api/admin/expenses/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -125,7 +125,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ beneficiaryId, onExpens
     if (!beneficiaryId) return;
 
     try {
-      const response = await fetch('/api/admin/expense-assignments', {
+      const response = await fetch('/api/admin/expense-assignments/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -185,7 +185,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ beneficiaryId, onExpens
       console.log('Will delete expense with ID:', assignment.expense_id);
 
       // Delete the expense from the expenses table (this will cascade to assignments)
-      const response = await fetch(`/api/admin/expenses/${assignment.expense_id}`, {
+      const response = await fetch(`/api/admin/expenses/delete/${assignment.expense_id}`, {
         method: 'DELETE',
       });
 

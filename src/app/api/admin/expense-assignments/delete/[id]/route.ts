@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server';
+import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function DELETE(
@@ -24,4 +24,4 @@ export async function DELETE(
     console.error('Error in expense assignment DELETE:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-} 
+}

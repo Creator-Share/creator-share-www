@@ -26,7 +26,7 @@ const ExpensesPage = () => {
 
   const fetchExpenses = async () => {
     try {
-      const response = await fetch('/api/admin/expenses');
+      const response = await fetch('/api/admin/expenses/get');
       if (response.ok) {
         const data = await response.json();
         setExpenses(data);
@@ -60,7 +60,7 @@ const ExpensesPage = () => {
     }
 
     try {
-      const response = await fetch('/api/admin/expenses', {
+      const response = await fetch('/api/admin/expenses/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +110,7 @@ const ExpensesPage = () => {
     }
 
     try {
-      const response = await fetch(`/api/admin/expenses/${editingExpense.id}`, {
+      const response = await fetch(`/api/admin/expenses/update/${editingExpense.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -154,7 +154,7 @@ const ExpensesPage = () => {
     }
 
     try {
-      const response = await fetch(`/api/admin/expenses/${expenseId}`, {
+      const response = await fetch(`/api/admin/expenses/delete/${expenseId}`, {
         method: 'DELETE',
       });
 
