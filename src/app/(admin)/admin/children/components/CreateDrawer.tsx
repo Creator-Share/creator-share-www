@@ -191,7 +191,9 @@ const CreateDrawer = ({
                             
                             {/* Expense Management Section */}
                             <div className="mt-6">
-                                <ExpenseManager />
+                                <ExpenseManager 
+                                    budgetGoal={formData.budget_goal ? Number(formData.budget_goal) * 100 : 0}
+                                />
                             </div>
                         </Fieldset.Content>
                     </Fieldset.Root>

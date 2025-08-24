@@ -262,6 +262,7 @@ const ChildrenTable = () => {
 
   const handleEditBeneficiary = (beneficiary: Beneficiaries) => {
     setSelectedBeneficiary(beneficiary);
+    setIsEditDrawerOpen(true);
   };
 
   const filteredData = data.filter((b) =>

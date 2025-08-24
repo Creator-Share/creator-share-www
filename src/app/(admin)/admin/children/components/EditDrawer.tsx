@@ -436,6 +436,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                 <div className="mt-6">
                                     <ExpenseManager 
                                         beneficiaryId={selectedChild.id}
+                                        budgetGoal={selectedChild.budget_goal || 0}
                                         onExpensesChange={(assignments) => {
                                             console.log('Expense assignments updated:', assignments);
                                         }}
