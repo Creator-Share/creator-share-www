@@ -172,6 +172,7 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
               min={0}
               max={defaultMaxAge}
               step={1}
+              variant={"solid"}
               onValueChange={(details) => {
                 if (details.value && details.value.length >= 2) {
                   const [newMin, origMax] = details.value;

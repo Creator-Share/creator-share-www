@@ -72,13 +72,15 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   const [selectedOption, setSelectedOption] = useState<string>(
     paymentOptionsCollection.items[0].value
   );
-  const [value, setValue] = useState<number[]>([remainingAmount]);
   const [loading, setLoading] = useState<boolean>(false);
-  const allowBelowMinimum =
-    remainingAmount < minimumAmount && amount === remainingAmount;
   const [primaryImageUrl, setPrimaryImageUrl] = useState<string | null>(null);
   const fallbackPlaceholder =
     "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+
+  // Whether user can proceed with payment given current amount
+  const canPay = remainingAmount < minimumAmount
+    ? amount > 0  // Any amount > 0 is valid when remaining < $10
+    : amount >= minimumAmount;  // Otherwise require minimum $10
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -193,7 +195,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       setPrimaryImageUrl(null);
       // Reset amount controls back to current beneficiary's defaults
       setAmount(remainingAmount);
-      setValue([remainingAmount]);
       setSelectedOption(paymentOptionsCollection.items[0].value);
       setLoading(false);
     }
@@ -238,13 +239,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     const inputValue = e.target.value;
     if (inputValue === "") {
       setAmount(0);
-      setValue([0]);
       return;
     }
     let newValue = parseInt(inputValue) || 0;
     newValue = Math.min(newValue, remainingAmount);
     setAmount(newValue);
-    setValue([newValue]);
   };
 
   const handleSelectChange = (value: string) => {
@@ -252,13 +251,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   };
 
   const handleStripePayment = async () => {
-    if (
-      amount < minimumAmount &&
-      !(remainingAmount < minimumAmount && amount === remainingAmount)
-    ) {
+    if (!canPay) {
       toaster.create({
         title: "Invalid Amount",
-        description: `Minimum sponsorship amount is $${minimumAmount}.`,
+        description:
+          remainingAmount < minimumAmount
+            ? `Please enter an amount greater than $0 to complete the sponsorship.`
+            : `Minimum sponsorship amount is $${minimumAmount}.`,
       });
       return;
     }
@@ -334,7 +333,8 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   };
 
   const handleCreateOrder = async (
-    _: Record<string, unknown>,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _data: Record<string, unknown>,
     actions: {
       order: {
         create: (options: {
@@ -346,20 +346,27 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       };
     }
   ) => {
-    if (!amount || (amount < minimumAmount && !allowBelowMinimum)) {
+    if (!canPay) {
       toaster.create({
         title: "Invalid Amount",
-        description: `Minimum amount is $${minimumAmount}.`,
+        description:
+          remainingAmount < minimumAmount
+            ? `Please enter an amount greater than $0 to complete the sponsorship.`
+            : `Minimum amount is $${minimumAmount}.`,
       });
       throw new Error("Invalid amount");
     }
+
+    // When remaining amount is less than minimum, use the exact remaining amount
+    const paymentAmount = remainingAmount < minimumAmount ? remainingAmount : amount;
+
     return actions.order.create({
       purchase_units: [
         {
           description: `${
             selectedOption === "subscription" ? "Monthly" : "Yearly"
           } Sponsorship for ${beneficiary.name}`,
-          amount: { value: amount.toFixed(2), currency_code: "USD" },
+          amount: { value: paymentAmount.toFixed(2), currency_code: "USD" },
         },
       ],
     });
@@ -377,7 +384,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
               selectedOption === "subscription" ? "Monthly" : "Yearly"
             } Sponsorship for ${beneficiary.name}`,
             description: `Recurring sponsorship for ${beneficiary.name}`,
-            amount: amount,
+            amount: remainingAmount < minimumAmount ? remainingAmount : amount,
             interval_unit: selectedOption === "subscription" ? "MONTH" : "YEAR",
             interval_count: 1,
             currency_code: "USD",
@@ -424,7 +431,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         body: JSON.stringify({
           beneficiaryId: beneficiary.id,
           beneficiaryName: beneficiary.name,
-          amount: amount,
+          amount: remainingAmount < minimumAmount ? remainingAmount : amount,
           paymentType: selectedOption,
           location: beneficiary.country,
           userId: user?.id,
@@ -639,25 +646,25 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   </Text>
 
                   {remainingAmount < minimumAmount ? (
-                    <Box>
-                      <Flex
-                        className="border rounded-xl"
-                        align="center"
-                        justify="center"
-                        gap={2}
-                      >
-                        <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">
-                          $
-                        </InputAddon>
-                        <Input
-                          type="number"
-                          value={remainingAmount}
-                          readOnly
-                          className="px-4 h-[50px] bg-gray-100"
-                          placeholder="Enter Amount"
-                        />
-                      </Flex>
-                    </Box>
+                      <Box>
+                        <Flex
+                          className="border rounded-xl"
+                          align="center"
+                          justify="center"
+                          gap={2}
+                        >
+                          <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">
+                            $
+                          </InputAddon>
+                          <Input
+                            type="number"
+                            value={remainingAmount}
+                            readOnly
+                            className="px-4 h-[50px] bg-gray-100"
+                            placeholder="Enter Amount"
+                          />
+                        </Flex>
+                      </Box>
                   ) : (
                     <>
                       <Flex
@@ -679,18 +686,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                           placeholder="Enter Amount"
                         />
                       </Flex>
-                      <Box my={4}>
-                        {amount > 0 && amount < minimumAmount && (
-                          <Text
-                            color="gray.400"
-                            fontSize="sm"
-                            textAlign="center"
-                            mt={1}
-                          >
-                            Minimum sponsorship amount is ${minimumAmount}.
-                          </Text>
-                        )}
-                      </Box>
                     </>
                   )}
                 </Box>
@@ -728,20 +723,9 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   onClick={handleStripePayment}
                   loading={loading}
                   loadingText="Processing..."
-                  disabled={
-                    loading ||
-                    (remainingAmount < minimumAmount
-                      ? amount !== remainingAmount
-                      : amount < minimumAmount)
-                  }
+                  disabled={loading || !canPay}
                   className={`flex-1 py-2 bg-blue-700 text-white hover:bg-blue-800${
-                    (
-                      remainingAmount < minimumAmount
-                        ? amount !== remainingAmount
-                        : amount < minimumAmount
-                    )
-                      ? " opacity-50 cursor-not-allowed"
-                      : ""
+                    !canPay ? " opacity-50 cursor-not-allowed" : ""
                   }`}
                 >
                   Sponsor this child
@@ -754,16 +738,26 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                     intent: "capture",
                   }}
                 >
-                  <PayPalButtons
-                    style={{
-                      layout: "horizontal",
-                      tagline: false,
-                      height: 40,
-                    }}
-                    createOrder={handleCreateOrder}
-                    onApprove={handlePayPalApproval}
-                    onError={handlePayPalError}
-                  />
+                  {canPay ? (
+                    <PayPalButtons
+                      style={{
+                        layout: "horizontal",
+                        tagline: false,
+                        height: 40,
+                      }}
+                      createOrder={handleCreateOrder}
+                      onApprove={handlePayPalApproval}
+                      onError={handlePayPalError}
+                    />
+                  ) : (
+                    <Box className="h-[40px] bg-gray-200 rounded flex items-center justify-center">
+                      <Text color="gray.500" fontSize="sm">
+                        {remainingAmount < minimumAmount
+                          ? "Enter amount greater than $0"
+                          : `Minimum amount is $${minimumAmount}`}
+                      </Text>
+                    </Box>
+                  )}
                 </PayPalScriptProvider>
               </Box>
 
