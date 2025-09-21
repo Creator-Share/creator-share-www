@@ -149,7 +149,7 @@ const ChildrenTable = () => {
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleLocationSelect = (geo: [number, number] | null, locationStr: string, country: string) => {
+  const handleLocationSelect = (geo: [number, number], locationStr: string, country: string) => {
     setFormData({
       ...formData,
       location_geo: geo ? { type: "Point", coordinates: [geo[1], geo[0]] } : null,
@@ -161,7 +161,7 @@ const ChildrenTable = () => {
   const handleSubmit = async (): Promise<boolean> => {
     if (!formData.name || !formData.username || !formData.gender || !formData.birth_date ||
       !formData.biography || !formData.status || !formData.country ||
-      !formData.location_str || !formData.introduction) {
+      !formData.introduction) {
       toaster.create({
         title: "Error",
         description: "Please fill in all required fields",
@@ -219,16 +219,25 @@ const ChildrenTable = () => {
   };
 
   const confirmDelete = async () => {
-    const beneficiaryIds = selectedRowsForDeletion.map((b) => b.id).filter((id): id is string => typeof id === "string");
-    await bulkDelete("CHILD", beneficiaryIds);
-    setSelectedItems(new Set());
-    setSelectedRowsForDeletion([]);
-    setIsDeleteDialogOpen(false);
-    toaster.create({
-      title: "Success",
-      description: "Selected beneficiaries deleted successfully.",
-      duration: 5000,
-    });
+    try {
+      const beneficiaryIds = selectedRowsForDeletion.map((b) => b.id).filter((id): id is string => typeof id === "string");
+      await bulkDelete("CHILD", beneficiaryIds);
+      setSelectedItems(new Set());
+      setSelectedRowsForDeletion([]);
+      setIsDeleteDialogOpen(false);
+      toaster.create({
+        title: "Success",
+        description: "Selected beneficiaries deleted successfully.",
+        duration: 5000,
+      });
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+      toaster.create({
+        title: "Error",
+        description: "Failed to delete selected beneficiaries. Please try again.",
+        duration: 5000,
+      });
+    }
   };
 
   const handleDelete = async (beneficiaryId: string) => {

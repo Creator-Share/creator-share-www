@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@chakra-ui/next-js": "^2.4.2",
-    "@chakra-ui/react": "^3.3.1",
+    "@chakra-ui/react": "^3.27.0",
+    "@chakra-ui/system": "^2.6.2",
+    "@chakra-ui/theme": "^3.4.6",
     "@emotion/react": "^11.14.0",
     "@paypal/checkout-server-sdk": "^1.0.3",
     "@paypal/react-paypal-js": "^8.8.3",
