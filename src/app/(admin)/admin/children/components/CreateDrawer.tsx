@@ -204,7 +204,7 @@ const CreateDrawer = ({
                                     placeholder="Enter country name"
                                 />
                             </Field>
-                            <Field label="Upload Images">
+                            <Field>
                                 <div className="space-y-4">
                                     <FileUpload.Root gap="1" maxWidth="100%" onFileChange={handleImageChange} accept={["image/*"]} maxFiles={5}>
                                         <FileUpload.HiddenInput />
@@ -259,7 +259,7 @@ const CreateDrawer = ({
                                     </FileUpload.Root>
                                 </div>
                             </Field>
-                            <Field label="Upload Video">
+                            <Field>
                                 <div className="space-y-4">
                                     <FileUpload.Root gap="1" maxWidth="100%" onFileChange={handleVideoChange} accept={["video/mp4"]}>
                                         <FileUpload.HiddenInput />
