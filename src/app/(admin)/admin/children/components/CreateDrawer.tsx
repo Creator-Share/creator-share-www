@@ -194,16 +194,6 @@ const CreateDrawer = ({
                                     </NativeSelectField>
                                 </NativeSelectRoot>
                             </Field>
-                            <Field label="Country" required errorText="This field is required">
-                                <Input 
-                                    name="country" 
-                                    className="border" 
-                                    px={2} 
-                                    onChange={handleInputChange}
-                                    value={formData.country || ''}
-                                    placeholder="Enter country name"
-                                />
-                            </Field>
                             <Field>
                                 <div className="space-y-4">
                                     <FileUpload.Root gap="1" maxWidth="100%" onFileChange={handleImageChange} accept={["image/*"]} maxFiles={5}>
@@ -309,7 +299,17 @@ const CreateDrawer = ({
                                 </div>
                             </Field>
                             <MapPicker onSelectLocation={handleLocationSelect} />
-                            
+                            <Field label="Country" required errorText="This field is required">
+                                <Input 
+                                    name="country" 
+                                    className="border" 
+                                    px={2} 
+                                    onChange={handleInputChange}
+                                    value={formData.country || ''}
+                                    placeholder="Enter country name"
+                                    disabled
+                                />
+                            </Field>
                             {/* Expense Management Section */}
                             <div className="mt-6">
                                 <ExpenseManager 
