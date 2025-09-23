@@ -11,19 +11,15 @@ import {
     DrawerBackdrop,
     DrawerTrigger,
 } from "@/components/ui/drawer";
-import {  Text, Fieldset, Input, Stack, Textarea } from "@chakra-ui/react";
+import {  Text, Fieldset, Input, Stack, Textarea, Image, CloseButton, InputGroup, FileUpload } from "@chakra-ui/react";
 import { Button } from '@/components/ui/button';
 import { Field } from "@/components/ui/field";
 import {
     NativeSelectField,
     NativeSelectRoot,
 } from "@/components/ui/native-select";
-import {
-    FileUploadList,
-    FileUploadRoot,
-    FileUploadTrigger,
-} from "@/components/ui/file-upload";
-import { HiUpload } from "react-icons/hi";
+import { LuFileUp } from "react-icons/lu";
+import ExpenseManager from "./ExpenseManager";
 import MapPicker from "./MapPicker";
 import { Beneficiaries } from "@/types/admin.types";
 import { GoPlusCircle } from "react-icons/go";
@@ -57,6 +53,26 @@ const CreateDrawer = ({
     handleDrawerClose,
 }: CreateDrawerProps) => {
     const [isAdding, setIsAdding] = useState(false);
+    const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
+    const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+
+    const handleImageChange = (fileDetails: { acceptedFiles: File[] }) => {
+        setImageFiles(fileDetails.acceptedFiles);
+        
+        // Create preview URLs for images
+        const previewUrls = fileDetails.acceptedFiles.map(file => URL.createObjectURL(file));
+        setImagePreviewUrls(previewUrls);
+    };
+
+    const handleVideoChange = (fileDetails: { acceptedFiles: File[] }) => {
+        setVideoFiles(fileDetails.acceptedFiles);
+        
+        // Create preview URL for video
+        if (fileDetails.acceptedFiles.length > 0) {
+            setVideoPreviewUrl(URL.createObjectURL(fileDetails.acceptedFiles[0]));
+        }
+    };
+
 
     const handleAdd = async () => {
         
@@ -72,19 +88,13 @@ const CreateDrawer = ({
             return;
         }
 
-        if (!formData.location_geo || !formData.location_str || !formData.country) {
-            toaster.create({
-                title: "Location Required",
-                description: "Please select a location on the map",
-                duration: 5000,
-            });
-            return;
-        }
-
         try {
             setIsAdding(true);
             const success = await handleSubmit();
             if (success) {
+                // Clean up preview URLs
+                imagePreviewUrls.forEach(url => URL.revokeObjectURL(url));
+                if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
                 handleDrawerClose();
             }
         } catch (error) {
@@ -166,27 +176,146 @@ const CreateDrawer = ({
                             <Field label="Budget Goal" required errorText="This field is required">
                                 <Input name="budget_goal" type="text" className="border" px={2} onChange={handleInputChange} />
                             </Field>
-                            <Field label="Upload Image">
-                                <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]} maxFiles={5}>
-                                    <FileUploadTrigger asChild>
-                                        <Button variant="outline" size="sm" className="border" px={4}>
-                                            <HiUpload /> Upload Image
-                                        </Button>
-                                    </FileUploadTrigger>
-                                    <FileUploadList />
-                                </FileUploadRoot>
+                            <Field label="Status" required errorText="This field is required">
+                                <NativeSelectRoot>
+                                    <NativeSelectField
+                                        className="border"
+                                        placeholder="Select Status"
+                                        px={2}
+                                        name="status"
+                                        onChange={(e) => handleSelectChange("status", e.target.value)}
+                                        value={formData.status || ''}
+                                    >
+                                        <option value="New">New</option>
+                                        <option value="Partially Funded">Partially Funded</option>
+                                        <option value="Budget Fulfilled">Budget Fulfilled</option>
+                                        <option value="Archived">Archived</option>
+                                        <option value="Draft">Draft</option>
+                                    </NativeSelectField>
+                                </NativeSelectRoot>
                             </Field>
-                            <Field label="Upload Video">
-                                <FileUploadRoot onFileChange={(fileDetails) => setVideoFiles(fileDetails.acceptedFiles)} accept={["video/mp4"]} >
-                                    <FileUploadTrigger asChild>
-                                        <Button variant="outline" size="sm" className="border" px={4}>
-                                            <HiUpload /> Upload Video
-                                        </Button>
-                                    </FileUploadTrigger>
-                                    <FileUploadList />
-                                </FileUploadRoot>
+                            <Field>
+                                <div className="space-y-4">
+                                    <FileUpload.Root gap="1" maxWidth="100%" onFileChange={handleImageChange} accept={["image/*"]} maxFiles={5}>
+                                        <FileUpload.HiddenInput />
+                                        <FileUpload.Label>Upload Images</FileUpload.Label>
+                                        <InputGroup
+                                            startElement={<LuFileUp />}
+                                            endElement={
+                                                <FileUpload.ClearTrigger asChild>
+                                                    <CloseButton
+                                                        me="-1"
+                                                        size="xs"
+                                                        variant="plain"
+                                                        focusVisibleRing="inside"
+                                                        focusRingWidth="2px"
+                                                        pointerEvents="auto"
+                                                    />
+                                                </FileUpload.ClearTrigger>
+                                            }
+                                        >
+                                            <Input asChild>
+                                                <FileUpload.Trigger>
+                                                    <FileUpload.FileText lineClamp={1} />
+                                                </FileUpload.Trigger>
+                                            </Input>
+                                        </InputGroup>
+                                        
+                                        {/* Image Previews */}
+                                        <div className="flex flex-wrap gap-4 mt-4">
+                                            {imagePreviewUrls.map((url, index) => (
+                                                <div key={index} className="relative group">
+                                                    <Image
+                                                        src={url}
+                                                        alt={`Preview ${index + 1}`}
+                                                        width={200}
+                                                        height={200}
+                                                        objectFit="cover"
+                                                        className="rounded-xl border-2 border-gray-200"
+                                                    />
+                                                    <FileUpload.ClearTrigger asChild>
+                                                        <CloseButton
+                                                            className="absolute top-2 right-2"
+                                                            size="sm"
+                                                            variant="solid"
+                                                            bg="red.500"
+                                                            color="white"
+                                                            _hover={{ bg: "red.600" }}
+                                                        />
+                                                    </FileUpload.ClearTrigger>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </FileUpload.Root>
+                                </div>
+                            </Field>
+                            <Field>
+                                <div className="space-y-4">
+                                    <FileUpload.Root gap="1" maxWidth="100%" onFileChange={handleVideoChange} accept={["video/mp4"]}>
+                                        <FileUpload.HiddenInput />
+                                        <FileUpload.Label>Upload Video</FileUpload.Label>
+                                        <InputGroup
+                                            startElement={<LuFileUp />}
+                                            endElement={
+                                                <FileUpload.ClearTrigger asChild>
+                                                    <CloseButton
+                                                        me="-1"
+                                                        size="xs"
+                                                        variant="plain"
+                                                        focusVisibleRing="inside"
+                                                        focusRingWidth="2px"
+                                                        pointerEvents="auto"
+                                                    />
+                                                </FileUpload.ClearTrigger>
+                                            }
+                                        >
+                                            <Input asChild>
+                                                <FileUpload.Trigger>
+                                                    <FileUpload.FileText lineClamp={1} />
+                                                </FileUpload.Trigger>
+                                            </Input>
+                                        </InputGroup>
+                                        
+                                        {/* Video Preview */}
+                                        {videoPreviewUrl && (
+                                            <div className="relative group mt-4">
+                                                <video width="200" height="200" controls>
+                                                    <source src={videoPreviewUrl} type="video/mp4" />
+                                                    Your browser does not support the video tag.
+                                                </video>
+                                                <FileUpload.ClearTrigger asChild>
+                                                    <CloseButton
+                                                        className="absolute top-2 right-2"
+                                                        size="sm"
+                                                        variant="solid"
+                                                        bg="red.500"
+                                                        color="white"
+                                                        _hover={{ bg: "red.600" }}
+                                                    />
+                                                </FileUpload.ClearTrigger>
+                                            </div>
+                                        )}
+                                    </FileUpload.Root>
+                                </div>
                             </Field>
                             <MapPicker onSelectLocation={handleLocationSelect} />
+                            <Field label="Country" required errorText="This field is required">
+                                <Input 
+                                    name="country" 
+                                    className="border" 
+                                    px={2} 
+                                    onChange={handleInputChange}
+                                    value={formData.country || ''}
+                                    placeholder="Enter country name"
+                                    disabled
+                                />
+                            </Field>
+                            {/* Expense Management Section */}
+                            <div className="mt-6">
+                                <ExpenseManager 
+                                    budgetGoal={formData.budget_goal ? Number(formData.budget_goal) * 100 : 0}
+                                />
+                            </div>
                         </Fieldset.Content>
                     </Fieldset.Root>
                 </DrawerBody>

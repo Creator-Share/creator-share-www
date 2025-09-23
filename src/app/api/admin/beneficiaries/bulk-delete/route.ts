@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     const { error: activitiesError } = await supabase
       .from("activities")
       .delete()
-      .in("been", ids)
+      .in("beneficiary_id", ids)
 
     if (activitiesError) {
       return NextResponse.json({ error: activitiesError.message }, { status: 400 });

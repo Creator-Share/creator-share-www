@@ -58,7 +58,7 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
     set({ loading: false });
   },
 
-  createBeneficiary: async (type, formData) => {
+  createBeneficiary: async (type, formData, imageFiles, videoFiles) => {
     try {
       const payload = { ...formData, beneficiary_type: type };
       const res = await fetch("/api/admin/beneficiaries/create", {
@@ -66,11 +66,69 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) return false;
-      // TODO: handle image/video upload if needed
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error("Create beneficiary failed:", errorData);
+        return false;
+      }
+      
+      const result = await res.json();
+      const beneficiaryId = result.beneficiary?.id;
+      
+      if (!beneficiaryId) {
+        console.error("No beneficiary ID returned");
+        return false;
+      }
+      
+      // Upload images if any
+      if (imageFiles && imageFiles.length > 0) {
+        try {
+          const imageFormData = new FormData();
+          imageFiles.forEach((file) => {
+            imageFormData.append(`images`, file);
+          });
+          imageFormData.append('beneficiary_id', beneficiaryId);
+          
+          const imageRes = await fetch("/api/admin/beneficiaries/images/create", {
+            method: "POST",
+            body: imageFormData,
+          });
+          
+          if (!imageRes.ok) {
+            console.error("Image upload failed:", await imageRes.json());
+          }
+        } catch (imageError) {
+          console.error("Image upload error:", imageError);
+        }
+      }
+      
+      // Upload video if any
+      if (videoFiles && videoFiles.length > 0) {
+        try {
+          const videoFormData = new FormData();
+          videoFiles.forEach((file) => {
+            videoFormData.append(`video`, file);
+          });
+          videoFormData.append('beneficiary_id', beneficiaryId);
+          
+          const videoRes = await fetch("/api/admin/beneficiaries/video/create", {
+            method: "POST",
+            body: videoFormData,
+          });
+          
+          if (!videoRes.ok) {
+            console.error("Video upload failed:", await videoRes.json());
+          }
+        } catch (videoError) {
+          console.error("Video upload error:", videoError);
+        }
+      }
+      
       await get().fetchBeneficiaries(type);
       return true;
-    } catch {
+    } catch (error) {
+      console.error("Create beneficiary error:", error);
       return false;
     }
   },
@@ -95,12 +153,22 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
 
   bulkDelete: async (type, ids) => {
     try {
-      await fetch("/api/beneficiaries/bulk-delete", {
+      const response = await fetch("/api/admin/beneficiaries/bulk-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids }),
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Bulk delete failed:", errorData);
+        throw new Error(errorData.error || "Bulk delete failed");
+      }
+      
       await get().fetchBeneficiaries(type);
-    } catch {}
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+      throw error;
+    }
   },
 }));

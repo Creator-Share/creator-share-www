@@ -24,6 +24,7 @@ import {
     FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
+import ExpenseManager from './ExpenseManager';
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types";
 import { createClient } from "@/utils/supabase/client";
 import { toaster } from "@/components/ui/toaster";
@@ -429,6 +430,30 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     } : undefined
                                 }
                             />
+                            <Field label="Country" required errorText="This field is required">
+                                <Input
+                                    name="country"
+                                    className="border"
+                                    px={2}
+                                    onChange={handleInputChange}
+                                    value={formDataEdit.country || ''}
+                                    placeholder="Enter country name"
+                                    disabled
+                                />
+                            </Field>
+
+                            {/* Expense Management Section */}
+                            {selectedChild?.id && (
+                                <div className="mt-6">
+                                    <ExpenseManager
+                                        beneficiaryId={selectedChild.id}
+                                        budgetGoal={selectedChild.budget_goal || 0}
+                                        onExpensesChange={(assignments) => {
+                                            console.log('Expense assignments updated:', assignments);
+                                        }}
+                                    />
+                                </div>
+                            )}
                         </Fieldset.Content>
                     </Fieldset.Root>
                     {selectedChild?.id && (
@@ -479,7 +504,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                         className="bg-[#1C3C8C] w-1/3 text-white"
                         loading={isSaving}
                         loadingText="Saving..."
-                            disabled={isSaving}
+                        disabled={isSaving}
                     >
                         Save
                     </Button>

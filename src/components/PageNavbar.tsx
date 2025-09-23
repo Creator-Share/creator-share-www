@@ -66,7 +66,13 @@ export function PageNavbar() {
     }
   }, [isOpen]);
 
+  // Close menu on route change
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
   const handleLogout = async () => {
+    setIsOpen(false);
     await logout();
     router.push("/");
   };
@@ -239,7 +245,6 @@ export function PageNavbar() {
                     boxShadow: "none",
                     outline: "none",
                   }}
-                  onClick={() => setIsOpen(false)}
                 >
                   {link.name}
                 </Link>
