@@ -8,6 +8,7 @@ import { BeneficiaryCardProps } from "@/types/propTypes";
 import Image from "next/image";
 import { BeneficiaryMedia } from "@/types/admin.types";
 import { centsToDollars } from "@/utils/currency";
+import { generatePublicUrl } from "@/utils/supabase/media";
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -72,7 +73,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       {/* Card Header: Image with Target Badge */}
       <Box position="relative" flexShrink={0}>
         <Image
-          src={images.length > 0 ? images[0].image_url : placeholderImage}
+          src={images.length > 0 ? (images[0].id ? generatePublicUrl(images[0] as any) : images[0].image_url) : placeholderImage}
           alt={beneficiary.name?.split(" ")[0] ?? ""}
           width={500}
           height={500}

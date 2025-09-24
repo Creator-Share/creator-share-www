@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { uploadFile, generatePublicUrl } from "@/utils/supabase/media";
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
@@ -23,43 +24,9 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = await createClient();
-  const images_url: string[] = [];
-  for (const file of images) {
-    const ext = file.name.split(".").pop();
-    const filePath = `activities/images/${Date.now()}_${Math.random()
-      .toString(36)
-      .slice(2)}.${ext}`;
-    const { error } = await supabase.storage
-      .from("activities-media")
-      .upload(filePath, file, { contentType: file.type });
-    if (error) {
-      console.error("Image upload error:", error.message);
-      continue;
-    }
-    const { data: publicUrlData } = supabase.storage
-      .from("activities-media")
-      .getPublicUrl(filePath);
-    if (publicUrlData?.publicUrl) images_url.push(publicUrlData.publicUrl);
-  }
-  const videos_url: string[] = [];
-  for (const file of videos) {
-    const ext = file.name.split(".").pop();
-    const filePath = `activities/videos/${Date.now()}_${Math.random()
-      .toString(36)
-      .slice(2)}.${ext}`;
-    const { error } = await supabase.storage
-      .from("activities-media")
-      .upload(filePath, file, { contentType: file.type });
-    if (error) {
-      console.error("Video upload error:", error.message);
-      continue;
-    }
-    const { data: publicUrlData } = supabase.storage
-      .from("activities-media")
-      .getPublicUrl(filePath);
-    if (publicUrlData?.publicUrl) videos_url.push(publicUrlData.publicUrl);
-  }
-  const { data: inserted, error } = await supabase
+
+  // Insert activity record first (we'll attach media via the media table)
+  const { data: activityInserted, error: insertErr } = await supabase
     .from("activities")
     .insert([
       {
@@ -67,16 +34,102 @@ export async function POST(req: NextRequest) {
         description,
         beneficiary_id,
         created_at: new Date().toISOString(),
-        images_url,
-        videos_url,
-        created_by: "admin", // Set the activity source
+        created_by: "admin",
       },
     ])
     .select()
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (insertErr) {
+    return NextResponse.json({ error: insertErr.message }, { status: 500 });
+  }
+
+  const activityId = (activityInserted as any).id;
+
+  // Use media table references (store media ids in activity.metadata) instead of persisting public URLs
+  const imageMediaIds: string[] = [];
+  for (const file of images) {
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+  
+    // Insert media row for this image
+    const { data: mediaInserted, error: mediaInsertErr } = await supabase
+      .from("media")
+      .insert([{ parent_id: activityId, extension: ext, type: "IMAGE" }])
+      .select()
+      .single();
+  
+    if (mediaInsertErr) {
+      console.error("Activity image media insert failed:", mediaInsertErr);
+      continue;
+    }
+  
+    const mediaRow = mediaInserted as any;
+  
+    // Upload using centralized helper
+    try {
+      const { error: uploadErr } = await uploadFile(supabase, mediaRow, file, {
+        contentType: file.type,
+      });
+      if (uploadErr) {
+        console.error("Activity image upload error:", uploadErr);
+      }
+    } catch (e) {
+      console.error("Unexpected error uploading activity image:", e);
+    }
+  
+    imageMediaIds.push(mediaRow.id);
+  }
+  
+  const videoMediaIds: string[] = [];
+  for (const file of videos) {
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+  
+    // Insert media row for this video
+    const { data: mediaInserted, error: mediaInsertErr } = await supabase
+      .from("media")
+      .insert([{ parent_id: activityId, extension: ext, type: "VIDEO" }])
+      .select()
+      .single();
+  
+    if (mediaInsertErr) {
+      console.error("Activity video media insert failed:", mediaInsertErr);
+      continue;
+    }
+  
+    const mediaRow = mediaInserted as any;
+  
+    try {
+      const { error: uploadErr } = await uploadFile(supabase, mediaRow, file, {
+        contentType: file.type,
+      });
+      if (uploadErr) {
+        console.error("Activity video upload error:", uploadErr);
+      }
+    } catch (e) {
+      console.error("Unexpected error uploading activity video:", e);
+    }
+  
+    videoMediaIds.push(mediaRow.id);
+  }
+  
+  // Persist media references in activity.metadata.media (images/videos)
+  let inserted = activityInserted;
+  try {
+    const metadata = { media: { images: imageMediaIds, videos: videoMediaIds } };
+    const { data: updatedActivity, error: updateErr } = await supabase
+      .from("activities")
+      .update({ metadata })
+      .eq("id", activityId)
+      .select()
+      .single();
+
+    if (updateErr) {
+      console.error("Failed to update activity with media references:", updateErr);
+    } else {
+      inserted = updatedActivity || activityInserted;
+    }
+  } catch (e) {
+    console.error("Unexpected error updating activity with media references:", e);
   }
 
   // Only notify subscribers if created_by is 'admin'

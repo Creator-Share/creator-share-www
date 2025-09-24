@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { deleteFile } from "@/utils/supabase/media";
 
 export async function DELETE(req: Request) {
   const supabase = await createClient();
   const { imageId } = await req.json();
 
   try {
-    // First get the image record to get its URL
-    const { data: imageData, error: fetchError } = await supabase
+    // Fetch the media row (we rely on parent_id/type/extension for storage key)
+    const { data: mediaRow, error: fetchError } = await supabase
       .from("media")
-      .select("image_url")
+      .select("id, parent_id, type, extension")
       .eq("id", imageId)
       .single();
 
@@ -17,17 +18,15 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: fetchError.message }, { status: 400 });
     }
 
-    // Delete from storage if URL exists
-    if (imageData?.image_url) {
-      const urlParts = imageData.image_url.split("/");
-      const fileName = urlParts[urlParts.length - 1];
-      const { error: storageError } = await supabase.storage
-        .from("beneficiaries")
-        .remove([`images/${fileName}`]);
-
+    // Delete from storage using centralized helper
+    try {
+      const { error: storageError } = await deleteFile(supabase, mediaRow as any);
       if (storageError) {
+        // Log but continue to attempt DB deletion
         console.error("Storage delete error:", storageError);
       }
+    } catch (storageErr) {
+      console.error("Unexpected storage delete error:", storageErr);
     }
 
     // Delete the database record
@@ -43,9 +42,6 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
