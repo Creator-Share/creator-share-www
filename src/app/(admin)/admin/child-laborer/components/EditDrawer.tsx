@@ -24,10 +24,10 @@ import {
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types";
-import { createClient } from "@/utils/supabase/client";
 import { toaster } from "@/components/ui/toaster";
 import { HiUpload, HiX } from "react-icons/hi";
 import ActivitiesTable from "../../activities/components/ActivitiesTable";
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media";
 
 interface EditDrawerProps {
     selectedBeneficiary: Beneficiaries | null;
@@ -92,24 +92,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     const [allImages, setAllImages] = useState<BeneficiaryMedia[]>([]);
     const [isImageLoading, setIsImageLoading] = useState(false);
 
-    const uploadFileToSupabase = async (file: File, folder: string): Promise<string | null> => {
-        const supabase = createClient();
-        const fileName = `${Date.now()}-${file.name}`;
-        const filePath = `${folder}/${fileName}`;
-
-        const { error } = await supabase.storage.from("beneficiaries").upload(filePath, file, {
-            cacheControl: "3600",
-            upsert: false,
-        });
-
-        if (error) {
-            console.error("File upload failed:", error.message);
-            return null;
-        }
-
-        const { data } = supabase.storage.from("beneficiaries").getPublicUrl(filePath);
-        return data.publicUrl;
-    };
+    // Legacy direct upload helper removed — uploads now go through server endpoints (/api/admin/beneficiaries/*)
 
     useEffect(() => {
         if (selectedBeneficiary) {
@@ -152,52 +135,62 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             // Ensure budget_goal is a number in dollars before converting to cents
             const budgetGoalInCents = Math.round(Number(formDataEdit.budget_goal) * 100);
             if (imageFiles.length > 0) {
-                const supabase = createClient();
-                const imageUrls = [];
+                try {
+                    const formData = new FormData();
+                    formData.append('beneficiaryId', selectedBeneficiary?.id || '');
+                    imageFiles.forEach((f) => formData.append('images', f));
 
-                for (const imageFile of imageFiles) {
-                    const fileName = `${Date.now()}-${imageFile.name}`;
-                    const filePath = `images/${fileName}`;
+                    const response = await fetch('/api/admin/beneficiaries/images/create', {
+                        method: 'POST',
+                        body: formData,
+                    });
 
-                    const { error: uploadError } = await supabase.storage
-                        .from("beneficiaries")
-                        .upload(filePath, imageFile, {
-                            cacheControl: "3600",
-                            upsert: false,
-                        });
-
-                    if (uploadError) {
-                        console.error("File upload failed:", uploadError.message);
-                        continue;
+                    if (!response.ok) {
+                        console.error('Beneficiary images upload error: server responded with', response.status);
+                        throw new Error('Image upload failed');
                     }
 
-                    const { data } = supabase.storage
-                        .from("beneficiaries")
-                        .getPublicUrl(filePath);
-
-                    imageUrls.push(data.publicUrl);
+                    await fetchImages();
+                    setImageFiles([]);
+                } catch (err) {
+                    console.error("Error uploading images:", err);
+                    toaster.create({
+                        title: "Error",
+                        description: "Failed to upload images",
+                        duration: 5000,
+                    });
                 }
-                const { error: insertError } = await supabase
-                    .from("media")
-                    .insert(
-                        imageUrls.map((url, index) => ({
-                            beneficiary_id: selectedBeneficiary?.id || '',
-                            image_url: url,
-                            order_index: index
-                        }))
-                    );
-
-                if (insertError) {
-                    throw new Error('Failed to create image records');
-                }
-
-                await fetchImages();
-                setImageFiles([]);
             }
 
             if (videoFiles.length > 0) {
-                const videoUrl = await uploadFileToSupabase(videoFiles[0], "videos");
-                if (videoUrl) updatedData.video_url = videoUrl;
+                try {
+                    const formData = new FormData();
+                    formData.append('beneficiaryId', selectedBeneficiary?.id || '');
+                    formData.append('video', videoFiles[0]);
+
+                    const response = await fetch('/api/admin/beneficiaries/video/create', {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    if (!response.ok) {
+                        console.error('Beneficiary video upload error: server responded with', response.status);
+                        throw new Error('Video upload failed');
+                    }
+
+                    const data = await response.json();
+                    if (data?.public_url) {
+                        updatedData.video_url = data.public_url;
+                        setVideoUrl(data.public_url);
+                    }
+                } catch (err) {
+                    console.error("Error uploading video:", err);
+                    toaster.create({
+                        title: "Error",
+                        description: "Failed to upload video",
+                        duration: 5000,
+                    });
+                }
             }
 
             // Ensure all required fields are present and not undefined
@@ -408,7 +401,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                         {allImages.map((image, index) => (
                                             <div key={image.id} className="relative group">
                                                 <Image
-                                                    src={image.image_url}
+                                                    src={image.id ? generatePublicUrl(image as unknown as MediaRow) : image.image_url}
                                                     alt={`Child Laborer's photo ${index + 1}`}
                                                     width={200}
                                                     height={200}

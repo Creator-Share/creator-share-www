@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { deleteFile, MediaRow } from "@/utils/supabase/media";
 
 // GET: Retrieve all images for a beneficiary by beneficiary_id
 export async function GET(
@@ -13,7 +14,7 @@ export async function GET(
     const { data, error } = await supabase
       .from("media")
       .select("*")
-      .eq("beneficiary_id", beneficiary_id);
+      .eq("parent_id", beneficiary_id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
@@ -29,12 +30,33 @@ export async function GET(
   }
 }
 
-// DELETE: Delete an image by its id
+// DELETE: Delete an image by its id (also remove file from storage)
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
   const { id } = await params;
   const image_id = id;
   try {
+    // Fetch the media row to determine storage key
+    const { data: mediaRow, error: fetchErr } = await supabase
+      .from("media")
+      .select("id, parent_id, type, extension")
+      .eq("id", image_id)
+      .single();
+
+    if (fetchErr) {
+      return NextResponse.json({ error: fetchErr.message }, { status: 400 });
+    }
+
+    try {
+      const { error: storageError } = await deleteFile(supabase, mediaRow as unknown as MediaRow);
+      if (storageError) {
+        console.error("Storage delete error:", storageError);
+        // continue to DB deletion even if storage delete failed
+      }
+    } catch (e) {
+      console.error("Unexpected storage delete error:", e);
+    }
+
     const { error } = await supabase
       .from("media")
       .delete()

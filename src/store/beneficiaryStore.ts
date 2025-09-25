@@ -88,7 +88,7 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
           imageFiles.forEach((file) => {
             imageFormData.append(`images`, file);
           });
-          imageFormData.append('beneficiary_id', beneficiaryId);
+          imageFormData.append('beneficiaryId', beneficiaryId);
           
           const imageRes = await fetch("/api/admin/beneficiaries/images/create", {
             method: "POST",
@@ -110,7 +110,7 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
           videoFiles.forEach((file) => {
             videoFormData.append(`video`, file);
           });
-          videoFormData.append('beneficiary_id', beneficiaryId);
+          videoFormData.append('beneficiaryId', beneficiaryId);
           
           const videoRes = await fetch("/api/admin/beneficiaries/video/create", {
             method: "POST",

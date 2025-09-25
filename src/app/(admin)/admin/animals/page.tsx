@@ -202,94 +202,80 @@ const AnimalsTable = () => {
       ]);
 
       if (imageFiles.length > 0 && beneficiary.id) {
-        const supabase = (await import("@/utils/supabase/client")).createClient();
-        const imageUrls: string[] = [];
-        for (const imageFile of imageFiles) {
-          const fileName = `${Date.now()}-${imageFile.name}`;
-          const filePath = `images/${fileName}`;
-          const { error: uploadError } = await supabase.storage
-            .from("beneficiaries")
-            .upload(filePath, imageFile, {
-              cacheControl: "3600",
-              upsert: false,
-            });
-          if (uploadError) {
-            console.error("File upload failed:", uploadError.message);
-            continue;
-          }
-          const { data: urlData } = supabase.storage
-            .from("beneficiaries")
-            .getPublicUrl(filePath);
-          if (urlData?.publicUrl) {
-            imageUrls.push(urlData.publicUrl);
-          }
-        }
-        if (imageUrls.length > 0) {
-          await fetch("/api/admin/beneficiaries/images/create", {
+        try {
+          const formData = new FormData();
+          formData.append("beneficiaryId", beneficiary.id);
+          imageFiles.forEach((f) => formData.append("images", f));
+
+          const response = await fetch("/api/admin/beneficiaries/images/create", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              images: imageUrls.map((url, index) => ({
-                beneficiary_id: beneficiary.id,
-                image_url: url,
-                order_index: index,
-              })),
-              beneficiary_type: "ANIMAL",
-            }),
+            body: formData,
+          });
+
+          if (!response.ok) {
+            console.error("Beneficiary images upload error: server responded with", response.status);
+            throw new Error("Image upload failed");
+          }
+
+          // Refresh UI: for now we fetch images on demand in other components,
+          // and we clear local selection here.
+          setImageFiles([]);
+        } catch (err) {
+          console.error("Error uploading images:", err);
+          toaster.create({
+            title: "Error",
+            description: "Failed to upload images",
+            duration: 5000,
           });
         }
       }
 
       // Upload video to Supabase storage and update animal record
       if (videoFiles.length > 0 && beneficiary.id) {
-        const supabase = (await import("@/utils/supabase/client")).createClient();
-        const videoFile = videoFiles[0];
-        const fileName = `${Date.now()}-${videoFile.name}`;
-        const filePath = `videos/${fileName}`;
-        const { error: uploadError } = await supabase.storage
-          .from("beneficiaries")
-          .upload(filePath, videoFile, {
-            cacheControl: "3600",
-            upsert: false,
+        try {
+          const formData = new FormData();
+          formData.append("beneficiaryId", beneficiary.id);
+          formData.append("video", videoFiles[0]);
+
+          const response = await fetch("/api/admin/beneficiaries/video/create", {
+            method: "POST",
+            body: formData,
           });
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage
-            .from("beneficiaries")
-            .getPublicUrl(filePath);
-          if (urlData?.publicUrl) {
-            const videoResponse = await fetch("/api/admin/beneficiaries/update/" + beneficiary.id, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                video_url: urlData.publicUrl,
-                beneficiary_type: "ANIMAL",
-              }),
-            });
-            if (videoResponse.ok) {
-              const updatedData = await videoResponse.json();
-              if (updatedData.beneficiary) {
-                const updatedAnimal = updatedData.beneficiary;
-                setData((prev: AnimalBeneficiary[]) => prev.map(a => 
-                  a.id === updatedAnimal.id 
-                    ? { 
-                        ...updatedAnimal, 
-                        budget_goal: String(dollarsToCents(updatedAnimal.budget_goal)),
-                        video_url: updatedAnimal.video_url || ""
-                      }
-                    : a
-                ));
-                setImageFiles([]);
-                setVideoFiles([]);
-                handleDrawerClose();
-                toaster.create({
-                  title: "Success",
-                  description: "Animal created successfully.",
-                  duration: 5000,
-                });
-                return true;
-              }
-            }
+
+          if (!response.ok) {
+            console.error("Beneficiary video upload error: server responded with", response.status);
+            throw new Error("Video upload failed");
           }
+
+          const data = await response.json();
+          // Expected response: { media: {...}, public_url: string }
+          if (data?.public_url) {
+            const publicUrl = data.public_url;
+            // Update local UI for the created animal
+            setData((prev: AnimalBeneficiary[]) =>
+              prev.map((a) =>
+                a.id === beneficiary.id
+                  ? { ...a, video_url: publicUrl }
+                  : a
+              )
+            );
+            setImageFiles([]);
+            setVideoFiles([]);
+            handleDrawerClose();
+            toaster.create({
+              title: "Success",
+              description: "Animal created successfully.",
+              duration: 5000,
+            });
+            return true;
+          }
+        } catch (err) {
+          console.error("Error uploading video:", err);
+          toaster.create({
+            title: "Error",
+            description: "Failed to upload video",
+            duration: 5000,
+          });
         }
       }
 

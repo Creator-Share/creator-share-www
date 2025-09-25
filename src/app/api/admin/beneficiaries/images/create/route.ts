@@ -1,69 +1,68 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { generatePublicUrl, MediaRow, uploadFile } from "@/utils/supabase/media";
 
 export async function POST(req: Request) {
+  const { createClient } = await import("@/utils/supabase/server");
   const supabase = await createClient();
   try {
     const formData = await req.formData();
-    const beneficiaryId = formData.get('beneficiary_id') as string;
+    const beneficiaryId = formData.get('beneficiaryId') as string;
     const imageFiles = formData.getAll('images') as File[];
-    
+
     if (!beneficiaryId) {
-      return NextResponse.json({ error: "Beneficiary ID is required" }, { status: 400 });
+      return NextResponse.json({ error: "Missing beneficiaryId" }, { status: 400 });
     }
-    
+
     if (!imageFiles || imageFiles.length === 0) {
       return NextResponse.json({ error: "No images provided" }, { status: 400 });
     }
 
-    const uploadedImages = [];
-    
+    const responses: Array<Record<string, unknown>> = [];
+
     for (let i = 0; i < imageFiles.length; i++) {
       const file = imageFiles[i];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${beneficiaryId}-${Date.now()}-${i}.${fileExt}`;
-      const filePath = `beneficiaries/${beneficiaryId}/${fileName}`;
+      const extPart = file.name.split('.').pop() || "";
+      const extension = extPart.toLowerCase();
 
-      const { error: uploadError } = await supabase.storage
-        .from('beneficiaries')
-        .upload(`images/${filePath}`, file);
-        
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
+      // Insert media row first
+      const { data: inserted, error: insertErr } = await supabase
+        .from('media')
+        .insert([{ parent_id: beneficiaryId, extension, type: 'IMAGE' }])
+        .select()
+        .single();
+
+      if (insertErr) {
+        console.error("Beneficiary images upload error: DB insert failed:", insertErr);
+        // Skip and continue
         continue;
       }
-      
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('beneficiaries')
-        .getPublicUrl(`images/${filePath}`);
-        
-      uploadedImages.push({
-        beneficiary_id: beneficiaryId,
-        image_url: urlData.publicUrl,
-        order_index: i,
+
+      const mediaRow = inserted as unknown as MediaRow;
+
+      // Upload file to storage using helper
+      const { error: uploadErr } = await uploadFile(supabase, mediaRow, file, {
+        cacheControl: '3600',
+        contentType: file.type,
+        upsert: false
       });
-    }
-    
-    if (uploadedImages.length === 0) {
-      return NextResponse.json({ error: "Failed to upload any images" }, { status: 400 });
+
+      if (uploadErr) {
+        console.error("Beneficiary images upload error: storage upload failed:", uploadErr);
+      }
+
+      const respItem = {
+        ...mediaRow,
+        public_url: generatePublicUrl(mediaRow),
+        upload_error: uploadErr?.message || null
+      };
+
+      responses.push(respItem);
     }
 
-    // Insert image records into database
-    const { error } = await supabase
-      .from("media")
-      .insert(uploadedImages);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    return NextResponse.json({ success: true, uploaded: uploadedImages.length }, { status: 201 });
+    return NextResponse.json(responses, { status: 200 });
   } catch (err: unknown) {
+    console.error("Beneficiary images upload error:", err);
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

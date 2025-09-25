@@ -4,6 +4,8 @@ import { Beneficiaries, Activity } from "@/types";
 import { Box, Text, Flex, Button, Input, Textarea } from "@chakra-ui/react";
 import Image from "next/image";
 import Link from "next/link";
+import { createClient } from "@/utils/supabase/server";
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media";
 
 async function getBeneficiary(username: string): Promise<Beneficiaries | null> {
   try {
@@ -36,6 +38,29 @@ export default async function ActivityDetailPage({ params }: ActivityPageProps) 
 
   const activities: Activity[] = await fetchActivitiesByBeneficiaryId(beneficiary.id);
   const activity = activities.find((a) => a.id === id);
+
+  // Fetch media rows for this activity (media table uses parent_id = activity.id)
+  let imagesPublic: string[] = [];
+  let videosPublic: string[] = [];
+  if (activity?.id) {
+    try {
+      const supabase = await createClient();
+      const { data: mediaRows, error: mediaErr } = await supabase
+        .from("media")
+        .select("*")
+        .eq("parent_id", activity.id)
+        .order("order_index", { ascending: true });
+
+      if (!mediaErr && Array.isArray(mediaRows) && mediaRows.length > 0) {
+        const images = mediaRows.filter((m: MediaRow) => m.type === "IMAGE" || m.type === "images" as MediaRow["type"]);
+        const videos = mediaRows.filter((m: MediaRow) => m.type === "VIDEO" || m.type === "videos" as MediaRow["type"]);
+        imagesPublic = images.map((m: MediaRow) => generatePublicUrl(m));
+        videosPublic = videos.map((m: MediaRow) => generatePublicUrl(m));
+      }
+    } catch (e) {
+      console.error("Failed to fetch activity media:", e);
+    }
+  }
 
   if (!activity) {
     return (
@@ -79,10 +104,10 @@ export default async function ActivityDetailPage({ params }: ActivityPageProps) 
       </Flex>
 
       {/* Main Image */}
-      {Array.isArray(activity.images_url) && activity.images_url.length > 0 && (
+      {imagesPublic.length > 0 && (
         <Box w="100%" maxH="400px" mb={6} borderRadius="md" overflow="hidden" boxShadow="md" className="bg-white px-4 md:px-0">
           <Image
-            src={activity.images_url[0]}
+            src={imagesPublic[0]}
             alt="Main activity image"
             width={900}
             height={400}
@@ -112,10 +137,10 @@ export default async function ActivityDetailPage({ params }: ActivityPageProps) 
       </Box>
 
       {/* Video */}
-      {Array.isArray(activity.videos_url) && activity.videos_url.length > 0 && (
+      {videosPublic.length > 0 && (
         <Box w="100%" maxW="700px" mx="auto" mb={8} borderRadius="md" overflow="hidden" boxShadow="md" className="bg-white px-4 md:px-0">
           <video
-            src={activity.videos_url[0]}
+            src={videosPublic[0]}
             controls
             style={{ width: "100%", height: "350px", objectFit: "cover", borderRadius: 8, border: "1px solid #eee" }}
           />

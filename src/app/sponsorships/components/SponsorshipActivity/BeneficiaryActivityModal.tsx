@@ -43,6 +43,7 @@ import { useAuthStore } from "@/store/authStore";
 import { paymentOptionsCollection } from "../Payments/config";
 import { Button } from "@/components/ui/button";
 import { BeneficiaryMedia } from "@/types/admin.types";
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media";
 
 interface BeneficiaryActivityModalProps {
   open: boolean;
@@ -74,8 +75,41 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   );
   const [loading, setLoading] = useState<boolean>(false);
   const [primaryImageUrl, setPrimaryImageUrl] = useState<string | null>(null);
+  const [videoMediaUrl, setVideoMediaUrl] = useState<string | null>(beneficiary.video_url || null);
+
   const fallbackPlaceholder =
     "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+
+  useEffect(() => {
+    async function loadBeneficiaryMedia() {
+      if (!beneficiary?.id) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/admin/beneficiaries/images/${beneficiary.id}`);
+        if (!res.ok) {
+          // fallback to any existing beneficiary.video_url already set in state
+          return;
+        }
+        const media = await res.json();
+        if (Array.isArray(media) && media.length > 0) {
+          const videos = media.filter((m: BeneficiaryMedia) => m.type === "VIDEO" || m.type === "videos");
+          if (videos.length > 0) {
+            try {
+              setVideoMediaUrl(generatePublicUrl(videos[0] as unknown as MediaRow));
+            } catch {
+              // if generatePublicUrl fails, leave existing beneficiary.video_url (if any)
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load beneficiary media:", e);
+      }
+    }
+
+    loadBeneficiaryMedia();
+  }, [beneficiary?.id]);
 
   // Whether user can proceed with payment given current amount
   const canPay = remainingAmount < minimumAmount
@@ -814,11 +848,10 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 mt={4}
                 className="flex justify-center items-center md:min-h-[191px] mb-2"
               >
-                {beneficiary.video_url &&
-                beneficiary.video_url.trim() !== "" ? (
+                {videoMediaUrl && videoMediaUrl.trim() !== "" ? (
                   <video
                     className="rounded-xl max-h-40 w-full"
-                    src={beneficiary.video_url}
+                    src={videoMediaUrl}
                     controls
                   />
                 ) : (
