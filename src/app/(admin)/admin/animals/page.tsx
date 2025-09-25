@@ -217,9 +217,6 @@ const AnimalsTable = () => {
             throw new Error("Image upload failed");
           }
 
-          // Response expected to be an array of created media objects with public_url
-          const created = await response.json();
-
           // Refresh UI: for now we fetch images on demand in other components,
           // and we clear local selection here.
           setImageFiles([]);

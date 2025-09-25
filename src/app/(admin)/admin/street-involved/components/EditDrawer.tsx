@@ -24,12 +24,11 @@ import {
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
 import { Beneficiaries, BeneficiaryMedia, BeneficiaryType } from "@/types/admin.types";
-import { createClient } from "@/utils/supabase/client";
 import { toaster } from "@/components/ui/toaster";
 import { dollarsToCents } from "@/utils/currency";
 import { HiUpload, HiX } from "react-icons/hi";
 import ActivitiesTable from "../../activities/components/ActivitiesTable";
-import { generatePublicUrl } from "@/utils/supabase/media";
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media";
 
 interface EditDrawerProps {
     selectedBeneficiary: Beneficiaries | null;
@@ -142,7 +141,6 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                         throw new Error('Image upload failed');
                     }
 
-                    const created = await response.json();
                     await fetchImages();
                     setImageFiles([]);
                 } catch (err) {
@@ -377,7 +375,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                         {allImages.map((image, index) => (
                                             <div key={image.id} className="relative group">
                                                 <Image
-                                                    src={image.id ? generatePublicUrl(image as any) : image.image_url}
+                                                    src={image.id ? generatePublicUrl(image as unknown as MediaRow) : image.image_url}
                                                     alt={`Street Involved's photo ${index + 1}`}
                                                     width={200}
                                                     height={200}

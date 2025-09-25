@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { uploadFile, generatePublicUrl } from "@/utils/supabase/media";
+import { MediaRow, uploadFile } from "@/utils/supabase/media";
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertErr.message }, { status: 500 });
   }
 
-  const activityId = (activityInserted as any).id;
+  const activityId = (activityInserted as unknown as MediaRow).id;
 
   // Use media table references (store media ids in activity.metadata) instead of persisting public URLs
   const imageMediaIds: string[] = [];
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       continue;
     }
   
-    const mediaRow = mediaInserted as any;
+    const mediaRow = mediaInserted as unknown as MediaRow;
   
     // Upload using centralized helper
     try {
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       continue;
     }
   
-    const mediaRow = mediaInserted as any;
+    const mediaRow = mediaInserted as unknown as MediaRow;
   
     try {
       const { error: uploadErr } = await uploadFile(supabase, mediaRow, file, {

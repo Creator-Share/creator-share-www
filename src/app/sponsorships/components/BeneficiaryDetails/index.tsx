@@ -7,7 +7,7 @@ import { formatDate } from "@/utils/dateFormatter";
 import { BeneficiaryCardProps } from "@/types/propTypes";
 import { useState, useEffect } from "react";
 import { BeneficiaryMedia } from "@/types";
-import { generatePublicUrl } from "@/utils/supabase/media";
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media";
 
 
 const BeneficiaryDetailsCard: React.FC<BeneficiaryCardProps> = ({ beneficiary }) => {
@@ -101,9 +101,9 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryCardProps> = ({ beneficiary })
                     <Image
                         src={
                           images.length > 0 && images[currentImageIndex]?.id
-                            ? generatePublicUrl(images[currentImageIndex] as any)
+                            ? generatePublicUrl(images[currentImageIndex] as unknown as MediaRow)
                             : images.length > 0 && images[currentImageIndex]?.id
-                              ? generatePublicUrl(images[currentImageIndex] as any)
+                              ? generatePublicUrl(images[currentImageIndex] as unknown as MediaRow)
                               : images.length > 0 && images[currentImageIndex]?.image_url
                                 ? images[currentImageIndex].image_url
                                 : placeholderImage

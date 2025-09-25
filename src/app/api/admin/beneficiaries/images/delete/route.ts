@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { deleteFile } from "@/utils/supabase/media";
+import { deleteFile, MediaRow } from "@/utils/supabase/media";
 
 export async function DELETE(req: Request) {
   const supabase = await createClient();
@@ -20,7 +20,7 @@ export async function DELETE(req: Request) {
 
     // Delete from storage using centralized helper
     try {
-      const { error: storageError } = await deleteFile(supabase, mediaRow as any);
+      const { error: storageError } = await deleteFile(supabase, mediaRow as unknown as MediaRow);
       if (storageError) {
         // Log but continue to attempt DB deletion
         console.error("Storage delete error:", storageError);

@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStorageKey, generatePublicUrl, uploadFile } from "@/utils/supabase/media";
-import type { Database } from "@/lib/types/db.types";
-
-type MediaRow = Database["public"]["Tables"]["media"]["Row"];
+import { generatePublicUrl, MediaRow, uploadFile } from "@/utils/supabase/media";
 
 export async function POST(req: Request) {
   const { createClient } = await import("@/utils/supabase/server");
@@ -20,7 +17,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No images provided" }, { status: 400 });
     }
 
-    const responses: Array<Record<string, any>> = [];
+    const responses: Array<Record<string, unknown>> = [];
 
     for (let i = 0; i < imageFiles.length; i++) {
       const file = imageFiles[i];
@@ -40,7 +37,7 @@ export async function POST(req: Request) {
         continue;
       }
 
-      const mediaRow = inserted as MediaRow;
+      const mediaRow = inserted as unknown as MediaRow;
 
       // Upload file to storage using helper
       const { error: uploadErr } = await uploadFile(supabase, mediaRow, file, {

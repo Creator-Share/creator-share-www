@@ -44,7 +44,8 @@ export interface BeneficiaryMedia {
   image_url: string;
   order_index: number;
   created_at: string;
-  acitivy_id?:string;
+  acitivy_id?: string;
+  type?: "IMAGE" | "VIDEO" | "images" | "videos"; // Add this field
 }
 
 export type AnimalBeneficiary = {

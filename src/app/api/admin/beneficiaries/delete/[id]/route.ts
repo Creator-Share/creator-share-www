@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { deleteFile } from "@/utils/supabase/media";
+import { deleteFile, MediaRow } from "@/utils/supabase/media";
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
@@ -30,7 +30,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       } else if (Array.isArray(mediaRows) && mediaRows.length > 0) {
         for (const mr of mediaRows) {
           try {
-            const { error: storageErr } = await deleteFile(supabase, mr as any);
+            const { error: storageErr } = await deleteFile(supabase, mr as unknown as MediaRow);
             if (storageErr) {
               console.error("Storage delete error for media id", mr.id, storageErr);
             }

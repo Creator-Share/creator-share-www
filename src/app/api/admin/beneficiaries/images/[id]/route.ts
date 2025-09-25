@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { deleteFile } from "@/utils/supabase/media";
+import { deleteFile, MediaRow } from "@/utils/supabase/media";
 
 // GET: Retrieve all images for a beneficiary by beneficiary_id
 export async function GET(
@@ -48,7 +48,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     }
 
     try {
-      const { error: storageError } = await deleteFile(supabase, mediaRow as any);
+      const { error: storageError } = await deleteFile(supabase, mediaRow as unknown as MediaRow);
       if (storageError) {
         console.error("Storage delete error:", storageError);
         // continue to DB deletion even if storage delete failed

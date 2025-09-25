@@ -5,7 +5,7 @@ import { Box, Text, Flex, Button, Input, Textarea } from "@chakra-ui/react";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
-import { generatePublicUrl } from "@/utils/supabase/media";
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media";
 
 async function getBeneficiary(username: string): Promise<Beneficiaries | null> {
   try {
@@ -52,10 +52,10 @@ export default async function ActivityDetailPage({ params }: ActivityPageProps) 
         .order("order_index", { ascending: true });
 
       if (!mediaErr && Array.isArray(mediaRows) && mediaRows.length > 0) {
-        const images = mediaRows.filter((m: any) => m.type === "IMAGE" || m.type === "images");
-        const videos = mediaRows.filter((m: any) => m.type === "VIDEO" || m.type === "videos");
-        imagesPublic = images.map((m: any) => generatePublicUrl(m));
-        videosPublic = videos.map((m: any) => generatePublicUrl(m));
+        const images = mediaRows.filter((m: MediaRow) => m.type === "IMAGE" || m.type === "images" as MediaRow["type"]);
+        const videos = mediaRows.filter((m: MediaRow) => m.type === "VIDEO" || m.type === "videos" as MediaRow["type"]);
+        imagesPublic = images.map((m: MediaRow) => generatePublicUrl(m));
+        videosPublic = videos.map((m: MediaRow) => generatePublicUrl(m));
       }
     } catch (e) {
       console.error("Failed to fetch activity media:", e);

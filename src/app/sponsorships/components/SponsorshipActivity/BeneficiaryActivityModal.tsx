@@ -43,7 +43,7 @@ import { useAuthStore } from "@/store/authStore";
 import { paymentOptionsCollection } from "../Payments/config";
 import { Button } from "@/components/ui/button";
 import { BeneficiaryMedia } from "@/types/admin.types";
-import { generatePublicUrl } from "@/utils/supabase/media";
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media";
 
 interface BeneficiaryActivityModalProps {
   open: boolean;
@@ -93,10 +93,10 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         }
         const media = await res.json();
         if (Array.isArray(media) && media.length > 0) {
-          const videos = media.filter((m: any) => m.type === "VIDEO" || m.type === "videos");
+          const videos = media.filter((m: BeneficiaryMedia) => m.type === "VIDEO" || m.type === "videos");
           if (videos.length > 0) {
             try {
-              setVideoMediaUrl(generatePublicUrl(videos[0] as any));
+              setVideoMediaUrl(generatePublicUrl(videos[0] as unknown as MediaRow));
             } catch {
               // if generatePublicUrl fails, leave existing beneficiary.video_url (if any)
             }

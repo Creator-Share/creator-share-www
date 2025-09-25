@@ -18,6 +18,7 @@ import { Activity, Beneficiaries, BeneficiaryMedia } from "@/types";
 import BeneficiaryActivityModal from "../components/SponsorshipActivity/BeneficiaryActivityModal";
 import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox";
 import { generatePublicUrl } from "@/utils/supabase/media";
+import { MediaRow } from "@/utils/supabase/media";
 
 export default function FullProfileDynamic() {
   const { username } = useParams();
@@ -198,7 +199,7 @@ export default function FullProfileDynamic() {
           h={{ base: "300px", md: "440px" }}
         >
           <Image
-            src={images.length > 0 ? (images[0].id ? generatePublicUrl(images[0] as any) : images[0].image_url) : placeholderImage}
+            src={images.length > 0 ? (images[0].id ? generatePublicUrl(images[0] as unknown as MediaRow) : images[0].image_url) : placeholderImage}
             alt={beneficiary.name}
             position="absolute"
             w="100%"

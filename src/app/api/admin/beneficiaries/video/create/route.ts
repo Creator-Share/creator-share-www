@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStorageKey, generatePublicUrl, uploadFile } from "@/utils/supabase/media";
+import {  generatePublicUrl, uploadFile } from "@/utils/supabase/media";
 import type { Database } from "@/lib/types/db.types";
 
 type MediaRow = Database["public"]["Tables"]["media"]["Row"];

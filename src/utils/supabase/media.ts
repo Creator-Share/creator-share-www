@@ -7,7 +7,7 @@
 import { STORAGE_BUCKET } from "@/utils/supabase/buckets";
 import type { Database } from "@/lib/types/db.types";
 
-type MediaRow = Database["public"]["Tables"]["media"]["Row"];
+export type MediaRow = Database["public"]["Tables"]["media"]["Row"];
 
 /**
  * Compose the storage key for a media row.
@@ -84,7 +84,7 @@ export async function uploadFile(
   media: MediaRow,
   file: File | Blob | Buffer,
   opts?: { cacheControl?: string; upsert?: boolean; contentType?: string }
-): Promise<{ error: any | null; data?: any }> {
+): Promise<{ error: any | null; data?: any }> { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (!supabaseClient) {
     throw new Error("supabaseClient is required");
   }
@@ -99,7 +99,7 @@ export async function uploadFile(
   if (typeof opts?.upsert === "boolean") options.upsert = opts.upsert;
   if (opts?.contentType) options.contentType = opts.contentType;
 
-  const result = await supabaseClient.storage.from(STORAGE_BUCKET).upload(path, file as any, options);
+  const result = await supabaseClient.storage.from(STORAGE_BUCKET).upload(path, file as any, options); // eslint-disable-line @typescript-eslint/no-explicit-any
   // result is in shape { data, error } from supabase-js
   return { error: result.error ?? null, data: result.data };
 }
@@ -110,7 +110,7 @@ export async function uploadFile(
 export async function deleteFile(
   supabaseClient: ReturnType<typeof import("@/utils/supabase/client").createClient>,
   media: MediaRow
-): Promise<{ error: any | null; data?: any }> {
+): Promise<{ error: any | null; data?: any }> { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (!supabaseClient) {
     throw new Error("supabaseClient is required");
   }

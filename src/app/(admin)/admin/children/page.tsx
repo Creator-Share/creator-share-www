@@ -11,7 +11,7 @@ import { Beneficiaries } from "@/types/admin.types";
 import { dollarsToCents } from "@/utils/currency";
 import GoBackButton from "@/components/ui/goBack";
 import { Checkbox } from "@/components/ui/checkbox";
-import { generatePublicUrl } from "@/utils/supabase/media";
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media";
 
 const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), { ssr: false });
 const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
@@ -101,7 +101,7 @@ const ChildrenTable = () => {
               const images = await response.json();
               if (images && images.length > 0) {
                 const img = images[0];
-                const src = img?.id ? generatePublicUrl(img as any) : img?.image_url || "";
+                const src = img?.id ? generatePublicUrl(img as unknown as MediaRow) : img?.image_url || "";
                 setBeneficiaryImages(prev => ({
                   ...prev,
                   [id]: src
