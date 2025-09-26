@@ -44,6 +44,8 @@ import { paymentOptionsCollection } from "../Payments/config"
 import { Button } from "@/components/ui/button"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { LuChevronLeft, LuChevronRight } from "react-icons/lu"
+import { IconButton } from "@chakra-ui/react"
 
 interface BeneficiaryActivityModalProps {
   open: boolean
@@ -93,6 +95,8 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   const [videoMediaUrl, setVideoMediaUrl] = useState<string | null>(
     beneficiary.video_url || null,
   )
+  const [images, setImages] = useState<BeneficiaryMedia[]>([])
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
   const fallbackPlaceholder =
     "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
@@ -112,6 +116,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         }
         const media = await res.json()
         if (Array.isArray(media) && media.length > 0) {
+          // Set images for carousel
+          const sortedImages = media
+            .filter((m: BeneficiaryMedia) => m.type === "IMAGE" || m.type === "images")
+            .sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => (a.order_index ?? 0) - (b.order_index ?? 0))
+          setImages(sortedImages)
+          
+          // Your existing video logic remains the same
           const videos = media.filter(
             (m: BeneficiaryMedia) => m.type === "VIDEO" || m.type === "videos",
           )
@@ -610,6 +621,25 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     )
   }
 
+  const nextImage = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setCurrentImageIndex((prev) => (prev + 1) % images.length)
+  }
+
+  const prevImage = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)
+  }
+
+  const goToImage = (index: number) => {
+    setCurrentImageIndex(index)
+  }
+
+  // Reset to first image when images change
+  useEffect(() => {
+    setCurrentImageIndex(0)
+  }, [images])
+
   return (
     <DialogRoot
       open={open}
@@ -643,14 +673,94 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   {getStatusText(beneficiary.status)}
                 </Text>
               </Box>
-              <Image
-                src={primaryImageUrl || fallbackPlaceholder}
-                alt={beneficiary.name || "Child"}
-                width={500}
-                height={405}
-                className="rounded-[15px] p-2"
-                style={{ objectFit: "cover", objectPosition: "center 20%" }}
-              />
+              <Box position="relative">
+                <Image
+                  src={
+                    images.length > 0
+                      ? images[currentImageIndex]?.id
+                        ? generatePublicUrl(images[currentImageIndex] as unknown as MediaRow)
+                        : images[currentImageIndex]?.image_url
+                      : primaryImageUrl || fallbackPlaceholder
+                  }
+                  alt={beneficiary.name || "Child"}
+                  width={500}
+                  height={405}
+                  className="rounded-[15px] p-2"
+                  style={{ objectFit: "cover", objectPosition: "center 20%" }}
+                />
+                
+                {/* Navigation Arrows - Only show if there are multiple images */}
+                {images.length > 1 && (
+                  <>
+                    {/* Previous Button */}
+                    <IconButton
+                      aria-label="Previous image"
+                      size="sm"
+                      position="absolute"
+                      left="2"
+                      top="50%"
+                      transform="translateY(-50%)"
+                      bg="rgba(0, 0, 0, 0.5)"
+                      color="white"
+                      _hover={{ bg: "rgba(0, 0, 0, 0.7)", opacity: 1 }}
+                      onClick={prevImage}
+                      zIndex={20}
+                      opacity={0.8}
+                      transition="opacity 0.2s"
+                    >
+                      <LuChevronLeft />
+                    </IconButton>
+                    
+                    {/* Next Button */}
+                    <IconButton
+                      aria-label="Next image"
+                      size="sm"
+                      position="absolute"
+                      right="2"
+                      top="50%"
+                      transform="translateY(-50%)"
+                      bg="rgba(0, 0, 0, 0.5)"
+                      color="white"
+                      _hover={{ bg: "rgba(0, 0, 0, 0.7)", opacity: 1 }}
+                      onClick={nextImage}
+                      zIndex={20}
+                      opacity={0.8}
+                      transition="opacity 0.2s"
+                    >
+                      <LuChevronRight />
+                    </IconButton>
+                  </>
+                )}
+
+                {/* Image Dots Indicator */}
+                {images.length > 1 && (
+                  <Flex
+                    position="absolute"
+                    bottom="2"
+                    left="50%"
+                    transform="translateX(-50%)"
+                    gap={1}
+                    zIndex={20}
+                  >
+                    {images.map((_, index) => (
+                      <Box
+                        key={index}
+                        w="6px"
+                        h="6px"
+                        borderRadius="50%"
+                        bg={index === currentImageIndex ? "white" : "rgba(255, 255, 255, 0.5)"}
+                        cursor="pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          goToImage(index)
+                        }}
+                        transition="background-color 0.2s"
+                        _hover={{ bg: "white" }}
+                      />
+                    ))}
+                  </Flex>
+                )}
+              </Box>
               <Box className="text-center mb-4 md:mb-0">
                 <Text className="text-xl font-bold text-gray-800 mb-2">
                   {beneficiary.name || "Full Name"}
