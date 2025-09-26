@@ -91,7 +91,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     paymentOptionsCollection.items[0].value,
   )
   const [loading, setLoading] = useState<boolean>(false)
-  const [primaryImageUrl, setPrimaryImageUrl] = useState<string | null>(null)
+  const [, setPrimaryImageUrl] = useState<string | null>(null)
   const [videoMediaUrl, setVideoMediaUrl] = useState<string | null>(
     beneficiary.video_url || null,
   )
