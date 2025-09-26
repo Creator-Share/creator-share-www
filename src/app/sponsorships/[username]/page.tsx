@@ -1,7 +1,7 @@
-"use client";
-import React, { useEffect, useState } from "react";
-import { fetchActivitiesByBeneficiaryId } from "@/actions";
-import Link from "next/link";
+"use client"
+import React, { useEffect, useState } from "react"
+import { fetchActivitiesByBeneficiaryId } from "@/actions"
+import Link from "next/link"
 import {
   Box,
   Button,
@@ -11,104 +11,104 @@ import {
   Text,
   VStack,
   Spinner,
-} from "@chakra-ui/react";
-import { useParams } from "next/navigation";
-import SponsorshipDetails from "../components/SponsorshipDetails";
-import { Activity, Beneficiaries, BeneficiaryMedia } from "@/types";
-import BeneficiaryActivityModal from "../components/SponsorshipActivity/BeneficiaryActivityModal";
-import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox";
-import { generatePublicUrl } from "@/utils/supabase/media";
-import { MediaRow } from "@/utils/supabase/media";
+} from "@chakra-ui/react"
+import { useParams } from "next/navigation"
+import SponsorshipDetails from "../components/SponsorshipDetails"
+import { Activity, Beneficiaries, BeneficiaryMedia } from "@/types"
+import BeneficiaryActivityModal from "../components/SponsorshipActivity/BeneficiaryActivityModal"
+import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox"
+import { generatePublicUrl } from "@/utils/supabase/media"
+import { MediaRow } from "@/utils/supabase/media"
 
 export default function FullProfileDynamic() {
-  const { username } = useParams();
-  const [beneficiary, setBeneficiary] = useState<Beneficiaries | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [activityOpen, setActivityOpen] = useState(false);
-  const [images, setImages] = useState<BeneficiaryMedia[]>([]);
-  const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([]);
-  const [currentBeneficiaryIndex, setCurrentBeneficiaryIndex] = useState(0);
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const { username } = useParams()
+  const [beneficiary, setBeneficiary] = useState<Beneficiaries | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [activityOpen, setActivityOpen] = useState(false)
+  const [images, setImages] = useState<BeneficiaryMedia[]>([])
+  const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([])
+  const [currentBeneficiaryIndex, setCurrentBeneficiaryIndex] = useState(0)
+  const [activities, setActivities] = useState<Activity[]>([])
 
   const placeholderImage =
-    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
 
   const fetchImages = async (beneficiaryId: string) => {
     try {
       const response = await fetch(
-        `/api/admin/beneficiaries/images/${beneficiaryId}`
-      );
+        `/api/admin/beneficiaries/images/${beneficiaryId}`,
+      )
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
-      const data = await response.json();
+      const data = await response.json()
       if (!Array.isArray(data)) {
-        console.error("Expected array of images but got:", data);
-        return;
+        console.error("Expected array of images but got:", data)
+        return
       }
       if (data.length > 0) {
         setImages(
           data.sort(
             (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
-              a.order_index - b.order_index
-          )
-        );
+              a.order_index - b.order_index,
+          ),
+        )
       }
     } catch (error) {
-      console.error("Error fetching images:", error);
+      console.error("Error fetching images:", error)
     }
-  };
+  }
 
   useEffect(() => {
     async function fetchData() {
-      setLoading(true);
-      setError("");
+      setLoading(true)
+      setError("")
       try {
-        const res = await fetch(`/api/beneficiaries/get/username/${username}`);
+        const res = await fetch(`/api/beneficiaries/get/username/${username}`)
         if (!res.ok) {
-          throw new Error("Beneficiary not found");
+          throw new Error("Beneficiary not found")
         }
-        const data = await res.json();
-        const { child } = data;
+        const data = await res.json()
+        const { child } = data
         if (!child) {
-          throw new Error("Beneficiary data is empty");
+          throw new Error("Beneficiary data is empty")
         }
-        setBeneficiary(child);
+        setBeneficiary(child)
         if (child?.id) {
-          await fetchImages(child.id);
+          await fetchImages(child.id)
 
-          const activitiesData = await fetchActivitiesByBeneficiaryId(child.id);
-          setActivities(activitiesData);
-          const res = await fetch("/api/beneficiaries/get");
-          const data = await res.json();
+          const activitiesData = await fetchActivitiesByBeneficiaryId(child.id)
+          setActivities(activitiesData)
+          const res = await fetch("/api/beneficiaries/get")
+          const data = await res.json()
           if (data.people) {
-            setBeneficiaries(data.people);
+            setBeneficiaries(data.people)
             const index = data.people.findIndex(
-              (b: Beneficiaries) => b.username === username
-            );
+              (b: Beneficiaries) => b.username === username,
+            )
             if (index !== -1) {
-              setCurrentBeneficiaryIndex(index);
+              setCurrentBeneficiaryIndex(index)
             }
           }
         }
       } catch (err) {
-        setError("Beneficiary not found.");
-        setBeneficiary(null);
-        console.error(err);
+        setError("Beneficiary not found.")
+        setBeneficiary(null)
+        console.error(err)
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
     }
-    if (username) fetchData();
-  }, [username]);
+    if (username) fetchData()
+  }, [username])
 
   if (loading) {
     return (
       <Flex minH="100vh" align="center" justify="center">
         <Spinner size="xl" color="blue.500" />
       </Flex>
-    );
+    )
   }
 
   if (error || !beneficiary) {
@@ -118,7 +118,7 @@ export default function FullProfileDynamic() {
           {error || "Beneficiary not found."}
         </Text>
       </Flex>
-    );
+    )
   }
 
   return (
@@ -128,9 +128,9 @@ export default function FullProfileDynamic() {
         <Flex justify="space-between" mb={4}>
           <Button
             onClick={() => {
-              const newIndex = currentBeneficiaryIndex - 1;
+              const newIndex = currentBeneficiaryIndex - 1
               if (newIndex >= 0 && beneficiaries[newIndex]?.username) {
-                window.location.href = `/sponsorships/${beneficiaries[newIndex].username}`;
+                window.location.href = `/sponsorships/${beneficiaries[newIndex].username}`
               }
             }}
             disabled={currentBeneficiaryIndex === 0}
@@ -145,12 +145,12 @@ export default function FullProfileDynamic() {
           </Button>
           <Button
             onClick={() => {
-              const newIndex = currentBeneficiaryIndex + 1;
+              const newIndex = currentBeneficiaryIndex + 1
               if (
                 newIndex < beneficiaries.length &&
                 beneficiaries[newIndex]?.username
               ) {
-                window.location.href = `/sponsorships/${beneficiaries[newIndex].username}`;
+                window.location.href = `/sponsorships/${beneficiaries[newIndex].username}`
               }
             }}
             disabled={currentBeneficiaryIndex === beneficiaries.length - 1}
@@ -199,7 +199,13 @@ export default function FullProfileDynamic() {
           h={{ base: "300px", md: "440px" }}
         >
           <Image
-            src={images.length > 0 ? (images[0].id ? generatePublicUrl(images[0] as unknown as MediaRow) : images[0].image_url) : placeholderImage}
+            src={
+              images.length > 0
+                ? images[0].id
+                  ? generatePublicUrl(images[0] as unknown as MediaRow)
+                  : images[0].image_url
+                : placeholderImage
+            }
             alt={beneficiary.name}
             position="absolute"
             w="100%"
@@ -258,7 +264,7 @@ export default function FullProfileDynamic() {
                               hour: "2-digit",
                               minute: "2-digit",
                               hour12: false,
-                            }
+                            },
                           )}
                         </Text>
                       </Box>
@@ -281,5 +287,5 @@ export default function FullProfileDynamic() {
         </Box>
       </Box>
     </Box>
-  );
+  )
 }

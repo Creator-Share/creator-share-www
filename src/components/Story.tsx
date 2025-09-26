@@ -1,6 +1,6 @@
-import React from 'react'
-import Image from 'next/image'
-import { FiArrowRight } from 'react-icons/fi'
+import React from "react"
+import Image from "next/image"
+import { FiArrowRight } from "react-icons/fi"
 
 export const Story = () => {
   return (
@@ -25,15 +25,19 @@ export const Story = () => {
               The Creator Share Foundation
             </h2>
             <p className="text-gray-700 mb-8">
-              We are dedicated to bringing hope and support to special needs children in developing countries, often referred to as the "invisible children." These children endure unimaginable suffering in environments devoid of basic necessities such as water, electricity, and adequate shelter.
+              We are dedicated to bringing hope and support to special needs
+              children in developing countries, often referred to as the
+              "invisible children." These children endure unimaginable suffering
+              in environments devoid of basic necessities such as water,
+              electricity, and adequate shelter.
             </p>
             <div className="mt-auto">
               <div className="mb-4">
                 <span className="font-medium">John St. Julien</span>
                 <span className="text-gray-600 ml-2">Founder</span>
               </div>
-              <a 
-                href="#" 
+              <a
+                href="#"
                 className="inline-flex items-center text-blue-600 hover:text-blue-700"
               >
                 Read Full Case Study

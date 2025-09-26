@@ -1,66 +1,67 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { NextResponse } from "next/server"
+import { createClient } from "@/utils/supabase/server"
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const body = await request.json();
-  const { email, password, first_name, last_name } = body;
+  const supabase = await createClient()
+  const body = await request.json()
+  const { email, password, first_name, last_name } = body
 
   if (!email || !password || !first_name || !last_name) {
     return NextResponse.json(
-      { error: 'Email, password, first name, and last name are required' },
-      { status: 400 }
-    );
+      { error: "Email, password, first name, and last name are required" },
+      { status: 400 },
+    )
   }
 
   try {
     const { data: existingUser } = await supabase
-      .from('users')
-      .select('email')
-      .eq('email', email)
-      .single();
+      .from("users")
+      .select("email")
+      .eq("email", email)
+      .single()
 
     if (existingUser) {
       return NextResponse.json(
-        { error: 'An account with this email already exists' },
-        { status: 400 }
-      );
+        { error: "An account with this email already exists" },
+        { status: 400 },
+      )
     }
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          first_name,
-          last_name,
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp(
+      {
+        email,
+        password,
+        options: {
+          data: {
+            first_name,
+            last_name,
+          },
+          emailRedirectTo: `http://localhost:3000/app/main/onboarding`,
         },
-        emailRedirectTo: `http://localhost:3000/app/main/onboarding`,
       },
-    });
+    )
 
     if (signUpError) {
-      return NextResponse.json(
-        { error: signUpError.message },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: signUpError.message }, { status: 400 })
     }
 
     if (signUpData.user?.identities?.length === 0) {
       return NextResponse.json(
-        { error: 'An account with this email already exists' },
-        { status: 400 }
-      );
+        { error: "An account with this email already exists" },
+        { status: 400 },
+      )
     }
 
     return NextResponse.json(
       {
-        message: 'Registration successful! Please check your email for confirmation.',
+        message:
+          "Registration successful! Please check your email for confirmation.",
       },
-      { status: 201 }
-    );
+      { status: 201 },
+    )
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Unexpected error occurred';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    const errorMessage =
+      err instanceof Error ? err.message : "Unexpected error occurred"
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

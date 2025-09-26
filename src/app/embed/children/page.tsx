@@ -1,5 +1,5 @@
-"use client";
-import React, { useState, useEffect } from "react";
+"use client"
+import React, { useState, useEffect } from "react"
 import {
   Box,
   Text,
@@ -8,135 +8,135 @@ import {
   Input,
   InputAddon,
   Spinner,
-} from "@chakra-ui/react";
-import { Button } from "@/components/ui/button";
+} from "@chakra-ui/react"
+import { Button } from "@/components/ui/button"
 import {
   SelectRoot,
   SelectTrigger,
   SelectValueText,
   SelectContent,
   SelectItem,
-} from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { centsToDollars } from "@/utils/currency";
-import { toaster } from "@/components/ui/toaster";
-import { paymentOptionsCollection } from "@/app/sponsorships/components/Payments/config";
-import { Beneficiaries } from "@/types";
-import { useAuthStore } from "@/store/authStore";
-import { BeneficiaryMedia } from "@/types/admin.types";
+} from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
+import { centsToDollars } from "@/utils/currency"
+import { toaster } from "@/components/ui/toaster"
+import { paymentOptionsCollection } from "@/app/sponsorships/components/Payments/config"
+import { Beneficiaries } from "@/types"
+import { useAuthStore } from "@/store/authStore"
+import { BeneficiaryMedia } from "@/types/admin.types"
 
-const isInIframe = typeof window !== "undefined" && window.self !== window.top;
+const isInIframe = typeof window !== "undefined" && window.self !== window.top
 
 const placeholderImage =
-  "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+  "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
 
 export default function SponsorshipEmbedChildrenPage() {
-  const [children, setChildren] = useState<Beneficiaries[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [images, setImages] = useState<BeneficiaryMedia[]>([]);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [amount, setAmount] = useState<number>(0);
-  const [inputValue, setInputValue] = useState<string>("");
-  const [selectedOption, setSelectedOption] = useState<string>("subscription");
-  const [value, setValue] = useState<number[]>([0]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [loadingChildren, setLoadingChildren] = useState<boolean>(true);
-  const user = useAuthStore((state) => state.user);
+  const [children, setChildren] = useState<Beneficiaries[]>([])
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [images, setImages] = useState<BeneficiaryMedia[]>([])
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [amount, setAmount] = useState<number>(0)
+  const [inputValue, setInputValue] = useState<string>("")
+  const [selectedOption, setSelectedOption] = useState<string>("subscription")
+  const [value, setValue] = useState<number[]>([0])
+  const [loading, setLoading] = useState<boolean>(false)
+  const [loadingChildren, setLoadingChildren] = useState<boolean>(true)
+  const user = useAuthStore((state) => state.user)
 
   useEffect(() => {
     async function fetchChildren() {
-      setLoadingChildren(true);
+      setLoadingChildren(true)
       try {
-        const queryParams = new URLSearchParams();
-        queryParams.append("status", ["New", "Partially Funded"].join(","));
+        const queryParams = new URLSearchParams()
+        queryParams.append("status", ["New", "Partially Funded"].join(","))
         queryParams.append(
           "excludeStatus",
-          ["Budget Fulfilled", "Fulfilled"].join(",")
-        );
-        const url = `/api/beneficiaries/getByAgeAndGender?${queryParams.toString()}`;
-        console.log("Fetching children from:", url);
+          ["Budget Fulfilled", "Fulfilled"].join(","),
+        )
+        const url = `/api/beneficiaries/getByAgeAndGender?${queryParams.toString()}`
+        console.log("Fetching children from:", url)
         const res = await fetch(url, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
           },
-        });
-        console.log("API Response Status:", res.status, res.statusText);
+        })
+        console.log("API Response Status:", res.status, res.statusText)
         if (res.ok) {
-          const data = await res.json();
-          console.log("Fetched Children Data:", data);
+          const data = await res.json()
+          console.log("Fetched Children Data:", data)
           if (!data.people || !Array.isArray(data.people)) {
             console.error(
               "Expected array of children in data.people, got:",
-              data
-            );
-            setChildren([]);
-            return;
+              data,
+            )
+            setChildren([])
+            return
           }
-          setChildren(data.people);
+          setChildren(data.people)
           if (data.people.length > 0) {
-            console.log("First Child:", data.people[0]);
+            console.log("First Child:", data.people[0])
             const remaining =
-              (data.people[0].budget_goal - data.people[0].budget_raised) / 100;
-            setAmount(remaining);
-            setValue([remaining]);
-            setInputValue(remaining.toString());
+              (data.people[0].budget_goal - data.people[0].budget_raised) / 100
+            setAmount(remaining)
+            setValue([remaining])
+            setInputValue(remaining.toString())
           } else {
-            console.log("No children data in response");
+            console.log("No children data in response")
           }
         } else {
-          const errorText = await res.text();
-          console.error("API Error Status:", res.status);
-          console.error("API Error Text:", errorText);
-          throw new Error(`API Error: ${res.status} - ${errorText}`);
+          const errorText = await res.text()
+          console.error("API Error Status:", res.status)
+          console.error("API Error Text:", errorText)
+          throw new Error(`API Error: ${res.status} - ${errorText}`)
         }
       } catch (e) {
-        console.error("Fetch Error:", e);
-        setChildren([]);
+        console.error("Fetch Error:", e)
+        setChildren([])
         toaster.create({
           title: "Error",
           description: "Failed to load children.",
-        });
+        })
       } finally {
-        setLoadingChildren(false);
+        setLoadingChildren(false)
       }
     }
-    fetchChildren();
-  }, []);
+    fetchChildren()
+  }, [])
 
   useEffect(() => {
-    if (!children[currentIndex]) return;
+    if (!children[currentIndex]) return
 
     const timeout = setTimeout(async () => {
       try {
         const response = await fetch(
-          `/api/admin/beneficiaries/images/${children[currentIndex].id}`
-        );
+          `/api/admin/beneficiaries/images/${children[currentIndex].id}`,
+        )
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json()
           setImages(
             data.sort(
               (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
-                a.order_index - b.order_index
-            )
-          );
-          setCurrentImageIndex(0);
+                a.order_index - b.order_index,
+            ),
+          )
+          setCurrentImageIndex(0)
         } else {
-          setImages([]);
-          setCurrentImageIndex(0);
+          setImages([])
+          setCurrentImageIndex(0)
         }
       } catch {
-        setImages([]);
-        setCurrentImageIndex(0);
+        setImages([])
+        setCurrentImageIndex(0)
       }
-    }, 0);
+    }, 0)
 
-    return () => clearTimeout(timeout);
-  }, [currentIndex, children]);
+    return () => clearTimeout(timeout)
+  }, [currentIndex, children])
 
-  console.log("Current State:", { children, loadingChildren, currentIndex });
+  console.log("Current State:", { children, loadingChildren, currentIndex })
 
-  console.log("Render State:", { loadingChildren, children });
+  console.log("Render State:", { loadingChildren, children })
 
   if (loadingChildren) {
     return (
@@ -150,11 +150,11 @@ export default function SponsorshipEmbedChildrenPage() {
         <Spinner size="xl" />
         <Text>Loading children data...</Text>
       </Flex>
-    );
+    )
   }
 
-  const people = children[currentIndex];
-  console.log("Selected Child:", people);
+  const people = children[currentIndex]
+  console.log("Selected Child:", people)
 
   if (!people) {
     return (
@@ -172,63 +172,69 @@ export default function SponsorshipEmbedChildrenPage() {
             : "Error loading child data"}
         </Text>
       </Flex>
-    );
+    )
   }
 
   // Public hardcoded override for front-end (dollars are provided as cents integer)
-  const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
-  const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
-  const effectiveGoalCents = publicHardcodedCents !== null ? publicHardcodedCents : (people?.budget_goal || 0);
+  const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
+  const publicHardcodedCents = publicHardcodedRaw
+    ? parseInt(publicHardcodedRaw, 10)
+    : null
+  const effectiveGoalCents =
+    publicHardcodedCents !== null
+      ? publicHardcodedCents
+      : people?.budget_goal || 0
 
-  const remainingAmount = (effectiveGoalCents - (people?.budget_raised || 0)) / 100;
-  const minimumAmount = 10;
+  const remainingAmount =
+    (effectiveGoalCents - (people?.budget_raised || 0)) / 100
+  const minimumAmount = 10
   const maxSelectableAmount =
     remainingAmount > minimumAmount
       ? remainingAmount - minimumAmount < minimumAmount
         ? remainingAmount
         : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
-      : remainingAmount;
+      : remainingAmount
 
   const handleSliderChange = (e: { value: number[] }) => {
-    const newValue = Math.min(e.value[0], remainingAmount);
-    setValue([newValue]);
-    setAmount(newValue);
-    setInputValue(newValue.toString());
-  };
+    const newValue = Math.min(e.value[0], remainingAmount)
+    setValue([newValue])
+    setAmount(newValue)
+    setInputValue(newValue.toString())
+  }
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    const value = e.target.value
     if (value === "" || /^\d+$/.test(value)) {
       if (value !== "") {
-        const numericValue = parseInt(value);
+        const numericValue = parseInt(value)
         if (!isNaN(numericValue)) {
           if (numericValue > remainingAmount) {
-            setInputValue(remainingAmount.toString());
-            setAmount(remainingAmount);
-            setValue([remainingAmount]);
+            setInputValue(remainingAmount.toString())
+            setAmount(remainingAmount)
+            setValue([remainingAmount])
             toaster.create({
               title: "Amount Adjusted",
               description: `Maximum sponsorship amount is $${remainingAmount}.`,
-            });
-            return;
+            })
+            return
           }
         }
       }
 
-      setInputValue(value);
+      setInputValue(value)
 
       if (value === "") {
-        setAmount(0);
-        setValue([0]);
+        setAmount(0)
+        setValue([0])
       } else {
-        const numericValue = parseInt(value);
+        const numericValue = parseInt(value)
         if (!isNaN(numericValue)) {
-          setAmount(numericValue);
-          setValue([numericValue]);
+          setAmount(numericValue)
+          setValue([numericValue])
         }
       }
     }
-  };
+  }
 
   const handleSponsor = async () => {
     if (
@@ -238,17 +244,17 @@ export default function SponsorshipEmbedChildrenPage() {
       toaster.create({
         title: "Invalid Amount",
         description: `Minimum sponsorship amount is $${minimumAmount}.`,
-      });
-      return;
+      })
+      return
     }
     if (amount > remainingAmount) {
       toaster.create({
         title: "Invalid Amount",
         description: "Amount exceeds the remaining budget needed.",
-      });
-      return;
+      })
+      return
     }
-    setLoading(true);
+    setLoading(true)
     try {
       const payload = {
         beneficiaryId: people.id,
@@ -264,25 +270,25 @@ export default function SponsorshipEmbedChildrenPage() {
         isEmbedded: true,
         allowBelowMinimum:
           remainingAmount < minimumAmount && amount === remainingAmount,
-      };
-      console.log("Sending payment request with payload:", payload);
+      }
+      console.log("Sending payment request with payload:", payload)
       if (selectedOption !== "payment" && selectedOption !== "subscription") {
-        console.error("Invalid payment type:", selectedOption);
+        console.error("Invalid payment type:", selectedOption)
         toaster.create({
           title: "Payment Error",
           description: "Invalid payment frequency selected. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
       if (!people.country) {
-        console.error("Missing location in payload");
+        console.error("Missing location in payload")
         toaster.create({
           title: "Payment Error",
           description: "Missing location information. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
       const res = await fetch("/api/stripe", {
         method: "POST",
@@ -292,76 +298,76 @@ export default function SponsorshipEmbedChildrenPage() {
         },
         credentials: "include",
         body: JSON.stringify(payload),
-      });
-      console.log("Payment API Response Status:", res.status);
-      const data = await res.json();
-      console.log("Payment API Response Data:", data);
+      })
+      console.log("Payment API Response Status:", res.status)
+      const data = await res.json()
+      console.log("Payment API Response Data:", data)
 
       if (!res.ok) {
-        console.error("Payment API Error:", data);
+        console.error("Payment API Error:", data)
         toaster.create({
           title: "Payment Error",
           description: data?.error || "Something went wrong. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
 
-      const { clientSecret, url } = data;
+      const { clientSecret, url } = data
       if (!clientSecret && !url) {
-        console.error("Missing checkout information:", data);
+        console.error("Missing checkout information:", data)
         toaster.create({
           title: "Payment Error",
           description: "Failed to create checkout session. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
 
       if (isInIframe) {
         try {
-          const urlParams = new URLSearchParams(window.location.search);
-          const parentOrigin = urlParams.get("parentOrigin") || "*";
+          const urlParams = new URLSearchParams(window.location.search)
+          const parentOrigin = urlParams.get("parentOrigin") || "*"
           const checkoutUrl = clientSecret
             ? `/sponsorships/checkout?client_secret=${clientSecret}&parentOrigin=${encodeURIComponent(
-                parentOrigin
+                parentOrigin,
               )}&embedded=true`
-            : url;
+            : url
 
-          console.log("Redirecting to:", checkoutUrl);
-          window.location.href = checkoutUrl;
-          return;
+          console.log("Redirecting to:", checkoutUrl)
+          window.location.href = checkoutUrl
+          return
         } catch (e) {
-          console.error("[Child Frame] Error handling checkout:", e);
+          console.error("[Child Frame] Error handling checkout:", e)
           toaster.create({
             title: "Payment Error",
             description: "Failed to process checkout. Please try again.",
-          });
+          })
         }
       } else {
         const checkoutUrl =
-          url || `/sponsorships/checkout?client_secret=${clientSecret}`;
-        console.log("Redirecting to:", checkoutUrl);
-        window.location.href = checkoutUrl;
-        return;
+          url || `/sponsorships/checkout?client_secret=${clientSecret}`
+        console.log("Redirecting to:", checkoutUrl)
+        window.location.href = checkoutUrl
+        return
       }
     } catch {
       toaster.create({
         title: "Payment Error",
         description: "Something went wrong. Please try again.",
-      });
+      })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleSelectChange = (value: string) => {
-    setSelectedOption(value);
-  };
+    setSelectedOption(value)
+  }
 
   const renderDisclaimer = () => {
     const monthlyAmount =
-      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
+      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
     if (people.budget_goal - people.budget_raised - amount * 100 > 0) {
       return (
         <>
@@ -377,7 +383,7 @@ export default function SponsorshipEmbedChildrenPage() {
           <br />
           Additional sponsors are required to meet this goal.
         </>
-      );
+      )
     } else if (people.budget_raised > 0) {
       return (
         <>
@@ -391,7 +397,7 @@ export default function SponsorshipEmbedChildrenPage() {
             </>
           )}
         </>
-      );
+      )
     }
     return (
       <>
@@ -405,8 +411,8 @@ export default function SponsorshipEmbedChildrenPage() {
           </>
         )}
       </>
-    );
-  };
+    )
+  }
 
   return (
     <Flex minH="100vh" align="center" justify="center" bg="white" py={8}>
@@ -423,7 +429,7 @@ export default function SponsorshipEmbedChildrenPage() {
             variant="ghost"
             onClick={() => {
               if (currentIndex > 0) {
-                setCurrentIndex(currentIndex - 1);
+                setCurrentIndex(currentIndex - 1)
               }
             }}
             disabled={currentIndex === 0}
@@ -434,7 +440,7 @@ export default function SponsorshipEmbedChildrenPage() {
             variant="ghost"
             onClick={() => {
               if (currentIndex < children.length - 1) {
-                setCurrentIndex(currentIndex + 1);
+                setCurrentIndex(currentIndex + 1)
               }
             }}
             disabled={currentIndex >= children.length - 1}
@@ -487,7 +493,7 @@ export default function SponsorshipEmbedChildrenPage() {
                 transform="translateY(-50%)"
                 onClick={() =>
                   setCurrentImageIndex(
-                    (prev) => (prev - 1 + images.length) % images.length
+                    (prev) => (prev - 1 + images.length) % images.length,
                   )
                 }
                 size="sm"
@@ -534,7 +540,10 @@ export default function SponsorshipEmbedChildrenPage() {
                 borderRadius="md"
                 width={`${
                   effectiveGoalCents > 0
-                    ? Math.min((people.budget_raised / effectiveGoalCents) * 100, 100)
+                    ? Math.min(
+                        (people.budget_raised / effectiveGoalCents) * 100,
+                        100,
+                      )
                     : 0
                 }%`}
                 transition="width 0.3s"
@@ -749,5 +758,5 @@ export default function SponsorshipEmbedChildrenPage() {
         </a>
       </Box>
     </Flex>
-  );
+  )
 }

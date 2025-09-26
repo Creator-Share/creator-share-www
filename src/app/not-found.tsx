@@ -1,7 +1,7 @@
-"use client";
-import { Button, Container, Heading, Text, VStack } from "@chakra-ui/react";
-import Link from "next/link";
-import React from "react";
+"use client"
+import { Button, Container, Heading, Text, VStack } from "@chakra-ui/react"
+import Link from "next/link"
+import React from "react"
 
 export default function NotFound() {
   return (
@@ -14,8 +14,8 @@ export default function NotFound() {
           Page Not Found
         </Heading>
         <Text fontSize="xl" color="gray.500">
-          Oops! The page you&apos;re looking for seems to have wandered off
-          into the creative ether.
+          Oops! The page you&apos;re looking for seems to have wandered off into
+          the creative ether.
         </Text>
         <Link href="/" passHref>
           <Button colorScheme="blue" size="lg">
@@ -24,5 +24,5 @@ export default function NotFound() {
         </Link>
       </VStack>
     </Container>
-  );
+  )
 }

@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer from "nodemailer"
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
@@ -8,13 +8,13 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
-});
+})
 
 interface SendEmailParams {
-  to: string;
-  subject: string;
-  text?: string;
-  html?: string;
+  to: string
+  subject: string
+  text?: string
+  html?: string
 }
 
 export const sendEmail = async ({
@@ -24,8 +24,8 @@ export const sendEmail = async ({
   html,
 }: SendEmailParams) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-    console.error("Email configuration is missing");
-    return { success: false, error: "Email service not configured" };
+    console.error("Email configuration is missing")
+    return { success: false, error: "Email service not configured" }
   }
 
   try {
@@ -35,25 +35,25 @@ export const sendEmail = async ({
       subject,
       text,
       html,
-    });
+    })
 
-    return { success: true, messageId: info.messageId };
+    return { success: true, messageId: info.messageId }
   } catch (error) {
-    console.error("Error sending email - full details:", error);
-    return { success: false, error };
+    console.error("Error sending email - full details:", error)
+    return { success: false, error }
   }
-};
+}
 
 export const sendPartnershipConfirmationEmail = async (
   email: string,
   project: string,
   amount: number,
-  interval: string
+  interval: string,
 ) => {
-  const subject = `Thank you for partnering with Creator Share Foundation!`;
+  const subject = `Thank you for partnering with Creator Share Foundation!`
 
-  const formattedAmount = (amount / 100).toFixed(2);
-  const intervalText = interval === "month" ? "monthly" : "yearly";
+  const formattedAmount = (amount / 100).toFixed(2)
+  const intervalText = interval === "month" ? "monthly" : "yearly"
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
@@ -82,25 +82,25 @@ export const sendPartnershipConfirmationEmail = async (
         <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
       </div>
     </div>
-  `;
+  `
 
   return sendEmail({
     to: email,
     subject,
     html,
-  });
-};
+  })
+}
 
 export const sendSponsorshipConfirmationEmail = async (
   email: string,
   childName: string,
   amount: number,
-  interval: string
+  interval: string,
 ) => {
-  const subject = `Thank you for sponsoring ${childName}!`;
+  const subject = `Thank you for sponsoring ${childName}!`
 
-  const formattedAmount = (amount / 100).toFixed(2);
-  const intervalText = interval === "month" ? "monthly" : "yearly";
+  const formattedAmount = (amount / 100).toFixed(2)
+  const intervalText = interval === "month" ? "monthly" : "yearly"
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
@@ -129,27 +129,27 @@ export const sendSponsorshipConfirmationEmail = async (
         <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
       </div>
     </div>
-  `;
+  `
 
   return sendEmail({
     to: email,
     subject,
     html,
-  });
-};
+  })
+}
 
 export const sendPaymentFailedEmail = async (
   email: string,
   childName: string,
   amount: number,
-  nextAttemptDate: Date | null
+  nextAttemptDate: Date | null,
 ) => {
-  const subject = `Action Required: Your Sponsorship Payment for ${childName} Failed`;
+  const subject = `Action Required: Your Sponsorship Payment for ${childName} Failed`
 
-  const formattedAmount = amount.toFixed(2);
+  const formattedAmount = amount.toFixed(2)
   const nextAttemptText = nextAttemptDate
     ? `We'll automatically try again on ${nextAttemptDate.toLocaleDateString()}.`
-    : "We'll automatically try again soon.";
+    : "We'll automatically try again soon."
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
@@ -185,20 +185,20 @@ export const sendPaymentFailedEmail = async (
         <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
       </div>
     </div>
-  `;
+  `
 
   return sendEmail({
     to: email,
     subject,
     html,
-  });
-};
+  })
+}
 
 export const sendSubscriptionConfirmationEmail = async (
   email: string,
-  beneficiaryName: string
+  beneficiaryName: string,
 ) => {
-  const subject = `You're subscribed to updates for ${beneficiaryName}!`;
+  const subject = `You're subscribed to updates for ${beneficiaryName}!`
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
@@ -218,13 +218,13 @@ export const sendSubscriptionConfirmationEmail = async (
         <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
       </div>
     </div>
-  `;
+  `
   return sendEmail({
     to: email,
     subject,
     html,
-  });
-};
+  })
+}
 
 /**
  * Send activity notification email to a subscriber
@@ -232,9 +232,9 @@ export const sendSubscriptionConfirmationEmail = async (
 export const sendActivityNotificationEmail = async (
   email: string,
   beneficiary: { name: string },
-  activity: { title: string; description: string }
+  activity: { title: string; description: string },
 ) => {
-  const subject = `New update on ${beneficiary.name}`;
+  const subject = `New update on ${beneficiary.name}`
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
@@ -264,27 +264,27 @@ export const sendActivityNotificationEmail = async (
         <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
       </div>
     </div>
-  `;
+  `
   return sendEmail({
     to: email,
     subject,
     html,
-  });
-};
+  })
+}
 
 /**
  * Send "budget goal fulfilled" email to a subscriber
  */
 export const sendGoalFulfilledEmail = async (
   email: string,
-  beneficiary: { name: string; budget_goal: number }
+  beneficiary: { name: string; budget_goal: number },
 ) => {
-  const subject = `Goal Fulfilled for ${beneficiary.name}!`;
+  const subject = `Goal Fulfilled for ${beneficiary.name}!`
   const formattedGoal = beneficiary.budget_goal
     ? `$${(beneficiary.budget_goal / 100).toLocaleString(undefined, {
         minimumFractionDigits: 2,
       })}`
-    : "the goal amount";
+    : "the goal amount"
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
@@ -313,10 +313,10 @@ export const sendGoalFulfilledEmail = async (
         <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
       </div>
     </div>
-  `;
+  `
   return sendEmail({
     to: email,
     subject,
     html,
-  });
-};
+  })
+}

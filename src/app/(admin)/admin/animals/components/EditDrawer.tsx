@@ -1,5 +1,5 @@
-"use client";
-import React, { useState } from "react";
+"use client"
+import React, { useState } from "react"
 import {
   DrawerContent,
   DrawerHeader,
@@ -8,27 +8,27 @@ import {
   DrawerTitle,
   DrawerRoot,
   DrawerBackdrop,
-} from "@/components/ui/drawer";
-import { Text, Fieldset, Input, Stack, Textarea } from "@chakra-ui/react";
-import { Button } from "@/components/ui/button";
-import { Field } from "@/components/ui/field";
+} from "@/components/ui/drawer"
+import { Text, Fieldset, Input, Stack, Textarea } from "@chakra-ui/react"
+import { Button } from "@/components/ui/button"
+import { Field } from "@/components/ui/field"
 import {
   NativeSelectField,
   NativeSelectRoot,
-} from "@/components/ui/native-select";
+} from "@/components/ui/native-select"
 
-import { AnimalBeneficiary } from "@/types/admin.types";
+import { AnimalBeneficiary } from "@/types/admin.types"
 
 type EditDrawerProps = {
-  formDataEdit: AnimalBeneficiary;
-  setFormDataEdit: React.Dispatch<React.SetStateAction<AnimalBeneficiary>>;
-  isDrawerOpen: boolean;
-  onClose: () => void;
-  onSave: (animal: AnimalBeneficiary) => Promise<void>;
-  onDelete: (animalId: string) => Promise<void>;
-};
+  formDataEdit: AnimalBeneficiary
+  setFormDataEdit: React.Dispatch<React.SetStateAction<AnimalBeneficiary>>
+  isDrawerOpen: boolean
+  onClose: () => void
+  onSave: (animal: AnimalBeneficiary) => Promise<void>
+  onDelete: (animalId: string) => Promise<void>
+}
 
-const animalTypes = ["Puppy", "Kitten", "Dog", "Cat"];
+const animalTypes = ["Puppy", "Kitten", "Dog", "Cat"]
 
 const EditDrawer = ({
   formDataEdit,
@@ -38,55 +38,56 @@ const EditDrawer = ({
   onSave,
   onDelete,
 }: EditDrawerProps) => {
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Sync local input state with form state when drawer opens or value changes
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    if (name === 'breed' || name === 'animal_type') {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    const { name, value } = e.target
+    if (name === "breed" || name === "animal_type") {
       setFormDataEdit((prev) => ({
         ...prev,
         metadata: {
           ...prev.metadata,
-          [name]: value
-        }
-      }));
+          [name]: value,
+        },
+      }))
     } else {
-      setFormDataEdit((prev) => ({ ...prev, [name]: value }));
+      setFormDataEdit((prev) => ({ ...prev, [name]: value }))
     }
-  };
+  }
 
   const handleSelectChange = (name: string, value: string) => {
-    if (name === 'animal_type') {
+    if (name === "animal_type") {
       setFormDataEdit((prev) => ({
         ...prev,
         metadata: {
           ...prev.metadata,
-          [name]: value
-        }
-      }));
+          [name]: value,
+        },
+      }))
     } else {
-      setFormDataEdit((prev) => ({ ...prev, [name]: value }));
+      setFormDataEdit((prev) => ({ ...prev, [name]: value }))
     }
-  };
+  }
 
   const handleSave = async () => {
-    setIsSaving(true);
-    await onSave(formDataEdit);
-    setIsSaving(false);
-    onClose();
-  };
+    setIsSaving(true)
+    await onSave(formDataEdit)
+    setIsSaving(false)
+    onClose()
+  }
 
   const handleDelete = async () => {
-    if (!formDataEdit.id) return;
-    setIsDeleting(true);
-    await onDelete(formDataEdit.id);
-    setIsDeleting(false);
-    onClose();
-  };
-
+    if (!formDataEdit.id) return
+    setIsDeleting(true)
+    await onDelete(formDataEdit.id)
+    setIsDeleting(false)
+    onClose()
+  }
 
   return (
     <DrawerRoot
@@ -94,7 +95,7 @@ const EditDrawer = ({
       size="lg"
       open={isDrawerOpen}
       onOpenChange={({ open }) => {
-        if (!open) onClose();
+        if (!open) onClose()
       }}
     >
       <DrawerBackdrop />
@@ -122,7 +123,11 @@ const EditDrawer = ({
                   value={formDataEdit.name}
                 />
               </Field>
-              <Field label="Username" required errorText="This field is required">
+              <Field
+                label="Username"
+                required
+                errorText="This field is required"
+              >
                 <Input
                   name="username"
                   className="border"
@@ -149,7 +154,11 @@ const EditDrawer = ({
                   </NativeSelectField>
                 </NativeSelectRoot>
               </Field>
-              <Field label="Birth Date" required errorText="This field is required">
+              <Field
+                label="Birth Date"
+                required
+                errorText="This field is required"
+              >
                 <Input
                   name="birth_date"
                   type="date"
@@ -168,7 +177,11 @@ const EditDrawer = ({
                   value={formDataEdit.metadata?.breed || ""}
                 />
               </Field>
-              <Field label="Animal Type" required errorText="This field is required">
+              <Field
+                label="Animal Type"
+                required
+                errorText="This field is required"
+              >
                 <NativeSelectRoot>
                   <NativeSelectField
                     className="border"
@@ -189,7 +202,11 @@ const EditDrawer = ({
                   </NativeSelectField>
                 </NativeSelectRoot>
               </Field>
-              <Field label="Biography" required errorText="This field is required">
+              <Field
+                label="Biography"
+                required
+                errorText="This field is required"
+              >
                 <Textarea
                   name="biography"
                   size="xl"
@@ -200,7 +217,11 @@ const EditDrawer = ({
                   value={formDataEdit.biography}
                 />
               </Field>
-              <Field label="Introduction" required errorText="This field is required">
+              <Field
+                label="Introduction"
+                required
+                errorText="This field is required"
+              >
                 <Textarea
                   name="introduction"
                   size="xl"
@@ -211,7 +232,11 @@ const EditDrawer = ({
                   value={formDataEdit.introduction}
                 />
               </Field>
-              <Field label="Budget Goal" required errorText="This field is required">
+              <Field
+                label="Budget Goal"
+                required
+                errorText="This field is required"
+              >
                 <Input
                   name="budget_goal"
                   type="text"
@@ -241,7 +266,11 @@ const EditDrawer = ({
                   </NativeSelectField>
                 </NativeSelectRoot>
               </Field>
-              <Field label="Country" required errorText="This field is required">
+              <Field
+                label="Country"
+                required
+                errorText="This field is required"
+              >
                 <Input
                   name="country"
                   className="border"
@@ -250,7 +279,11 @@ const EditDrawer = ({
                   value={formDataEdit.country}
                 />
               </Field>
-              <Field label="Location" required errorText="This field is required">
+              <Field
+                label="Location"
+                required
+                errorText="This field is required"
+              >
                 <Input
                   name="location_str"
                   className="border"
@@ -286,7 +319,7 @@ const EditDrawer = ({
         </DrawerFooter>
       </DrawerContent>
     </DrawerRoot>
-  );
-};
+  )
+}
 
-export default EditDrawer;
+export default EditDrawer

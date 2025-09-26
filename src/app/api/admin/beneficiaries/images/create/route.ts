@@ -1,68 +1,77 @@
-import { NextResponse } from "next/server";
-import { generatePublicUrl, MediaRow, uploadFile } from "@/utils/supabase/media";
+import { NextResponse } from "next/server"
+import { generatePublicUrl, MediaRow, uploadFile } from "@/utils/supabase/media"
 
 export async function POST(req: Request) {
-  const { createClient } = await import("@/utils/supabase/server");
-  const supabase = await createClient();
+  const { createClient } = await import("@/utils/supabase/server")
+  const supabase = await createClient()
   try {
-    const formData = await req.formData();
-    const beneficiaryId = formData.get('beneficiaryId') as string;
-    const imageFiles = formData.getAll('images') as File[];
+    const formData = await req.formData()
+    const beneficiaryId = formData.get("beneficiaryId") as string
+    const imageFiles = formData.getAll("images") as File[]
 
     if (!beneficiaryId) {
-      return NextResponse.json({ error: "Missing beneficiaryId" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing beneficiaryId" },
+        { status: 400 },
+      )
     }
 
     if (!imageFiles || imageFiles.length === 0) {
-      return NextResponse.json({ error: "No images provided" }, { status: 400 });
+      return NextResponse.json({ error: "No images provided" }, { status: 400 })
     }
 
-    const responses: Array<Record<string, unknown>> = [];
+    const responses: Array<Record<string, unknown>> = []
 
     for (let i = 0; i < imageFiles.length; i++) {
-      const file = imageFiles[i];
-      const extPart = file.name.split('.').pop() || "";
-      const extension = extPart.toLowerCase();
+      const file = imageFiles[i]
+      const extPart = file.name.split(".").pop() || ""
+      const extension = extPart.toLowerCase()
 
       // Insert media row first
       const { data: inserted, error: insertErr } = await supabase
-        .from('media')
-        .insert([{ parent_id: beneficiaryId, extension, type: 'IMAGE' }])
+        .from("media")
+        .insert([{ parent_id: beneficiaryId, extension, type: "IMAGE" }])
         .select()
-        .single();
+        .single()
 
       if (insertErr) {
-        console.error("Beneficiary images upload error: DB insert failed:", insertErr);
+        console.error(
+          "Beneficiary images upload error: DB insert failed:",
+          insertErr,
+        )
         // Skip and continue
-        continue;
+        continue
       }
 
-      const mediaRow = inserted as unknown as MediaRow;
+      const mediaRow = inserted as unknown as MediaRow
 
       // Upload file to storage using helper
       const { error: uploadErr } = await uploadFile(supabase, mediaRow, file, {
-        cacheControl: '3600',
+        cacheControl: "3600",
         contentType: file.type,
-        upsert: false
-      });
+        upsert: false,
+      })
 
       if (uploadErr) {
-        console.error("Beneficiary images upload error: storage upload failed:", uploadErr);
+        console.error(
+          "Beneficiary images upload error: storage upload failed:",
+          uploadErr,
+        )
       }
 
       const respItem = {
         ...mediaRow,
         public_url: generatePublicUrl(mediaRow),
-        upload_error: uploadErr?.message || null
-      };
+        upload_error: uploadErr?.message || null,
+      }
 
-      responses.push(respItem);
+      responses.push(respItem)
     }
 
-    return NextResponse.json(responses, { status: 200 });
+    return NextResponse.json(responses, { status: 200 })
   } catch (err: unknown) {
-    console.error("Beneficiary images upload error:", err);
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Beneficiary images upload error:", err)
+    const message = err instanceof Error ? err.message : "Unknown error"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

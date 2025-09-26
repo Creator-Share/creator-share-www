@@ -1,5 +1,5 @@
-import React from 'react'
-import { FaTwitter, FaFacebook, FaInstagram, FaGithub } from 'react-icons/fa'
+import React from "react"
+import { FaTwitter, FaFacebook, FaInstagram, FaGithub } from "react-icons/fa"
 
 export const Footer = () => {
   return (
@@ -7,7 +7,9 @@ export const Footer = () => {
       <div className="container mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 px-4">
         {/* Left Column */}
         <div>
-          <h2 className="text-2xl font-semibold mb-4">The Creator Share Foundation</h2>
+          <h2 className="text-2xl font-semibold mb-4">
+            The Creator Share Foundation
+          </h2>
           <p className="mb-2">UK reg Charity 1169474</p>
           <p className="mb-6">enquiries@sharetanzania.com</p>
           <div className="flex gap-6">
@@ -35,7 +37,9 @@ export const Footer = () => {
           <h2 className="text-2xl font-semibold mb-4">Our Centers</h2>
           <ul className="space-y-2">
             <li>Feathers Tale Children's Village</li>
-            <li>Angels Gate Rehabilitation Centre For Street Involved Children</li>
+            <li>
+              Angels Gate Rehabilitation Centre For Street Involved Children
+            </li>
             <li>Kilimanjaro Animal Rescue</li>
             <li>New Children's Village, Dodoma</li>
             <li>Faith Rehabilitation Center</li>

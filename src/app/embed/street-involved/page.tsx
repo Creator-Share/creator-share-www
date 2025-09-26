@@ -1,5 +1,5 @@
-"use client";
-import React, { useState, useEffect } from "react";
+"use client"
+import React, { useState, useEffect } from "react"
 import {
   Box,
   Text,
@@ -8,126 +8,131 @@ import {
   Input,
   InputAddon,
   Spinner,
-} from "@chakra-ui/react";
-import { Button } from "@/components/ui/button";
+} from "@chakra-ui/react"
+import { Button } from "@/components/ui/button"
 import {
   SelectRoot,
   SelectTrigger,
   SelectValueText,
   SelectContent,
   SelectItem,
-} from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { centsToDollars } from "@/utils/currency";
-import { toaster } from "@/components/ui/toaster";
-import { paymentOptionsCollection } from "@/app/sponsorships/components/Payments/config";
-import { useAuthStore } from "@/store/authStore";
-import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types";
+} from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
+import { centsToDollars } from "@/utils/currency"
+import { toaster } from "@/components/ui/toaster"
+import { paymentOptionsCollection } from "@/app/sponsorships/components/Payments/config"
+import { useAuthStore } from "@/store/authStore"
+import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types"
 
-const isInIframe = typeof window !== "undefined" && window.self !== window.top;
+const isInIframe = typeof window !== "undefined" && window.self !== window.top
 
 const placeholderImage =
-  "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+  "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
 
 export default function SponsorshipEmbedStreetInvolvedPage() {
-  const [streetInvolved, setStreetInvolved] = useState<Beneficiaries[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [images, setImages] = useState<BeneficiaryMedia[]>([]);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [amount, setAmount] = useState<number>(0);
-  const [inputValue, setInputValue] = useState<string>("");
-  const [selectedOption, setSelectedOption] = useState<string>("subscription");
-  const [value, setValue] = useState<number[]>([0]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [streetInvolved, setStreetInvolved] = useState<Beneficiaries[]>([])
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [images, setImages] = useState<BeneficiaryMedia[]>([])
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [amount, setAmount] = useState<number>(0)
+  const [inputValue, setInputValue] = useState<string>("")
+  const [selectedOption, setSelectedOption] = useState<string>("subscription")
+  const [value, setValue] = useState<number[]>([0])
+  const [loading, setLoading] = useState<boolean>(false)
   const [loadingStreetInvolved, setLoadingStreetInvolved] =
-    useState<boolean>(true);
-  const user = useAuthStore((state) => state.user);
+    useState<boolean>(true)
+  const user = useAuthStore((state) => state.user)
 
   useEffect(() => {
     async function fetchStreetInvolved() {
-      setLoadingStreetInvolved(true);
+      setLoadingStreetInvolved(true)
       try {
-        const queryParams = new URLSearchParams();
-        queryParams.append("status", ["New", "Partially Funded"].join(","));
+        const queryParams = new URLSearchParams()
+        queryParams.append("status", ["New", "Partially Funded"].join(","))
         queryParams.append(
           "excludeStatus",
-          ["Budget Fulfilled", "Fulfilled"].join(",")
-        );
-        queryParams.append("beneficiary_type", "STREET_INVOLVED");
-        const url = `/api/beneficiaries/getByAgeAndGender?${queryParams.toString()}`;
+          ["Budget Fulfilled", "Fulfilled"].join(","),
+        )
+        queryParams.append("beneficiary_type", "STREET_INVOLVED")
+        const url = `/api/beneficiaries/getByAgeAndGender?${queryParams.toString()}`
         const res = await fetch(url, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
           },
-        });
+        })
         if (res.ok) {
-          const data = await res.json();
-          const streetList = data.people;
+          const data = await res.json()
+          const streetList = data.people
           if (!streetList || !Array.isArray(streetList)) {
-            setStreetInvolved([]);
-            return;
+            setStreetInvolved([])
+            return
           }
-          setStreetInvolved(streetList);
+          setStreetInvolved(streetList)
           if (streetList.length > 0) {
-            const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
-            const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
-            const effectiveGoal = publicHardcodedCents !== null ? publicHardcodedCents : streetList[0].budget_goal;
+            const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
+            const publicHardcodedCents = publicHardcodedRaw
+              ? parseInt(publicHardcodedRaw, 10)
+              : null
+            const effectiveGoal =
+              publicHardcodedCents !== null
+                ? publicHardcodedCents
+                : streetList[0].budget_goal
             const remaining =
-              (effectiveGoal - streetList[0].budget_raised) / 100;
-            setAmount(remaining);
-            setValue([remaining]);
-            setInputValue(remaining.toString());
+              (effectiveGoal - streetList[0].budget_raised) / 100
+            setAmount(remaining)
+            setValue([remaining])
+            setInputValue(remaining.toString())
           }
         } else {
-          setStreetInvolved([]);
+          setStreetInvolved([])
           toaster.create({
             title: "Error",
             description: "Failed to load street-involved beneficiaries.",
-          });
+          })
         }
       } catch {
-        setStreetInvolved([]);
+        setStreetInvolved([])
         toaster.create({
           title: "Error",
           description: "Failed to load street-involved beneficiaries.",
-        });
+        })
       } finally {
-        setLoadingStreetInvolved(false);
+        setLoadingStreetInvolved(false)
       }
     }
-    fetchStreetInvolved();
-  }, []);
+    fetchStreetInvolved()
+  }, [])
 
   useEffect(() => {
-    if (!streetInvolved[currentIndex]) return;
+    if (!streetInvolved[currentIndex]) return
 
     const timeout = setTimeout(async () => {
       try {
         const response = await fetch(
-          `/api/admin/beneficiaries/images/${streetInvolved[currentIndex].id}`
-        );
+          `/api/admin/beneficiaries/images/${streetInvolved[currentIndex].id}`,
+        )
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json()
           setImages(
             data.sort(
               (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
-                a.order_index - b.order_index
-            )
-          );
-          setCurrentImageIndex(0);
+                a.order_index - b.order_index,
+            ),
+          )
+          setCurrentImageIndex(0)
         } else {
-          setImages([]);
-          setCurrentImageIndex(0);
+          setImages([])
+          setCurrentImageIndex(0)
         }
       } catch {
-        setImages([]);
-        setCurrentImageIndex(0);
+        setImages([])
+        setCurrentImageIndex(0)
       }
-    }, 0);
+    }, 0)
 
-    return () => clearTimeout(timeout);
-  }, [currentIndex, streetInvolved]);
+    return () => clearTimeout(timeout)
+  }, [currentIndex, streetInvolved])
 
   if (loadingStreetInvolved) {
     return (
@@ -141,10 +146,10 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
         <Spinner size="xl" />
         <Text>Loading street-involved data...</Text>
       </Flex>
-    );
+    )
   }
 
-  const street = streetInvolved[currentIndex];
+  const street = streetInvolved[currentIndex]
 
   if (!street) {
     return (
@@ -162,62 +167,69 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
             : "Error loading street-involved data"}
         </Text>
       </Flex>
-    );
+    )
   }
   // Public hardcoded override for front-end (dollars are provided as cents integer)
-  const publicHardcodedRaw = process.env.NEXT_PUBLIC_HARDCODE_CHILD_BUDGET_PRICE_CENTS;
-  const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
-  const effectiveGoalCents = publicHardcodedCents !== null ? publicHardcodedCents : (street?.budget_goal || 0);
+  const publicHardcodedRaw =
+    process.env.NEXT_PUBLIC_HARDCODE_CHILD_BUDGET_PRICE_CENTS
+  const publicHardcodedCents = publicHardcodedRaw
+    ? parseInt(publicHardcodedRaw, 10)
+    : null
+  const effectiveGoalCents =
+    publicHardcodedCents !== null
+      ? publicHardcodedCents
+      : street?.budget_goal || 0
 
-  const remainingAmount = (effectiveGoalCents - (street?.budget_raised || 0)) / 100;
-  const minimumAmount = 10;
+  const remainingAmount =
+    (effectiveGoalCents - (street?.budget_raised || 0)) / 100
+  const minimumAmount = 10
   const maxSelectableAmount =
     remainingAmount > minimumAmount
       ? remainingAmount - minimumAmount < minimumAmount
         ? remainingAmount
         : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
-      : remainingAmount;
+      : remainingAmount
 
   const handleSliderChange = (e: { value: number[] }) => {
-    const newValue = Math.min(e.value[0], remainingAmount);
-    setValue([newValue]);
-    setAmount(newValue);
-    setInputValue(newValue.toString());
-  };
+    const newValue = Math.min(e.value[0], remainingAmount)
+    setValue([newValue])
+    setAmount(newValue)
+    setInputValue(newValue.toString())
+  }
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    const value = e.target.value
     if (value === "" || /^\d+$/.test(value)) {
       if (value !== "") {
-        const numericValue = parseInt(value);
+        const numericValue = parseInt(value)
         if (!isNaN(numericValue)) {
           if (numericValue > remainingAmount) {
-            setInputValue(remainingAmount.toString());
-            setAmount(remainingAmount);
-            setValue([remainingAmount]);
+            setInputValue(remainingAmount.toString())
+            setAmount(remainingAmount)
+            setValue([remainingAmount])
             toaster.create({
               title: "Amount Adjusted",
               description: `Maximum sponsorship amount is $${remainingAmount}.`,
-            });
-            return;
+            })
+            return
           }
         }
       }
 
-      setInputValue(value);
+      setInputValue(value)
 
       if (value === "") {
-        setAmount(0);
-        setValue([0]);
+        setAmount(0)
+        setValue([0])
       } else {
-        const numericValue = parseInt(value);
+        const numericValue = parseInt(value)
         if (!isNaN(numericValue)) {
-          setAmount(numericValue);
-          setValue([numericValue]);
+          setAmount(numericValue)
+          setValue([numericValue])
         }
       }
     }
-  };
+  }
 
   const handleSponsor = async () => {
     if (
@@ -227,17 +239,17 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
       toaster.create({
         title: "Invalid Amount",
         description: `Minimum sponsorship amount is $${minimumAmount}.`,
-      });
-      return;
+      })
+      return
     }
     if (amount > remainingAmount) {
       toaster.create({
         title: "Invalid Amount",
         description: "Amount exceeds the remaining budget needed.",
-      });
-      return;
+      })
+      return
     }
-    setLoading(true);
+    setLoading(true)
     try {
       const payload = {
         beneficiaryId: street.id,
@@ -245,29 +257,30 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
         beneficiaryImage:
           images[currentImageIndex]?.image_url || placeholderImage,
         // If public hardcoded amount is set, send that exact cents value to server.
-        amount: publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
+        amount:
+          publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
         paymentType: selectedOption,
         location: street.country,
         userId: user?.id,
         isEmbedded: true,
         allowBelowMinimum:
           remainingAmount < minimumAmount && amount === remainingAmount,
-      };
+      }
       if (selectedOption !== "payment" && selectedOption !== "subscription") {
         toaster.create({
           title: "Payment Error",
           description: "Invalid payment frequency selected. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
       if (!street.country) {
         toaster.create({
           title: "Payment Error",
           description: "Missing location information. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
       const res = await fetch("/api/stripe", {
         method: "POST",
@@ -277,66 +290,66 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
         },
         credentials: "include",
         body: JSON.stringify(payload),
-      });
-      const data = await res.json();
+      })
+      const data = await res.json()
       if (!res.ok) {
         toaster.create({
           title: "Payment Error",
           description: data?.error || "Something went wrong. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
-      const { clientSecret, url } = data;
+      const { clientSecret, url } = data
       if (!clientSecret && !url) {
         toaster.create({
           title: "Payment Error",
           description: "Failed to create checkout session. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
 
       if (isInIframe) {
         try {
-          const urlParams = new URLSearchParams(window.location.search);
-          const parentOrigin = urlParams.get("parentOrigin") || "*";
+          const urlParams = new URLSearchParams(window.location.search)
+          const parentOrigin = urlParams.get("parentOrigin") || "*"
           const checkoutUrl = clientSecret
             ? `/sponsorships/checkout?client_secret=${clientSecret}&parentOrigin=${encodeURIComponent(
-                parentOrigin
+                parentOrigin,
               )}&embedded=true`
-            : url;
-          window.location.href = checkoutUrl;
-          return;
+            : url
+          window.location.href = checkoutUrl
+          return
         } catch {
           toaster.create({
             title: "Payment Error",
             description: "Failed to process checkout. Please try again.",
-          });
+          })
         }
       } else {
         const checkoutUrl =
-          url || `/sponsorships/checkout?client_secret=${clientSecret}`;
-        window.location.href = checkoutUrl;
-        return;
+          url || `/sponsorships/checkout?client_secret=${clientSecret}`
+        window.location.href = checkoutUrl
+        return
       }
     } catch {
       toaster.create({
         title: "Payment Error",
         description: "Something went wrong. Please try again.",
-      });
+      })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleSelectChange = (value: string) => {
-    setSelectedOption(value);
-  };
+    setSelectedOption(value)
+  }
 
   const renderDisclaimer = () => {
     const monthlyAmount =
-      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
+      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
     if (street.budget_goal - street.budget_raised - amount * 100 > 0) {
       return (
         <>
@@ -352,7 +365,7 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
           <br />
           Additional sponsors are required to meet this goal.
         </>
-      );
+      )
     } else if (street.budget_raised > 0) {
       return (
         <>
@@ -366,7 +379,7 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
             </>
           )}
         </>
-      );
+      )
     }
     return (
       <>
@@ -380,8 +393,8 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
           </>
         )}
       </>
-    );
-  };
+    )
+  }
 
   return (
     <Flex minH="100vh" align="center" justify="center" bg="white" py={8}>
@@ -398,7 +411,7 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
             variant="ghost"
             onClick={() => {
               if (currentIndex > 0) {
-                setCurrentIndex(currentIndex - 1);
+                setCurrentIndex(currentIndex - 1)
               }
             }}
             disabled={currentIndex === 0}
@@ -409,7 +422,7 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
             variant="ghost"
             onClick={() => {
               if (currentIndex < streetInvolved.length - 1) {
-                setCurrentIndex(currentIndex + 1);
+                setCurrentIndex(currentIndex + 1)
               }
             }}
             disabled={currentIndex >= streetInvolved.length - 1}
@@ -462,7 +475,7 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
                 transform="translateY(-50%)"
                 onClick={() =>
                   setCurrentImageIndex(
-                    (prev) => (prev - 1 + images.length) % images.length
+                    (prev) => (prev - 1 + images.length) % images.length,
                   )
                 }
                 size="sm"
@@ -509,7 +522,10 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
                 borderRadius="md"
                 width={`${
                   effectiveGoalCents > 0
-                    ? Math.min((street.budget_raised / effectiveGoalCents) * 100, 100)
+                    ? Math.min(
+                        (street.budget_raised / effectiveGoalCents) * 100,
+                        100,
+                      )
                     : 0
                 }%`}
                 transition="width 0.3s"
@@ -724,5 +740,5 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
         </a>
       </Box>
     </Flex>
-  );
+  )
 }

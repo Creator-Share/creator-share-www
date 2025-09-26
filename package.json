@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "update-types-dev": "npx supabase gen types typescript --project-id \"destjwstohzmufshfnuy\" --schema public > src/lib/types/db.types.ts",
-    "lint": "next lint"
+    "lint": "next lint",
+    "format": "npx prettier --write ."
   },
   "dependencies": {
     "@chakra-ui/next-js": "^2.4.2",
