@@ -174,7 +174,19 @@ export default function SponsorshipEmbedChildrenPage() {
       </Flex>
     )
   }
-  const remainingAmount = (people.budget_goal - people.budget_raised) / 100
+
+  // Public hardcoded override for front-end (dollars are provided as cents integer)
+  const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
+  const publicHardcodedCents = publicHardcodedRaw
+    ? parseInt(publicHardcodedRaw, 10)
+    : null
+  const effectiveGoalCents =
+    publicHardcodedCents !== null
+      ? publicHardcodedCents
+      : people?.budget_goal || 0
+
+  const remainingAmount =
+    (effectiveGoalCents - (people?.budget_raised || 0)) / 100
   const minimumAmount = 10
   const maxSelectableAmount =
     remainingAmount > minimumAmount
@@ -526,10 +538,14 @@ export default function SponsorshipEmbedChildrenPage() {
                 h="100%"
                 bg="#1C3C8C"
                 borderRadius="md"
-                width={`${Math.min(
-                  (people.budget_raised / people.budget_goal) * 100,
-                  100,
-                )}%`}
+                width={`${
+                  effectiveGoalCents > 0
+                    ? Math.min(
+                        (people.budget_raised / effectiveGoalCents) * 100,
+                        100,
+                      )
+                    : 0
+                }%`}
                 transition="width 0.3s"
               />
             </Box>
@@ -545,7 +561,7 @@ export default function SponsorshipEmbedChildrenPage() {
         </Flex>
         <Flex justify="flex-end" mb={2}>
           <Text color="blue.700" fontWeight="semibold" fontSize="md">
-            Monthly Goal: ${centsToDollars(people.budget_goal)}
+            Monthly Goal: ${centsToDollars(effectiveGoalCents)}
           </Text>
         </Flex>
         <Box mb={2}>

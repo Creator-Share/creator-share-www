@@ -86,21 +86,23 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           style={{ objectFit: "cover", objectPosition: "center 20%" }}
           className="w-full h-64 rounded-t-[20px]"
         />
-        <Box position="absolute" top="0" right="0" zIndex={10}>
-          <Badge
-            bg="#CDE1FE"
-            color="#011532"
-            borderRadius="0"
-            borderTopRightRadius="20px"
-            borderBottomLeftRadius="20px"
-            className="p-[10px] text-sm font-medium"
-          >
-            Goal{" "}
-            <span className="text-xl font-semibold">
-              ${centsToDollars(beneficiary.budget_goal)}
-            </span>
-          </Badge>
-        </Box>
+        {!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && (
+          <Box position="absolute" top="0" right="0" zIndex={10}>
+            <Badge
+              bg="#CDE1FE"
+              color="#011532"
+              borderRadius="0"
+              borderTopRightRadius="20px"
+              borderBottomLeftRadius="20px"
+              className="p-[10px] text-sm font-medium"
+            >
+              Goal{" "}
+              <span className="text-xl font-semibold">
+                ${centsToDollars(beneficiary.budget_goal)}
+              </span>
+            </Badge>
+          </Box>
+        )}
       </Box>
 
       {/* Card Content */}

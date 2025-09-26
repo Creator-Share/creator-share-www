@@ -7,3 +7,5 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 STRIPE_SECRET_KEY=
 NEXT_PUBLIC_BASE_URL=https://localhost:3000/
 
+# Public frontend exposure (dollars in cents integer string) to allow UI to honor/lock the amount
+NEXT_PUBLIC_SPONSORSHIP_GOAL=

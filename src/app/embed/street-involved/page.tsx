@@ -70,8 +70,16 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
           }
           setStreetInvolved(streetList)
           if (streetList.length > 0) {
+            const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
+            const publicHardcodedCents = publicHardcodedRaw
+              ? parseInt(publicHardcodedRaw, 10)
+              : null
+            const effectiveGoal =
+              publicHardcodedCents !== null
+                ? publicHardcodedCents
+                : streetList[0].budget_goal
             const remaining =
-              (streetList[0].budget_goal - streetList[0].budget_raised) / 100
+              (effectiveGoal - streetList[0].budget_raised) / 100
             setAmount(remaining)
             setValue([remaining])
             setInputValue(remaining.toString())
@@ -161,7 +169,19 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
       </Flex>
     )
   }
-  const remainingAmount = (street.budget_goal - street.budget_raised) / 100
+  // Public hardcoded override for front-end (dollars are provided as cents integer)
+  const publicHardcodedRaw =
+    process.env.NEXT_PUBLIC_HARDCODE_CHILD_BUDGET_PRICE_CENTS
+  const publicHardcodedCents = publicHardcodedRaw
+    ? parseInt(publicHardcodedRaw, 10)
+    : null
+  const effectiveGoalCents =
+    publicHardcodedCents !== null
+      ? publicHardcodedCents
+      : street?.budget_goal || 0
+
+  const remainingAmount =
+    (effectiveGoalCents - (street?.budget_raised || 0)) / 100
   const minimumAmount = 10
   const maxSelectableAmount =
     remainingAmount > minimumAmount
@@ -236,7 +256,9 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
         beneficiaryName: street.name,
         beneficiaryImage:
           images[currentImageIndex]?.image_url || placeholderImage,
-        amount: amount * 100,
+        // If public hardcoded amount is set, send that exact cents value to server.
+        amount:
+          publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
         paymentType: selectedOption,
         location: street.country,
         userId: user?.id,
@@ -498,10 +520,14 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
                 h="100%"
                 bg="#1C3C8C"
                 borderRadius="md"
-                width={`${Math.min(
-                  (street.budget_raised / street.budget_goal) * 100,
-                  100,
-                )}%`}
+                width={`${
+                  effectiveGoalCents > 0
+                    ? Math.min(
+                        (street.budget_raised / effectiveGoalCents) * 100,
+                        100,
+                      )
+                    : 0
+                }%`}
                 transition="width 0.3s"
               />
             </Box>
@@ -517,7 +543,7 @@ export default function SponsorshipEmbedStreetInvolvedPage() {
         </Flex>
         <Flex justify="flex-end" mb={2}>
           <Text color="blue.700" fontWeight="semibold" fontSize="md">
-            Monthly Goal: ${centsToDollars(street.budget_goal)}
+            Monthly Goal: ${centsToDollars(effectiveGoalCents)}
           </Text>
         </Flex>
         <Box mb={2}>

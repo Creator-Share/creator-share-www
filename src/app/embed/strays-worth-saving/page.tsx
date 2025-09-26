@@ -65,10 +65,16 @@ export default function SponsorshipEmbedStraysPage() {
           }
           setAnimals(animalList)
           if (animalList.length > 0) {
+            const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
+            const publicHardcodedCents = publicHardcodedRaw
+              ? parseInt(publicHardcodedRaw, 10)
+              : null
+            const effectiveGoal =
+              publicHardcodedCents !== null
+                ? publicHardcodedCents
+                : Number(animalList[0].budget_goal)
             const remaining =
-              (Number(animalList[0].budget_goal) -
-                animalList[0].budget_raised) /
-              100
+              (effectiveGoal - animalList[0].budget_raised) / 100
             setAmount(remaining)
             setValue([remaining])
             setInputValue(remaining.toString())
@@ -158,8 +164,18 @@ export default function SponsorshipEmbedStraysPage() {
       </Flex>
     )
   }
-  const remainingAmount =
-    (Number(animal.budget_goal) - animal.budget_raised) / 100
+  // Public hardcoded override for front-end (dollars are provided as cents integer)
+  const publicHardcodedRaw =
+    process.env.NEXT_PUBLIC_HARDCODE_CHILD_BUDGET_PRICE_CENTS
+  const publicHardcodedCents = publicHardcodedRaw
+    ? parseInt(publicHardcodedRaw, 10)
+    : null
+  const effectiveGoalCents =
+    publicHardcodedCents !== null
+      ? publicHardcodedCents
+      : Number(animal?.budget_goal || 0)
+
+  const remainingAmount = (effectiveGoalCents - animal.budget_raised) / 100
   const minimumAmount = 10
   const maxSelectableAmount =
     remainingAmount > minimumAmount
@@ -234,7 +250,9 @@ export default function SponsorshipEmbedStraysPage() {
         beneficiaryName: animal.name,
         beneficiaryImage:
           images[currentImageIndex]?.image_url || placeholderImage,
-        amount: amount * 100,
+        // If public hardcoded amount is set, send that exact cents value to server.
+        amount:
+          publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
         paymentType: selectedOption,
         location: animal.country,
         userId: user?.id,

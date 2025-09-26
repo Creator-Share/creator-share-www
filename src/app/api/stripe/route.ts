@@ -20,7 +20,21 @@ export async function POST(req: Request) {
       email,
     } = await req.json()
 
-    if (!amount || (amount < 1000 && !allowBelowMinimum)) {
+    // If a hardcoded server-side price is configured, enforce it.
+    const hardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
+    const hardcoded = hardcodedRaw ? parseInt(hardcodedRaw, 10) : null
+    if (hardcoded !== null && (isNaN(hardcoded) || hardcoded <= 0)) {
+      console.warn(
+        "NEXT_PUBLIC_SPONSORSHIP_GOAL is set but invalid:",
+        hardcodedRaw,
+      )
+    }
+
+    // Use the hardcoded value if present, otherwise use the client-provided amount.
+    const enforcedAmount = hardcoded !== null ? hardcoded : amount
+
+    // Validate enforced amount (keep existing minimum unless overriden intentionally)
+    if (!enforcedAmount || (enforcedAmount < 1000 && !allowBelowMinimum)) {
       return NextResponse.json(
         { error: "Minimum amount is $10." },
         { status: 400 },
@@ -49,8 +63,9 @@ export async function POST(req: Request) {
       images: productImages,
     })
 
+    // Create price using the enforced amount (either hardcoded server var or client-provided)
     const price = await stripe.prices.create({
-      unit_amount: amount,
+      unit_amount: enforcedAmount,
       currency: "usd",
       recurring: { interval },
       product: product.id,
@@ -59,12 +74,14 @@ export async function POST(req: Request) {
           ? {
               type: "partnership",
               project,
-              amount: amount.toString(),
+              amount: enforcedAmount.toString(),
+              hardcoded_override: hardcoded !== null ? "true" : "false",
             }
           : {
               beneficiaryId,
               userId: userId || null,
-              amount: amount.toString(),
+              amount: enforcedAmount.toString(),
+              hardcoded_override: hardcoded !== null ? "true" : "false",
             },
     })
 
@@ -82,19 +99,21 @@ export async function POST(req: Request) {
         type === "partnership"
           ? {
               type: "partnership",
-              amount: amount.toString(),
+              amount: enforcedAmount.toString(),
               project,
               email,
               paymentType,
+              hardcoded_override: hardcoded !== null ? "true" : "false",
             }
           : {
               beneficiaryId,
               beneficiaryName,
               childName: beneficiaryName,
-              amount: amount.toString(),
+              amount: enforcedAmount.toString(),
               childLocation: location,
               userId: userId || null,
               paymentType,
+              hardcoded_override: hardcoded !== null ? "true" : "false",
             },
       subscription_data: {
         metadata:
@@ -102,13 +121,15 @@ export async function POST(req: Request) {
             ? {
                 type: "partnership",
                 project,
-                amount: amount.toString(),
+                amount: enforcedAmount.toString(),
                 email,
+                hardcoded_override: hardcoded !== null ? "true" : "false",
               }
             : {
                 beneficiaryId,
                 userId: userId || null,
-                amount: amount.toString(),
+                amount: enforcedAmount.toString(),
+                hardcoded_override: hardcoded !== null ? "true" : "false",
               },
       },
     }
