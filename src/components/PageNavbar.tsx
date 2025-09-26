@@ -13,7 +13,6 @@ import {
 import NextLink from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { usePathname, useRouter } from "next/navigation";
-import { ColorModeButton } from "./ui/color-mode";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { IoClose } from "react-icons/io5";
 
@@ -136,7 +135,6 @@ export function PageNavbar() {
 
         {/* Right Actions */}
         <Flex gap={4} display={{ base: "none", md: "flex" }}>
-          {/* <ColorModeButton /> */}
           {user ? (
             <Menu.Root>
               <Menu.Trigger asChild>
@@ -179,7 +177,7 @@ export function PageNavbar() {
             </Menu.Root>
           ) : (
             <>
-              <NextLink href="/login" passHref>
+              {/* <NextLink href="/login" passHref>
                 <Button size="sm" variant="ghost">
                   Sign In
                 </Button>
@@ -188,7 +186,7 @@ export function PageNavbar() {
                 <Button size="sm" colorScheme="blue">
                   Sign Up
                 </Button>
-              </NextLink>
+              </NextLink> */}
             </>
           )}
         </Flex>
@@ -250,7 +248,6 @@ export function PageNavbar() {
                 </Link>
               );
             })}
-            <ColorModeButton />
             {user ? (
               <>
                 {isAdmin && (
