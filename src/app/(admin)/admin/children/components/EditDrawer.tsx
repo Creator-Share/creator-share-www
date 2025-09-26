@@ -108,7 +108,8 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     // Required fields for validation. If a public sponsorship goal is provided via
     // NEXT_PUBLIC_SPONSORSHIP_GOAL, the budget is supplied by the environment and
     // should not be required in the form.
-    let requiredFields: string[] = [
+    // The next line is causing a build error even though it is conditionally being reassigned. Silly typescript...
+    const requiredFields: string[] = [
       "name",
       "username",
       "gender",
