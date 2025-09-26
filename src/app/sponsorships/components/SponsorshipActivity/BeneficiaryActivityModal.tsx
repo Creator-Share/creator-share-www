@@ -101,17 +101,24 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   const fallbackPlaceholder =
     "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
 
+  // Update the loadBeneficiaryMedia function to properly handle no images case
   useEffect(() => {
     async function loadBeneficiaryMedia() {
       if (!beneficiary?.id) {
         return
       }
+      
+      // Clear images first
+      setImages([])
+      setCurrentImageIndex(0)
+      
       try {
         const res = await fetch(
           `/api/admin/beneficiaries/images/${beneficiary.id}`,
         )
         if (!res.ok) {
-          // fallback to any existing beneficiary.video_url already set in state
+          // No images found, use fallback
+          setImages([])
           return
         }
         const media = await res.json()
@@ -136,9 +143,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             }
             return
           }
+        } else {
+          // No media found, clear images
+          setImages([])
         }
       } catch (e) {
         console.error("Failed to load beneficiary media:", e)
+        setImages([])
       }
     }
 
@@ -673,14 +684,14 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   {getStatusText(beneficiary.status)}
                 </Text>
               </Box>
-              <Box position="relative">
+              <Box position="relative" className="group">
                 <Image
                   src={
                     images.length > 0
                       ? images[currentImageIndex]?.id
                         ? generatePublicUrl(images[currentImageIndex] as unknown as MediaRow)
                         : images[currentImageIndex]?.image_url
-                      : primaryImageUrl || fallbackPlaceholder
+                      : beneficiary.image_url || fallbackPlaceholder
                   }
                   alt={beneficiary.name || "Child"}
                   width={500}
@@ -702,10 +713,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                       transform="translateY(-50%)"
                       bg="rgba(0, 0, 0, 0.5)"
                       color="white"
-                      _hover={{ bg: "rgba(0, 0, 0, 0.7)", opacity: 1 }}
+                      _hover={{ bg: "rgba(0, 0, 0, 0.7)" }}
                       onClick={prevImage}
                       zIndex={20}
-                      opacity={0.8}
+                      opacity={0}
+                      _groupHover={{ opacity: 1 }}
                       transition="opacity 0.2s"
                     >
                       <LuChevronLeft />
@@ -721,10 +733,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                       transform="translateY(-50%)"
                       bg="rgba(0, 0, 0, 0.5)"
                       color="white"
-                      _hover={{ bg: "rgba(0, 0, 0, 0.7)", opacity: 1 }}
+                      _hover={{ bg: "rgba(0, 0, 0, 0.7)" }}
                       onClick={nextImage}
                       zIndex={20}
-                      opacity={0.8}
+                      opacity={0}
+                      _groupHover={{ opacity: 1 }}
                       transition="opacity 0.2s"
                     >
                       <LuChevronRight />

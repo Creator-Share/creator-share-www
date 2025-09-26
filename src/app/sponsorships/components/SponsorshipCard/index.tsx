@@ -91,7 +91,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       onClick={() => onOpenDialog?.()}
     >
       {/* Card Header: Image with Navigation */}
-      <Box position="relative" flexShrink={0}>
+      <Box position="relative" flexShrink={0} className="group">
         <Image
           src={
             images.length > 0
@@ -120,10 +120,11 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
               transform="translateY(-50%)"
               bg="rgba(0, 0, 0, 0.5)"
               color="white"
-              _hover={{ bg: "rgba(0, 0, 0, 0.7)", opacity: 1 }}
+              _hover={{ bg: "rgba(0, 0, 0, 0.7)" }}
               onClick={prevImage}
               zIndex={20}
-              opacity={0.8}
+              opacity={0}
+              _groupHover={{ opacity: 1 }}
               transition="opacity 0.2s"
             >
               <LuChevronLeft />
@@ -139,10 +140,11 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
               transform="translateY(-50%)"
               bg="rgba(0, 0, 0, 0.5)"
               color="white"
-              _hover={{ bg: "rgba(0, 0, 0, 0.7)", opacity: 1 }}
+              _hover={{ bg: "rgba(0, 0, 0, 0.7)" }}
               onClick={nextImage}
               zIndex={20}
-              opacity={0.8}
+              opacity={0}
+              _groupHover={{ opacity: 1 }}
               transition="opacity 0.2s"
             >
               <LuChevronRight />
