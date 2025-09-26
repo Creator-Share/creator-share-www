@@ -86,8 +86,7 @@ export async function uploadFile(
   media: MediaRow,
   file: File | Blob | Buffer,
   opts?: { cacheControl?: string; upsert?: boolean; contentType?: string },
-): Promise<{ error: any | null; data?: any }> {
-  // eslint-disable-line @typescript-eslint/no-explicit-any
+): Promise<{ error: unknown | null; data?: unknown }> {
   if (!supabaseClient) {
     throw new Error("supabaseClient is required")
   }
@@ -108,7 +107,7 @@ export async function uploadFile(
 
   const result = await supabaseClient.storage
     .from(STORAGE_BUCKET)
-    .upload(path, file as any, options) // eslint-disable-line @typescript-eslint/no-explicit-any
+    .upload(path, file, options)
   // result is in shape { data, error } from supabase-js
   return { error: result.error ?? null, data: result.data }
 }
@@ -121,8 +120,7 @@ export async function deleteFile(
     typeof import("@/utils/supabase/client").createClient
   >,
   media: MediaRow,
-): Promise<{ error: any | null; data?: any }> {
-  // eslint-disable-line @typescript-eslint/no-explicit-any
+): Promise<{ error: unknown | null; data?: unknown }> {
   if (!supabaseClient) {
     throw new Error("supabaseClient is required")
   }
