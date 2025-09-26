@@ -644,10 +644,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 </Text>
               </Box>
               <Image
-                src={
-                  primaryImageUrl ||
-                  fallbackPlaceholder
-                }
+                src={primaryImageUrl || fallbackPlaceholder}
                 alt={beneficiary.name || "Child"}
                 width={500}
                 height={405}

@@ -1,6 +1,6 @@
 "use client"
 import { Box, Flex, Button, SimpleGrid } from "@chakra-ui/react"
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import BeneficiaryCard from "../SponsorshipCard"
 import BeneficiaryActivityModal from "../SponsorshipActivity/BeneficiaryActivityModal"
 import { BeneficiaryListingsProps } from "@/types/propTypes"
@@ -22,9 +22,8 @@ const BeneficiaryListings = React.forwardRef<
   ) => {
     const [currentPage, setCurrentPage] = useState(1)
     const [dialogOpen, setDialogOpen] = useState<boolean>(false)
-    // const [activeBeneficiaryId, setActiveBeneficiaryId] = useState<string | null>(null);
     const isInIframe = window.self !== window.top
-    const itemsPerPage = 6 // Show fewer items per page to test pagination
+    const itemsPerPage = 6
 
     const filteredBeneficiary = React.useMemo(() => {
       const safeBeneficiaryData = Array.isArray(beneficiaryData)
@@ -32,7 +31,6 @@ const BeneficiaryListings = React.forwardRef<
         : []
 
       const filtered = safeBeneficiaryData.filter((beneficiary) => {
-        // Filter by country if selected
         if (selectedCountry && beneficiary.country !== selectedCountry) {
           return false
         }
@@ -42,7 +40,6 @@ const BeneficiaryListings = React.forwardRef<
             const [lng, lat] = beneficiary.location_geo.coordinates
             return mapBounds.contains([lat, lng])
           } else {
-            // Include animals with null location_geo in the listings
             return true
           }
         }
@@ -61,6 +58,52 @@ const BeneficiaryListings = React.forwardRef<
       return sliced
     }, [filteredBeneficiary, currentPage, itemsPerPage])
 
+    // Calculate total pages
+    const totalPages = Math.ceil(filteredBeneficiary.length / itemsPerPage)
+
+    // Generate pagination items with ellipsis
+    const generatePaginationItems = () => {
+      const items = []
+      const maxVisiblePages = 7 // Show max 7 page numbers
+      
+      if (totalPages <= maxVisiblePages) {
+        // Show all pages if total is small
+        for (let i = 1; i <= totalPages; i++) {
+          items.push(i)
+        }
+      } else {
+        // Always show first page
+        items.push(1)
+        
+        if (currentPage <= 4) {
+          // Show first 5 pages + ellipsis + last page
+          for (let i = 2; i <= 5; i++) {
+            items.push(i)
+          }
+          items.push('ellipsis')
+          items.push(totalPages)
+        } else if (currentPage >= totalPages - 3) {
+          // Show first page + ellipsis + last 5 pages
+          items.push('ellipsis')
+          for (let i = totalPages - 4; i <= totalPages; i++) {
+            items.push(i)
+          }
+        } else {
+          // Show first page + ellipsis + current-1, current, current+1 + ellipsis + last page
+          items.push('ellipsis')
+          for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+            items.push(i)
+          }
+          items.push('ellipsis')
+          items.push(totalPages)
+        }
+      }
+      
+      return items
+    }
+
+    const paginationItems = generatePaginationItems()
+
     useEffect(() => {
       if (isInIframe) {
         setTimeout(() => {
@@ -75,24 +118,21 @@ const BeneficiaryListings = React.forwardRef<
       }
     }, [isInIframe])
 
-    useEffect(() => {
-      // Only reset to first page if not jumping to a selected beneficiary
-      setCurrentPage(1)
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedCountry, JSON.stringify(mapBounds || {})])
+    const mapBoundsString = useMemo(() => JSON.stringify(mapBounds || {}), [mapBounds])
 
-    // Effect to update page when selected beneficiary changes
+    useEffect(() => {
+      setCurrentPage(1)
+    }, [selectedCountry, mapBoundsString])
+
     useEffect(() => {
       if (!selectedBeneficiaryId) return
 
-      // Find the index of the selected beneficiary in the filtered list
       const index = filteredBeneficiary.findIndex(
         (b) => b.id === selectedBeneficiaryId,
       )
 
-      if (index === -1) return // Not found in filtered list
+      if (index === -1) return
 
-      // Calculate the page number that contains the selected beneficiary
       const newPage = Math.floor(index / itemsPerPage) + 1
 
       if (newPage !== currentPage) {
@@ -101,16 +141,12 @@ const BeneficiaryListings = React.forwardRef<
       }
     }, [selectedBeneficiaryId, filteredBeneficiary, currentPage, itemsPerPage])
 
-    // Track if page change was triggered by beneficiary selection
-    const [pageChangeFromSelection, setPageChangeFromSelection] =
-      useState(false)
+    const [pageChangeFromSelection, setPageChangeFromSelection] = useState(false)
 
-    // Reset selectedBeneficiaryId when currentPage changes to allow manual pagination
     useEffect(() => {
       if (selectedBeneficiaryId && !pageChangeFromSelection) {
         setSelectedBeneficiaryId(null)
       }
-      // Don't reset pageChangeFromSelection here to avoid immediate clearing
     }, [
       currentPage,
       pageChangeFromSelection,
@@ -118,10 +154,8 @@ const BeneficiaryListings = React.forwardRef<
       selectedBeneficiaryId,
     ])
 
-    // Scroll to selected beneficiary after page change (from map click)
     useEffect(() => {
       if (selectedBeneficiaryId && pageChangeFromSelection) {
-        // Wait for DOM update
         setTimeout(() => {
           const el = document.getElementById(selectedBeneficiaryId)
           if (el) {
@@ -132,7 +166,6 @@ const BeneficiaryListings = React.forwardRef<
       }
     }, [selectedBeneficiaryId, pageChangeFromSelection])
 
-    // Reset pageChangeFromSelection after a delay to allow the beneficiary to be shown
     useEffect(() => {
       if (pageChangeFromSelection) {
         const timer = setTimeout(() => {
@@ -142,18 +175,6 @@ const BeneficiaryListings = React.forwardRef<
       }
     }, [pageChangeFromSelection])
 
-    // Remove the scroll effect from listings component since it's now handled in the map component
-
-    // Reset active beneficiary when selectedBeneficiaryId is cleared or page changes
-    useEffect(() => {
-      // if (!selectedBeneficiaryId) setActiveBeneficiaryId(null);
-    }, [selectedBeneficiaryId])
-
-    // useEffect(() => {
-    //   setActiveBeneficiaryId(null);
-    // }, [currentPage]);
-
-    // Handle opening the dialog for a specific child
     const handleOpenDialog = (beneficiaryId?: string) => {
       if (!beneficiaryId) return
       const index = visibleBeneficiary.findIndex(
@@ -166,9 +187,6 @@ const BeneficiaryListings = React.forwardRef<
     }
 
     const [currentDialogIndex, setCurrentDialogIndex] = useState<number>(0)
-
-    // Calculate total pages
-    const totalPages = Math.ceil(filteredBeneficiary.length / itemsPerPage)
 
     return (
       <Box
@@ -207,9 +225,10 @@ const BeneficiaryListings = React.forwardRef<
             )}
           </SimpleGrid>
         </Box>
+
         {filteredBeneficiary.length > itemsPerPage && (
-          <Flex justify="center" pb={10} gap={2}>
-            <Flex gap={2}>
+          <Flex justify="center" pb={10} gap={2} flexWrap="wrap">
+            <Flex gap={1} align="center">
               <Button
                 onClick={() => {
                   setSelectedBeneficiaryId(null)
@@ -217,27 +236,37 @@ const BeneficiaryListings = React.forwardRef<
                   window.scrollTo({ top: 0, behavior: "smooth" })
                 }}
                 disabled={currentPage === 1}
+                size="sm"
+                variant="outline"
               >
                 Previous
               </Button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (page) => (
-                  <Button
-                    key={page}
-                    onClick={() => {
-                      setSelectedBeneficiaryId(null)
-                      setCurrentPage(page)
-                      window.scrollTo({ top: 0, behavior: "smooth" })
-                    }}
-                    colorScheme={currentPage === page ? "blue" : undefined}
-                    variant={currentPage === page ? "solid" : "outline"}
-                    aria-current={currentPage === page ? "page" : undefined}
-                    fontWeight={currentPage === page ? "bold" : "normal"}
-                  >
-                    {page}
-                  </Button>
-                ),
-              )}
+              
+              {paginationItems.map((item, index) => (
+                <React.Fragment key={index}>
+                  {item === 'ellipsis' ? (
+                    <Box px={2} py={1} color="gray.500">
+                      ...
+                    </Box>
+                  ) : (
+                    <Button
+                      onClick={() => {
+                        setSelectedBeneficiaryId(null)
+                        setCurrentPage(item as number)
+                        window.scrollTo({ top: 0, behavior: "smooth" })
+                      }}
+                      colorScheme={currentPage === item ? "blue" : undefined}
+                      variant={currentPage === item ? "solid" : "outline"}
+                      size="sm"
+                      aria-current={currentPage === item ? "page" : undefined}
+                      fontWeight={currentPage === item ? "bold" : "normal"}
+                    >
+                      {item}
+                    </Button>
+                  )}
+                </React.Fragment>
+              ))}
+              
               <Button
                 onClick={() => {
                   setSelectedBeneficiaryId(null)
@@ -245,6 +274,8 @@ const BeneficiaryListings = React.forwardRef<
                   window.scrollTo({ top: 0, behavior: "smooth" })
                 }}
                 disabled={currentPage === totalPages}
+                size="sm"
+                variant="outline"
               >
                 Next
               </Button>
