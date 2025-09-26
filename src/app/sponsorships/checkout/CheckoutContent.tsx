@@ -74,7 +74,6 @@ export default function CheckoutContent() {
       </Box>
     );
   }
-
   return (
     <Box className="w-full min-h-screen p-4">
       <EmbeddedCheckoutProvider

@@ -24,7 +24,7 @@ import {
     FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
-import ExpenseManager from './ExpenseManager';
+// import ExpenseManager from './ExpenseManager';
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types";
 import { toaster } from "@/components/ui/toaster";
 import { dollarsToCents } from "@/utils/currency";
@@ -68,6 +68,10 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     const [isImageLoading, setIsImageLoading] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
+    // Read optional public sponsorship goal (cents). If set, hide budget input and use this value.
+    const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
+    const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
+
     // Legacy direct upload helper removed — uploads now go through server endpoints (/api/admin/beneficiaries/*)
 
     useEffect(() => {
@@ -109,7 +113,12 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
         try {
             setIsSaving(true);
             const updatedData = { ...formDataEdit };
-            const budgetGoalInCents = parseInt(dollarsToCents(formDataEdit.budget_goal || 0));
+            // Allow server/environment override for sponsorship goal (cents).
+            const envRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
+            const envCents = envRaw ? parseInt(envRaw, 10) : null;
+            const budgetGoalInCentsFromForm = parseInt(dollarsToCents(formDataEdit.budget_goal || 0));
+            const budgetGoalInCents = envCents !== null && !isNaN(envCents) ? envCents : budgetGoalInCentsFromForm;
+
             if (imageFiles.length > 0) {
                 try {
                     const formData = new FormData();
@@ -326,16 +335,30 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                     value={formDataEdit.introduction || ''}
                                 />
                             </Field>
-                            <Field label="Budget Goal" required errorText="This field is required">
-                                <Input
-                                    name="budget_goal"
-                                    type="number"
-                                    className="border"
-                                    px={2}
-                                    onChange={handleInputChange}
-                                    value={formDataEdit.budget_goal || ''}
-                                />
-                            </Field>
+                            {publicHardcodedCents === null ? (
+                              <Field label="Budget Goal" required errorText="This field is required">
+                                  <Input
+                                      name="budget_goal"
+                                      type="number"
+                                      className="border"
+                                      px={2}
+                                      onChange={handleInputChange}
+                                      value={formDataEdit.budget_goal || ''}
+                                  />
+                              </Field>
+                            ) : (
+                              <Field label="Budget Goal">
+                                  <Input
+                                      name="budget_goal"
+                                      type="text"
+                                      className="border bg-gray-100"
+                                      px={2}
+                                      value={((publicHardcodedCents || 0) / 100).toFixed(2)}
+                                      readOnly
+                                      disabled
+                                  />
+                              </Field>
+                            )}
                             <Field label="Status" required errorText="This field is required">
                                 <NativeSelectRoot>
                                     <NativeSelectField
@@ -437,7 +460,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                             </Field>
 
                             {/* Expense Management Section */}
-                            {selectedChild?.id && (
+                            {/* {selectedChild?.id && (
                                 <div className="mt-6">
                                     <ExpenseManager
                                         beneficiaryId={selectedChild.id}
@@ -447,7 +470,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                                         }}
                                     />
                                 </div>
-                            )}
+                            )} */}
                         </Fieldset.Content>
                     </Fieldset.Root>
                     {selectedChild?.id && (

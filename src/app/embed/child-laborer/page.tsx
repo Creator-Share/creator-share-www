@@ -69,8 +69,11 @@ export default function SponsorshipEmbedChildLaborerPage() {
           }
           setLaborers(laborerList);
           if (laborerList.length > 0) {
+            const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
+            const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
+            const effectiveGoal = publicHardcodedCents !== null ? publicHardcodedCents : laborerList[0].budget_goal;
             const remaining =
-              (laborerList[0].budget_goal - laborerList[0].budget_raised) / 100;
+              (effectiveGoal - laborerList[0].budget_raised) / 100;
             setAmount(remaining);
             setValue([remaining]);
             setInputValue(remaining.toString());
@@ -160,7 +163,12 @@ export default function SponsorshipEmbedChildLaborerPage() {
       </Flex>
     );
   }
-  const remainingAmount = (laborer.budget_goal - laborer.budget_raised) / 100;
+  // Public hardcoded override for front-end (dollars are provided as cents integer)
+  const publicHardcodedRaw = process.env.NEXT_PUBLIC_HARDCODE_CHILD_BUDGET_PRICE_CENTS;
+  const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
+  const effectiveGoalCents = publicHardcodedCents !== null ? publicHardcodedCents : (laborer?.budget_goal || 0);
+
+  const remainingAmount = (effectiveGoalCents - (laborer?.budget_raised || 0)) / 100;
   const minimumAmount = 10;
   const maxSelectableAmount =
     remainingAmount > minimumAmount
@@ -235,7 +243,8 @@ export default function SponsorshipEmbedChildLaborerPage() {
         beneficiaryName: laborer.name,
         beneficiaryImage:
           images[currentImageIndex]?.image_url || placeholderImage,
-        amount: amount * 100,
+        // If public hardcoded amount is set, send that exact cents value to server.
+        amount: publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
         paymentType: selectedOption,
         location: laborer.country,
         userId: user?.id,
@@ -497,10 +506,11 @@ export default function SponsorshipEmbedChildLaborerPage() {
                 h="100%"
                 bg="#1C3C8C"
                 borderRadius="md"
-                width={`${Math.min(
-                  (laborer.budget_raised / laborer.budget_goal) * 100,
-                  100
-                )}%`}
+                width={`${
+                  effectiveGoalCents > 0
+                    ? Math.min((laborer.budget_raised / effectiveGoalCents) * 100, 100)
+                    : 0
+                }%`}
                 transition="width 0.3s"
               />
             </Box>
@@ -516,7 +526,7 @@ export default function SponsorshipEmbedChildLaborerPage() {
         </Flex>
         <Flex justify="flex-end" mb={2}>
           <Text color="blue.700" fontWeight="semibold" fontSize="md">
-            Monthly Goal: ${centsToDollars(laborer.budget_goal)}
+            Monthly Goal: ${centsToDollars(effectiveGoalCents)}
           </Text>
         </Flex>
         <Box mb={2}>

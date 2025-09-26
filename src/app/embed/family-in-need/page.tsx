@@ -69,8 +69,11 @@ export default function SponsorshipEmbedFamilyPage() {
           }
           setFamilies(familyList);
           if (familyList.length > 0) {
+            const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
+            const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
+            const effectiveGoal = publicHardcodedCents !== null ? publicHardcodedCents : familyList[0].budget_goal;
             const remaining =
-              (familyList[0].budget_goal - familyList[0].budget_raised) / 100;
+              (effectiveGoal - familyList[0].budget_raised) / 100;
             setAmount(remaining);
             setValue([remaining]);
             setInputValue(remaining.toString());
@@ -160,7 +163,12 @@ export default function SponsorshipEmbedFamilyPage() {
       </Flex>
     );
   }
-  const remainingAmount = (family.budget_goal - family.budget_raised) / 100;
+  // Public hardcoded override for front-end (dollars are provided as cents integer)
+  const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
+  const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
+  const effectiveGoalCents = publicHardcodedCents !== null ? publicHardcodedCents : (family?.budget_goal || 0);
+
+  const remainingAmount = (effectiveGoalCents - (family?.budget_raised || 0)) / 100;
   const minimumAmount = 10;
   const maxSelectableAmount =
     remainingAmount > minimumAmount
@@ -235,7 +243,8 @@ export default function SponsorshipEmbedFamilyPage() {
         beneficiaryName: family.name,
         beneficiaryImage:
           images[currentImageIndex]?.image_url || placeholderImage,
-        amount: amount * 100,
+        // If public hardcoded amount is set, send that exact cents value to server.
+        amount: publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
         paymentType: selectedOption,
         location: family.country,
         userId: user?.id,
@@ -497,10 +506,11 @@ export default function SponsorshipEmbedFamilyPage() {
                 h="100%"
                 bg="#1C3C8C"
                 borderRadius="md"
-                width={`${Math.min(
-                  (family.budget_raised / family.budget_goal) * 100,
-                  100
-                )}%`}
+                width={`${
+                  effectiveGoalCents > 0
+                    ? Math.min((family.budget_raised / effectiveGoalCents) * 100, 100)
+                    : 0
+                }%`}
                 transition="width 0.3s"
               />
             </Box>
@@ -516,7 +526,7 @@ export default function SponsorshipEmbedFamilyPage() {
         </Flex>
         <Flex justify="flex-end" mb={2}>
           <Text color="blue.700" fontWeight="semibold" fontSize="md">
-            Monthly Goal: ${centsToDollars(family.budget_goal)}
+            Monthly Goal: ${centsToDollars(effectiveGoalCents)}
           </Text>
         </Flex>
         <Box mb={2}>

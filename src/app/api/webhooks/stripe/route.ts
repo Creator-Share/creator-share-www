@@ -355,9 +355,13 @@ export async function POST(req: Request) {
         }
 
         // Check if budget goal is fulfilled and notification should be sent
+        // Use server-side hardcoded override when configured
+        const hardcoded = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
+        const effectiveGoal = hardcoded !== null ? hardcoded : beneficiaryData.budget_goal;
+
         if (
           beneficiaryData.goal_fulfilled_at == null &&
-          beneficiaryData.budget_raised + amount >= beneficiaryData.budget_goal
+          beneficiaryData.budget_raised + amount >= effectiveGoal
         ) {
           // Set goal_fulfilled_at
           const { error: updateGoalError } = await supabase

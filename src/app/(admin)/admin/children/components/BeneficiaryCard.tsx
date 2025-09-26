@@ -23,7 +23,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiaryImages,
   loadingImages,
 }) => {
-  const goal = Number(beneficiary.budget_goal || 0);
+  const publicHardcoded = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
+  const goal = Number(publicHardcoded !== null ? publicHardcoded : (beneficiary.budget_goal || 0));
   const raised = Number(beneficiary.budget_raised || 0);
   const progress = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
 
@@ -78,7 +79,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         <Box className="flex justify-between text-sm">
           <Text>Raised</Text>
           <Text>
-            ${centsToDollars(beneficiary.budget_raised)} / ${centsToDollars(beneficiary.budget_goal)}
+            ${centsToDollars(beneficiary.budget_raised)} / ${centsToDollars(goal || beneficiary.budget_goal)}
           </Text>
         </Box>
         <Progress.Root value={progress}>

@@ -80,6 +80,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           style={{ objectFit: "cover", objectPosition: "center 20%" }}
           className="w-full h-64 rounded-t-[20px]"
         />
+        {!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && (
         <Box position="absolute" top="0" right="0" zIndex={10}>
           <Badge
             bg="#CDE1FE"
@@ -95,6 +96,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
             </span>
           </Badge>
         </Box>
+        )}
       </Box>
 
       {/* Card Content */}
