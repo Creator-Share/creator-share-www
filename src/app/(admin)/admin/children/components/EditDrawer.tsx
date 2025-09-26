@@ -24,7 +24,7 @@ import {
     FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import MapPicker from './MapPicker';
-import ExpenseManager from './ExpenseManager';
+// import ExpenseManager from './ExpenseManager';
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types";
 import { toaster } from "@/components/ui/toaster";
 import { dollarsToCents } from "@/utils/currency";

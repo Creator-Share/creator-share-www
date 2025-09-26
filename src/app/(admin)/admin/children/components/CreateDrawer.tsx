@@ -19,7 +19,7 @@ import {
     NativeSelectRoot,
 } from "@/components/ui/native-select";
 import { LuFileUp } from "react-icons/lu";
-import ExpenseManager from "./ExpenseManager";
+// import ExpenseManager from "./ExpenseManager";
 import MapPicker from "./MapPicker";
 import { Beneficiaries } from "@/types/admin.types";
 import { GoPlusCircle } from "react-icons/go";
