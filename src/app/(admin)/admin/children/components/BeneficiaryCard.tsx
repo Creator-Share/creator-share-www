@@ -87,7 +87,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
       <Box className="space-y-1">
         <Box className="flex justify-between text-sm">
-          <Text>Raised</Text>
+          <Text>Raioosed</Text>
           <Text>
             ${centsToDollars(beneficiary.budget_raised)} / $
             {centsToDollars(goal || beneficiary.budget_goal)}

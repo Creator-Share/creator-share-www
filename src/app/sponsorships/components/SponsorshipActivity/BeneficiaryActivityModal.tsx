@@ -292,7 +292,16 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             const sorted = Array.isArray(data)
               ? data.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
               : []
-            setPrimaryImageUrl(sorted[0]?.image_url || null)
+            try {
+              setPrimaryImageUrl(
+                sorted[0]
+                  ? generatePublicUrl(sorted[0] as unknown as MediaRow)
+                  : null,
+              )
+            } catch {
+              // If generatePublicUrl fails for any reason, fall back to the raw image_url
+              setPrimaryImageUrl(sorted[0]?.image_url || null)
+            }
           } else {
             setPrimaryImageUrl(null)
           }
@@ -637,7 +646,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
               <Image
                 src={
                   primaryImageUrl ||
-                  beneficiary.image_url ||
                   fallbackPlaceholder
                 }
                 alt={beneficiary.name || "Child"}
