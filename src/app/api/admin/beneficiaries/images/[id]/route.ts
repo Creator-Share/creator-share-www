@@ -15,6 +15,7 @@ export async function GET(
       .from("media")
       .select("*")
       .eq("parent_id", beneficiary_id)
+      .order("weight")
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
