@@ -97,6 +97,15 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   )
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [, setDataLoaded] = useState(false)
+  const [beneficiaryData, setBeneficiaryData] = useState<Record<string, {
+    primaryImageUrl: string | null
+    images: BeneficiaryMedia[]
+    dataLoaded: boolean
+  }>>({})
+
+  // Add image loading state
+  const [imageLoading, setImageLoading] = useState<boolean>(false)
 
   const fallbackPlaceholder =
     "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
@@ -297,44 +306,91 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     setPrimaryImageUrl(null)
   }, [beneficiary.id])
 
+  // Update the main useEffect to load data silently
   useEffect(() => {
-    if (!open) return
-    setLoading(true)
+    if (!open || !beneficiary.id) return
+    
+    // Check if we already have data for this beneficiary
+    const existingData = beneficiaryData[beneficiary.id]
+    if (existingData?.dataLoaded) {
+      // Data already exists, just set it
+      setPrimaryImageUrl(existingData.primaryImageUrl)
+      setImages(existingData.images)
+      return
+    }
+    
+    // Set image loading to true when starting to fetch
+    setImageLoading(true)
+    
     const fetchData = async () => {
       try {
         await fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id)
         await fetchActivitiesByBeneficiaryId(beneficiary.id)
-        // Fetch primary image
+        
+        // Fetch images
         try {
           const res = await fetch(
             `/api/admin/beneficiaries/images/${beneficiary.id}`,
           )
           if (res.ok) {
             const data: BeneficiaryMedia[] = await res.json()
-            const sorted = Array.isArray(data)
-              ? data.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+            const sortedImages = Array.isArray(data)
+              ? data
+                  .filter((m: BeneficiaryMedia) => m.type === "IMAGE" || m.type === "images")
+                  .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
               : []
-            try {
-              setPrimaryImageUrl(
-                sorted[0]
-                  ? generatePublicUrl(sorted[0] as unknown as MediaRow)
-                  : null,
-              )
-            } catch {
-              // If generatePublicUrl fails for any reason, fall back to the raw image_url
-              setPrimaryImageUrl(sorted[0]?.image_url || null)
+            
+            let primaryUrl = null
+            if (sortedImages.length > 0) {
+              try {
+                primaryUrl = generatePublicUrl(sortedImages[0] as unknown as MediaRow)
+              } catch {
+                primaryUrl = sortedImages[0]?.image_url || null
+              }
             }
+            
+            // Cache the data for this beneficiary
+            setBeneficiaryData(prev => ({
+              ...prev,
+              [beneficiary.id]: {
+                primaryImageUrl: primaryUrl,
+                images: sortedImages,
+                dataLoaded: true
+              }
+            }))
+            
+            setPrimaryImageUrl(primaryUrl)
+            setImages(sortedImages)
           } else {
             setPrimaryImageUrl(null)
+            setImages([])
           }
         } catch {
           setPrimaryImageUrl(null)
+          setImages([])
         }
       } catch {}
-      setLoading(false)
+      setImageLoading(false)
     }
+    
     fetchData()
-  }, [open, beneficiary.id])
+  }, [open, beneficiary.id, beneficiaryData])
+
+  // Clear cache when modal closes to free memory
+  useEffect(() => {
+    if (!open) {
+      // Optionally clear cache after a delay to free memory
+      // setTimeout(() => {
+      //   setBeneficiaryData({})
+      //   setLoadedBeneficiaries(new Set())
+      // }, 5000)
+    }
+  }, [open])
+
+  // Reset dataLoaded when beneficiary changes
+  useEffect(() => {
+    setDataLoaded(false)
+  }, [beneficiary.id])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Ignore changes when public hardcoded amount is active (all-or-nothing)
@@ -670,11 +726,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           </DialogCloseTrigger>
         </DialogHeader>
         <DialogBody className="p-0">
-          {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-60 z-50 rounded-2xl">
-              <Spinner size="xl" color="#1C3C8C" />
-            </div>
-          )}
           <Box className="px-8 md:grid md:grid-cols-12 md:gap-4 md:my-2.5">
             <Box className="border border-[#0654C6] rounded-[10px] flex flex-col text-center gap-[11px] relative md:max-h-[523px] md:col-span-5">
               {/* Status Overlay */}
@@ -684,7 +735,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   {getStatusText(beneficiary.status)}
                 </Text>
               </Box>
+              {/* Update the image section to show a simple spinner */}
               <Box position="relative" className="group">
+                {imageLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-10 rounded-[15px]">
+                    <Spinner size="lg" color="#1C3C8C" />
+                  </div>
+                )}
                 <Image
                   src={
                     images.length > 0
