@@ -1,5 +1,5 @@
-"use client";
-import React, { useState, useEffect } from "react";
+"use client"
+import React, { useState, useEffect } from "react"
 import {
   Box,
   Text,
@@ -8,122 +8,126 @@ import {
   Input,
   InputAddon,
   Spinner,
-} from "@chakra-ui/react";
-import { Button } from "@/components/ui/button";
+} from "@chakra-ui/react"
+import { Button } from "@/components/ui/button"
 import {
   SelectRoot,
   SelectTrigger,
   SelectValueText,
   SelectContent,
   SelectItem,
-} from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { centsToDollars } from "@/utils/currency";
-import { toaster } from "@/components/ui/toaster";
-import { paymentOptionsCollection } from "@/app/sponsorships/components/Payments/config";
-import { useAuthStore } from "@/store/authStore";
-import { AnimalBeneficiary, BeneficiaryMedia } from "@/types/admin.types";
+} from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
+import { centsToDollars } from "@/utils/currency"
+import { toaster } from "@/components/ui/toaster"
+import { paymentOptionsCollection } from "@/app/sponsorships/components/Payments/config"
+import { useAuthStore } from "@/store/authStore"
+import { AnimalBeneficiary, BeneficiaryMedia } from "@/types/admin.types"
 
-const isInIframe = typeof window !== "undefined" && window.self !== window.top;
+const isInIframe = typeof window !== "undefined" && window.self !== window.top
 
-const placeholderImage =
-  "https://cdn-icons-png.flaticon.com/512/616/616408.png";
+const placeholderImage = "https://cdn-icons-png.flaticon.com/512/616/616408.png"
 
 export default function SponsorshipEmbedStraysPage() {
-  const [animals, setAnimals] = useState<AnimalBeneficiary[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [images, setImages] = useState<BeneficiaryMedia[]>([]);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [amount, setAmount] = useState<number>(0);
-  const [inputValue, setInputValue] = useState<string>("");
-  const [selectedOption, setSelectedOption] = useState<string>("subscription");
-  const [value, setValue] = useState<number[]>([0]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [loadingAnimals, setLoadingAnimals] = useState<boolean>(true);
-  const user = useAuthStore((state) => state.user);
+  const [animals, setAnimals] = useState<AnimalBeneficiary[]>([])
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [images, setImages] = useState<BeneficiaryMedia[]>([])
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [amount, setAmount] = useState<number>(0)
+  const [inputValue, setInputValue] = useState<string>("")
+  const [selectedOption, setSelectedOption] = useState<string>("subscription")
+  const [value, setValue] = useState<number[]>([0])
+  const [loading, setLoading] = useState<boolean>(false)
+  const [loadingAnimals, setLoadingAnimals] = useState<boolean>(true)
+  const user = useAuthStore((state) => state.user)
 
   useEffect(() => {
     async function fetchAnimals() {
-      setLoadingAnimals(true);
+      setLoadingAnimals(true)
       try {
-        const queryParams = new URLSearchParams();
-        queryParams.append("status", ["New", "Partially Funded"].join(","));
-        queryParams.append("excludeStatus", ["Budget Fulfilled"].join(","));
-        queryParams.append("beneficiary_type", "ANIMAL");
-        const url = `/api/beneficiaries/getByAgeAndGender?${queryParams.toString()}`;
+        const queryParams = new URLSearchParams()
+        queryParams.append("status", ["New", "Partially Funded"].join(","))
+        queryParams.append("excludeStatus", ["Budget Fulfilled"].join(","))
+        queryParams.append("beneficiary_type", "ANIMAL")
+        const url = `/api/beneficiaries/getByAgeAndGender?${queryParams.toString()}`
         const res = await fetch(url, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
           },
-        });
+        })
         if (res.ok) {
-          const data = await res.json();
-          const animalList = data.people;
+          const data = await res.json()
+          const animalList = data.people
           if (!animalList || !Array.isArray(animalList)) {
-            setAnimals([]);
-            return;
+            setAnimals([])
+            return
           }
-          setAnimals(animalList);
+          setAnimals(animalList)
           if (animalList.length > 0) {
-            const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
-            const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
-            const effectiveGoal = publicHardcodedCents !== null ? publicHardcodedCents : Number(animalList[0].budget_goal);
+            const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
+            const publicHardcodedCents = publicHardcodedRaw
+              ? parseInt(publicHardcodedRaw, 10)
+              : null
+            const effectiveGoal =
+              publicHardcodedCents !== null
+                ? publicHardcodedCents
+                : Number(animalList[0].budget_goal)
             const remaining =
-              (effectiveGoal - animalList[0].budget_raised) / 100;
-            setAmount(remaining);
-            setValue([remaining]);
-            setInputValue(remaining.toString());
+              (effectiveGoal - animalList[0].budget_raised) / 100
+            setAmount(remaining)
+            setValue([remaining])
+            setInputValue(remaining.toString())
           }
         } else {
-          setAnimals([]);
+          setAnimals([])
           toaster.create({
             title: "Error",
             description: "Failed to load strays.",
-          });
+          })
         }
       } catch {
-        setAnimals([]);
+        setAnimals([])
         toaster.create({
           title: "Error",
           description: "Failed to load strays.",
-        });
+        })
       } finally {
-        setLoadingAnimals(false);
+        setLoadingAnimals(false)
       }
     }
-    fetchAnimals();
-  }, []);
+    fetchAnimals()
+  }, [])
 
   useEffect(() => {
-    if (!animals[currentIndex]) return;
+    if (!animals[currentIndex]) return
 
     const timeout = setTimeout(async () => {
       try {
         const response = await fetch(
-          `/api/admin/animals/images/${animals[currentIndex].id}`
-        );
+          `/api/admin/animals/images/${animals[currentIndex].id}`,
+        )
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json()
           setImages(
             data.sort(
               (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
-                a.order_index - b.order_index
-            )
-          );
-          setCurrentImageIndex(0);
+                a.order_index - b.order_index,
+            ),
+          )
+          setCurrentImageIndex(0)
         } else {
-          setImages([]);
-          setCurrentImageIndex(0);
+          setImages([])
+          setCurrentImageIndex(0)
         }
       } catch {
-        setImages([]);
-        setCurrentImageIndex(0);
+        setImages([])
+        setCurrentImageIndex(0)
       }
-    }, 0);
+    }, 0)
 
-    return () => clearTimeout(timeout);
-  }, [currentIndex, animals]);
+    return () => clearTimeout(timeout)
+  }, [currentIndex, animals])
 
   if (loadingAnimals) {
     return (
@@ -137,10 +141,10 @@ export default function SponsorshipEmbedStraysPage() {
         <Spinner size="xl" />
         <Text>Loading strays data...</Text>
       </Flex>
-    );
+    )
   }
 
-  const animal = animals[currentIndex];
+  const animal = animals[currentIndex]
 
   if (!animal) {
     return (
@@ -158,63 +162,68 @@ export default function SponsorshipEmbedStraysPage() {
             : "Error loading stray data"}
         </Text>
       </Flex>
-    );
+    )
   }
   // Public hardcoded override for front-end (dollars are provided as cents integer)
-  const publicHardcodedRaw = process.env.NEXT_PUBLIC_HARDCODE_CHILD_BUDGET_PRICE_CENTS;
-  const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
-  const effectiveGoalCents = publicHardcodedCents !== null ? publicHardcodedCents : Number(animal?.budget_goal || 0);
+  const publicHardcodedRaw =
+    process.env.NEXT_PUBLIC_HARDCODE_CHILD_BUDGET_PRICE_CENTS
+  const publicHardcodedCents = publicHardcodedRaw
+    ? parseInt(publicHardcodedRaw, 10)
+    : null
+  const effectiveGoalCents =
+    publicHardcodedCents !== null
+      ? publicHardcodedCents
+      : Number(animal?.budget_goal || 0)
 
-  const remainingAmount =
-    (effectiveGoalCents - animal.budget_raised) / 100;
-  const minimumAmount = 10;
+  const remainingAmount = (effectiveGoalCents - animal.budget_raised) / 100
+  const minimumAmount = 10
   const maxSelectableAmount =
     remainingAmount > minimumAmount
       ? remainingAmount - minimumAmount < minimumAmount
         ? remainingAmount
         : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
-      : remainingAmount;
+      : remainingAmount
 
   const handleSliderChange = (e: { value: number[] }) => {
-    const newValue = Math.min(e.value[0], remainingAmount);
-    setValue([newValue]);
-    setAmount(newValue);
-    setInputValue(newValue.toString());
-  };
+    const newValue = Math.min(e.value[0], remainingAmount)
+    setValue([newValue])
+    setAmount(newValue)
+    setInputValue(newValue.toString())
+  }
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    const value = e.target.value
     if (value === "" || /^\d+$/.test(value)) {
       if (value !== "") {
-        const numericValue = parseInt(value);
+        const numericValue = parseInt(value)
         if (!isNaN(numericValue)) {
           if (numericValue > remainingAmount) {
-            setInputValue(remainingAmount.toString());
-            setAmount(remainingAmount);
-            setValue([remainingAmount]);
+            setInputValue(remainingAmount.toString())
+            setAmount(remainingAmount)
+            setValue([remainingAmount])
             toaster.create({
               title: "Amount Adjusted",
               description: `Maximum sponsorship amount is $${remainingAmount}.`,
-            });
-            return;
+            })
+            return
           }
         }
       }
 
-      setInputValue(value);
+      setInputValue(value)
 
       if (value === "") {
-        setAmount(0);
-        setValue([0]);
+        setAmount(0)
+        setValue([0])
       } else {
-        const numericValue = parseInt(value);
+        const numericValue = parseInt(value)
         if (!isNaN(numericValue)) {
-          setAmount(numericValue);
-          setValue([numericValue]);
+          setAmount(numericValue)
+          setValue([numericValue])
         }
       }
     }
-  };
+  }
 
   const handleSponsor = async () => {
     if (
@@ -224,17 +233,17 @@ export default function SponsorshipEmbedStraysPage() {
       toaster.create({
         title: "Invalid Amount",
         description: `Minimum sponsorship amount is $${minimumAmount}.`,
-      });
-      return;
+      })
+      return
     }
     if (amount > remainingAmount) {
       toaster.create({
         title: "Invalid Amount",
         description: "Amount exceeds the remaining budget needed.",
-      });
-      return;
+      })
+      return
     }
-    setLoading(true);
+    setLoading(true)
     try {
       const payload = {
         beneficiaryId: animal.id,
@@ -242,29 +251,30 @@ export default function SponsorshipEmbedStraysPage() {
         beneficiaryImage:
           images[currentImageIndex]?.image_url || placeholderImage,
         // If public hardcoded amount is set, send that exact cents value to server.
-        amount: publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
+        amount:
+          publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
         paymentType: selectedOption,
         location: animal.country,
         userId: user?.id,
         isEmbedded: true,
         allowBelowMinimum:
           remainingAmount < minimumAmount && amount === remainingAmount,
-      };
+      }
       if (selectedOption !== "payment" && selectedOption !== "subscription") {
         toaster.create({
           title: "Payment Error",
           description: "Invalid payment frequency selected. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
       if (!animal.country) {
         toaster.create({
           title: "Payment Error",
           description: "Missing location information. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
       const res = await fetch("/api/stripe", {
         method: "POST",
@@ -274,66 +284,66 @@ export default function SponsorshipEmbedStraysPage() {
         },
         credentials: "include",
         body: JSON.stringify(payload),
-      });
-      const data = await res.json();
+      })
+      const data = await res.json()
       if (!res.ok) {
         toaster.create({
           title: "Payment Error",
           description: data?.error || "Something went wrong. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
-      const { clientSecret, url } = data;
+      const { clientSecret, url } = data
       if (!clientSecret && !url) {
         toaster.create({
           title: "Payment Error",
           description: "Failed to create checkout session. Please try again.",
-        });
-        setLoading(false);
-        return;
+        })
+        setLoading(false)
+        return
       }
 
       if (isInIframe) {
         try {
-          const urlParams = new URLSearchParams(window.location.search);
-          const parentOrigin = urlParams.get("parentOrigin") || "*";
+          const urlParams = new URLSearchParams(window.location.search)
+          const parentOrigin = urlParams.get("parentOrigin") || "*"
           const checkoutUrl = clientSecret
             ? `/sponsorships/checkout?client_secret=${clientSecret}&parentOrigin=${encodeURIComponent(
-                parentOrigin
+                parentOrigin,
               )}&embedded=true`
-            : url;
-          window.location.href = checkoutUrl;
-          return;
+            : url
+          window.location.href = checkoutUrl
+          return
         } catch {
           toaster.create({
             title: "Payment Error",
             description: "Failed to process checkout. Please try again.",
-          });
+          })
         }
       } else {
         const checkoutUrl =
-          url || `/sponsorships/checkout?client_secret=${clientSecret}`;
-        window.location.href = checkoutUrl;
-        return;
+          url || `/sponsorships/checkout?client_secret=${clientSecret}`
+        window.location.href = checkoutUrl
+        return
       }
     } catch {
       toaster.create({
         title: "Payment Error",
         description: "Something went wrong. Please try again.",
-      });
+      })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleSelectChange = (value: string) => {
-    setSelectedOption(value);
-  };
+    setSelectedOption(value)
+  }
 
   const renderDisclaimer = () => {
     const monthlyAmount =
-      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
+      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
     if (Number(animal.budget_goal) - animal.budget_raised - amount * 100 > 0) {
       return (
         <>
@@ -348,7 +358,7 @@ export default function SponsorshipEmbedStraysPage() {
           <br />
           Additional sponsors are required to meet this goal.
         </>
-      );
+      )
     } else if (animal.budget_raised > 0) {
       return (
         <>
@@ -362,7 +372,7 @@ export default function SponsorshipEmbedStraysPage() {
             </>
           )}
         </>
-      );
+      )
     }
     return (
       <>
@@ -376,8 +386,8 @@ export default function SponsorshipEmbedStraysPage() {
           </>
         )}
       </>
-    );
-  };
+    )
+  }
 
   return (
     <Flex minH="100vh" align="center" justify="center" bg="white" py={8}>
@@ -394,7 +404,7 @@ export default function SponsorshipEmbedStraysPage() {
             variant="ghost"
             onClick={() => {
               if (currentIndex > 0) {
-                setCurrentIndex(currentIndex - 1);
+                setCurrentIndex(currentIndex - 1)
               }
             }}
             disabled={currentIndex === 0}
@@ -405,7 +415,7 @@ export default function SponsorshipEmbedStraysPage() {
             variant="ghost"
             onClick={() => {
               if (currentIndex < animals.length - 1) {
-                setCurrentIndex(currentIndex + 1);
+                setCurrentIndex(currentIndex + 1)
               }
             }}
             disabled={currentIndex >= animals.length - 1}
@@ -458,7 +468,7 @@ export default function SponsorshipEmbedStraysPage() {
                 transform="translateY(-50%)"
                 onClick={() =>
                   setCurrentImageIndex(
-                    (prev) => (prev - 1 + images.length) % images.length
+                    (prev) => (prev - 1 + images.length) % images.length,
                   )
                 }
                 size="sm"
@@ -505,7 +515,7 @@ export default function SponsorshipEmbedStraysPage() {
                 borderRadius="md"
                 width={`${Math.min(
                   (animal.budget_raised / Number(animal.budget_goal)) * 100,
-                  100
+                  100,
                 )}%`}
                 transition="width 0.3s"
               />
@@ -719,5 +729,5 @@ export default function SponsorshipEmbedStraysPage() {
         </a>
       </Box>
     </Flex>
-  );
+  )
 }

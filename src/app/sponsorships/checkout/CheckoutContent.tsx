@@ -1,34 +1,39 @@
-'use client';
+"use client"
 
-import { useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { Box, Text, Button, Spinner, Center } from '@chakra-ui/react';
-import { EmbeddedCheckout, EmbeddedCheckoutProvider } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
+import { useEffect, useState } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
+import { Box, Text, Button, Spinner, Center } from "@chakra-ui/react"
+import {
+  EmbeddedCheckout,
+  EmbeddedCheckoutProvider,
+} from "@stripe/react-stripe-js"
+import { loadStripe } from "@stripe/stripe-js"
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string);
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string,
+)
 
 export default function CheckoutContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState<boolean>(true)
 
   useEffect(() => {
-    const secret = searchParams.get('client_secret');
+    const secret = searchParams.get("client_secret")
     if (secret) {
-      setClientSecret(secret);
-      setLoading(false);
+      setClientSecret(secret)
+      setLoading(false)
     } else {
-      setError('No client secret provided');
-      setLoading(false);
+      setError("No client secret provided")
+      setLoading(false)
     }
-  }, [searchParams]);
+  }, [searchParams])
 
   const handleReturn = () => {
-    router.push('/sponsorships');
-  };
+    router.push("/sponsorships")
+  }
 
   if (loading) {
     return (
@@ -38,7 +43,7 @@ export default function CheckoutContent() {
           <Text>Loading checkout...</Text>
         </Box>
       </Center>
-    );
+    )
   }
 
   if (error) {
@@ -48,31 +53,27 @@ export default function CheckoutContent() {
         <Text className="mb-4">
           There was a problem loading the checkout page. Please try again.
         </Text>
-        <Button
-          onClick={handleReturn}
-          className="mt-4 bg-blue-700 text-white"
-        >
+        <Button onClick={handleReturn} className="mt-4 bg-blue-700 text-white">
           Return to Sponsorship Page
         </Button>
       </Box>
-    );
+    )
   }
 
   if (!clientSecret) {
     return (
       <Box className="p-8 text-center">
-        <Text className="text-xl mb-4 text-red-600">Missing checkout information</Text>
+        <Text className="text-xl mb-4 text-red-600">
+          Missing checkout information
+        </Text>
         <Text className="mb-4">
           The checkout session could not be initialized. Please try again.
         </Text>
-        <Button
-          onClick={handleReturn}
-          className="mt-4 bg-blue-700 text-white"
-        >
+        <Button onClick={handleReturn} className="mt-4 bg-blue-700 text-white">
           Return to Sponsorship Page
         </Button>
       </Box>
-    );
+    )
   }
   return (
     <Box className="w-full min-h-screen p-4">
@@ -83,5 +84,5 @@ export default function CheckoutContent() {
         <EmbeddedCheckout />
       </EmbeddedCheckoutProvider>
     </Box>
-  );
+  )
 }

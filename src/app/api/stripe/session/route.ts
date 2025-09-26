@@ -1,48 +1,48 @@
-import { NextResponse } from "next/server";
-import Stripe from "stripe";
-import { createClient } from "@/utils/supabase/server";
+import { NextResponse } from "next/server"
+import Stripe from "stripe"
+import { createClient } from "@/utils/supabase/server"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string)
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const sessionId = searchParams.get("id");
+  const { searchParams } = new URL(request.url)
+  const sessionId = searchParams.get("id")
 
   if (!sessionId) {
     return NextResponse.json(
       { error: "Session ID is required" },
-      { status: 400 }
-    );
+      { status: 400 },
+    )
   }
 
   try {
-    const supabase = await createClient();
-    let session = null;
-    let sessionStatus = null;
-    let errorDetails = null;
+    const supabase = await createClient()
+    let session = null
+    let sessionStatus = null
+    let errorDetails = null
 
     try {
       session = await stripe.checkout.sessions.retrieve(sessionId, {
         expand: ["customer_details", "payment_intent"],
-      });
+      })
 
-      sessionStatus = session.status;
+      sessionStatus = session.status
       return NextResponse.json({
         session,
         status: sessionStatus,
-      });
+      })
     } catch (stripeError) {
       errorDetails =
         stripeError instanceof Error
           ? stripeError.message
-          : "Unknown Stripe error";
+          : "Unknown Stripe error"
     }
 
     const { data: transaction } = await supabase
       .from("transaction_ledger")
       .select("*, beneficiaries(name, location_str)")
       .eq("reference", sessionId)
-      .single();
+      .single()
 
     if (transaction) {
       return NextResponse.json({
@@ -58,14 +58,14 @@ export async function GET(request: Request) {
           },
         },
         status: "completed",
-      });
+      })
     }
 
     const { data: subscription } = await supabase
       .from("subscriptions")
       .select("*, beneficiaries!inner(name, location_str)")
       .eq("sponsorship_id", sessionId)
-      .single();
+      .single()
 
     if (subscription) {
       return NextResponse.json({
@@ -81,13 +81,13 @@ export async function GET(request: Request) {
           },
         },
         status: subscription.status,
-      });
+      })
     }
     const { data: partialSubscriptions } = await supabase
       .from("subscriptions")
       .select("*, beneficiaries!inner(name, location_str)")
       .ilike("sponsorship_id", `%${sessionId}%`)
-      .limit(1);
+      .limit(1)
 
     if (partialSubscriptions && partialSubscriptions.length > 0) {
       return NextResponse.json({
@@ -104,7 +104,7 @@ export async function GET(request: Request) {
           },
         },
         status: partialSubscriptions[0].status,
-      });
+      })
     }
 
     // If we can't find any records, return a clear error with details
@@ -116,17 +116,17 @@ export async function GET(request: Request) {
         checkedStripe: true,
         checkedDatabase: true,
       },
-      { status: 404 }
-    );
+      { status: 404 },
+    )
   } catch (error) {
-    console.error("Error checking session status:", error);
+    console.error("Error checking session status:", error)
     return NextResponse.json(
       {
         error: "An unexpected error occurred",
         code: "UNKNOWN_ERROR",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
-    );
+      { status: 500 },
+    )
   }
 }

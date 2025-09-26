@@ -1,10 +1,10 @@
-import { createListCollection } from "@chakra-ui/react";
+import { createListCollection } from "@chakra-ui/react"
 export const genders = createListCollection({
   items: [
     { label: "Boy", value: "Boy" },
     { label: "Girl", value: "Girl" },
   ],
-});
+})
 
 export const status = createListCollection({
   items: [
@@ -14,7 +14,7 @@ export const status = createListCollection({
     { label: "Archived", value: "Archived" },
     { label: "Draft", value: "Draft" },
   ],
-});
+})
 
 export const ageOptions = createListCollection({
   items: [
@@ -24,4 +24,4 @@ export const ageOptions = createListCollection({
       value: `${i + 1}`,
     })),
   ],
-});
+})

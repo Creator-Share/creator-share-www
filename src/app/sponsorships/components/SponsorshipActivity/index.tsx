@@ -1,36 +1,43 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Text, Flex, Spinner } from '@chakra-ui/react';
-import { fetchActivitiesByBeneficiaryId } from '@/actions';
-import { Activity } from '@/types';
+import React, { useEffect, useState } from "react"
+import { Box, Text, Flex, Spinner } from "@chakra-ui/react"
+import { fetchActivitiesByBeneficiaryId } from "@/actions"
+import { Activity } from "@/types"
 
-import Link from "next/link";
+import Link from "next/link"
 
 const BeneficiaryActivity = ({
   beneficiaryId,
   username,
 }: {
-  beneficiaryId: string | undefined;
-  username: string;
+  beneficiaryId: string | undefined
+  username: string
 }) => {
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadActivities = async () => {
       if (!beneficiaryId) {
-        setLoading(false);
-        return;
+        setLoading(false)
+        return
       }
-      const data = await fetchActivitiesByBeneficiaryId(beneficiaryId);
-      setActivities(data);
-      setLoading(false);
-    };
+      const data = await fetchActivitiesByBeneficiaryId(beneficiaryId)
+      setActivities(data)
+      setLoading(false)
+    }
 
-    loadActivities();
-  }, [beneficiaryId]);
+    loadActivities()
+  }, [beneficiaryId])
 
   return (
-    <Box className="md:min-h-[443px] md:max-h-[443px]" borderWidth="1px" borderRadius="md" p={4} boxShadow="md" overflowY="auto">
+    <Box
+      className="md:min-h-[443px] md:max-h-[443px]"
+      borderWidth="1px"
+      borderRadius="md"
+      p={4}
+      boxShadow="md"
+      overflowY="auto"
+    >
       <Text fontSize="lg" fontWeight="bold" mb={4}>
         Activities
       </Text>
@@ -70,7 +77,7 @@ const BeneficiaryActivity = ({
         ))
       )}
     </Box>
-  );
-};
+  )
+}
 
-export default BeneficiaryActivity;
+export default BeneficiaryActivity

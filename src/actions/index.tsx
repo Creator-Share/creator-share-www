@@ -1,23 +1,27 @@
-import { createClient } from '@/utils/supabase/client'
-import { Subscription } from '@/types'
+import { createClient } from "@/utils/supabase/client"
+import { Subscription } from "@/types"
 
-export async function fetchSponsorshipDetailsByBeneficiaryId(beneficiaryId: string): Promise<Subscription[]> {
+export async function fetchSponsorshipDetailsByBeneficiaryId(
+  beneficiaryId: string,
+): Promise<Subscription[]> {
   if (!beneficiaryId) return []
 
   const supabase = createClient()
   const { data, error } = await supabase
-    .from('subscriptions')
-    .select(`
+    .from("subscriptions")
+    .select(
+      `
       *,
       beneficiary:beneficiaries(
         name
       )
-    `)
-    .eq('beneficiary_id', beneficiaryId)
-    .order('created_at', { ascending: false })
+    `,
+    )
+    .eq("beneficiary_id", beneficiaryId)
+    .order("created_at", { ascending: false })
 
   if (error) {
-    console.error('Error fetching subscriptions:', error)
+    console.error("Error fetching subscriptions:", error)
     return []
   }
 
@@ -25,19 +29,19 @@ export async function fetchSponsorshipDetailsByBeneficiaryId(beneficiaryId: stri
 }
 
 export async function fetchActivitiesByBeneficiaryId(beneficiaryId: string) {
-  if (!beneficiaryId) return [];
+  if (!beneficiaryId) return []
 
-  const supabase = createClient();
+  const supabase = createClient()
   const { data, error } = await supabase
-    .from('activities')
-    .select('*')
-    .eq('beneficiary_id', beneficiaryId)
-    .order('created_at', { ascending: false });
+    .from("activities")
+    .select("*")
+    .eq("beneficiary_id", beneficiaryId)
+    .order("created_at", { ascending: false })
 
   if (error) {
-    console.error('Error fetching activities:', error);
-    return [];
+    console.error("Error fetching activities:", error)
+    return []
   }
 
-  return data || [];
+  return data || []
 }

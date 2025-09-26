@@ -1,23 +1,23 @@
-"use client";
+"use client"
 
-import React, { useEffect, useState } from "react";
-import { Beneficiaries } from "@/types/admin.types";
-import { Box, Text } from "@chakra-ui/react";
-import ChakraSelect from "./components/SelectBeneficiary";
-import ActivitiesTable from "./components/ActivitiesTable";
-import GoBackButton from "@/components/ui/goBack";
+import React, { useEffect, useState } from "react"
+import { Beneficiaries } from "@/types/admin.types"
+import { Box, Text } from "@chakra-ui/react"
+import ChakraSelect from "./components/SelectBeneficiary"
+import ActivitiesTable from "./components/ActivitiesTable"
+import GoBackButton from "@/components/ui/goBack"
 
 const ActivitiesAdminPage: React.FC = () => {
-  const [children, setChildren] = useState<Beneficiaries[]>([]);
-  const [selectedChild, setSelectedChild] = useState<string[]>([]);
+  const [children, setChildren] = useState<Beneficiaries[]>([])
+  const [selectedChild, setSelectedChild] = useState<string[]>([])
   useEffect(() => {
     const fetchChildren = async () => {
-      const res = await fetch("/api/admin/beneficiaries/retrieve");
-      const data = await res.json();
-      setChildren(data.children || []);
-    };
-    fetchChildren();
-  }, []);
+      const res = await fetch("/api/admin/beneficiaries/retrieve")
+      const data = await res.json()
+      setChildren(data.children || [])
+    }
+    fetchChildren()
+  }, [])
 
   return (
     <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
@@ -32,10 +32,10 @@ const ActivitiesAdminPage: React.FC = () => {
       </Box>
       <ActivitiesTable
         beneficiaryType="CHILD"
-        beneficiaryId={selectedChild[0] || ''}
+        beneficiaryId={selectedChild[0] || ""}
       />
     </Box>
-  );
-};
+  )
+}
 
 export default ActivitiesAdminPage

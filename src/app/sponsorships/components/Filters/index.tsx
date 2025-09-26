@@ -1,18 +1,18 @@
-"use client";
+"use client"
 
-import React, { useState, useEffect } from "react";
-import { Box, Flex, Button, Text } from "@chakra-ui/react";
-import { Slider } from "@/components/ui/slider";
+import React, { useState, useEffect } from "react"
+import { Box, Flex, Button, Text } from "@chakra-ui/react"
+import { Slider } from "@/components/ui/slider"
 import {
   SelectRoot,
   SelectTrigger,
   SelectValueText,
   SelectContent,
   SelectItem,
-} from "@/components/ui/select";
-import { useFilterStore } from "@/store/filterStore";
-import { FiltersProps } from "@/types/propTypes";
-import { genders, status as statusOptions } from "./config";
+} from "@/components/ui/select"
+import { useFilterStore } from "@/store/filterStore"
+import { FiltersProps } from "@/types/propTypes"
+import { genders, status as statusOptions } from "./config"
 
 const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
   onFilterChange,
@@ -28,59 +28,59 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
     setStatus,
     resetToDefaults,
     isDirty,
-  } = useFilterStore();
-  const [minAge, setMinAge] = useState<number>(selectedAgeRange[0] || 0);
-  const defaultMaxAge = beneficiaryType === "ANIMAL" ? 20 : 14;
+  } = useFilterStore()
+  const [minAge, setMinAge] = useState<number>(selectedAgeRange[0] || 0)
+  const defaultMaxAge = beneficiaryType === "ANIMAL" ? 20 : 14
   const [maxAge, setMaxAge] = useState<number>(
-    selectedAgeRange[1] || defaultMaxAge
-  );
+    selectedAgeRange[1] || defaultMaxAge,
+  )
 
   useEffect(() => {
-    setMinAge(selectedAgeRange[0] || 0);
-    setMaxAge(selectedAgeRange[1] || defaultMaxAge);
-  }, [selectedAgeRange, defaultMaxAge]);
+    setMinAge(selectedAgeRange[0] || 0)
+    setMaxAge(selectedAgeRange[1] || defaultMaxAge)
+  }, [selectedAgeRange, defaultMaxAge])
 
   const handleFilterChange = (updatedFilters: {
-    gender?: string;
-    ageRange?: [number, number];
-    status?: string[];
+    gender?: string
+    ageRange?: [number, number]
+    status?: string[]
   }) => {
     // Always include the current status if not explicitly changed
-    const newStatus = updatedFilters.status ?? selectedStatus;
-    console.log("New status:", newStatus);
+    const newStatus = updatedFilters.status ?? selectedStatus
+    console.log("New status:", newStatus)
 
     const newFilters = {
       gender: updatedFilters.gender ?? selectedGender,
       ageRange: updatedFilters.ageRange ?? selectedAgeRange,
       status: newStatus,
-    };
+    }
 
     if (updatedFilters.gender !== undefined) {
-      setGender(newFilters.gender);
+      setGender(newFilters.gender)
     }
     if (updatedFilters.ageRange !== undefined) {
-      setAgeRange(newFilters.ageRange);
+      setAgeRange(newFilters.ageRange)
     }
-    setStatus(newStatus);
+    setStatus(newStatus)
 
-    onFilterChange(newFilters);
-  };
+    onFilterChange(newFilters)
+  }
 
   const handleClearFilters = (e: React.MouseEvent) => {
-    e.preventDefault();
-    resetToDefaults();
-    setMinAge(0);
-    setMaxAge(defaultMaxAge);
+    e.preventDefault()
+    resetToDefaults()
+    setMinAge(0)
+    setMaxAge(defaultMaxAge)
     onFilterChange({
       gender: "",
       ageRange: [0, defaultMaxAge],
       status: ["New", "Partially Funded"],
-    });
-  };
+    })
+  }
 
   // Determine if current filters differ from defaults to enable Clear button
   // Call directly so it reflects the latest store state each render
-  const isDefaultFilters = !isDirty();
+  const isDefaultFilters = !isDirty()
 
   return (
     <Box className="bg-transparent rounded-xl" width="100%">
@@ -98,8 +98,8 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
             collection={genders}
             value={selectedGender ? [selectedGender] : undefined}
             onValueChange={(details) => {
-              const value = details.items[0];
-              handleFilterChange({ gender: value?.value || "" });
+              const value = details.items[0]
+              handleFilterChange({ gender: value?.value || "" })
             }}
             size="sm"
             className="border rounded-xl w-full"
@@ -110,9 +110,9 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
               <SelectValueText placeholder="Select Gender">
                 {() => {
                   const selected = genders.items.find(
-                    (item) => item.value === selectedGender
-                  );
-                  return selected ? selected.label : "Select Gender";
+                    (item) => item.value === selectedGender,
+                  )
+                  return selected ? selected.label : "Select Gender"
                 }}
               </SelectValueText>
             </SelectTrigger>
@@ -132,8 +132,8 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
             collection={statusOptions}
             value={selectedStatus}
             onValueChange={(details) => {
-              const values = details.items.map((item) => item.value);
-              handleFilterChange({ status: values });
+              const values = details.items.map((item) => item.value)
+              handleFilterChange({ status: values })
             }}
             size="sm"
             className="border rounded-xl w-full"
@@ -147,8 +147,8 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
                   const selected = statusOptions.items
                     .filter((item) => selectedStatus.includes(item.value))
                     .map((item) => item.label)
-                    .join(", ");
-                  return selected || "Select Status";
+                    .join(", ")
+                  return selected || "Select Status"
                 }}
               </SelectValueText>
             </SelectTrigger>
@@ -175,17 +175,17 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
               variant={"solid"}
               onValueChange={(details) => {
                 if (details.value && details.value.length >= 2) {
-                  const [newMin, origMax] = details.value;
-                  let newMax = origMax;
+                  const [newMin, origMax] = details.value
+                  let newMax = origMax
 
-                  const minDistance = 1;
+                  const minDistance = 1
                   if (newMax - newMin < minDistance) {
-                    newMax = Math.max(newMin + minDistance, maxAge);
+                    newMax = Math.max(newMin + minDistance, maxAge)
                   }
 
-                  setMinAge(newMin);
-                  setMaxAge(newMax);
-                  handleFilterChange({ ageRange: [newMin, newMax] });
+                  setMinAge(newMin)
+                  setMaxAge(newMax)
+                  handleFilterChange({ ageRange: [newMin, newMax] })
                 }
               }}
               showValue
@@ -215,7 +215,7 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
         </Box>
       </Flex>
     </Box>
-  );
-};
+  )
+}
 
-export default Filters;
+export default Filters

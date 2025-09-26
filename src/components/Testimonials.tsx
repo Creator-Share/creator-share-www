@@ -1,6 +1,6 @@
-import React from 'react'
-import Image from 'next/image'
-import { FiArrowRight } from 'react-icons/fi'
+import React from "react"
+import Image from "next/image"
+import { FiArrowRight } from "react-icons/fi"
 
 export const Testimonials = () => {
   return (
@@ -10,10 +10,16 @@ export const Testimonials = () => {
           <div className="flex flex-col">
             <div className="text-gray-200 text-8xl font-serif">&quot;</div>
             <h2 className="text-3xl md:text-4xl font-medium mb-8">
-              &quot;Highly recommended for anyone looking to fund their creative journey.&quot;
+              &quot;Highly recommended for anyone looking to fund their creative
+              journey.&quot;
             </h2>
             <p className="text-gray-600 mb-8 text-base md:text-xl">
-              &quot;Creator Share has been a game-changer for me. It gave me a simple, transparent way to raise funds and connect directly with supporters who believe in my work. The platform is easy to use, and the support team genuinely cares about helping creators succeed. Highly recommended for anyone looking to fund their creative journey.&quot;
+              &quot;Creator Share has been a game-changer for me. It gave me a
+              simple, transparent way to raise funds and connect directly with
+              supporters who believe in my work. The platform is easy to use,
+              and the support team genuinely cares about helping creators
+              succeed. Highly recommended for anyone looking to fund their
+              creative journey.&quot;
             </p>
             <a
               href="#"
@@ -33,8 +39,12 @@ export const Testimonials = () => {
                 priority
               />
               <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/70 to-transparent rounded-b-2xl">
-                <h3 className="text-white text-xl font-semibold mb-1">Albert Flores</h3>
-                <p className="text-gray-200 text-sm">Product Manager at Jamanar</p>
+                <h3 className="text-white text-xl font-semibold mb-1">
+                  Albert Flores
+                </h3>
+                <p className="text-gray-200 text-sm">
+                  Product Manager at Jamanar
+                </p>
               </div>
             </div>
           </div>

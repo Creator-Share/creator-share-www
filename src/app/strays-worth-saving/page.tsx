@@ -1,134 +1,158 @@
-'use client';
+"use client"
 
-import React, { useEffect, useState, useRef } from 'react';
-import { Box, Flex, Text, Spinner } from '@chakra-ui/react';
-import dynamic from 'next/dynamic';
-import { Beneficiaries } from '@/types';
-import { useFilterStore } from '@/store/filterStore';
+import React, { useEffect, useState, useRef } from "react"
+import { Box, Flex, Text, Spinner } from "@chakra-ui/react"
+import dynamic from "next/dynamic"
+import { Beneficiaries } from "@/types"
+import { useFilterStore } from "@/store/filterStore"
 
-const SponsorshipMap = dynamic(() => import('../sponsorships/components/SponsorshipMap'), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-[400px] bg-gray-100 animate-pulse rounded-lg" />
+const SponsorshipMap = dynamic(
+  () => import("../sponsorships/components/SponsorshipMap"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[400px] bg-gray-100 animate-pulse rounded-lg" />
+    ),
+  },
+)
+
+const Filters = dynamic(() => import("../sponsorships/components/Filters"))
+const BeneficiaryListings = dynamic(
+  () => import("../sponsorships/components/SponsorshipListings"),
+)
+const BeneficiaryListingsSkeleton = dynamic(() =>
+  import("../sponsorships/components/SponsorshipListings/Skeleton").then(
+    (mod) => mod.ChildListingsSkeleton,
   ),
-});
-
-const Filters = dynamic(() => import('../sponsorships/components/Filters'));
-const BeneficiaryListings = dynamic(() => import('../sponsorships/components/SponsorshipListings'));
-const BeneficiaryListingsSkeleton = dynamic(() => 
-  import('../sponsorships/components/SponsorshipListings/Skeleton').then(mod => mod.ChildListingsSkeleton)
-);
+)
 
 interface Filters {
-  gender: string;
-  ageRange: [number, number];
-  status: string[];
+  gender: string
+  ageRange: [number, number]
+  status: string[]
 }
 
 const StraySponsorPage = () => {
-  const { setStatus } = useFilterStore();
+  const { setStatus } = useFilterStore()
 
-  const [L, setL] = useState<typeof import("leaflet") | null>(null);
-  const [currentBounds, setCurrentBounds] = useState<L.LatLngBounds | undefined>(undefined);
-  const [animalsData, setAnimalsData] = useState<Beneficiaries[]>([]);
-  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>({ gender: "", ageRange: [0, 20], status: ["New", "Partially Funded"] });
+  const [L, setL] = useState<typeof import("leaflet") | null>(null)
+  const [currentBounds, setCurrentBounds] = useState<
+    L.LatLngBounds | undefined
+  >(undefined)
+  const [animalsData, setAnimalsData] = useState<Beneficiaries[]>([])
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Filters>({
+    gender: "",
+    ageRange: [0, 20],
+    status: ["New", "Partially Funded"],
+  })
 
-  const listingsRef = useRef<HTMLDivElement>(null);
-  const animalListingsRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const listingsRef = useRef<HTMLDivElement>(null)
+  const animalListingsRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     import("leaflet")
       .then(setL)
-      .catch(error => console.error('Error loading Leaflet:', error));
-  }, []);
+      .catch((error) => console.error("Error loading Leaflet:", error))
+  }, [])
 
+  const handleFilterChange = React.useCallback(
+    (newFilters: Partial<Filters>) => {
+      const updatedFilters = {
+        ...newFilters,
+        status: newFilters.status ?? filters.status,
+      }
 
-  const handleFilterChange = React.useCallback((newFilters: Partial<Filters>) => {
-    const updatedFilters = {
-      ...newFilters,
-      status: newFilters.status ?? filters.status
-    };
-    
-    setFilters(prev => ({ ...prev, ...updatedFilters }));
-    setStatus(updatedFilters.status);
-  }, [setStatus, filters.status]);
+      setFilters((prev) => ({ ...prev, ...updatedFilters }))
+      setStatus(updatedFilters.status)
+    },
+    [setStatus, filters.status],
+  )
 
   const fetchAnimals = React.useCallback(async (filters: Filters) => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
 
     try {
-      const endpoint = "/api/beneficiaries/getByAgeAndGender";
-      const queryParams = new URLSearchParams();
+      const endpoint = "/api/beneficiaries/getByAgeAndGender"
+      const queryParams = new URLSearchParams()
 
-      queryParams.append("beneficiary_type", "ANIMAL");
-      queryParams.append("status", filters.status.join(','));
+      queryParams.append("beneficiary_type", "ANIMAL")
+      queryParams.append("status", filters.status.join(","))
 
       if (filters.gender) {
-        queryParams.append("gender", filters.gender);
+        queryParams.append("gender", filters.gender)
       }
-      if (filters.ageRange && (filters.ageRange[0] > 0 || filters.ageRange[1] < 20)) {
-        queryParams.append("ageRange", filters.ageRange.join(','));
+      if (
+        filters.ageRange &&
+        (filters.ageRange[0] > 0 || filters.ageRange[1] < 20)
+      ) {
+        queryParams.append("ageRange", filters.ageRange.join(","))
       }
 
-      const url = `${endpoint}?${queryParams.toString()}`;
-      console.log('Fetching animals with URL:', url);
-      console.log('Filters:', {
+      const url = `${endpoint}?${queryParams.toString()}`
+      console.log("Fetching animals with URL:", url)
+      console.log("Filters:", {
         beneficiary_type: "ANIMAL",
         status: filters.status,
         gender: filters.gender,
-        ageRange: filters.ageRange
-      });
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch animals data");
+        ageRange: filters.ageRange,
+      })
+      const res = await fetch(url)
+      if (!res.ok) throw new Error("Failed to fetch animals data")
 
-      const data = await res.json();
-      console.log('API response:', {
+      const data = await res.json()
+      console.log("API response:", {
         status: res.status,
         statusText: res.statusText,
-        data: data
-      });
-      const animals = data.people || data.beneficiary || [];
+        data: data,
+      })
+      const animals = data.people || data.beneficiary || []
       if (animals.length > 0) {
-        console.log('First animal:', animals[0]);
+        console.log("First animal:", animals[0])
       }
-      setAnimalsData(animals);
+      setAnimalsData(animals)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unexpected error occurred");
+      setError(err instanceof Error ? err.message : "Unexpected error occurred")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    fetchAnimals(filters);
-  }, [fetchAnimals, filters]);
+    fetchAnimals(filters)
+  }, [fetchAnimals, filters])
 
-  const handleBoundsChange = React.useCallback((bounds: L.LatLngBounds) => {
-    if (!L) return;
-    setCurrentBounds(bounds);
-  }, [L]);
+  const handleBoundsChange = React.useCallback(
+    (bounds: L.LatLngBounds) => {
+      if (!L) return
+      setCurrentBounds(bounds)
+    },
+    [L],
+  )
 
-  const handleMarkerClick = React.useCallback((id: string) => {
-    setSelectedAnimalId(id);
-    const selectedAnimal = animalsData.find((animal) => animal.id === id);
-    
-    if (selectedAnimal) {
-      setSelectedCountry(selectedAnimal.country);
-    }
-  }, [animalsData]);
+  const handleMarkerClick = React.useCallback(
+    (id: string) => {
+      setSelectedAnimalId(id)
+      const selectedAnimal = animalsData.find((animal) => animal.id === id)
+
+      if (selectedAnimal) {
+        setSelectedCountry(selectedAnimal.country)
+      }
+    },
+    [animalsData],
+  )
 
   const onResetView = React.useCallback(() => {
-    setSelectedCountry(null);
-  }, []);
+    setSelectedCountry(null)
+  }, [])
 
   return (
-    <Box 
+    <Box
       ref={contentRef}
       className="flex flex-col items-center justify-center px-4 md:px-10 py-12 md:py-16"
       suppressHydrationWarning={true}
@@ -138,10 +162,12 @@ const StraySponsorPage = () => {
           Adopt a Stray with Strays Worth Saving
         </Text>
         <Text className="text-base font-normal text-[#03150E99]">
-          Adopting a stray animal is a compassionate way to give them a second chance at life. For $39 a month,
+          Adopting a stray animal is a compassionate way to give them a second
+          chance at life. For $39 a month,
         </Text>
         <Text className="md:px-[200px] text-base font-normal text-[#03150E99]">
-          you&apos;ll help provide food, shelter, and medical care for a stray animal in need.
+          you&apos;ll help provide food, shelter, and medical care for a stray
+          animal in need.
         </Text>
       </Box>
 
@@ -151,13 +177,13 @@ const StraySponsorPage = () => {
         </Text>
       )}
 
-      <Flex 
-        width="100%" 
+      <Flex
+        width="100%"
         direction={{ base: "column", md: "row" }}
         gap={{ base: 0, md: 4 }}
         position="relative"
       >
-        <Box 
+        <Box
           flex="1"
           position="sticky"
           top="20px"
@@ -171,11 +197,11 @@ const StraySponsorPage = () => {
             onResetView={onResetView}
             onFilterChange={handleFilterChange}
           />
-          
-          <Box 
-            position="absolute" 
-            bottom={12} 
-            right={4} 
+
+          <Box
+            position="absolute"
+            bottom={12}
+            right={4}
             zIndex={1000}
             className="bg-white bg-opacity-90 backdrop-blur-sm rounded-xl p-2 shadow-md"
           >
@@ -206,7 +232,7 @@ const StraySponsorPage = () => {
                 background: "#e2e8f0",
                 border: "none",
                 borderRadius: "6px",
-                cursor: "pointer"
+                cursor: "pointer",
               }}
               onClick={() => setSelectedCountry(null)}
             >
@@ -243,7 +269,7 @@ const StraySponsorPage = () => {
         </>
       )}
     </Box>
-  );
-};
+  )
+}
 
-export default React.memo(StraySponsorPage);
+export default React.memo(StraySponsorPage)
