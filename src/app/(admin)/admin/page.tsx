@@ -13,10 +13,10 @@ const Dashboard = () => {
 
   const navigationItems = [
     { label: 'Manage Children', path: '/admin/children' },
-    { label: 'Manage Child Laborers', path: '/admin/child-laborer' },
-    { label: 'Manage Street Involved', path: '/admin/street-involved' },
-    { label: 'Manage Families in Need', path: '/admin/family-in-need' },
-    { label: 'Manage Animals', path: '/admin/animals' },
+    // { label: 'Manage Child Laborers', path: '/admin/child-laborer' },
+    // { label: 'Manage Street Involved', path: '/admin/street-involved' },
+    // { label: 'Manage Families in Need', path: '/admin/family-in-need' },
+    // { label: 'Manage Animals', path: '/admin/animals' },
     { label: 'Manage Activities', path: '/admin/activities' },
   ];
 

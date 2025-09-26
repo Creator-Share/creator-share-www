@@ -42,6 +42,7 @@ type CreateDrawerProps = {
 };
 const CreateDrawer = ({
     formData,
+    setFormData,
     setVideoFiles,
     setIsDrawerOpen,
     isDrawerOpen,
@@ -55,6 +56,11 @@ const CreateDrawer = ({
     const [isAdding, setIsAdding] = useState(false);
     const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
     const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+
+    // Read optional public sponsorship goal (cents). If set, the budget_goal field in the drawer
+    // should be hidden and the value will be hardcoded on submission.
+    const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
+    const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
 
     const handleImageChange = (fileDetails: { acceptedFiles: File[] }) => {
         setImageFiles(fileDetails.acceptedFiles);
@@ -75,10 +81,15 @@ const CreateDrawer = ({
 
 
     const handleAdd = async () => {
-        
-        const requiredFields = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'budget_goal', 'country'] as const;
+        // Read optional public hardcoded sponsorship goal (cents) if set
+        const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
+        const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
+
+        // If public hardcoded goal is set, budget_goal is not required in the form.
+        const baseRequired = ['name', 'username', 'gender', 'birth_date', 'biography', 'introduction', 'country'] as const;
+        const requiredFields = publicHardcodedCents === null ? [...baseRequired, 'budget_goal'] as const : baseRequired;
         const emptyFields = requiredFields.filter(field => !formData[field]);
-        
+
         if (emptyFields.length > 0) {
             toaster.create({
                 title: "Validation Error",
@@ -90,6 +101,14 @@ const CreateDrawer = ({
 
         try {
             setIsAdding(true);
+
+            // If the public hardcoded goal is present, set the form value to that goal (in dollars)
+            if (publicHardcodedCents !== null) {
+              const dollars = publicHardcodedCents / 100;
+              // Overwrite formData.budget_goal with hardcoded value (in dollars)
+              setFormData({ ...(formData || {}), budget_goal: dollars });
+            }
+
             const success = await handleSubmit();
             if (success) {
                 // Clean up preview URLs
@@ -164,18 +183,23 @@ const CreateDrawer = ({
                                 <Textarea name="biography" size="xl" className="border" px={2} py={2} onChange={handleInputChange} />
                             </Field>
                             <Field label="Introduction" required errorText="This field is required">
-                                <Textarea 
-                                    name="introduction" 
-                                    size="xl" 
-                                    className="border" 
-                                    px={2} 
-                                    py={2} 
-                                    onChange={handleInputChange} 
+                                <Textarea
+                                    name="introduction"
+                                    size="xl"
+                                    className="border"
+                                    px={2}
+                                    py={2}
+                                    onChange={handleInputChange}
                                 />
                             </Field>
-                            <Field label="Budget Goal" required errorText="This field is required">
-                                <Input name="budget_goal" type="text" className="border" px={2} onChange={handleInputChange} />
-                            </Field>
+
+                            {/* Hide budget_goal input when public hardcoded sponsorship goal is set */}
+                            {publicHardcodedCents === null && (
+                              <Field label="Budget Goal" required errorText="This field is required">
+                                  <Input name="budget_goal" type="text" className="border" px={2} onChange={handleInputChange} />
+                              </Field>
+                            )}
+
                             <Field label="Status" required errorText="This field is required">
                                 <NativeSelectRoot>
                                     <NativeSelectField
@@ -311,11 +335,11 @@ const CreateDrawer = ({
                                 />
                             </Field>
                             {/* Expense Management Section */}
-                            <div className="mt-6">
-                                <ExpenseManager 
-                                    budgetGoal={formData.budget_goal ? Number(formData.budget_goal) * 100 : 0}
+                            {/* <div className="mt-6">
+                                <ExpenseManager
+                                    budgetGoal={publicHardcodedCents !== null ? publicHardcodedCents : (formData.budget_goal ? Number(formData.budget_goal) * 100 : 0)}
                                 />
-                            </div>
+                            </div> */}
                         </Fieldset.Content>
                     </Fieldset.Root>
                 </DrawerBody>

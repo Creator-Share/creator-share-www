@@ -59,8 +59,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   const [toastCount, setToastCount] = useState(0);
   const [lastToastTime, setLastToastTime] = useState(0);
   const user = useAuthStore((state) => state.user);
-  const remainingAmount =
-    (beneficiary.budget_goal - beneficiary.budget_raised) / 100;
+  // If a public hardcoded amount is configured, use it as the effective goal.
+  const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL;
+  const publicHardcodedCents = publicHardcodedRaw ? parseInt(publicHardcodedRaw, 10) : null;
+  const effectiveGoalCents =
+    publicHardcodedCents !== null ? publicHardcodedCents : (beneficiary.budget_goal || 0);
+  const remainingAmount = (effectiveGoalCents - (beneficiary.budget_raised || 0)) / 100;
+
   const minimumAmount = 10;
   const maxSelectableAmount =
     remainingAmount > minimumAmount
@@ -69,7 +74,10 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
       : remainingAmount;
 
-  const [amount, setAmount] = useState<number>(remainingAmount);
+  // If public hardcoded is present, default amount to the hardcoded total (in dollars)
+  const publicHardcodedDollars =
+    publicHardcodedCents !== null ? publicHardcodedCents / 100 : null;
+  const [amount, setAmount] = useState<number>(publicHardcodedDollars ?? remainingAmount);
   const [selectedOption, setSelectedOption] = useState<string>(
     paymentOptionsCollection.items[0].value
   );
@@ -111,10 +119,20 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     loadBeneficiaryMedia();
   }, [beneficiary?.id]);
 
-  // Whether user can proceed with payment given current amount
-  const canPay = remainingAmount < minimumAmount
-    ? amount > 0  // Any amount > 0 is valid when remaining < $10
-    : amount >= minimumAmount;  // Otherwise require minimum $10
+  // Disable payments when goal already satisfied.
+  // Some client-side Beneficiaries typings don't include goal_fulfilled_at, so
+  // use status or compare raised vs effective goal instead.
+  const alreadyFulfilled =
+    beneficiary.status === "Budget Fulfilled" ||
+    effectiveGoalCents <= (beneficiary.budget_raised || 0);
+
+  // Whether user can proceed with payment given current amount.
+  // If public hardcoded amount is set, require the user amount to exactly match that value.
+  const canPay = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL || !alreadyFulfilled && (
+    publicHardcodedDollars !== null
+      ? amount === publicHardcodedDollars
+      : (remainingAmount < minimumAmount ? amount > 0 : amount >= minimumAmount)
+  );
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -270,6 +288,9 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   }, [open, beneficiary.id]);
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Ignore changes when public hardcoded amount is active (all-or-nothing)
+    if (publicHardcodedDollars !== null) return;
+
     const inputValue = e.target.value;
     if (inputValue === "") {
       setAmount(0);
@@ -295,7 +316,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       });
       return;
     }
-    if (amount > remainingAmount) {
+    if (!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && amount > remainingAmount) {
       toaster.create({
         title: "Invalid Amount",
         description: "Amount exceeds the remaining budget needed.",
@@ -311,7 +332,8 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         beneficiaryImage:
           beneficiary.image_url ||
           "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=",
-        amount: amount * 100,
+        // If public hardcoded amount is set, send that exact cents value to server.
+        amount: publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
         paymentType: selectedOption,
         location: beneficiary.country,
         userId: user?.id,
@@ -630,48 +652,50 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
               className="h-[523px] mt-3 mb-2.5 md:my-0 md:col-span-7 md:gap-4"
             >
               {/* Sponsorship Target */}
-              <Box mb={2} gap={10}>
-                <Box className="flex justify-between">
-                  <Text className="text-base text-[#52667A] font-normal" mb={2}>
-                    Sponsorship Target
-                  </Text>
-                  <Text className="text-base font-semibold" mb={2}>
-                    {beneficiary.budget_goal > 0
-                      ? Math.round(
-                          (beneficiary.budget_raised /
-                            beneficiary.budget_goal) *
-                            100
-                        )
-                      : 0}
-                    %
-                  </Text>
-                </Box>
-                <Box className="w-full bg-[#CDE1FE] h-[13px] rounded-full mb-3">
-                  <Box
-                    className="bg-[#0654C6] h-[13px] rounded-full"
-                    style={{
-                      width: `${
-                        beneficiary.budget_goal > 0
-                          ? Math.min(
-                              (beneficiary.budget_raised /
-                                beneficiary.budget_goal) *
-                                100,
+              {publicHardcodedCents == null && (
+                <Box mb={2} gap={10}>
+                  <Box className="flex justify-between">
+                    <Text className="text-base text-[#52667A] font-normal" mb={2}>
+                      Sponsorship Target
+                    </Text>
+                    <Text className="text-base font-semibold" mb={2}>
+                      {beneficiary.budget_goal > 0
+                        ? Math.round(
+                            (beneficiary.budget_raised /
+                              beneficiary.budget_goal) *
                               100
-                            )
-                          : 0
-                      }%`,
-                    }}
-                  />
+                          )
+                        : 0}
+                      %
+                    </Text>
+                  </Box>
+                  <Box className="w-full bg-[#CDE1FE] h-[13px] rounded-full mb-3">
+                    <Box
+                      className="bg-[#0654C6] h-[13px] rounded-full"
+                      style={{
+                        width: `${
+                          beneficiary.budget_goal > 0
+                            ? Math.min(
+                                (beneficiary.budget_raised /
+                                  beneficiary.budget_goal) *
+                                  100,
+                                100
+                              )
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </Box>
+                  <Text className="text-sm text-[#52667A] font-normal">
+                    {`$${((beneficiary.budget_raised || 0) / 100).toLocaleString(
+                      undefined,
+                      { maximumFractionDigits: 0 }
+                    )} of $${(
+                      (beneficiary.budget_goal || 0) / 100
+                    ).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                  </Text>
                 </Box>
-                <Text className="text-sm text-[#52667A] font-normal">
-                  {`$${((beneficiary.budget_raised || 0) / 100).toLocaleString(
-                    undefined,
-                    { maximumFractionDigits: 0 }
-                  )} of $${(
-                    (beneficiary.budget_goal || 0) / 100
-                  ).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-                </Text>
-              </Box>
+              )}
 
               <Box className="grid grid-cols-2 gap-2">
                 <Box>
@@ -692,8 +716,9 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                           </InputAddon>
                           <Input
                             type="number"
-                            value={remainingAmount}
-                            readOnly
+                            value={publicHardcodedDollars !== null ? publicHardcodedDollars : remainingAmount}
+                            readOnly={publicHardcodedDollars !== null}
+                            disabled={publicHardcodedDollars !== null}
                             className="px-4 h-[50px] bg-gray-100"
                             placeholder="Enter Amount"
                           />
@@ -716,6 +741,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                           max={maxSelectableAmount}
                           value={amount || ""}
                           onChange={handleAmountChange}
+                          readOnly={publicHardcodedDollars !== null}
                           className="px-4 h-[48px]"
                           placeholder="Enter Amount"
                         />
