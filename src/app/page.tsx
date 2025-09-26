@@ -7,7 +7,6 @@ import {
   Box,
   Container,
 } from "@chakra-ui/react";
-import Loader from "@/components/Loader";
 
 import React from "react";
 
@@ -15,7 +14,6 @@ import React from "react";
 export default function Home() {
   return (
     <Box>
-      <Loader />
       <Hero />
       <Container maxW={'1200px'}>
       <Story />
