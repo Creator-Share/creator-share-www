@@ -10,6 +10,32 @@ export async function GET(req: Request) {
   const gender = searchParams.get("gender") as Gender | null
   const statusString = searchParams.get("status") || ""
   const status = statusString ? (statusString.split(",") as Status[]) : []
+  const ageRangeParam = searchParams.get("ageRange")
+
+  // Pagination params
+  const limitParam = Number(searchParams.get("limit") || "9")
+  const cursorParam = searchParams.get("cursor")
+
+  // Defensive bounds
+  const limit = Number.isFinite(limitParam)
+    ? Math.min(Math.max(limitParam, 1), 60)
+    : 9
+
+  // Decode cursor (created_at|id) if provided
+  let cursorCreatedAt: string | null = null
+  let cursorId: string | null = null
+  if (cursorParam) {
+    try {
+      const decoded = Buffer.from(cursorParam, "base64").toString("utf-8")
+      const [ts, id] = decoded.split("|")
+      if (ts && id) {
+        cursorCreatedAt = ts
+        cursorId = id
+      }
+    } catch (_) {
+      // ignore invalid cursor
+    }
+  }
 
   try {
     let query = supabase.from("beneficiaries").select("*")
@@ -24,18 +50,61 @@ export async function GET(req: Request) {
       query = query.in("status", status)
     }
 
+    if (ageRangeParam) {
+      const parts = ageRangeParam.split(",").map((v) => Number(v.trim()))
+      if (parts.length === 2 && parts.every((n) => Number.isFinite(n))) {
+        const [minAgeInYears, maxAgeInYears] =
+          parts[0] <= parts[1] ? parts : [parts[1], parts[0]]
+
+        const now = new Date()
+        const dateYearsAgo = (years: number) =>
+          new Date(now.getFullYear() - years, now.getMonth(), now.getDate())
+
+        // People between min and max age inclusive → born between (now - (max+1) years) and (now - min years)
+        const minDob = dateYearsAgo(maxAgeInYears + 1).toISOString()
+        const maxDob = dateYearsAgo(minAgeInYears).toISOString()
+        query = query.gte("birth_date", minDob).lte("birth_date", maxDob)
+      }
+    }
+
+    // Keyset (cursor) pagination: created_at DESC, id DESC
+    if (cursorCreatedAt && cursorId) {
+      // Records strictly older than the cursor in the composite order
+      query = query.or(
+        `created_at.lt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.lt.${cursorId})`,
+      )
+    }
+
+    // Stable ordering then limit
+    query = query
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(limit)
+
     const { data, error } = await query
     if (error) {
       console.error("Supabase error:", error)
       return NextResponse.json({ error: "Database error" }, { status: 500 })
     }
 
-    return NextResponse.json({ people: data as Beneficiaries[] })
+    return NextResponse.json({
+      people: (data || []) as Beneficiaries[],
+      pageInfo: {
+        limit,
+        nextCursor:
+          (data && data.length === limit)
+            ? Buffer.from(
+                `${(data[data.length - 1] as any).created_at}|${(data[data.length - 1] as any).id}`,
+              ).toString("base64")
+            : null,
+        hasMore: Boolean(data && data.length === limit),
+      },
+    })
   } catch (err) {
     console.error("Unexpected error:", err)
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }
