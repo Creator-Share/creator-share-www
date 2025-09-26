@@ -1,22 +1,28 @@
-import { createClient } from "@/utils/supabase/server";
-import { NextResponse } from 'next/server';
+import { createClient } from "@/utils/supabase/server"
+import { NextResponse } from "next/server"
 export async function GET() {
   try {
-    const supabase = await createClient();
-    
+    const supabase = await createClient()
+
     const { data: expenses, error } = await supabase
-      .from('expenses')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .from("expenses")
+      .select("*")
+      .order("created_at", { ascending: false })
 
     if (error) {
-      console.error('Error fetching expenses:', error);
-      return NextResponse.json({ error: 'Failed to fetch expenses' }, { status: 500 });
+      console.error("Error fetching expenses:", error)
+      return NextResponse.json(
+        { error: "Failed to fetch expenses" },
+        { status: 500 },
+      )
     }
 
-    return NextResponse.json(expenses);
+    return NextResponse.json(expenses)
   } catch (error) {
-    console.error('Error in expenses GET:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Error in expenses GET:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    )
   }
 }

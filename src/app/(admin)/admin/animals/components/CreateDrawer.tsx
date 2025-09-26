@@ -1,5 +1,5 @@
-"use client";
-import React, { useState } from "react";
+"use client"
+import React, { useState } from "react"
 import {
   DrawerContent,
   DrawerHeader,
@@ -10,41 +10,43 @@ import {
   DrawerRoot,
   DrawerBackdrop,
   DrawerTrigger,
-} from "@/components/ui/drawer";
-import { Text, Fieldset, Input, Stack, Textarea } from "@chakra-ui/react";
-import { Button } from "@/components/ui/button";
-import { Field } from "@/components/ui/field";
+} from "@/components/ui/drawer"
+import { Text, Fieldset, Input, Stack, Textarea } from "@chakra-ui/react"
+import { Button } from "@/components/ui/button"
+import { Field } from "@/components/ui/field"
 import {
   NativeSelectField,
   NativeSelectRoot,
-} from "@/components/ui/native-select";
-import { GoPlusCircle } from "react-icons/go";
-import { toaster } from "@/components/ui/toaster";
+} from "@/components/ui/native-select"
+import { GoPlusCircle } from "react-icons/go"
+import { toaster } from "@/components/ui/toaster"
 import {
   FileUploadList,
   FileUploadRoot,
   FileUploadTrigger,
-} from "@/components/ui/file-upload";
-import { HiUpload } from "react-icons/hi";
+} from "@/components/ui/file-upload"
+import { HiUpload } from "react-icons/hi"
 
-import { AnimalBeneficiary } from "@/types/admin.types";
+import { AnimalBeneficiary } from "@/types/admin.types"
 
 type CreateDrawerProps = {
-  formData: AnimalBeneficiary;
-  isDrawerOpen: boolean;
-  setIsDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  setFormData: React.Dispatch<React.SetStateAction<AnimalBeneficiary>>;
-  handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  handleSelectChange: (name: string, value: string) => void;
-  handleSubmit: (data: AnimalBeneficiary) => Promise<boolean>;
-  handleDrawerClose: () => void;
-  imageFiles: File[];
-  setImageFiles: React.Dispatch<React.SetStateAction<File[]>>;
-  videoFiles: File[];
-  setVideoFiles: React.Dispatch<React.SetStateAction<File[]>>;
-};
+  formData: AnimalBeneficiary
+  isDrawerOpen: boolean
+  setIsDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>
+  setFormData: React.Dispatch<React.SetStateAction<AnimalBeneficiary>>
+  handleInputChange: (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => void
+  handleSelectChange: (name: string, value: string) => void
+  handleSubmit: (data: AnimalBeneficiary) => Promise<boolean>
+  handleDrawerClose: () => void
+  imageFiles: File[]
+  setImageFiles: React.Dispatch<React.SetStateAction<File[]>>
+  videoFiles: File[]
+  setVideoFiles: React.Dispatch<React.SetStateAction<File[]>>
+}
 
-const animalTypes = ["Puppy", "Kitten", "Dog", "Cat"]; // Replace with your enums
+const animalTypes = ["Puppy", "Kitten", "Dog", "Cat"] // Replace with your enums
 
 const CreateDrawer = ({
   formData,
@@ -57,27 +59,33 @@ const CreateDrawer = ({
   setImageFiles,
   setVideoFiles,
 }: CreateDrawerProps) => {
-  const [isAdding, setIsAdding] = useState(false);
+  const [isAdding, setIsAdding] = useState(false)
 
   // Custom metadata fields state
-  const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>([]);
+  const [customFields, setCustomFields] = useState<
+    { key: string; value: string }[]
+  >([])
 
   // Add a new custom field
   const handleAddField = () => {
-    setCustomFields([...customFields, { key: "", value: "" }]);
-  };
+    setCustomFields([...customFields, { key: "", value: "" }])
+  }
 
   // Update a custom field
-  const handleCustomFieldChange = (idx: number, field: "key" | "value", val: string) => {
+  const handleCustomFieldChange = (
+    idx: number,
+    field: "key" | "value",
+    val: string,
+  ) => {
     setCustomFields((prev) =>
-      prev.map((item, i) => (i === idx ? { ...item, [field]: val } : item))
-    );
-  };
+      prev.map((item, i) => (i === idx ? { ...item, [field]: val } : item)),
+    )
+  }
 
   // Remove a custom field
   const handleRemoveField = (idx: number) => {
-    setCustomFields((prev) => prev.filter((_, i) => i !== idx));
-  };
+    setCustomFields((prev) => prev.filter((_, i) => i !== idx))
+  }
 
   // Merge custom fields into metadata before submit
   const handleAdd = async () => {
@@ -90,26 +98,26 @@ const CreateDrawer = ({
       "introduction",
       "budget_goal",
       "country",
-    ] as const;
-    
+    ] as const
+
     // Check required metadata fields
-    const requiredMetadataFields = ["breed", "animal_type"];
+    const requiredMetadataFields = ["breed", "animal_type"]
     const emptyMetadataFields = requiredMetadataFields.filter(
-      (field) => !formData.metadata?.[field]
-    );
-    
+      (field) => !formData.metadata?.[field],
+    )
+
     const emptyFields = [
       ...requiredFields.filter((field) => !formData[field]),
-      ...emptyMetadataFields
-    ];
+      ...emptyMetadataFields,
+    ]
 
     if (emptyFields.length > 0) {
       toaster.create({
         title: "Validation Error",
         description: `Please fill in all required fields: ${emptyFields.join(", ")}`,
         duration: 5000,
-      });
-      return;
+      })
+      return
     }
 
     // Prepare the data for submission
@@ -118,38 +126,43 @@ const CreateDrawer = ({
       // Let the database generate the UUID
       metadata: {
         ...formData.metadata,
-        ...Object.fromEntries(customFields.map(({ key, value }) => [key, value]).filter(([key]) => key))
-      }
-    };
+        ...Object.fromEntries(
+          customFields
+            .map(({ key, value }) => [key, value])
+            .filter(([key]) => key),
+        ),
+      },
+    }
 
     try {
-      setIsAdding(true);
-      const success = await handleSubmit(submitData);
+      setIsAdding(true)
+      const success = await handleSubmit(submitData)
       if (success) {
-        handleDrawerClose();
-        setCustomFields([]);
+        handleDrawerClose()
+        setCustomFields([])
       }
     } catch (error) {
-      console.error("Error adding:", error);
-      const errorMsg = (error as Error)?.message || "";
+      console.error("Error adding:", error)
+      const errorMsg = (error as Error)?.message || ""
       if (
         errorMsg.includes("duplicate key value") ||
         errorMsg.toLowerCase().includes("username")
       ) {
         toaster.create({
           title: "Username Error",
-          description: "This username is already taken. Please choose a different username.",
+          description:
+            "This username is already taken. Please choose a different username.",
           duration: 5000,
-        });
+        })
       } else {
         toaster.create({
           title: "Error",
           description: "Failed to add animal",
           duration: 5000,
-        });
+        })
       }
     } finally {
-      setIsAdding(false);
+      setIsAdding(false)
     }
   }
 
@@ -159,7 +172,7 @@ const CreateDrawer = ({
       size="lg"
       open={isDrawerOpen}
       onOpenChange={({ open }) => {
-        setIsDrawerOpen(open);
+        setIsDrawerOpen(open)
       }}
     >
       <DrawerBackdrop />
@@ -192,7 +205,11 @@ const CreateDrawer = ({
                   value={formData.name}
                 />
               </Field>
-              <Field label="Username" required errorText="This field is required">
+              <Field
+                label="Username"
+                required
+                errorText="This field is required"
+              >
                 <Input
                   name="username"
                   className="border"
@@ -220,7 +237,11 @@ const CreateDrawer = ({
                   </NativeSelectField>
                 </NativeSelectRoot>
               </Field>
-              <Field label="Birth Date" required errorText="This field is required">
+              <Field
+                label="Birth Date"
+                required
+                errorText="This field is required"
+              >
                 <Input
                   name="birth_date"
                   type="date"
@@ -239,7 +260,11 @@ const CreateDrawer = ({
                   value={formData.metadata?.breed || ""}
                 />
               </Field>
-              <Field label="Animal Type" required errorText="This field is required">
+              <Field
+                label="Animal Type"
+                required
+                errorText="This field is required"
+              >
                 <NativeSelectRoot>
                   <NativeSelectField
                     className="border"
@@ -273,11 +298,16 @@ const CreateDrawer = ({
                 </Button>
                 <Stack gap={2}>
                   {customFields.map((field, idx) => (
-                    <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <div
+                      key={idx}
+                      style={{ display: "flex", gap: 8, alignItems: "center" }}
+                    >
                       <Input
                         placeholder="Field Name"
                         value={field.key}
-                        onChange={(e) => handleCustomFieldChange(idx, "key", e.target.value)}
+                        onChange={(e) =>
+                          handleCustomFieldChange(idx, "key", e.target.value)
+                        }
                         className="border"
                         px={2}
                         width="40%"
@@ -285,7 +315,9 @@ const CreateDrawer = ({
                       <Input
                         placeholder="Value"
                         value={field.value}
-                        onChange={(e) => handleCustomFieldChange(idx, "value", e.target.value)}
+                        onChange={(e) =>
+                          handleCustomFieldChange(idx, "value", e.target.value)
+                        }
                         className="border"
                         px={2}
                         width="40%"
@@ -303,7 +335,11 @@ const CreateDrawer = ({
                   ))}
                 </Stack>
               </Field>
-              <Field label="Biography" required errorText="This field is required">
+              <Field
+                label="Biography"
+                required
+                errorText="This field is required"
+              >
                 <Textarea
                   name="biography"
                   size="xl"
@@ -314,7 +350,11 @@ const CreateDrawer = ({
                   value={formData.biography}
                 />
               </Field>
-              <Field label="Introduction" required errorText="This field is required">
+              <Field
+                label="Introduction"
+                required
+                errorText="This field is required"
+              >
                 <Textarea
                   name="introduction"
                   size="xl"
@@ -325,7 +365,11 @@ const CreateDrawer = ({
                   value={formData.introduction}
                 />
               </Field>
-              <Field label="Budget Goal" required errorText="This field is required">
+              <Field
+                label="Budget Goal"
+                required
+                errorText="This field is required"
+              >
                 <Input
                   name="budget_goal"
                   type="text"
@@ -335,7 +379,11 @@ const CreateDrawer = ({
                   value={formData.budget_goal}
                 />
               </Field>
-              <Field label="Country" required errorText="This field is required">
+              <Field
+                label="Country"
+                required
+                errorText="This field is required"
+              >
                 <Input
                   name="country"
                   className="border"
@@ -344,7 +392,11 @@ const CreateDrawer = ({
                   value={formData.country}
                 />
               </Field>
-              <Field label="Location" required errorText="This field is required">
+              <Field
+                label="Location"
+                required
+                errorText="This field is required"
+              >
                 <Input
                   name="location_str"
                   className="border"
@@ -354,9 +406,20 @@ const CreateDrawer = ({
                 />
               </Field>
               <Field label="Upload Image">
-                <FileUploadRoot onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)} accept={["image/*"]} maxFiles={5}>
+                <FileUploadRoot
+                  onFileChange={(fileDetails) =>
+                    setImageFiles(fileDetails.acceptedFiles)
+                  }
+                  accept={["image/*"]}
+                  maxFiles={5}
+                >
                   <FileUploadTrigger asChild>
-                    <Button variant="outline" size="sm" className="border" px={4}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border"
+                      px={4}
+                    >
                       <HiUpload /> Upload Image
                     </Button>
                   </FileUploadTrigger>
@@ -364,9 +427,19 @@ const CreateDrawer = ({
                 </FileUploadRoot>
               </Field>
               <Field label="Upload Video">
-                <FileUploadRoot onFileChange={(fileDetails) => setVideoFiles(fileDetails.acceptedFiles)} accept={["video/mp4"]}>
+                <FileUploadRoot
+                  onFileChange={(fileDetails) =>
+                    setVideoFiles(fileDetails.acceptedFiles)
+                  }
+                  accept={["video/mp4"]}
+                >
                   <FileUploadTrigger asChild>
-                    <Button variant="outline" size="sm" className="border" px={4}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border"
+                      px={4}
+                    >
                       <HiUpload /> Upload Video
                     </Button>
                   </FileUploadTrigger>
@@ -399,7 +472,7 @@ const CreateDrawer = ({
         </DrawerFooter>
       </DrawerContent>
     </DrawerRoot>
-  );
-};
+  )
+}
 
-export default CreateDrawer;
+export default CreateDrawer

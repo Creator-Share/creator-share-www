@@ -11,21 +11,23 @@ Currently, the Supabase storage bucket names (e.g., `"sponsor_people"`) are hard
 ## Proposed Solution
 
 1. **Environment Variables for Bucket Names**  
-   Introduce environment variables to define storage bucket names, for example:  
+   Introduce environment variables to define storage bucket names, for example:
    - `NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET`
-   
+
    These variables will be used to configure bucket names dynamically.
 
 2. **Centralized Bucket Name Constants**  
    Create a centralized module to export bucket name constants that read from environment variables with fallback defaults.  
-   Example:  
+   Example:
+
    ```ts
-   export const STORAGE_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET;
+   export const STORAGE_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET
    ```
 
 3. **Refactor Code to Use Constants**  
    Refactor all code that uses hardcoded bucket names to import and use these constants instead.  
-   For example, in `EditDrawer.tsx`:  
+   For example, in `EditDrawer.tsx`:
+
    ```ts
    import { STORAGE_BUCKET } from 'src/utils/supabase/buckets';
 

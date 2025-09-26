@@ -7,6 +7,7 @@ First, run the development server:
 ```bash
 yarn dev
 ```
+
 ## Branching and Deployment Process
 
 For detailed information on our branching and deployment workflow, including how we handle Vercel's commit author restrictions, please see [docs/branches.md](./docs/branches.md).
@@ -14,6 +15,7 @@ For detailed information on our branching and deployment workflow, including how
 ## Vercel Deployment
 
 Push changes to the main branch, then to trigger a deployment,
+
 ```bash
 yarn deploy
 ```

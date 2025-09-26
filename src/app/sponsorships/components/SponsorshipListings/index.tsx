@@ -1,9 +1,9 @@
-"use client";
-import { Box, Flex, Button, SimpleGrid } from "@chakra-ui/react";
-import React, { useState, useEffect } from "react";
-import BeneficiaryCard from "../SponsorshipCard";
-import BeneficiaryActivityModal from "../SponsorshipActivity/BeneficiaryActivityModal";
-import { BeneficiaryListingsProps } from "@/types/propTypes";
+"use client"
+import { Box, Flex, SimpleGrid, Spinner } from "@chakra-ui/react"
+import React, { useState, useEffect, useRef } from "react"
+import BeneficiaryCard from "../SponsorshipCard"
+import BeneficiaryActivityModal from "../SponsorshipActivity/BeneficiaryActivityModal"
+import { BeneficiaryListingsProps } from "@/types/propTypes"
 
 const BeneficiaryListings = React.forwardRef<
   HTMLDivElement,
@@ -20,46 +20,51 @@ const BeneficiaryListings = React.forwardRef<
     },
     ref
   ) => {
-    const [currentPage, setCurrentPage] = useState(1);
-    const [dialogOpen, setDialogOpen] = useState<boolean>(false);
+    // Infinite scroll state: how many items are currently visible
+    const itemsPerPage = 3
+    const ARTIFICIAL_DELAY_MS = 5000 // artificial delay to demo spinner
+    const OBSERVER_THRESHOLD = 1 // require the sentinel to be fully visible
+    const SENTINEL_HEIGHT_PX = 300 // make sentinel tall so intersection happens very close to bottom
+    const [visibleCount, setVisibleCount] = useState(itemsPerPage)
+    const [dialogOpen, setDialogOpen] = useState<boolean>(false)
     // const [activeBeneficiaryId, setActiveBeneficiaryId] = useState<string | null>(null);
-    const isInIframe = window.self !== window.top;
-    const itemsPerPage = 6; // Show fewer items per page to test pagination
+    const isInIframe = window.self !== window.top
+    const sentinelRef = useRef<HTMLDivElement | null>(null)
+    const [isLoadingMore, setIsLoadingMore] = useState(false)
 
     const filteredBeneficiary = React.useMemo(() => {
       const safeBeneficiaryData = Array.isArray(beneficiaryData)
         ? beneficiaryData
-        : [];
+        : []
 
       const filtered = safeBeneficiaryData.filter((beneficiary) => {
         // Filter by country if selected
         if (selectedCountry && beneficiary.country !== selectedCountry) {
-          return false;
+          return false
         }
 
         if (mapBounds) {
           if (beneficiary.location_geo) {
-            const [lng, lat] = beneficiary.location_geo.coordinates;
-            return mapBounds.contains([lat, lng]);
+            const [lng, lat] = beneficiary.location_geo.coordinates
+            return mapBounds.contains([lat, lng])
           } else {
             // Include animals with null location_geo in the listings
-            return true;
+            return true
           }
         }
 
-        return true;
-      });
+        return true
+      })
 
-      return filtered;
-    }, [beneficiaryData, selectedCountry, mapBounds]);
+      return filtered
+    }, [beneficiaryData, selectedCountry, mapBounds])
 
     const visibleBeneficiary = React.useMemo(() => {
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = startIndex + itemsPerPage;
-      const sliced = filteredBeneficiary.slice(startIndex, endIndex);
-
-      return sliced;
-    }, [filteredBeneficiary, currentPage, itemsPerPage]);
+      return filteredBeneficiary.slice(
+        0,
+        Math.min(visibleCount, filteredBeneficiary.length)
+      )
+    }, [filteredBeneficiary, visibleCount])
 
     useEffect(() => {
       if (isInIframe) {
@@ -70,84 +75,73 @@ const BeneficiaryListings = React.forwardRef<
               height: document.documentElement.scrollHeight + 200,
             },
             "*"
-          );
-        }, 100);
+          )
+        }, 100)
       }
-    }, [isInIframe]);
+    }, [isInIframe, visibleCount])
 
     useEffect(() => {
-      // Only reset to first page if not jumping to a selected beneficiary
-      setCurrentPage(1);
+      // Reset back to the first "page" worth of items on filter/map changes
+      setVisibleCount(itemsPerPage)
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedCountry, JSON.stringify(mapBounds || {})]);
+    }, [selectedCountry, JSON.stringify(mapBounds || {})])
 
-    // Effect to update page when selected beneficiary changes
+    // Ensure the selected beneficiary is visible; expand the list if needed
     useEffect(() => {
-      if (!selectedBeneficiaryId) return;
+      if (!selectedBeneficiaryId) return
 
       // Find the index of the selected beneficiary in the filtered list
       const index = filteredBeneficiary.findIndex(
         (b) => b.id === selectedBeneficiaryId
-      );
+      )
 
-      if (index === -1) return; // Not found in filtered list
+      if (index === -1) return // Not found in filtered list
 
-      // Calculate the page number that contains the selected beneficiary
-      const newPage = Math.floor(index / itemsPerPage) + 1;
-
-      if (newPage !== currentPage) {
-        setPageChangeFromSelection(true);
-        setCurrentPage(newPage);
+      const requiredCount = Math.ceil((index + 1) / itemsPerPage) * itemsPerPage
+      if (requiredCount > visibleCount) {
+        setPageChangeFromSelection(true)
+        setVisibleCount(requiredCount)
+      } else {
+        setPageChangeFromSelection(true)
       }
-    }, [selectedBeneficiaryId, filteredBeneficiary, currentPage, itemsPerPage]);
+    }, [selectedBeneficiaryId, filteredBeneficiary, visibleCount, itemsPerPage])
 
     // Track if page change was triggered by beneficiary selection
     const [pageChangeFromSelection, setPageChangeFromSelection] =
-      useState(false);
+      useState(false)
 
-    // Reset selectedBeneficiaryId when currentPage changes to allow manual pagination
-    useEffect(() => {
-      if (selectedBeneficiaryId && !pageChangeFromSelection) {
-        setSelectedBeneficiaryId(null);
-      }
-      // Don't reset pageChangeFromSelection here to avoid immediate clearing
-    }, [
-      currentPage,
-      pageChangeFromSelection,
-      setSelectedBeneficiaryId,
-      selectedBeneficiaryId,
-    ]);
+    // No need to clear selection on infinite scroll expansion
 
-    // Scroll to selected beneficiary after page change (from map click)
+    // Scroll to selected beneficiary after expansion (from map click)
     useEffect(() => {
       if (selectedBeneficiaryId && pageChangeFromSelection) {
         // Wait for DOM update
         setTimeout(() => {
-          const el = document.getElementById(selectedBeneficiaryId);
+          const el = document.getElementById(selectedBeneficiaryId)
           if (el) {
-            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.scrollIntoView({ behavior: "smooth", block: "center" })
           }
-          setPageChangeFromSelection(false);
-        }, 100);
+          setPageChangeFromSelection(false)
+        }, 100)
       }
-    }, [selectedBeneficiaryId, pageChangeFromSelection]);
+    }, [selectedBeneficiaryId, pageChangeFromSelection])
 
     // Reset pageChangeFromSelection after a delay to allow the beneficiary to be shown
     useEffect(() => {
       if (pageChangeFromSelection) {
         const timer = setTimeout(() => {
-          setPageChangeFromSelection(false);
-        }, 500);
-        return () => clearTimeout(timer);
+          setPageChangeFromSelection(false)
+        }, 500)
+        return () => clearTimeout(timer)
       }
-    }, [pageChangeFromSelection]);
+    }, [pageChangeFromSelection])
 
     // Remove the scroll effect from listings component since it's now handled in the map component
 
     // Reset active beneficiary when selectedBeneficiaryId is cleared or page changes
     useEffect(() => {
       // if (!selectedBeneficiaryId) setActiveBeneficiaryId(null);
-    }, [selectedBeneficiaryId]);
+    }, [selectedBeneficiaryId])
 
     // useEffect(() => {
     //   setActiveBeneficiaryId(null);
@@ -155,20 +149,70 @@ const BeneficiaryListings = React.forwardRef<
 
     // Handle opening the dialog for a specific child
     const handleOpenDialog = (beneficiaryId?: string) => {
-      if (!beneficiaryId) return;
+      if (!beneficiaryId) return
       const index = visibleBeneficiary.findIndex(
         (beneficiary) => beneficiary.id === beneficiaryId
-      );
+      )
       if (index !== -1) {
-        setCurrentDialogIndex(index);
-        setDialogOpen(true);
+        setCurrentDialogIndex(index)
+        setDialogOpen(true)
       }
-    };
+    }
 
-    const [currentDialogIndex, setCurrentDialogIndex] = useState<number>(0);
+    const [currentDialogIndex, setCurrentDialogIndex] = useState<number>(0)
 
-    // Calculate total pages
-    const totalPages = Math.ceil(filteredBeneficiary.length / itemsPerPage);
+    // IntersectionObserver to load more when the sentinel comes into view
+    useEffect(() => {
+      if (!sentinelRef.current) return
+      const element = sentinelRef.current
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0]
+          const rect = entry.target.getBoundingClientRect()
+          const info = {
+            time: new Date().toISOString(),
+            isIntersecting: entry.isIntersecting,
+            intersectionRatio: entry.intersectionRatio,
+            sentinelTop: Math.round(rect.top),
+            viewportHeight: window.innerHeight,
+            visibleCount,
+            total: filteredBeneficiary.length,
+          }
+          // Debug log every time the observer fires
+          console.log("[Listings] IO event", info)
+
+          if (
+            entry.isIntersecting &&
+            entry.intersectionRatio >= 0.99 &&
+            !isLoadingMore &&
+            visibleCount < filteredBeneficiary.length
+          ) {
+            console.log("[Listings] Loading more…", {
+              add: itemsPerPage,
+              delayMs: ARTIFICIAL_DELAY_MS,
+            })
+            setIsLoadingMore(true)
+            // Small timeout to coalesce rapid intersections and show spinner
+            setTimeout(() => {
+              setVisibleCount((prev) =>
+                Math.min(prev + itemsPerPage, filteredBeneficiary.length)
+              )
+              setIsLoadingMore(false)
+              console.log("[Listings] Load complete")
+            }, ARTIFICIAL_DELAY_MS)
+          }
+        },
+        {
+          root: null,
+          rootMargin: "0px 0px 0px 0px",
+          threshold: OBSERVER_THRESHOLD,
+        }
+      )
+
+      observer.observe(element)
+      return () => observer.unobserve(element)
+    }, [filteredBeneficiary.length, visibleCount, itemsPerPage, isLoadingMore])
 
     return (
       <Box
@@ -207,55 +251,17 @@ const BeneficiaryListings = React.forwardRef<
             )}
           </SimpleGrid>
         </Box>
-        {filteredBeneficiary.length > itemsPerPage && (
-          <Flex justify="center" pb={10} gap={2}>
-            <Flex gap={2}>
-              <Button
-                onClick={() => {
-                  setSelectedBeneficiaryId(null);
-                  setCurrentPage((prev) => Math.max(1, prev - 1));
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (page) => (
-                  <Button
-                    key={page}
-                    onClick={() => {
-                      setSelectedBeneficiaryId(null);
-                      setCurrentPage(page);
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                    colorScheme={currentPage === page ? "blue" : undefined}
-                    variant={currentPage === page ? "solid" : "outline"}
-                    aria-current={currentPage === page ? "page" : undefined}
-                    fontWeight={currentPage === page ? "bold" : "normal"}
-                  >
-                    {page}
-                  </Button>
-                )
-              )}
-              <Button
-                onClick={() => {
-                  setSelectedBeneficiaryId(null);
-                  setCurrentPage((prev) => Math.min(totalPages, prev + 1));
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </Button>
-            </Flex>
-          </Flex>
-        )}
+        {/* Infinite scroll sentinel + loading indicator */}
+        <Flex justify="center" pb={10} align="center" gap={3}>
+          {isLoadingMore && <Spinner size="xl" color="gray.600" />}
+          <Spinner size="xl" color="gray.600" />
+          <div ref={sentinelRef} style={{ height: SENTINEL_HEIGHT_PX }} />
+        </Flex>
       </Box>
-    );
+    )
   }
-);
+)
 
-BeneficiaryListings.displayName = "BeneficiaryListings";
+BeneficiaryListings.displayName = "BeneficiaryListings"
 
-export default BeneficiaryListings;
+export default BeneficiaryListings

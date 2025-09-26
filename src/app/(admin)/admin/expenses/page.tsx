@@ -1,201 +1,219 @@
-"use client";
-import React, { useEffect, useState } from "react";
-import { Box, Button, Text, Input, Textarea } from "@chakra-ui/react";
-import { Field } from "@/components/ui/field";
-import { toaster } from "@/components/ui/toaster";
-import { Expense } from "@/types/admin.types";
-import { centsToDollars, dollarsToCents } from "@/utils/currency";
-import GoBackButton from "@/components/ui/goBack";
-import { HiPlus, HiTrash, HiPencil } from "react-icons/hi";
+"use client"
+import React, { useEffect, useState } from "react"
+import { Box, Button, Text, Input, Textarea } from "@chakra-ui/react"
+import { Field } from "@/components/ui/field"
+import { toaster } from "@/components/ui/toaster"
+import { Expense } from "@/types/admin.types"
+import { centsToDollars, dollarsToCents } from "@/utils/currency"
+import GoBackButton from "@/components/ui/goBack"
+import { HiPlus, HiTrash, HiPencil } from "react-icons/hi"
 
 const ExpensesPage = () => {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [newExpense, setNewExpense] = useState<Partial<Expense>>({
     name: "",
     description: "",
     price: 0,
-    icon: ""
-  });
+    icon: "",
+  })
 
   useEffect(() => {
-    fetchExpenses();
-  }, []);
+    fetchExpenses()
+  }, [])
 
   const fetchExpenses = async () => {
     try {
-      const response = await fetch('/api/admin/expenses/get');
+      const response = await fetch("/api/admin/expenses/get")
       if (response.ok) {
-        const data = await response.json();
-        setExpenses(data);
+        const data = await response.json()
+        setExpenses(data)
       } else {
         toaster.create({
           title: "Error",
           description: "Failed to fetch expenses",
           duration: 5000,
-        });
+        })
       }
     } catch (error) {
-      console.error('Error fetching expenses:', error);
+      console.error("Error fetching expenses:", error)
       toaster.create({
         title: "Error",
         description: "Failed to fetch expenses",
         duration: 5000,
-      });
+      })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const createExpense = async () => {
-    if (!newExpense.name || !newExpense.description || newExpense.price === undefined) {
+    if (
+      !newExpense.name ||
+      !newExpense.description ||
+      newExpense.price === undefined
+    ) {
       toaster.create({
         title: "Error",
         description: "Please fill in all required fields",
         duration: 5000,
-      });
-      return;
+      })
+      return
     }
 
     try {
-      const response = await fetch('/api/admin/expenses/create', {
-        method: 'POST',
+      const response = await fetch("/api/admin/expenses/create", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           ...newExpense,
-          price: dollarsToCents(newExpense.price || 0)
+          price: dollarsToCents(newExpense.price || 0),
         }),
-      });
+      })
 
       if (response.ok) {
-        const createdExpense = await response.json();
-        setExpenses(prev => [createdExpense, ...prev]);
-        setNewExpense({ name: "", description: "", price: 0, icon: "" });
-        setShowCreateForm(false);
+        const createdExpense = await response.json()
+        setExpenses((prev) => [createdExpense, ...prev])
+        setNewExpense({ name: "", description: "", price: 0, icon: "" })
+        setShowCreateForm(false)
         toaster.create({
           title: "Success",
           description: "Expense created successfully",
           duration: 5000,
-        });
+        })
       } else {
-        const error = await response.json();
+        const error = await response.json()
         toaster.create({
           title: "Error",
           description: error.error || "Failed to create expense",
           duration: 5000,
-        });
+        })
       }
     } catch (error) {
-      console.error('Error creating expense:', error);
+      console.error("Error creating expense:", error)
       toaster.create({
         title: "Error",
         description: "Failed to create expense",
         duration: 5000,
-      });
+      })
     }
-  };
+  }
 
   const updateExpense = async () => {
-    if (!editingExpense?.id || !editingExpense.name || !editingExpense.description || editingExpense.price === undefined) {
+    if (
+      !editingExpense?.id ||
+      !editingExpense.name ||
+      !editingExpense.description ||
+      editingExpense.price === undefined
+    ) {
       toaster.create({
         title: "Error",
         description: "Please fill in all required fields",
         duration: 5000,
-      });
-      return;
+      })
+      return
     }
 
     try {
-      const response = await fetch(`/api/admin/expenses/update/${editingExpense.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `/api/admin/expenses/update/${editingExpense.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...editingExpense,
+            price: dollarsToCents(editingExpense.price || 0),
+          }),
         },
-        body: JSON.stringify({
-          ...editingExpense,
-          price: dollarsToCents(editingExpense.price || 0)
-        }),
-      });
+      )
 
       if (response.ok) {
-        const updatedExpense = await response.json();
-        setExpenses(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
-        setEditingExpense(null);
+        const updatedExpense = await response.json()
+        setExpenses((prev) =>
+          prev.map((e) => (e.id === updatedExpense.id ? updatedExpense : e)),
+        )
+        setEditingExpense(null)
         toaster.create({
           title: "Success",
           description: "Expense updated successfully",
           duration: 5000,
-        });
+        })
       } else {
-        const error = await response.json();
+        const error = await response.json()
         toaster.create({
           title: "Error",
           description: error.error || "Failed to update expense",
           duration: 5000,
-        });
+        })
       }
     } catch (error) {
-      console.error('Error updating expense:', error);
+      console.error("Error updating expense:", error)
       toaster.create({
         title: "Error",
         description: "Failed to update expense",
         duration: 5000,
-      });
+      })
     }
-  };
+  }
 
   const deleteExpense = async (expenseId: string) => {
-    if (!confirm('Are you sure you want to delete this expense? This will also remove all assignments.')) {
-      return;
+    if (
+      !confirm(
+        "Are you sure you want to delete this expense? This will also remove all assignments.",
+      )
+    ) {
+      return
     }
 
     try {
       const response = await fetch(`/api/admin/expenses/delete/${expenseId}`, {
-        method: 'DELETE',
-      });
+        method: "DELETE",
+      })
 
       if (response.ok) {
-        setExpenses(prev => prev.filter(e => e.id !== expenseId));
+        setExpenses((prev) => prev.filter((e) => e.id !== expenseId))
         toaster.create({
           title: "Success",
           description: "Expense deleted successfully",
           duration: 5000,
-        });
+        })
       } else {
-        const error = await response.json();
+        const error = await response.json()
         toaster.create({
           title: "Error",
           description: error.error || "Failed to delete expense",
           duration: 5000,
-        });
+        })
       }
     } catch (error) {
-      console.error('Error deleting expense:', error);
+      console.error("Error deleting expense:", error)
       toaster.create({
         title: "Error",
         description: "Failed to delete expense",
         duration: 5000,
-      });
+      })
     }
-  };
+  }
 
   const startEditing = (expense: Expense) => {
     setEditingExpense({
       ...expense,
-      price: expense.price ? expense.price / 100 : 0 // Convert from cents to dollars
-    });
-  };
+      price: expense.price ? expense.price / 100 : 0, // Convert from cents to dollars
+    })
+  }
 
   if (loading) {
     return (
       <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
         <div className="text-gray-500">Loading...</div>
       </div>
-    );
+    )
   }
 
   return (
@@ -225,9 +243,14 @@ const ExpensesPage = () => {
                   value={editingExpense?.name || newExpense.name}
                   onChange={(e) => {
                     if (editingExpense) {
-                      setEditingExpense(prev => prev ? { ...prev, name: e.target.value } : null);
+                      setEditingExpense((prev) =>
+                        prev ? { ...prev, name: e.target.value } : null,
+                      )
                     } else {
-                      setNewExpense(prev => ({ ...prev, name: e.target.value }));
+                      setNewExpense((prev) => ({
+                        ...prev,
+                        name: e.target.value,
+                      }))
                     }
                   }}
                   placeholder="e.g., School Supplies"
@@ -240,9 +263,16 @@ const ExpensesPage = () => {
                   value={editingExpense?.price || newExpense.price}
                   onChange={(e) => {
                     if (editingExpense) {
-                      setEditingExpense(prev => prev ? { ...prev, price: parseFloat(e.target.value) || 0 } : null);
+                      setEditingExpense((prev) =>
+                        prev
+                          ? { ...prev, price: parseFloat(e.target.value) || 0 }
+                          : null,
+                      )
                     } else {
-                      setNewExpense(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }));
+                      setNewExpense((prev) => ({
+                        ...prev,
+                        price: parseFloat(e.target.value) || 0,
+                      }))
                     }
                   }}
                   placeholder="0.00"
@@ -254,9 +284,14 @@ const ExpensesPage = () => {
                   value={editingExpense?.icon || newExpense.icon}
                   onChange={(e) => {
                     if (editingExpense) {
-                      setEditingExpense(prev => prev ? { ...prev, icon: e.target.value } : null);
+                      setEditingExpense((prev) =>
+                        prev ? { ...prev, icon: e.target.value } : null,
+                      )
                     } else {
-                      setNewExpense(prev => ({ ...prev, icon: e.target.value }));
+                      setNewExpense((prev) => ({
+                        ...prev,
+                        icon: e.target.value,
+                      }))
                     }
                   }}
                   placeholder="e.g., 📚, 🎒"
@@ -268,9 +303,14 @@ const ExpensesPage = () => {
                   value={editingExpense?.description || newExpense.description}
                   onChange={(e) => {
                     if (editingExpense) {
-                      setEditingExpense(prev => prev ? { ...prev, description: e.target.value } : null);
+                      setEditingExpense((prev) =>
+                        prev ? { ...prev, description: e.target.value } : null,
+                      )
                     } else {
-                      setNewExpense(prev => ({ ...prev, description: e.target.value }));
+                      setNewExpense((prev) => ({
+                        ...prev,
+                        description: e.target.value,
+                      }))
                     }
                   }}
                   placeholder="Describe what this expense covers"
@@ -287,9 +327,14 @@ const ExpensesPage = () => {
               </Button>
               <Button
                 onClick={() => {
-                  setShowCreateForm(false);
-                  setEditingExpense(null);
-                  setNewExpense({ name: "", description: "", price: 0, icon: "" });
+                  setShowCreateForm(false)
+                  setEditingExpense(null)
+                  setNewExpense({
+                    name: "",
+                    description: "",
+                    price: 0,
+                    icon: "",
+                  })
                 }}
                 className="bg-gray-500 text-white"
               >
@@ -305,7 +350,9 @@ const ExpensesPage = () => {
             <Box key={expense.id} className="border rounded-lg p-4 bg-white">
               <Box className="flex items-start justify-between mb-3">
                 <Box className="flex items-center gap-2">
-                  {expense.icon && <Text className="text-2xl">{expense.icon}</Text>}
+                  {expense.icon && (
+                    <Text className="text-2xl">{expense.icon}</Text>
+                  )}
                   <Text className="font-semibold text-lg">{expense.name}</Text>
                 </Box>
                 <Box className="flex gap-2">
@@ -338,12 +385,14 @@ const ExpensesPage = () => {
 
         {expenses.length === 0 && (
           <Box className="text-center py-12">
-            <Text className="text-gray-500">No expenses found. Create your first expense to get started.</Text>
+            <Text className="text-gray-500">
+              No expenses found. Create your first expense to get started.
+            </Text>
           </Box>
         )}
       </Box>
     </Box>
-  );
-};
+  )
+}
 
-export default ExpensesPage; 
+export default ExpensesPage

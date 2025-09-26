@@ -1,35 +1,43 @@
-"use client";
+"use client"
 
-import { Button } from "@/components/ui/button";
-import { ColumnDef } from "@tanstack/react-table";
-import { Checkbox } from "@/components/ui/checkbox";
-import { LuArrowUpDown } from "react-icons/lu";
-import { IoCopyOutline } from "react-icons/io5";
-import { Beneficiaries } from "@/types/admin.types";
-import { centsToDollars } from "@/utils/currency";
+import { Button } from "@/components/ui/button"
+import { ColumnDef } from "@tanstack/react-table"
+import { Checkbox } from "@/components/ui/checkbox"
+import { LuArrowUpDown } from "react-icons/lu"
+import { IoCopyOutline } from "react-icons/io5"
+import { Beneficiaries } from "@/types/admin.types"
+import { centsToDollars } from "@/utils/currency"
 
 export const columns: ColumnDef<Beneficiaries>[] = [
   {
     id: "select",
     meta: { excludeFromClick: true },
     header: ({ table }) => {
-      const isAllSelected = table.getIsAllPageRowsSelected();
-      const isSomeSelected = table.getIsSomePageRowsSelected();
+      const isAllSelected = table.getIsAllPageRowsSelected()
+      const isSomeSelected = table.getIsSomePageRowsSelected()
       return (
-        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="flex items-center justify-center"
+          onClick={(e) => e.stopPropagation()}
+        >
           <Checkbox
             key={`header-${isAllSelected}-${isSomeSelected}`}
             className="h-5 w-5 border border-black"
             checked={isAllSelected}
             _indeterminate={isSomeSelected && !isAllSelected ? {} : undefined}
-            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            onCheckedChange={(value) =>
+              table.toggleAllPageRowsSelected(!!value)
+            }
           />
         </div>
-      );
+      )
     },
     cell: ({ row }) => {
       return (
-        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="flex items-center justify-center"
+          onClick={(e) => e.stopPropagation()}
+        >
           <Checkbox
             key={`${row.id}-${row.getIsSelected()}`}
             className="h-5 w-5 border border-black"
@@ -38,7 +46,7 @@ export const columns: ColumnDef<Beneficiaries>[] = [
             aria-label="Select row"
           />
         </div>
-      );
+      )
     },
     enableSorting: false,
     enableHiding: false,
@@ -47,32 +55,32 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     accessorKey: "id",
     meta: { excludeFromClick: true },
     header: ({ column }) => {
-      const meta = column.columnDef.meta as { excludeFromClick?: boolean };
+      const meta = column.columnDef.meta as { excludeFromClick?: boolean }
       if (meta?.excludeFromClick) {
-        return null;
+        return null
       }
       return (
         <Button
           variant="ghost"
-          onClick={() =>
-            column.toggleSorting(column.getIsSorted() === "asc")
-          }
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
           ID
           <LuArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
-      );
+      )
     },
     cell: ({ row }) => {
-      const person = row.original;
+      const person = row.original
       return (
         <div className="flex items-center justify-center" title={person.id}>
           <IoCopyOutline
             className="ml-1 h-4 w-4 cursor-pointer"
-            onClick={() => person.id && navigator.clipboard.writeText(person.id)}
+            onClick={() =>
+              person.id && navigator.clipboard.writeText(person.id)
+            }
           />
         </div>
-      );
+      )
     },
   },
   {
@@ -80,9 +88,7 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
         Name
         <LuArrowUpDown className="ml-2 h-4 w-4" />
@@ -94,9 +100,7 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
         Username
         <LuArrowUpDown className="ml-2 h-4 w-4" />
@@ -108,17 +112,21 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
         Birth Date
         <LuArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
     cell: ({ row }) => {
-      const person = row.original;
-      return <div>{person.birth_date ? new Date(person.birth_date).toLocaleDateString() : '-'}</div>;
+      const person = row.original
+      return (
+        <div>
+          {person.birth_date
+            ? new Date(person.birth_date).toLocaleDateString()
+            : "-"}
+        </div>
+      )
     },
   },
   {
@@ -126,21 +134,15 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
         Biography
         <LuArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
     cell: ({ row }) => {
-      const person = row.original;
-      return (
-        <div className="line-clamp-2">
-          {person.biography}
-        </div>
-      );
+      const person = row.original
+      return <div className="line-clamp-2">{person.biography}</div>
     },
   },
   {
@@ -148,17 +150,15 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
         Introduction
         <LuArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
     cell: ({ row }) => {
-      const person = row.original;
-      return <div className="line-clamp-2">{person.introduction}</div>;
+      const person = row.original
+      return <div className="line-clamp-2">{person.introduction}</div>
     },
   },
   {
@@ -166,17 +166,15 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
         Budget Goal
         <LuArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
     cell: ({ row }) => {
-      const person = row.original;
-      return <div>${centsToDollars(person.budget_goal)}</div>;
+      const person = row.original
+      return <div>${centsToDollars(person.budget_goal)}</div>
     },
   },
   {
@@ -184,17 +182,15 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
         Budget Raised
         <LuArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
     cell: ({ row }) => {
-      const person = row.original;
-      return <div>${centsToDollars(person.budget_raised)}</div>;
+      const person = row.original
+      return <div>${centsToDollars(person.budget_raised)}</div>
     },
   },
   {
@@ -202,9 +198,7 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
         Status
         <LuArrowUpDown className="ml-2 h-4 w-4" />
@@ -216,9 +210,7 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
         Country
         <LuArrowUpDown className="ml-2 h-4 w-4" />
@@ -230,9 +222,7 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
         Location
         <LuArrowUpDown className="ml-2 h-4 w-4" />
@@ -244,13 +234,11 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
         Gender
         <LuArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
   },
-];
+]

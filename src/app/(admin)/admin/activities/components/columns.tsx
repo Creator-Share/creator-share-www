@@ -1,37 +1,33 @@
-"use client";
+"use client"
 
-import { ColumnDef } from "@tanstack/react-table";
-import { Activity } from "@/types/admin.types";
+import { ColumnDef } from "@tanstack/react-table"
+import { Activity } from "@/types/admin.types"
 
-import React from "react";
-import { Button } from "@chakra-ui/react";
+import React from "react"
+import { Button } from "@chakra-ui/react"
 
 export type ActivityActionHandlers = {
-  onEdit: (activity: Activity) => void;
-  onDelete: (activity: Activity) => void;
-};
+  onEdit: (activity: Activity) => void
+  onDelete: (activity: Activity) => void
+}
 
-export function getActivityColumns(handlers: ActivityActionHandlers): ColumnDef<unknown, unknown>[] {
+export function getActivityColumns(
+  handlers: ActivityActionHandlers,
+): ColumnDef<unknown, unknown>[] {
   return [
     {
       accessorKey: "title",
-      header: () => (
-        <span>Title</span>
-      ),
+      header: () => <span>Title</span>,
       cell: ({ row }) => (row.original as Activity).title,
     },
     {
       accessorKey: "description",
-      header: () => (
-        <span>Description</span>
-      ),
+      header: () => <span>Description</span>,
       cell: ({ row }) => (row.original as Activity).description,
     },
     {
       accessorKey: "created_at",
-      header: () => (
-        <span>Created At</span>
-      ),
+      header: () => <span>Created At</span>,
       cell: ({ row }) =>
         new Date((row.original as Activity).created_at).toLocaleString(),
     },
@@ -39,7 +35,10 @@ export function getActivityColumns(handlers: ActivityActionHandlers): ColumnDef<
       id: "actions",
       header: () => <span>Actions</span>,
       cell: ({ row }) => (
-        <div style={{ display: "flex", gap: 8 }} className="text-center justify-center">
+        <div
+          style={{ display: "flex", gap: 8 }}
+          className="text-center justify-center"
+        >
           <Button
             size="xs"
             colorScheme="yellow"
@@ -56,7 +55,7 @@ export function getActivityColumns(handlers: ActivityActionHandlers): ColumnDef<
           </Button>
         </div>
       ),
-      meta: { excludeFromClick: true }
+      meta: { excludeFromClick: true },
     },
-  ];
+  ]
 }

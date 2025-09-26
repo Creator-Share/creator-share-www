@@ -1,18 +1,18 @@
-"use client";
-import React from "react";
-import { Box, Button, Text, Progress, Badge } from "@chakra-ui/react";
-import Image from "next/image";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Beneficiaries } from "@/types/admin.types";
-import { centsToDollars } from "@/utils/currency";
+"use client"
+import React from "react"
+import { Box, Button, Text, Progress, Badge } from "@chakra-ui/react"
+import Image from "next/image"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Beneficiaries } from "@/types/admin.types"
+import { centsToDollars } from "@/utils/currency"
 
 interface BeneficiaryCardProps {
-  beneficiary: Beneficiaries;
-  isSelected: boolean;
-  onSelect: (id: string, checked: boolean) => void;
-  onEdit: (beneficiary: Beneficiaries) => void;
-  beneficiaryImages: Record<string, string>;
-  loadingImages: Record<string, boolean>;
+  beneficiary: Beneficiaries
+  isSelected: boolean
+  onSelect: (id: string, checked: boolean) => void
+  onEdit: (beneficiary: Beneficiaries) => void
+  beneficiaryImages: Record<string, string>
+  loadingImages: Record<string, boolean>
 }
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
@@ -23,9 +23,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiaryImages,
   loadingImages,
 }) => {
-  const goal = Number(beneficiary.budget_goal || 0);
-  const raised = Number(beneficiary.budget_raised || 0);
-  const progress = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
+  const goal = Number(beneficiary.budget_goal || 0)
+  const raised = Number(beneficiary.budget_raised || 0)
+  const progress =
+    goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0
 
   return (
     <Box className="border rounded-xl p-4 bg-white space-y-3 relative">
@@ -63,22 +64,30 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         </Box>
         <Box className="flex-1 flex items-start justify-between">
           <Box>
-            <Text className="text-lg font-semibold leading-6">{beneficiary.name}</Text>
-            <Text className="text-xs text-gray-500">@{beneficiary.username}</Text>
+            <Text className="text-lg font-semibold leading-6">
+              {beneficiary.name}
+            </Text>
+            <Text className="text-xs text-gray-500">
+              @{beneficiary.username}
+            </Text>
           </Box>
           <Badge colorPalette="blue">{beneficiary.status}</Badge>
         </Box>
       </Box>
 
       <Box className="text-sm text-gray-600">
-        <Text>{beneficiary.country}{beneficiary.location_str ? ` • ${beneficiary.location_str}` : ''}</Text>
+        <Text>
+          {beneficiary.country}
+          {beneficiary.location_str ? ` • ${beneficiary.location_str}` : ""}
+        </Text>
       </Box>
 
       <Box className="space-y-1">
         <Box className="flex justify-between text-sm">
           <Text>Raised</Text>
           <Text>
-            ${centsToDollars(beneficiary.budget_raised)} / ${centsToDollars(beneficiary.budget_goal)}
+            ${centsToDollars(beneficiary.budget_raised)} / $
+            {centsToDollars(beneficiary.budget_goal)}
           </Text>
         </Box>
         <Progress.Root value={progress}>
@@ -98,7 +107,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         </Button>
       </Box>
     </Box>
-  );
-};
+  )
+}
 
-export default BeneficiaryCard; 
+export default BeneficiaryCard

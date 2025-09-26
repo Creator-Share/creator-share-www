@@ -160,9 +160,9 @@ This task list includes all files under /src that reference old schema elements 
 
 ## Files and Directories to Rename
 
-- Rename directories and files from "children" to "beneficiaries" in the following paths:  
-  - src/app/api/children → src/app/api/beneficiaries  
-  - src/app/api/admin/children → src/app/api/admin/beneficiaries  
+- Rename directories and files from "children" to "beneficiaries" in the following paths:
+  - src/app/api/children → src/app/api/beneficiaries
+  - src/app/api/admin/children → src/app/api/admin/beneficiaries
   - src/app/(admin)/admin/children → src/app/(admin)/admin/beneficiaries
 
 ---

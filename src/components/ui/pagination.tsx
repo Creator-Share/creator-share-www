@@ -136,30 +136,31 @@ export const PaginationPrevTrigger = React.forwardRef<
   )
 })
 
-export const PaginationNextTrigger = React.forwardRef<HTMLButtonElement, ChakraPagination.NextTriggerProps>(
-  function PaginationNextTrigger(props, ref) {
-    const { size, variantMap, getHref } = useRootProps();
-    const { nextPage } = usePaginationContext();
-    if (getHref) {
-      return (
-        <LinkButton
-          href={nextPage != null ? getHref(nextPage) : undefined}
-          variant={variantMap.default}
-          size={size}
-        >
-          <HiChevronRight />
-        </LinkButton>
-      );
-    }
+export const PaginationNextTrigger = React.forwardRef<
+  HTMLButtonElement,
+  ChakraPagination.NextTriggerProps
+>(function PaginationNextTrigger(props, ref) {
+  const { size, variantMap, getHref } = useRootProps()
+  const { nextPage } = usePaginationContext()
+  if (getHref) {
     return (
-      <ChakraPagination.NextTrigger ref={ref} asChild {...props}>
-        <Button variant={variantMap.default} size={size}>
-          <HiChevronRight />
-        </Button>
-      </ChakraPagination.NextTrigger>
-    );
+      <LinkButton
+        href={nextPage != null ? getHref(nextPage) : undefined}
+        variant={variantMap.default}
+        size={size}
+      >
+        <HiChevronRight />
+      </LinkButton>
+    )
   }
-);
+  return (
+    <ChakraPagination.NextTrigger ref={ref} asChild {...props}>
+      <Button variant={variantMap.default} size={size}>
+        <HiChevronRight />
+      </Button>
+    </ChakraPagination.NextTrigger>
+  )
+})
 
 export const PaginationItems = (props: React.HTMLAttributes<HTMLElement>) => {
   return (
@@ -186,25 +187,27 @@ interface PageTextProps extends TextProps {
   format?: "short" | "compact" | "long"
 }
 
-export const PaginationPageText = React.forwardRef<HTMLParagraphElement, PageTextProps>(
-  function PaginationPageText(props, ref) {
-    const { format = "compact", ...rest } = props;
-    const { page, count /* count here can be total items if needed */ } = usePaginationContext();
-    // Use context values here or use our context (if provided via useRootProps)
-    // For simplicity, assume useChakraPaginationContext returns page and totalPages:
-    const content = React.useMemo(() => {
-      if (format === "short") return `${page} / ${count}`;
-      if (format === "compact") return `${page} of ${count}`;
-      // Otherwise, assume pageRange and count (if available) for long format.
-      return `${page} of ${count}`;
-    }, [format, page, count]);
-    return (
-      <Text fontWeight="medium" ref={ref} {...rest}>
-        {content}
-      </Text>
-    );
-  }
-);
+export const PaginationPageText = React.forwardRef<
+  HTMLParagraphElement,
+  PageTextProps
+>(function PaginationPageText(props, ref) {
+  const { format = "compact", ...rest } = props
+  const { page, count /* count here can be total items if needed */ } =
+    usePaginationContext()
+  // Use context values here or use our context (if provided via useRootProps)
+  // For simplicity, assume useChakraPaginationContext returns page and totalPages:
+  const content = React.useMemo(() => {
+    if (format === "short") return `${page} / ${count}`
+    if (format === "compact") return `${page} of ${count}`
+    // Otherwise, assume pageRange and count (if available) for long format.
+    return `${page} of ${count}`
+  }, [format, page, count])
+  return (
+    <Text fontWeight="medium" ref={ref} {...rest}>
+      {content}
+    </Text>
+  )
+})
 
 interface PaginationProps {
   currentPage: number
@@ -219,15 +222,15 @@ export const Pagination = ({
   totalPages,
   onPageChange,
   variant = "outline",
-  size = "sm"
+  size = "sm",
 }: PaginationProps) => {
   // Adapt onPageChange to accept PageChangeDetails if needed
   const handlePageChange = React.useCallback(
     (details: { page: number }) => {
-      onPageChange(details.page);
+      onPageChange(details.page)
     },
-    [onPageChange]
-  );
+    [onPageChange],
+  )
 
   return (
     <PaginationRoot

@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react"
 import {
   DialogRoot,
   DialogContent,
   DialogHeader,
   DialogBody,
   DialogCloseTrigger,
-} from "@/components/ui/dialog";
+} from "@/components/ui/dialog"
 import {
   FaCalendar,
   FaUser,
@@ -13,15 +13,15 @@ import {
   FaCircleInfo,
   FaLink,
   FaShare,
-} from "react-icons/fa6";
-import { Beneficiaries } from "@/types/index";
+} from "react-icons/fa6"
+import { Beneficiaries } from "@/types/index"
 import {
   fetchActivitiesByBeneficiaryId,
   fetchSponsorshipDetailsByBeneficiaryId,
-} from "@/actions";
-import BeneficiaryActivity from "../SponsorshipActivity";
-import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox";
-import { toaster } from "@/components/ui/toaster";
+} from "@/actions"
+import BeneficiaryActivity from "../SponsorshipActivity"
+import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox"
+import { toaster } from "@/components/ui/toaster"
 import {
   Box,
   Text,
@@ -30,25 +30,25 @@ import {
   Flex,
   Input,
   InputAddon,
-} from "@chakra-ui/react";
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+} from "@chakra-ui/react"
+import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js"
 import {
   SelectRoot,
   SelectTrigger,
   SelectValueText,
   SelectContent,
   SelectItem,
-} from "@/components/ui/select";
-import { useAuthStore } from "@/store/authStore";
-import { paymentOptionsCollection } from "../Payments/config";
-import { Button } from "@/components/ui/button";
-import { BeneficiaryMedia } from "@/types/admin.types";
-import { generatePublicUrl, MediaRow } from "@/utils/supabase/media";
+} from "@/components/ui/select"
+import { useAuthStore } from "@/store/authStore"
+import { paymentOptionsCollection } from "../Payments/config"
+import { Button } from "@/components/ui/button"
+import { BeneficiaryMedia } from "@/types/admin.types"
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 
 interface BeneficiaryActivityModalProps {
-  open: boolean;
-  onClose: () => void;
-  beneficiary: Beneficiaries;
+  open: boolean
+  onClose: () => void
+  beneficiary: Beneficiaries
 }
 
 const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
@@ -56,233 +56,242 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   onClose,
   beneficiary,
 }) => {
-  const [toastCount, setToastCount] = useState(0);
-  const [lastToastTime, setLastToastTime] = useState(0);
-  const user = useAuthStore((state) => state.user);
+  const [toastCount, setToastCount] = useState(0)
+  const [lastToastTime, setLastToastTime] = useState(0)
+  const user = useAuthStore((state) => state.user)
   const remainingAmount =
-    (beneficiary.budget_goal - beneficiary.budget_raised) / 100;
-  const minimumAmount = 10;
+    (beneficiary.budget_goal - beneficiary.budget_raised) / 100
+  const minimumAmount = 10
   const maxSelectableAmount =
     remainingAmount > minimumAmount
       ? remainingAmount - minimumAmount < minimumAmount
         ? remainingAmount
         : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
-      : remainingAmount;
+      : remainingAmount
 
-  const [amount, setAmount] = useState<number>(remainingAmount);
+  const [amount, setAmount] = useState<number>(remainingAmount)
   const [selectedOption, setSelectedOption] = useState<string>(
-    paymentOptionsCollection.items[0].value
-  );
-  const [loading, setLoading] = useState<boolean>(false);
-  const [primaryImageUrl, setPrimaryImageUrl] = useState<string | null>(null);
-  const [videoMediaUrl, setVideoMediaUrl] = useState<string | null>(beneficiary.video_url || null);
+    paymentOptionsCollection.items[0].value,
+  )
+  const [loading, setLoading] = useState<boolean>(false)
+  const [primaryImageUrl, setPrimaryImageUrl] = useState<string | null>(null)
+  const [videoMediaUrl, setVideoMediaUrl] = useState<string | null>(
+    beneficiary.video_url || null,
+  )
 
   const fallbackPlaceholder =
-    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
 
   useEffect(() => {
     async function loadBeneficiaryMedia() {
       if (!beneficiary?.id) {
-        return;
+        return
       }
       try {
-        const res = await fetch(`/api/admin/beneficiaries/images/${beneficiary.id}`);
+        const res = await fetch(
+          `/api/admin/beneficiaries/images/${beneficiary.id}`,
+        )
         if (!res.ok) {
           // fallback to any existing beneficiary.video_url already set in state
-          return;
+          return
         }
-        const media = await res.json();
+        const media = await res.json()
         if (Array.isArray(media) && media.length > 0) {
-          const videos = media.filter((m: BeneficiaryMedia) => m.type === "VIDEO" || m.type === "videos");
+          const videos = media.filter(
+            (m: BeneficiaryMedia) => m.type === "VIDEO" || m.type === "videos",
+          )
           if (videos.length > 0) {
             try {
-              setVideoMediaUrl(generatePublicUrl(videos[0] as unknown as MediaRow));
+              setVideoMediaUrl(
+                generatePublicUrl(videos[0] as unknown as MediaRow),
+              )
             } catch {
               // if generatePublicUrl fails, leave existing beneficiary.video_url (if any)
             }
-            return;
+            return
           }
         }
       } catch (e) {
-        console.error("Failed to load beneficiary media:", e);
+        console.error("Failed to load beneficiary media:", e)
       }
     }
 
-    loadBeneficiaryMedia();
-  }, [beneficiary?.id]);
+    loadBeneficiaryMedia()
+  }, [beneficiary?.id])
 
   // Whether user can proceed with payment given current amount
-  const canPay = remainingAmount < minimumAmount
-    ? amount > 0  // Any amount > 0 is valid when remaining < $10
-    : amount >= minimumAmount;  // Otherwise require minimum $10
+  const canPay =
+    remainingAmount < minimumAmount
+      ? amount > 0 // Any amount > 0 is valid when remaining < $10
+      : amount >= minimumAmount // Otherwise require minimum $10
 
   const getStatusText = (status: string) => {
     switch (status) {
       case "Budget Fulfilled":
-        return "Sponsored";
+        return "Sponsored"
       case "Partially Funded":
-        return "Ongoing";
+        return "Ongoing"
       case "New":
-        return "Not funded";
+        return "Not funded"
       default:
-        return "Not funded";
+        return "Not funded"
     }
-  };
+  }
 
   const handleCopyLink = async () => {
-    const now = Date.now();
+    const now = Date.now()
     if (now - lastToastTime < 2000 || toastCount >= 3) {
-      return;
+      return
     }
 
     try {
-      const profileUrl = `${window.location.origin}/sponsorships/${beneficiary.username}`;
+      const profileUrl = `${window.location.origin}/sponsorships/${beneficiary.username}`
 
-      await navigator.clipboard.writeText(profileUrl);
+      await navigator.clipboard.writeText(profileUrl)
 
-      setToastCount((prev) => prev + 1);
-      setLastToastTime(now);
+      setToastCount((prev) => prev + 1)
+      setLastToastTime(now)
 
       toaster.create({
         title: "Link Copied!",
         description: "Profile link has been copied to clipboard",
         duration: 3000,
-      });
+      })
     } catch (err) {
-      console.error("Failed to copy link:", err);
-      const textArea = document.createElement("textarea");
-      const profileUrl = `${window.location.origin}/sponsorships/${beneficiary.username}`;
-      textArea.value = profileUrl;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textArea);
+      console.error("Failed to copy link:", err)
+      const textArea = document.createElement("textarea")
+      const profileUrl = `${window.location.origin}/sponsorships/${beneficiary.username}`
+      textArea.value = profileUrl
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand("copy")
+      document.body.removeChild(textArea)
 
-      setToastCount((prev) => prev + 1);
-      setLastToastTime(now);
+      setToastCount((prev) => prev + 1)
+      setLastToastTime(now)
 
       toaster.create({
         title: "Link Copied!",
         description: "Profile link has been copied to clipboard",
         duration: 3000,
-      });
+      })
     }
-  };
+  }
 
   const handleShareProfile = async () => {
-    const profileUrl = `${window.location.origin}/sponsorships/${beneficiary.username}`;
-    const shareText = `Check out ${beneficiary.name}'s profile on Creator Share. Help make a difference in their life!`;
+    const profileUrl = `${window.location.origin}/sponsorships/${beneficiary.username}`
+    const shareText = `Check out ${beneficiary.name}'s profile on Creator Share. Help make a difference in their life!`
     if (navigator.share) {
       try {
         await navigator.share({
           title: `${beneficiary.name} - Creator Share`,
           text: shareText,
           url: profileUrl,
-        });
+        })
 
         toaster.create({
           title: "Shared Successfully!",
           description: "Profile has been shared",
           duration: 3000,
-        });
+        })
       } catch (error) {
         if (error instanceof Error && error.name !== "AbortError") {
-          console.error("Share failed:", error);
+          console.error("Share failed:", error)
           toaster.create({
             title: "Share Failed",
             description:
               "Unable to share profile. Please try copying the link instead.",
             duration: 3000,
-          });
+          })
         }
       }
     } else {
       try {
-        await navigator.clipboard.writeText(`${shareText}\n\n${profileUrl}`);
+        await navigator.clipboard.writeText(`${shareText}\n\n${profileUrl}`)
         toaster.create({
           title: "Link Copied!",
           description: "Profile link and description copied to clipboard",
           duration: 3000,
-        });
+        })
       } catch {
-        const textArea = document.createElement("textarea");
-        textArea.value = `${shareText}\n\n${profileUrl}`;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textArea);
+        const textArea = document.createElement("textarea")
+        textArea.value = `${shareText}\n\n${profileUrl}`
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand("copy")
+        document.body.removeChild(textArea)
 
         toaster.create({
           title: "Link Copied!",
           description: "Profile link and description copied to clipboard",
           duration: 3000,
-        });
+        })
       }
     }
-  };
+  }
 
   useEffect(() => {
     if (!open) {
       // Clear all transient state when closing so next open starts fresh
-      setToastCount(0);
-      setLastToastTime(0);
-      setPrimaryImageUrl(null);
+      setToastCount(0)
+      setLastToastTime(0)
+      setPrimaryImageUrl(null)
       // Reset amount controls back to current beneficiary's defaults
-      setAmount(remainingAmount);
-      setSelectedOption(paymentOptionsCollection.items[0].value);
-      setLoading(false);
+      setAmount(remainingAmount)
+      setSelectedOption(paymentOptionsCollection.items[0].value)
+      setLoading(false)
     }
-  }, [open, remainingAmount]);
+  }, [open, remainingAmount])
 
   // Also clear image when switching beneficiaries to avoid flashing old image
   useEffect(() => {
-    setPrimaryImageUrl(null);
-  }, [beneficiary.id]);
+    setPrimaryImageUrl(null)
+  }, [beneficiary.id])
 
   useEffect(() => {
-    if (!open) return;
-    setLoading(true);
+    if (!open) return
+    setLoading(true)
     const fetchData = async () => {
       try {
-        await fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id);
-        await fetchActivitiesByBeneficiaryId(beneficiary.id);
+        await fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id)
+        await fetchActivitiesByBeneficiaryId(beneficiary.id)
         // Fetch primary image
         try {
           const res = await fetch(
-            `/api/admin/beneficiaries/images/${beneficiary.id}`
-          );
+            `/api/admin/beneficiaries/images/${beneficiary.id}`,
+          )
           if (res.ok) {
-            const data: BeneficiaryMedia[] = await res.json();
+            const data: BeneficiaryMedia[] = await res.json()
             const sorted = Array.isArray(data)
               ? data.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
-              : [];
-            setPrimaryImageUrl(sorted[0]?.image_url || null);
+              : []
+            setPrimaryImageUrl(sorted[0]?.image_url || null)
           } else {
-            setPrimaryImageUrl(null);
+            setPrimaryImageUrl(null)
           }
         } catch {
-          setPrimaryImageUrl(null);
+          setPrimaryImageUrl(null)
         }
       } catch {}
-      setLoading(false);
-    };
-    fetchData();
-  }, [open, beneficiary.id]);
+      setLoading(false)
+    }
+    fetchData()
+  }, [open, beneficiary.id])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputValue = e.target.value;
+    const inputValue = e.target.value
     if (inputValue === "") {
-      setAmount(0);
-      return;
+      setAmount(0)
+      return
     }
-    let newValue = parseInt(inputValue) || 0;
-    newValue = Math.min(newValue, remainingAmount);
-    setAmount(newValue);
-  };
+    let newValue = parseInt(inputValue) || 0
+    newValue = Math.min(newValue, remainingAmount)
+    setAmount(newValue)
+  }
 
   const handleSelectChange = (value: string) => {
-    setSelectedOption(value);
-  };
+    setSelectedOption(value)
+  }
 
   const handleStripePayment = async () => {
     if (!canPay) {
@@ -292,18 +301,18 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           remainingAmount < minimumAmount
             ? `Please enter an amount greater than $0 to complete the sponsorship.`
             : `Minimum sponsorship amount is $${minimumAmount}.`,
-      });
-      return;
+      })
+      return
     }
     if (amount > remainingAmount) {
       toaster.create({
         title: "Invalid Amount",
         description: "Amount exceeds the remaining budget needed.",
-      });
-      return;
+      })
+      return
     }
 
-    setLoading(true);
+    setLoading(true)
     try {
       const payload = {
         beneficiaryId: beneficiary.id,
@@ -320,51 +329,51 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           remainingAmount < minimumAmount && amount === remainingAmount,
         email: user?.email || undefined,
         type: "sponsorship",
-      };
+      }
 
       const res = await fetch("/api/stripe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
-      const data = await res.json();
+      })
+      const data = await res.json()
 
       if (!res.ok) {
         toaster.create({
           title: "Payment Error",
           description: data?.error || "Something went wrong. Please try again.",
-        });
-        return;
+        })
+        return
       }
 
-      const { clientSecret, url } = data;
+      const { clientSecret, url } = data
       if (window.self !== window.top) {
         if (clientSecret)
-          window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}`;
-        else if (url) window.location.href = url;
+          window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}`
+        else if (url) window.location.href = url
         else
           toaster.create({
             title: "Payment Error",
             description: "No checkout information returned. Please try again.",
-          });
+          })
       } else {
-        if (url) window.location.href = url;
+        if (url) window.location.href = url
         else
           toaster.create({
             title: "Payment Error",
             description: "No checkout URL returned. Please try again.",
-          });
+          })
       }
     } catch (err) {
       toaster.create({
         title: "Payment Error",
         description: "Something went wrong. Please try again.",
-      });
-      console.error("Payment Error:", err);
+      })
+      console.error("Payment Error:", err)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleCreateOrder = async (
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -373,12 +382,12 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       order: {
         create: (options: {
           purchase_units: Array<{
-            description: string;
-            amount: { value: string; currency_code: string };
-          }>;
-        }) => Promise<string>;
-      };
-    }
+            description: string
+            amount: { value: string; currency_code: string }
+          }>
+        }) => Promise<string>
+      }
+    },
   ) => {
     if (!canPay) {
       toaster.create({
@@ -387,12 +396,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           remainingAmount < minimumAmount
             ? `Please enter an amount greater than $0 to complete the sponsorship.`
             : `Minimum amount is $${minimumAmount}.`,
-      });
-      throw new Error("Invalid amount");
+      })
+      throw new Error("Invalid amount")
     }
 
     // When remaining amount is less than minimum, use the exact remaining amount
-    const paymentAmount = remainingAmount < minimumAmount ? remainingAmount : amount;
+    const paymentAmount =
+      remainingAmount < minimumAmount ? remainingAmount : amount
 
     return actions.order.create({
       purchase_units: [
@@ -403,8 +413,8 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           amount: { value: paymentAmount.toFixed(2), currency_code: "USD" },
         },
       ],
-    });
-  };
+    })
+  }
 
   const handlePayPalApproval = async (data: { orderID: string }) => {
     try {
@@ -423,13 +433,13 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             interval_count: 1,
             currency_code: "USD",
           }),
-        });
-        const planData = await planRes.json();
+        })
+        const planData = await planRes.json()
         if (!planRes.ok)
           throw new Error(
-            planData.error?.message || "Failed to create/get PayPal plan"
-          );
-        const plan_id = planData.plan.id;
+            planData.error?.message || "Failed to create/get PayPal plan",
+          )
+        const plan_id = planData.plan.id
 
         const subRes = await fetch("/api/paypal", {
           method: "POST",
@@ -440,22 +450,22 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             subscriber_email: user?.email,
             subscriber_name: user?.email || "",
           }),
-        });
-        const subData = await subRes.json();
+        })
+        const subData = await subRes.json()
         if (!subRes.ok)
           throw new Error(
-            subData.error?.message || "Failed to create PayPal subscription"
-          );
+            subData.error?.message || "Failed to create PayPal subscription",
+          )
 
-        type PayPalLink = { rel?: string; href?: string };
+        type PayPalLink = { rel?: string; href?: string }
         const approvalUrl = subData.subscription?.links?.find(
-          (l: PayPalLink) => l.rel === "approve"
-        )?.href;
+          (l: PayPalLink) => l.rel === "approve",
+        )?.href
         if (approvalUrl) {
-          window.location.href = approvalUrl;
-          return;
+          window.location.href = approvalUrl
+          return
         }
-        throw new Error("No approval link returned from PayPal");
+        throw new Error("No approval link returned from PayPal")
       }
 
       // One-time legacy flow
@@ -472,44 +482,44 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           email: user?.email,
           orderID: data.orderID,
         }),
-      });
+      })
 
-      const responseText = await response.text();
-      const responseData = JSON.parse(responseText);
+      const responseText = await response.text()
+      const responseData = JSON.parse(responseText)
 
       if (!response.ok) {
-        console.error("PayPal error response:", responseData);
-        throw new Error(responseData.error || "Failed to process payment");
+        console.error("PayPal error response:", responseData)
+        throw new Error(responseData.error || "Failed to process payment")
       }
 
       toaster.create({
         title: "Success",
         description: "Your payment has been processed successfully!",
-      });
-      window.location.href = `/payments/success?order_id=${data.orderID}`;
+      })
+      window.location.href = `/payments/success?order_id=${data.orderID}`
     } catch (error) {
-      const err = error as Error;
-      console.error("PayPal Error:", error);
+      const err = error as Error
+      console.error("PayPal Error:", error)
       toaster.create({
         title: "Payment Error",
         description:
           err.message || "Failed to process payment. Please try again.",
-      });
-      window.location.href = "/payments/failed";
+      })
+      window.location.href = "/payments/failed"
     }
-  };
+  }
 
   const handlePayPalError = (err: Error) => {
-    console.error("PayPal Error:", err);
+    console.error("PayPal Error:", err)
     toaster.create({
       title: "Payment Error",
       description: "Something went wrong with PayPal. Please try again.",
-    });
-  };
+    })
+  }
 
   const renderDisclaimer = () => {
     const monthlyAmount =
-      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount;
+      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
     if (
       beneficiary.budget_goal - beneficiary.budget_raised - amount * 100 >
       0
@@ -528,7 +538,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           <br />
           Additional sponsors are required to meet this goal.
         </>
-      );
+      )
     } else if (beneficiary.budget_raised > 0) {
       return (
         <>
@@ -542,7 +552,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             </>
           )}
         </>
-      );
+      )
     }
     return (
       <>
@@ -556,14 +566,14 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           </>
         )}
       </>
-    );
-  };
+    )
+  }
 
   return (
     <DialogRoot
       open={open}
       onOpenChange={(details) => {
-        if (!details.open) onClose();
+        if (!details.open) onClose()
       }}
     >
       <DialogContent className="max-w-[400px] md:min-w-[1000px] md:max-w-[1000px] w-full relative rounded-2xl">
@@ -614,7 +624,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                     {beneficiary.birth_date
                       ? new Date(beneficiary.birth_date).toLocaleDateString(
                           "en-GB",
-                          { day: "numeric", month: "long", year: "numeric" }
+                          { day: "numeric", month: "long", year: "numeric" },
                         )
                       : "DOB"}
                   </Text>
@@ -640,7 +650,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                       ? Math.round(
                           (beneficiary.budget_raised /
                             beneficiary.budget_goal) *
-                            100
+                            100,
                         )
                       : 0}
                     %
@@ -656,7 +666,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                               (beneficiary.budget_raised /
                                 beneficiary.budget_goal) *
                                 100,
-                              100
+                              100,
                             )
                           : 0
                       }%`,
@@ -666,7 +676,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 <Text className="text-sm text-[#52667A] font-normal">
                   {`$${((beneficiary.budget_raised || 0) / 100).toLocaleString(
                     undefined,
-                    { maximumFractionDigits: 0 }
+                    { maximumFractionDigits: 0 },
                   )} of $${(
                     (beneficiary.budget_goal || 0) / 100
                   ).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
@@ -680,25 +690,25 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   </Text>
 
                   {remainingAmount < minimumAmount ? (
-                      <Box>
-                        <Flex
-                          className="border rounded-xl"
-                          align="center"
-                          justify="center"
-                          gap={2}
-                        >
-                          <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">
-                            $
-                          </InputAddon>
-                          <Input
-                            type="number"
-                            value={remainingAmount}
-                            readOnly
-                            className="px-4 h-[50px] bg-gray-100"
-                            placeholder="Enter Amount"
-                          />
-                        </Flex>
-                      </Box>
+                    <Box>
+                      <Flex
+                        className="border rounded-xl"
+                        align="center"
+                        justify="center"
+                        gap={2}
+                      >
+                        <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">
+                          $
+                        </InputAddon>
+                        <Input
+                          type="number"
+                          value={remainingAmount}
+                          readOnly
+                          className="px-4 h-[50px] bg-gray-100"
+                          placeholder="Enter Amount"
+                        />
+                      </Flex>
+                    </Box>
                   ) : (
                     <>
                       <Flex
@@ -871,7 +881,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         </DialogBody>
       </DialogContent>
     </DialogRoot>
-  );
-};
+  )
+}
 
-export default BeneficiaryActivityModal;
+export default BeneficiaryActivityModal

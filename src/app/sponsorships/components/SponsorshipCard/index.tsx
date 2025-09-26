@@ -1,14 +1,14 @@
-"use client";
-import React, { useState, useEffect } from "react";
-import { Box, Text, Flex, Badge } from "@chakra-ui/react";
-import { FaCalendar } from "react-icons/fa";
-import { FaLocationDot, FaPerson } from "react-icons/fa6";
-import { calculateAge } from "@/utils/ageCalculator";
-import { BeneficiaryCardProps } from "@/types/propTypes";
-import Image from "next/image";
-import { BeneficiaryMedia } from "@/types/admin.types";
-import { centsToDollars } from "@/utils/currency";
-import { generatePublicUrl, MediaRow } from "@/utils/supabase/media";
+"use client"
+import React, { useState, useEffect } from "react"
+import { Box, Text, Flex, Badge } from "@chakra-ui/react"
+import { FaCalendar } from "react-icons/fa"
+import { FaLocationDot, FaPerson } from "react-icons/fa6"
+import { calculateAge } from "@/utils/ageCalculator"
+import { BeneficiaryCardProps } from "@/types/propTypes"
+import Image from "next/image"
+import { BeneficiaryMedia } from "@/types/admin.types"
+import { centsToDollars } from "@/utils/currency"
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -17,36 +17,36 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   onOpenDialog,
   beneficiaryType = "CHILD",
 }) => {
-  const [images, setImages] = useState<BeneficiaryMedia[]>([]);
+  const [images, setImages] = useState<BeneficiaryMedia[]>([])
 
   const placeholderImage =
-    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=";
+    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
 
   useEffect(() => {
     const fetchImages = async () => {
       try {
         const response = await fetch(
-          `/api/admin/beneficiaries/images/${beneficiary.id}`
-        );
+          `/api/admin/beneficiaries/images/${beneficiary.id}`,
+        )
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json()
           setImages(
             data.sort(
               (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
-                a.order_index - b.order_index
-            )
-          );
+                a.order_index - b.order_index,
+            ),
+          )
         }
       } catch (error) {
-        console.error("Error fetching images:", error);
+        console.error("Error fetching images:", error)
       }
-    };
+    }
 
-    fetchImages();
-  }, [beneficiary.id, beneficiaryType]);
+    fetchImages()
+  }, [beneficiary.id, beneficiaryType])
 
   // Primary content
-  const age = calculateAge(new Date(beneficiary.birth_date).toISOString());
+  const age = calculateAge(new Date(beneficiary.birth_date).toISOString())
   // onOpen handled by parent via prop
 
   return (
@@ -73,7 +73,13 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       {/* Card Header: Image with Target Badge */}
       <Box position="relative" flexShrink={0}>
         <Image
-          src={images.length > 0 ? (images[0].id ? generatePublicUrl(images[0] as unknown as MediaRow) : images[0].image_url) : placeholderImage}
+          src={
+            images.length > 0
+              ? images[0].id
+                ? generatePublicUrl(images[0] as unknown as MediaRow)
+                : images[0].image_url
+              : placeholderImage
+          }
           alt={beneficiary.name?.split(" ")[0] ?? ""}
           width={500}
           height={500}
@@ -148,7 +154,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       </Box>
       {/* Card click will be handled by parent via onOpenDialog prop. */}
     </Box>
-  );
-};
+  )
+}
 
-export default BeneficiaryCard;
+export default BeneficiaryCard

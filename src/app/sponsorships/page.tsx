@@ -1,9 +1,9 @@
-"use client";
+"use client"
 
-import React, { useEffect, useState, useRef } from "react";
-import { Box, Flex, Text } from "@chakra-ui/react";
-import dynamic from "next/dynamic";
-import { Beneficiaries } from "@/types";
+import React, { useEffect, useState, useRef } from "react"
+import { Box, Flex, Text } from "@chakra-ui/react"
+import dynamic from "next/dynamic"
+import { Beneficiaries } from "@/types"
 // import { FaCaretDown, FaCaretUp, FaCompass } from "react-icons/fa";
 
 // Map temporarily disabled from UI; keeping dynamic import commented for future multi-location rollout.
@@ -14,39 +14,39 @@ import { Beneficiaries } from "@/types";
 //   ),
 // });
 
-const Filters = dynamic(() => import("./components/Filters"));
-const ChildListings = dynamic(() => import("./components/SponsorshipListings"));
+const Filters = dynamic(() => import("./components/Filters"))
+const ChildListings = dynamic(() => import("./components/SponsorshipListings"))
 const ChildListingsSkeleton = dynamic(() =>
   import("./components/SponsorshipListings/Skeleton").then(
-    (mod) => mod.ChildListingsSkeleton
-  )
-);
+    (mod) => mod.ChildListingsSkeleton,
+  ),
+)
 
 interface Filters {
-  gender: string;
-  ageRange: [number, number];
-  status: string[];
+  gender: string
+  ageRange: [number, number]
+  status: string[]
 }
 
 const SponsorChild = () => {
   // const [L, setL] = useState<typeof import("leaflet") | null>(null);
-  const [currentBounds] = useState<L.LatLngBounds | undefined>(undefined);
-  const [childrenData, setChildrenData] = useState<Beneficiaries[]>([]);
-  const [selectedCountry] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [currentBounds] = useState<L.LatLngBounds | undefined>(undefined)
+  const [childrenData, setChildrenData] = useState<Beneficiaries[]>([])
+  const [selectedCountry] = useState<string | null>(null)
+  const [loading, setLoading] = useState<boolean>(true)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null)
   const [filters, setFilters] = useState<Filters>({
     gender: "",
     ageRange: [0, 14],
     status: ["New", "Partially Funded"],
-  });
+  })
   // Map visibility/state no longer needed with toolbar layout
   // const [showMap, setShowMap] = useState<boolean>(true);
   // const [isMapSticky] = useState(false);
-  const listingsRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<HTMLDivElement>(null);
-  const childListingsRef = useRef<HTMLDivElement>(null);
+  const listingsRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<HTMLDivElement>(null)
+  const childListingsRef = useRef<HTMLDivElement>(null)
   // const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Leaflet is unused while map is disabled
@@ -57,88 +57,86 @@ const SponsorChild = () => {
 
   const handleFilterChange = React.useCallback(
     (newFilters: Partial<Filters>) => {
-      setFilters((prev) => ({ ...prev, ...newFilters }));
+      setFilters((prev) => ({ ...prev, ...newFilters }))
     },
-    []
-  );
+    [],
+  )
 
   const fetchChildren = React.useCallback(async (filters: Filters) => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
 
     try {
-      let endpoint = "/api/beneficiaries/get";
-      const queryParams = new URLSearchParams();
+      let endpoint = "/api/beneficiaries/get"
+      const queryParams = new URLSearchParams()
       if (
         filters.gender ||
         (filters.ageRange &&
           (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)) ||
         filters.status.length > 0
       ) {
-        endpoint = "/api/beneficiaries/getByAgeAndGender";
-        if (filters.gender) queryParams.append("gender", filters.gender);
+        endpoint = "/api/beneficiaries/getByAgeAndGender"
+        if (filters.gender) queryParams.append("gender", filters.gender)
         if (
           filters.ageRange &&
           (filters.ageRange[0] > 0 || filters.ageRange[1] < 14)
         ) {
-          queryParams.append("ageRange", filters.ageRange.join(","));
+          queryParams.append("ageRange", filters.ageRange.join(","))
         }
         if (filters.status.length > 0) {
-          queryParams.append("status", filters.status.join(","));
+          queryParams.append("status", filters.status.join(","))
         }
       }
 
-      const res = await fetch(`${endpoint}?${queryParams.toString()}`);
-      if (!res.ok) throw new Error("Failed to fetch children data");
+      const res = await fetch(`${endpoint}?${queryParams.toString()}`)
+      if (!res.ok) throw new Error("Failed to fetch children data")
 
-      const data = await res.json();
-      setChildrenData(data.people || []);
+      const data = await res.json()
+      setChildrenData(data.people || [])
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Unexpected error occurred"
-      );
+      setError(err instanceof Error ? err.message : "Unexpected error occurred")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    fetchChildren(filters);
-  }, [fetchChildren, filters]);
+    fetchChildren(filters)
+  }, [fetchChildren, filters])
 
   // Map handlers kept for future map re-enable but currently unused
 
   const sendHeight = React.useCallback(() => {
-    if (window.self === window.top) return;
+    if (window.self === window.top) return
 
     try {
       requestAnimationFrame(() => {
         const height = Math.max(
           document.documentElement.offsetHeight,
-          document.documentElement.scrollHeight
-        );
+          document.documentElement.scrollHeight,
+        )
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const parentOrigin = urlParams.get("parentOrigin") || "*";
+        const urlParams = new URLSearchParams(window.location.search)
+        const parentOrigin = urlParams.get("parentOrigin") || "*"
 
         window.parent.postMessage(
           {
             type: "resize",
             height: height,
           },
-          parentOrigin
-        );
-      });
+          parentOrigin,
+        )
+      })
     } catch (error) {
-      console.error("[Child Frame] Error sending height:", error);
+      console.error("[Child Frame] Error sending height:", error)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (window.self === window.top) return;
+    if (window.self === window.top) return
 
-    let resizeObserver: ResizeObserver | null = null;
-    let resizeTimeout: NodeJS.Timeout | null = null;
+    let resizeObserver: ResizeObserver | null = null
+    let resizeTimeout: NodeJS.Timeout | null = null
 
     try {
       const handleMessage = (event: MessageEvent) => {
@@ -147,41 +145,41 @@ const SponsorChild = () => {
           !event.origin.includes("share-tanzania.webflow.io") &&
           !event.origin.includes("localhost:3000")
         ) {
-          return;
+          return
         }
 
         if (event.data?.type === "requestHeight") {
-          sendHeight();
+          sendHeight()
         }
-      };
+      }
 
-      window.addEventListener("message", handleMessage);
+      window.addEventListener("message", handleMessage)
 
       const debouncedSendHeight = () => {
-        if (resizeTimeout) clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(sendHeight, 100);
-      };
+        if (resizeTimeout) clearTimeout(resizeTimeout)
+        resizeTimeout = setTimeout(sendHeight, 100)
+      }
 
-      const observer = new ResizeObserver(debouncedSendHeight);
-      resizeObserver = observer;
+      const observer = new ResizeObserver(debouncedSendHeight)
+      resizeObserver = observer
 
-      observer.observe(document.documentElement);
+      observer.observe(document.documentElement)
 
-      window.addEventListener("load", sendHeight);
-      setTimeout(sendHeight, 100);
-      setTimeout(sendHeight, 500);
-      setTimeout(sendHeight, 1000);
+      window.addEventListener("load", sendHeight)
+      setTimeout(sendHeight, 100)
+      setTimeout(sendHeight, 500)
+      setTimeout(sendHeight, 1000)
 
       return () => {
-        window.removeEventListener("message", handleMessage);
-        window.removeEventListener("load", sendHeight);
-        if (resizeObserver) resizeObserver.disconnect();
-        if (resizeTimeout) clearTimeout(resizeTimeout);
-      };
+        window.removeEventListener("message", handleMessage)
+        window.removeEventListener("load", sendHeight)
+        if (resizeObserver) resizeObserver.disconnect()
+        if (resizeTimeout) clearTimeout(resizeTimeout)
+      }
     } catch (error) {
-      console.error("[Child Frame] Error setting up resize handling:", error);
+      console.error("[Child Frame] Error setting up resize handling:", error)
     }
-  }, [sendHeight]);
+  }, [sendHeight])
 
   return (
     <Box className="px-6 py-6 md:px-12 md:py-12">
@@ -289,7 +287,7 @@ const SponsorChild = () => {
         </div>
       </Box>
     </Box>
-  );
-};
+  )
+}
 
-export default React.memo(SponsorChild);
+export default React.memo(SponsorChild)

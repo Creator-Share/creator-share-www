@@ -1,24 +1,24 @@
-import React, { useState } from "react";
-import { Button, Input, Textarea } from "@chakra-ui/react";
-import { Activity } from "@/types/admin.types";
+import React, { useState } from "react"
+import { Button, Input, Textarea } from "@chakra-ui/react"
+import { Activity } from "@/types/admin.types"
 import {
   FileUploadRoot,
   FileUploadTrigger,
   FileUploadList,
-} from "@/components/ui/file-upload";
-import { HiUpload } from "react-icons/hi";
+} from "@/components/ui/file-upload"
+import { HiUpload } from "react-icons/hi"
 
 interface CreateModalProps {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  description: string;
-  beneficiaryId: string;
-  onTitleChange: (v: string) => void;
-  onDescriptionChange: (v: string) => void;
-  onCreate: (formData: FormData) => void;
-  creating: boolean;
-  error: string | null;
+  open: boolean
+  onClose: () => void
+  title: string
+  description: string
+  beneficiaryId: string
+  onTitleChange: (v: string) => void
+  onDescriptionChange: (v: string) => void
+  onCreate: (formData: FormData) => void
+  creating: boolean
+  error: string | null
 }
 
 export const CreateActivityModal: React.FC<CreateModalProps> = ({
@@ -33,18 +33,18 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   creating,
   error,
 }) => {
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [videoFiles, setVideoFiles] = useState<File[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([])
+  const [videoFiles, setVideoFiles] = useState<File[]>([])
 
   const handleCreate = () => {
-    const formData = new FormData();
-    formData.append("title", title);
-    formData.append("description", description);
-    formData.append("beneficiary_id", beneficiaryId);
-    imageFiles.forEach((file) => formData.append("images", file));
-    videoFiles.forEach((file) => formData.append("videos", file));
-    onCreate(formData);
-  };
+    const formData = new FormData()
+    formData.append("title", title)
+    formData.append("description", description)
+    formData.append("beneficiary_id", beneficiaryId)
+    imageFiles.forEach((file) => formData.append("images", file))
+    videoFiles.forEach((file) => formData.append("videos", file))
+    onCreate(formData)
+  }
 
   return open ? (
     <div
@@ -71,7 +71,9 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           boxShadow: "0 2px 16px rgba(0,0,0,0.2)",
         }}
       >
-        <div style={{ fontWeight: "bold", fontSize: "1.125rem", marginBottom: 16 }}>
+        <div
+          style={{ fontWeight: "bold", fontSize: "1.125rem", marginBottom: 16 }}
+        >
           Create Activity
         </div>
         <Input
@@ -93,7 +95,9 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload Images</label>
           <FileUploadRoot
-            onFileChange={(fileDetails) => setImageFiles(fileDetails.acceptedFiles)}
+            onFileChange={(fileDetails) =>
+              setImageFiles(fileDetails.acceptedFiles)
+            }
             accept={["image/*"]}
             maxFiles={5}
           >
@@ -108,7 +112,9 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload Videos</label>
           <FileUploadRoot
-            onFileChange={(fileDetails) => setVideoFiles(fileDetails.acceptedFiles)}
+            onFileChange={(fileDetails) =>
+              setVideoFiles(fileDetails.acceptedFiles)
+            }
             accept={["video/*"]}
             maxFiles={5}
           >
@@ -121,8 +127,14 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           </FileUploadRoot>
         </div>
         {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-          <Button onClick={onClose} style={{ marginRight: 12 }} disabled={creating}>
+        <div
+          style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}
+        >
+          <Button
+            onClick={onClose}
+            style={{ marginRight: 12 }}
+            disabled={creating}
+          >
             Cancel
           </Button>
           <Button
@@ -135,19 +147,19 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         </div>
       </div>
     </div>
-  ) : null;
-};
+  ) : null
+}
 
 interface EditModalProps {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  description: string;
-  onTitleChange: (v: string) => void;
-  onDescriptionChange: (v: string) => void;
-  onSave: () => void;
-  saving: boolean;
-  error: string | null;
+  open: boolean
+  onClose: () => void
+  title: string
+  description: string
+  onTitleChange: (v: string) => void
+  onDescriptionChange: (v: string) => void
+  onSave: () => void
+  saving: boolean
+  error: string | null
 }
 
 export const EditActivityModal: React.FC<EditModalProps> = ({
@@ -186,7 +198,9 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
           boxShadow: "0 2px 16px rgba(0,0,0,0.2)",
         }}
       >
-        <div style={{ fontWeight: "bold", fontSize: "1.125rem", marginBottom: 16 }}>
+        <div
+          style={{ fontWeight: "bold", fontSize: "1.125rem", marginBottom: 16 }}
+        >
           Edit Activity
         </div>
         <Input
@@ -206,7 +220,9 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
           className="border border-stone-600"
         />
         {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+        <div
+          style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}
+        >
           <Button
             onClick={onClose}
             style={{ marginRight: 12 }}
@@ -224,15 +240,15 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
         </div>
       </div>
     </div>
-  ) : null;
+  ) : null
 
 interface DeleteModalProps {
-  open: boolean;
-  onClose: () => void;
-  activity: Activity | null;
-  onDelete: () => void;
-  deleting: boolean;
-  error: string | null;
+  open: boolean
+  onClose: () => void
+  activity: Activity | null
+  onDelete: () => void
+  deleting: boolean
+  error: string | null
 }
 
 export const DeleteActivityModal: React.FC<DeleteModalProps> = ({
@@ -268,14 +284,18 @@ export const DeleteActivityModal: React.FC<DeleteModalProps> = ({
           boxShadow: "0 2px 16px rgba(0,0,0,0.2)",
         }}
       >
-        <div style={{ fontWeight: "bold", fontSize: "1.125rem", marginBottom: 16 }}>
+        <div
+          style={{ fontWeight: "bold", fontSize: "1.125rem", marginBottom: 16 }}
+        >
           Delete Activity
         </div>
         <div style={{ marginBottom: 16 }}>
           Are you sure you want to delete the activity <b>{activity.title}</b>?
         </div>
         {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+        <div
+          style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}
+        >
           <Button
             onClick={onClose}
             style={{ marginRight: 12 }}
@@ -283,14 +303,10 @@ export const DeleteActivityModal: React.FC<DeleteModalProps> = ({
           >
             Cancel
           </Button>
-          <Button
-            colorScheme="red"
-            onClick={onDelete}
-            disabled={deleting}
-          >
+          <Button colorScheme="red" onClick={onDelete} disabled={deleting}>
             Delete
           </Button>
         </div>
       </div>
     </div>
-  ) : null;
+  ) : null

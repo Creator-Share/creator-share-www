@@ -1,20 +1,20 @@
-"use client";
+"use client"
 
-import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import dynamic from "next/dynamic"
+import { useEffect, useState } from "react"
 
 const PageNavbar = dynamic(
   () => import("./PageNavbar").then((mod) => mod.PageNavbar),
-  { ssr: false }
-);
+  { ssr: false },
+)
 
 export function PageWrapper({ children }: { children: React.ReactNode }) {
-  const [isEmbedded, setIsEmbedded] = useState(false);
+  const [isEmbedded, setIsEmbedded] = useState(false)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setIsEmbedded(params.get("embedded") === "true");
-  }, []);
+    const params = new URLSearchParams(window.location.search)
+    setIsEmbedded(params.get("embedded") === "true")
+  }, [])
 
   return (
     <>
@@ -23,5 +23,5 @@ export function PageWrapper({ children }: { children: React.ReactNode }) {
         {children}
       </div>
     </>
-  );
+  )
 }

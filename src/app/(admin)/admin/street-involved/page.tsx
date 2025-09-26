@@ -1,18 +1,18 @@
-"use client";
-import React, { useEffect, useRef, useState } from "react";
-import { DataTable } from "@/components/admin-ui/Tables/data-table";
-import { ColumnDef, Row } from "@tanstack/react-table";
-import { columns } from "./columns";
-import dynamic from "next/dynamic";
+"use client"
+import React, { useEffect, useRef, useState } from "react"
+import { DataTable } from "@/components/admin-ui/Tables/data-table"
+import { ColumnDef, Row } from "@tanstack/react-table"
+import { columns } from "./columns"
+import dynamic from "next/dynamic"
 // import BulkUploadDrawer from "./components/BulkUploadDrawer";
-import { Box, Button, Text } from "@chakra-ui/react";
-import { MdDeleteOutline } from "react-icons/md";
-import { toaster } from "@/components/ui/toaster";
-import DeleteDialog from "./components/DeleteDialog";
-import { useBeneficiaryStore } from "@/store/beneficiaryStore";
-import { Beneficiaries, BeneficiaryType } from "@/types/admin.types";
-import { dollarsToCents } from "@/utils/currency";
-import GoBackButton from "@/components/ui/goBack";
+import { Box, Button, Text } from "@chakra-ui/react"
+import { MdDeleteOutline } from "react-icons/md"
+import { toaster } from "@/components/ui/toaster"
+import DeleteDialog from "./components/DeleteDialog"
+import { useBeneficiaryStore } from "@/store/beneficiaryStore"
+import { Beneficiaries, BeneficiaryType } from "@/types/admin.types"
+import { dollarsToCents } from "@/utils/currency"
+import GoBackButton from "@/components/ui/goBack"
 
 const initialFormData: Partial<Beneficiaries> = {
   name: "",
@@ -30,16 +30,20 @@ const initialFormData: Partial<Beneficiaries> = {
   introduction: "",
   active_subscriptions: 0,
   metadata: {},
-  beneficiary_type: "STREET_INVOLVED" as BeneficiaryType
-};
+  beneficiary_type: "STREET_INVOLVED" as BeneficiaryType,
+}
 
-const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), { ssr: false });
-const EditDrawer = dynamic(() => import("./components/EditDrawer"), { ssr: false });
+const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), {
+  ssr: false,
+})
+const EditDrawer = dynamic(() => import("./components/EditDrawer"), {
+  ssr: false,
+})
 
 type TableInstance = {
-  getSelectedRowModel: () => { rows: Row<Beneficiaries>[] };
-  getTableInstance: () => { toggleAllRowsSelected: (value: boolean) => void };
-};
+  getSelectedRowModel: () => { rows: Row<Beneficiaries>[] }
+  getTableInstance: () => { toggleAllRowsSelected: (value: boolean) => void }
+}
 
 const StreetInvolvedTable = () => {
   const {
@@ -62,139 +66,166 @@ const StreetInvolvedTable = () => {
     updateBeneficiary,
     deleteBeneficiary,
     bulkDelete,
-  } = useBeneficiaryStore();
+  } = useBeneficiaryStore()
 
-  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
-  const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
+  const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
   // const [isBulkUploadDrawerOpen, setIsBulkUploadDrawerOpen] = useState(false);
-  const [selectedCount, setSelectedCount] = useState(0);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const tableRef = useRef<TableInstance | null>(null);
+  const [selectedCount, setSelectedCount] = useState(0)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const tableRef = useRef<TableInstance | null>(null)
 
   useEffect(() => {
-    fetchBeneficiaries("STREET_INVOLVED");
-  }, [fetchBeneficiaries]);
+    fetchBeneficiaries("STREET_INVOLVED")
+  }, [fetchBeneficiaries])
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    const { name, value } = e.target
     // Convert budget_goal to number if it's the budget field
-    const processedValue = name === 'budget_goal' ? parseFloat(value) || 0 : value;
-    setFormData({ ...formData, [name]: processedValue });
-  };
+    const processedValue =
+      name === "budget_goal" ? parseFloat(value) || 0 : value
+    setFormData({ ...formData, [name]: processedValue })
+  }
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData({ ...formData, [name]: value });
-  };
+    setFormData({ ...formData, [name]: value })
+  }
 
-  const handleLocationSelect = (geo: [number, number] | null, locationStr: string, country: string) => {
+  const handleLocationSelect = (
+    geo: [number, number] | null,
+    locationStr: string,
+    country: string,
+  ) => {
     setFormData({
       ...formData,
-      location_geo: geo ? { type: "Point", coordinates: [geo[1], geo[0]] } : null,
+      location_geo: geo
+        ? { type: "Point", coordinates: [geo[1], geo[0]] }
+        : null,
       location_str: locationStr,
       country,
-    });
-  };
+    })
+  }
 
   const handleSubmit = async (): Promise<boolean> => {
     // Ensure all required fields are present before submitting
-    if (!formData.name || !formData.username || !formData.gender || !formData.birth_date || 
-        !formData.biography || !formData.introduction || !formData.country || 
-        !formData.location_str) {
+    if (
+      !formData.name ||
+      !formData.username ||
+      !formData.gender ||
+      !formData.birth_date ||
+      !formData.biography ||
+      !formData.introduction ||
+      !formData.country ||
+      !formData.location_str
+    ) {
       toaster.create({
         title: "Error",
         description: "Please fill in all required fields",
         duration: 5000,
-      });
-      return false;
+      })
+      return false
     }
 
     // Convert budget_goal to cents before submission
     const formDataWithCents = {
       ...formData,
-      budget_goal: parseInt(dollarsToCents(formData.budget_goal || 0))
-    };
-    const success = await createBeneficiary("STREET_INVOLVED", formDataWithCents, imageFiles, videoFiles);
+      budget_goal: parseInt(dollarsToCents(formData.budget_goal || 0)),
+    }
+    const success = await createBeneficiary(
+      "STREET_INVOLVED",
+      formDataWithCents,
+      imageFiles,
+      videoFiles,
+    )
     if (success) {
-      setIsCreateDrawerOpen(false);
+      setIsCreateDrawerOpen(false)
       toaster.create({
         title: "Success",
         description: "Street Involved beneficiary created successfully.",
         duration: 5000,
-      });
-      return true;
+      })
+      return true
     } else {
       toaster.create({
         title: "Error",
         description: "Failed to create beneficiary",
         duration: 5000,
-      });
-      return false;
+      })
+      return false
     }
-  };
+  }
 
   const handleSave = async (updated: Partial<Beneficiaries>) => {
-    await updateBeneficiary("STREET_INVOLVED", updated);
-    setIsEditDrawerOpen(false);
+    await updateBeneficiary("STREET_INVOLVED", updated)
+    setIsEditDrawerOpen(false)
     toaster.create({
       title: "Success",
       description: "Street Involved beneficiary updated successfully.",
       duration: 5000,
-    });
-  };
+    })
+  }
 
   const handleBulkDelete = () => {
-    if (!tableRef.current) return;
-    const selectedRowModel = tableRef.current.getSelectedRowModel();
-    const selectedRows = selectedRowModel.rows;
+    if (!tableRef.current) return
+    const selectedRowModel = tableRef.current.getSelectedRowModel()
+    const selectedRows = selectedRowModel.rows
     if (selectedRows.length === 0) {
       toaster.create({
         title: "No Selection",
         description: "No rows selected for deletion.",
         duration: 5000,
-      });
-      return;
+      })
+      return
     }
-    setSelectedRowsForDeletion(selectedRows.map((row) => row.original));
-    setIsDeleteDialogOpen(true);
-  };
+    setSelectedRowsForDeletion(selectedRows.map((row) => row.original))
+    setIsDeleteDialogOpen(true)
+  }
 
   const confirmDelete = async () => {
-    const beneficiaryIds = selectedRowsForDeletion.map((b) => b.id).filter((id): id is string => typeof id === "string");
-    await bulkDelete("STREET_INVOLVED", beneficiaryIds);
+    const beneficiaryIds = selectedRowsForDeletion
+      .map((b) => b.id)
+      .filter((id): id is string => typeof id === "string")
+    await bulkDelete("STREET_INVOLVED", beneficiaryIds)
     if (tableRef.current) {
-      tableRef.current.getTableInstance().toggleAllRowsSelected(false);
+      tableRef.current.getTableInstance().toggleAllRowsSelected(false)
     }
-    setSelectedCount(0);
-    setSelectedRowsForDeletion([]);
-    setIsDeleteDialogOpen(false);
+    setSelectedCount(0)
+    setSelectedRowsForDeletion([])
+    setIsDeleteDialogOpen(false)
     toaster.create({
       title: "Success",
       description: "Selected beneficiaries deleted successfully.",
       duration: 5000,
-    });
-  };
+    })
+  }
 
   const handleDelete = async (beneficiaryId: string) => {
-    await deleteBeneficiary("STREET_INVOLVED", beneficiaryId);
-    setIsEditDrawerOpen(false);
+    await deleteBeneficiary("STREET_INVOLVED", beneficiaryId)
+    setIsEditDrawerOpen(false)
     toaster.create({
       title: "Success",
       description: "Street Involved beneficiary deleted successfully.",
       duration: 5000,
-    });
-  };
+    })
+  }
 
   if (loading) {
-    return <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
-      <div className="text-gray-500">Loading...</div>
-    </div>;
+    return (
+      <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    )
   }
 
   return (
     <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
       <GoBackButton />
       <Box className="grid grid-cols-2 mb-2">
-        <Text className="text-3xl font-semibold leading-9">Manage Street Involved</Text>
+        <Text className="text-3xl font-semibold leading-9">
+          Manage Street Involved
+        </Text>
         <Box className="justify-self-end flex gap-3">
           <CreateDrawer
             formData={formData as Partial<Beneficiaries>}
@@ -231,8 +262,12 @@ const StreetInvolvedTable = () => {
             }}
           /> */}
           {selectedCount > 0 && (
-            <Button onClick={handleBulkDelete} className="border-[2px] border-[#E0E0E0] bg-red-500 text-white w-fit h-[40px] px-4">
-              <MdDeleteOutline className="mr-[3.5px]" /> Bulk Delete ({selectedCount})
+            <Button
+              onClick={handleBulkDelete}
+              className="border-[2px] border-[#E0E0E0] bg-red-500 text-white w-fit h-[40px] px-4"
+            >
+              <MdDeleteOutline className="mr-[3.5px]" /> Bulk Delete (
+              {selectedCount})
             </Button>
           )}
         </Box>
@@ -246,8 +281,8 @@ const StreetInvolvedTable = () => {
           setSelectedCount(Object.keys(rowSelection).length)
         }
         onRowClick={(data: unknown) => {
-          setSelectedBeneficiary(data as Beneficiaries);
-          setIsEditDrawerOpen(true);
+          setSelectedBeneficiary(data as Beneficiaries)
+          setIsEditDrawerOpen(true)
         }}
       />
       {isEditDrawerOpen && selectedBeneficiary && (
@@ -284,7 +319,7 @@ const StreetInvolvedTable = () => {
         itemCount={selectedRowsForDeletion.length}
       />
     </Box>
-  );
-};
+  )
+}
 
-export default StreetInvolvedTable;
+export default StreetInvolvedTable

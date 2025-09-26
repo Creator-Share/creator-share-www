@@ -1,5 +1,5 @@
-"use client";
-import { useEffect, useState } from "react";
+"use client"
+import { useEffect, useState } from "react"
 import {
   Box,
   Flex,
@@ -9,12 +9,12 @@ import {
   VStack,
   Menu,
   Portal,
-} from "@chakra-ui/react";
-import NextLink from "next/link";
-import { useAuthStore } from "@/store/authStore";
-import { usePathname, useRouter } from "next/navigation";
-import { GiHamburgerMenu } from "react-icons/gi";
-import { IoClose } from "react-icons/io5";
+} from "@chakra-ui/react"
+import NextLink from "next/link"
+import { useAuthStore } from "@/store/authStore"
+import { usePathname, useRouter } from "next/navigation"
+import { GiHamburgerMenu } from "react-icons/gi"
+import { IoClose } from "react-icons/io5"
 
 const Links = [
   { name: "Home", href: "/" },
@@ -29,54 +29,54 @@ const Links = [
   // { name: "Street Involved", href: "/street-involved" },
   // { name: "Child Laborers", href: "/child-labor" },
   // { name: "I-Frame Test", href: "/iframe-test" },
-];
+]
 
 export function PageNavbar() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
-  const fetchUser = useAuthStore((state) => state.fetchUser);
-  const router = useRouter();
-  const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isOpen, setIsOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const user = useAuthStore((state) => state.user)
+  const logout = useAuthStore((state) => state.logout)
+  const fetchUser = useAuthStore((state) => state.fetchUser)
+  const router = useRouter()
+  const pathname = usePathname()
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
-    setMounted(true);
-    fetchUser();
-  }, [fetchUser]);
+    setMounted(true)
+    fetchUser()
+  }, [fetchUser])
 
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (user?.id) {
-        const response = await fetch("/api/auth/check-admin");
-        const { isAdmin } = await response.json();
-        setIsAdmin(isAdmin);
+        const response = await fetch("/api/auth/check-admin")
+        const { isAdmin } = await response.json()
+        setIsAdmin(isAdmin)
       }
-    };
-    checkAdminStatus();
-  }, [user]);
+    }
+    checkAdminStatus()
+  }, [user])
 
   useEffect(() => {
     if (isOpen) {
-      document.body.classList.add("overflow-hidden");
+      document.body.classList.add("overflow-hidden")
     } else {
-      document.body.classList.remove("overflow-hidden");
+      document.body.classList.remove("overflow-hidden")
     }
-  }, [isOpen]);
+  }, [isOpen])
 
   // Close menu on route change
   useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
+    setIsOpen(false)
+  }, [pathname])
 
   const handleLogout = async () => {
-    setIsOpen(false);
-    await logout();
-    router.push("/");
-  };
+    setIsOpen(false)
+    await logout()
+    router.push("/")
+  }
 
-  if (!mounted) return null;
+  if (!mounted) return null
 
   return (
     <Box className="w-full z-[1000] bg-[#FFFFFF]">
@@ -96,7 +96,7 @@ export function PageNavbar() {
         {/* Desktop Menu */}
         <Flex as="nav" gap={4} display={{ base: "none", md: "flex" }}>
           {Links.map((link) => {
-            const isActive = pathname === link.href;
+            const isActive = pathname === link.href
             return (
               <Link
                 as={NextLink}
@@ -129,7 +129,7 @@ export function PageNavbar() {
               >
                 {link.name}
               </Link>
-            );
+            )
           })}
         </Flex>
 
@@ -149,7 +149,7 @@ export function PageNavbar() {
                       <Menu.Item
                         value="admin"
                         onClick={() => {
-                          router.push("/admin");
+                          router.push("/admin")
                         }}
                       >
                         Admin Dashboard
@@ -158,7 +158,7 @@ export function PageNavbar() {
                     <Menu.Item
                       value="user-dashboard"
                       onClick={() => {
-                        router.push("/app");
+                        router.push("/app")
                       }}
                     >
                       User Dashboard
@@ -166,7 +166,7 @@ export function PageNavbar() {
                     <Menu.Item
                       value="logout"
                       onClick={() => {
-                        handleLogout();
+                        handleLogout()
                       }}
                     >
                       Logout
@@ -215,7 +215,7 @@ export function PageNavbar() {
         >
           <VStack gap={4} py={6}>
             {Links.map((link) => {
-              const isActive = pathname === link.href;
+              const isActive = pathname === link.href
               return (
                 <Link
                   as={NextLink}
@@ -246,7 +246,7 @@ export function PageNavbar() {
                 >
                   {link.name}
                 </Link>
-              );
+              )
             })}
             {user ? (
               <>
@@ -289,5 +289,5 @@ export function PageNavbar() {
         </Box>
       )}
     </Box>
-  );
+  )
 }

@@ -1,19 +1,19 @@
-"use client";
+"use client"
 
-import { IoMdArrowDropdown } from "react-icons/io";
-import { RxMixerHorizontal } from "react-icons/rx";
-import { Table } from "@tanstack/react-table";
-import { Button } from "@/components/ui/button";
+import { IoMdArrowDropdown } from "react-icons/io"
+import { RxMixerHorizontal } from "react-icons/rx"
+import { Table } from "@tanstack/react-table"
+import { Button } from "@/components/ui/button"
 import {
   MenuRoot,
   MenuTrigger,
   MenuContent,
   MenuSeparator,
   MenuCheckboxItem,
-} from "@/components/ui/menu";
+} from "@/components/ui/menu"
 
 interface DataTableViewOptionsProps<TData> {
-  table: Table<TData>;
+  table: Table<TData>
 }
 
 export function DataTableViewOptions<TData>({
@@ -22,7 +22,11 @@ export function DataTableViewOptions<TData>({
   return (
     <MenuRoot>
       <MenuTrigger asChild>
-        <Button variant="outline" size="sm" className="ml-auto hidden h-8 lg:flex">
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto hidden h-8 lg:flex"
+        >
           <RxMixerHorizontal className="mr-2 h-4 w-4" />
           View
           <IoMdArrowDropdown className="ml-1 h-4 w-4" />
@@ -37,14 +41,16 @@ export function DataTableViewOptions<TData>({
           .getAllColumns()
           .filter(
             (column) =>
-              typeof column.accessorFn !== "undefined" && column.getCanHide()
+              typeof column.accessorFn !== "undefined" && column.getCanHide(),
           )
           .map((column) => (
             <MenuCheckboxItem
               key={column.id}
               className="capitalize"
               checked={column.getIsVisible()}
-              onCheckedChange={(value: boolean) => column.toggleVisibility(!!value)}
+              onCheckedChange={(value: boolean) =>
+                column.toggleVisibility(!!value)
+              }
               value={column.id}
             >
               {column.id}
@@ -52,5 +58,5 @@ export function DataTableViewOptions<TData>({
           ))}
       </MenuContent>
     </MenuRoot>
-  );
+  )
 }

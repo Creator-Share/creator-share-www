@@ -1,6 +1,6 @@
-"use client";
+"use client"
 
-import * as React from "react";
+import * as React from "react"
 import {
   ColumnDef,
   SortingState,
@@ -13,7 +13,7 @@ import {
   useReactTable,
   VisibilityState,
   Row,
-} from "@tanstack/react-table";
+} from "@tanstack/react-table"
 import {
   Table,
   TableBody,
@@ -21,34 +21,34 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { DataTablePagination } from "./DataTablePagination";
-import { DataTableViewOptions } from "./column-toggle";
+} from "@/components/ui/table"
+import { DataTablePagination } from "./DataTablePagination"
+import { DataTableViewOptions } from "./column-toggle"
 // import { Input } from "@chakra-ui/react";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 declare module "@tanstack/table-core" {
   interface ColumnMeta<TData, TValue> {
-    excludeFromClick?: boolean;
+    excludeFromClick?: boolean
   }
 }
 /* eslint-enable @typescript-eslint/no-unused-vars */
 
 interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[];
-  data: TData[];
-  controls?: "top" | "bottom";
-  searchable?: boolean;
-  onRowClick?: (data: TData, column: ColumnDef<TData, TValue>) => void;
-  tableHeight?: string;
-  className?: string;
-  getRowProps?: (row: Row<TData>) => React.HTMLAttributes<HTMLTableRowElement>;
-  initialColumnVisibility?: VisibilityState;
-  onRowSelectionChange?: (rowSelection: Record<string, unknown>) => void;
+  columns: ColumnDef<TData, TValue>[]
+  data: TData[]
+  controls?: "top" | "bottom"
+  searchable?: boolean
+  onRowClick?: (data: TData, column: ColumnDef<TData, TValue>) => void
+  tableHeight?: string
+  className?: string
+  getRowProps?: (row: Row<TData>) => React.HTMLAttributes<HTMLTableRowElement>
+  initialColumnVisibility?: VisibilityState
+  onRowSelectionChange?: (rowSelection: Record<string, unknown>) => void
 }
 // const excludeFromFiltering = ["select", "actions", "id"];
 // const renderFilterInput = (id: string) => !excludeFromFiltering.includes(id);
-const DEFAULT_TABLE_HEIGHT = "h-[80vh]";
+const DEFAULT_TABLE_HEIGHT = "h-[80vh]"
 
 export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
   {
@@ -61,18 +61,21 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
     initialColumnVisibility = {},
     onRowSelectionChange,
   }: DataTableProps<TData, TValue>,
-  ref: React.Ref<unknown>
+  ref: React.Ref<unknown>,
 ) {
-  const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(initialColumnVisibility);
-  const [rowSelection, setRowSelection] = React.useState({});
+  const [sorting, setSorting] = React.useState<SortingState>([])
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
+    [],
+  )
+  const [columnVisibility, setColumnVisibility] =
+    React.useState<VisibilityState>(initialColumnVisibility)
+  const [rowSelection, setRowSelection] = React.useState({})
 
   React.useEffect(() => {
     if (onRowSelectionChange) {
-      onRowSelectionChange(rowSelection);
+      onRowSelectionChange(rowSelection)
     }
-  }, [rowSelection, onRowSelectionChange]);
+  }, [rowSelection, onRowSelectionChange])
 
   const table = useReactTable({
     data,
@@ -95,13 +98,12 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
       columnVisibility: initialColumnVisibility,
       pagination: { pageSize: 10 },
     },
-  });
-
+  })
 
   React.useImperativeHandle(ref, () => ({
     getTableInstance: () => table,
     getSelectedRowModel: () => table.getSelectedRowModel(),
-  }));
+  }))
 
   return (
     <div className="flex flex-col h-full">
@@ -111,16 +113,24 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
           <DataTableViewOptions table={table} />
         </div>
       )}
-      <div className={`rounded-xl border mt-3 h-full overflow-auto ${tableHeight}`}>
+      <div
+        className={`rounded-xl border mt-3 h-full overflow-auto ${tableHeight}`}
+      >
         <Table>
           <TableHeader className="bg-[#E5EEFB]">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} className="text-center text-[#727D79] px-6 py-3">
+                  <TableHead
+                    key={header.id}
+                    className="text-center text-[#727D79] px-6 py-3"
+                  >
                     {header.isPlaceholder
                       ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
                     {/* {renderFilterInput(header.id) && (
                       <div className="flex justify-center items-center w-full py-4">
                         <Input
@@ -153,23 +163,29 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
                     <TableCell
                       key={cell.id}
                       onClick={() => {
-                        const columnDef = cell.column.columnDef;
+                        const columnDef = cell.column.columnDef
                         if (columnDef.meta?.excludeFromClick && onRowClick) {
-                          return;
+                          return
                         }
                         if (onRowClick) {
-                          onRowClick(row.original, columnDef);
+                          onRowClick(row.original, columnDef)
                         }
                       }}
                     >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
                   No results.
                 </TableCell>
               </TableRow>
@@ -184,5 +200,5 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
         </div>
       )}
     </div>
-  );
-});
+  )
+})
