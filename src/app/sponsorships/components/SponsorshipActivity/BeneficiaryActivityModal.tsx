@@ -61,7 +61,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   const [toastCount, setToastCount] = useState(0)
   const [lastToastTime, setLastToastTime] = useState(0)
   const user = useAuthStore((state) => state.user)
-  // If a public hardcoded amount is configured, use it as the effective goal.
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
   const publicHardcodedCents = publicHardcodedRaw
     ? parseInt(publicHardcodedRaw, 10)
@@ -81,7 +80,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
       : remainingAmount
 
-  // If public hardcoded is present, default amount to the hardcoded total (in dollars)
   const publicHardcodedDollars =
     publicHardcodedCents !== null ? publicHardcodedCents / 100 : null
   const [amount, setAmount] = useState<number>(
@@ -91,89 +89,88 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     paymentOptionsCollection.items[0].value,
   )
   const [loading, setLoading] = useState<boolean>(false)
-  const [, setPrimaryImageUrl] = useState<string | null>(null)
-  const [videoMediaUrl, setVideoMediaUrl] = useState<string | null>(
-    beneficiary.video_url || null,
-  )
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [, setDataLoaded] = useState(false)
-  const [beneficiaryData, setBeneficiaryData] = useState<Record<string, {
-    primaryImageUrl: string | null
-    images: BeneficiaryMedia[]
-    dataLoaded: boolean
-  }>>({})
-
-  // Add image loading state
   const [imageLoading, setImageLoading] = useState<boolean>(false)
 
-  const fallbackPlaceholder =
-    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+  const [, setPrimaryImageUrl] = useState<string | null>(null)
 
-  // Update the loadBeneficiaryMedia function to properly handle no images case
-  useEffect(() => {
-    async function loadBeneficiaryMedia() {
-      if (!beneficiary?.id) {
-        return
-      }
-      
-      // Clear images first
-      setImages([])
-      setCurrentImageIndex(0)
-      
-      try {
-        const res = await fetch(
-          `/api/admin/beneficiaries/images/${beneficiary.id}`,
-        )
-        if (!res.ok) {
-          // No images found, use fallback
-          setImages([])
-          return
-        }
-        const media = await res.json()
-        if (Array.isArray(media) && media.length > 0) {
-          // Set images for carousel
-          const sortedImages = media
-            .filter((m: BeneficiaryMedia) => m.type === "IMAGE" || m.type === "images")
-            .sort((a: BeneficiaryMedia, b: BeneficiaryMedia) => (a.order_index ?? 0) - (b.order_index ?? 0))
-          setImages(sortedImages)
-          
-          // Your existing video logic remains the same
-          const videos = media.filter(
-            (m: BeneficiaryMedia) => m.type === "VIDEO" || m.type === "videos",
-          )
-          if (videos.length > 0) {
-            try {
-              setVideoMediaUrl(
-                generatePublicUrl(videos[0] as unknown as MediaRow),
-              )
-            } catch {
-              // if generatePublicUrl fails, leave existing beneficiary.video_url (if any)
-            }
-            return
+  const loadImages = async (beneficiaryId: string) => {
+    setImageLoading(true)
+    try {
+      const res = await fetch(`/api/admin/beneficiaries/images/${beneficiaryId}`)
+      if (res.ok) {
+        const data: BeneficiaryMedia[] = await res.json()
+        const sortedImages = data
+          ?.filter((m: BeneficiaryMedia) => m.type === "IMAGE" || m.type === "images")
+          ?.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)) || []
+        
+        setImages(sortedImages)
+        
+        if (sortedImages.length > 0) {
+          try {
+            setPrimaryImageUrl(generatePublicUrl(sortedImages[0] as unknown as MediaRow))
+          } catch {
+            setPrimaryImageUrl(sortedImages[0]?.image_url || null)
           }
         } else {
-          // No media found, clear images
-          setImages([])
+          setPrimaryImageUrl(null)
         }
-      } catch (e) {
-        console.error("Failed to load beneficiary media:", e)
-        setImages([])
+      }
+    } catch (error) {
+      console.error("Failed to load images:", error)
+      setImages([])
+      setPrimaryImageUrl(null)
+    } finally {
+      setImageLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!open || !beneficiary.id) return
+    
+    fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id)
+    fetchActivitiesByBeneficiaryId(beneficiary.id)
+    loadImages(beneficiary.id)
+  }, [open, beneficiary.id])
+
+  const getValidImageUrl = (url: string | null | undefined): string => {
+    const fallback = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+    
+    if (!url || typeof url !== 'string' || url.trim() === '') {
+      return fallback
+    }
+    
+    return url.trim()
+  }
+
+  const getImageSrc = () => {
+    if (images.length > 0) {
+      const currentImage = images[currentImageIndex]
+      if (currentImage) {
+        let imageUrl = ""
+        
+        if (currentImage.id) {
+          try {
+            imageUrl = generatePublicUrl(currentImage as unknown as MediaRow)
+          } catch {
+            imageUrl = currentImage.image_url || ""
+          }
+        } else {
+          imageUrl = currentImage.image_url || ""
+        }
+        
+        return getValidImageUrl(imageUrl)
       }
     }
+    
+    return getValidImageUrl(beneficiary.image_url)
+  }
 
-    loadBeneficiaryMedia()
-  }, [beneficiary?.id])
-
-  // Disable payments when goal already satisfied.
-  // Some client-side Beneficiaries typings don't include goal_fulfilled_at, so
-  // use status or compare raised vs effective goal instead.
   const alreadyFulfilled =
     beneficiary.status === "Budget Fulfilled" ||
     effectiveGoalCents <= (beneficiary.budget_raised || 0)
 
-  // Whether user can proceed with payment given current amount.
-  // If public hardcoded amount is set, require the user amount to exactly match that value.
   const canPay =
     process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL ||
     (!alreadyFulfilled &&
@@ -290,110 +287,20 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 
   useEffect(() => {
     if (!open) {
-      // Clear all transient state when closing so next open starts fresh
       setToastCount(0)
       setLastToastTime(0)
       setPrimaryImageUrl(null)
-      // Reset amount controls back to current beneficiary's defaults
       setAmount(remainingAmount)
       setSelectedOption(paymentOptionsCollection.items[0].value)
       setLoading(false)
     }
   }, [open, remainingAmount])
 
-  // Also clear image when switching beneficiaries to avoid flashing old image
   useEffect(() => {
     setPrimaryImageUrl(null)
   }, [beneficiary.id])
 
-  // Update the main useEffect to load data silently
-  useEffect(() => {
-    if (!open || !beneficiary.id) return
-    
-    // Check if we already have data for this beneficiary
-    const existingData = beneficiaryData[beneficiary.id]
-    if (existingData?.dataLoaded) {
-      // Data already exists, just set it
-      setPrimaryImageUrl(existingData.primaryImageUrl)
-      setImages(existingData.images)
-      return
-    }
-    
-    // Set image loading to true when starting to fetch
-    setImageLoading(true)
-    
-    const fetchData = async () => {
-      try {
-        await fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id)
-        await fetchActivitiesByBeneficiaryId(beneficiary.id)
-        
-        // Fetch images
-        try {
-          const res = await fetch(
-            `/api/admin/beneficiaries/images/${beneficiary.id}`,
-          )
-          if (res.ok) {
-            const data: BeneficiaryMedia[] = await res.json()
-            const sortedImages = Array.isArray(data)
-              ? data
-                  .filter((m: BeneficiaryMedia) => m.type === "IMAGE" || m.type === "images")
-                  .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
-              : []
-            
-            let primaryUrl = null
-            if (sortedImages.length > 0) {
-              try {
-                primaryUrl = generatePublicUrl(sortedImages[0] as unknown as MediaRow)
-              } catch {
-                primaryUrl = sortedImages[0]?.image_url || null
-              }
-            }
-            
-            // Cache the data for this beneficiary
-            setBeneficiaryData(prev => ({
-              ...prev,
-              [beneficiary.id]: {
-                primaryImageUrl: primaryUrl,
-                images: sortedImages,
-                dataLoaded: true
-              }
-            }))
-            
-            setPrimaryImageUrl(primaryUrl)
-            setImages(sortedImages)
-          } else {
-            setPrimaryImageUrl(null)
-            setImages([])
-          }
-        } catch {
-          setPrimaryImageUrl(null)
-          setImages([])
-        }
-      } catch {}
-      setImageLoading(false)
-    }
-    
-    fetchData()
-  }, [open, beneficiary.id, beneficiaryData])
-
-  // Clear cache when modal closes to free memory
-  useEffect(() => {
-    if (!open) {
-      // Optionally clear cache after a delay to free memory
-      // setTimeout(() => {
-      //   setBeneficiaryData({})
-      //   setLoadedBeneficiaries(new Set())
-      // }, 5000)
-    }
-  }, [open])
-
-  // Reset dataLoaded when beneficiary changes
-  useEffect(() => {
-    setDataLoaded(false)
-  }, [beneficiary.id])
-
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Ignore changes when public hardcoded amount is active (all-or-nothing)
     if (publicHardcodedDollars !== null) return
 
     const inputValue = e.target.value
@@ -743,13 +650,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   </div>
                 )}
                 <Image
-                  src={
-                    images.length > 0
-                      ? images[currentImageIndex]?.id
-                        ? generatePublicUrl(images[currentImageIndex] as unknown as MediaRow)
-                        : images[currentImageIndex]?.image_url
-                      : beneficiary.image_url || fallbackPlaceholder
-                  }
+                  src={getImageSrc()}
                   alt={beneficiary.name || "Child"}
                   width={500}
                   height={405}
@@ -757,10 +658,9 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   style={{ objectFit: "cover", objectPosition: "center 20%" }}
                 />
                 
-                {/* Navigation Arrows - Only show if there are multiple images */}
+                {/* Navigation arrows and dots */}
                 {images.length > 1 && (
                   <>
-                    {/* Previous Button */}
                     <IconButton
                       aria-label="Previous image"
                       size="sm"
@@ -780,7 +680,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                       <LuChevronLeft />
                     </IconButton>
                     
-                    {/* Next Button */}
                     <IconButton
                       aria-label="Next image"
                       size="sm"
@@ -1087,15 +986,15 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 mt={4}
                 className="flex justify-center items-center md:min-h-[191px] mb-2"
               >
-                {videoMediaUrl && videoMediaUrl.trim() !== "" ? (
+                {beneficiary.video_url?.trim() !== "" ? (
                   <video
                     className="rounded-xl max-h-40 w-full"
-                    src={videoMediaUrl}
+                    src={beneficiary.video_url?.trim() || undefined}
                     controls
                   />
                 ) : (
                   <Text className="text-center text-gray-500">
-                    No Media Available
+                    No videos available
                   </Text>
                 )}
               </Box>
