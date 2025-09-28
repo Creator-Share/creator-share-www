@@ -25,7 +25,6 @@ import { toaster } from "@/components/ui/toaster"
 import {
   Box,
   Text,
-  Image,
   Spinner,
   Flex,
   Input,
@@ -44,8 +43,7 @@ import { paymentOptionsCollection } from "../Payments/config"
 import { Button } from "@/components/ui/button"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
-import { LuChevronLeft, LuChevronRight } from "react-icons/lu"
-import { IconButton } from "@chakra-ui/react"
+import { ImageCarousel } from "@/components/common/ImageCarousel"
 
 interface BeneficiaryActivityModalProps {
   open: boolean
@@ -90,7 +88,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   )
   const [loading, setLoading] = useState<boolean>(false)
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [imageLoading, setImageLoading] = useState<boolean>(false)
 
   const [, setPrimaryImageUrl] = useState<string | null>(null)
@@ -134,38 +131,19 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     loadImages(beneficiary.id)
   }, [open, beneficiary.id])
 
-  const getValidImageUrl = (url: string | null | undefined): string => {
-    const fallback = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
-    
-    if (!url || typeof url !== 'string' || url.trim() === '') {
-      return fallback
-    }
-    
-    return url.trim()
-  }
-
-  const getImageSrc = () => {
-    if (images.length > 0) {
-      const currentImage = images[currentImageIndex]
-      if (currentImage) {
-        let imageUrl = ""
-        
-        if (currentImage.id) {
-          try {
-            imageUrl = generatePublicUrl(currentImage as unknown as MediaRow)
-          } catch {
-            imageUrl = currentImage.image_url || ""
-          }
-        } else {
-          imageUrl = currentImage.image_url || ""
-        }
-        
-        return getValidImageUrl(imageUrl)
+  // Helper function for ImageCarousel
+  const getImageSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generatePublicUrl(image as unknown as MediaRow)
+      } catch {
+        return image.image_url || ""
       }
     }
-    
-    return getValidImageUrl(beneficiary.image_url)
+    return image.image_url || ""
   }
+
+  const fallbackImageSrc = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
 
   const alreadyFulfilled =
     beneficiary.status === "Budget Fulfilled" ||
@@ -402,7 +380,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   }
 
   const handleCreateOrder = async (
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _data: Record<string, unknown>,
     actions: {
       order: {
@@ -426,9 +403,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       throw new Error("Invalid amount")
     }
 
-    // When remaining amount is less than minimum, use the exact remaining amount
-    const paymentAmount =
-      remainingAmount < minimumAmount ? remainingAmount : amount
+    const paymentAmount = remainingAmount < minimumAmount ? remainingAmount : amount
 
     return actions.order.create({
       purchase_units: [
@@ -544,21 +519,15 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   }
 
   const renderDisclaimer = () => {
-    const monthlyAmount =
-      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
-    if (
-      beneficiary.budget_goal - beneficiary.budget_raised - amount * 100 >
-      0
-    ) {
+    const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
+    if (beneficiary.budget_goal - beneficiary.budget_raised - amount * 100 > 0) {
       return (
         <>
-          This child has a monthly budget goal that must be met for enrollment
-          in school.
+          This child has a monthly budget goal that must be met for enrollment in school.
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
-              monthly for this child.
+              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
             </>
           )}
           <br />
@@ -568,13 +537,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     } else if (beneficiary.budget_raised > 0) {
       return (
         <>
-          This child is partially sponsored. Your contribution will help reach
-          their monthly budget goal!
+          This child is partially sponsored. Your contribution will help reach their monthly budget goal!
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
-              monthly for this child.
+              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
             </>
           )}
         </>
@@ -582,38 +549,16 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     }
     return (
       <>
-        Your sponsorship will be applied towards the child's monthly budget
-        goals.
+        Your sponsorship will be applied towards the child's monthly budget goals.
         {selectedOption === "payment" && (
           <>
             <br />
-            Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
-            monthly for this child.
+            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
           </>
         )}
       </>
     )
   }
-
-  const nextImage = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setCurrentImageIndex((prev) => (prev + 1) % images.length)
-  }
-
-  const prevImage = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)
-  }
-
-  const goToImage = (index: number) => {
-    setCurrentImageIndex(index)
-  }
-
-  // Reset to first image when images change
-  useEffect(() => {
-    setCurrentImageIndex(0)
-  }, [images])
-
   return (
     <DialogRoot
       open={open}
@@ -643,92 +588,21 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 </Text>
               </Box>
               {/* Update the image section to show a simple spinner */}
+              {/* Use ImageCarousel component instead of custom implementation */}
               <Box position="relative" className="group">
                 {imageLoading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-10 rounded-[15px]">
                     <Spinner size="lg" color="#1C3C8C" />
                   </div>
                 )}
-                <Image
-                  src={getImageSrc()}
+                <ImageCarousel
+                  images={images}
+                  getImageSrc={getImageSrc}
+                  fallbackSrc={fallbackImageSrc}
                   alt={beneficiary.name || "Child"}
-                  width={500}
-                  height={405}
                   className="rounded-[15px] p-2"
-                  style={{ objectFit: "cover", objectPosition: "center 20%" }}
+                  showArrowsOnHover={true}
                 />
-                
-                {/* Navigation arrows and dots */}
-                {images.length > 1 && (
-                  <>
-                    <IconButton
-                      aria-label="Previous image"
-                      size="sm"
-                      position="absolute"
-                      left="2"
-                      top="50%"
-                      transform="translateY(-50%)"
-                      bg="rgba(0, 0, 0, 0.5)"
-                      color="white"
-                      _hover={{ bg: "rgba(0, 0, 0, 0.7)" }}
-                      onClick={prevImage}
-                      zIndex={20}
-                      opacity={0}
-                      _groupHover={{ opacity: 1 }}
-                      transition="opacity 0.2s"
-                    >
-                      <LuChevronLeft />
-                    </IconButton>
-                    
-                    <IconButton
-                      aria-label="Next image"
-                      size="sm"
-                      position="absolute"
-                      right="2"
-                      top="50%"
-                      transform="translateY(-50%)"
-                      bg="rgba(0, 0, 0, 0.5)"
-                      color="white"
-                      _hover={{ bg: "rgba(0, 0, 0, 0.7)" }}
-                      onClick={nextImage}
-                      zIndex={20}
-                      opacity={0}
-                      _groupHover={{ opacity: 1 }}
-                      transition="opacity 0.2s"
-                    >
-                      <LuChevronRight />
-                    </IconButton>
-                  </>
-                )}
-
-                {/* Image Dots Indicator */}
-                {images.length > 1 && (
-                  <Flex
-                    position="absolute"
-                    bottom="2"
-                    left="50%"
-                    transform="translateX(-50%)"
-                    gap={1}
-                    zIndex={20}
-                  >
-                    {images.map((_, index) => (
-                      <Box
-                        key={index}
-                        w="6px"
-                        h="6px"
-                        borderRadius="50%"
-                        bg={index === currentImageIndex ? "white" : "rgba(255, 255, 255, 0.5)"}
-                        cursor="pointer"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          goToImage(index)
-                        }}
-                        transition="background-color 0.2s"
-                        _hover={{ bg: "white" }}
-                      />
-                    ))}
-                  </Flex>
-                )}
               </Box>
               <Box className="text-center mb-4 md:mb-0">
                 <Text className="text-xl font-bold text-gray-800 mb-2">
@@ -904,8 +778,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 </Button>
                 <PayPalScriptProvider
                   options={{
-                    "client-id": process.env
-                      .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
+                    "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
                     currency: "USD",
                     intent: "capture",
                   }}

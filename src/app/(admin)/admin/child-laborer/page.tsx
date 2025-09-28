@@ -10,6 +10,7 @@ import { MdDeleteOutline } from "react-icons/md"
 import { toaster } from "@/components/ui/toaster"
 import DeleteDialog from "./components/DeleteDialog"
 import { useBeneficiaryStore } from "@/store/beneficiaryStore"
+import { useFormStore } from "@/store/formStore"
 import { Beneficiaries } from "@/types/admin.types"
 import GoBackButton from "@/components/ui/goBack"
 
@@ -26,20 +27,13 @@ type TableInstance = {
 }
 
 const ChildLaborerTable = () => {
+  // Beneficiary store
   const {
     data,
     loading,
-    formData,
-    formDataEdit,
     selectedBeneficiary,
-    imageFiles,
-    videoFiles,
     selectedRowsForDeletion,
-    setFormData,
-    setFormDataEdit,
     setSelectedBeneficiary,
-    setImageFiles,
-    setVideoFiles,
     setSelectedRowsForDeletion,
     fetchBeneficiaries,
     createBeneficiary,
@@ -47,6 +41,18 @@ const ChildLaborerTable = () => {
     deleteBeneficiary,
     bulkDelete,
   } = useBeneficiaryStore()
+
+  // Form store
+  const {
+    formData,
+    formDataEdit,
+    imageFiles,
+    videoFiles,
+    setFormData,
+    setFormDataEdit,
+    setImageFiles,
+    setVideoFiles,
+  } = useFormStore()
 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
@@ -86,12 +92,7 @@ const ChildLaborerTable = () => {
   }
 
   const handleSubmit = async (): Promise<boolean> => {
-    const success = await createBeneficiary(
-      "CHILD_LABORER",
-      formData,
-      imageFiles,
-      videoFiles,
-    )
+    const success = await createBeneficiary("CHILD_LABORER", formData)
     if (success) {
       setIsCreateDrawerOpen(false)
       toaster.create({

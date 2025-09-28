@@ -1,15 +1,14 @@
 "use client"
 import React, { useState, useEffect } from "react"
-import { Box, Text, Flex, Badge, IconButton } from "@chakra-ui/react"
+import { Box, Text, Flex, Badge } from "@chakra-ui/react"
 import { FaCalendar } from "react-icons/fa"
 import { FaLocationDot, FaPerson } from "react-icons/fa6"
-import { LuChevronLeft, LuChevronRight } from "react-icons/lu"
 import { calculateAge } from "@/utils/ageCalculator"
 import { BeneficiaryCardProps } from "@/types/propTypes"
-import Image from "next/image"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { ImageCarousel } from "@/components/common/ImageCarousel"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -19,7 +18,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiaryType = "CHILD",
 }) => {
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
   const placeholderImage =
     "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
@@ -47,23 +45,16 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     fetchImages()
   }, [beneficiary.id, beneficiaryType])
 
-  // Reset to first image when images change
-  useEffect(() => {
-    setCurrentImageIndex(0)
-  }, [images])
-
-  const nextImage = (e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent card click
-    setCurrentImageIndex((prev) => (prev + 1) % images.length)
-  }
-
-  const prevImage = (e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent card click
-    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)
-  }
-
-  const goToImage = (index: number) => {
-    setCurrentImageIndex(index)
+  // Helper function for ImageCarousel
+  const getImageSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generatePublicUrl(image as unknown as MediaRow)
+      } catch {
+        return image.image_url || ""
+      }
+    }
+    return image.image_url || ""
   }
 
   // Primary content
@@ -90,96 +81,16 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       _hover={{ borderColor: "#2B7FF9", borderWidth: "1px" }}
       onClick={() => onOpenDialog?.()}
     >
-      {/* Card Header: Image with Navigation */}
+      {/* Card Header: Image with Navigation using ImageCarousel */}
       <Box position="relative" flexShrink={0} className="group">
-        <Image
-          src={
-            images.length > 0
-              ? images[currentImageIndex]?.id
-                ? generatePublicUrl(images[currentImageIndex] as unknown as MediaRow)
-                : images[currentImageIndex]?.image_url
-              : placeholderImage
-          }
+        <ImageCarousel
+          images={images}
+          getImageSrc={getImageSrc}
+          fallbackSrc={placeholderImage}
           alt={beneficiary.name?.split(" ")[0] ?? ""}
-          width={500}
-          height={500}
-          style={{ objectFit: "cover", objectPosition: "center 20%" }}
           className="w-full h-64 rounded-t-[20px]"
+          showArrowsOnHover={true}
         />
-        
-        {/* Navigation Arrows - Only show if there are multiple images */}
-        {images.length > 1 && (
-          <>
-            {/* Previous Button */}
-            <IconButton
-              aria-label="Previous image"
-              size="sm"
-              position="absolute"
-              left="2"
-              top="50%"
-              transform="translateY(-50%)"
-              bg="rgba(0, 0, 0, 0.5)"
-              color="white"
-              _hover={{ bg: "rgba(0, 0, 0, 0.7)" }}
-              onClick={prevImage}
-              zIndex={20}
-              opacity={0}
-              _groupHover={{ opacity: 1 }}
-              transition="opacity 0.2s"
-            >
-              <LuChevronLeft />
-            </IconButton>
-            
-            {/* Next Button */}
-            <IconButton
-              aria-label="Next image"
-              size="sm"
-              position="absolute"
-              right="2"
-              top="50%"
-              transform="translateY(-50%)"
-              bg="rgba(0, 0, 0, 0.5)"
-              color="white"
-              _hover={{ bg: "rgba(0, 0, 0, 0.7)" }}
-              onClick={nextImage}
-              zIndex={20}
-              opacity={0}
-              _groupHover={{ opacity: 1 }}
-              transition="opacity 0.2s"
-            >
-              <LuChevronRight />
-            </IconButton>
-          </>
-        )}
-
-        {/* Image Dots Indicator */}
-        {images.length > 1 && (
-          <Flex
-            position="absolute"
-            bottom="2"
-            left="50%"
-            transform="translateX(-50%)"
-            gap={1}
-            zIndex={20}
-          >
-            {images.map((_, index) => (
-              <Box
-                key={index}
-                w="6px"
-                h="6px"
-                borderRadius="50%"
-                bg={index === currentImageIndex ? "white" : "rgba(255, 255, 255, 0.5)"}
-                cursor="pointer"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  goToImage(index)
-                }}
-                transition="background-color 0.2s"
-                _hover={{ bg: "white" }}
-              />
-            ))}
-          </Flex>
-        )}
 
         {/* Goal Badge */}
         {!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && (

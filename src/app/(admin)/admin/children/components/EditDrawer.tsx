@@ -171,8 +171,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             throw new Error("Image upload failed")
           }
 
-          // Refresh image list and clear selected files
-          await fetchImages()
+          // Don't call fetchImages() here - it will re-fetch deleted images
           setImageFiles([])
         } catch (err) {
           console.error("Error uploading images:", err)
@@ -252,12 +251,19 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
 
   const fetchImages = useCallback(async () => {
     if (selectedChild?.id) {
+      console.log('Fetching images for beneficiary:', selectedChild.id)
       const response = await fetch(
         `/api/admin/beneficiaries/images/${selectedChild.id}`,
       )
       if (response.ok) {
         const images = await response.json()
-        setAllImages(images)
+        console.log('Raw images from database:', images)
+        // Filter out invalid/empty images
+        const validImages = images.filter((img: BeneficiaryMedia) => 
+          img && (img.id || img.image_url) && img.type === "IMAGE"
+        )
+        console.log('Filtered valid images:', validImages)
+        setAllImages(validImages)
       }
     }
   }, [selectedChild?.id])
@@ -267,8 +273,21 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
   }, [selectedChild?.id, fetchImages])
 
   const handleDeleteImage = async (imageId: string) => {
+    console.log('Attempting to delete image with ID:', imageId)
+    
+    if (!imageId) {
+      toaster.create({
+        title: "Error",
+        description: "No image ID provided",
+        duration: 3000,
+      })
+      return
+    }
+
     try {
       setIsImageLoading(true)
+      console.log('Sending delete request for image:', imageId)
+      
       const response = await fetch("/api/admin/beneficiaries/images/delete", {
         method: "DELETE",
         headers: {
@@ -277,11 +296,19 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
         body: JSON.stringify({ imageId }),
       })
 
+      console.log('Delete response status:', response.status)
+      
       if (!response.ok) {
-        throw new Error("Failed to delete image")
+        const errorData = await response.json()
+        console.error('Delete failed:', errorData)
+        throw new Error(`Failed to delete image: ${errorData.error || response.statusText}`)
       }
 
+      // Remove from local state
       setAllImages((prev) => prev.filter((img) => img.id !== imageId))
+      
+      // Clear any pending uploads to prevent re-uploading
+      setImageFiles([])
 
       toaster.create({
         title: "Success",
@@ -292,7 +319,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
       console.error("Error deleting image:", error)
       toaster.create({
         title: "Error",
-        description: "Failed to delete image",
+        description: `Failed to delete image: ${error instanceof Error ? error.message : 'Unknown error'}`,
         duration: 3000,
       })
     } finally {

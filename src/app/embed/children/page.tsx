@@ -134,10 +134,6 @@ export default function SponsorshipEmbedChildrenPage() {
     return () => clearTimeout(timeout)
   }, [currentIndex, children])
 
-  console.log("Current State:", { children, loadingChildren, currentIndex })
-
-  console.log("Render State:", { loadingChildren, children })
-
   if (loadingChildren) {
     return (
       <Flex

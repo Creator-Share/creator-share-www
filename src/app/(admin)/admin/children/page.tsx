@@ -7,11 +7,12 @@ import { toaster } from "@/components/ui/toaster"
 import DeleteDialog from "./components/DeleteDialog"
 import BeneficiaryCard from "./components/BeneficiaryCard"
 import { useBeneficiaryStore } from "@/store/beneficiaryStore"
-import { Beneficiaries } from "@/types/admin.types"
+import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types"
 import { dollarsToCents } from "@/utils/currency"
 import GoBackButton from "@/components/ui/goBack"
 import { Checkbox } from "@/components/ui/checkbox"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { useFormStore } from "@/store/formStore"
 
 const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), {
   ssr: false,
@@ -21,40 +22,43 @@ const EditDrawer = dynamic(() => import("./components/EditDrawer"), {
 })
 
 const ChildrenTable = () => {
-  const initialFormData: Beneficiaries = {
-    name: "",
-    username: "",
-    gender: "Boy",
-    birth_date: "",
-    biography: "",
-    budget_goal: 0,
-    budget_raised: 0,
-    status: "Draft",
-    country: "",
-    location_geo: null,
-    location_str: "",
-    video_url: "",
-    introduction: "",
-    active_subscriptions: 0,
-    metadata: {},
-    beneficiary_type: "CHILD",
-    image_url: "",
-  }
+  // const initialFormData: Beneficiaries = {
+  //   name: "",
+  //   username: "",
+  //   gender: "Boy",
+  //   birth_date: "",
+  //   biography: "",
+  //   budget_goal: 0,
+  //   budget_raised: 0,
+  //   status: "Draft",
+  //   country: "",
+  //   location_geo: null,
+  //   location_str: "",
+  //   video_url: "",
+  //   introduction: "",
+  //   active_subscriptions: 0,
+  //   metadata: {},
+  //   beneficiary_type: "CHILD",
+  //   image_url: "",
+  // }
+
+  const { 
+    formData, 
+    setFormData, 
+    formDataEdit,
+    setFormDataEdit,
+    imageFiles, 
+    setImageFiles, 
+    videoFiles, 
+    setVideoFiles 
+  } = useFormStore()
 
   const {
     data,
     loading,
-    formData = initialFormData,
-    formDataEdit,
     selectedBeneficiary,
-    imageFiles,
-    videoFiles,
     selectedRowsForDeletion,
-    setFormData,
-    setFormDataEdit,
     setSelectedBeneficiary,
-    setImageFiles,
-    setVideoFiles,
     setSelectedRowsForDeletion,
     fetchBeneficiaries,
     createBeneficiary,
@@ -121,15 +125,26 @@ const ChildrenTable = () => {
             if (response.ok) {
               const images = await response.json()
               if (images && images.length > 0) {
-                const img = images[0]
-                const src = img?.id
-                  ? generatePublicUrl(img as unknown as MediaRow)
-                  : img?.image_url || ""
-                setBeneficiaryImages((prev) => ({
-                  ...prev,
-                  [id]: src,
-                }))
+                // Filter for only IMAGE type media
+                const imageMedia = images.filter((img: BeneficiaryMedia) => img.type === "IMAGE")
+                
+                if (imageMedia.length > 0) {
+                  const img = imageMedia[0]
+                  const src = img?.id
+                    ? generatePublicUrl(img as unknown as MediaRow)
+                    : img?.image_url || ""
+                
+                  // Only set the image if we have a valid src
+                  if (src && src.trim() !== "") {
+                    setBeneficiaryImages((prev) => ({
+                      ...prev,
+                      [id]: src,
+                    }))
+                  }
+                }
               }
+            } else {
+              console.error(`Failed to fetch images for beneficiary ${id}:`, response.status, response.statusText)
             }
           } catch (error) {
             console.error("Error fetching beneficiary image:", error)
@@ -150,11 +165,19 @@ const ChildrenTable = () => {
   useEffect(() => {
     if (!data?.length) return
 
-    const filteredData = data.filter(
-      (b) =>
-        (b.name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-        (b.username?.toLowerCase() || "").includes(searchTerm.toLowerCase()),
-    )
+    // Update the filteredData to sort by creation date (newest first)
+    const filteredData = data
+      .filter(
+        (b) =>
+          (b.name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+          (b.username?.toLowerCase() || "").includes(searchTerm.toLowerCase()),
+      )
+      .sort((a, b) => {
+        // Sort by created_at in descending order (newest first)
+        const dateA = new Date(a.created_at || 0).getTime()
+        const dateB = new Date(b.created_at || 0).getTime()
+        return dateB - dateA
+      })
 
     const startIndex = (currentPage - 1) * itemsPerPage
     const endIndex = startIndex + itemsPerPage

@@ -67,7 +67,7 @@ const CreateDrawer = ({
   handleLocationSelect,
   handleSubmit,
   setImageFiles,
-  handleDrawerClose,
+  handleDrawerClose
 }: CreateDrawerProps) => {
   const [isAdding, setIsAdding] = useState(false)
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([])
@@ -137,17 +137,19 @@ const CreateDrawer = ({
       // If the public hardcoded goal is present, set the form value to that goal (in dollars)
       if (publicHardcodedCents !== null) {
         const dollars = publicHardcodedCents / 100
-        // Overwrite formData.budget_goal with hardcoded value (in dollars)
         setFormData({ ...(formData || {}), budget_goal: dollars })
       }
 
+      // Create the beneficiary first
       const success = await handleSubmit()
-      if (success) {
-        // Clean up preview URLs
-        imagePreviewUrls.forEach((url) => URL.revokeObjectURL(url))
-        if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl)
-        handleDrawerClose()
+      if (!success) {
+        return
       }
+
+      // Clean up preview URLs
+      imagePreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl)
+      handleDrawerClose()
     } catch (error) {
       console.error("Error adding:", error)
       toaster.create({

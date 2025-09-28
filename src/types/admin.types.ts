@@ -36,6 +36,7 @@ export interface Beneficiaries {
   metadata: Record<string, unknown>
   beneficiary_type: BeneficiaryType
   image_url?: string
+  created_at?: string
 }
 
 export interface Activity {

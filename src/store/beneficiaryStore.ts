@@ -1,193 +1,167 @@
 import { create } from "zustand"
-import { Beneficiaries } from "@/types/admin.types"
-
-import { BeneficiaryType } from "@/types/admin.types"
+import { Beneficiaries, BeneficiaryType } from "@/types/admin.types"
 
 interface BeneficiaryStoreState {
   data: Beneficiaries[]
   loading: boolean
-  formData: Partial<Beneficiaries>
-  formDataEdit: Partial<Beneficiaries>
   selectedBeneficiary: Beneficiaries | null
-  imageFiles: File[]
-  videoFiles: File[]
   selectedRowsForDeletion: Beneficiaries[]
-  setFormData: (data: Partial<Beneficiaries>) => void
-  setFormDataEdit: (data: Partial<Beneficiaries>) => void
+  
+  // Actions
   setSelectedBeneficiary: (beneficiary: Beneficiaries | null) => void
-  setImageFiles: (files: File[]) => void
-  setVideoFiles: (files: File[]) => void
   setSelectedRowsForDeletion: (rows: Beneficiaries[]) => void
   fetchBeneficiaries: (type: BeneficiaryType) => Promise<void>
-  createBeneficiary: (
-    type: BeneficiaryType,
-    formData: Partial<Beneficiaries>,
-    imageFiles: File[],
-    videoFiles: File[],
-  ) => Promise<boolean>
-  updateBeneficiary: (
-    type: BeneficiaryType,
-    updated: Partial<Beneficiaries>,
-  ) => Promise<void>
+  createBeneficiary: (type: BeneficiaryType, formData: Partial<Beneficiaries>, imageFiles?: File[], videoFiles?: File[]) => Promise<boolean>
+  updateBeneficiary: (type: BeneficiaryType, updated: Partial<Beneficiaries>) => Promise<void>
   deleteBeneficiary: (type: BeneficiaryType, id: string) => Promise<void>
   bulkDelete: (type: BeneficiaryType, ids: string[]) => Promise<void>
 }
 
-export const useBeneficiaryStore = create<BeneficiaryStoreState>(
-  (set, get) => ({
-    data: [],
-    loading: false,
-    formData: {},
-    formDataEdit: {},
-    selectedBeneficiary: null,
-    imageFiles: [],
-    videoFiles: [],
-    selectedRowsForDeletion: [],
-    setFormData: (data) => set({ formData: data }),
-    setFormDataEdit: (data) => set({ formDataEdit: data }),
-    setSelectedBeneficiary: (beneficiary) =>
-      set({ selectedBeneficiary: beneficiary }),
-    setImageFiles: (files) => set({ imageFiles: files }),
-    setVideoFiles: (files) => set({ videoFiles: files }),
-    setSelectedRowsForDeletion: (rows) =>
-      set({ selectedRowsForDeletion: rows }),
+export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => ({
+  data: [],
+  loading: false,
+  selectedBeneficiary: null,
+  selectedRowsForDeletion: [],
+  
+  setSelectedBeneficiary: (beneficiary) => set({ selectedBeneficiary: beneficiary }),
+  setSelectedRowsForDeletion: (rows) => set({ selectedRowsForDeletion: rows }),
 
-    fetchBeneficiaries: async (type) => {
-      set({ loading: true })
-      try {
-        const res = await fetch(
-          `/api/admin/beneficiaries/retrieve?beneficiary_type=${type}`,
-        )
-        const json = await res.json()
-        set({
-          data: Array.isArray(json.beneficiaries) ? json.beneficiaries : [],
-        })
-      } catch {
-        set({ data: [] })
-      }
-      set({ loading: false })
-    },
+  fetchBeneficiaries: async (type) => {
+    set({ loading: true })
+    try {
+      const res = await fetch(`/api/beneficiaries/get?beneficiary_type=${type}`)
+      const json = await res.json()
+      set({ data: Array.isArray(json.people) ? json.people : [] })
+    } catch {
+      set({ data: [] })
+    }
+    set({ loading: false })
+  },
 
-    createBeneficiary: async (type, formData, imageFiles, videoFiles) => {
-      try {
-        const payload = { ...formData, beneficiary_type: type }
-        const res = await fetch("/api/admin/beneficiaries/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-
-        if (!res.ok) {
-          const errorData = await res.json()
-          console.error("Create beneficiary failed:", errorData)
-          return false
-        }
-
-        const result = await res.json()
-        const beneficiaryId = result.beneficiary?.id
-
-        if (!beneficiaryId) {
-          console.error("No beneficiary ID returned")
-          return false
-        }
-
-        // Upload images if any
-        if (imageFiles && imageFiles.length > 0) {
-          try {
-            const imageFormData = new FormData()
-            imageFiles.forEach((file) => {
-              imageFormData.append(`images`, file)
-            })
-            imageFormData.append("beneficiaryId", beneficiaryId)
-
-            const imageRes = await fetch(
-              "/api/admin/beneficiaries/images/create",
-              {
-                method: "POST",
-                body: imageFormData,
-              },
-            )
-
-            if (!imageRes.ok) {
-              console.error("Image upload failed:", await imageRes.json())
-            }
-          } catch (imageError) {
-            console.error("Image upload error:", imageError)
+  // Update createBeneficiary to return the created beneficiary ID
+  createBeneficiary: async (type, formData, imageFiles = [], videoFiles = []) => {
+    try {
+      const payload = { ...formData, beneficiary_type: type }
+      
+      // Create FormData to handle file uploads
+      const formDataToSend = new FormData()
+      
+      // Add form fields
+      Object.keys(payload).forEach(key => {
+        const value = payload[key as keyof typeof payload]
+        if (value !== null && value !== undefined) {
+          if (key === 'location_geo' && typeof value === 'object') {
+            formDataToSend.append(key, JSON.stringify(value))
+          } else {
+            formDataToSend.append(key, String(value))
           }
         }
+      })
+      
+      const res = await fetch("/api/admin/beneficiaries/create", {
+        method: "POST",
+        body: formDataToSend,
+      })
 
-        // Upload video if any
-        if (videoFiles && videoFiles.length > 0) {
-          try {
-            const videoFormData = new FormData()
-            videoFiles.forEach((file) => {
-              videoFormData.append(`video`, file)
-            })
-            videoFormData.append("beneficiaryId", beneficiaryId)
-
-            const videoRes = await fetch(
-              "/api/admin/beneficiaries/video/create",
-              {
-                method: "POST",
-                body: videoFormData,
-              },
-            )
-
-            if (!videoRes.ok) {
-              console.error("Video upload failed:", await videoRes.json())
-            }
-          } catch (videoError) {
-            console.error("Video upload error:", videoError)
-          }
-        }
-
-        await get().fetchBeneficiaries(type)
-        return true
-      } catch (error) {
-        console.error("Create beneficiary error:", error)
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error("Create beneficiary failed:", errorText)
         return false
       }
-    },
 
-    updateBeneficiary: async (type, updated) => {
-      try {
-        await fetch(`/api/admin/beneficiaries/update/${updated.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updated),
-        })
-        await get().fetchBeneficiaries(type)
-      } catch {}
-    },
+      const result = await res.json()
+      const beneficiaryId = result.beneficiary?.id
 
-    deleteBeneficiary: async (type, id) => {
-      try {
-        await fetch(`/api/admin/beneficiaries/delete/${id}`, {
-          method: "DELETE",
-        })
-        await get().fetchBeneficiaries(type)
-      } catch {}
-    },
+      // Upload files if beneficiary was created successfully
+      if (beneficiaryId) {
+        // Upload images
+        if (imageFiles.length > 0) {
+          const imageFormData = new FormData()
+          imageFormData.append("beneficiaryId", beneficiaryId)
+          imageFiles.forEach((f) => imageFormData.append("images", f))
 
-    bulkDelete: async (type, ids) => {
-      try {
-        const response = await fetch("/api/admin/beneficiaries/bulk-delete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids }),
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          console.error("Bulk delete failed:", errorData)
-          throw new Error(errorData.error || "Bulk delete failed")
+          await fetch("/api/admin/beneficiaries/images/create", {
+            method: "POST",
+            body: imageFormData,
+          })
         }
 
-        await get().fetchBeneficiaries(type)
-      } catch (error) {
-        console.error("Bulk delete error:", error)
-        throw error
+        // Upload videos
+        if (videoFiles.length > 0) {
+          const videoFormData = new FormData()
+          videoFormData.append("beneficiaryId", beneficiaryId)
+          videoFormData.append("video", videoFiles[0])
+
+          await fetch("/api/admin/beneficiaries/video/create", {
+            method: "POST",
+            body: videoFormData,
+          })
+        }
       }
-    },
-  }),
-)
+
+      await get().fetchBeneficiaries(type)
+      return true
+    } catch (error) {
+      console.error("Create beneficiary error:", error)
+      return false
+    }
+  },
+
+  updateBeneficiary: async (type, updated) => {
+    try {
+      const res = await fetch(`/api/admin/beneficiaries/update/${updated.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        console.error("Update beneficiary failed:", errorData)
+        return
+      }
+
+      await get().fetchBeneficiaries(type)
+    } catch (error) {
+      console.error("Update beneficiary error:", error)
+    }
+  },
+
+  deleteBeneficiary: async (type, id) => {
+    try {
+      const res = await fetch(`/api/admin/beneficiaries/delete/${id}`, {
+        method: "DELETE",
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        console.error("Delete beneficiary failed:", errorData)
+        return
+      }
+
+      await get().fetchBeneficiaries(type)
+    } catch (error) {
+      console.error("Delete beneficiary error:", error)
+    }
+  },
+
+  bulkDelete: async (type, ids) => {
+    try {
+      const res = await fetch("/api/admin/beneficiaries/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        console.error("Bulk delete failed:", errorData)
+        return
+      }
+
+      await get().fetchBeneficiaries(type)
+    } catch (error) {
+      console.error("Bulk delete error:", error)
+    }
+  },
+}))
