@@ -290,20 +290,16 @@ const CreateDrawer = ({
               <Field label="Status" required errorText="This field is required">
                 <NativeSelectRoot>
                   <NativeSelectField
-                    className="border"
-                    placeholder="Select Status"
+                    className="border bg-gray-100"
                     px={2}
                     name="status"
-                    onChange={(e) =>
-                      handleSelectChange("status", e.target.value)
-                    }
-                    value={formData.status || ""}
+                    value="New"
+                    _disabled={{
+                      opacity: 0.6,
+                      cursor: "not-allowed",
+                    }}
                   >
                     <option value="New">New</option>
-                    <option value="Partially Funded">Partially Funded</option>
-                    <option value="Budget Fulfilled">Budget Fulfilled</option>
-                    <option value="Archived">Archived</option>
-                    <option value="Draft">Draft</option>
                   </NativeSelectField>
                 </NativeSelectRoot>
               </Field>

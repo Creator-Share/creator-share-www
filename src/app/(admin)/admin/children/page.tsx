@@ -89,6 +89,13 @@ const ChildrenTable = () => {
     fetchBeneficiaries("CHILD")
   }, [fetchBeneficiaries])
 
+  // Initialize form data with default values
+  useEffect(() => {
+    if (!formData.status) {
+      setFormData({ ...formData, status: "New" })
+    }
+  }, [formData, setFormData])
+
   // Lazy load images only for visible beneficiaries
   const fetchImagesForVisibleBeneficiaries = useCallback(async (visibleBeneficiaries: Beneficiaries[]) => {
     if (!visibleBeneficiaries?.length) return
