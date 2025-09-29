@@ -88,14 +88,29 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
 
         // Upload videos
         if (videoFiles.length > 0) {
-          const videoFormData = new FormData()
-          videoFormData.append("beneficiaryId", beneficiaryId)
-          videoFormData.append("video", videoFiles[0])
+          try {
+            console.log('Uploading videos:', videoFiles.length)
+            const videoFormData = new FormData()
+            videoFormData.append("beneficiaryId", beneficiaryId)
+            videoFormData.append("video", videoFiles[0])
 
-          await fetch("/api/admin/beneficiaries/video/create", {
-            method: "POST",
-            body: videoFormData,
-          })
+            const videoResponse = await fetch("/api/admin/beneficiaries/video/create", {
+              method: "POST",
+              body: videoFormData,
+            })
+            
+            if (!videoResponse.ok) {
+              const errorText = await videoResponse.text()
+              console.error("Video upload failed:", errorText)
+              throw new Error(`Video upload failed: ${errorText}`)
+            }
+            
+            const videoData = await videoResponse.json()
+            console.log("Video upload successful:", videoData)
+          } catch (error) {
+            console.error("Video upload error:", error)
+            // Don't throw here - let the creation succeed even if video fails
+          }
         }
       }
 
@@ -121,7 +136,15 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
         return
       }
 
-      await get().fetchBeneficiaries(type)
+      // Update local state immediately
+      const currentData = get().data
+      const updatedData = currentData.map(item => 
+        item.id === updated.id ? { ...item, ...updated } : item
+      )
+      set({ data: updatedData })
+      
+      // Don't refetch - rely on local state update
+      // await get().fetchBeneficiaries(type)
     } catch (error) {
       console.error("Update beneficiary error:", error)
     }

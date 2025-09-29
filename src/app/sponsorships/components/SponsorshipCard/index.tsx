@@ -30,8 +30,12 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         )
         if (response.ok) {
           const data = await response.json()
+          // Filter for only IMAGE type media
+          const imageMedia = data.filter((item: BeneficiaryMedia) => 
+            item.type === "IMAGE"
+          )
           setImages(
-            data.sort(
+            imageMedia.sort(
               (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
                 a.order_index - b.order_index,
             ),

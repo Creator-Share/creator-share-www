@@ -284,6 +284,44 @@ const ChildrenTable = () => {
 
   const handleSave = async (updated: Partial<Beneficiaries>) => {
     await updateBeneficiary("CHILD", updated)
+    
+    // Force re-fetch images for the updated child
+    if (updated.id) {
+      // Clear cached images
+      setBeneficiaryImages(prev => {
+        const newState = { ...prev }
+        delete newState[updated.id!]
+        return newState
+      })
+      
+      // Remove from fetchedImagesRef
+      fetchedImagesRef.current.delete(updated.id!)
+
+      try {
+        const response = await fetch(`/api/admin/beneficiaries/images/${updated.id}`)
+        if (response.ok) {
+          const images = await response.json()
+          const imageMedia = images.filter((img: BeneficiaryMedia) => img.type === "IMAGE")
+          
+          if (imageMedia.length > 0) {
+            const img = imageMedia[0]
+            const src = img?.id
+              ? generatePublicUrl(img as unknown as MediaRow)
+              : img?.image_url || ""
+          
+            if (src && src.trim() !== "") {
+              setBeneficiaryImages((prev) => ({
+                ...prev,
+                [updated.id!]: src,
+              }))
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error re-fetching images for updated child:", error)
+      }
+    }
+    
     setIsEditDrawerOpen(false)
     toaster.create({
       title: "Success",
@@ -368,11 +406,18 @@ const ChildrenTable = () => {
     setIsEditDrawerOpen(true)
   }
 
-  const filteredData = data.filter(
-    (b) =>
-      (b.name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-      (b.username?.toLowerCase() || "").includes(searchTerm.toLowerCase()),
-  )
+  const filteredData = data
+    .filter(
+      (b) =>
+        (b.name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (b.username?.toLowerCase() || "").includes(searchTerm.toLowerCase()),
+    )
+    .sort((a, b) => {
+      // Sort by created_at in descending order (newest first)
+      const dateA = new Date(a.created_at || 0).getTime()
+      const dateB = new Date(b.created_at || 0).getTime()
+      return dateB - dateA
+    })
 
   // Pagination logic
   const startIndex = (currentPage - 1) * itemsPerPage

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useCallback } from "react"
 import {
   DialogRoot,
   DialogContent,
@@ -92,7 +92,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 
   const [, setPrimaryImageUrl] = useState<string | null>(null)
 
-  const loadImages = async (beneficiaryId: string) => {
+  const loadImages = useCallback(async (beneficiaryId: string) => {
     setImageLoading(true)
     try {
       const res = await fetch(`/api/admin/beneficiaries/images/${beneficiaryId}`)
@@ -113,6 +113,21 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         } else {
           setPrimaryImageUrl(null)
         }
+        
+        // Also look for videos and update the beneficiary's video_url
+        const videoMedia = data?.filter((m: BeneficiaryMedia) => m.type === "VIDEO") || []
+        
+        if (videoMedia.length > 0) {
+          const video = videoMedia[0]
+          const videoSrc = video?.id
+            ? generatePublicUrl(video as unknown as MediaRow)
+            : video?.image_url || ""
+          
+          if (videoSrc && videoSrc.trim() !== "") {
+            // Update the beneficiary object with the video URL
+            beneficiary.video_url = videoSrc
+          }
+        }
       }
     } catch (error) {
       console.error("Failed to load images:", error)
@@ -121,7 +136,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     } finally {
       setImageLoading(false)
     }
-  }
+  }, [beneficiary])
 
   useEffect(() => {
     if (!open || !beneficiary.id) return
@@ -129,7 +144,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id)
     fetchActivitiesByBeneficiaryId(beneficiary.id)
     loadImages(beneficiary.id)
-  }, [open, beneficiary.id])
+  }, [open, beneficiary.id, loadImages])
 
   // Helper function for ImageCarousel
   const getImageSrc = (image: { id?: string; image_url?: string }) => {

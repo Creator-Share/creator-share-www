@@ -251,19 +251,43 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
 
   const fetchImages = useCallback(async () => {
     if (selectedChild?.id) {
-      console.log('Fetching images for beneficiary:', selectedChild.id)
+      console.log('Fetching media for beneficiary:', selectedChild.id)
       const response = await fetch(
         `/api/admin/beneficiaries/images/${selectedChild.id}`,
       )
       if (response.ok) {
-        const images = await response.json()
-        console.log('Raw images from database:', images)
-        // Filter out invalid/empty images
-        const validImages = images.filter((img: BeneficiaryMedia) => 
-          img && (img.id || img.image_url) && img.type === "IMAGE"
+        const media = await response.json()
+        console.log('Raw media from database:', media)
+        
+        // Filter for IMAGE type only for the images display
+        const validImages = media.filter((item: BeneficiaryMedia) => 
+          item && (item.id || item.image_url) && item.type === "IMAGE"
         )
         console.log('Filtered valid images:', validImages)
         setAllImages(validImages)
+        
+        // Also look for videos and set the video URL
+        const videoMedia = media.filter((item: BeneficiaryMedia) => 
+          item && (item.id || item.image_url) && item.type === "VIDEO"
+        )
+        
+        console.log('Found video media:', videoMedia)
+        
+        if (videoMedia.length > 0) {
+          const video = videoMedia[0]
+          console.log('Video object:', video)
+          
+          const videoSrc = video?.id
+            ? generatePublicUrl(video as unknown as MediaRow)
+            : video?.image_url || ""
+          
+          console.log('Generated video URL:', videoSrc)
+          
+          if (videoSrc && videoSrc.trim() !== "") {
+            setVideoUrl(videoSrc)
+            console.log('Set video URL to:', videoSrc)
+          }
+        }
       }
     }
   }, [selectedChild?.id])
