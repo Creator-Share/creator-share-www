@@ -293,7 +293,7 @@ const CreateDrawer = ({
                     className="border bg-gray-100"
                     px={2}
                     name="status"
-                    value="New"
+                    defaultValue="New"
                     _disabled={{
                       opacity: 0.6,
                       cursor: "not-allowed",
@@ -428,8 +428,7 @@ const CreateDrawer = ({
                   name="country"
                   className="border"
                   px={2}
-                  onChange={handleInputChange}
-                  value={formData.country || ""}
+                  defaultValue={formData.country || ""}
                   placeholder="Enter country name"
                   disabled
                 />

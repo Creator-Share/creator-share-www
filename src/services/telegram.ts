@@ -4,11 +4,11 @@
  */
 
 import {
-  TelegramMessage,
   TelegramNotificationService,
   TelegramConfig,
   TelegramApiResponse,
-} from '@/types/telegram.types'
+  SponsorshipNotificationData,
+} from "@/types/telegram.types"
 import { Beneficiaries } from "@/types"
 
 // Single Responsibility Principle (SRP) - Telegram service only handles Telegram operations
@@ -43,7 +43,7 @@ export class TelegramBotService implements TelegramNotificationService {
         return false;
       }
 
-      const telegramMessage: TelegramMessage = {
+      const telegramMessage: { text: string; parse_mode?: 'HTML' | 'Markdown'; disable_web_page_preview?: boolean } = {
         text: message,
         parse_mode: 'HTML',
         disable_web_page_preview: true
@@ -173,6 +173,30 @@ export class TelegramBotService implements TelegramNotificationService {
   }
 
   /**
+   * Send a notification about a new sponsorship
+   * @param sponsorshipData - The sponsorship data
+   * @param chatId - Optional chat ID
+   */
+  async sendSponsorshipNotification(
+    sponsorshipData: SponsorshipNotificationData,
+    chatId?: string
+  ): Promise<boolean> {
+    try {
+      const message = this.formatSponsorshipMessage(sponsorshipData);
+      return await this.sendMessage(message, chatId);
+    } catch (error) {
+      console.error('Error sending sponsorship notification:', {
+        error: error instanceof Error ? error.message : error,
+        sponsorshipData: {
+          ...sponsorshipData,
+          sponsorEmail: '[REDACTED]' // Don't log sensitive email data
+        }
+      });
+      return false;
+    }
+  }
+
+  /**
    * Get the first image URL for a beneficiary
    * @param beneficiaryId - The beneficiary ID
    * @returns Promise<string | null> - Image URL or null if not found
@@ -252,6 +276,38 @@ export class TelegramBotService implements TelegramNotificationService {
 #NewChild #Beneficiary #CreatorShare
     `.trim();
   }
+
+  /**
+   * Format the sponsorship received message
+   * @param sponsorshipData - The sponsorship data
+   */
+  private formatSponsorshipMessage(sponsorshipData: SponsorshipNotificationData): string {
+    const {
+      beneficiaryName,
+      amount,
+      interval,
+      sponsorName,
+      sponsorEmail,
+      paymentMethod
+    } = sponsorshipData;
+
+    const amountFormatted = `$${(amount / 100).toFixed(2)}`;
+    const intervalText = interval === 'month' ? 'Monthly' : 'Yearly';
+    const sponsorDisplayName = sponsorName || sponsorEmail?.split('@')[0] || 'Anonymous';
+
+    return `
+🎉 <b>New Sponsorship Received!</b>
+
+👤 <b>Beneficiary:</b> ${beneficiaryName}
+💰 <b>Amount:</b> ${amountFormatted}
+🔄 <b>Type:</b> ${intervalText} ${interval ? 'Recurring' : 'One-time'}
+💳 <b>Payment Method:</b> ${paymentMethod}
+👨‍💼 <b>Sponsor:</b> ${sponsorDisplayName}
+📧 <b>Email:</b> ${sponsorEmail || 'Not provided'}
+
+#NewSponsorship #CreatorShare #ThankYou
+  `.trim();
+  }
 }
 
 // Dependency Inversion Principle (DIP) - Factory function for easy testing and configuration
@@ -286,6 +342,30 @@ export async function notifyChildCreated(beneficiaryData: Beneficiaries): Promis
   } catch (error) {
     console.error('Failed to send Telegram notification:', {
       childId: beneficiaryData?.id,
+      error: error instanceof Error ? error.message : error
+    });
+    // Don't throw - notification failure shouldn't break the main flow
+  }
+}
+
+/**
+ * Add utility function for sponsorship notifications
+ */
+export async function notifySponsorshipReceived(sponsorshipData: SponsorshipNotificationData): Promise<void> {
+  try {
+    if (!process.env.TELEGRAM_BOT_TOKEN) {
+      console.warn('TELEGRAM_BOT_TOKEN not configured - skipping sponsorship notification');
+      return;
+    }
+
+    const telegramService = createTelegramService();
+    const success = await telegramService.sendSponsorshipNotification(sponsorshipData);
+    
+    if (!success) {
+      console.warn('Telegram sponsorship notification failed');
+    }
+  } catch (error) {
+    console.error('Failed to send Telegram sponsorship notification:', {
       error: error instanceof Error ? error.message : error
     });
     // Don't throw - notification failure shouldn't break the main flow

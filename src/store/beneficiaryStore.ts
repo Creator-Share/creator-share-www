@@ -112,6 +112,19 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
             // Don't throw here - let the creation succeed even if video fails
           }
         }
+
+        // Send Telegram notification AFTER media uploads are complete
+        if (type === "CHILD") {
+          try {
+            await fetch("/api/admin/beneficiaries/notify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ beneficiaryId })
+            })
+          } catch (notificationError) {
+            console.error('Telegram notification failed:', notificationError)
+          }
+        }
       }
 
       await get().fetchBeneficiaries(type)

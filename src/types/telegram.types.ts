@@ -11,10 +11,29 @@ export interface TelegramPhotoMessage {
   caption?: string;
   parse_mode?: 'HTML' | 'Markdown';
 }
+
+export interface TelegramVideoMessage {
+  video: string; // URL to the video
+  caption?: string;
+  parse_mode?: 'HTML' | 'Markdown';
+}
+
+export interface SponsorshipNotificationData {
+  sponsorName: string;
+  sponsorEmail: string;
+  amount: number;
+  beneficiaryId?: string | null;
+  beneficiaryName: string;
+  paymentMethod: string;
+  paymentReference: string;
+  interval?: string;
+}
+
 export interface TelegramNotificationService {
   sendMessage(message: string, chatId?: string): Promise<boolean>;
   sendPhoto(photoUrl: string, caption?: string, chatId?: string): Promise<boolean>;
   sendChildCreatedNotification(beneficiaryData: Beneficiaries, chatId?: string): Promise<boolean>;
+  sendSponsorshipNotification(sponsorshipData: SponsorshipNotificationData, chatId?: string): Promise<boolean>;
 }
 
 export interface TelegramConfig {

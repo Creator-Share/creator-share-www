@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/client"
+import { notifySponsorshipReceived } from "@/services/telegram"
 
 // Helper to get raw body (Next.js API routes do not provide this by default)
 async function getRawBody(req: Request): Promise<string> {
@@ -223,11 +224,24 @@ export async function POST(req: Request) {
             { error: "Failed to create recurring transaction" },
             { status: 500 },
           )
-        } else {
-          console.log(
-            "Duplicate transaction detected, skipping insert for recurring payment window",
-          )
         }
+
+        // Send Telegram notification for PayPal sponsorship
+        try {
+          await notifySponsorshipReceived({
+            sponsorName: payerName || "Anonymous Sponsor",
+            sponsorEmail: payerEmail || "No email provided",
+            amount: amount || 0,
+            beneficiaryId: beneficiaryId,
+            beneficiaryName: beneficiaryName,
+            paymentMethod: "PayPal",
+            paymentReference: recurringReference,
+          })
+        } catch (telegramError) {
+          console.error("Failed to send PayPal sponsorship Telegram notification:", telegramError)
+          // Don't fail the webhook if Telegram notification fails
+        }
+
         return NextResponse.json(
           { message: "PayPal recurring payment processed successfully" },
           { status: 200 },
@@ -247,6 +261,27 @@ export async function POST(req: Request) {
         const customerId = subscriber.payer_id || null
         const userId = null // Do not set user_id to custom_id
         const beneficiaryId = subscription.custom_id || null
+
+        // Get subscriber details for notification
+        const payerEmail = subscriber.email_address || null
+        const payerName = subscriber.name
+          ? `${subscriber.name.given_name || ""} ${
+              subscriber.name.surname || ""
+            }`.trim()
+          : null
+
+        // Fetch beneficiary name from DB if beneficiaryId is present
+        const { data: beneficiary, error: beneficiaryError } = beneficiaryId
+          ? await supabase
+              .from("beneficiaries")
+              .select("name")
+              .eq("id", beneficiaryId)
+              .single()
+          : { data: null, error: null }
+        const beneficiaryName =
+          !beneficiaryError && beneficiary && beneficiary.name
+            ? beneficiary.name
+            : beneficiaryId
 
         // Fetch plan details for amount and interval
         let amount = null
@@ -333,6 +368,24 @@ export async function POST(req: Request) {
             },
             { status: 500 },
           )
+        }
+
+        // Send Telegram notification for new PayPal subscription (only if active/approved)
+        if (mappedStatus === "active" || mappedStatus === "approved") {
+          try {
+            await notifySponsorshipReceived({
+              sponsorName: payerName || "Anonymous Sponsor",
+              sponsorEmail: payerEmail || "No email provided",
+              amount: amount || 0,
+              beneficiaryId: beneficiaryId,
+              beneficiaryName: beneficiaryName,
+              paymentMethod: "PayPal",
+              paymentReference: paypalSubscriptionId,
+            })
+          } catch (telegramError) {
+            console.error("Failed to send PayPal subscription Telegram notification:", telegramError)
+            // Don't fail the webhook if Telegram notification fails
+          }
         }
 
         return NextResponse.json(
