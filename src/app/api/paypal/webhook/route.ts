@@ -347,7 +347,7 @@ export async function POST(req: Request) {
           .from("subscriptions")
           .insert({
             user_id: userId,
-            sponsorship_id: paypalSubscriptionId,
+            stripe_subscription_id: paypalSubscriptionId, // Changed from sponsorship_id
             status: "incomplete",
             amount: amount ?? 0,
             interval: interval ?? undefined,
@@ -405,7 +405,7 @@ export async function POST(req: Request) {
             status: "cancelled",
             canceled_at: new Date(),
           })
-          .eq("sponsorship_id", paypalSubscriptionId)
+          .eq("stripe_subscription_id", paypalSubscriptionId) // Changed from sponsorship_id
 
         if (updateError) {
           console.error("Error cancelling PayPal subscription:", updateError)

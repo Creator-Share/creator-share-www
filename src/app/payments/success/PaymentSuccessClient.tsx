@@ -61,7 +61,7 @@ export default function PaymentSuccessClient() {
 
   useEffect(() => {
     const sessionId = searchParams.get("session_id")
-    const paypalSubscriptionId = searchParams.get("sponsorship_id")
+    const paypalSubscriptionId = searchParams.get("sponsorship_id") || searchParams.get("subscription_id") // Handle both parameter names
     const paypalToken =
       searchParams.get("token") || searchParams.get("ba_token")
 
@@ -102,14 +102,14 @@ export default function PaymentSuccessClient() {
           setStatus({
             provider: "paypal",
             status: "error",
-            message: "Invalid session ID for PayPal payment.",
+            message: "Invalid PayPal session.",
           })
         })
     } else {
       setStatus({
         provider: "unknown",
         status: "error",
-        message: "Invalid session ID",
+        message: "No valid payment session found.",
       })
     }
   }, [searchParams])
