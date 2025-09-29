@@ -19,6 +19,7 @@ export interface Beneficiaries {
   name: string
   username: string
   gender: Gender
+  age?: number
   birth_date: string
   biography: string
   budget_goal: number
@@ -100,3 +101,6 @@ export interface FilterState {
   resetToDefaults: () => void
   isDirty: () => boolean
 }
+
+// Export Telegram types
+export * from './telegram.types'

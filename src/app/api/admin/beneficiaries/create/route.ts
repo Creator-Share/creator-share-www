@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { Beneficiaries, BeneficiaryType, Status } from "@/types/admin.types"
+import { notifyChildCreated } from "@/services/telegram"
+import { calculateAge } from "@/utils/ageCalculator"
 
 export async function POST(req: Request) {
   const supabase = await createClient()
@@ -41,6 +43,27 @@ export async function POST(req: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    // Send Telegram notification for child beneficiaries
+    if (inserted.beneficiary_type === "CHILD") {
+      try {
+        // Calculate age from birth_date using existing utility
+        const age = inserted.birth_date ? calculateAge(inserted.birth_date) : null;
+
+        const notificationData = {
+          ...inserted,
+          age
+        };
+
+        // Send notification asynchronously (don't wait for it)
+        notifyChildCreated(notificationData).catch(error => {
+          console.error('Telegram notification failed for child:', inserted.id, error);
+        });
+      } catch (notificationError) {
+        console.error('Error preparing Telegram notification:', notificationError);
+        // Don't fail the main operation if notification fails
+      }
     }
 
     // TODO: Handle file uploads (images and videos) here
