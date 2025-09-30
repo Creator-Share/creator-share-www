@@ -8,8 +8,7 @@ import {
   DrawerTitle,
   DrawerActionTrigger,
   DrawerRoot,
-  DrawerBackdrop,
-  DrawerTrigger,
+  DrawerBackdrop
 } from "@/components/ui/drawer"
 import {
   Text,
@@ -32,7 +31,6 @@ import { LuFileUp } from "react-icons/lu"
 // import ExpenseManager from "./ExpenseManager";
 import MapPicker from "./MapPicker"
 import { Beneficiaries } from "@/types/admin.types"
-import { GoPlusCircle } from "react-icons/go"
 import { toaster } from "@/components/ui/toaster"
 
 type CreateDrawerProps = {
@@ -172,11 +170,6 @@ const CreateDrawer = ({
       }}
     >
       <DrawerBackdrop />
-      <DrawerTrigger asChild>
-        <Button className="border-[2px] border-[#E0E0E0] rounded-md w-fit h-[40px] px-10 bg-[#1C3C8C] text-white">
-          <GoPlusCircle className="mr-[3.5px]" /> List A Child
-        </Button>
-      </DrawerTrigger>
       <DrawerContent>
         <DrawerHeader>
           <DrawerTitle>

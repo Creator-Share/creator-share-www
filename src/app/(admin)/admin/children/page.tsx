@@ -1,8 +1,8 @@
 "use client"
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
-import { Box, Button, Text, Input, Flex } from "@chakra-ui/react"
-import { MdDeleteOutline } from "react-icons/md"
+import { Box, Text, Input, Flex } from "@chakra-ui/react"
+import { Button } from "@/components/ui/button"
 import { toaster } from "@/components/ui/toaster"
 import DeleteDialog from "./components/DeleteDialog"
 import BeneficiaryCard from "./components/BeneficiaryCard"
@@ -13,6 +13,8 @@ import GoBackButton from "@/components/ui/goBack"
 import { Checkbox } from "@/components/ui/checkbox"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { useFormStore } from "@/store/formStore"
+import { BulkActionButton } from "@/components/admin-ui/BulkActionButton"
+import { GoPlusCircle } from "react-icons/go"
 
 const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), {
   ssr: false,
@@ -65,6 +67,7 @@ const ChildrenTable = () => {
     updateBeneficiary,
     deleteBeneficiary,
     bulkDelete,
+    bulkUpdateStatus, // Single method for all status updates
   } = useBeneficiaryStore()
 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
@@ -213,6 +216,19 @@ const ChildrenTable = () => {
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm])
+
+  // Add this useEffect to ensure selection state is properly managed
+  useEffect(() => {
+    // Clear selection if selected items no longer exist in data
+    if (selectedItems.size > 0) {
+      const existingIds = new Set(data.filter(b => b.id).map(b => b.id!))
+      const validSelectedItems = Array.from(selectedItems).filter(id => existingIds.has(id))
+      
+      if (validSelectedItems.length !== selectedItems.size) {
+        setSelectedItems(new Set(validSelectedItems))
+      }
+    }
+  }, [data, selectedItems])
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -481,6 +497,35 @@ const ChildrenTable = () => {
     selectedItems.size > 0 &&
     selectedItems.size < data.filter((b) => b.id).length
 
+  // Single responsibility - handle any bulk status update
+  const handleBulkStatusUpdate = async (status: string) => {
+    if (selectedItems.size === 0) return
+
+    try {
+      const beneficiaryIds = Array.from(selectedItems)
+      console.log('Updating status for IDs:', beneficiaryIds, 'to status:', status)
+      
+      // Clear selection BEFORE making the API call to prevent race conditions
+      setSelectedItems(new Set())
+      setSelectedRowsForDeletion([])
+      
+      await bulkUpdateStatus("CHILD", beneficiaryIds, status)
+      
+      toaster.create({
+        title: "Success",
+        description: `Selected beneficiaries moved to ${status.toLowerCase()} successfully.`,
+        duration: 5000,
+      })
+    } catch (error) {
+      console.error("Bulk status update error:", error)
+      toaster.create({
+        title: "Error",
+        description: `Failed to update selected beneficiaries: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        duration: 5000,
+      })
+    }
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
@@ -493,53 +538,43 @@ const ChildrenTable = () => {
     <Box>
       <GoBackButton />
       <Box className="container mx-auto mt-12 p-4">
-        {/* Header */}
-        <Box className="grid grid-cols-1 lg:grid-cols-2 mb-6 gap-4">
-          <Text className="text-3xl font-semibold leading-9">
-            Manage Children ({filteredData.length} total)
-          </Text>
-          <Box className="flex gap-3 justify-end">
-            <CreateDrawer
-              formData={formData}
-              isDrawerOpen={isCreateDrawerOpen}
-              setIsDrawerOpen={setIsCreateDrawerOpen}
-              setFormData={(value) => {
-                if (typeof value === "function") {
-                  const currentValue = value(formData)
-                  setFormData(currentValue)
-                } else {
-                  setFormData(value)
-                }
-              }}
-              handleInputChange={handleInputChange}
-              handleSelectChange={handleSelectChange}
-              handleLocationSelect={handleLocationSelect}
-              handleSubmit={handleSubmit}
-              imageFiles={imageFiles}
-              setImageFiles={(value) =>
-                typeof value === "function"
-                  ? setImageFiles(value(imageFiles))
-                  : setImageFiles(value)
-              }
-              videoFiles={videoFiles}
-              setVideoFiles={(value) =>
-                typeof value === "function"
-                  ? setVideoFiles(value(videoFiles))
-                  : setVideoFiles(value)
-              }
-              handleDrawerClose={() => setIsCreateDrawerOpen(false)}
-            />
-            {selectedCount > 0 && (
-              <Button
-                onClick={handleBulkDelete}
-                className="border-[2px] border-[#E0E0E0] bg-red-500 text-white w-fit h-[40px] px-4"
-              >
-                <MdDeleteOutline className="mr-[3.5px]" /> Bulk Delete (
-                {selectedCount})
-              </Button>
+        {/* Simple header with bulk actions */}
+        <Flex justify="space-between" align="center" mb={6}>
+          <Text fontSize="2xl" fontWeight="bold">Children</Text>
+          
+          <Flex gap={3}>
+            {selectedItems.size > 0 && (
+              <>
+                <BulkActionButton
+                  label="Delete"
+                  count={selectedItems.size}
+                  action={handleBulkDelete}
+                  className="border-[2px] border-transparent rounded-md w-fit h-[40px] px-10 bg-[#ff0000] text-white hover:bg-[#ff0000] hover:text-white"
+                />
+                <BulkActionButton
+                  label="Archive"
+                  count={selectedItems.size}
+                  action={() => handleBulkStatusUpdate("Archived")}
+                  className="border-[2px] border-[#000000] rounded-md w-fit h-[40px] px-10 bg-[#ffffff] text-black hover:bg-[#f0f0f0] hover:text-black"
+                />
+                <BulkActionButton
+                  label="Draft"
+                  count={selectedItems.size}
+                  action={() => handleBulkStatusUpdate("Draft")}
+                  className="border-[2px] border-[#000000] rounded-md w-fit h-[40px] px-10 bg-[#ffffff] text-black hover:bg-[#f0f0f0] hover:text-black"
+                />
+              </>
             )}
-          </Box>
-        </Box>
+            
+            <Button
+              onClick={() => setIsCreateDrawerOpen(true)}
+              className="border-[2px] border-[#E0E0E0] rounded-md w-fit h-[40px] px-10 bg-[#1C3C8C] text-white"
+            >
+              <GoPlusCircle className="mr-2" />
+              Add New
+            </Button>
+          </Flex>
+        </Flex>
 
         {/* Search and Select All */}
         <Box className="mb-6 space-y-4">
@@ -695,6 +730,39 @@ const ChildrenTable = () => {
           onConfirm={confirmDelete}
           itemCount={selectedRowsForDeletion.length}
         />
+
+        {/* Create Drawer */}
+        <CreateDrawer
+          formData={formData}
+          isDrawerOpen={isCreateDrawerOpen}
+          setIsDrawerOpen={setIsCreateDrawerOpen}
+          setFormData={(value) => {
+            if (typeof value === "function") {
+              const currentValue = value(formData)
+              setFormData(currentValue)
+            } else {
+              setFormData(value)
+            }
+          }}
+          handleInputChange={handleInputChange}
+          handleSelectChange={handleSelectChange}
+          handleLocationSelect={handleLocationSelect}
+          handleSubmit={handleSubmit}
+          imageFiles={imageFiles}
+          setImageFiles={(value) =>
+            typeof value === "function"
+              ? setImageFiles(value(imageFiles))
+              : setImageFiles(value)
+          }
+          videoFiles={videoFiles}
+          setVideoFiles={(value) =>
+            typeof value === "function"
+              ? setVideoFiles(value(videoFiles))
+              : setVideoFiles(value)
+          }
+          handleDrawerClose={() => setIsCreateDrawerOpen(false)}
+        />
+
       </Box>
     </Box>
   )

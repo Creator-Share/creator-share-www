@@ -15,6 +15,7 @@ interface BeneficiaryStoreState {
   updateBeneficiary: (type: BeneficiaryType, updated: Partial<Beneficiaries>) => Promise<void>
   deleteBeneficiary: (type: BeneficiaryType, id: string) => Promise<void>
   bulkDelete: (type: BeneficiaryType, ids: string[]) => Promise<void>
+  bulkUpdateStatus: (type: BeneficiaryType, ids: string[], status: string) => Promise<void>
 }
 
 export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => ({
@@ -198,6 +199,29 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
       await get().fetchBeneficiaries(type)
     } catch (error) {
       console.error("Bulk delete error:", error)
+    }
+  },
+
+  bulkUpdateStatus: async (type, ids, status) => {
+    try {
+      console.log('Bulk update status request:', { type, ids, status })
+      
+      const res = await fetch("/api/admin/beneficiaries/bulk-update-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, status }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        console.error("Bulk status update failed:", errorData)
+        throw new Error(errorData.error || "Bulk status update failed")
+      }
+
+      await get().fetchBeneficiaries(type)
+    } catch (error) {
+      console.error("Bulk status update error:", error)
+      throw error // Re-throw to be handled by the component
     }
   },
 }))
