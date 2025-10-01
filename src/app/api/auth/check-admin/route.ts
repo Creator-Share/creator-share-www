@@ -1,6 +1,6 @@
+import {  RoleAssignmentResponse } from "@/types"
 import { createClient } from "@/utils/supabase/server"
 import { NextResponse } from "next/server"
-import { RoleAssignment } from "@/types"
 
 export async function GET() {
   try {
@@ -13,17 +13,26 @@ export async function GET() {
       return NextResponse.json({ isAdmin: false })
     }
 
-    const { data: roleData } = (await supabase
+    const { data: roleData } = await supabase
       .from("role_assignments")
       .select(
         `
         roles:roles!role_assignments_role_id_fkey(name)
-      `,
+      `
       )
-      .eq("user_id", user.id)) as { data: RoleAssignment[] | null }
+      .eq("user_id", user.id)
 
-    const isAdmin = roleData?.[0]?.roles?.name === "SUPER_ADMIN"
-    return NextResponse.json({ isAdmin })
+    console.log("DEBUG - check-admin roleData:", JSON.stringify(roleData, null, 2))
+
+    // Check if any role assignment has SUPER_ADMIN role
+    // Cast to unknown first to handle the type mismatch
+    const typedRoleData = (roleData as unknown) as RoleAssignmentResponse
+    const isAdmin = typedRoleData?.some((assignment) => 
+      assignment.roles.name === "SUPER_ADMIN"
+    )
+
+    console.log("DEBUG - check-admin isAdmin:", isAdmin)
+    return NextResponse.json({ isAdmin: !!isAdmin })
   } catch (error) {
     console.error("Error checking admin:", error)
     return NextResponse.json({ isAdmin: false })

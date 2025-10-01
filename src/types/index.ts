@@ -76,11 +76,15 @@ export interface loginForm {
   password: string
 }
 
-export interface RoleAssignment {
-  roles: {
-    name: string
-  }
+export interface Role {
+  name: string
 }
+
+export interface RoleAssignment {
+  roles: Role
+}
+
+export type RoleAssignmentResponse = RoleAssignment[]
 
 export interface AuthState {
   user: User | null
