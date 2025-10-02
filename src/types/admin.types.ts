@@ -137,7 +137,7 @@ export interface UserRole {
 
 export interface UserInvitation {
   email: string
-  role_id: string
+  role_ids: string[]
   invited_by: string
 }
 

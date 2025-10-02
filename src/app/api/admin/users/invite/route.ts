@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
-import {  RoleAssignmentResponse } from "@/types"
+import { RoleAssignmentResponse } from "@/types"
 import { UserInvitation } from "@/types/admin.types"
 
 export async function POST(request: Request) {
@@ -35,66 +35,49 @@ export async function POST(request: Request) {
     }
 
     const invitation: UserInvitation = await request.json()
-    const { email, role_id } = invitation
+    const { email, role_ids } = invitation
 
-    if (!email || !role_id) {
+    if (!email || !role_ids || role_ids.length === 0) {
       return NextResponse.json(
-        { error: "Email and role_id are required" },
+        { error: "Email and role_ids are required" },
         { status: 400 }
       )
     }
 
-    // Check if user already exists
-    const { data: existingUser } = await serviceSupabase
-      .from("users")
-      .select("id")
-      .eq("email", email)
-      .single()
+    console.log("Attempting to invite user:", email, "with roles:", role_ids)
 
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "User with this email already exists" },
-        { status: 400 }
-      )
+    // Use Supabase's built-in inviteUserByEmail with first role as primary
+    const { data: inviteData, error: inviteError } = await serviceSupabase.auth.admin.inviteUserByEmail(
+      email,
+      {
+        data: {
+          role_ids: role_ids, // Store all role IDs for later assignment
+          invited_by: user.id
+        },
+        redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://creator-share-www.vercel.app'}/set-password`
+      }
+    )
+
+    if (inviteError) {
+      console.error("Error inviting user:", inviteError)
+      return NextResponse.json({ 
+        error: "Failed to invite user", 
+        details: inviteError.message 
+      }, { status: 500 })
     }
 
-    // Create user invitation using service role client
-    const { data: newUser, error: userError } = await serviceSupabase
-      .from("users")
-      .insert({
-        email,
-        first_name: null,
-        last_name: null,
-      })
-      .select()
-      .single()
-
-    if (userError) {
-      console.error("Error creating user:", userError)
-      return NextResponse.json({ error: "Failed to create user" }, { status: 500 })
-    }
-
-    // Assign role to user using service role client
-    const { error: roleError } = await serviceSupabase
-      .from("role_assignments")
-      .insert({
-        user_id: newUser.id,
-        role_id,
-      })
-
-    if (roleError) {
-      console.error("Error assigning role:", roleError)
-      // Clean up the user if role assignment fails
-      await serviceSupabase.from("users").delete().eq("id", newUser.id)
-      return NextResponse.json({ error: "Failed to assign role" }, { status: 500 })
-    }
+    console.log("Invitation sent successfully:", inviteData)
 
     return NextResponse.json(
-      { message: "User invited successfully" },
+      { 
+        message: "User invited successfully", 
+        user: inviteData.user,
+        invitationSent: true
+      },
       { status: 201 }
     )
   } catch (error) {
     console.error("Unexpected error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-} 
+}
