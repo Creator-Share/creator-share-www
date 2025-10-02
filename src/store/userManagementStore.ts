@@ -50,12 +50,13 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(invitation),
       })
-      
+
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to invite user")
       }
-      
+
+      await get().fetchUsers()
       set({ loading: false })
       return true
     } catch (error) {
@@ -73,13 +74,12 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, roleId }),
       })
-      
+
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to assign role")
       }
-      
-      // Refresh users list
+
       await get().fetchUsers()
       set({ loading: false })
       return true
@@ -94,17 +94,16 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
     set({ loading: true, error: null })
     try {
       const response = await fetch("/api/admin/users/remove-role", {
-        method: "DELETE",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, roleId }),
       })
-      
+
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to remove role")
       }
-      
-      // Refresh users list
+
       await get().fetchUsers()
       set({ loading: false })
       return true
@@ -121,13 +120,12 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: "DELETE",
       })
-      
+
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to delete user")
       }
-      
-      // Refresh users list
+
       await get().fetchUsers()
       set({ loading: false })
       return true
@@ -138,21 +136,47 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
     }
   },
 
+  bulkDeleteUsers: async (userIds: string[]) => {
+    set({ loading: true, error: null })
+    try {
+      const response = await fetch('/api/admin/users/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ids: userIds }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to delete users')
+      }
+
+      // Refresh the users list
+      await get().fetchUsers()
+      set({ loading: false })
+      return true
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      set({ error: errorMessage, loading: false })
+      throw error
+    }
+  },
+
   updateUserRole: async (userId: string, roleId: string) => {
     set({ loading: true, error: null })
     try {
       const response = await fetch("/api/admin/users/update-role", {
-        method: "PUT",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, roleId }),
       })
-      
+
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to update user role")
       }
-      
-      // Refresh users list
+
       await get().fetchUsers()
       set({ loading: false })
       return true
@@ -167,17 +191,16 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
     set({ loading: true, error: null })
     try {
       const response = await fetch("/api/admin/users/assign-roles", {
-        method: "PUT",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, roleIds }),
       })
-      
+
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to assign roles")
       }
-      
-      // Refresh users list
+
       await get().fetchUsers()
       set({ loading: false })
       return true
@@ -188,6 +211,11 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
     }
   },
 
-  setSelectedUsers: (userIds: Set<string>) => set({ selectedUsers: userIds }),
-  clearError: () => set({ error: null }),
+  setSelectedUsers: (userIds: Set<string>) => {
+    set({ selectedUsers: userIds })
+  },
+
+  clearError: () => {
+    set({ error: null })
+  },
 })) 

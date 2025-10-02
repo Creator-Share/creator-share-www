@@ -1,6 +1,6 @@
 "use client"
 import React, { useEffect, useState } from "react"
-import { Box, Text, Flex, Button, Input } from "@chakra-ui/react"
+import { Box, Text, Flex, Button, Menu, Portal } from "@chakra-ui/react"
 import { useUserManagementStore } from "@/store/userManagementStore"
 import { UserRole, User, Role } from "@/types/admin.types"
 import {InviteUserDialog} from "./components/InviteUserDialog"
@@ -8,10 +8,10 @@ import { EditRoleDialog } from "./components/EditRoleDialog"
 import { BulkActionButton } from "@/components/admin-ui/BulkActionButton"
 import DeleteDialog from "../children/components/DeleteDialog"
 import { toaster } from "@/components/ui/toaster"
-import GoBackButton from "@/components/ui/goBack"
 import { Checkbox } from "@/components/ui/checkbox"
 import { GoPlusCircle } from "react-icons/go"
-import { FaEdit } from "react-icons/fa"
+import { HiDotsVertical } from "react-icons/hi"
+import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 
 const UserManagement = () => {
   const {
@@ -26,6 +26,7 @@ const UserManagement = () => {
     assignMultipleRoles,
     setSelectedUsers,
     clearError,
+    bulkDeleteUsers,
   } = useUserManagementStore()
 
   const [isInviteDrawerOpen, setIsInviteDrawerOpen] = useState(false)
@@ -35,6 +36,12 @@ const UserManagement = () => {
   const [userToEditRole, setUserToEditRole] = useState<UserRole | null>(null)
   const [userRoleAssignments, setUserRoleAssignments] = useState<UserRole[]>([])
   const [searchTerm, setSearchTerm] = useState("")
+  const [isClient, setIsClient] = useState(false)
+
+  // Fix hydration by ensuring client-side rendering
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   useEffect(() => {
     fetchUsers()
@@ -52,9 +59,55 @@ const UserManagement = () => {
     }
   }, [error, clearError])
 
+  // Group users by user_id to handle multiple roles
+  const groupedUsers = users.reduce((acc, userRole) => {
+    const userId = userRole.user_id
+    if (!acc[userId]) {
+      acc[userId] = {
+        user: userRole.user,
+        roles: [],
+        created_at: userRole.created_at
+      }
+    }
+    // Only push non-null roles
+    if (userRole.role) {
+      acc[userId].roles.push(userRole.role)
+    }
+    return acc
+  }, {} as Record<string, { user: User | undefined; roles: (Role | undefined)[]; created_at: string }>)
+
+  // Separate users with roles and users without roles
+  const usersWithRoles = Object.values(groupedUsers).filter(userGroup => 
+    userGroup.roles.length > 0 && userGroup.roles.some(role => role !== null && role !== undefined)
+  )
+  
+  const usersWithoutRoles = Object.values(groupedUsers).filter(userGroup => 
+    userGroup.roles.length === 0 || userGroup.roles.every(role => role === null || role === undefined)
+  )
+
+  // Filter both groups based on search term
+  const filteredUsersWithRoles = usersWithRoles.filter((userGroup) =>
+    userGroup.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    userGroup.user?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    userGroup.user?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    userGroup.roles.some(role => role?.name?.toLowerCase().includes(searchTerm.toLowerCase()))
+  )
+
+  const filteredUsersWithoutRoles = usersWithoutRoles.filter((userGroup) =>
+    userGroup.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    userGroup.user?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    userGroup.user?.last_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  // Get all unique user IDs from filtered results
+  const allFilteredUserIds = [
+    ...filteredUsersWithRoles.map(u => u.user?.id).filter(Boolean),
+    ...filteredUsersWithoutRoles.map(u => u.user?.id).filter(Boolean)
+  ].filter(Boolean) as string[]
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const allUserIds = new Set(users.map((user) => user.user?.id).filter(Boolean) as string[])
+      const allUserIds = new Set(allFilteredUserIds)
       setSelectedUsers(allUserIds)
     } else {
       setSelectedUsers(new Set())
@@ -90,34 +143,43 @@ const UserManagement = () => {
 
   const confirmDelete = async () => {
     try {
-      for (const user of usersToDelete) {
-        await deleteUser(user.user_id)
+      const userIds = usersToDelete.map(user => user.user_id).filter(Boolean)
+      
+      // Try bulk delete first (fastest)
+      try {
+        await bulkDeleteUsers(userIds)
+      } catch (bulkError) {
+        console.warn('Bulk delete failed, falling back to parallel individual deletes:', bulkError)
+        
+        // Fallback to parallel individual deletes (still much faster than sequential)
+        const deletePromises = usersToDelete.map(user => deleteUser(user.user_id))
+        await Promise.all(deletePromises)
       }
+      
       setSelectedUsers(new Set())
       setUsersToDelete([])
       setIsDeleteDialogOpen(false)
       toaster.create({
         title: "Success",
-        description: "Selected users deleted successfully.",
+        description: `Successfully deleted ${userIds.length} users.`,
         duration: 5000,
       })
     } catch (error) {
       console.error("Bulk delete error:", error)
       toaster.create({
         title: "Error",
-        description: "Failed to delete selected users. Please try again.",
+        description: `Failed to delete users: ${error instanceof Error ? error.message : 'Unknown error'}`,
         duration: 5000,
       })
     }
   }
 
   const handleEditRole = (userGroup: { user: User | undefined; roles: (Role | undefined)[]; created_at: string }) => {
-    // Find all role assignments for this user
     if (userGroup.user?.id) {
       const allUserRoleAssignments = users.filter(user => user.user?.id === userGroup.user?.id)
       if (allUserRoleAssignments.length > 0) {
-        setUserToEditRole(allUserRoleAssignments[0]) // Use first one for user info
-        setUserRoleAssignments(allUserRoleAssignments) // Store all role assignments
+        setUserToEditRole(allUserRoleAssignments[0])
+        setUserRoleAssignments(allUserRoleAssignments)
         setIsEditRoleDialogOpen(true)
       }
     }
@@ -127,30 +189,138 @@ const UserManagement = () => {
     await assignMultipleRoles(userId, roleIds)
   }
 
-  const isAllSelected = users.length > 0 && selectedUsers.size === users.length
-  const isSomeSelected = selectedUsers.size > 0 && selectedUsers.size < users.length
+  // Fix the selection logic - check against filtered users, not all users
+  const isAllSelected = allFilteredUserIds.length > 0 && 
+    allFilteredUserIds.every(userId => selectedUsers.has(userId))
+  const isSomeSelected = allFilteredUserIds.some(userId => selectedUsers.has(userId)) && 
+    !isAllSelected
 
-  // Group users by user_id to handle multiple roles
-  const groupedUsers = users.reduce((acc, userRole) => {
-    const userId = userRole.user_id
-    if (!acc[userId]) {
-      acc[userId] = {
-        user: userRole.user,
-        roles: [],
-        created_at: userRole.created_at
-      }
+  // Helper function to format date consistently
+  const formatDate = (dateString: string) => {
+    if (!isClient) return "Loading..."
+    try {
+      return new Date(dateString).toLocaleDateString()
+    } catch {
+      return "Invalid Date"
     }
-    acc[userId].roles.push(userRole.role)
-    return acc
-  }, {} as Record<string, { user: User | undefined; roles: (Role | undefined)[]; created_at: string }>)
+  }
 
-  // Convert grouped users to array and filter based on search term
-  const filteredUsers = Object.values(groupedUsers).filter((userGroup) =>
-    userGroup.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    userGroup.user?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    userGroup.user?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    userGroup.roles.some(role => role?.name?.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const renderUserCard = (userGroup: { user: User | undefined; roles: (Role | undefined)[]; created_at: string }) => {
+    return (
+      <Box
+        key={`${userGroup.user?.id}`}
+        className="border border-gray-200 rounded-lg p-4 bg-white hover:shadow-md transition-shadow"
+      >
+        {/* Checkbox and Menu aligned in the same row */}
+        <Flex justify="space-between" align="center" mb={3}>
+          <Checkbox
+            checked={selectedUsers.has(userGroup.user?.id || "")}
+            onCheckedChange={(checked) => handleSelectUser(userGroup.user?.id || "", !!checked)}
+            className="h-5 w-5 border-2 border-gray-400"
+          />
+          
+          {/* Ellipses Menu - Aligned with checkbox */}
+          <Menu.Root>
+            <Menu.Trigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="flex items-center justify-center p-2 hover:bg-gray-100 rounded-md"
+              >
+                <HiDotsVertical className="w-5 h-5 text-gray-600" />
+              </Button>
+            </Menu.Trigger>
+            <Portal>
+              <Menu.Positioner>
+                <Menu.Content>
+                  <Menu.Item 
+                    value="edit"
+                    onClick={() => handleEditRole(userGroup)}
+                    className="flex items-center gap-2 text-blue-600 hover:bg-blue-50"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Role
+                  </Menu.Item>
+                  <Menu.Item 
+                    value="delete"
+                    onClick={() => {
+                      if (userGroup.user?.id) {
+                        deleteUser(userGroup.user.id)
+                      }
+                    }}
+                    className="flex items-center gap-2 text-red-600 hover:bg-red-50"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete
+                  </Menu.Item>
+                </Menu.Content>
+              </Menu.Positioner>
+            </Portal>
+          </Menu.Root>
+        </Flex>
+        
+        {/* User info - Mobile optimized */}
+        <Box className="space-y-3">
+          <Box>
+            <Text fontSize="lg" fontWeight="bold" mb={1} className="break-all">
+              {userGroup.user?.email || "No email"}
+            </Text>
+            
+            <Text fontSize="sm" color="gray.600">
+              <strong>Name:</strong> {userGroup.user?.first_name || "N/A"} {userGroup.user?.last_name || ""}
+            </Text>
+          </Box>
+          
+          {/* Roles - Mobile optimized */}
+          <Box>
+            <Text as="span" fontWeight="bold" fontSize="sm" color="gray.600" display="block" mb={2}>
+              Roles:
+            </Text>
+            <Box className="flex flex-wrap gap-1">
+              {userGroup.roles && userGroup.roles.length > 0 ? (
+                userGroup.roles
+                  .filter(role => role !== null && role !== undefined)
+                  .map((role, roleIndex) => (
+                    <span
+                      key={roleIndex}
+                      className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                        role?.name === "SUPER_ADMIN" 
+                          ? "bg-red-100 text-red-800" 
+                          : "bg-blue-100 text-blue-800"
+                      }`}
+                    >
+                      {role?.display_name || role?.name || "N/A"}
+                    </span>
+                  ))
+              ) : (
+                <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 whitespace-nowrap">
+                  No roles assigned
+                </span>
+              )}
+            </Box>
+          </Box>
+          
+          <Text fontSize="sm" color="gray.600">
+            <strong>Joined:</strong> {formatDate(userGroup.created_at)}
+          </Text>
+          
+          {userGroup.roles && userGroup.roles.length > 0 && (
+            <Text fontSize="sm" color="gray.500" className="leading-relaxed">
+              {userGroup.roles
+                .filter(role => role !== null && role !== undefined)
+                .map(role => role?.description)
+                .filter(Boolean)
+                .join(" • ")}
+            </Text>
+          )}
+        </Box>
+      </Box>
+    )
+  }
 
   if (loading) {
     return (
@@ -160,180 +330,121 @@ const UserManagement = () => {
     )
   }
 
+  const totalFilteredUsers = filteredUsersWithRoles.length + filteredUsersWithoutRoles.length
+  const hasResults = totalFilteredUsers > 0
+
   return (
-    <Box>
-      <GoBackButton />
-      <Box className="container mx-auto mt-12 p-4">
-        {/* Simple header with bulk actions */}
-        <Flex justify="space-between" align="center" mb={6}>
-          <Text fontSize="2xl" fontWeight="bold">User Management</Text>
-          
-          <Flex gap={3}>
-            {selectedUsers.size > 0 && (
-              <BulkActionButton
-                label="Delete"
-                count={selectedUsers.size}
-                action={handleBulkDelete}
-                className="border-[2px] border-transparent rounded-md w-fit h-[40px] px-10 bg-[#ff0000] text-white hover:bg-[#ff0000] hover:text-white"
-              />
-            )}
-            
-            <Button
-              onClick={() => setIsInviteDrawerOpen(true)}
-              className="border-[2px] border-[#E0E0E0] rounded-md w-fit h-[40px] px-10 bg-[#1C3C8C] text-white"
-            >
-              <GoPlusCircle className="mr-2" />
-              Invite User
-            </Button>
-          </Flex>
-        </Flex>
-
-        {/* Search and Select All */}
-        <Box className="mb-6 space-y-4">
-          <Input
-            placeholder="Search by email, name, or role"
-            value={searchTerm}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setSearchTerm(e.target.value)
-            }
-            className="border max-w-md"
-            px={3}
-            py={2}
+    <AdminPageLayout
+      title="User Management"
+      description="Manage user accounts and role assignments"
+      breadcrumb={[{ label: "User Management" }]}
+      searchPlaceholder="Search by email, name, or role..."
+      searchValue={searchTerm}
+      onSearchChange={setSearchTerm}
+      showSelectAll={true}
+      isAllSelected={isAllSelected}
+      isSomeSelected={isSomeSelected}
+      onSelectAll={handleSelectAll}
+      selectedCount={selectedUsers.size}
+      totalCount={totalFilteredUsers}
+      bulkActions={
+        selectedUsers.size > 0 ? (
+          <BulkActionButton
+            label="Delete"
+            count={selectedUsers.size}
+            action={handleBulkDelete}
+            className="border-[2px] border-transparent rounded-md w-full md:w-auto h-[40px] px-6 bg-[#ff0000] text-white hover:bg-[#ff0000] hover:text-white justify-center"
           />
-
-          {users.length > 0 && (
-            <Box className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <Checkbox
-                checked={isAllSelected}
-                _indeterminate={isSomeSelected ? {} : undefined}
-                onCheckedChange={handleSelectAll}
-                className="h-5 w-5 border-2 border-gray-400"
-              />
-              <Text className="text-sm font-medium text-gray-700">
-                Select All ({selectedUsers.size} selected)
+        ) : undefined
+      }
+      primaryAction={
+        <Button
+          onClick={() => setIsInviteDrawerOpen(true)}
+          className="border-[2px] border-[#E0E0E0] rounded-md w-full md:w-auto h-[40px] px-6 bg-[#1C3C8C] text-white hover:bg-[#1C3C8C] justify-center"
+        >
+          <GoPlusCircle className="mr-2" />
+          Invite User
+        </Button>
+      }
+      showResults={hasResults}
+      noResultsMessage="No users found matching your search."
+    >
+      {/* Users with Roles Section - Mobile optimized */}
+      {filteredUsersWithRoles.length > 0 && (
+        <Box className="mb-6 md:mb-8">
+          <Flex 
+            align="center" 
+            gap={3} 
+            mb={4}
+            direction="column"
+            className="md:flex-row md:items-center"
+          >
+            <Flex align="center" gap={3} className="w-full md:w-auto">
+              <Box className="h-6 w-1 bg-blue-500 rounded-full md:h-8" />
+              <Text fontSize="lg" fontWeight="bold" color="gray.800" className="md:text-xl">
+                Users with Roles
               </Text>
-              {selectedUsers.size > 0 && (
-                <Text className="text-xs text-gray-500 ml-auto">
-                  {selectedUsers.size} of {users.length} users selected
-                </Text>
-              )}
-            </Box>
-          )}
-        </Box>
-
-        {/* User Cards Grid */}
-        <Box className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredUsers.map((userGroup, index) => (
-            <Box
-              key={`${userGroup.user?.id || index}`}
-              className="border border-gray-200 rounded-lg p-4 bg-white hover:shadow-md transition-shadow"
-            >
-              <Flex justify="space-between" align="start" mb={3}>
-                <Checkbox
-                  checked={selectedUsers.has(userGroup.user?.id || "")}
-                  onCheckedChange={(checked) => handleSelectUser(userGroup.user?.id || "", !!checked)}
-                  className="h-5 w-5 border-2 border-gray-400"
-                />
-                <Flex gap={2}>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    colorScheme="blue"
-                    onClick={() => handleEditRole(userGroup)}
-                    className="flex items-center gap-1"
-                  >
-                    <FaEdit className="text-xs" />
-                    Edit Role
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    colorScheme="red"
-                    onClick={() => {
-                      if (userGroup.user?.id) {
-                        deleteUser(userGroup.user.id)
-                      }
-                    }}
-                  >
-                    Delete
-                  </Button>
-                </Flex>
-              </Flex>
-              
-              <Box>
-                <Text fontSize="lg" fontWeight="bold" mb={2}>
-                  {userGroup.user?.email || "No email"}
-                </Text>
-                
-                <Text fontSize="sm" color="gray.600" mb={1}>
-                  <strong>Name:</strong> {userGroup.user?.first_name || "N/A"} {userGroup.user?.last_name || ""}
-                </Text>
-                
-                <Box fontSize="sm" color="gray.600" mb={1}>
-                  <Text as="span" fontWeight="bold">Roles:</Text>
-                  <Box className="flex flex-wrap gap-1 mt-1">
-                    {userGroup.roles.map((role, roleIndex) => (
-                      <span
-                        key={roleIndex}
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          role?.name === "SUPER_ADMIN" 
-                            ? "bg-red-100 text-red-800" 
-                            : "bg-blue-100 text-blue-800"
-                        }`}
-                      >
-                        {role?.display_name || role?.name || "N/A"}
-                      </span>
-                    ))}
-                  </Box>
-                </Box>
-                
-                <Text fontSize="sm" color="gray.600" mb={1}>
-                  <strong>Joined:</strong> {new Date(userGroup.created_at).toLocaleDateString()}
-                </Text>
-                
-                {userGroup.roles.length > 0 && (
-                  <Text fontSize="sm" color="gray.500" mt={2}>
-                    {userGroup.roles.map(role => role?.description).filter(Boolean).join(" • ")}
-                  </Text>
-                )}
+              <Box className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium md:text-sm">
+                {filteredUsersWithRoles.length}
               </Box>
-            </Box>
-          ))}
-        </Box>
-
-        {filteredUsers.length === 0 && (
-          <Box className="text-center py-12">
-            <Text className="text-gray-500">
-              No users found matching your search.
-            </Text>
+            </Flex>
+          </Flex>
+          <Box className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredUsersWithRoles.map(renderUserCard)}
           </Box>
-        )}
+        </Box>
+      )}
 
-        {/* Invite User Dialog */}
-        <InviteUserDialog
-          isOpen={isInviteDrawerOpen}
-          onClose={() => setIsInviteDrawerOpen(false)}
-        />
+      {/* Users without Roles Section - Mobile optimized */}
+      {filteredUsersWithoutRoles.length > 0 && (
+        <Box className="mb-6 md:mb-8">
+          <Flex 
+            align="center" 
+            gap={3} 
+            mb={4}
+            direction="column"
+            className="md:flex-row md:items-center"
+          >
+            <Flex align="center" gap={3} className="w-full md:w-auto">
+              <Box className="h-6 w-1 bg-orange-500 rounded-full md:h-8" />
+              <Text fontSize="lg" fontWeight="bold" color="gray.800" className="md:text-xl">
+                Users without Roles
+              </Text>
+              <Box className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium md:text-sm">
+                {filteredUsersWithoutRoles.length}
+              </Box>
+            </Flex>
+          </Flex>
+          <Box className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredUsersWithoutRoles.map(renderUserCard)}
+          </Box>
+        </Box>
+      )}
 
-        {/* Delete Dialog */}
-        <DeleteDialog
-          isOpen={isDeleteDialogOpen}
-          onClose={() => setIsDeleteDialogOpen(false)}
-          onConfirm={confirmDelete}
-          itemCount={usersToDelete.length}
-        />
+      {/* Invite User Dialog */}
+      <InviteUserDialog
+        isOpen={isInviteDrawerOpen}
+        onClose={() => setIsInviteDrawerOpen(false)}
+      />
 
-        {/* Edit Role Dialog */}
-        <EditRoleDialog
-          isOpen={isEditRoleDialogOpen}
-          onClose={() => setIsEditRoleDialogOpen(false)}
-          user={userToEditRole}
-          userRoles={userRoleAssignments}
-          allRoles={roles}
-          onRoleUpdate={handleRoleUpdate}
-        />
-      </Box>
-    </Box>
+      {/* Delete Dialog */}
+      <DeleteDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={confirmDelete}
+        itemCount={usersToDelete.length}
+      />
+
+      {/* Edit Role Dialog */}
+      <EditRoleDialog
+        isOpen={isEditRoleDialogOpen}
+        onClose={() => setIsEditRoleDialogOpen(false)}
+        user={userToEditRole}
+        userRoles={userRoleAssignments}
+        allRoles={roles}
+        onRoleUpdate={handleRoleUpdate}
+      />
+    </AdminPageLayout>
   )
 }
 

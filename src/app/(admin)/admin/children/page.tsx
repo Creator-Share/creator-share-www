@@ -1,20 +1,18 @@
 "use client"
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
-import { Box, Text, Input, Flex } from "@chakra-ui/react"
-import { Button } from "@/components/ui/button"
+import { Box, Flex, Button } from "@chakra-ui/react"
 import { toaster } from "@/components/ui/toaster"
 import DeleteDialog from "./components/DeleteDialog"
 import BeneficiaryCard from "./components/BeneficiaryCard"
 import { useBeneficiaryStore } from "@/store/beneficiaryStore"
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types"
 import { dollarsToCents } from "@/utils/currency"
-import GoBackButton from "@/components/ui/goBack"
-import { Checkbox } from "@/components/ui/checkbox"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { useFormStore } from "@/store/formStore"
 import { BulkActionButton } from "@/components/admin-ui/BulkActionButton"
 import { GoPlusCircle } from "react-icons/go"
+import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 
 const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), {
   ssr: false,
@@ -24,26 +22,6 @@ const EditDrawer = dynamic(() => import("./components/EditDrawer"), {
 })
 
 const ChildrenTable = () => {
-  // const initialFormData: Beneficiaries = {
-  //   name: "",
-  //   username: "",
-  //   gender: "Boy",
-  //   birth_date: "",
-  //   biography: "",
-  //   budget_goal: 0,
-  //   budget_raised: 0,
-  //   status: "Draft",
-  //   country: "",
-  //   location_geo: null,
-  //   location_str: "",
-  //   video_url: "",
-  //   introduction: "",
-  //   active_subscriptions: 0,
-  //   metadata: {},
-  //   beneficiary_type: "CHILD",
-  //   image_url: "",
-  // }
-
   const { 
     formData, 
     setFormData, 
@@ -67,12 +45,12 @@ const ChildrenTable = () => {
     updateBeneficiary,
     deleteBeneficiary,
     bulkDelete,
-    bulkUpdateStatus, // Single method for all status updates
+    bulkUpdateStatus,
   } = useBeneficiaryStore()
 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
-  const [selectedCount, setSelectedCount] = useState(0)
+  const [, setSelectedCount] = useState(0)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [beneficiaryImages, setBeneficiaryImages] = useState<
@@ -86,13 +64,12 @@ const ChildrenTable = () => {
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 9 // Show 9 items per page (3x3 grid)
+  const itemsPerPage = 9
 
   useEffect(() => {
     fetchBeneficiaries("CHILD")
   }, [fetchBeneficiaries])
 
-  // Initialize form data with default values
   useEffect(() => {
     if (!formData.status) {
       setFormData({ ...formData, status: "New" })
@@ -534,220 +511,148 @@ const ChildrenTable = () => {
     )
   }
 
+  const hasResults = filteredData.length > 0
+
   return (
-    <Box>
-      <GoBackButton />
-      <Box className="container mx-auto mt-12 p-4">
-        {/* Simple header with bulk actions */}
-        <Flex justify="space-between" align="center" mb={6}>
-          <Text fontSize="2xl" fontWeight="bold">Children</Text>
-          
-          <Flex gap={3}>
-            {selectedItems.size > 0 && (
-              <>
-                <BulkActionButton
-                  label="Delete"
-                  count={selectedItems.size}
-                  action={handleBulkDelete}
-                  className="border-[2px] border-transparent rounded-md w-fit h-[40px] px-10 bg-[#ff0000] text-white hover:bg-[#ff0000] hover:text-white"
-                />
-                <BulkActionButton
-                  label="Archive"
-                  count={selectedItems.size}
-                  action={() => handleBulkStatusUpdate("Archived")}
-                  className="border-[2px] border-[#000000] rounded-md w-fit h-[40px] px-10 bg-[#ffffff] text-black hover:bg-[#f0f0f0] hover:text-black"
-                />
-                <BulkActionButton
-                  label="Draft"
-                  count={selectedItems.size}
-                  action={() => handleBulkStatusUpdate("Draft")}
-                  className="border-[2px] border-[#000000] rounded-md w-fit h-[40px] px-10 bg-[#ffffff] text-black hover:bg-[#f0f0f0] hover:text-black"
-                />
-              </>
-            )}
+    <AdminPageLayout
+      title="Children"
+      description="Manage child beneficiaries"
+      breadcrumb={[{ label: "Children" }]}
+      searchPlaceholder="Search by name or username"
+      searchValue={searchTerm}
+      onSearchChange={setSearchTerm}
+      showSelectAll={true}
+      isAllSelected={isAllSelected}
+      isSomeSelected={isSomeSelected}
+      onSelectAll={handleSelectAll}
+      selectedCount={selectedItems.size}
+      totalCount={data.filter((b) => b.id).length}
+      bulkActions={
+        selectedItems.size > 0 ? (
+          <>
+            <BulkActionButton
+              label="Delete"
+              count={selectedItems.size}
+              action={handleBulkDelete}
+              className="border-[2px] border-transparent rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ff0000] text-white hover:bg-[#ff0000] hover:text-white"
+            />
+            <BulkActionButton
+              label="Archive"
+              count={selectedItems.size}
+              action={() => handleBulkStatusUpdate("Archived")}
+              className="border-[2px] border-[#000000] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ffffff] text-black hover:bg-[#f0f0f0] hover:text-black"
+            />
+            <BulkActionButton
+              label="Draft"
+              count={selectedItems.size}
+              action={() => handleBulkStatusUpdate("Draft")}
+              className="border-[2px] border-[#000000] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ffffff] text-black hover:bg-[#f0f0f0] hover:text-black"
+            />
+          </>
+        ) : undefined
+      }
+      primaryAction={
+        <Button
+          onClick={() => setIsCreateDrawerOpen(true)}
+          className="border-[2px] border-[#E0E0E0] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#1C3C8C] text-white"
+        >
+          <GoPlusCircle className="mr-2" />
+          Add New
+        </Button>
+      }
+      showResults={hasResults}
+      noResultsMessage="No children found matching your search."
+    >
+      {/* Grid Layout */}
+      <Box className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {paginatedData.map((beneficiary) => (
+          <BeneficiaryCard
+            key={beneficiary.id || beneficiary.username}
+            beneficiary={beneficiary}
+            isSelected={
+              beneficiary.id ? selectedItems.has(beneficiary.id) : false
+            }
+            onSelect={handleSelectItem}
+            onEdit={handleEditBeneficiary}
+            beneficiaryImages={beneficiaryImages}
+            loadingImages={loadingImages}
+          />
+        ))}
+      </Box>
+
+      {/* Pagination */}
+      {filteredData.length > itemsPerPage && (
+        <Flex justify="center" mt={8} gap={2} flexWrap="wrap">
+          <Flex gap={1} align="center">
+            <Button
+              onClick={() => {
+                setCurrentPage((prev) => Math.max(1, prev - 1))
+                window.scrollTo({ top: 0, behavior: "smooth" })
+              }}
+              disabled={currentPage === 1}
+              size="sm"
+              variant="outline"
+            >
+              Previous
+            </Button>
+            
+            {paginationItems.map((item, index) => (
+              <React.Fragment key={index}>
+                {item === 'ellipsis' ? (
+                  <Box px={2} py={1} color="gray.500">
+                    ...
+                  </Box>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      setCurrentPage(item as number)
+                      window.scrollTo({ top: 0, behavior: "smooth" })
+                    }}
+                    colorScheme={currentPage === item ? "blue" : undefined}
+                    variant={currentPage === item ? "solid" : "outline"}
+                    size="sm"
+                    aria-current={currentPage === item ? "page" : undefined}
+                    fontWeight={currentPage === item ? "bold" : "normal"}
+                  >
+                    {item}
+                  </Button>
+                )}
+              </React.Fragment>
+            ))}
             
             <Button
-              onClick={() => setIsCreateDrawerOpen(true)}
-              className="border-[2px] border-[#E0E0E0] rounded-md w-fit h-[40px] px-10 bg-[#1C3C8C] text-white"
+              onClick={() => {
+                const totalPages = Math.ceil(filteredData.length / itemsPerPage) // Calculate here too
+                setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                window.scrollTo({ top: 0, behavior: "smooth" })
+              }}
+              disabled={currentPage === Math.ceil(filteredData.length / itemsPerPage)} // And here
+              size="sm"
+              variant="outline"
             >
-              <GoPlusCircle className="mr-2" />
-              Add New
+              Next
             </Button>
           </Flex>
         </Flex>
+      )}
 
-        {/* Search and Select All */}
-        <Box className="mb-6 space-y-4">
-          <Input
-            placeholder="Search by name or username"
-            value={searchTerm}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setSearchTerm(e.target.value)
-            }
-            className="border max-w-md"
-            px={3}
-            py={2}
-          />
-
-          {data.length > 0 && (
-            <Box className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <Checkbox
-                checked={isAllSelected}
-                _indeterminate={isSomeSelected ? {} : undefined}
-                onCheckedChange={handleSelectAll}
-                className="h-5 w-5 border-2 border-gray-400"
-              />
-              <Text className="text-sm font-medium text-gray-700">
-                Select All ({selectedCount} selected)
-              </Text>
-              {selectedCount > 0 && (
-                <Text className="text-xs text-gray-500 ml-auto">
-                  {selectedCount} of {data.filter((b) => b.id).length} children
-                  selected
-                </Text>
-              )}
-            </Box>
-          )}
-        </Box>
-
-        {/* Grid Layout */}
-        <Box className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {paginatedData.map((beneficiary) => (
-            <BeneficiaryCard
-              key={beneficiary.id || beneficiary.username}
-              beneficiary={beneficiary}
-              isSelected={
-                beneficiary.id ? selectedItems.has(beneficiary.id) : false
-              }
-              onSelect={handleSelectItem}
-              onEdit={handleEditBeneficiary}
-              beneficiaryImages={beneficiaryImages}
-              loadingImages={loadingImages}
-            />
-          ))}
-        </Box>
-
-        {filteredData.length === 0 && (
-          <Box className="text-center py-12">
-            <Text className="text-gray-500">
-              No children found matching your search.
-            </Text>
-          </Box>
-        )}
-
-        {/* Pagination */}
-        {filteredData.length > itemsPerPage && (
-          <Flex justify="center" mt={8} gap={2} flexWrap="wrap">
-            <Flex gap={1} align="center">
-              <Button
-                onClick={() => {
-                  setCurrentPage((prev) => Math.max(1, prev - 1))
-                  window.scrollTo({ top: 0, behavior: "smooth" })
-                }}
-                disabled={currentPage === 1}
-                size="sm"
-                variant="outline"
-              >
-                Previous
-              </Button>
-              
-              {paginationItems.map((item, index) => (
-                <React.Fragment key={index}>
-                  {item === 'ellipsis' ? (
-                    <Box px={2} py={1} color="gray.500">
-                      ...
-                    </Box>
-                  ) : (
-                    <Button
-                      onClick={() => {
-                        setCurrentPage(item as number)
-                        window.scrollTo({ top: 0, behavior: "smooth" })
-                      }}
-                      colorScheme={currentPage === item ? "blue" : undefined}
-                      variant={currentPage === item ? "solid" : "outline"}
-                      size="sm"
-                      aria-current={currentPage === item ? "page" : undefined}
-                      fontWeight={currentPage === item ? "bold" : "normal"}
-                    >
-                      {item}
-                    </Button>
-                  )}
-                </React.Fragment>
-              ))}
-              
-              <Button
-                onClick={() => {
-                  const totalPages = Math.ceil(filteredData.length / itemsPerPage) // Calculate here too
-                  setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                  window.scrollTo({ top: 0, behavior: "smooth" })
-                }}
-                disabled={currentPage === Math.ceil(filteredData.length / itemsPerPage)} // And here
-                size="sm"
-                variant="outline"
-              >
-                Next
-              </Button>
-            </Flex>
-          </Flex>
-        )}
-
-        {/* Edit Drawer */}
-        {isEditDrawerOpen && selectedBeneficiary && (
-          <EditDrawer
-            selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
-            formDataEdit={formDataEdit as Partial<Beneficiaries>}
-            setFormDataEdit={(value) => {
-              if (typeof value === "function") {
-                const currentValue = value(formDataEdit)
-                setFormDataEdit(currentValue)
-              } else {
-                setFormDataEdit(value)
-              }
-            }}
-            isDrawerOpen={isEditDrawerOpen}
-            onClose={() => setIsEditDrawerOpen(false)}
-            onSave={handleSave}
-            onDelete={handleDelete}
-            imageFiles={imageFiles}
-            setImageFiles={(value) =>
-              typeof value === "function"
-                ? setImageFiles(value(imageFiles))
-                : setImageFiles(value)
-            }
-            videoFiles={videoFiles}
-            setVideoFiles={(value) =>
-              typeof value === "function"
-                ? setVideoFiles(value(videoFiles))
-                : setVideoFiles(value)
-            }
-          />
-        )}
-
-        {/* Delete Dialog */}
-        <DeleteDialog
-          isOpen={isDeleteDialogOpen}
-          onClose={() => setIsDeleteDialogOpen(false)}
-          onConfirm={confirmDelete}
-          itemCount={selectedRowsForDeletion.length}
-        />
-
-        {/* Create Drawer */}
-        <CreateDrawer
-          formData={formData}
-          isDrawerOpen={isCreateDrawerOpen}
-          setIsDrawerOpen={setIsCreateDrawerOpen}
-          setFormData={(value) => {
+      {/* Edit Drawer */}
+      {isEditDrawerOpen && selectedBeneficiary && (
+        <EditDrawer
+          selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
+          formDataEdit={formDataEdit as Partial<Beneficiaries>}
+          setFormDataEdit={(value) => {
             if (typeof value === "function") {
-              const currentValue = value(formData)
-              setFormData(currentValue)
+              const currentValue = value(formDataEdit)
+              setFormDataEdit(currentValue)
             } else {
-              setFormData(value)
+              setFormDataEdit(value)
             }
           }}
-          handleInputChange={handleInputChange}
-          handleSelectChange={handleSelectChange}
-          handleLocationSelect={handleLocationSelect}
-          handleSubmit={handleSubmit}
+          isDrawerOpen={isEditDrawerOpen}
+          onClose={() => setIsEditDrawerOpen(false)}
+          onSave={handleSave}
+          onDelete={handleDelete}
           imageFiles={imageFiles}
           setImageFiles={(value) =>
             typeof value === "function"
@@ -760,11 +665,49 @@ const ChildrenTable = () => {
               ? setVideoFiles(value(videoFiles))
               : setVideoFiles(value)
           }
-          handleDrawerClose={() => setIsCreateDrawerOpen(false)}
         />
+      )}
 
-      </Box>
-    </Box>
+      {/* Delete Dialog */}
+      <DeleteDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={confirmDelete}
+        itemCount={selectedRowsForDeletion.length}
+      />
+
+      {/* Create Drawer */}
+      <CreateDrawer
+        formData={formData}
+        isDrawerOpen={isCreateDrawerOpen}
+        setIsDrawerOpen={setIsCreateDrawerOpen}
+        setFormData={(value) => {
+          if (typeof value === "function") {
+            const currentValue = value(formData)
+            setFormData(currentValue)
+          } else {
+            setFormData(value)
+          }
+        }}
+        handleInputChange={handleInputChange}
+        handleSelectChange={handleSelectChange}
+        handleLocationSelect={handleLocationSelect}
+        handleSubmit={handleSubmit}
+        imageFiles={imageFiles}
+        setImageFiles={(value) =>
+          typeof value === "function"
+            ? setImageFiles(value(imageFiles))
+            : setImageFiles(value)
+        }
+        videoFiles={videoFiles}
+        setVideoFiles={(value) =>
+          typeof value === "function"
+            ? setVideoFiles(value(videoFiles))
+            : setVideoFiles(value)
+        }
+        handleDrawerClose={() => setIsCreateDrawerOpen(false)}
+      />
+    </AdminPageLayout>
   )
 }
 

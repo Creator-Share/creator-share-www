@@ -158,6 +158,7 @@ export interface UserManagementActions {
   deleteUser: (userId: string) => Promise<boolean>
   updateUserRole: (userId: string, roleId: string) => Promise<boolean>
   assignMultipleRoles: (userId: string, roleIds: string[]) => Promise<boolean>
+  bulkDeleteUsers: (userIds: string[]) => Promise<boolean>
   setSelectedUsers: (userIds: Set<string>) => void
   clearError: () => void
 }

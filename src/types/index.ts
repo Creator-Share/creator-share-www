@@ -84,6 +84,12 @@ export interface RoleAssignment {
   roles: Role
 }
 
+export interface SingleRoleData {
+  roles: {
+    name: string
+  }[]
+}
+
 export type RoleAssignmentResponse = RoleAssignment[]
 
 export interface AuthState {
