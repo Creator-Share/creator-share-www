@@ -7,16 +7,21 @@ import ActivitiesTable from "./components/ActivitiesTable"
 import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 
 const ActivitiesAdminPage: React.FC = () => {
-  const [children, setChildren] = useState<Beneficiaries[]>([])
-  const [selectedChild, setSelectedChild] = useState<string[]>([])
+  const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([])
+  const [selectedBeneficiary, setSelectedBeneficiary] = useState<string[]>([])
   
   useEffect(() => {
-    const fetchChildren = async () => {
-      const res = await fetch("/api/admin/beneficiaries/retrieve")
-      const data = await res.json()
-      setChildren(data.children || [])
+    const fetchBeneficiaries = async () => {
+      try {
+        const res = await fetch("/api/admin/beneficiaries/retrieve?beneficiary_type=CHILD")
+        const data = await res.json()
+        setBeneficiaries(data.beneficiaries || [])
+      } catch (error) {
+        console.error("Failed to fetch beneficiaries:", error)
+        setBeneficiaries([])
+      }
     }
-    fetchChildren()
+    fetchBeneficiaries()
   }, [])
 
   return (
@@ -31,14 +36,14 @@ const ActivitiesAdminPage: React.FC = () => {
     >
       <Box className="mb-6">
         <ChakraSelect
-          childrenList={children}
-          selectedChild={selectedChild}
-          setSelectedChild={setSelectedChild}
+          childrenList={beneficiaries}
+          selectedChild={selectedBeneficiary}
+          setSelectedChild={setSelectedBeneficiary}
         />
       </Box>
       <ActivitiesTable
         beneficiaryType="CHILD"
-        beneficiaryId={selectedChild[0] || ""}
+        beneficiaryId={selectedBeneficiary[0] || ""}
       />
     </AdminPageLayout>
   )
