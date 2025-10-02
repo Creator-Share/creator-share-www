@@ -15,12 +15,12 @@ import { Text, Box } from "@chakra-ui/react"
 import { useUserManagementStore } from "@/store/userManagementStore"
 import { toaster } from "@/components/ui/toaster"
 
-interface InviteUserDrawerProps {
+interface InviteUserDialogProps {
   isOpen: boolean
   onClose: () => void
 }
 
-export const InviteUserDrawer: React.FC<InviteUserDrawerProps> = ({
+export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
   isOpen,
   onClose,
 }) => {
@@ -187,7 +187,7 @@ export const InviteUserDrawer: React.FC<InviteUserDrawerProps> = ({
               onClick={handleSubmit}
               loading={loading}
               disabled={selectedRoleIds.size === 0}
-              className="bg-[#1C3C8C] text-white"
+              className="bg-[#1C3C8C] text-white px-4 py-2"
             >
               Invite User
             </Button>

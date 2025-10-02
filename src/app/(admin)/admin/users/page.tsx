@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react"
 import { Box, Text, Flex, Button, Input } from "@chakra-ui/react"
 import { useUserManagementStore } from "@/store/userManagementStore"
 import { UserRole, User, Role } from "@/types/admin.types"
-import {InviteUserDrawer} from "./components/InviteUserDrawer"
+import {InviteUserDialog} from "./components/InviteUserDialog"
 import { EditRoleDialog } from "./components/EditRoleDialog"
 import { BulkActionButton } from "@/components/admin-ui/BulkActionButton"
 import DeleteDialog from "../children/components/DeleteDialog"
@@ -310,7 +310,7 @@ const UserManagement = () => {
         )}
 
         {/* Invite User Dialog */}
-        <InviteUserDrawer
+        <InviteUserDialog
           isOpen={isInviteDrawerOpen}
           onClose={() => setIsInviteDrawerOpen(false)}
         />
