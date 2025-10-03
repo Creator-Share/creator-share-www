@@ -265,7 +265,7 @@ export default function SponsorshipEmbedChildLaborerPage() {
         allowBelowMinimum:
           remainingAmount < minimumAmount && amount === remainingAmount,
       }
-      if (selectedOption !== "payment" && selectedOption !== "subscription") {
+      if (selectedOption !== "subscription") {
         toaster.create({
           title: "Payment Error",
           description: "Invalid payment frequency selected. Please try again.",

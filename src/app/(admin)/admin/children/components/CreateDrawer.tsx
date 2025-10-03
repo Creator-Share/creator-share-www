@@ -71,8 +71,7 @@ const CreateDrawer = ({
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([])
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
 
-  // Read optional public sponsorship goal (cents). If set, the budget_goal field in the drawer
-  // should be hidden and the value will be hardcoded on submission.
+  // Use environment variable for sponsorship amount
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
   const publicHardcodedCents = publicHardcodedRaw
     ? parseInt(publicHardcodedRaw, 10)
@@ -98,7 +97,7 @@ const CreateDrawer = ({
   }
 
   const handleAdd = async () => {
-    // Read optional public hardcoded sponsorship goal (cents) if set
+    // Use environment variable for sponsorship amount
     const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
     const publicHardcodedCents = publicHardcodedRaw
       ? parseInt(publicHardcodedRaw, 10)
@@ -276,6 +275,21 @@ const CreateDrawer = ({
                     className="border"
                     px={2}
                     onChange={handleInputChange}
+                  />
+                </Field>
+              )}
+
+              {/* Show fixed sponsorship amount when ENV is set */}
+              {publicHardcodedCents !== null && (
+                <Field label="Sponsorship Amount">
+                  <Input
+                    name="budget_goal"
+                    type="text"
+                    className="border bg-gray-100"
+                    px={2}
+                    value={`$${((publicHardcodedCents || 0) / 100).toFixed(2)}`}
+                    readOnly
+                    disabled
                   />
                 </Field>
               )}

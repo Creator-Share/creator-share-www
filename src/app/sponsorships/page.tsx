@@ -39,7 +39,7 @@ const SponsorChild = () => {
   const [filters, setFilters] = useState<Filters>({
     gender: "",
     ageRange: [0, 14],
-    status: ["New", "Partially Funded"],
+    status: ["New", "Partially Funded", "Budget Fulfilled"]
   })
   // Map visibility/state no longer needed with toolbar layout
   // const [showMap, setShowMap] = useState<boolean>(true);

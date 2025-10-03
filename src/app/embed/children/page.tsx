@@ -268,7 +268,7 @@ export default function SponsorshipEmbedChildrenPage() {
           remainingAmount < minimumAmount && amount === remainingAmount,
       }
       console.log("Sending payment request with payload:", payload)
-      if (selectedOption !== "payment" && selectedOption !== "subscription") {
+      if (selectedOption !== "subscription") {
         console.error("Invalid payment type:", selectedOption)
         toaster.create({
           title: "Payment Error",
@@ -363,13 +363,13 @@ export default function SponsorshipEmbedChildrenPage() {
 
   const renderDisclaimer = () => {
     const monthlyAmount =
-      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
+      selectedOption === "subscription" ? (amount / 12).toFixed(2) : amount
     if (people.budget_goal - people.budget_raised - amount * 100 > 0) {
       return (
         <>
           This child has a monthly budget goal that must be met for enrollment
           in school.
-          {selectedOption === "payment" && (
+          {selectedOption === "subscription" && (
             <>
               <br />
               Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
@@ -385,7 +385,7 @@ export default function SponsorshipEmbedChildrenPage() {
         <>
           This child is partially sponsored. Your contribution will help reach
           their monthly budget goal!
-          {selectedOption === "payment" && (
+          {selectedOption === "subscription" && (
             <>
               <br />
               Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
@@ -399,7 +399,7 @@ export default function SponsorshipEmbedChildrenPage() {
       <>
         Your sponsorship will be applied towards the child's monthly budget
         goals.
-        {selectedOption === "payment" && (
+        {selectedOption === "subscription" && (
           <>
             <br />
             Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}

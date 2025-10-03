@@ -434,28 +434,39 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 
   const handlePayPalApproval = async (data: { orderID: string }) => {
     try {
-      if (selectedOption === "subscription" || selectedOption === "payment") {
+      console.log('PayPal Approval - selectedOption:', selectedOption)
+      console.log('PayPal Approval - beneficiary:', beneficiary)
+      console.log('PayPal Approval - amount:', amount)
+      
+      if (selectedOption === "subscription") {
+        console.log('Creating PayPal subscription...')
+        
         const planRes = await fetch("/api/paypal/plan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             beneficiary_id: beneficiary.id,
-            name: `${
-              selectedOption === "subscription" ? "Monthly" : "Yearly"
-            } Sponsorship for ${beneficiary.name}`,
-            description: `Recurring sponsorship for ${beneficiary.name}`,
+            name: `Monthly Sponsorship for ${beneficiary.name}`,
+            description: `Recurring monthly sponsorship for ${beneficiary.name}`,
             amount: remainingAmount < minimumAmount ? remainingAmount : amount,
-            interval_unit: selectedOption === "subscription" ? "MONTH" : "YEAR",
+            interval_unit: "MONTH",
             interval_count: 1,
             currency_code: "USD",
           }),
         })
+        
         const planData = await planRes.json()
-        if (!planRes.ok)
+        console.log('Plan creation response:', planData)
+        
+        if (!planRes.ok) {
+          console.error('Plan creation failed:', planData)
           throw new Error(
             planData.error?.message || "Failed to create/get PayPal plan",
           )
+        }
+        
         const plan_id = planData.plan.id
+        console.log('Plan ID:', plan_id)
 
         const subRes = await fetch("/api/paypal", {
           method: "POST",
@@ -467,16 +478,24 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             subscriber_name: user?.email || "",
           }),
         })
+        
         const subData = await subRes.json()
-        if (!subRes.ok)
+        console.log('Subscription creation response:', subData)
+        
+        if (!subRes.ok) {
+          console.error('Subscription creation failed:', subData)
           throw new Error(
             subData.error?.message || "Failed to create PayPal subscription",
           )
+        }
 
         type PayPalLink = { rel?: string; href?: string }
         const approvalUrl = subData.subscription?.links?.find(
           (l: PayPalLink) => l.rel === "approve",
         )?.href
+        
+        console.log('Approval URL:', approvalUrl)
+        
         if (approvalUrl) {
           window.location.href = approvalUrl
           return
@@ -484,6 +503,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         throw new Error("No approval link returned from PayPal")
       }
 
+      console.log('Creating one-time payment...')
       // One-time legacy flow
       const response = await fetch("/api/paypal", {
         method: "POST",
@@ -518,10 +538,9 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       console.error("PayPal Error:", error)
       toaster.create({
         title: "Payment Error",
-        description:
-          err.message || "Failed to process payment. Please try again.",
+        description: err.message || "Something went wrong. Please try again.",
+        duration: 5000,
       })
-      window.location.href = "/payments/failed"
     }
   }
 

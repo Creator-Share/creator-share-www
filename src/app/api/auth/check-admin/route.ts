@@ -22,7 +22,6 @@ export async function GET() {
       )
       .eq("user_id", user.id)
 
-    console.log("DEBUG - check-admin roleData:", JSON.stringify(roleData, null, 2))
 
     // Check if any role assignment has SUPER_ADMIN role
     // Cast to unknown first to handle the type mismatch
@@ -30,8 +29,6 @@ export async function GET() {
     const isAdmin = typedRoleData?.some((assignment) => 
       assignment.roles.name === "SUPER_ADMIN"
     )
-
-    console.log("DEBUG - check-admin isAdmin:", isAdmin)
     return NextResponse.json({ isAdmin: !!isAdmin })
   } catch (error) {
     console.error("Error checking admin:", error)

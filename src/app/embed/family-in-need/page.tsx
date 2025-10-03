@@ -264,7 +264,7 @@ export default function SponsorshipEmbedFamilyPage() {
         allowBelowMinimum:
           remainingAmount < minimumAmount && amount === remainingAmount,
       }
-      if (selectedOption !== "payment" && selectedOption !== "subscription") {
+      if (selectedOption !== "subscription") {
         toaster.create({
           title: "Payment Error",
           description: "Invalid payment frequency selected. Please try again.",
@@ -347,13 +347,13 @@ export default function SponsorshipEmbedFamilyPage() {
 
   const renderDisclaimer = () => {
     const monthlyAmount =
-      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
+      selectedOption === "subscription" ? (amount / 12).toFixed(2) : amount
     if (family.budget_goal - family.budget_raised - amount * 100 > 0) {
       return (
         <>
           This family has a monthly budget goal that must be met for their
           support.
-          {selectedOption === "payment" && (
+          {selectedOption === "subscription" && (
             <>
               <br />
               Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
@@ -369,7 +369,7 @@ export default function SponsorshipEmbedFamilyPage() {
         <>
           This family is partially sponsored. Your contribution will help reach
           their monthly budget goal!
-          {selectedOption === "payment" && (
+          {selectedOption === "subscription" && (
             <>
               <br />
               Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
@@ -383,7 +383,7 @@ export default function SponsorshipEmbedFamilyPage() {
       <>
         Your sponsorship will be applied towards the family's monthly budget
         goals.
-        {selectedOption === "payment" && (
+        {selectedOption === "subscription" && (
           <>
             <br />
             Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}

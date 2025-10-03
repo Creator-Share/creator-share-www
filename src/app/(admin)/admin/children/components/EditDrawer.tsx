@@ -68,7 +68,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
   const [isImageLoading, setIsImageLoading] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
-  // Read optional public sponsorship goal (cents). If set, hide budget input and use this value.
+  // Use environment variable for sponsorship amount
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
   const publicHardcodedCents = publicHardcodedRaw
     ? parseInt(publicHardcodedRaw, 10)
@@ -108,7 +108,6 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     // Required fields for validation. If a public sponsorship goal is provided via
     // NEXT_PUBLIC_SPONSORSHIP_GOAL, the budget is supplied by the environment and
     // should not be required in the form.
-    // The next line is causing a build error even though it is conditionally being reassigned. Silly typescript...
     const requiredFields: string[] = [
       "name",
       "username",
@@ -258,31 +257,31 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
       if (response.ok) {
         const media = await response.json()
         console.log('Raw media from database:', media)
-        
+
         // Filter for IMAGE type only for the images display
-        const validImages = media.filter((item: BeneficiaryMedia) => 
+        const validImages = media.filter((item: BeneficiaryMedia) =>
           item && (item.id || item.image_url) && item.type === "IMAGE"
         )
         console.log('Filtered valid images:', validImages)
         setAllImages(validImages)
-        
+
         // Also look for videos and set the video URL
-        const videoMedia = media.filter((item: BeneficiaryMedia) => 
+        const videoMedia = media.filter((item: BeneficiaryMedia) =>
           item && (item.id || item.image_url) && item.type === "VIDEO"
         )
-        
+
         console.log('Found video media:', videoMedia)
-        
+
         if (videoMedia.length > 0) {
           const video = videoMedia[0]
           console.log('Video object:', video)
-          
+
           const videoSrc = video?.id
             ? generatePublicUrl(video as unknown as MediaRow)
             : video?.image_url || ""
-          
+
           console.log('Generated video URL:', videoSrc)
-          
+
           if (videoSrc && videoSrc.trim() !== "") {
             setVideoUrl(videoSrc)
             console.log('Set video URL to:', videoSrc)
@@ -298,7 +297,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
 
   const handleDeleteImage = async (imageId: string) => {
     console.log('Attempting to delete image with ID:', imageId)
-    
+
     if (!imageId) {
       toaster.create({
         title: "Error",
@@ -311,7 +310,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
     try {
       setIsImageLoading(true)
       console.log('Sending delete request for image:', imageId)
-      
+
       const response = await fetch("/api/admin/beneficiaries/images/delete", {
         method: "DELETE",
         headers: {
@@ -321,7 +320,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
       })
 
       console.log('Delete response status:', response.status)
-      
+
       if (!response.ok) {
         const errorData = await response.json()
         console.error('Delete failed:', errorData)
@@ -330,7 +329,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
 
       // Remove from local state
       setAllImages((prev) => prev.filter((img) => img.id !== imageId))
-      
+
       // Clear any pending uploads to prevent re-uploading
       setImageFiles([])
 
@@ -459,6 +458,8 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                   value={formDataEdit.introduction || ""}
                 />
               </Field>
+
+              {/* Show dynamic or fixed sponsorship amount based on ENV */}
               {publicHardcodedCents === null ? (
                 <Field
                   label="Budget Goal"
@@ -475,18 +476,19 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                   />
                 </Field>
               ) : (
-                <Field label="Budget Goal">
+                <Field label="Sponsorship Amount">
                   <Input
                     name="budget_goal"
                     type="text"
                     className="border bg-gray-100"
                     px={2}
-                    value={((publicHardcodedCents || 0) / 100).toFixed(2)}
+                    value={`$${((publicHardcodedCents || 0) / 100).toFixed(2)}`}
                     readOnly
                     disabled
                   />
                 </Field>
               )}
+
               <Field label="Status" required errorText="This field is required">
                 <NativeSelectRoot>
                   <NativeSelectField
@@ -591,13 +593,13 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                 initialLocation={
                   selectedChild?.location_geo
                     ? {
-                        coordinates: [
-                          selectedChild.location_geo.coordinates[1],
-                          selectedChild.location_geo.coordinates[0],
-                        ],
-                        locationStr: selectedChild.location_str || "",
-                        country: selectedChild.country || "",
-                      }
+                      coordinates: [
+                        selectedChild.location_geo.coordinates[1],
+                        selectedChild.location_geo.coordinates[0],
+                      ],
+                      locationStr: selectedChild.location_str || "",
+                      country: selectedChild.country || "",
+                    }
                     : undefined
                 }
               />
