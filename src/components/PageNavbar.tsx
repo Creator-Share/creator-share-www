@@ -17,7 +17,7 @@ import { GiHamburgerMenu } from "react-icons/gi"
 import { IoClose } from "react-icons/io5"
 
 const Links = [
-  { name: "Home", href: "/" },
+  { name: "Sponsorships", href: "/" },
   // { name: "Lives", href: "/lives" },
   // { name: "Projects", href: "/projects" },
   // { name: "Causes", href: "/causes" },
