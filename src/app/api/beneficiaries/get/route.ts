@@ -71,7 +71,10 @@ export async function GET(req: Request) {
     if (cursorCreatedAt && cursorId) {
       // Records strictly older than the cursor in the composite order
       query = query.or(
-        `created_at.lt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.lt.${cursorId})`,
+        `created_at.lt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.lt.${cursorId})`
+      )
+      console.log(
+        `[Cursor Pagination] Using cursor: ${cursorCreatedAt}|${cursorId}`
       )
     }
 
@@ -87,14 +90,32 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Database error" }, { status: 500 })
     }
 
+    // Log returned IDs to detect duplicates
+    const returnedIds = (data || []).map((b: any) => b.id)
+    console.log(
+      `[Cursor Pagination] Returned ${returnedIds.length} items:`,
+      returnedIds.slice(0, 3),
+      "..."
+    )
+
+    // Check for duplicates in this response
+    const uniqueIds = new Set(returnedIds)
+    if (uniqueIds.size !== returnedIds.length) {
+      console.error(
+        `[Cursor Pagination] ⚠️  DUPLICATE IDs IN RESPONSE! Total: ${returnedIds.length}, Unique: ${uniqueIds.size}`
+      )
+    }
+
     return NextResponse.json({
       people: (data || []) as Beneficiaries[],
       pageInfo: {
         limit,
         nextCursor:
-          (data && data.length === limit)
+          data && data.length === limit
             ? Buffer.from(
-                `${(data[data.length - 1] as any).created_at}|${(data[data.length - 1] as any).id}`,
+                `${(data[data.length - 1] as any).created_at}|${
+                  (data[data.length - 1] as any).id
+                }`
               ).toString("base64")
             : null,
         hasMore: Boolean(data && data.length === limit),

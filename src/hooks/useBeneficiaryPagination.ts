@@ -101,7 +101,34 @@ export function useBeneficiaryPagination(
         const data = await res.json()
         const people = (data?.people || []) as Beneficiaries[]
 
-        setBeneficiaries((prev) => (nextCursor ? [...prev, ...people] : people))
+        setBeneficiaries((prev) => {
+          if (!nextCursor) {
+            console.log(
+              `[useBeneficiaryPagination] Initial load: ${people.length} items`
+            )
+            return people
+          }
+
+          // Deduplicate by ID to prevent duplicate key errors
+          const existingIds = new Set(prev.map((b) => b.id))
+          const newItems = people.filter((b) => !existingIds.has(b.id))
+
+          const duplicateCount = people.length - newItems.length
+          if (duplicateCount > 0) {
+            console.error(
+              `[useBeneficiaryPagination] ⚠️  Filtered out ${duplicateCount} duplicate(s) from API response`
+            )
+            console.error(
+              `[useBeneficiaryPagination] Duplicate IDs:`,
+              people.filter((b) => existingIds.has(b.id)).map((b) => b.id)
+            )
+          }
+
+          console.log(
+            `[useBeneficiaryPagination] Loading more: ${newItems.length} new items (${duplicateCount} duplicates filtered)`
+          )
+          return [...prev, ...newItems]
+        })
         setCursor(data?.pageInfo?.nextCursor || null)
         setHasMore(Boolean(data?.pageInfo?.hasMore))
         setRetryCount(0) // Reset retry count on success
@@ -172,6 +199,8 @@ export function useBeneficiaryPagination(
 
   // Fetch initial data and when filters change
   useEffect(() => {
+    console.log("[useBeneficiaryPagination] Filters changed, resetting list")
+    setBeneficiaries([]) // Clear list immediately when filters change
     setCursor(null)
     fetchPage(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
