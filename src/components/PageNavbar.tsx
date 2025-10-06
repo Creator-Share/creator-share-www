@@ -23,7 +23,6 @@ const Links = [
   // { name: "Causes", href: "/causes" },
   // { name: "My Community", href: "/local" },
   // { name: "Share Abundance", href: "/share" },
-  { name: "Sponsorships", href: "/sponsorships" },
   // { name: "Strays Worth Saving", href: "/strays-worth-saving" },
   // { name: "Sponsor-a-Family", href: "/family-in-need" },
   // { name: "Street Involved", href: "/street-involved" },

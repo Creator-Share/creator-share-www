@@ -7,7 +7,11 @@ import { BeneficiaryListingsProps } from "@/types/propTypes"
 
 const BeneficiaryListings = React.forwardRef<
   HTMLDivElement,
-  BeneficiaryListingsProps
+  BeneficiaryListingsProps & {
+    onLoadMore?: () => void
+    hasMore?: boolean
+    isLoading?: boolean
+  }
 >(
   (
     {
@@ -17,20 +21,24 @@ const BeneficiaryListings = React.forwardRef<
       setSelectedBeneficiaryId,
       mapBounds,
       beneficiaryType = "CHILD",
+      onLoadMore,
+      hasMore = false,
+      isLoading = false,
     },
     ref
   ) => {
     // Infinite scroll state: how many items are currently visible
     const itemsPerPage = 3
-    const ARTIFICIAL_DELAY_MS = 5000 // artificial delay to demo spinner
-    const OBSERVER_THRESHOLD = 1 // require the sentinel to be fully visible
-    const SENTINEL_HEIGHT_PX = 300 // make sentinel tall so intersection happens very close to bottom
+    const SCROLL_THRESHOLD_PX = 300
     const [visibleCount, setVisibleCount] = useState(itemsPerPage)
     const [dialogOpen, setDialogOpen] = useState<boolean>(false)
     // const [activeBeneficiaryId, setActiveBeneficiaryId] = useState<string | null>(null);
-    const isInIframe = window.self !== window.top
-    const sentinelRef = useRef<HTMLDivElement | null>(null)
+    const isInIframe =
+      typeof window !== "undefined" && window.self !== window.top
+    const containerRef = useRef<HTMLDivElement | null>(null)
     const [isLoadingMore, setIsLoadingMore] = useState(false)
+    const [animatingItems, setAnimatingItems] = useState<Set<string>>(new Set())
+    const prevVisibleCountRef = useRef(visibleCount)
 
     const filteredBeneficiary = React.useMemo(() => {
       const safeBeneficiaryData = Array.isArray(beneficiaryData)
@@ -48,7 +56,7 @@ const BeneficiaryListings = React.forwardRef<
             const [lng, lat] = beneficiary.location_geo.coordinates
             return mapBounds.contains([lat, lng])
           } else {
-            // Include animals with null location_geo in the listings
+            // Include listings with null location_geo
             return true
           }
         }
@@ -60,11 +68,26 @@ const BeneficiaryListings = React.forwardRef<
     }, [beneficiaryData, selectedCountry, mapBounds])
 
     const visibleBeneficiary = React.useMemo(() => {
-      return filteredBeneficiary.slice(
-        0,
-        Math.min(visibleCount, filteredBeneficiary.length)
-      )
-    }, [filteredBeneficiary, visibleCount])
+      return filteredBeneficiary
+    }, [filteredBeneficiary])
+
+    // Track new items for fade-in animation
+    useEffect(() => {
+      if (visibleCount > prevVisibleCountRef.current) {
+        const newItems = visibleBeneficiary.slice(
+          prevVisibleCountRef.current,
+          visibleCount
+        )
+        const newItemIds = new Set(
+          newItems.map((item) => item.id).filter(Boolean)
+        )
+        setAnimatingItems(newItemIds)
+
+        // Remove animation class after animation completes
+        setTimeout(() => setAnimatingItems(new Set()), 500)
+      }
+      prevVisibleCountRef.current = visibleCount
+    }, [visibleCount, visibleBeneficiary])
 
     useEffect(() => {
       if (isInIframe) {
@@ -161,67 +184,47 @@ const BeneficiaryListings = React.forwardRef<
 
     const [currentDialogIndex, setCurrentDialogIndex] = useState<number>(0)
 
-    // IntersectionObserver to load more when the sentinel comes into view
+    // Scroll detection for infinite loading
     useEffect(() => {
-      if (!sentinelRef.current) return
-      const element = sentinelRef.current
+      const container = containerRef.current
+      if (!container) return
 
-      const observer = new IntersectionObserver(
-        (entries) => {
-          const entry = entries[0]
-          const rect = entry.target.getBoundingClientRect()
-          const info = {
-            time: new Date().toISOString(),
-            isIntersecting: entry.isIntersecting,
-            intersectionRatio: entry.intersectionRatio,
-            sentinelTop: Math.round(rect.top),
-            viewportHeight: window.innerHeight,
-            visibleCount,
-            total: filteredBeneficiary.length,
-          }
-          // Debug log every time the observer fires
-          console.log("[Listings] IO event", info)
-
+      let ticking = false
+      const onScroll = () => {
+        if (ticking) return
+        ticking = true
+        requestAnimationFrame(() => {
+          const rect = container.getBoundingClientRect()
+          const distanceFromBottom = rect.bottom - window.innerHeight
           if (
-            entry.isIntersecting &&
-            entry.intersectionRatio >= 0.99 &&
-            !isLoadingMore &&
-            visibleCount < filteredBeneficiary.length
+            distanceFromBottom <= SCROLL_THRESHOLD_PX &&
+            hasMore &&
+            !isLoading
           ) {
-            console.log("[Listings] Loading more…", {
-              add: itemsPerPage,
-              delayMs: ARTIFICIAL_DELAY_MS,
-            })
-            setIsLoadingMore(true)
-            // Small timeout to coalesce rapid intersections and show spinner
-            setTimeout(() => {
-              setVisibleCount((prev) =>
-                Math.min(prev + itemsPerPage, filteredBeneficiary.length)
-              )
-              setIsLoadingMore(false)
-              console.log("[Listings] Load complete")
-            }, ARTIFICIAL_DELAY_MS)
+            onLoadMore?.()
           }
-        },
-        {
-          root: null,
-          rootMargin: "0px 0px 0px 0px",
-          threshold: OBSERVER_THRESHOLD,
-        }
-      )
+          ticking = false
+        })
+      }
 
-      observer.observe(element)
-      return () => observer.unobserve(element)
-    }, [filteredBeneficiary.length, visibleCount, itemsPerPage, isLoadingMore])
+      window.addEventListener("scroll", onScroll, { passive: true })
+      return () => window.removeEventListener("scroll", onScroll)
+    }, [hasMore, isLoading, onLoadMore])
 
     return (
       <Box
-        ref={ref}
+        ref={(el: HTMLDivElement | null) => {
+          // Set both refs - containerRef for scrolling, ref for forwarded ref
+          containerRef.current = el
+          if (typeof ref === "function") ref(el)
+          else if (ref) ref.current = el
+        }}
         width="100%"
         className="border bg-white rounded-2xl"
-        px={{ base: 3, md: 8 }}
         mt={4}
-        style={{ minHeight: visibleBeneficiary.length ? "auto" : "100px" }}
+        style={{
+          minHeight: visibleBeneficiary.length ? "auto" : "100px",
+        }}
         suppressHydrationWarning={true}
       >
         {visibleBeneficiary.length > 0 && (
@@ -234,11 +237,16 @@ const BeneficiaryListings = React.forwardRef<
           />
         )}
 
-        <Box pt={10} pb={6}>
+        <Box p={8}>
           <SimpleGrid columns={{ base: 1, md: 3 }} gap="1.5rem">
             {visibleBeneficiary.map((beneficiary) =>
               beneficiary.id ? (
-                <Box key={beneficiary.id}>
+                <Box
+                  key={beneficiary.id}
+                  className={
+                    animatingItems.has(beneficiary.id) ? "fade-in-new-item" : ""
+                  }
+                >
                   <BeneficiaryCard
                     beneficiary={beneficiary}
                     isSelected={selectedBeneficiaryId === beneficiary.id}
@@ -251,12 +259,12 @@ const BeneficiaryListings = React.forwardRef<
             )}
           </SimpleGrid>
         </Box>
-        {/* Infinite scroll sentinel + loading indicator */}
-        <Flex justify="center" pb={10} align="center" gap={3}>
-          {isLoadingMore && <Spinner size="xl" color="gray.600" />}
-          <Spinner size="xl" color="gray.600" />
-          <div ref={sentinelRef} style={{ height: SENTINEL_HEIGHT_PX }} />
-        </Flex>
+        {/* Infinite scroll loading indicator */}
+        {(isLoadingMore || isLoading) && (
+          <Flex justify="center" py={4} align="center">
+            <Spinner size="xl" color="gray.300" />
+          </Flex>
+        )}
       </Box>
     )
   }
