@@ -9,6 +9,7 @@ import { BeneficiaryMedia } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
+import { useSponsorship } from "../../hooks/useSponsorship"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -18,6 +19,89 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiaryType = "CHILD",
 }) => {
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
+  const [timeRemaining, setTimeRemaining] = useState<string>("")
+  const [serverReservationStatus, setServerReservationStatus] = useState<{
+    reserved: boolean
+    mine?: boolean
+    ttlMs?: number
+    userId?: string
+  } | null>(null)
+
+  // Add sponsorship state management
+  const { sponsorshipInProgress, getReservationInfo } = useSponsorship()
+  const isSponsorshipInProgress = sponsorshipInProgress.has(beneficiary.id)
+  const reservationInfo = getReservationInfo(beneficiary.id)
+  
+  // Calculate time remaining for reservation
+  const getTimeRemaining = (timestamp: number) => {
+    const now = Date.now()
+    const reservationTimeoutMs = parseInt(process.env.NEXT_PUBLIC_RESERVATION_TIMEOUT_MINUTES || "15", 10) * 60 * 1000
+    const timeLeft = reservationTimeoutMs - (now - timestamp)
+    if (timeLeft <= 0) return "Expired"
+    
+    const minutes = Math.floor(timeLeft / (60 * 1000))
+    const seconds = Math.floor((timeLeft % (60 * 1000)) / 1000)
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  // Fetch server-side reservation status
+  useEffect(() => {
+    const fetchReservationStatus = async () => {
+      try {
+        const response = await fetch(`/api/sponsorships/reservations?beneficiaryId=${beneficiary.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          setServerReservationStatus(data)
+        }
+      } catch (error) {
+        console.error('Error fetching reservation status:', error)
+      }
+    }
+
+    fetchReservationStatus()
+    
+    // Poll for updates every 5 seconds
+    const interval = setInterval(fetchReservationStatus, 5000)
+    
+    return () => clearInterval(interval)
+  }, [beneficiary.id])
+
+  // Update time remaining every second when reservation is active
+  useEffect(() => {
+    if (!reservationInfo && !serverReservationStatus?.reserved) {
+      setTimeRemaining("")
+      return
+    }
+
+    const updateTime = () => {
+      let remaining = ""
+      
+      // Use server-side TTL if available
+      if (serverReservationStatus?.reserved && serverReservationStatus.ttlMs) {
+        const timeLeft = serverReservationStatus.ttlMs
+        if (timeLeft <= 0) {
+          remaining = "Expired"
+        } else {
+          const minutes = Math.floor(timeLeft / (60 * 1000))
+          const seconds = Math.floor((timeLeft % (60 * 1000)) / 1000)
+          remaining = `${minutes}:${seconds.toString().padStart(2, '0')}`
+        }
+      } else if (reservationInfo) {
+        // Fallback to client-side reservation
+        remaining = getTimeRemaining(reservationInfo.timestamp)
+      }
+      
+      setTimeRemaining(remaining)
+    }
+
+    // Update immediately
+    updateTime()
+
+    // Set up interval to update every second
+    const interval = setInterval(updateTime, 1000)
+
+    return () => clearInterval(interval)
+  }, [reservationInfo, serverReservationStatus])
 
   const placeholderImage =
     "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
@@ -63,6 +147,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
   // Primary content
   const age = calculateAge(new Date(beneficiary.birth_date).toISOString())
+  
+  // Check if child is reserved (either client-side or server-side)
+  const isReserved = isSponsorshipInProgress || serverReservationStatus?.reserved
+  const shouldShowOverlay = isReserved && (reservationInfo || serverReservationStatus?.reserved)
 
   return (
     <Box
@@ -71,7 +159,9 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       borderWidth={isSelected ? "4px" : "1px"}
       className={`bg-white mb-6 rounded-[20px] shadow-md ${
         isSelected ? "highlight-child" : ""
-      } hover:shadow-xl hover:shadow-black/20 hover:scale-105 transition-all duration-300`}
+      } hover:shadow-xl hover:shadow-black/20 hover:scale-105 transition-all duration-300 ${
+        isReserved ? "opacity-50 pointer-events-none" : ""
+      }`}
       suppressHydrationWarning={true}
       style={{ overflow: "hidden" }}
       maxW="sm"
@@ -80,10 +170,11 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       display="flex"
       flexDirection="column"
       transform="translateZ(0)"
-      cursor="pointer"
+      cursor={isReserved ? "not-allowed" : "pointer"}
       transition="border-color 200ms ease, border-width 200ms ease, box-shadow 200ms ease, transform 200ms ease"
-      _hover={{ borderColor: "#2B7FF9", borderWidth: "1px" }}
-      onClick={() => onOpenDialog?.()}
+      _hover={{ borderColor: isReserved ? "gray.200" : "#2B7FF9", borderWidth: "1px" }}
+      onClick={() => !isReserved && onOpenDialog?.()}
+      position="relative"
     >
       {/* Card Header: Image with Navigation using ImageCarousel */}
       <Box position="relative" flexShrink={0} className="group">
@@ -163,6 +254,32 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           </Text>
         </Box>
       </Box>
+
+      {/* Sponsorship in Progress Overlay */}
+      {shouldShowOverlay && (
+        <Box
+          position="absolute"
+          top="50%"
+          left="50%"
+          transform="translate(-50%, -50%)"
+          bg="blue.500"
+          color="white"
+          px={4}
+          py={3}
+          borderRadius="md"
+          zIndex={20}
+          fontSize="sm"
+          fontWeight="semibold"
+          textAlign="center"
+          boxShadow="lg"
+          minW="200px"
+        >
+          <Text mb={1}>Sponsorship in Progress</Text>
+          <Text fontSize="xs" opacity={0.9}>
+            Time remaining: {timeRemaining}
+          </Text>
+        </Box>
+      )}
     </Box>
   )
 }

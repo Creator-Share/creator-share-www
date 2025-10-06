@@ -5,11 +5,22 @@ import { Beneficiaries, Gender, Status } from "@/types/admin.types"
 
 export async function GET(req: Request) {
   const supabase = await createClient()
+  
+  // Clean up expired reservations
+  try {
+    await supabase
+      .from("beneficiary_reservations")
+      .delete()
+      .lt("expires_at", new Date().toISOString())
+  } catch (error) {
+    console.error("Failed to cleanup expired reservations:", error)
+  }
+  
   const { searchParams } = new URL(req.url)
 
   const gender = searchParams.get("gender") as Gender | null
   const statusString = searchParams.get("status") || ""
-  const status = statusString.split(",") as Status[]
+const status = statusString ? statusString.split(",") as Status[] : []
   const beneficiaryType = searchParams.get("beneficiary_type") || "CHILD"
 
   try {

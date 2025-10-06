@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { Box, Flex, Button, Text } from "@chakra-ui/react"
+import { Box, Flex, Button, Text, Input } from "@chakra-ui/react"
 import { Slider } from "@/components/ui/slider"
 import {
   SelectRoot,
@@ -34,6 +34,7 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
   const [maxAge, setMaxAge] = useState<number>(
     selectedAgeRange[1] || defaultMaxAge,
   )
+  const [searchTerm, setSearchTerm] = useState<string>("")
 
   useEffect(() => {
     setMinAge(selectedAgeRange[0] || 0)
@@ -44,15 +45,18 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
     gender?: string
     ageRange?: [number, number]
     status?: string[]
+    searchTerm?: string
   }) => {
     // Always include the current status if not explicitly changed
     const newStatus = updatedFilters.status ?? selectedStatus
+    const newSearchTerm = updatedFilters.searchTerm ?? searchTerm
     console.log("New status:", newStatus)
 
     const newFilters = {
       gender: updatedFilters.gender ?? selectedGender,
       ageRange: updatedFilters.ageRange ?? selectedAgeRange,
       status: newStatus,
+      searchTerm: newSearchTerm,
     }
 
     if (updatedFilters.gender !== undefined) {
@@ -60,6 +64,9 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
     }
     if (updatedFilters.ageRange !== undefined) {
       setAgeRange(newFilters.ageRange)
+    }
+    if (updatedFilters.searchTerm !== undefined) {
+      setSearchTerm(newSearchTerm)
     }
     setStatus(newStatus)
 
@@ -71,10 +78,12 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
     resetToDefaults()
     setMinAge(0)
     setMaxAge(defaultMaxAge)
+    setSearchTerm("")
     onFilterChange({
       gender: "",
       ageRange: [0, defaultMaxAge],
       status: ["New", "Partially Funded"],
+      searchTerm: "",
     })
   }
 
@@ -84,6 +93,20 @@ const Filters: React.FC<FiltersProps & { variant?: "default" | "sidebar" }> = ({
 
   return (
     <Box className="bg-transparent rounded-xl" width="100%">
+      {/* Search Section */}
+      <Box mb={4}>
+        <Input
+          placeholder="Search by name or username..."
+          value={searchTerm}
+          onChange={(e) => handleFilterChange({ searchTerm: e.target.value })}
+          size="sm"
+          className="border rounded-xl w-full"
+          px={4}
+          py={2}
+        />
+      </Box>
+
+      {/* Filters Section */}
       <Flex
         align="center"
         className={variant === "sidebar" ? "flex-col" : "flex-col md:flex-row"}

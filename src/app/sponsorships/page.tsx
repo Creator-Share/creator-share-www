@@ -1,10 +1,11 @@
 "use client"
 
 import React, { useEffect, useState, useRef } from "react"
+import { SponsorshipProvider } from "./hooks/useSponsorship"
 import { Box, Flex, Text } from "@chakra-ui/react"
 import dynamic from "next/dynamic"
 import { Beneficiaries } from "@/types"
-// import { FaCaretDown, FaCaretUp, FaCompass } from "react-icons/fa";
+
 
 // Map temporarily disabled from UI; keeping dynamic import commented for future multi-location rollout.
 // const SponsorshipMap = dynamic(() => import('./components/SponsorshipMap'), {
@@ -26,6 +27,7 @@ interface Filters {
   gender: string
   ageRange: [number, number]
   status: string[]
+  searchTerm?: string
 }
 
 const SponsorChild = () => {
@@ -39,7 +41,8 @@ const SponsorChild = () => {
   const [filters, setFilters] = useState<Filters>({
     gender: "",
     ageRange: [0, 14],
-    status: ["New", "Partially Funded", "Budget Fulfilled"]
+    status: ["New", "Partially Funded", "Budget Fulfilled"],
+    searchTerm: ""
   })
   // Map visibility/state no longer needed with toolbar layout
   // const [showMap, setShowMap] = useState<boolean>(true);
@@ -48,6 +51,14 @@ const SponsorChild = () => {
   const mapRef = useRef<HTMLDivElement>(null)
   const childListingsRef = useRef<HTMLDivElement>(null)
   // const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+
+
+
+
+
+
+
 
   // Leaflet is unused while map is disabled
 
@@ -92,7 +103,19 @@ const SponsorChild = () => {
       if (!res.ok) throw new Error("Failed to fetch children data")
 
       const data = await res.json()
-      setChildrenData(data.people || [])
+      let filteredData = data.people || []
+
+      // Apply client-side search filter if searchTerm is provided
+      if (filters.searchTerm && filters.searchTerm.trim() !== "") {
+        const searchLower = filters.searchTerm.toLowerCase().trim()
+        filteredData = filteredData.filter((child: Beneficiaries) => {
+          const name = (child.name || "").toLowerCase()
+          const username = (child.username || "").toLowerCase()
+          return name.includes(searchLower) || username.includes(searchLower)
+        })
+      }
+
+      setChildrenData(filteredData)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unexpected error occurred")
     } finally {
@@ -148,146 +171,149 @@ const SponsorChild = () => {
           return
         }
 
-        if (event.data?.type === "requestHeight") {
-          sendHeight()
+        if (event.data.type === "resize") {
+          if (resizeTimeout) clearTimeout(resizeTimeout)
+          resizeTimeout = setTimeout(() => {
+            sendHeight()
+          }, 100)
         }
       }
 
       window.addEventListener("message", handleMessage)
 
-      const debouncedSendHeight = () => {
+      resizeObserver = new ResizeObserver(() => {
         if (resizeTimeout) clearTimeout(resizeTimeout)
-        resizeTimeout = setTimeout(sendHeight, 100)
-      }
+        resizeTimeout = setTimeout(() => {
+          sendHeight()
+        }, 100)
+      })
 
-      const observer = new ResizeObserver(debouncedSendHeight)
-      resizeObserver = observer
-
-      observer.observe(document.documentElement)
-
-      window.addEventListener("load", sendHeight)
-      setTimeout(sendHeight, 100)
-      setTimeout(sendHeight, 500)
-      setTimeout(sendHeight, 1000)
+      resizeObserver.observe(document.body)
 
       return () => {
         window.removeEventListener("message", handleMessage)
-        window.removeEventListener("load", sendHeight)
-        if (resizeObserver) resizeObserver.disconnect()
-        if (resizeTimeout) clearTimeout(resizeTimeout)
+        if (resizeObserver) {
+          resizeObserver.disconnect()
+        }
+        if (resizeTimeout) {
+          clearTimeout(resizeTimeout)
+        }
       }
     } catch (error) {
-      console.error("[Child Frame] Error setting up resize handling:", error)
+      console.error("[Child Frame] Error setting up observers:", error)
     }
   }, [sendHeight])
 
   return (
-    <Box className="px-6 py-6 md:px-12 md:py-12">
-      <Box className="text-center justify-center my-12">
-        <Text className="text-[#1C3C8C] font-semibold text-5xl mb-4">
-          Sponsoring a Child with Creator Share
-        </Text>
-        <Text className="text-base font-normal text-[#03150E99]">
-          Sponsoring a child brings hope to those facing isolation, poverty, or
-          neglect. Your support provides a safe environment where vulnerable
-          children.
-        </Text>
-      </Box>
-
-      {error && (
-        <Text color="red.500" mb={4}>
-          {error}
-        </Text>
-      )}
-
-      {/* Map (temporarily disabled) - keeping embed for future multi-location rollout */}
-      {/**
-       * <Box
-       *   ref={mapRef}
-       *   position={{ base: isMapSticky ? "fixed" : "relative", md: "relative" }}
-       *   top={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
-       *   left={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
-       *   right={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
-       *   width={{ base: isMapSticky ? "100%" : "auto", md: "auto" }}
-       *   height={{ base: "auto", md: "auto" }}
-       *   zIndex={{ base: isMapSticky ? 50 : 10, md: 10 }}
-       *   bg={{ base: isMapSticky ? "transparent" : "transparent", md: "transparent" }}
-       *   borderColor={{ base: isMapSticky ? "gray.200" : "transparent", md: "transparent" }}
-       *   pb={{ base: isMapSticky ? 4 : 0, md: 0 }}
-       *   px={{ base: isMapSticky ? 6 : 0, md: 0 }}
-       *   transition="all 0.3s ease"
-       *   className='flex flex-col w-full'
-       *   style={{ transform: isMapSticky ? 'translateZ(0)' : 'none' }}
-       * >
-       *   <SponsorshipMap
-       *     beneficiaryData={childrenData}
-       *     onMarkerClick={handleMarkerClick}
-       *     onBoundsChange={handleBoundsChange}
-       *     onResetView={onResetView}
-       *     onFilterChange={handleFilterChange}
-       *   />
-       * </Box>
-       */}
-
-      {/* Toolbar: Always-visible filters replacing map UI. */}
-      <Box ref={mapRef} className="w-full">
-        <Box className="w-full max-w-7xl mx-auto">
-          <Box
-            className="bg-white border rounded-2xl shadow-sm"
-            p={{ base: 3, md: 4 }}
-          >
-            <Filters onFilterChange={handleFilterChange} />
-          </Box>
+    <SponsorshipProvider>
+      <Box className="px-6 py-6 md:px-12 md:py-12">
+        <Box className="text-center justify-center my-12">
+          <Text className="text-[#1C3C8C] font-semibold text-5xl mb-4">
+            Sponsoring a Child with Creator Share
+          </Text>
+          <Text className="text-base font-normal text-[#03150E99]">
+            Sponsoring a child brings hope to those facing isolation, poverty, or
+            neglect. Your support provides a safe environment where vulnerable
+            children.
+          </Text>
         </Box>
-      </Box>
 
-      {/* Content area */}
-      <Box>
-        {selectedCountry && (
-          <Box width="100%">
-            <Text
-              mb={8}
-              mt={5}
-              fontSize="4xl"
-              color="#1C3C8C"
-              fontWeight="semibold"
-              textAlign="left"
-            >
-              Showing results from {selectedCountry}
-            </Text>
-          </Box>
+        {error && (
+          <Text color="red.500" mb={4}>
+            {error}
+          </Text>
         )}
 
-        {/* The actual listings section - this is where sticky behavior triggers */}
-        <div ref={listingsRef}>
-          {loading ? (
-            <Box className="flex justify-center items-center min-h-20vh">
-              <ChildListingsSkeleton />
+        {/* Map (temporarily disabled) - keeping embed for future multi-location rollout */}
+        {/**
+         * <Box
+         *   ref={mapRef}
+         *   position={{ base: isMapSticky ? "fixed" : "relative", md: "relative" }}
+         *   top={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
+         *   left={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
+         *   right={{ base: isMapSticky ? "0" : "auto", md: "auto" }}
+         *   width={{ base: isMapSticky ? "100%" : "auto", md: "auto" }}
+         *   height={{ base: "auto", md: "auto" }}
+         *   zIndex={{ base: isMapSticky ? 50 : 10, md: 10 }}
+         *   bg={{ base: isMapSticky ? "transparent" : "transparent", md: "transparent" }}
+         *   borderColor={{ base: isMapSticky ? "gray.200" : "transparent", md: "transparent" }}
+         *   pb={{ base: isMapSticky ? 4 : 0, md: 0 }}
+         *   px={{ base: isMapSticky ? 6 : 0, md: 0 }}
+         *   transition="all 0.3s ease"
+         *   className='flex flex-col w-full'
+         *   style={{ transform: isMapSticky ? 'translateZ(0)' : 'none' }}
+         * >
+         *   <SponsorshipMap
+         *     beneficiaryData={childrenData}
+         *     onMarkerClick={handleMarkerClick}
+         *     onBoundsChange={handleBoundsChange}
+         *     onResetView={onResetView}
+         *     onFilterChange={handleFilterChange}
+         *   />
+         * </Box>
+         */}
+
+        {/* Toolbar: Always-visible filters replacing map UI. */}
+        <Box ref={mapRef} className="w-full">
+          <Box className="w-full max-w-7xl mx-auto">
+            <Box
+              className="bg-white border rounded-2xl shadow-sm"
+              p={{ base: 3, md: 4 }}
+            >
+              <Filters onFilterChange={handleFilterChange} />
             </Box>
-          ) : (
-            <>
-              {childrenData.length > 0 ? (
-                <ChildListings
-                  ref={childListingsRef}
-                  beneficiaryData={childrenData}
-                  selectedBeneficiaryId={selectedChildId}
-                  selectedCountry={selectedCountry}
-                  mapBounds={currentBounds}
-                  setSelectedBeneficiaryId={setSelectedChildId}
-                />
-              ) : (
-                <Flex justify="center" align="center" minH="20vh">
-                  <Text fontSize="xl" color="gray.500">
-                    No children listed in this area.
-                  </Text>
-                </Flex>
-              )}
-            </>
+          </Box>
+        </Box>
+
+        {/* Content area */}
+        <Box>
+          {selectedCountry && (
+            <Box width="100%">
+              <Text
+                mb={8}
+                mt={5}
+                fontSize="4xl"
+                color="#1C3C8C"
+                fontWeight="semibold"
+                textAlign="left"
+              >
+                Showing results from {selectedCountry}
+              </Text>
+            </Box>
           )}
-        </div>
+
+          {/* The actual listings section - this is where sticky behavior triggers */}
+          <div ref={listingsRef}>
+            {loading ? (
+              <Box className="flex justify-center items-center min-h-20vh">
+                <ChildListingsSkeleton />
+              </Box>
+            ) : (
+              <>
+                {childrenData.length > 0 ? (
+                  <ChildListings
+                    ref={childListingsRef}
+                    beneficiaryData={childrenData}
+                    selectedBeneficiaryId={selectedChildId}
+                    selectedCountry={selectedCountry}
+                    mapBounds={currentBounds}
+                    setSelectedBeneficiaryId={setSelectedChildId}
+                    beneficiaryType="CHILD"
+                  />
+                ) : (
+                  <Flex justify="center" align="center" minH="20vh">
+                    <Text fontSize="xl" color="gray.500">
+                      No children listed in this area.
+                    </Text>
+                  </Flex>
+                )}
+              </>
+            )}
+          </div>
+        </Box>
       </Box>
-    </Box>
+    </SponsorshipProvider>
   )
 }
 
-export default React.memo(SponsorChild)
+export default SponsorChild
