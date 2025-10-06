@@ -12,6 +12,7 @@ const Dashboard = () => {
   }
 
   const navigationItems = [
+    { label: "User Management", path: "/admin/users" },
     { label: "Manage Children", path: "/admin/children" },
     // { label: 'Manage Child Laborers', path: '/admin/child-laborer' },
     // { label: 'Manage Street Involved', path: '/admin/street-involved' },

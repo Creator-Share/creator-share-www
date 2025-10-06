@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useCallback } from "react"
 import {
   DialogRoot,
   DialogContent,
@@ -25,7 +25,6 @@ import { toaster } from "@/components/ui/toaster"
 import {
   Box,
   Text,
-  Image,
   Spinner,
   Flex,
   Input,
@@ -44,6 +43,7 @@ import { paymentOptionsCollection } from "../Payments/config"
 import { Button } from "@/components/ui/button"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { ImageCarousel } from "@/components/common/ImageCarousel"
 
 interface BeneficiaryActivityModalProps {
   open: boolean
@@ -59,7 +59,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   const [toastCount, setToastCount] = useState(0)
   const [lastToastTime, setLastToastTime] = useState(0)
   const user = useAuthStore((state) => state.user)
-  // If a public hardcoded amount is configured, use it as the effective goal.
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
   const publicHardcodedCents = publicHardcodedRaw
     ? parseInt(publicHardcodedRaw, 10)
@@ -79,7 +78,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
       : remainingAmount
 
-  // If public hardcoded is present, default amount to the hardcoded total (in dollars)
   const publicHardcodedDollars =
     publicHardcodedCents !== null ? publicHardcodedCents / 100 : null
   const [amount, setAmount] = useState<number>(
@@ -89,60 +87,83 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     paymentOptionsCollection.items[0].value,
   )
   const [loading, setLoading] = useState<boolean>(false)
-  const [primaryImageUrl, setPrimaryImageUrl] = useState<string | null>(null)
-  const [videoMediaUrl, setVideoMediaUrl] = useState<string | null>(
-    beneficiary.video_url || null,
-  )
+  const [images, setImages] = useState<BeneficiaryMedia[]>([])
+  const [imageLoading, setImageLoading] = useState<boolean>(false)
 
-  const fallbackPlaceholder =
-    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+  const [, setPrimaryImageUrl] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function loadBeneficiaryMedia() {
-      if (!beneficiary?.id) {
-        return
-      }
-      try {
-        const res = await fetch(
-          `/api/admin/beneficiaries/images/${beneficiary.id}`,
-        )
-        if (!res.ok) {
-          // fallback to any existing beneficiary.video_url already set in state
-          return
+  const loadImages = useCallback(async (beneficiaryId: string) => {
+    setImageLoading(true)
+    try {
+      const res = await fetch(`/api/admin/beneficiaries/images/${beneficiaryId}`)
+      if (res.ok) {
+        const data: BeneficiaryMedia[] = await res.json()
+        const sortedImages = data
+          ?.filter((m: BeneficiaryMedia) => m.type === "IMAGE" || m.type === "images")
+          ?.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)) || []
+        
+        setImages(sortedImages)
+        
+        if (sortedImages.length > 0) {
+          try {
+            setPrimaryImageUrl(generatePublicUrl(sortedImages[0] as unknown as MediaRow))
+          } catch {
+            setPrimaryImageUrl(sortedImages[0]?.image_url || null)
+          }
+        } else {
+          setPrimaryImageUrl(null)
         }
-        const media = await res.json()
-        if (Array.isArray(media) && media.length > 0) {
-          const videos = media.filter(
-            (m: BeneficiaryMedia) => m.type === "VIDEO" || m.type === "videos",
-          )
-          if (videos.length > 0) {
-            try {
-              setVideoMediaUrl(
-                generatePublicUrl(videos[0] as unknown as MediaRow),
-              )
-            } catch {
-              // if generatePublicUrl fails, leave existing beneficiary.video_url (if any)
-            }
-            return
+        
+        // Also look for videos and update the beneficiary's video_url
+        const videoMedia = data?.filter((m: BeneficiaryMedia) => m.type === "VIDEO") || []
+        
+        if (videoMedia.length > 0) {
+          const video = videoMedia[0]
+          const videoSrc = video?.id
+            ? generatePublicUrl(video as unknown as MediaRow)
+            : video?.image_url || ""
+          
+          if (videoSrc && videoSrc.trim() !== "") {
+            // Update the beneficiary object with the video URL
+            beneficiary.video_url = videoSrc
           }
         }
-      } catch (e) {
-        console.error("Failed to load beneficiary media:", e)
+      }
+    } catch (error) {
+      console.error("Failed to load images:", error)
+      setImages([])
+      setPrimaryImageUrl(null)
+    } finally {
+      setImageLoading(false)
+    }
+  }, [beneficiary])
+
+  useEffect(() => {
+    if (!open || !beneficiary.id) return
+    
+    fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id)
+    fetchActivitiesByBeneficiaryId(beneficiary.id)
+    loadImages(beneficiary.id)
+  }, [open, beneficiary.id, loadImages])
+
+  // Helper function for ImageCarousel
+  const getImageSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generatePublicUrl(image as unknown as MediaRow)
+      } catch {
+        return image.image_url || ""
       }
     }
+    return image.image_url || ""
+  }
 
-    loadBeneficiaryMedia()
-  }, [beneficiary?.id])
+  const fallbackImageSrc = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
 
-  // Disable payments when goal already satisfied.
-  // Some client-side Beneficiaries typings don't include goal_fulfilled_at, so
-  // use status or compare raised vs effective goal instead.
   const alreadyFulfilled =
     beneficiary.status === "Budget Fulfilled" ||
     effectiveGoalCents <= (beneficiary.budget_raised || 0)
 
-  // Whether user can proceed with payment given current amount.
-  // If public hardcoded amount is set, require the user amount to exactly match that value.
   const canPay =
     process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL ||
     (!alreadyFulfilled &&
@@ -259,54 +280,20 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 
   useEffect(() => {
     if (!open) {
-      // Clear all transient state when closing so next open starts fresh
       setToastCount(0)
       setLastToastTime(0)
       setPrimaryImageUrl(null)
-      // Reset amount controls back to current beneficiary's defaults
       setAmount(remainingAmount)
       setSelectedOption(paymentOptionsCollection.items[0].value)
       setLoading(false)
     }
   }, [open, remainingAmount])
 
-  // Also clear image when switching beneficiaries to avoid flashing old image
   useEffect(() => {
     setPrimaryImageUrl(null)
   }, [beneficiary.id])
 
-  useEffect(() => {
-    if (!open) return
-    setLoading(true)
-    const fetchData = async () => {
-      try {
-        await fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id)
-        await fetchActivitiesByBeneficiaryId(beneficiary.id)
-        // Fetch primary image
-        try {
-          const res = await fetch(
-            `/api/admin/beneficiaries/images/${beneficiary.id}`,
-          )
-          if (res.ok) {
-            const data: BeneficiaryMedia[] = await res.json()
-            const sorted = Array.isArray(data)
-              ? data.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
-              : []
-            setPrimaryImageUrl(sorted[0]?.image_url || null)
-          } else {
-            setPrimaryImageUrl(null)
-          }
-        } catch {
-          setPrimaryImageUrl(null)
-        }
-      } catch {}
-      setLoading(false)
-    }
-    fetchData()
-  }, [open, beneficiary.id])
-
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Ignore changes when public hardcoded amount is active (all-or-nothing)
     if (publicHardcodedDollars !== null) return
 
     const inputValue = e.target.value
@@ -408,7 +395,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   }
 
   const handleCreateOrder = async (
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _data: Record<string, unknown>,
     actions: {
       order: {
@@ -432,9 +418,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       throw new Error("Invalid amount")
     }
 
-    // When remaining amount is less than minimum, use the exact remaining amount
-    const paymentAmount =
-      remainingAmount < minimumAmount ? remainingAmount : amount
+    const paymentAmount = remainingAmount < minimumAmount ? remainingAmount : amount
 
     return actions.order.create({
       purchase_units: [
@@ -450,28 +434,39 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
 
   const handlePayPalApproval = async (data: { orderID: string }) => {
     try {
-      if (selectedOption === "subscription" || selectedOption === "payment") {
+      console.log('PayPal Approval - selectedOption:', selectedOption)
+      console.log('PayPal Approval - beneficiary:', beneficiary)
+      console.log('PayPal Approval - amount:', amount)
+      
+      if (selectedOption === "subscription") {
+        console.log('Creating PayPal subscription...')
+        
         const planRes = await fetch("/api/paypal/plan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             beneficiary_id: beneficiary.id,
-            name: `${
-              selectedOption === "subscription" ? "Monthly" : "Yearly"
-            } Sponsorship for ${beneficiary.name}`,
-            description: `Recurring sponsorship for ${beneficiary.name}`,
+            name: `Monthly Sponsorship for ${beneficiary.name}`,
+            description: `Recurring monthly sponsorship for ${beneficiary.name}`,
             amount: remainingAmount < minimumAmount ? remainingAmount : amount,
-            interval_unit: selectedOption === "subscription" ? "MONTH" : "YEAR",
+            interval_unit: "MONTH",
             interval_count: 1,
             currency_code: "USD",
           }),
         })
+        
         const planData = await planRes.json()
-        if (!planRes.ok)
+        console.log('Plan creation response:', planData)
+        
+        if (!planRes.ok) {
+          console.error('Plan creation failed:', planData)
           throw new Error(
             planData.error?.message || "Failed to create/get PayPal plan",
           )
+        }
+        
         const plan_id = planData.plan.id
+        console.log('Plan ID:', plan_id)
 
         const subRes = await fetch("/api/paypal", {
           method: "POST",
@@ -483,16 +478,24 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
             subscriber_name: user?.email || "",
           }),
         })
+        
         const subData = await subRes.json()
-        if (!subRes.ok)
+        console.log('Subscription creation response:', subData)
+        
+        if (!subRes.ok) {
+          console.error('Subscription creation failed:', subData)
           throw new Error(
             subData.error?.message || "Failed to create PayPal subscription",
           )
+        }
 
         type PayPalLink = { rel?: string; href?: string }
         const approvalUrl = subData.subscription?.links?.find(
           (l: PayPalLink) => l.rel === "approve",
         )?.href
+        
+        console.log('Approval URL:', approvalUrl)
+        
         if (approvalUrl) {
           window.location.href = approvalUrl
           return
@@ -500,6 +503,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
         throw new Error("No approval link returned from PayPal")
       }
 
+      console.log('Creating one-time payment...')
       // One-time legacy flow
       const response = await fetch("/api/paypal", {
         method: "POST",
@@ -534,10 +538,9 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
       console.error("PayPal Error:", error)
       toaster.create({
         title: "Payment Error",
-        description:
-          err.message || "Failed to process payment. Please try again.",
+        description: err.message || "Something went wrong. Please try again.",
+        duration: 5000,
       })
-      window.location.href = "/payments/failed"
     }
   }
 
@@ -550,21 +553,15 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   }
 
   const renderDisclaimer = () => {
-    const monthlyAmount =
-      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
-    if (
-      beneficiary.budget_goal - beneficiary.budget_raised - amount * 100 >
-      0
-    ) {
+    const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
+    if (beneficiary.budget_goal - beneficiary.budget_raised - amount * 100 > 0) {
       return (
         <>
-          This child has a monthly budget goal that must be met for enrollment
-          in school.
+          This child has a monthly budget goal that must be met for enrollment in school.
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
-              monthly for this child.
+              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
             </>
           )}
           <br />
@@ -574,13 +571,11 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     } else if (beneficiary.budget_raised > 0) {
       return (
         <>
-          This child is partially sponsored. Your contribution will help reach
-          their monthly budget goal!
+          This child is partially sponsored. Your contribution will help reach their monthly budget goal!
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
-              monthly for this child.
+              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
             </>
           )}
         </>
@@ -588,19 +583,16 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
     }
     return (
       <>
-        Your sponsorship will be applied towards the child's monthly budget
-        goals.
+        Your sponsorship will be applied towards the child's monthly budget goals.
         {selectedOption === "payment" && (
           <>
             <br />
-            Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
-            monthly for this child.
+            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
           </>
         )}
       </>
     )
   }
-
   return (
     <DialogRoot
       open={open}
@@ -620,11 +612,6 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
           </DialogCloseTrigger>
         </DialogHeader>
         <DialogBody className="p-0">
-          {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-60 z-50 rounded-2xl">
-              <Spinner size="xl" color="#1C3C8C" />
-            </div>
-          )}
           <Box className="px-8 md:grid md:grid-cols-12 md:gap-4 md:my-2.5">
             <Box className="border border-[#0654C6] rounded-[10px] flex flex-col text-center gap-[11px] relative md:max-h-[523px] md:col-span-5">
               {/* Status Overlay */}
@@ -634,18 +621,23 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                   {getStatusText(beneficiary.status)}
                 </Text>
               </Box>
-              <Image
-                src={
-                  primaryImageUrl ||
-                  beneficiary.image_url ||
-                  fallbackPlaceholder
-                }
-                alt={beneficiary.name || "Child"}
-                width={500}
-                height={405}
-                className="rounded-[15px] p-2"
-                style={{ objectFit: "cover", objectPosition: "center 20%" }}
-              />
+              {/* Update the image section to show a simple spinner */}
+              {/* Use ImageCarousel component instead of custom implementation */}
+              <Box position="relative" className="group">
+                {imageLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-10 rounded-[15px]">
+                    <Spinner size="lg" color="#1C3C8C" />
+                  </div>
+                )}
+                <ImageCarousel
+                  images={images}
+                  getImageSrc={getImageSrc}
+                  fallbackSrc={fallbackImageSrc}
+                  alt={beneficiary.name || "Child"}
+                  className="rounded-[15px] p-2"
+                  showArrowsOnHover={true}
+                />
+              </Box>
               <Box className="text-center mb-4 md:mb-0">
                 <Text className="text-xl font-bold text-gray-800 mb-2">
                   {beneficiary.name || "Full Name"}
@@ -820,8 +812,7 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 </Button>
                 <PayPalScriptProvider
                   options={{
-                    "client-id": process.env
-                      .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
+                    "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
                     currency: "USD",
                     intent: "capture",
                   }}
@@ -902,15 +893,15 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
                 mt={4}
                 className="flex justify-center items-center md:min-h-[191px] mb-2"
               >
-                {videoMediaUrl && videoMediaUrl.trim() !== "" ? (
+                {beneficiary.video_url?.trim() !== "" ? (
                   <video
                     className="rounded-xl max-h-40 w-full"
-                    src={videoMediaUrl}
+                    src={beneficiary.video_url?.trim() || undefined}
                     controls
                   />
                 ) : (
                   <Text className="text-center text-gray-500">
-                    No Media Available
+                    No videos available
                   </Text>
                 )}
               </Box>

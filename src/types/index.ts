@@ -19,6 +19,7 @@ export interface Beneficiaries {
   name: string
   username: string
   gender: Gender
+  age?: number
   birth_date: string
   biography: string
   budget_goal: number
@@ -75,11 +76,21 @@ export interface loginForm {
   password: string
 }
 
+export interface Role {
+  name: string
+}
+
 export interface RoleAssignment {
+  roles: Role
+}
+
+export interface SingleRoleData {
   roles: {
     name: string
-  }
+  }[]
 }
+
+export type RoleAssignmentResponse = RoleAssignment[]
 
 export interface AuthState {
   user: User | null
@@ -100,3 +111,6 @@ export interface FilterState {
   resetToDefaults: () => void
   isDirty: () => boolean
 }
+
+// Export Telegram types
+export * from './telegram.types'

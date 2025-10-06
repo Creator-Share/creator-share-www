@@ -4,31 +4,49 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const lat = searchParams.get("lat")
   const lon = searchParams.get("lon")
+  const q = searchParams.get("q")
 
-  if (!lat || !lon) {
-    return NextResponse.json({ error: "Missing lat or lon" }, { status: 400 })
+  let url: string
+
+  if (lat && lon) {
+    // Reverse geocoding
+    url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
+  } else if (q) {
+    // Search geocoding
+    url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`
+  } else {
+    return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
   }
 
-  const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
-
   try {
+    console.log('Fetching from Nominatim:', url)
+    
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "CreatorShareDev/1.0 (your-email@example.com)",
+        "User-Agent": "CreatorShareApp/1.0 (contact@creatorshare.com)",
         "Accept-Language": "en",
+        "Accept": "application/json",
       },
     })
+    
+    console.log('Nominatim response status:', response.status)
+    
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Nominatim error response:', errorText)
       return NextResponse.json(
-        { error: "Failed to fetch from Nominatim" },
+        { error: `Failed to fetch from Nominatim: ${response.status} ${response.statusText}` },
         { status: 502 },
       )
     }
+    
     const data = await response.json()
+    console.log('Nominatim response data:', data)
     return NextResponse.json(data)
-  } catch {
+  } catch (error) {
+    console.error('Proxy error:', error)
     return NextResponse.json(
-      { error: "Error fetching from Nominatim" },
+      { error: `Error fetching from Nominatim: ${error instanceof Error ? error.message : 'Unknown error'}` },
       { status: 500 },
     )
   }

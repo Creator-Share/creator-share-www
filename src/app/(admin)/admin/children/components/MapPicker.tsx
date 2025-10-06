@@ -59,7 +59,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
   const fetchLocationData = async (lat: number, lng: number) => {
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        `/api/proxy/nominatim?lat=${lat}&lon=${lng}`,
       )
       const data = await response.json()
 
@@ -83,7 +83,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
 
       try {
         const nominatimResponse = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1`,
+          `/api/proxy/nominatim?q=${encodeURIComponent(searchQuery)}`,
         )
         const nominatimData = await nominatimResponse.json()
 

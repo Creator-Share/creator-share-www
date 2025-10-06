@@ -184,6 +184,9 @@ export function useBeneficiaryPagination(
     fetchPage(null)
   }, [fetchPage])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const memoizedRetryFetch = useCallback(retryFetch, [])
+
   const loadMore = useCallback(() => {
     if (hasMore && !isLoading) {
       fetchPage(cursor)
@@ -225,7 +228,7 @@ export function useBeneficiaryPagination(
     handleFilterChange,
     fetchPage,
     loadMore,
-    retryFetch,
+    retryFetch: memoizedRetryFetch,
     retryCount,
   }
 }

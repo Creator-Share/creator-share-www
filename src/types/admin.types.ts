@@ -36,6 +36,7 @@ export interface Beneficiaries {
   metadata: Record<string, unknown>
   beneficiary_type: BeneficiaryType
   image_url?: string
+  created_at?: string
 }
 
 export interface Activity {
@@ -106,4 +107,89 @@ export interface ExpenseAssignment {
 
 export interface ExpenseWithAssignment extends Expense {
   assignment?: ExpenseAssignment
+}
+
+// User Management Types
+export interface User {
+  id: string
+  first_name: string | null
+  last_name: string | null
+  email: string
+  created_at: string
+}
+
+export interface Role {
+  id: string
+  name: string
+  description: string | null
+  display_name: string | null
+  created_at: string
+}
+
+export interface UserRole {
+  id: string
+  user_id: string
+  role_id: string
+  created_at: string
+  user?: User
+  role?: Role
+}
+
+export interface UserInvitation {
+  email: string
+  role_ids: string[]
+  invited_by: string
+}
+
+export interface UserManagementState {
+  users: UserRole[]
+  roles: Role[]
+  loading: boolean
+  error: string | null
+  selectedUsers: Set<string>
+}
+
+export interface UserManagementActions {
+  fetchUsers: () => Promise<void>
+  fetchRoles: () => Promise<void>
+  inviteUser: (invitation: UserInvitation) => Promise<boolean>
+  assignRole: (userId: string, roleId: string) => Promise<boolean>
+  removeRole: (userId: string, roleId: string) => Promise<boolean>
+  deleteUser: (userId: string) => Promise<boolean>
+  updateUserRole: (userId: string, roleId: string) => Promise<boolean>
+  assignMultipleRoles: (userId: string, roleIds: string[]) => Promise<boolean>
+  bulkDeleteUsers: (userIds: string[]) => Promise<boolean>
+  setSelectedUsers: (userIds: Set<string>) => void
+  clearError: () => void
+}
+
+export type UserRoleName = "SUPER_ADMIN" | "EMPLOYEE"
+
+export interface RolePermissions {
+  canManageUsers: boolean
+  canAssignRoles: boolean
+  canAccessAdmin: boolean
+  canManageBeneficiaries: boolean
+  canManageActivities: boolean
+  canManageExpenses: boolean
+}
+
+// Permission mapping based on role
+export const ROLE_PERMISSIONS: Record<UserRoleName, RolePermissions> = {
+  SUPER_ADMIN: {
+    canManageUsers: true,
+    canAssignRoles: true,
+    canAccessAdmin: true,
+    canManageBeneficiaries: true,
+    canManageActivities: true,
+    canManageExpenses: true,
+  },
+  EMPLOYEE: {
+    canManageUsers: false,
+    canAssignRoles: false,
+    canAccessAdmin: true,
+    canManageBeneficiaries: true,
+    canManageActivities: true,
+    canManageExpenses: false,
+  },
 }

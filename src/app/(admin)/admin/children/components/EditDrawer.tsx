@@ -68,7 +68,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
   const [isImageLoading, setIsImageLoading] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
-  // Read optional public sponsorship goal (cents). If set, hide budget input and use this value.
+  // Use environment variable for sponsorship amount
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
   const publicHardcodedCents = publicHardcodedRaw
     ? parseInt(publicHardcodedRaw, 10)
@@ -105,17 +105,22 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
   }
 
   const handleSave = async () => {
-    const requiredFields = [
+    // Required fields for validation. If a public sponsorship goal is provided via
+    // NEXT_PUBLIC_SPONSORSHIP_GOAL, the budget is supplied by the environment and
+    // should not be required in the form.
+    const requiredFields: string[] = [
       "name",
       "username",
       "gender",
       "birth_date",
       "biography",
       "introduction",
-      "budget_goal",
       "status",
       "country",
-    ] as const
+    ]
+    if (publicHardcodedCents === null) {
+      requiredFields.push("budget_goal")
+    }
     const emptyFields = requiredFields.filter(
       (field) => !formDataEdit[field as keyof Beneficiaries],
     )
@@ -165,8 +170,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
             throw new Error("Image upload failed")
           }
 
-          // Refresh image list and clear selected files
-          await fetchImages()
+          // Don't call fetchImages() here - it will re-fetch deleted images
           setImageFiles([])
         } catch (err) {
           console.error("Error uploading images:", err)
@@ -246,12 +250,43 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
 
   const fetchImages = useCallback(async () => {
     if (selectedChild?.id) {
+      console.log('Fetching media for beneficiary:', selectedChild.id)
       const response = await fetch(
         `/api/admin/beneficiaries/images/${selectedChild.id}`,
       )
       if (response.ok) {
-        const images = await response.json()
-        setAllImages(images)
+        const media = await response.json()
+        console.log('Raw media from database:', media)
+
+        // Filter for IMAGE type only for the images display
+        const validImages = media.filter((item: BeneficiaryMedia) =>
+          item && (item.id || item.image_url) && item.type === "IMAGE"
+        )
+        console.log('Filtered valid images:', validImages)
+        setAllImages(validImages)
+
+        // Also look for videos and set the video URL
+        const videoMedia = media.filter((item: BeneficiaryMedia) =>
+          item && (item.id || item.image_url) && item.type === "VIDEO"
+        )
+
+        console.log('Found video media:', videoMedia)
+
+        if (videoMedia.length > 0) {
+          const video = videoMedia[0]
+          console.log('Video object:', video)
+
+          const videoSrc = video?.id
+            ? generatePublicUrl(video as unknown as MediaRow)
+            : video?.image_url || ""
+
+          console.log('Generated video URL:', videoSrc)
+
+          if (videoSrc && videoSrc.trim() !== "") {
+            setVideoUrl(videoSrc)
+            console.log('Set video URL to:', videoSrc)
+          }
+        }
       }
     }
   }, [selectedChild?.id])
@@ -261,8 +296,21 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
   }, [selectedChild?.id, fetchImages])
 
   const handleDeleteImage = async (imageId: string) => {
+    console.log('Attempting to delete image with ID:', imageId)
+
+    if (!imageId) {
+      toaster.create({
+        title: "Error",
+        description: "No image ID provided",
+        duration: 3000,
+      })
+      return
+    }
+
     try {
       setIsImageLoading(true)
+      console.log('Sending delete request for image:', imageId)
+
       const response = await fetch("/api/admin/beneficiaries/images/delete", {
         method: "DELETE",
         headers: {
@@ -271,11 +319,19 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
         body: JSON.stringify({ imageId }),
       })
 
+      console.log('Delete response status:', response.status)
+
       if (!response.ok) {
-        throw new Error("Failed to delete image")
+        const errorData = await response.json()
+        console.error('Delete failed:', errorData)
+        throw new Error(`Failed to delete image: ${errorData.error || response.statusText}`)
       }
 
+      // Remove from local state
       setAllImages((prev) => prev.filter((img) => img.id !== imageId))
+
+      // Clear any pending uploads to prevent re-uploading
+      setImageFiles([])
 
       toaster.create({
         title: "Success",
@@ -286,7 +342,7 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
       console.error("Error deleting image:", error)
       toaster.create({
         title: "Error",
-        description: "Failed to delete image",
+        description: `Failed to delete image: ${error instanceof Error ? error.message : 'Unknown error'}`,
         duration: 3000,
       })
     } finally {
@@ -402,6 +458,8 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                   value={formDataEdit.introduction || ""}
                 />
               </Field>
+
+              {/* Show dynamic or fixed sponsorship amount based on ENV */}
               {publicHardcodedCents === null ? (
                 <Field
                   label="Budget Goal"
@@ -418,18 +476,19 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                   />
                 </Field>
               ) : (
-                <Field label="Budget Goal">
+                <Field label="Sponsorship Amount">
                   <Input
                     name="budget_goal"
                     type="text"
                     className="border bg-gray-100"
                     px={2}
-                    value={((publicHardcodedCents || 0) / 100).toFixed(2)}
+                    value={`$${((publicHardcodedCents || 0) / 100).toFixed(2)}`}
                     readOnly
                     disabled
                   />
                 </Field>
               )}
+
               <Field label="Status" required errorText="This field is required">
                 <NativeSelectRoot>
                   <NativeSelectField
@@ -534,13 +593,13 @@ const EditDrawer: React.FC<EditDrawerProps> = ({
                 initialLocation={
                   selectedChild?.location_geo
                     ? {
-                        coordinates: [
-                          selectedChild.location_geo.coordinates[1],
-                          selectedChild.location_geo.coordinates[0],
-                        ],
-                        locationStr: selectedChild.location_str || "",
-                        country: selectedChild.country || "",
-                      }
+                      coordinates: [
+                        selectedChild.location_geo.coordinates[1],
+                        selectedChild.location_geo.coordinates[0],
+                      ],
+                      locationStr: selectedChild.location_str || "",
+                      country: selectedChild.country || "",
+                    }
                     : undefined
                 }
               />

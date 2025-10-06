@@ -10,6 +10,7 @@ import { MdDeleteOutline } from "react-icons/md"
 import { toaster } from "@/components/ui/toaster"
 import DeleteDialog from "./components/DeleteDialog"
 import { useBeneficiaryStore } from "@/store/beneficiaryStore"
+import { useFormStore } from "@/store/formStore"
 import { Beneficiaries, BeneficiaryType } from "@/types/admin.types"
 import { dollarsToCents } from "@/utils/currency"
 import GoBackButton from "@/components/ui/goBack"
@@ -46,20 +47,13 @@ type TableInstance = {
 }
 
 const StreetInvolvedTable = () => {
+  // Beneficiary store
   const {
     data,
     loading,
-    formData = initialFormData,
-    formDataEdit,
     selectedBeneficiary,
-    imageFiles,
-    videoFiles,
     selectedRowsForDeletion,
-    setFormData,
-    setFormDataEdit,
     setSelectedBeneficiary,
-    setImageFiles,
-    setVideoFiles,
     setSelectedRowsForDeletion,
     fetchBeneficiaries,
     createBeneficiary,
@@ -67,6 +61,18 @@ const StreetInvolvedTable = () => {
     deleteBeneficiary,
     bulkDelete,
   } = useBeneficiaryStore()
+
+  // Form store
+  const {
+    formData = initialFormData,
+    formDataEdit,
+    imageFiles,
+    videoFiles,
+    setFormData,
+    setFormDataEdit,
+    setImageFiles,
+    setVideoFiles,
+  } = useFormStore()
 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
@@ -136,8 +142,6 @@ const StreetInvolvedTable = () => {
     const success = await createBeneficiary(
       "STREET_INVOLVED",
       formDataWithCents,
-      imageFiles,
-      videoFiles,
     )
     if (success) {
       setIsCreateDrawerOpen(false)

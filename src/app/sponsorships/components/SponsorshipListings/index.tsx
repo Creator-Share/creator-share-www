@@ -18,7 +18,6 @@ const BeneficiaryListings = React.forwardRef<
       beneficiaryData,
       selectedBeneficiaryId,
       selectedCountry,
-      setSelectedBeneficiaryId,
       mapBounds,
       beneficiaryType = "CHILD",
       onLoadMore,
@@ -36,7 +35,6 @@ const BeneficiaryListings = React.forwardRef<
     const isInIframe =
       typeof window !== "undefined" && window.self !== window.top
     const containerRef = useRef<HTMLDivElement | null>(null)
-    const [isLoadingMore, setIsLoadingMore] = useState(false)
     const [animatingItems, setAnimatingItems] = useState<Set<string>>(new Set())
     const prevVisibleCountRef = useRef(visibleCount)
 
@@ -253,6 +251,7 @@ const BeneficiaryListings = React.forwardRef<
                     id={beneficiary.id}
                     onOpenDialog={() => handleOpenDialog(beneficiary.id)}
                     beneficiaryType={beneficiaryType}
+                    setSelectedBeneficiaryId={() => {}}
                   />
                 </Box>
               ) : null

@@ -10,7 +10,7 @@ import {
 import { loadStripe } from "@stripe/stripe-js"
 
 const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string,
 )
 
 export default function CheckoutContent() {
@@ -75,7 +75,6 @@ export default function CheckoutContent() {
       </Box>
     )
   }
-
   return (
     <Box className="w-full min-h-screen p-4">
       <EmbeddedCheckoutProvider

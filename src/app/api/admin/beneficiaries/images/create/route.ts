@@ -59,10 +59,21 @@ export async function POST(req: Request) {
         )
       }
 
+      const uploadErrorMessage =
+        uploadErr instanceof Error
+          ? uploadErr.message
+          : typeof uploadErr === "object" &&
+              uploadErr !== null &&
+              "message" in uploadErr
+            ? String((uploadErr as { message?: unknown }).message)
+            : uploadErr != null
+              ? String(uploadErr)
+              : null
+
       const respItem = {
         ...mediaRow,
         public_url: generatePublicUrl(mediaRow),
-        upload_error: uploadErr?.message || null,
+        upload_error: uploadErrorMessage,
       }
 
       responses.push(respItem)

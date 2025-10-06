@@ -32,6 +32,17 @@ type PayPalDetails = {
   update_time?: string
   custom_id?: string
   beneficiary_name?: string
+  subscription?: {
+    beneficiaries?: {
+      name?: string
+      location_str?: string
+    }
+  }
+  paypal_order?: {
+    payer?: {
+      email_address?: string
+    }
+  }
   [key: string]: unknown
 }
 
@@ -61,7 +72,7 @@ export default function PaymentSuccessClient() {
 
   useEffect(() => {
     const sessionId = searchParams.get("session_id")
-    const paypalSubscriptionId = searchParams.get("sponsorship_id")
+    const paypalSubscriptionId = searchParams.get("subscription_id") // Use subscription_id, not sponsorship_id
     const paypalToken =
       searchParams.get("token") || searchParams.get("ba_token")
 
@@ -102,14 +113,14 @@ export default function PaymentSuccessClient() {
           setStatus({
             provider: "paypal",
             status: "error",
-            message: "Invalid session ID for PayPal payment.",
+            message: "Invalid PayPal session.",
           })
         })
     } else {
       setStatus({
         provider: "unknown",
         status: "error",
-        message: "Invalid session ID",
+        message: "No valid payment session found.",
       })
     }
   }, [searchParams])
@@ -157,9 +168,11 @@ export default function PaymentSuccessClient() {
     if (
       status?.provider === "paypal" &&
       status.details &&
-      "beneficiary_name" in status.details
+      status.details.subscription &&
+      status.details.subscription.beneficiaries &&
+      status.details.subscription.beneficiaries.name
     ) {
-      return status.details.beneficiary_name || "—"
+      return status.details.subscription.beneficiaries.name
     }
     // For Stripe, you may have to get from metadata or elsewhere
     if (
@@ -175,6 +188,15 @@ export default function PaymentSuccessClient() {
 
   const getLocation = () => {
     if (
+      status?.provider === "paypal" &&
+      status.details &&
+      status.details.subscription &&
+      status.details.subscription.beneficiaries &&
+      status.details.subscription.beneficiaries.location_str
+    ) {
+      return status.details.subscription.beneficiaries.location_str
+    }
+    if (
       status?.provider === "stripe" &&
       status.details &&
       status.details.metadata &&
@@ -182,7 +204,6 @@ export default function PaymentSuccessClient() {
     ) {
       return String(status.details.metadata.childLocation)
     }
-    // For PayPal, location is not available in the response, so use placeholder
     return "—"
   }
 
@@ -190,10 +211,11 @@ export default function PaymentSuccessClient() {
     if (
       status?.provider === "paypal" &&
       status.details &&
-      status.details.subscriber &&
-      status.details.subscriber.email_address
+      status.details.paypal_order &&
+      status.details.paypal_order.payer &&
+      status.details.paypal_order.payer.email_address
     ) {
-      return status.details.subscriber.email_address
+      return status.details.paypal_order.payer.email_address
     }
     if (
       status?.provider === "stripe" &&

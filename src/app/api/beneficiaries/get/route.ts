@@ -32,7 +32,7 @@ export async function GET(req: Request) {
         cursorCreatedAt = ts
         cursorId = id
       }
-    } catch (_) {
+    } catch {
       // ignore invalid cursor
     }
   }
@@ -91,7 +91,7 @@ export async function GET(req: Request) {
     }
 
     // Log returned IDs to detect duplicates
-    const returnedIds = (data || []).map((b: any) => b.id)
+    const returnedIds = (data || []).map((b: Beneficiaries) => b.id)
     console.log(
       `[Cursor Pagination] Returned ${returnedIds.length} items:`,
       returnedIds.slice(0, 3),
@@ -106,16 +106,16 @@ export async function GET(req: Request) {
       )
     }
 
+    const lastItem = data && data.length > 0 ? data[data.length - 1] : null
+
     return NextResponse.json({
       people: (data || []) as Beneficiaries[],
       pageInfo: {
         limit,
         nextCursor:
-          data && data.length === limit
+          data && data.length === limit && lastItem
             ? Buffer.from(
-                `${(data[data.length - 1] as any).created_at}|${
-                  (data[data.length - 1] as any).id
-                }`
+                `${lastItem.created_at}|${lastItem.id}`
               ).toString("base64")
             : null,
         hasMore: Boolean(data && data.length === limit),

@@ -5,10 +5,10 @@ import { FaCalendar } from "react-icons/fa"
 import { FaLocationDot, FaPerson } from "react-icons/fa6"
 import { calculateAge } from "@/utils/ageCalculator"
 import { BeneficiaryCardProps } from "@/types/propTypes"
-import Image from "next/image"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { ImageCarousel } from "@/components/common/ImageCarousel"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -30,8 +30,12 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         )
         if (response.ok) {
           const data = await response.json()
+          // Filter for only IMAGE type media
+          const imageMedia = data.filter((item: BeneficiaryMedia) => 
+            item.type === "IMAGE"
+          )
           setImages(
-            data.sort(
+            imageMedia.sort(
               (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
                 a.order_index - b.order_index,
             ),
@@ -45,9 +49,20 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     fetchImages()
   }, [beneficiary.id, beneficiaryType])
 
+  // Helper function for ImageCarousel
+  const getImageSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generatePublicUrl(image as unknown as MediaRow)
+      } catch {
+        return image.image_url || ""
+      }
+    }
+    return image.image_url || ""
+  }
+
   // Primary content
   const age = calculateAge(new Date(beneficiary.birth_date).toISOString())
-  // onOpen handled by parent via prop
 
   return (
     <Box
@@ -70,22 +85,18 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       _hover={{ borderColor: "#2B7FF9", borderWidth: "1px" }}
       onClick={() => onOpenDialog?.()}
     >
-      {/* Card Header: Image with Target Badge */}
-      <Box position="relative" flexShrink={0}>
-        <Image
-          src={
-            images.length > 0
-              ? images[0].id
-                ? generatePublicUrl(images[0] as unknown as MediaRow)
-                : images[0].image_url
-              : placeholderImage
-          }
+      {/* Card Header: Image with Navigation using ImageCarousel */}
+      <Box position="relative" flexShrink={0} className="group">
+        <ImageCarousel
+          images={images}
+          getImageSrc={getImageSrc}
+          fallbackSrc={placeholderImage}
           alt={beneficiary.name?.split(" ")[0] ?? ""}
-          width={500}
-          height={500}
-          style={{ objectFit: "cover", objectPosition: "center 20%" }}
           className="w-full h-64 rounded-t-[20px]"
+          showArrowsOnHover={true}
         />
+
+        {/* Goal Badge */}
         {!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && (
           <Box position="absolute" top="0" right="0" zIndex={10}>
             <Badge
@@ -136,8 +147,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
         {/* Info Section */}
         <Box mb={4} flex="1">
-          {" "}
-          {/* Add flex="1" to take available space */}
           <Text
             fontSize="sm"
             style={{
@@ -154,7 +163,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           </Text>
         </Box>
       </Box>
-      {/* Card click will be handled by parent via onOpenDialog prop. */}
     </Box>
   )
 }

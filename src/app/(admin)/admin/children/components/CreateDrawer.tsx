@@ -8,8 +8,7 @@ import {
   DrawerTitle,
   DrawerActionTrigger,
   DrawerRoot,
-  DrawerBackdrop,
-  DrawerTrigger,
+  DrawerBackdrop
 } from "@/components/ui/drawer"
 import {
   Text,
@@ -32,7 +31,6 @@ import { LuFileUp } from "react-icons/lu"
 // import ExpenseManager from "./ExpenseManager";
 import MapPicker from "./MapPicker"
 import { Beneficiaries } from "@/types/admin.types"
-import { GoPlusCircle } from "react-icons/go"
 import { toaster } from "@/components/ui/toaster"
 
 type CreateDrawerProps = {
@@ -67,14 +65,13 @@ const CreateDrawer = ({
   handleLocationSelect,
   handleSubmit,
   setImageFiles,
-  handleDrawerClose,
+  handleDrawerClose
 }: CreateDrawerProps) => {
   const [isAdding, setIsAdding] = useState(false)
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([])
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
 
-  // Read optional public sponsorship goal (cents). If set, the budget_goal field in the drawer
-  // should be hidden and the value will be hardcoded on submission.
+  // Use environment variable for sponsorship amount
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
   const publicHardcodedCents = publicHardcodedRaw
     ? parseInt(publicHardcodedRaw, 10)
@@ -100,7 +97,7 @@ const CreateDrawer = ({
   }
 
   const handleAdd = async () => {
-    // Read optional public hardcoded sponsorship goal (cents) if set
+    // Use environment variable for sponsorship amount
     const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
     const publicHardcodedCents = publicHardcodedRaw
       ? parseInt(publicHardcodedRaw, 10)
@@ -137,17 +134,19 @@ const CreateDrawer = ({
       // If the public hardcoded goal is present, set the form value to that goal (in dollars)
       if (publicHardcodedCents !== null) {
         const dollars = publicHardcodedCents / 100
-        // Overwrite formData.budget_goal with hardcoded value (in dollars)
         setFormData({ ...(formData || {}), budget_goal: dollars })
       }
 
+      // Create the beneficiary first
       const success = await handleSubmit()
-      if (success) {
-        // Clean up preview URLs
-        imagePreviewUrls.forEach((url) => URL.revokeObjectURL(url))
-        if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl)
-        handleDrawerClose()
+      if (!success) {
+        return
       }
+
+      // Clean up preview URLs
+      imagePreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl)
+      handleDrawerClose()
     } catch (error) {
       console.error("Error adding:", error)
       toaster.create({
@@ -170,11 +169,6 @@ const CreateDrawer = ({
       }}
     >
       <DrawerBackdrop />
-      <DrawerTrigger asChild>
-        <Button className="border-[2px] border-[#E0E0E0] rounded-md w-fit h-[40px] px-10 bg-[#1C3C8C] text-white">
-          <GoPlusCircle className="mr-[3.5px]" /> List A Child
-        </Button>
-      </DrawerTrigger>
       <DrawerContent>
         <DrawerHeader>
           <DrawerTitle>
@@ -285,23 +279,34 @@ const CreateDrawer = ({
                 </Field>
               )}
 
+              {/* Show fixed sponsorship amount when ENV is set */}
+              {publicHardcodedCents !== null && (
+                <Field label="Sponsorship Amount">
+                  <Input
+                    name="budget_goal"
+                    type="text"
+                    className="border bg-gray-100"
+                    px={2}
+                    value={`$${((publicHardcodedCents || 0) / 100).toFixed(2)}`}
+                    readOnly
+                    disabled
+                  />
+                </Field>
+              )}
+
               <Field label="Status" required errorText="This field is required">
                 <NativeSelectRoot>
                   <NativeSelectField
-                    className="border"
-                    placeholder="Select Status"
+                    className="border bg-gray-100"
                     px={2}
                     name="status"
-                    onChange={(e) =>
-                      handleSelectChange("status", e.target.value)
-                    }
-                    value={formData.status || ""}
+                    defaultValue="New"
+                    _disabled={{
+                      opacity: 0.6,
+                      cursor: "not-allowed",
+                    }}
                   >
                     <option value="New">New</option>
-                    <option value="Partially Funded">Partially Funded</option>
-                    <option value="Budget Fulfilled">Budget Fulfilled</option>
-                    <option value="Archived">Archived</option>
-                    <option value="Draft">Draft</option>
                   </NativeSelectField>
                 </NativeSelectRoot>
               </Field>
@@ -430,8 +435,7 @@ const CreateDrawer = ({
                   name="country"
                   className="border"
                   px={2}
-                  onChange={handleInputChange}
-                  value={formData.country || ""}
+                  defaultValue={formData.country || ""}
                   placeholder="Enter country name"
                   disabled
                 />

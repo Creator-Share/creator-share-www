@@ -9,3 +9,14 @@ NEXT_PUBLIC_BASE_URL=https://localhost:3000/
 
 # Public frontend exposure (dollars in cents integer string) to allow UI to honor/lock the amount
 NEXT_PUBLIC_SPONSORSHIP_GOAL=
+
+# Telegram Bot Configuration
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+
+# Email
+EMAIL_HOST=
+EMAIL_USER=
+EMAIL_PASSWORD=
+EMAIL_PORT=587
+EMAIL_SECURE=true
