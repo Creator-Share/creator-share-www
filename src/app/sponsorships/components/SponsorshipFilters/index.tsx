@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { Box, Flex, Button, Text, Input } from "@chakra-ui/react"
+import { Global, css } from "@emotion/react"
 import { Slider } from "@/components/ui/slider"
 import {
   SelectRoot,
@@ -98,11 +99,19 @@ const SponsorshipFilters: React.FC<
   const isDefaultFilters = !isDirty() && !hasSearchQuery
 
   return (
-    <Box
-      className="bg-white border rounded-3xl shadow-sm"
-      p={{ base: 3, md: 4 }}
-    >
-      <Box className="bg-transparent rounded-2xl" width="100%">
+    <>
+      <Global
+        styles={css`
+          [data-scope="select"][data-part="trigger"] {
+            border-radius: 16px !important;
+          }
+        `}
+      />
+      <Box
+        className="bg-white border rounded-3xl shadow-sm"
+        p={{ base: 3, md: 4 }}
+      >
+        <Box className="bg-transparent rounded-2xl" width="100%">
         <Flex
           align="center"
           className={
@@ -127,7 +136,11 @@ const SponsorshipFilters: React.FC<
               size="sm"
               className="rounded-2xl w-full"
             >
-              <SelectTrigger style={{ borderRadius: "20px" }}>
+              <SelectTrigger
+                css={{
+                  borderRadius: "16px !important",
+                }}
+              >
                 <SelectValueText placeholder="Select Gender">
                   {() => {
                     const selected = genders.items.find(
@@ -160,7 +173,11 @@ const SponsorshipFilters: React.FC<
               className="rounded-2xl w-full"
               multiple
             >
-              <SelectTrigger style={{ borderRadius: "20px" }}>
+              <SelectTrigger
+                css={{
+                  borderRadius: "16px !important",
+                }}
+              >
                 <SelectValueText placeholder="Select Status">
                   {() => {
                     const selected = statusOptions.items
@@ -181,7 +198,12 @@ const SponsorshipFilters: React.FC<
             </SelectRoot>
           </Box>
 
-          <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+          <Box
+            flex={{ base: "1 1 100%", md: "1 1 0" }}
+            w="100%"
+            minW={0}
+            px={2}
+          >
             <Text mb={2} fontSize="sm" fontWeight="semibold" textAlign="center">
               Age Range: {minAge} - {maxAge} years
             </Text>
@@ -258,7 +280,7 @@ const SponsorshipFilters: React.FC<
                   _dark: { bg: "gray.600", color: "gray.200" },
                 }}
               >
-                {hasSearchQuery
+                {!isDefaultFilters
                   ? "Clear Search & Filters"
                   : "Showing All Children"}
               </Button>
@@ -267,6 +289,7 @@ const SponsorshipFilters: React.FC<
         </Flex>
       </Box>
     </Box>
+    </>
   )
 }
 
