@@ -21,20 +21,23 @@ export default function Home() {
       {/* Compact Hero Section */}
       <CompactHero />
 
-      {/* Filters */}
-      <SponsorshipFilters onFilterChange={handleFilterChange} />
+      {/* Filters and Listings Container with consistent margins */}
+      <Box px={{ base: 2, md: 0 }}>
+        {/* Filters */}
+        <SponsorshipFilters onFilterChange={handleFilterChange} />
 
-      {/* Listings */}
-      <SponsorshipListings
-        ref={listRef}
-        beneficiaryData={beneficiaries}
-        selectedBeneficiaryId={null}
-        selectedCountry={null}
-        setSelectedBeneficiaryId={() => {}}
-        onLoadMore={loadMore}
-        hasMore={hasMore}
-        isLoading={isLoading}
-      />
+        {/* Listings */}
+        <SponsorshipListings
+          ref={listRef}
+          beneficiaryData={beneficiaries}
+          selectedBeneficiaryId={null}
+          selectedCountry={null}
+          setSelectedBeneficiaryId={() => {}}
+          onLoadMore={loadMore}
+          hasMore={hasMore}
+          isLoading={isLoading}
+        />
+      </Box>
     </Box>
   )
 }

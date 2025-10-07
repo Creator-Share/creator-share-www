@@ -1,7 +1,19 @@
-import React from "react"
+"use client"
+import React, { useEffect, useState } from "react"
 import { FaTwitter, FaFacebook, FaInstagram, FaGithub } from "react-icons/fa"
+import NextLink from "next/link"
+import { useAuthStore } from "@/store/authStore"
 
 export const Footer = () => {
+  const [mounted, setMounted] = useState(false)
+  const user = useAuthStore((state) => state.user)
+  const fetchUser = useAuthStore((state) => state.fetchUser)
+
+  useEffect(() => {
+    setMounted(true)
+    fetchUser()
+  }, [fetchUser])
+
   return (
     <footer className="bg-[#1C3C8C] text-white py-16">
       <div className="container mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 px-4">
@@ -47,6 +59,17 @@ export const Footer = () => {
           </ul>
         </div>
       </div>
+
+      {/* Login Button */}
+      {mounted && !user && (
+        <div className="container mx-auto px-4 mt-8 text-center">
+          <NextLink href="/login">
+            <button className="bg-white text-[#1C3C8C] px-6 py-2 rounded-md font-semibold hover:bg-gray-100 transition-colors">
+              Sign In
+            </button>
+          </NextLink>
+        </div>
+      )}
     </footer>
   )
 }

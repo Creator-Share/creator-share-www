@@ -109,16 +109,16 @@ const SponsorshipFilters: React.FC<
       />
       <Box
         className="bg-white border rounded-3xl shadow-sm"
-        p={{ base: 3, md: 4 }}
+        p={{ base: 4, md: 5 }}
       >
         <Box className="bg-transparent rounded-2xl" width="100%">
           <Flex
             align="center"
             className={
-              variant === "sidebar" ? "flex-col" : "flex-col md:flex-row"
+              variant === "sidebar" ? "flex-col" : "flex-col lg:flex-row"
             }
             gap={8}
-            px={4}
+            px={{ base: 2, md: 4 }}
             py={2}
             position="relative"
             alignItems="center"

@@ -134,7 +134,7 @@ export function PageNavbar() {
 
         {/* Right Actions */}
         <Flex gap={4} display={{ base: "none", md: "flex" }}>
-          {user ? (
+          {user && (
             <Menu.Root>
               <Menu.Trigger asChild>
                 <Button size="sm" variant="ghost">
@@ -174,19 +174,6 @@ export function PageNavbar() {
                 </Menu.Positioner>
               </Portal>
             </Menu.Root>
-          ) : (
-            <>
-              <NextLink href="/login" passHref>
-                <Button size="sm" variant="ghost">
-                  Sign In
-                </Button>
-              </NextLink>
-              {/* <NextLink href="/registration" passHref>
-                <Button size="sm" colorScheme="blue">
-                  Sign Up
-                </Button>
-              </NextLink> */}
-            </>
           )}
         </Flex>
 
@@ -248,7 +235,7 @@ export function PageNavbar() {
                 </Link>
               )
             })} */}
-            {user ? (
+            {user && (
               <>
                 {isAdmin && (
                   <NextLink href="/admin" passHref>
@@ -270,19 +257,6 @@ export function PageNavbar() {
                     Dashboard
                   </Button>
                 </NextLink>
-              </>
-            ) : (
-              <>
-                <NextLink href="/login" passHref>
-                  <Button size="sm" variant="ghost" className="w-full">
-                    Sign In
-                  </Button>
-                </NextLink>
-                {/* <NextLink href="/registration" passHref>
-                  <Button size="sm" colorScheme="blue" className="w-full">
-                    Sign Up
-                  </Button>
-                </NextLink> */}
               </>
             )}
           </VStack>

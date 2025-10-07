@@ -196,10 +196,23 @@ const BeneficiaryListings = React.forwardRef<
         ticking = true
         requestAnimationFrame(() => {
           const now = Date.now()
-          const scrollTop = container.scrollTop
-          const scrollHeight = container.scrollHeight
-          const clientHeight = container.clientHeight
-          const distanceFromBottom = scrollHeight - (scrollTop + clientHeight)
+
+          // Check if container has internal scroll
+          const hasInternalScroll =
+            container.scrollHeight > container.clientHeight
+
+          let distanceFromBottom
+          if (hasInternalScroll) {
+            // Container is scrolling internally
+            const scrollTop = container.scrollTop
+            const scrollHeight = container.scrollHeight
+            const clientHeight = container.clientHeight
+            distanceFromBottom = scrollHeight - (scrollTop + clientHeight)
+          } else {
+            // Container fits in viewport, use window scroll position
+            const rect = container.getBoundingClientRect()
+            distanceFromBottom = rect.bottom - window.innerHeight
+          }
 
           if (
             distanceFromBottom <= SCROLL_THRESHOLD_PX &&
@@ -214,8 +227,13 @@ const BeneficiaryListings = React.forwardRef<
         })
       }
 
+      // Listen to both container scroll and window scroll
       container.addEventListener("scroll", onScroll, { passive: true })
-      return () => container.removeEventListener("scroll", onScroll)
+      window.addEventListener("scroll", onScroll, { passive: true })
+      return () => {
+        container.removeEventListener("scroll", onScroll)
+        window.removeEventListener("scroll", onScroll)
+      }
     }, [hasMore, isLoading, onLoadMore])
 
     return (
@@ -283,7 +301,7 @@ const BeneficiaryListings = React.forwardRef<
         </Box>
         {/* Infinite scroll loading indicator */}
         {isLoading && (
-          <Flex justify="center" py={8} align="center">
+          <Flex justify="center" py={12} align="center">
             <Spinner size="xl" color="gray.300" />
           </Flex>
         )}
