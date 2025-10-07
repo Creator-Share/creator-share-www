@@ -13,18 +13,16 @@ import {
 import NextLink from "next/link"
 import { useAuthStore } from "@/store/authStore"
 import { usePathname, useRouter } from "next/navigation"
-import { ColorModeButton } from "./ui/color-mode"
 import { GiHamburgerMenu } from "react-icons/gi"
 import { IoClose } from "react-icons/io5"
 
 const Links = [
-  { name: "Home", href: "/" },
+  // { name: "Sponsorships", href: "/" }, // Temporarily hidden
   // { name: "Lives", href: "/lives" },
   // { name: "Projects", href: "/projects" },
   // { name: "Causes", href: "/causes" },
   // { name: "My Community", href: "/local" },
   // { name: "Share Abundance", href: "/share" },
-  { name: "Sponsorships", href: "/sponsorships" },
   // { name: "Strays Worth Saving", href: "/strays-worth-saving" },
   // { name: "Sponsor-a-Family", href: "/family-in-need" },
   // { name: "Street Involved", href: "/street-involved" },
@@ -136,7 +134,6 @@ export function PageNavbar() {
 
         {/* Right Actions */}
         <Flex gap={4} display={{ base: "none", md: "flex" }}>
-          {/* <ColorModeButton /> */}
           {user ? (
             <Menu.Root>
               <Menu.Trigger asChild>
@@ -184,11 +181,11 @@ export function PageNavbar() {
                   Sign In
                 </Button>
               </NextLink>
-              <NextLink href="/registration" passHref>
+              {/* <NextLink href="/registration" passHref>
                 <Button size="sm" colorScheme="blue">
                   Sign Up
                 </Button>
-              </NextLink>
+              </NextLink> */}
             </>
           )}
         </Flex>
@@ -250,7 +247,6 @@ export function PageNavbar() {
                 </Link>
               )
             })}
-            <ColorModeButton />
             {user ? (
               <>
                 {isAdmin && (
@@ -281,11 +277,11 @@ export function PageNavbar() {
                     Sign In
                   </Button>
                 </NextLink>
-                <NextLink href="/registration" passHref>
+                {/* <NextLink href="/registration" passHref>
                   <Button size="sm" colorScheme="blue" className="w-full">
                     Sign Up
                   </Button>
-                </NextLink>
+                </NextLink> */}
               </>
             )}
           </VStack>

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 
 const PageNavbar = dynamic(
   () => import("./PageNavbar").then((mod) => mod.PageNavbar),
-  { ssr: false },
+  { ssr: false }
 )
 
 export function PageWrapper({ children }: { children: React.ReactNode }) {
@@ -19,7 +19,7 @@ export function PageWrapper({ children }: { children: React.ReactNode }) {
   return (
     <>
       {!isEmbedded && <PageNavbar />}
-      <div className="w-full max-w-[1200px] mx-auto px-3 md:px-8">
+      <div className="w-full max-w-[1200px] mx-auto p-2 md:p-4 lg:p-8">
         {children}
       </div>
     </>

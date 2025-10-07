@@ -20,12 +20,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 }) => {
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
   const [timeRemaining, setTimeRemaining] = useState<string>("")
-  const [serverReservationStatus, setServerReservationStatus] = useState<{
-    reserved: boolean
-    mine?: boolean
-    ttlMs?: number
-    userId?: string
-  } | null>(null)
 
   // Add sponsorship state management
   const { sponsorshipInProgress, getReservationInfo } = useSponsorship()
@@ -44,53 +38,15 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 
-  // Fetch server-side reservation status
-  useEffect(() => {
-    const fetchReservationStatus = async () => {
-      try {
-        const response = await fetch(`/api/sponsorships/reservations?beneficiaryId=${beneficiary.id}`)
-        if (response.ok) {
-          const data = await response.json()
-          setServerReservationStatus(data)
-        }
-      } catch (error) {
-        console.error('Error fetching reservation status:', error)
-      }
-    }
-
-    fetchReservationStatus()
-    
-    // Poll for updates every 5 seconds
-    const interval = setInterval(fetchReservationStatus, 5000)
-    
-    return () => clearInterval(interval)
-  }, [beneficiary.id])
-
   // Update time remaining every second when reservation is active
   useEffect(() => {
-    if (!reservationInfo && !serverReservationStatus?.reserved) {
+    if (!reservationInfo) {
       setTimeRemaining("")
       return
     }
 
     const updateTime = () => {
-      let remaining = ""
-      
-      // Use server-side TTL if available
-      if (serverReservationStatus?.reserved && serverReservationStatus.ttlMs) {
-        const timeLeft = serverReservationStatus.ttlMs
-        if (timeLeft <= 0) {
-          remaining = "Expired"
-        } else {
-          const minutes = Math.floor(timeLeft / (60 * 1000))
-          const seconds = Math.floor((timeLeft % (60 * 1000)) / 1000)
-          remaining = `${minutes}:${seconds.toString().padStart(2, '0')}`
-        }
-      } else if (reservationInfo) {
-        // Fallback to client-side reservation
-        remaining = getTimeRemaining(reservationInfo.timestamp)
-      }
-      
+      const remaining = getTimeRemaining(reservationInfo.timestamp)
       setTimeRemaining(remaining)
     }
 
@@ -101,7 +57,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     const interval = setInterval(updateTime, 1000)
 
     return () => clearInterval(interval)
-  }, [reservationInfo, serverReservationStatus])
+  }, [reservationInfo])
 
   const placeholderImage =
     "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
@@ -148,9 +104,9 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   // Primary content
   const age = calculateAge(new Date(beneficiary.birth_date).toISOString())
   
-  // Check if child is reserved (either client-side or server-side)
-  const isReserved = isSponsorshipInProgress || serverReservationStatus?.reserved
-  const shouldShowOverlay = isReserved && (reservationInfo || serverReservationStatus?.reserved)
+  // Check if child is reserved (client-side only - server polling removed to prevent spam)
+  const isReserved = isSponsorshipInProgress
+  const shouldShowOverlay = isReserved && reservationInfo
 
   return (
     <Box
