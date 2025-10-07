@@ -1,7 +1,7 @@
 "use client"
 import { Box } from "@chakra-ui/react"
 import React from "react"
-import { CompactHero } from "@/components/CompactHero"
+import { HomeHero } from "@/components/HomeHero"
 import SponsorshipFilters from "./sponsorships/components/SponsorshipFilters"
 import SponsorshipListings from "./sponsorships/components/SponsorshipListings"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
@@ -18,11 +18,11 @@ export default function Home() {
 
   return (
     <Box>
-      {/* Compact Hero Section */}
-      <CompactHero />
+      {/* Home Hero Section */}
+      <HomeHero />
 
-      {/* Filters and Listings Container with consistent margins */}
-      <Box px={{ base: 2, md: 0 }}>
+      {/* Filters and Listings Container */}
+      <Box px={{ base: 4, md: 8 }}>
         {/* Filters */}
         <SponsorshipFilters onFilterChange={handleFilterChange} />
 

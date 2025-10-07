@@ -1,7 +1,7 @@
 import React from "react"
 import { Box, Heading, Text, Image, Flex } from "@chakra-ui/react"
 
-export const CompactHero = () => {
+export const HomeHero = () => {
   return (
     <Box className="text-center py-8 md:py-12" position="relative">
       {/* Badge - Far Upper Right */}
