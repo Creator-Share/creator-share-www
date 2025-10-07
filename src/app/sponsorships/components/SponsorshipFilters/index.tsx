@@ -141,12 +141,12 @@ const SponsorshipFilters: React.FC<
                     borderRadius: "16px !important",
                   }}
                 >
-                  <SelectValueText placeholder="Select Gender">
+                  <SelectValueText placeholder="All Genders">
                     {() => {
                       const selected = genders.items.find(
                         (item) => item.value === selectedGender
                       )
-                      return selected ? selected.label : "Select Gender"
+                      return selected ? selected.label : "All Genders"
                     }}
                   </SelectValueText>
                 </SelectTrigger>
