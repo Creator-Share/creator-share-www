@@ -114,9 +114,9 @@ export async function GET(req: Request) {
         limit,
         nextCursor:
           data && data.length === limit && lastItem
-            ? Buffer.from(
-                `${lastItem.created_at}|${lastItem.id}`
-              ).toString("base64")
+            ? Buffer.from(`${lastItem.created_at}|${lastItem.id}`).toString(
+                "base64"
+              )
             : null,
         hasMore: Boolean(data && data.length === limit),
       },

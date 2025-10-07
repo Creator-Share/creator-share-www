@@ -59,6 +59,7 @@ export function useBeneficiaryPagination(
 
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const toastIdRef = useRef<string | null>(null)
+  const activeRequestRef = useRef<string | null>(null) // Track active request cursor
 
   // Fibonacci sequence for retry delays (in seconds): 1, 1, 2, 3, 5, 8, 13...
   const getFibonacciDelay = useCallback((n: number): number => {
@@ -92,6 +93,17 @@ export function useBeneficiaryPagination(
 
   const fetchPage = useCallback(
     async (nextCursor: string | null) => {
+      // Prevent duplicate requests with the same cursor
+      const requestKey = nextCursor || "initial"
+      if (activeRequestRef.current === requestKey) {
+        console.log(
+          `[useBeneficiaryPagination] 🚫 Skipping duplicate request for cursor:`,
+          requestKey
+        )
+        return
+      }
+
+      activeRequestRef.current = requestKey
       setIsLoading(true)
       try {
         const res = await fetch(
@@ -138,6 +150,9 @@ export function useBeneficiaryPagination(
           toaster.dismiss(toastIdRef.current)
           toastIdRef.current = null
         }
+
+        // Clear active request
+        activeRequestRef.current = null
       } catch (e) {
         const message = e instanceof Error ? e.message : "Unexpected error"
         console.error("[useBeneficiaryPagination] Fetch error:", message)
@@ -174,6 +189,8 @@ export function useBeneficiaryPagination(
         }
       } finally {
         setIsLoading(false)
+        // Clear active request on error too
+        activeRequestRef.current = null
       }
     },
     [buildQuery, autoRetry, getFibonacciDelay, retryCount]
@@ -181,6 +198,7 @@ export function useBeneficiaryPagination(
 
   const retryFetch = useCallback(() => {
     setRetryCount(0)
+    activeRequestRef.current = null // Clear any stuck request state
     fetchPage(null)
   }, [fetchPage])
 

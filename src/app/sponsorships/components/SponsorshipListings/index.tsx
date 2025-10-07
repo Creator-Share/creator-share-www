@@ -188,17 +188,24 @@ const BeneficiaryListings = React.forwardRef<
       if (!container) return
 
       let ticking = false
+      let lastLoadTime = 0
+      const LOAD_THROTTLE_MS = 500 // Prevent loads within 500ms of each other
+
       const onScroll = () => {
         if (ticking) return
         ticking = true
         requestAnimationFrame(() => {
+          const now = Date.now()
           const rect = container.getBoundingClientRect()
           const distanceFromBottom = rect.bottom - window.innerHeight
+
           if (
             distanceFromBottom <= SCROLL_THRESHOLD_PX &&
             hasMore &&
-            !isLoading
+            !isLoading &&
+            now - lastLoadTime > LOAD_THROTTLE_MS
           ) {
+            lastLoadTime = now
             onLoadMore?.()
           }
           ticking = false
@@ -251,7 +258,6 @@ const BeneficiaryListings = React.forwardRef<
                     id={beneficiary.id}
                     onOpenDialog={() => handleOpenDialog(beneficiary.id)}
                     beneficiaryType={beneficiaryType}
-                    setSelectedBeneficiaryId={() => {}}
                   />
                 </Box>
               ) : null
@@ -259,7 +265,7 @@ const BeneficiaryListings = React.forwardRef<
           </SimpleGrid>
         </Box>
         {/* Infinite scroll loading indicator */}
-        {(isLoadingMore || isLoading) && (
+        {isLoading && (
           <Flex justify="center" py={4} align="center">
             <Spinner size="xl" color="gray.300" />
           </Flex>
