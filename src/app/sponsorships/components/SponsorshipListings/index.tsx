@@ -196,8 +196,10 @@ const BeneficiaryListings = React.forwardRef<
         ticking = true
         requestAnimationFrame(() => {
           const now = Date.now()
-          const rect = container.getBoundingClientRect()
-          const distanceFromBottom = rect.bottom - window.innerHeight
+          const scrollTop = container.scrollTop
+          const scrollHeight = container.scrollHeight
+          const clientHeight = container.clientHeight
+          const distanceFromBottom = scrollHeight - (scrollTop + clientHeight)
 
           if (
             distanceFromBottom <= SCROLL_THRESHOLD_PX &&
@@ -212,8 +214,8 @@ const BeneficiaryListings = React.forwardRef<
         })
       }
 
-      window.addEventListener("scroll", onScroll, { passive: true })
-      return () => window.removeEventListener("scroll", onScroll)
+      container.addEventListener("scroll", onScroll, { passive: true })
+      return () => container.removeEventListener("scroll", onScroll)
     }, [hasMore, isLoading, onLoadMore])
 
     return (
@@ -229,6 +231,8 @@ const BeneficiaryListings = React.forwardRef<
         mt={4}
         style={{
           minHeight: visibleBeneficiary.length ? "auto" : "100px",
+          maxHeight: "200vh",
+          overflowY: "auto",
         }}
         suppressHydrationWarning={true}
       >
@@ -279,7 +283,7 @@ const BeneficiaryListings = React.forwardRef<
         </Box>
         {/* Infinite scroll loading indicator */}
         {isLoading && (
-          <Flex justify="center" py={4} align="center">
+          <Flex justify="center" py={8} align="center">
             <Spinner size="xl" color="gray.300" />
           </Flex>
         )}
