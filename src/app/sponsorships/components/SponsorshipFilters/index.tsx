@@ -112,183 +112,188 @@ const SponsorshipFilters: React.FC<
         p={{ base: 3, md: 4 }}
       >
         <Box className="bg-transparent rounded-2xl" width="100%">
-        <Flex
-          align="center"
-          className={
-            variant === "sidebar" ? "flex-col" : "flex-col md:flex-row"
-          }
-          gap={8}
-          px={4}
-          py={2}
-          position="relative"
-          alignItems="center"
-          width="100%"
-        >
-          {/* Gender Select Dropdown */}
-          <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-            <SelectRoot
-              collection={genders}
-              value={selectedGender ? [selectedGender] : undefined}
-              onValueChange={(details) => {
-                const value = details.items[0]
-                handleFilterChange({ gender: value?.value || "" })
-              }}
-              size="sm"
-              className="rounded-2xl w-full"
-            >
-              <SelectTrigger
-                css={{
-                  borderRadius: "16px !important",
-                }}
-              >
-                <SelectValueText placeholder="Select Gender">
-                  {() => {
-                    const selected = genders.items.find(
-                      (item) => item.value === selectedGender
-                    )
-                    return selected ? selected.label : "Select Gender"
-                  }}
-                </SelectValueText>
-              </SelectTrigger>
-              <SelectContent>
-                {genders.items.map((gender) => (
-                  <SelectItem item={gender} key={gender.value}>
-                    {gender.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </SelectRoot>
-          </Box>
-
-          {/* Status Select Dropdown */}
-          <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-            <SelectRoot
-              collection={statusOptions}
-              value={selectedStatus}
-              onValueChange={(details) => {
-                const values = details.items.map((item) => item.value)
-                handleFilterChange({ status: values })
-              }}
-              size="sm"
-              className="rounded-2xl w-full"
-              multiple
-            >
-              <SelectTrigger
-                css={{
-                  borderRadius: "16px !important",
-                }}
-              >
-                <SelectValueText placeholder="Select Status">
-                  {() => {
-                    const selected = statusOptions.items
-                      .filter((item) => selectedStatus.includes(item.value))
-                      .map((item) => item.label)
-                      .join(", ")
-                    return selected || "Select Status"
-                  }}
-                </SelectValueText>
-              </SelectTrigger>
-              <SelectContent>
-                {statusOptions.items.map((option) => (
-                  <SelectItem item={option} key={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </SelectRoot>
-          </Box>
-
-          <Box
-            flex={{ base: "1 1 100%", md: "1 1 0" }}
-            w="100%"
-            minW={0}
-            px={2}
+          <Flex
+            align="center"
+            className={
+              variant === "sidebar" ? "flex-col" : "flex-col md:flex-row"
+            }
+            gap={8}
+            px={4}
+            py={2}
+            position="relative"
+            alignItems="center"
+            width="100%"
           >
-            <Text mb={2} fontSize="sm" fontWeight="semibold" textAlign="center">
-              Age Range: {minAge} - {maxAge} years
-            </Text>
-            <Box>
-              <Slider
-                size={"sm"}
-                value={[minAge, maxAge]}
-                min={0}
-                max={defaultMaxAge}
-                step={1}
-                variant={"solid"}
+            {/* Gender Select Dropdown */}
+            <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+              <SelectRoot
+                collection={genders}
+                value={selectedGender ? [selectedGender] : undefined}
                 onValueChange={(details) => {
-                  if (details.value && details.value.length >= 2) {
-                    const [newMin, origMax] = details.value
-                    let newMax = origMax
-
-                    const minDistance = 1
-                    if (newMax - newMin < minDistance) {
-                      newMax = Math.max(newMin + minDistance, maxAge)
-                    }
-
-                    setMinAge(newMin)
-                    setMaxAge(newMax)
-                    handleFilterChange({ ageRange: [newMin, newMax] })
-                  }
+                  const value = details.items[0]
+                  handleFilterChange({ gender: value?.value || "" })
                 }}
-                showValue
+                size="sm"
+                className="rounded-2xl w-full"
+              >
+                <SelectTrigger
+                  css={{
+                    borderRadius: "16px !important",
+                  }}
+                >
+                  <SelectValueText placeholder="Select Gender">
+                    {() => {
+                      const selected = genders.items.find(
+                        (item) => item.value === selectedGender
+                      )
+                      return selected ? selected.label : "Select Gender"
+                    }}
+                  </SelectValueText>
+                </SelectTrigger>
+                <SelectContent>
+                  {genders.items.map((gender) => (
+                    <SelectItem item={gender} key={gender.value}>
+                      {gender.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </SelectRoot>
+            </Box>
+
+            {/* Status Select Dropdown */}
+            <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+              <SelectRoot
+                collection={statusOptions}
+                value={selectedStatus}
+                onValueChange={(details) => {
+                  const values = details.items.map((item) => item.value)
+                  handleFilterChange({ status: values })
+                }}
+                size="sm"
+                className="rounded-2xl w-full"
+                multiple
+              >
+                <SelectTrigger
+                  css={{
+                    borderRadius: "16px !important",
+                  }}
+                >
+                  <SelectValueText placeholder="Select Status">
+                    {() => {
+                      const selected = statusOptions.items
+                        .filter((item) => selectedStatus.includes(item.value))
+                        .map((item) => item.label)
+                        .join(", ")
+                      return selected || "Select Status"
+                    }}
+                  </SelectValueText>
+                </SelectTrigger>
+                <SelectContent>
+                  {statusOptions.items.map((option) => (
+                    <SelectItem item={option} key={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </SelectRoot>
+            </Box>
+
+            <Box
+              flex={{ base: "1 1 100%", md: "1 1 0" }}
+              w="100%"
+              minW={0}
+              px={2}
+            >
+              <Text
+                mb={2}
+                fontSize="sm"
+                fontWeight="semibold"
+                textAlign="center"
+              >
+                Age Range: {minAge} - {maxAge} years
+              </Text>
+              <Box>
+                <Slider
+                  size={"sm"}
+                  value={[minAge, maxAge]}
+                  min={0}
+                  max={defaultMaxAge}
+                  step={1}
+                  variant={"solid"}
+                  onValueChange={(details) => {
+                    if (details.value && details.value.length >= 2) {
+                      const [newMin, origMax] = details.value
+                      let newMax = origMax
+
+                      const minDistance = 1
+                      if (newMax - newMin < minDistance) {
+                        newMax = Math.max(newMin + minDistance, maxAge)
+                      }
+
+                      setMinAge(newMin)
+                      setMaxAge(newMax)
+                      handleFilterChange({ ageRange: [newMin, newMax] })
+                    }
+                  }}
+                  showValue
+                />
+              </Box>
+            </Box>
+
+            {/* Search Field */}
+            <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+              <Input
+                placeholder="Search for a Child"
+                value={mounted ? searchQuery : ""}
+                onChange={(e) => {
+                  if (!mounted) return
+                  const value = e.target.value
+                  setSearchQuery(value)
+                  handleFilterChange({ search: value })
+                }}
+                size="sm"
+                className="rounded-2xl"
+                borderRadius="16px"
+                _focus={{
+                  borderColor: "#1C3C8C",
+                  boxShadow: "0 0 0 1px #1C3C8C",
+                }}
+                suppressHydrationWarning={true}
               />
             </Box>
-          </Box>
 
-          {/* Search Field */}
-          <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-            <Input
-              placeholder="Search for a Child"
-              value={mounted ? searchQuery : ""}
-              onChange={(e) => {
-                if (!mounted) return
-                const value = e.target.value
-                setSearchQuery(value)
-                handleFilterChange({ search: value })
-              }}
-              size="sm"
-              className="rounded-2xl"
-              borderRadius="16px"
-              _focus={{
-                borderColor: "#1C3C8C",
-                boxShadow: "0 0 0 1px #1C3C8C",
-              }}
-              suppressHydrationWarning={true}
-            />
-          </Box>
-
-          <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-            <Tooltip
-              content="This button will clear search filters to show all children if you have search filters applied"
-              disabled={!isDefaultFilters}
-            >
-              <Button
-                onClick={handleClearFilters}
-                size="md"
-                fontWeight="semibold"
-                width={{ base: "100%", md: "100%" }}
-                bg="#1C3C8C"
-                color="white"
-                borderRadius="16px"
-                _hover={{ bg: "#1C2B7A" }}
-                _active={{ bg: "#182765" }}
-                disabled={isDefaultFilters}
-                _disabled={{
-                  bg: "gray.300",
-                  color: "white",
-                  cursor: "not-allowed",
-                  _dark: { bg: "gray.600", color: "gray.200" },
-                }}
+            <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+              <Tooltip
+                content="This button will clear search filters to show all children if you have search filters applied"
+                disabled={!isDefaultFilters}
               >
-                {!isDefaultFilters
-                  ? "Clear Search & Filters"
-                  : "Showing All Children"}
-              </Button>
-            </Tooltip>
-          </Box>
-        </Flex>
+                <Button
+                  onClick={handleClearFilters}
+                  size="md"
+                  fontWeight="semibold"
+                  width={{ base: "100%", md: "100%" }}
+                  bg="#1C3C8C"
+                  color="white"
+                  borderRadius="16px"
+                  _hover={{ bg: "#1C2B7A" }}
+                  _active={{ bg: "#182765" }}
+                  disabled={isDefaultFilters}
+                  _disabled={{
+                    bg: "gray.300",
+                    color: "white",
+                    cursor: "not-allowed",
+                    _dark: { bg: "gray.600", color: "gray.200" },
+                  }}
+                >
+                  {!isDefaultFilters
+                    ? "Clear Search & Filters"
+                    : "Showing All Children"}
+                </Button>
+              </Tooltip>
+            </Box>
+          </Flex>
+        </Box>
       </Box>
-    </Box>
     </>
   )
 }
