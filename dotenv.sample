@@ -10,6 +10,10 @@ NEXT_PUBLIC_BASE_URL=https://localhost:3000/
 # Public frontend exposure (dollars in cents integer string) to allow UI to honor/lock the amount
 NEXT_PUBLIC_SPONSORSHIP_GOAL=
 
+# Reservation timeout in minutes (how long a child stays reserved when someone starts sponsoring)
+RESERVATION_TIMEOUT_MINUTES=
+NEXT_PUBLIC_RESERVATION_TIMEOUT_MINUTES=
+
 # Telegram Bot Configuration
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=

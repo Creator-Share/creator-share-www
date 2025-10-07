@@ -76,6 +76,19 @@ export default function PaymentSuccessClient() {
     const paypalToken =
       searchParams.get("token") || searchParams.get("ba_token")
 
+    // Function to clear reservation after successful payment
+    const clearReservation = async (beneficiaryId: string) => {
+      try {
+        await fetch('/api/sponsorships/reservations', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ beneficiaryId }),
+        })
+      } catch (error) {
+        console.error('Failed to clear reservation after payment:', error)
+      }
+    }
+
     if (sessionId) {
       fetch(`/api/stripe/success?session_id=${sessionId}`)
         .then(async (res) => {
@@ -87,6 +100,10 @@ export default function PaymentSuccessClient() {
             message: "Your Stripe payment was successful!",
             details: data,
           })
+          // Clear reservation after successful payment
+          if (data.metadata?.beneficiaryId) {
+            await clearReservation(data.metadata.beneficiaryId)
+          }
         })
         .catch(() => {
           setStatus({
@@ -108,6 +125,10 @@ export default function PaymentSuccessClient() {
             message: "Your PayPal payment was successful!",
             details: data,
           })
+          // Clear reservation after successful payment
+          if (data.beneficiaryId) {
+            await clearReservation(data.beneficiaryId)
+          }
         })
         .catch(() => {
           setStatus({

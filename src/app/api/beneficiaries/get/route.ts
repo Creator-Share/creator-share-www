@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { Beneficiaries, Status, Gender } from "@/types/admin.types"
+import { Status, Gender } from "@/types/admin.types"
 
 export async function GET(req: Request) {
   const supabase = await createClient()
+  
+  // Clean up expired reservations
+  try {
+    await supabase
+      .from("beneficiary_reservations")
+      .delete()
+      .lt("expires_at", new Date().toISOString())
+  } catch (error) {
+    console.error("Failed to cleanup expired reservations:", error)
+  }
+  
   const { searchParams } = new URL(req.url)
 
   const beneficiaryType = searchParams.get("beneficiary_type")
