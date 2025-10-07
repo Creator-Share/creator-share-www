@@ -10,6 +10,7 @@ import { centsToDollars } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { useSponsorship } from "../../hooks/useSponsorship"
+import { useReservations } from "../../hooks/useReservations"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -23,8 +24,12 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
   // Add sponsorship state management
   const { sponsorshipInProgress, getReservationInfo } = useSponsorship()
+  const { getReservationStatus, cleanupExpiredReservations } = useReservations()
   const isSponsorshipInProgress = sponsorshipInProgress.has(beneficiary.id)
   const reservationInfo = getReservationInfo(beneficiary.id)
+  
+  // Get real-time reservation status from server
+  const serverReservationStatus = getReservationStatus(beneficiary.id)
   
   // Calculate time remaining for reservation
   const getTimeRemaining = (timestamp: number) => {
@@ -40,13 +45,35 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
   // Update time remaining every second when reservation is active
   useEffect(() => {
-    if (!reservationInfo) {
+    // Prioritize server-side reservation status
+    if (!reservationInfo && !serverReservationStatus?.reserved) {
       setTimeRemaining("")
       return
     }
 
     const updateTime = () => {
-      const remaining = getTimeRemaining(reservationInfo.timestamp)
+      let remaining = ""
+      
+      // Use server-side TTL if available (real-time data)
+      if (serverReservationStatus?.reserved && serverReservationStatus.ttlMs) {
+        const timeLeft = serverReservationStatus.ttlMs
+        if (timeLeft <= 0) {
+          remaining = "Expired"
+          // Trigger cleanup when reservation expires
+          cleanupExpiredReservations()
+        } else {
+          const minutes = Math.floor(timeLeft / (60 * 1000))
+          const seconds = Math.floor((timeLeft % (60 * 1000)) / 1000)
+          remaining = `${minutes}:${seconds.toString().padStart(2, '0')}`
+        }
+      } else if (reservationInfo) {
+        // Fallback to client-side reservation
+        remaining = getTimeRemaining(reservationInfo.timestamp)
+        if (remaining === "Expired") {
+          cleanupExpiredReservations()
+        }
+      }
+      
       setTimeRemaining(remaining)
     }
 
@@ -57,7 +84,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     const interval = setInterval(updateTime, 1000)
 
     return () => clearInterval(interval)
-  }, [reservationInfo])
+  }, [reservationInfo, serverReservationStatus, cleanupExpiredReservations])
 
   const placeholderImage =
     "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
@@ -104,9 +131,9 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   // Primary content
   const age = calculateAge(new Date(beneficiary.birth_date).toISOString())
   
-  // Check if child is reserved (client-side only - server polling removed to prevent spam)
-  const isReserved = isSponsorshipInProgress
-  const shouldShowOverlay = isReserved && reservationInfo
+  // Check if child is reserved (real-time server-side + client-side fallback)
+  const isReserved = isSponsorshipInProgress || serverReservationStatus?.reserved || false
+  const shouldShowOverlay = isReserved && (reservationInfo || serverReservationStatus?.reserved)
 
   return (
     <Box

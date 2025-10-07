@@ -6,6 +6,7 @@ import { ChakraProvider, defaultSystem } from "@chakra-ui/react"
 import { QueryClient } from "@tanstack/react-query"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { SponsorshipProvider } from "@/app/sponsorships/hooks/useSponsorship"
+import { ReservationsProvider } from "@/app/sponsorships/hooks/useReservations"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient())
@@ -18,9 +19,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
         defaultTheme="light"
       >
         <QueryClientProvider client={queryClient}>
-          <SponsorshipProvider>
-            {children}
-          </SponsorshipProvider>
+          <ReservationsProvider>
+            <SponsorshipProvider>
+              {children}
+            </SponsorshipProvider>
+          </ReservationsProvider>
         </QueryClientProvider>
       </ThemeProvider>
     </ChakraProvider>

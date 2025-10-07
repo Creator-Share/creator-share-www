@@ -3,7 +3,6 @@ import { useEffect, useState } from "react"
 import {
   Box,
   Flex,
-  Link,
   Button,
   Image,
   VStack,
@@ -16,19 +15,19 @@ import { usePathname, useRouter } from "next/navigation"
 import { GiHamburgerMenu } from "react-icons/gi"
 import { IoClose } from "react-icons/io5"
 
-const Links = [
-  // { name: "Sponsorships", href: "/" }, // Temporarily hidden
-  // { name: "Lives", href: "/lives" },
-  // { name: "Projects", href: "/projects" },
-  // { name: "Causes", href: "/causes" },
-  // { name: "My Community", href: "/local" },
-  // { name: "Share Abundance", href: "/share" },
-  // { name: "Strays Worth Saving", href: "/strays-worth-saving" },
-  // { name: "Sponsor-a-Family", href: "/family-in-need" },
-  // { name: "Street Involved", href: "/street-involved" },
-  // { name: "Child Laborers", href: "/child-labor" },
-  // { name: "I-Frame Test", href: "/iframe-test" },
-]
+// const Links = [
+//   // { name: "Sponsorships", href: "/" }, // Temporarily hidden
+//   // { name: "Lives", href: "/lives" },
+//   // { name: "Projects", href: "/projects" },
+//   // { name: "Causes", href: "/causes" },
+//   // { name: "My Community", href: "/local" },
+//   // { name: "Share Abundance", href: "/share" },
+//   // { name: "Strays Worth Saving", href: "/strays-worth-saving" },
+//   // { name: "Sponsor-a-Family", href: "/family-in-need" },
+//   // { name: "Street Involved", href: "/street-involved" },
+//   // { name: "Child Laborers", href: "/child-labor" },
+//   // { name: "I-Frame Test", href: "/iframe-test" },
+// ]
 
 export function PageNavbar() {
   const [isOpen, setIsOpen] = useState(false)
@@ -94,6 +93,7 @@ export function PageNavbar() {
 
         {/* Desktop Menu */}
         <Flex as="nav" gap={4} display={{ base: "none", md: "flex" }}>
+          {/* Navigation links temporarily disabled
           {Links.map((link) => {
             const isActive = pathname === link.href
             return (
@@ -129,7 +129,7 @@ export function PageNavbar() {
                 {link.name}
               </Link>
             )
-          })}
+          })} */}
         </Flex>
 
         {/* Right Actions */}
@@ -213,6 +213,7 @@ export function PageNavbar() {
           pointerEvents="auto"
         >
           <VStack gap={4} py={6}>
+            {/* Navigation links temporarily disabled
             {Links.map((link) => {
               const isActive = pathname === link.href
               return (
@@ -246,7 +247,7 @@ export function PageNavbar() {
                   {link.name}
                 </Link>
               )
-            })}
+            })} */}
             {user ? (
               <>
                 {isAdmin && (

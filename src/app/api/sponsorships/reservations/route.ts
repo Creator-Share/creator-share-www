@@ -102,13 +102,27 @@ export async function DELETE(req: Request) {
 export async function GET(req: Request) {
   const supabase = await createClient()
   
-  // Clean up expired reservations first
+  // Force cleanup of expired reservations first
   await cleanupExpiredReservations(supabase)
   
   const { searchParams } = new URL(req.url)
   const beneficiaryId = searchParams.get("beneficiaryId")
+  
+  // If no beneficiaryId, return cleanup status
   if (!beneficiaryId) {
-    return NextResponse.json({ error: "beneficiaryId required" }, { status: 400 })
+    const { data, error } = await supabase
+      .from("beneficiary_reservations")
+      .select("beneficiary_id", { count: "exact" })
+      .gt("expires_at", new Date().toISOString())
+
+    if (error) {
+      return NextResponse.json({ error: "Failed to get active reservations" }, { status: 500 })
+    }
+
+    return NextResponse.json({ 
+      activeReservations: data?.length || 0,
+      cleaned: true 
+    })
   }
 
   const { data, error } = await supabase

@@ -176,7 +176,9 @@ export function useBeneficiaryPagination(
               if (retryTimeoutRef.current) {
                 clearTimeout(retryTimeoutRef.current)
               }
-              retryFetch()
+              setRetryCount(0)
+              activeRequestRef.current = null
+              fetchPage(null)
             },
           },
         })
@@ -196,17 +198,14 @@ export function useBeneficiaryPagination(
         activeRequestRef.current = null
       }
     },
-    [buildQuery, autoRetry, getFibonacciDelay, retryCount]
+    [buildQuery, autoRetry, getFibonacciDelay, retryCount, setRetryCount]
   )
 
-  const retryFetch = useCallback(() => {
+  const memoizedRetryFetch = useCallback(() => {
     setRetryCount(0)
-    activeRequestRef.current = null // Clear any stuck request state
+    activeRequestRef.current = null
     fetchPage(null)
   }, [fetchPage])
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const memoizedRetryFetch = useCallback(retryFetch, [])
 
   const loadMore = useCallback(() => {
     if (hasMore && !isLoading) {
