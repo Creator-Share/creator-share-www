@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { Box, Flex, Button, Text } from "@chakra-ui/react"
+import { Box, Flex, Button, Text, Input } from "@chakra-ui/react"
 import { Slider } from "@/components/ui/slider"
 import {
   SelectRoot,
@@ -32,6 +32,7 @@ const SponsorshipFilters: React.FC<
   const [maxAge, setMaxAge] = useState<number>(
     selectedAgeRange[1] || defaultMaxAge
   )
+  const [searchQuery, setSearchQuery] = useState<string>("")
 
   useEffect(() => {
     setMinAge(selectedAgeRange[0] || 0)
@@ -42,6 +43,7 @@ const SponsorshipFilters: React.FC<
     gender?: string
     ageRange?: [number, number]
     status?: string[]
+    search?: string
   }) => {
     // Always include the current status if not explicitly changed
     const newStatus = updatedFilters.status ?? selectedStatus
@@ -51,6 +53,7 @@ const SponsorshipFilters: React.FC<
       gender: updatedFilters.gender ?? selectedGender,
       ageRange: updatedFilters.ageRange ?? selectedAgeRange,
       status: newStatus,
+      search: updatedFilters.search ?? searchQuery,
     }
 
     if (updatedFilters.gender !== undefined) {
@@ -58,6 +61,9 @@ const SponsorshipFilters: React.FC<
     }
     if (updatedFilters.ageRange !== undefined) {
       setAgeRange(newFilters.ageRange)
+    }
+    if (updatedFilters.search !== undefined) {
+      setSearchQuery(newFilters.search)
     }
     setStatus(newStatus)
 
@@ -69,10 +75,12 @@ const SponsorshipFilters: React.FC<
     resetToDefaults()
     setMinAge(0)
     setMaxAge(defaultMaxAge)
+    setSearchQuery("")
     onFilterChange({
       gender: "",
       ageRange: [0, defaultMaxAge],
       status: ["New", "Partially Funded"],
+      search: "",
     })
   }
 
@@ -82,10 +90,10 @@ const SponsorshipFilters: React.FC<
 
   return (
     <Box
-      className="bg-white border rounded-2xl shadow-sm"
+      className="bg-white border rounded-3xl shadow-sm"
       p={{ base: 3, md: 4 }}
     >
-      <Box className="bg-transparent rounded-xl" width="100%">
+      <Box className="bg-transparent rounded-2xl" width="100%">
         <Flex
           align="center"
           className={
@@ -98,6 +106,25 @@ const SponsorshipFilters: React.FC<
           alignItems="center"
           width="100%"
         >
+          {/* Search Field */}
+          <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+            <Input
+              placeholder="Search by name or username..."
+              value={searchQuery}
+              onChange={(e) => {
+                const value = e.target.value
+                setSearchQuery(value)
+                handleFilterChange({ search: value })
+              }}
+              size="sm"
+              className="rounded-2xl"
+              borderRadius="16px"
+              _focus={{
+                borderColor: "#1C3C8C",
+                boxShadow: "0 0 0 1px #1C3C8C",
+              }}
+            />
+          </Box>
           {/* Gender Select Dropdown */}
           <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
             <SelectRoot
@@ -140,7 +167,7 @@ const SponsorshipFilters: React.FC<
                 handleFilterChange({ status: values })
               }}
               size="sm"
-              className="rounded-xl w-full"
+              className="rounded-2xl w-full"
               multiple
             >
               <SelectTrigger>
@@ -203,6 +230,7 @@ const SponsorshipFilters: React.FC<
               width={{ base: "100%", md: "100%" }}
               bg="#1C3C8C"
               color="white"
+              borderRadius="16px"
               _hover={{ bg: "#1C2B7A" }}
               _active={{ bg: "#182765" }}
               disabled={isDefaultFilters}

@@ -17,7 +17,7 @@ import { GiHamburgerMenu } from "react-icons/gi"
 import { IoClose } from "react-icons/io5"
 
 const Links = [
-  { name: "Sponsorships", href: "/" },
+  // { name: "Sponsorships", href: "/" }, // Temporarily hidden
   // { name: "Lives", href: "/lives" },
   // { name: "Projects", href: "/projects" },
   // { name: "Causes", href: "/causes" },
@@ -176,12 +176,12 @@ export function PageNavbar() {
             </Menu.Root>
           ) : (
             <>
-              {/* <NextLink href="/login" passHref>
+              <NextLink href="/login" passHref>
                 <Button size="sm" variant="ghost">
                   Sign In
                 </Button>
               </NextLink>
-              <NextLink href="/registration" passHref>
+              {/* <NextLink href="/registration" passHref>
                 <Button size="sm" colorScheme="blue">
                   Sign Up
                 </Button>
@@ -277,11 +277,11 @@ export function PageNavbar() {
                     Sign In
                   </Button>
                 </NextLink>
-                <NextLink href="/registration" passHref>
+                {/* <NextLink href="/registration" passHref>
                   <Button size="sm" colorScheme="blue" className="w-full">
                     Sign Up
                   </Button>
-                </NextLink>
+                </NextLink> */}
               </>
             )}
           </VStack>

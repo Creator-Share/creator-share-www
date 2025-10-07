@@ -6,6 +6,7 @@ export interface FiltersProps {
     gender: string
     ageRange: [number, number]
     status: string[]
+    search?: string
   }) => void
   beneficiaryType?: "CHILD" | "ANIMAL"
 }

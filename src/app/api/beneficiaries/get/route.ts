@@ -11,6 +11,7 @@ export async function GET(req: Request) {
   const statusString = searchParams.get("status") || ""
   const status = statusString ? (statusString.split(",") as Status[]) : []
   const ageRangeParam = searchParams.get("ageRange")
+  const searchQuery = searchParams.get("search")
 
   // Pagination params
   const limitParam = Number(searchParams.get("limit") || "9")
@@ -65,6 +66,14 @@ export async function GET(req: Request) {
         const maxDob = dateYearsAgo(minAgeInYears).toISOString()
         query = query.gte("birth_date", minDob).lte("birth_date", maxDob)
       }
+    }
+
+    // Search by name or username
+    if (searchQuery && searchQuery.trim()) {
+      const searchTerm = searchQuery.trim()
+      query = query.or(
+        `name.ilike.%${searchTerm}%,username.ilike.%${searchTerm}%`
+      )
     }
 
     // Keyset (cursor) pagination: created_at DESC, id DESC

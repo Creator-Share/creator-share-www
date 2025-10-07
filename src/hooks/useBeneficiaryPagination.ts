@@ -6,6 +6,7 @@ type FiltersState = {
   gender: string
   ageRange: [number, number]
   status: string[]
+  search?: string
   beneficiary_type?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED"
 }
 
@@ -48,6 +49,7 @@ export function useBeneficiaryPagination(
     gender: "",
     ageRange: [0, beneficiaryType === "ANIMAL" ? 20 : 14],
     status: ["New", "Partially Funded"],
+    search: "",
     beneficiary_type: beneficiaryType,
   })
 
@@ -84,6 +86,7 @@ export function useBeneficiaryPagination(
       if (filters.gender) params.set("gender", filters.gender)
       if (filters.status?.length) params.set("status", filters.status.join(","))
       if (filters.ageRange) params.set("ageRange", filters.ageRange.join(","))
+      if (filters.search) params.set("search", filters.search)
       params.set("limit", String(recordsPerPage))
       if (nextCursor) params.set("cursor", nextCursor)
       return params.toString()
@@ -213,6 +216,7 @@ export function useBeneficiaryPagination(
 
   const handleFilterChange = useCallback(
     (newFilters: Partial<FiltersState>) => {
+      console.log("[useBeneficiaryPagination] Filter change:", newFilters)
       setFilters((prev) => ({ ...prev, ...newFilters }))
     },
     []
