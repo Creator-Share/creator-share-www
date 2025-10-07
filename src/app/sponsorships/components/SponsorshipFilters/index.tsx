@@ -10,6 +10,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select"
+import { Tooltip } from "@/components/ui/tooltip"
 import { useFilterStore } from "@/store/filterStore"
 import { FiltersProps } from "@/types/propTypes"
 import { genders, status as statusOptions } from "./config"
@@ -33,11 +34,16 @@ const SponsorshipFilters: React.FC<
     selectedAgeRange[1] || defaultMaxAge
   )
   const [searchQuery, setSearchQuery] = useState<string>("")
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMinAge(selectedAgeRange[0] || 0)
     setMaxAge(selectedAgeRange[1] || defaultMaxAge)
   }, [selectedAgeRange, defaultMaxAge])
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleFilterChange = (updatedFilters: {
     gender?: string
@@ -75,7 +81,9 @@ const SponsorshipFilters: React.FC<
     resetToDefaults()
     setMinAge(0)
     setMaxAge(defaultMaxAge)
-    setSearchQuery("")
+    if (mounted) {
+      setSearchQuery("")
+    }
     onFilterChange({
       gender: "",
       ageRange: [0, defaultMaxAge],
@@ -86,7 +94,8 @@ const SponsorshipFilters: React.FC<
 
   // Determine if current filters differ from defaults to enable Clear button
   // Call directly so it reflects the latest store state each render
-  const isDefaultFilters = !isDirty()
+  const hasSearchQuery = mounted && searchQuery.trim().length > 0
+  const isDefaultFilters = !isDirty() && !hasSearchQuery
 
   return (
     <Box
@@ -99,32 +108,13 @@ const SponsorshipFilters: React.FC<
           className={
             variant === "sidebar" ? "flex-col" : "flex-col md:flex-row"
           }
-          gap={12}
+          gap={8}
           px={4}
           py={2}
           position="relative"
           alignItems="center"
           width="100%"
         >
-          {/* Search Field */}
-          <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-            <Input
-              placeholder="Search by name or username..."
-              value={searchQuery}
-              onChange={(e) => {
-                const value = e.target.value
-                setSearchQuery(value)
-                handleFilterChange({ search: value })
-              }}
-              size="sm"
-              className="rounded-2xl"
-              borderRadius="16px"
-              _focus={{
-                borderColor: "#1C3C8C",
-                boxShadow: "0 0 0 1px #1C3C8C",
-              }}
-            />
-          </Box>
           {/* Gender Select Dropdown */}
           <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
             <SelectRoot
@@ -135,9 +125,9 @@ const SponsorshipFilters: React.FC<
                 handleFilterChange({ gender: value?.value || "" })
               }}
               size="sm"
-              className="rounded-xl w-full"
+              className="rounded-2xl w-full"
             >
-              <SelectTrigger>
+              <SelectTrigger style={{ borderRadius: "20px" }}>
                 <SelectValueText placeholder="Select Gender">
                   {() => {
                     const selected = genders.items.find(
@@ -170,7 +160,7 @@ const SponsorshipFilters: React.FC<
               className="rounded-2xl w-full"
               multiple
             >
-              <SelectTrigger>
+              <SelectTrigger style={{ borderRadius: "20px" }}>
                 <SelectValueText placeholder="Select Status">
                   {() => {
                     const selected = statusOptions.items
@@ -191,7 +181,7 @@ const SponsorshipFilters: React.FC<
             </SelectRoot>
           </Box>
 
-          <Box flex={{ base: "1 1 100%", md: "1 1 0" }}>
+          <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
             <Text mb={2} fontSize="sm" fontWeight="semibold" textAlign="center">
               Age Range: {minAge} - {maxAge} years
             </Text>
@@ -222,27 +212,57 @@ const SponsorshipFilters: React.FC<
               />
             </Box>
           </Box>
+
+          {/* Search Field */}
           <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-            <Button
-              onClick={handleClearFilters}
-              size="md"
-              fontWeight="semibold"
-              width={{ base: "100%", md: "100%" }}
-              bg="#1C3C8C"
-              color="white"
-              borderRadius="16px"
-              _hover={{ bg: "#1C2B7A" }}
-              _active={{ bg: "#182765" }}
-              disabled={isDefaultFilters}
-              _disabled={{
-                bg: "gray.300",
-                color: "white",
-                cursor: "not-allowed",
-                _dark: { bg: "gray.600", color: "gray.200" },
+            <Input
+              placeholder="Search for a Child"
+              value={mounted ? searchQuery : ""}
+              onChange={(e) => {
+                if (!mounted) return
+                const value = e.target.value
+                setSearchQuery(value)
+                handleFilterChange({ search: value })
               }}
+              size="sm"
+              className="rounded-2xl"
+              borderRadius="16px"
+              _focus={{
+                borderColor: "#1C3C8C",
+                boxShadow: "0 0 0 1px #1C3C8C",
+              }}
+              suppressHydrationWarning={true}
+            />
+          </Box>
+
+          <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+            <Tooltip
+              content="This button will clear search filters to show all children if you have search filters applied"
+              disabled={!isDefaultFilters}
             >
-              Show All Children
-            </Button>
+              <Button
+                onClick={handleClearFilters}
+                size="md"
+                fontWeight="semibold"
+                width={{ base: "100%", md: "100%" }}
+                bg="#1C3C8C"
+                color="white"
+                borderRadius="16px"
+                _hover={{ bg: "#1C2B7A" }}
+                _active={{ bg: "#182765" }}
+                disabled={isDefaultFilters}
+                _disabled={{
+                  bg: "gray.300",
+                  color: "white",
+                  cursor: "not-allowed",
+                  _dark: { bg: "gray.600", color: "gray.200" },
+                }}
+              >
+                {hasSearchQuery
+                  ? "Clear Search & Filters"
+                  : "Showing All Children"}
+              </Button>
+            </Tooltip>
           </Box>
         </Flex>
       </Box>
