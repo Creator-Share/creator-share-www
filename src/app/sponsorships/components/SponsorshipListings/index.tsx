@@ -1,5 +1,5 @@
 "use client"
-import { Box, Flex, SimpleGrid, Spinner } from "@chakra-ui/react"
+import { Box, Flex, SimpleGrid, Spinner, Text } from "@chakra-ui/react"
 import React, { useState, useEffect, useRef } from "react"
 import BeneficiaryCard from "../SponsorshipCard"
 import BeneficiaryActivityModal from "../SponsorshipActivity/BeneficiaryActivityModal"
@@ -243,26 +243,39 @@ const BeneficiaryListings = React.forwardRef<
         )}
 
         <Box p={8}>
-          <SimpleGrid columns={{ base: 1, md: 3 }} gap="1.5rem">
-            {visibleBeneficiary.map((beneficiary) =>
-              beneficiary.id ? (
-                <Box
-                  key={beneficiary.id}
-                  className={
-                    animatingItems.has(beneficiary.id) ? "fade-in-new-item" : ""
-                  }
-                >
-                  <BeneficiaryCard
-                    beneficiary={beneficiary}
-                    isSelected={selectedBeneficiaryId === beneficiary.id}
-                    id={beneficiary.id}
-                    onOpenDialog={() => handleOpenDialog(beneficiary.id)}
-                    beneficiaryType={beneficiaryType}
-                  />
-                </Box>
-              ) : null
-            )}
-          </SimpleGrid>
+          {visibleBeneficiary.length === 0 && !isLoading ? (
+            <Flex justify="center" py={12} align="center" direction="column">
+              <Text fontSize="lg" color="gray.600" textAlign="center">
+                No matching children
+              </Text>
+              <Text fontSize="sm" color="gray.500" textAlign="center" mt={2}>
+                Try adjusting your search or filters to find more results
+              </Text>
+            </Flex>
+          ) : (
+            <SimpleGrid columns={{ base: 1, md: 3 }} gap="1.5rem">
+              {visibleBeneficiary.map((beneficiary) =>
+                beneficiary.id ? (
+                  <Box
+                    key={beneficiary.id}
+                    className={
+                      animatingItems.has(beneficiary.id)
+                        ? "fade-in-new-item"
+                        : ""
+                    }
+                  >
+                    <BeneficiaryCard
+                      beneficiary={beneficiary}
+                      isSelected={selectedBeneficiaryId === beneficiary.id}
+                      id={beneficiary.id}
+                      onOpenDialog={() => handleOpenDialog(beneficiary.id)}
+                      beneficiaryType={beneficiaryType}
+                    />
+                  </Box>
+                ) : null
+              )}
+            </SimpleGrid>
+          )}
         </Box>
         {/* Infinite scroll loading indicator */}
         {isLoading && (
