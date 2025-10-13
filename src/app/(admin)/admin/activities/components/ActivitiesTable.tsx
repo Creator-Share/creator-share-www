@@ -27,6 +27,7 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
   const { open, onOpen, onClose } = useDisclosure()
   const [newTitle, setNewTitle] = useState<string>("")
   const [newDescription, setNewDescription] = useState<string>("")
+  const [newActivityType, setNewActivityType] = useState<string>("INFO")
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -57,6 +58,7 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
       setActivities((prev) => [data.activity, ...prev])
       setNewTitle("")
       setNewDescription("")
+      setNewActivityType("INFO")
       onClose()
     } catch (e: Error | unknown) {
       setError(e instanceof Error ? e.message : "Failed to create activity")
@@ -136,9 +138,11 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
         onClose={onClose}
         title={newTitle}
         description={newDescription}
+        activityType={newActivityType}
         beneficiaryId={beneficiaryId}
         onTitleChange={setNewTitle}
         onDescriptionChange={setNewDescription}
+        onActivityTypeChange={setNewActivityType}
         onCreate={handleCreateActivity}
         creating={creating}
         error={error}
