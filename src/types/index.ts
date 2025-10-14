@@ -64,9 +64,19 @@ export interface Activity {
   description: string
   created_at: string
   beneficiary_id: string
+  user_id: string | null
   title: string
   images_url?: string[]
   videos_url?: string[]
+  activity_type: "INFO" | "UPDATE" | "SUBSCRIPTION"
+  created_by: string
+  metadata?: {
+    media?: {
+      images?: string[]
+      videos?: string[]
+    }
+  }
+  activity_source: "admin" | "sponsorship" | "system"
 }
 
 //Auth types

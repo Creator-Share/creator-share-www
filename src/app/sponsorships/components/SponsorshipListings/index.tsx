@@ -2,7 +2,7 @@
 import { Box, Flex, SimpleGrid, Spinner, Text } from "@chakra-ui/react"
 import React, { useState, useEffect, useRef } from "react"
 import BeneficiaryCard from "../SponsorshipCard"
-import BeneficiaryActivityModal from "../SponsorshipActivity/BeneficiaryActivityModal"
+import BeneficiaryModal from "../SponsorshipModal"
 import { BeneficiaryListingsProps } from "@/types/propTypes"
 
 const BeneficiaryListings = React.forwardRef<
@@ -255,7 +255,7 @@ const BeneficiaryListings = React.forwardRef<
         suppressHydrationWarning={true}
       >
         {visibleBeneficiary.length > 0 && (
-          <BeneficiaryActivityModal
+          <BeneficiaryModal
             open={dialogOpen}
             onClose={(open?: boolean) => setDialogOpen(Boolean(open))}
             beneficiary={

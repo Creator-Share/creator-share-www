@@ -54,4 +54,4 @@ export interface SponsorshipDetailsProps {
   hideAmount?: boolean
 }
 
-// SponsorDialogProps removed; SponsorDialog replaced by BeneficiaryActivityModal
+// SponsorDialogProps removed; SponsorDialog replaced by BeneficiaryModal

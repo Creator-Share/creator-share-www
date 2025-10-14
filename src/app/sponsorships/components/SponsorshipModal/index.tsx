@@ -46,13 +46,13 @@ import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { useSponsorship } from "../../hooks/useSponsorship"
 
-interface BeneficiaryActivityModalProps {
+interface BeneficiaryModalProps {
   open: boolean
   onClose: () => void
   beneficiary: Beneficiaries
 }
 
-const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
+const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   open,
   onClose,
   beneficiary,
@@ -1052,4 +1052,4 @@ const BeneficiaryActivityModal: React.FC<BeneficiaryActivityModalProps> = ({
   )
 }
 
-export default BeneficiaryActivityModal
+export default BeneficiaryModal

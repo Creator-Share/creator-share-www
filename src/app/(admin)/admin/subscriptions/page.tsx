@@ -9,13 +9,14 @@ import { ColumnDef } from "@tanstack/react-table"
 import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 import { toaster } from "@/components/ui/toaster"
 import type { RealtimeChannel } from "@supabase/supabase-js"
+import { RawSubscription } from "@/types/admin.types"
 
 const AdminSubscriptionsPage = () => {
   const [subscriptions, setSubscriptions] = useState<AdminSubscription[]>([])
   const [loading, setLoading] = useState(true)
   const [supabase] = useState(() => createClient())
 
-  const transformSubscription = (sub: any): AdminSubscription => ({
+  const transformSubscription = (sub: RawSubscription): AdminSubscription => ({
     ...sub,
     child_name: sub.beneficiaries?.name || `Child ID: ${sub.child_id}`,
     child_username: sub.beneficiaries?.username || "unknown",
@@ -70,44 +71,52 @@ const AdminSubscriptionsPage = () => {
               const { eventType, new: newRecord, old: oldRecord } = payload
 
               if (eventType === 'INSERT' && newRecord) {
+                // Cast the newRecord to our RawSubscription type
+                const subscriptionRecord = newRecord as RawSubscription
+                
                 // Fetch beneficiary data for the new subscription
                 const { data: beneficiaryData } = await supabase
                   .from('beneficiaries')
                   .select('id, name, username')
-                  .eq('id', newRecord.child_id)
+                  .eq('id', subscriptionRecord.child_id)
                   .single()
 
-                const fullRecord = { ...newRecord, beneficiaries: beneficiaryData }
+                const fullRecord = { ...subscriptionRecord, beneficiaries: beneficiaryData }
                 const transformed = transformSubscription(fullRecord)
 
                 setSubscriptions(prev => [transformed, ...prev])
               } else if (eventType === 'UPDATE' && newRecord) {
+                // Cast the newRecord to our RawSubscription type
+                const subscriptionRecord = newRecord as RawSubscription
+                
                 // Fetch beneficiary data for the updated subscription
                 const { data: beneficiaryData } = await supabase
                   .from('beneficiaries')
                   .select('id, name, username')
-                  .eq('id', newRecord.child_id)
+                  .eq('id', subscriptionRecord.child_id)
                   .single()
 
-                const fullRecord = { ...newRecord, beneficiaries: beneficiaryData }
+                const fullRecord = { ...subscriptionRecord, beneficiaries: beneficiaryData }
                 const transformed = transformSubscription(fullRecord)
 
                 setSubscriptions(prev =>
                   prev.map(sub => sub.id === transformed.id ? transformed : sub)
                 )
               } else if (eventType === 'DELETE' && oldRecord) {
-                setSubscriptions(prev => prev.filter(sub => sub.id !== oldRecord.id))
+                const subscriptionRecord = oldRecord as RawSubscription
+                setSubscriptions(prev => prev.filter(sub => sub.id !== subscriptionRecord.id))
               }
             }
           )
           .subscribe()
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("❌ Error initializing subscriptions:", error)
         if (mounted) {
+          const errorMessage = error instanceof Error ? error.message : "Failed to fetch subscriptions"
           toaster.create({
             title: "Error",
-            description: error.message || "Failed to fetch subscriptions",
+            description: errorMessage,
             type: "error",
             duration: 3000,
           })
