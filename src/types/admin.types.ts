@@ -119,7 +119,7 @@ export interface ExpenseWithAssignment extends Expense {
   assignment?: ExpenseAssignment
 }
 
-// User Management Types
+// Manage Users Types
 export interface User {
   id: string
   first_name: string | null
@@ -203,7 +203,6 @@ export const ROLE_PERMISSIONS: Record<UserRoleName, RolePermissions> = {
     canManageExpenses: false,
   },
 }
-
 
 //subscriptions
 export interface RawSubscription {

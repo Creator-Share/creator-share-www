@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import {  RoleAssignmentResponse } from "@/types"
+import { RoleAssignmentResponse } from "@/types"
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   if (!email || !password) {
     return NextResponse.json(
       { error: "Email and password are required." },
-      { status: 400 },
+      { status: 400 }
     )
   }
 
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     if (signInError) {
       return NextResponse.json(
         { error: signInError.message || "Invalid credentials." },
-        { status: 401 },
+        { status: 401 }
       )
     }
 
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     if (!userId) {
       return NextResponse.json(
         { error: "User ID not found after login." },
-        { status: 500 },
+        { status: 500 }
       )
     }
     const { data: roleData } = await supabase
@@ -41,26 +41,16 @@ export async function POST(request: Request) {
       .select(
         `
         roles:roles!role_assignments_role_id_fkey(name)
-      `,
+      `
       )
       .eq("user_id", userId)
 
-    const typedRoleData = (roleData as unknown) as RoleAssignmentResponse
+    const typedRoleData = roleData as unknown as RoleAssignmentResponse
     const roleName = typedRoleData[0]?.roles.name
-
-    if (roleName === "SUPER_ADMIN") {
-      return NextResponse.json(
-        {
-          message: "Login successful. Redirecting to /choose-dashboard.",
-          redirect: "/admin/choose-dashboard",
-        },
-        { status: 200 },
-      )
-    }
 
     return NextResponse.json(
       { message: "Login successful.", redirect: "/" },
-      { status: 200 },
+      { status: 200 }
     )
   } catch (err: unknown) {
     const errorMessage =

@@ -7,7 +7,7 @@ import { Field } from "@/components/ui/field"
 import { useForm } from "react-hook-form"
 import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
-import ToS from "@/components/ui/ToS"
+import AuthMessage from "@/components/ui/AuthMessage"
 import Link from "next/link"
 import { create } from "zustand"
 import { useEffect, useState } from "react"
@@ -46,7 +46,7 @@ const Register = () => {
   const setIsDisabled = useFormStore((state) => state.setIsDisabled)
   const isDisabled = useFormStore((state) => state.isDisabled)
   const setRegistrationEmail = useAuthStore(
-    (state) => state.setRegistrationEmail,
+    (state) => state.setRegistrationEmail
   )
 
   const [showPassword, setShowPassword] = useState(false)
@@ -138,7 +138,10 @@ const Register = () => {
   }, [fields, password, confirmPassword, setIsDisabled])
 
   return (
-    <Box className="flex flex-col items-center justify-center min-h-screen p-4 md:p-12">
+    <Box className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-4 md:p-12">
+      <Box mb="6" className="max-w-md">
+        <AuthMessage />
+      </Box>
       <form
         onSubmit={handleSubmit(onSubmit)}
         className="w-full max-w-md p-6 md:border bg-[#FFFFFF] md:rounded-xl md:shadow-sm md:px-8 md:py-12"
@@ -154,9 +157,6 @@ const Register = () => {
         <Box className="text-center my-8">
           <Text className="text-[#03150E] font-semibold text-2xl">
             Create account
-          </Text>
-          <Text className="text-[#8D9692] text-base">
-            Register to Creator Share
           </Text>
         </Box>
         <Stack gap="4" className="text-[#8D9692]">
@@ -239,7 +239,7 @@ const Register = () => {
               </Box>
             </Box>
           </Field>
-          <Box>
+          <Box mt={2}>
             <Checkbox className="border rounded-xl mr-1 border-[#8D9692]" />
             <span>Send me occasional Creator Share news.</span>
           </Box>
@@ -248,6 +248,7 @@ const Register = () => {
             className="bg-[#1C3C8C] text-white"
             width="full"
             disabled={isDisabled || isLoading}
+            mt={4}
           >
             {isLoading ? (
               <Box display="flex" alignItems="center" gap={2}>
@@ -268,9 +269,6 @@ const Register = () => {
           </Box>
         </Stack>
       </form>
-      <Box mt="6" className="max-w-md">
-        <ToS />
-      </Box>
     </Box>
   )
 }

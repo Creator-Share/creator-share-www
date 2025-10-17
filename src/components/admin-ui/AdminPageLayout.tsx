@@ -4,6 +4,7 @@ import { Box, Text, Flex, Button, Input } from "@chakra-ui/react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { GoArrowLeft } from "react-icons/go"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 interface AdminPageLayoutProps {
   title: string
@@ -63,32 +64,49 @@ const AdminPageLayout: React.FC<AdminPageLayoutProps> = ({
               <GoArrowLeft className="w-4 h-4" />
               <Text fontSize="sm">Back</Text>
             </Button>
-            
+
             <Box className="h-6 w-px bg-gray-300" />
-            
-            <Text fontSize="sm" color="gray.500">
-              Admin Panel
-            </Text>
-            
+
+            <Link href="/admin" className="cursor-pointer">
+              <Text
+                fontSize="sm"
+                color="gray.500"
+                _hover={{ color: "gray.900" }}
+              >
+                Admin Dashboard
+              </Text>
+            </Link>
+
             {breadcrumb?.map((item, index) => (
               <React.Fragment key={index}>
-                <Text fontSize="sm" color="gray.400">/</Text>
-                <Text 
-                  fontSize="sm" 
-                  color={index === breadcrumb.length - 1 ? "gray.900" : "gray.500"}
-                  fontWeight={index === breadcrumb.length - 1 ? "medium" : "normal"}
+                <Text fontSize="sm" color="gray.400">
+                  /
+                </Text>
+                <Text
+                  fontSize="sm"
+                  color={
+                    index === breadcrumb.length - 1 ? "gray.900" : "gray.500"
+                  }
+                  fontWeight={
+                    index === breadcrumb.length - 1 ? "medium" : "normal"
+                  }
                 >
                   {item.label}
                 </Text>
               </React.Fragment>
             ))}
           </Flex>
-          
+
           {/* Title and Actions - FORCE horizontal layout on desktop */}
           <div className="flex flex-col space-y-4 md:flex-row md:justify-between md:items-end md:space-y-0">
             {/* Title and Description */}
             <div className="flex-1">
-              <Text fontSize="2xl md:text-3xl" fontWeight="bold" color="gray.900" mb={1}>
+              <Text
+                fontSize="2xl md:text-3xl"
+                fontWeight="bold"
+                color="gray.900"
+                mb={1}
+              >
                 {title}
               </Text>
               {description && (
@@ -97,7 +115,7 @@ const AdminPageLayout: React.FC<AdminPageLayoutProps> = ({
                 </Text>
               )}
             </div>
-            
+
             {/* Actions - FORCE beside title on desktop */}
             {(bulkActions || primaryAction) && (
               <div className="w-full md:w-auto md:flex-shrink-0">
@@ -108,9 +126,7 @@ const AdminPageLayout: React.FC<AdminPageLayoutProps> = ({
                     </div>
                   )}
                   {primaryAction && (
-                    <div className="w-full md:w-auto">
-                      {primaryAction}
-                    </div>
+                    <div className="w-full md:w-auto">{primaryAction}</div>
                   )}
                 </div>
               </div>
@@ -127,7 +143,7 @@ const AdminPageLayout: React.FC<AdminPageLayoutProps> = ({
             <Text fontSize="lg" fontWeight="semibold" color="gray.900">
               Search & Filter
             </Text>
-            
+
             {showSelectAll && totalCount > 0 && (
               <Box className="flex items-center gap-3">
                 <Checkbox
@@ -147,7 +163,7 @@ const AdminPageLayout: React.FC<AdminPageLayoutProps> = ({
               </Box>
             )}
           </Flex>
-          
+
           <Input
             placeholder={searchPlaceholder}
             value={searchValue}
@@ -161,11 +177,11 @@ const AdminPageLayout: React.FC<AdminPageLayoutProps> = ({
         </Box>
 
         {/* Content */}
-        {showResults ? children : (
+        {showResults ? (
+          children
+        ) : (
           <Box className="text-center py-12 bg-white rounded-lg border border-gray-200">
-            <Text className="text-gray-500 text-lg">
-              {noResultsMessage}
-            </Text>
+            <Text className="text-gray-500 text-lg">{noResultsMessage}</Text>
           </Box>
         )}
       </Box>
@@ -173,4 +189,4 @@ const AdminPageLayout: React.FC<AdminPageLayoutProps> = ({
   )
 }
 
-export default AdminPageLayout 
+export default AdminPageLayout

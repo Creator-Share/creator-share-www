@@ -77,7 +77,7 @@ export function PageNavbar() {
   if (!mounted) return null
 
   return (
-    <Box className="w-full z-[1000] bg-[#FFFFFF]">
+    <Box className="w-full z-[1000] bg-[#FFFFFF] sticky top-0 shadow-md">
       <Flex className="w-full max-w-[1200px] mx-auto px-6 md:px-8 h-16 flex justify-between items-center relative">
         {/* Logo Centered */}
         <Box className="flex items-center flex-shrink-0">
@@ -133,47 +133,54 @@ export function PageNavbar() {
         </Flex>
 
         {/* Right Actions */}
-        <Flex gap={4} display={{ base: "none", md: "flex" }}>
+        <Flex
+          gap={4}
+          display={{ base: "none", md: "flex" }}
+          alignItems="center"
+        >
           {user && (
-            <Menu.Root>
-              <Menu.Trigger asChild>
-                <Button size="sm" variant="ghost">
-                  {user.email}
+            <>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant={pathname?.startsWith("/admin") ? "solid" : "ghost"}
+                  onClick={() => router.push("/admin")}
+                >
+                  Admin Dashboard
                 </Button>
-              </Menu.Trigger>
-              <Portal>
-                <Menu.Positioner>
-                  <Menu.Content>
-                    {isAdmin && (
+              )}
+              {/* Temporarily hidden
+              <Button
+                size="sm"
+                variant={pathname === "/app" ? "solid" : "ghost"}
+                onClick={() => router.push("/app")}
+              >
+                User Dashboard
+              </Button>
+              */}
+              <Menu.Root>
+                <Menu.Trigger asChild>
+                  <Button size="sm" variant="ghost">
+                    My Account ({user.email})
+                  </Button>
+                </Menu.Trigger>
+                <Portal>
+                  <Menu.Positioner>
+                    <Menu.Content>
                       <Menu.Item
-                        value="admin"
+                        value="logout"
                         onClick={() => {
-                          router.push("/admin")
+                          handleLogout()
                         }}
+                        cursor="pointer"
                       >
-                        Admin Dashboard
+                        Logout
                       </Menu.Item>
-                    )}
-                    <Menu.Item
-                      value="user-dashboard"
-                      onClick={() => {
-                        router.push("/app")
-                      }}
-                    >
-                      User Dashboard
-                    </Menu.Item>
-                    <Menu.Item
-                      value="logout"
-                      onClick={() => {
-                        handleLogout()
-                      }}
-                    >
-                      Logout
-                    </Menu.Item>
-                  </Menu.Content>
-                </Menu.Positioner>
-              </Portal>
-            </Menu.Root>
+                    </Menu.Content>
+                  </Menu.Positioner>
+                </Portal>
+              </Menu.Root>
+            </>
           )}
         </Flex>
 
