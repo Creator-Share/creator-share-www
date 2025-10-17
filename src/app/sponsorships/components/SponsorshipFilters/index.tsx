@@ -283,7 +283,7 @@ const SponsorshipFilters: React.FC<
                 size="sm"
                 className="rounded-2xl"
                 borderRadius="16px"
-                paddingRight={searchQuery ? "2.5rem" : undefined}
+                paddingRight="2.5rem"
                 _focus={{
                   borderColor: "#1C3C8C",
                   boxShadow: "0 0 0 1px #1C3C8C",
@@ -295,7 +295,7 @@ const SponsorshipFilters: React.FC<
                   aria-label="Clear search"
                   size="xs"
                   position="absolute"
-                  right="4px"
+                  right="2px"
                   top="50%"
                   transform="translateY(-50%)"
                   onClick={() => {
