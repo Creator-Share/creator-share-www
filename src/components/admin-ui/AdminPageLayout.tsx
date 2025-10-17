@@ -14,8 +14,8 @@ interface AdminPageLayoutProps {
     href?: string
   }[]
   searchPlaceholder?: string
-  searchValue: string
-  onSearchChange: (value: string) => void
+  searchValue?: string
+  onSearchChange?: (value: string) => void
   showSelectAll?: boolean
   isAllSelected?: boolean
   isSomeSelected?: boolean
@@ -27,6 +27,7 @@ interface AdminPageLayoutProps {
   children: React.ReactNode
   noResultsMessage?: string
   showResults?: boolean
+  hideSearchSection?: boolean
 }
 
 const AdminPageLayout: React.FC<AdminPageLayoutProps> = ({
@@ -34,7 +35,7 @@ const AdminPageLayout: React.FC<AdminPageLayoutProps> = ({
   description,
   breadcrumb,
   searchPlaceholder = "Search...",
-  searchValue,
+  searchValue = "",
   onSearchChange,
   showSelectAll = false,
   isAllSelected = false,
@@ -47,6 +48,7 @@ const AdminPageLayout: React.FC<AdminPageLayoutProps> = ({
   children,
   noResultsMessage = "No items found matching your search.",
   showResults = true,
+  hideSearchSection = false,
 }) => {
   const router = useRouter()
 
@@ -138,43 +140,45 @@ const AdminPageLayout: React.FC<AdminPageLayoutProps> = ({
       {/* Main content */}
       <Box className="container mx-auto px-4 py-6">
         {/* Search and filters */}
-        <Box className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <Flex justify="space-between" align="center" mb={4}>
-            <Text fontSize="lg" fontWeight="semibold" color="gray.900">
-              Search & Filter
-            </Text>
+        {!hideSearchSection && (
+          <Box className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+            <Flex justify="space-between" align="center" mb={4}>
+              <Text fontSize="lg" fontWeight="semibold" color="gray.900">
+                Search & Filter
+              </Text>
 
-            {showSelectAll && totalCount > 0 && (
-              <Box className="flex items-center gap-3">
-                <Checkbox
-                  checked={isAllSelected}
-                  _indeterminate={isSomeSelected ? {} : undefined}
-                  onCheckedChange={onSelectAll}
-                  className="h-5 w-5 border-2 border-gray-400"
-                />
-                <Text className="text-sm font-medium text-gray-700">
-                  Select All ({selectedCount} selected)
-                </Text>
-                {selectedCount > 0 && (
-                  <Text className="text-xs text-gray-500 ml-auto">
-                    {selectedCount} of {totalCount} items selected
+              {showSelectAll && totalCount > 0 && (
+                <Box className="flex items-center gap-3">
+                  <Checkbox
+                    checked={isAllSelected}
+                    _indeterminate={isSomeSelected ? {} : undefined}
+                    onCheckedChange={onSelectAll}
+                    className="h-5 w-5 border-2 border-gray-400"
+                  />
+                  <Text className="text-sm font-medium text-gray-700">
+                    Select All ({selectedCount} selected)
                   </Text>
-                )}
-              </Box>
-            )}
-          </Flex>
+                  {selectedCount > 0 && (
+                    <Text className="text-xs text-gray-500 ml-auto">
+                      {selectedCount} of {totalCount} items selected
+                    </Text>
+                  )}
+                </Box>
+              )}
+            </Flex>
 
-          <Input
-            placeholder={searchPlaceholder}
-            value={searchValue}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              onSearchChange(e.target.value)
-            }
-            className="w-full"
-            px={4}
-            py={3}
-          />
-        </Box>
+            <Input
+              placeholder={searchPlaceholder}
+              value={searchValue}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onSearchChange?.(e.target.value)
+              }
+              className="w-full"
+              px={4}
+              py={3}
+            />
+          </Box>
+        )}
 
         {/* Content */}
         {showResults ? (
