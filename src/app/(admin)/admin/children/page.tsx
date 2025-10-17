@@ -1,7 +1,7 @@
 "use client"
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
-import { Box, Flex, Button, Spinner, Badge } from "@chakra-ui/react"
+import { Box, Flex, Button, Spinner } from "@chakra-ui/react"
 import { toaster } from "@/components/ui/toaster"
 import DeleteDialog from "./components/DeleteDialog"
 import BeneficiaryCard from "./components/BeneficiaryCard"
@@ -56,6 +56,7 @@ const ChildrenTable = () => {
     ]
     setFilterStatus(allStatuses)
     handleFilterChange({ status: allStatuses })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Only run once on mount
 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
@@ -375,7 +376,7 @@ const ChildrenTable = () => {
       // Reload the list
       window.location.reload()
       return true
-    } catch (error) {
+    } catch {
       toaster.create({
         title: "Error",
         description: "Failed to create beneficiary",
@@ -447,7 +448,7 @@ const ChildrenTable = () => {
 
       // Reload to show changes
       window.location.reload()
-    } catch (error) {
+    } catch {
       toaster.create({
         title: "Error",
         description: "Failed to update beneficiary",
@@ -533,7 +534,7 @@ const ChildrenTable = () => {
 
       // Reload the list
       window.location.reload()
-    } catch (error) {
+    } catch {
       toaster.create({
         title: "Error",
         description: "Failed to delete child",

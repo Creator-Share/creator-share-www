@@ -33,8 +33,6 @@ const SponsorshipFilters: React.FC<
     setGender,
     setAgeRange,
     setStatus,
-    resetToDefaults,
-    isDirty,
   } = useFilterStore()
   const [minAge, setMinAge] = useState<number>(selectedAgeRange[0] || 0)
   const defaultMaxAge = beneficiaryType === "ANIMAL" ? 20 : 14

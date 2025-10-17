@@ -26,10 +26,13 @@ import { Box, Text, Spinner, Flex, Input, InputAddon } from "@chakra-ui/react"
 
 // Conditionally import PayPal components only if enabled
 const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let PayPalScriptProvider: any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let PayPalButtons: any
 
 if (isPayPalEnabled) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const paypalModule = require("@paypal/react-paypal-js")
   PayPalScriptProvider = paypalModule.PayPalScriptProvider
   PayPalButtons = paypalModule.PayPalButtons
