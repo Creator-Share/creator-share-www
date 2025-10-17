@@ -9,6 +9,7 @@ import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types"
 import { dollarsToCents } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { useFormStore } from "@/store/formStore"
+import { useFilterStore } from "@/store/filterStore"
 import { BulkActionButton } from "@/components/admin-ui/BulkActionButton"
 import { GoPlusCircle } from "react-icons/go"
 import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
@@ -34,6 +35,8 @@ const ChildrenTable = () => {
     setVideoFiles,
   } = useFormStore()
 
+  const { setStatus: setFilterStatus } = useFilterStore()
+
   // Use pagination hook for infinite scroll
   const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore } =
     useBeneficiaryPagination({
@@ -41,6 +44,19 @@ const ChildrenTable = () => {
       beneficiaryType: "CHILD",
       autoRetry: true,
     })
+
+  // Initialize admin filters to show all statuses
+  useEffect(() => {
+    const allStatuses = [
+      "New",
+      "Partially Funded",
+      "Budget Fulfilled",
+      "Draft",
+      "Archived",
+    ]
+    setFilterStatus(allStatuses)
+    handleFilterChange({ status: allStatuses })
+  }, []) // Only run once on mount
 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
@@ -550,6 +566,25 @@ const ChildrenTable = () => {
     setIsEditDrawerOpen(true)
   }
 
+  const handleStatusBadgeClick = (status: string) => {
+    // Update the filter store AND call handleFilterChange
+    setFilterStatus([status])
+    handleFilterChange({ status: [status] })
+  }
+
+  const handleTotalBadgeClick = () => {
+    // Reset to admin default (all statuses)
+    const allStatuses = [
+      "New",
+      "Partially Funded",
+      "Budget Fulfilled",
+      "Draft",
+      "Archived",
+    ]
+    setFilterStatus(allStatuses)
+    handleFilterChange({ status: allStatuses })
+  }
+
   // Single responsibility - handle any bulk status update
   const handleBulkStatusUpdate = async (status: string) => {
     if (selectedItems.size === 0) return
@@ -638,6 +673,12 @@ const ChildrenTable = () => {
       bulkActions={
         selectedItems.size > 0 ? (
           <>
+            <Button
+              onClick={() => setSelectedItems(new Set())}
+              className="border-[2px] border-[#2B7FF9] rounded-md w-full md:w-fit h-[40px] px-10 bg-white text-[#2B7FF9] hover:bg-[#f0f7ff]"
+            >
+              Deselect All
+            </Button>
             <BulkActionButton
               label="Delete"
               count={selectedItems.size}
@@ -676,24 +717,36 @@ const ChildrenTable = () => {
         <SponsorshipFilters
           onFilterChange={handleFilterChange}
           beneficiaryType="CHILD"
+          isAdminMode={true}
         />
       </Box>
 
       {/* Status Badges */}
       <Flex gap={3} mb={6} flexWrap="wrap">
-        <Badge colorPalette="gray" size="lg" px={4} py={2}>
+        <Button
+          colorPalette="gray"
+          size="lg"
+          px={4}
+          py={2}
+          onClick={handleTotalBadgeClick}
+          variant="subtle"
+          style={{ cursor: "pointer", fontWeight: "normal" }}
+        >
           Total: {stats.total}
-        </Badge>
+        </Button>
         {Object.entries(stats.statusCounts).map(([status, count]) => (
-          <Badge
+          <Button
             key={status}
             colorPalette={getStatusBadgeColor(status)}
             size="lg"
             px={4}
             py={2}
+            onClick={() => handleStatusBadgeClick(status)}
+            variant="subtle"
+            style={{ cursor: "pointer", fontWeight: "normal" }}
           >
             {status}: {count}
-          </Badge>
+          </Button>
         ))}
       </Flex>
 

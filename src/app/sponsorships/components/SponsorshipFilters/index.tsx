@@ -19,8 +19,13 @@ import { useAuthStore } from "@/store/authStore"
 import { IoClose } from "react-icons/io5"
 
 const SponsorshipFilters: React.FC<
-  FiltersProps & { variant?: "default" | "sidebar" }
-> = ({ onFilterChange, variant = "default", beneficiaryType = "CHILD" }) => {
+  FiltersProps & { variant?: "default" | "sidebar"; isAdminMode?: boolean }
+> = ({
+  onFilterChange,
+  variant = "default",
+  beneficiaryType = "CHILD",
+  isAdminMode = false,
+}) => {
   const {
     selectedGender,
     selectedAgeRange,
@@ -96,7 +101,15 @@ const SponsorshipFilters: React.FC<
 
   const handleClearFilters = (e: React.MouseEvent) => {
     e.preventDefault()
-    resetToDefaults()
+
+    // Determine default status based on mode
+    const defaultStatus = isAdminMode
+      ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
+      : ["New", "Partially Funded"]
+
+    setGender("")
+    setAgeRange([0, defaultMaxAge])
+    setStatus(defaultStatus)
     setMinAge(0)
     setMaxAge(defaultMaxAge)
     if (mounted) {
@@ -105,15 +118,27 @@ const SponsorshipFilters: React.FC<
     onFilterChange({
       gender: "",
       ageRange: [0, defaultMaxAge],
-      status: ["New", "Partially Funded"],
+      status: defaultStatus,
       search: "",
     })
   }
 
-  // Determine if current filters differ from defaults to enable Clear button
-  // Call directly so it reflects the latest store state each render
+  // Determine if current filters differ from mode-specific defaults to enable Clear button
   const hasSearchQuery = mounted && searchQuery.trim().length > 0
-  const isDefaultFilters = !isDirty() && !hasSearchQuery
+
+  const modeDefaultStatus = isAdminMode
+    ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
+    : ["New", "Partially Funded"]
+
+  const isGenderDefault = (selectedGender ?? "") === ""
+  const isAgeDefault =
+    selectedAgeRange[0] === 0 && selectedAgeRange[1] === defaultMaxAge
+  const isStatusDefault =
+    selectedStatus.length === modeDefaultStatus.length &&
+    modeDefaultStatus.every((s) => selectedStatus.includes(s))
+
+  const isDefaultFilters =
+    isGenderDefault && isAgeDefault && isStatusDefault && !hasSearchQuery
 
   return (
     <>
