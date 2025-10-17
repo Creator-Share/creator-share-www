@@ -6,9 +6,11 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData()
   const title = formData.get("title") as string | null
   const description = formData.get("description") as string | null
+  const activity_type = formData.get("activity_type") as string | null
+  const activity_source = formData.get("activity_source") as string | null
   const beneficiary_id = formData.get("beneficiary_id") as string | null
 
-  if (!description || !beneficiary_id) {
+  if (!description || !beneficiary_id || !activity_type || !activity_source) {
     return NextResponse.json(
       { error: "Missing required fields" },
       { status: 400 },
@@ -32,6 +34,8 @@ export async function POST(req: NextRequest) {
       {
         title,
         description,
+        activity_type,
+        activity_source,
         beneficiary_id,
         created_at: new Date().toISOString(),
         created_by: "admin",

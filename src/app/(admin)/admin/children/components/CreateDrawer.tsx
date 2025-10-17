@@ -32,6 +32,11 @@ import { LuFileUp } from "react-icons/lu"
 import MapPicker from "./MapPicker"
 import { Beneficiaries } from "@/types/admin.types"
 import { toaster } from "@/components/ui/toaster"
+import { 
+  uploadImagesForTransformation, 
+  getTransformedImageUrl,
+  type ImageTransformOptions 
+} from "@/utils/supabase/imageTransform"
 
 type CreateDrawerProps = {
   formData: Partial<Beneficiaries>
@@ -70,6 +75,9 @@ const CreateDrawer = ({
   const [isAdding, setIsAdding] = useState(false)
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([])
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
+  const [processedImages, setProcessedImages] = useState<File[]>([])
+  const [, setUploadedImagePaths] = useState<string[]>([])
+  const [isProcessingImages, setIsProcessingImages] = useState(false)
 
   // Use environment variable for sponsorship amount
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
@@ -77,14 +85,59 @@ const CreateDrawer = ({
     ? parseInt(publicHardcodedRaw, 10)
     : null
 
-  const handleImageChange = (fileDetails: { acceptedFiles: File[] }) => {
-    setImageFiles(fileDetails.acceptedFiles)
 
-    // Create preview URLs for images
-    const previewUrls = fileDetails.acceptedFiles.map((file) =>
-      URL.createObjectURL(file),
-    )
-    setImagePreviewUrls(previewUrls)
+  const handleImageChange = async (fileDetails: { acceptedFiles: File[] }) => {
+    if (fileDetails.acceptedFiles.length === 0) return
+
+    setIsProcessingImages(true)
+    
+    try {
+      // Upload images to Supabase for transformation using utility function
+      const uploadedPaths = await uploadImagesForTransformation('media', fileDetails.acceptedFiles)
+      
+      // Generate transformed URLs using Supabase Image Transformation API
+      const transformOptions: ImageTransformOptions = {
+        width: 400,
+        height: 400,
+        resize: 'contain',
+        quality: 80
+        // Note: Supabase automatically optimizes to WebP when supported by the browser
+      }
+      
+      const transformedUrls = uploadedPaths.map(path => 
+        getTransformedImageUrl('media', path, transformOptions)
+      )
+
+      // Store original files, paths, and transformed URLs
+      setImageFiles(fileDetails.acceptedFiles)
+      setProcessedImages(fileDetails.acceptedFiles)
+      setUploadedImagePaths(uploadedPaths)
+      setImagePreviewUrls(transformedUrls)
+
+      toaster.create({
+        title: "Images Uploaded & Optimized",
+        description: `${uploadedPaths.length} images uploaded and transformed by Supabase`,
+        type: "success",
+        duration: 3000,
+      })
+    } catch (error) {
+      console.error('Error processing images:', error)
+      toaster.create({
+        title: "Upload Error",
+        description: "Failed to upload images to Supabase. Please try again.",
+        type: "error",
+        duration: 5000,
+      })
+      
+      // Fallback to local preview URLs
+      const previewUrls = fileDetails.acceptedFiles.map((file) =>
+        URL.createObjectURL(file),
+      )
+      setImagePreviewUrls(previewUrls)
+      setImageFiles(fileDetails.acceptedFiles)
+    } finally {
+      setIsProcessingImages(false)
+    }
   }
 
   const handleVideoChange = (fileDetails: { acceptedFiles: File[] }) => {
@@ -320,7 +373,9 @@ const CreateDrawer = ({
                     maxFiles={5}
                   >
                     <FileUpload.HiddenInput />
-                    <FileUpload.Label>Upload Images</FileUpload.Label>
+                    <FileUpload.Label>
+                      {isProcessingImages ? "Uploading & Optimizing Images..." : "Upload Images (Auto-Optimized)"}
+                    </FileUpload.Label>
                     <InputGroup
                       startElement={<LuFileUp />}
                       endElement={
@@ -343,31 +398,55 @@ const CreateDrawer = ({
                       </Input>
                     </InputGroup>
 
+                    {/* Processing Indicator */}
+                    {isProcessingImages && (
+                      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <Text fontSize="sm" color="blue.600" textAlign="center">
+                          🔄 Uploading to Supabase and applying transformations... This may take a moment.
+                        </Text>
+                      </div>
+                    )}
+
                     {/* Image Previews */}
-                    <div className="flex flex-wrap gap-4 mt-4">
-                      {imagePreviewUrls.map((url, index) => (
-                        <div key={index} className="relative group">
-                          <Image
-                            src={url}
-                            alt={`Preview ${index + 1}`}
-                            width={200}
-                            height={200}
-                            objectFit="cover"
-                            className="rounded-xl border-2 border-gray-200"
-                          />
-                          <FileUpload.ClearTrigger asChild>
-                            <CloseButton
-                              className="absolute top-2 right-2"
-                              size="sm"
-                              variant="solid"
-                              bg="red.500"
-                              color="white"
-                              _hover={{ bg: "red.600" }}
-                            />
-                          </FileUpload.ClearTrigger>
+                    {imagePreviewUrls.length > 0 && (
+                      <div className="mt-4">
+                        <Text fontSize="sm" color="gray.600" mb={2}>
+                          Optimized Images via Supabase ({processedImages.length}):
+                        </Text>
+                        <div className="flex flex-wrap gap-4">
+                          {imagePreviewUrls.map((url, index) => {
+                            const file = processedImages[index]
+                            const fileSizeKB = file ? Math.round(file.size / 1024) : 0
+                            
+                            return (
+                              <div key={index} className="relative group">
+                                <Image
+                                  src={url}
+                                  alt={`Preview ${index + 1}`}
+                                  width={200}
+                                  height={200}
+                                  objectFit="cover"
+                                  className="rounded-xl border-2 border-gray-200"
+                                />
+                                <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                                  {fileSizeKB}KB
+                                </div>
+                                <FileUpload.ClearTrigger asChild>
+                                  <CloseButton
+                                    className="absolute top-2 right-2"
+                                    size="sm"
+                                    variant="solid"
+                                    bg="red.500"
+                                    color="white"
+                                    _hover={{ bg: "red.600" }}
+                                  />
+                                </FileUpload.ClearTrigger>
+                              </div>
+                            )
+                          })}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    )}
                   </FileUpload.Root>
                 </div>
               </Field>

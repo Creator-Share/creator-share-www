@@ -15,7 +15,7 @@ import {
 import { useParams } from "next/navigation"
 import SponsorshipDetails from "../components/SponsorshipDetails"
 import { Activity, Beneficiaries, BeneficiaryMedia } from "@/types"
-import BeneficiaryActivityModal from "../components/SponsorshipActivity/BeneficiaryActivityModal"
+import BeneficiaryModal from "../components/SponsorshipModal"
 import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox"
 import { generatePublicUrl } from "@/utils/supabase/media"
 import { MediaRow } from "@/utils/supabase/media"
@@ -185,7 +185,7 @@ export default function FullProfileDynamic() {
           >
             Sponsor this child
           </Button>
-          <BeneficiaryActivityModal
+          <BeneficiaryModal
             open={activityOpen}
             onClose={() => setActivityOpen(false)}
             beneficiary={beneficiary}

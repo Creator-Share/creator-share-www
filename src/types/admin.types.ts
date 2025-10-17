@@ -44,9 +44,19 @@ export interface Activity {
   description: string
   created_at: string
   beneficiary_id: string
+  user_id: string | null
   title: string
   images_url?: string[]
   videos_url?: string[]
+  activity_type: "INFO" | "UPDATE" | "SUBSCRIPTION"
+  created_by: string
+  metadata?: {
+    media?: {
+      images?: string[]
+      videos?: string[]
+    }
+  }
+  activity_source: "admin" | "sponsorship" | "system"
 }
 
 export interface BeneficiaryMedia {
@@ -192,4 +202,24 @@ export const ROLE_PERMISSIONS: Record<UserRoleName, RolePermissions> = {
     canManageActivities: true,
     canManageExpenses: false,
   },
+}
+
+
+//subscriptions
+export interface RawSubscription {
+  id: string
+  child_id: string
+  status: string
+  amount: number
+  interval: string
+  current_period_start: string
+  current_period_end: string
+  created_at: string
+  sponsorship_id: string
+  user_id: string
+  beneficiaries?: {
+    id: string
+    name: string
+    username: string
+  } | null
 }
