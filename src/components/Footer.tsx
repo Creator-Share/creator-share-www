@@ -63,10 +63,11 @@ export const Footer = () => {
       {/* Login Button */}
       {mounted && !user && (
         <div className="container mx-auto px-4 mt-8 text-center">
-          <NextLink href="/login">
-            <button className="bg-white text-[#1C3C8C] px-6 py-2 rounded-md font-semibold hover:bg-gray-100 transition-colors">
-              Sign In
-            </button>
+          <NextLink
+            href="/login"
+            className="inline-block bg-white text-[#1C3C8C] px-6 py-2 rounded-md font-semibold hover:bg-gray-100 transition-colors cursor-pointer"
+          >
+            Sign In
           </NextLink>
         </div>
       )}
