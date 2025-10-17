@@ -5,6 +5,16 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ["@chakra-ui/react"],
   },
 
+  async redirects() {
+    return [
+      {
+        source: "/sponsorships",
+        destination: "/",
+        permanent: true,
+      },
+    ]
+  },
+
   images: {
     remotePatterns: [
       {
