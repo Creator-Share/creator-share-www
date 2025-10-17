@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { Box, Flex, Button, Text, Input } from "@chakra-ui/react"
+import { Box, Flex, Button, Text, Input, IconButton } from "@chakra-ui/react"
 import { Global, css } from "@emotion/react"
 import { Slider } from "@/components/ui/slider"
 import {
@@ -16,6 +16,7 @@ import { useFilterStore } from "@/store/filterStore"
 import { FiltersProps } from "@/types/propTypes"
 import { genders, status as statusOptions } from "./config"
 import { useAuthStore } from "@/store/authStore"
+import { IoClose } from "react-icons/io5"
 
 const SponsorshipFilters: React.FC<
   FiltersProps & { variant?: "default" | "sidebar" }
@@ -140,84 +141,7 @@ const SponsorshipFilters: React.FC<
             alignItems="center"
             width="100%"
           >
-            {/* Gender Select Dropdown */}
-            <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-              <SelectRoot
-                collection={genders}
-                value={selectedGender ? [selectedGender] : undefined}
-                onValueChange={(details) => {
-                  const value = details.items[0]
-                  handleFilterChange({ gender: value?.value || "" })
-                }}
-                size="sm"
-                className="rounded-2xl w-full"
-              >
-                <SelectTrigger
-                  css={{
-                    borderRadius: "16px !important",
-                  }}
-                >
-                  <SelectValueText placeholder="All Genders">
-                    {() => {
-                      const selected = genders.items.find(
-                        (item) => item.value === selectedGender
-                      )
-                      return selected ? selected.label : "All Genders"
-                    }}
-                  </SelectValueText>
-                </SelectTrigger>
-                <SelectContent>
-                  {genders.items.map((gender) => (
-                    <SelectItem item={gender} key={gender.value}>
-                      {gender.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </SelectRoot>
-            </Box>
-
-            {/* Status Select Dropdown - Admin Only */}
-            {user && isAdmin && (
-              <Tooltip content="Filter by funding status (Admin Only)">
-                <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-                  <SelectRoot
-                    collection={statusOptions}
-                    value={selectedStatus}
-                    onValueChange={(details) => {
-                      const values = details.items.map((item) => item.value)
-                      handleFilterChange({ status: values })
-                    }}
-                    size="sm"
-                    className="rounded-2xl w-full"
-                    multiple
-                  >
-                    <SelectTrigger
-                      css={{
-                        borderRadius: "16px !important",
-                      }}
-                    >
-                      <SelectValueText placeholder="Select Status">
-                        {() => {
-                          const selected = statusOptions.items
-                            .filter((item) => selectedStatus.includes(item.value))
-                            .map((item) => item.label)
-                            .join(", ")
-                          return selected || "Select Status"
-                        }}
-                      </SelectValueText>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statusOptions.items.map((option) => (
-                        <SelectItem item={option} key={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </SelectRoot>
-                </Box>
-              </Tooltip>
-            )}
-
+            {/* Age Range Slider */}
             <Box
               flex={{ base: "1 1 100%", md: "1 1 0" }}
               w="100%"
@@ -260,8 +184,93 @@ const SponsorshipFilters: React.FC<
               </Box>
             </Box>
 
-            {/* Search Field */}
+            {/* Gender Select Dropdown */}
             <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+              <SelectRoot
+                collection={genders}
+                value={selectedGender ? [selectedGender] : [""]}
+                onValueChange={(details) => {
+                  const value = details.items[0]
+                  handleFilterChange({ gender: value?.value || "" })
+                }}
+                size="sm"
+                className="rounded-2xl w-full"
+              >
+                <SelectTrigger
+                  css={{
+                    borderRadius: "16px !important",
+                  }}
+                >
+                  <SelectValueText placeholder="All Genders">
+                    {() => {
+                      const selected = genders.items.find(
+                        (item) => item.value === selectedGender
+                      )
+                      return selected ? selected.label : "All Genders"
+                    }}
+                  </SelectValueText>
+                </SelectTrigger>
+                <SelectContent>
+                  {genders.items.map((gender) => (
+                    <SelectItem item={gender} key={gender.value || "all"}>
+                      {gender.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </SelectRoot>
+            </Box>
+
+            {/* Status Select Dropdown - Admin Only */}
+            {user && isAdmin && (
+              <Tooltip content="Filter by funding status (Admin Only)">
+                <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+                  <SelectRoot
+                    collection={statusOptions}
+                    value={selectedStatus}
+                    onValueChange={(details) => {
+                      const values = details.items.map((item) => item.value)
+                      handleFilterChange({ status: values })
+                    }}
+                    size="sm"
+                    className="rounded-2xl w-full"
+                    multiple
+                  >
+                    <SelectTrigger
+                      css={{
+                        borderRadius: "16px !important",
+                      }}
+                    >
+                      <SelectValueText placeholder="Select Status">
+                        {() => {
+                          const selected = statusOptions.items
+                            .filter((item) =>
+                              selectedStatus.includes(item.value)
+                            )
+                            .map((item) => item.label)
+                            .join(", ")
+                          return selected || "Select Status"
+                        }}
+                      </SelectValueText>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusOptions.items.map((option) => (
+                        <SelectItem item={option} key={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </SelectRoot>
+                </Box>
+              </Tooltip>
+            )}
+
+            {/* Search Field */}
+            <Box
+              flex={{ base: "1 1 100%", md: "1 1 0" }}
+              w="100%"
+              minW={0}
+              position="relative"
+            >
               <Input
                 placeholder="Search for a Child"
                 value={mounted ? searchQuery : ""}
@@ -274,12 +283,32 @@ const SponsorshipFilters: React.FC<
                 size="sm"
                 className="rounded-2xl"
                 borderRadius="16px"
+                paddingRight={searchQuery ? "2.5rem" : undefined}
                 _focus={{
                   borderColor: "#1C3C8C",
                   boxShadow: "0 0 0 1px #1C3C8C",
                 }}
                 suppressHydrationWarning={true}
               />
+              {mounted && searchQuery && (
+                <IconButton
+                  aria-label="Clear search"
+                  size="xs"
+                  position="absolute"
+                  right="4px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  onClick={() => {
+                    setSearchQuery("")
+                    handleFilterChange({ search: "" })
+                  }}
+                  variant="ghost"
+                  borderRadius="full"
+                  _hover={{ bg: "gray.200" }}
+                >
+                  <IoClose />
+                </IconButton>
+              )}
             </Box>
 
             <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
