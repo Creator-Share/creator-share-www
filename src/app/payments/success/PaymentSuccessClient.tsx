@@ -3,6 +3,9 @@ import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { FaPaypal, FaStripe } from "react-icons/fa"
 
+// Check if PayPal is enabled
+const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+
 type StripeSessionDetails = {
   id: string
   amount_total?: number | null
@@ -72,20 +75,23 @@ export default function PaymentSuccessClient() {
 
   useEffect(() => {
     const sessionId = searchParams.get("session_id")
-    const paypalSubscriptionId = searchParams.get("subscription_id") // Use subscription_id, not sponsorship_id
-    const paypalToken =
-      searchParams.get("token") || searchParams.get("ba_token")
+    const paypalSubscriptionId = isPayPalEnabled
+      ? searchParams.get("subscription_id")
+      : null // Use subscription_id, not sponsorship_id
+    const paypalToken = isPayPalEnabled
+      ? searchParams.get("token") || searchParams.get("ba_token")
+      : null
 
     // Function to clear reservation after successful payment
     const clearReservation = async (beneficiaryId: string) => {
       try {
-        await fetch('/api/sponsorships/reservations', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
+        await fetch("/api/sponsorships/reservations", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ beneficiaryId }),
         })
       } catch (error) {
-        console.error('Failed to clear reservation after payment:', error)
+        console.error("Failed to clear reservation after payment:", error)
       }
     }
 
@@ -114,7 +120,9 @@ export default function PaymentSuccessClient() {
         })
     } else if (paypalSubscriptionId || paypalToken) {
       fetch(
-        `/api/paypal/verify?sponsorship_id=${paypalSubscriptionId || ""}&token=${paypalToken || ""}`,
+        `/api/paypal/verify?sponsorship_id=${
+          paypalSubscriptionId || ""
+        }&token=${paypalToken || ""}`
       )
         .then(async (res) => {
           if (!res.ok) throw new Error("Invalid PayPal session")
@@ -148,7 +156,7 @@ export default function PaymentSuccessClient() {
 
   // UI helpers
   const getLogo = () => {
-    if (status?.provider === "paypal")
+    if (isPayPalEnabled && status?.provider === "paypal")
       return (
         <span
           style={{
@@ -187,6 +195,7 @@ export default function PaymentSuccessClient() {
 
   const getChildName = () => {
     if (
+      isPayPalEnabled &&
       status?.provider === "paypal" &&
       status.details &&
       status.details.subscription &&
@@ -209,6 +218,7 @@ export default function PaymentSuccessClient() {
 
   const getLocation = () => {
     if (
+      isPayPalEnabled &&
       status?.provider === "paypal" &&
       status.details &&
       status.details.subscription &&
@@ -230,6 +240,7 @@ export default function PaymentSuccessClient() {
 
   const getEmail = () => {
     if (
+      isPayPalEnabled &&
       status?.provider === "paypal" &&
       status.details &&
       status.details.paypal_order &&

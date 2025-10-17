@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server"
 
+// Check if PayPal is enabled by checking if client ID is configured
+const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+
 const PAYPAL_API_URL =
   process.env.PAYPAL_API_URL || "https://api-m.sandbox.paypal.com"
 
@@ -27,6 +30,13 @@ async function getPayPalAccessToken() {
 }
 
 export async function GET(req: Request) {
+  if (!isPayPalEnabled) {
+    return NextResponse.json(
+      { error: 'PayPal integration is not enabled' },
+      { status: 501 }
+    )
+  }
+
   const { searchParams } = new URL(req.url)
   const sponsorshipId = searchParams.get("sponsorship_id")
   const token = searchParams.get("token")

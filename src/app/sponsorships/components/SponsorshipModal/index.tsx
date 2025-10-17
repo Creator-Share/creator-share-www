@@ -22,15 +22,18 @@ import {
 import BeneficiaryActivity from "../SponsorshipActivity"
 import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox"
 import { toaster } from "@/components/ui/toaster"
-import {
-  Box,
-  Text,
-  Spinner,
-  Flex,
-  Input,
-  InputAddon,
-} from "@chakra-ui/react"
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js"
+import { Box, Text, Spinner, Flex, Input, InputAddon } from "@chakra-ui/react"
+
+// Conditionally import PayPal components only if enabled
+const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+let PayPalScriptProvider: any
+let PayPalButtons: any
+
+if (isPayPalEnabled) {
+  const paypalModule = require("@paypal/react-paypal-js")
+  PayPalScriptProvider = paypalModule.PayPalScriptProvider
+  PayPalButtons = paypalModule.PayPalButtons
+}
 import {
   SelectRoot,
   SelectTrigger,
@@ -83,10 +86,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const publicHardcodedDollars =
     publicHardcodedCents !== null ? publicHardcodedCents / 100 : null
   const [amount, setAmount] = useState<number>(
-    publicHardcodedDollars ?? remainingAmount,
+    publicHardcodedDollars ?? remainingAmount
   )
   const [selectedOption, setSelectedOption] = useState<string>(
-    paymentOptionsCollection.items[0].value,
+    paymentOptionsCollection.items[0].value
   )
   const [loading, setLoading] = useState<boolean>(false)
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
@@ -104,55 +107,68 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }, [open, beneficiary.id, setSponsorshipInProgress])
 
-  const loadImages = useCallback(async (beneficiaryId: string) => {
-    setImageLoading(true)
-    try {
-      const res = await fetch(`/api/admin/beneficiaries/images/${beneficiaryId}`)
-      if (res.ok) {
-        const data: BeneficiaryMedia[] = await res.json()
-        const sortedImages = data
-          ?.filter((m: BeneficiaryMedia) => m.type === "IMAGE" || m.type === "images")
-          ?.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)) || []
-        
-        setImages(sortedImages)
-        
-        if (sortedImages.length > 0) {
-          try {
-            setPrimaryImageUrl(generatePublicUrl(sortedImages[0] as unknown as MediaRow))
-          } catch {
-            setPrimaryImageUrl(sortedImages[0]?.image_url || null)
+  const loadImages = useCallback(
+    async (beneficiaryId: string) => {
+      setImageLoading(true)
+      try {
+        const res = await fetch(
+          `/api/admin/beneficiaries/images/${beneficiaryId}`
+        )
+        if (res.ok) {
+          const data: BeneficiaryMedia[] = await res.json()
+          const sortedImages =
+            data
+              ?.filter(
+                (m: BeneficiaryMedia) =>
+                  m.type === "IMAGE" || m.type === "images"
+              )
+              ?.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)) ||
+            []
+
+          setImages(sortedImages)
+
+          if (sortedImages.length > 0) {
+            try {
+              setPrimaryImageUrl(
+                generatePublicUrl(sortedImages[0] as unknown as MediaRow)
+              )
+            } catch {
+              setPrimaryImageUrl(sortedImages[0]?.image_url || null)
+            }
+          } else {
+            setPrimaryImageUrl(null)
           }
-        } else {
-          setPrimaryImageUrl(null)
-        }
-        
-        // Also look for videos and update the beneficiary's video_url
-        const videoMedia = data?.filter((m: BeneficiaryMedia) => m.type === "VIDEO") || []
-        
-        if (videoMedia.length > 0) {
-          const video = videoMedia[0]
-          const videoSrc = video?.id
-            ? generatePublicUrl(video as unknown as MediaRow)
-            : video?.image_url || ""
-          
-          if (videoSrc && videoSrc.trim() !== "") {
-            // Update the beneficiary object with the video URL
-            beneficiary.video_url = videoSrc
+
+          // Also look for videos and update the beneficiary's video_url
+          const videoMedia =
+            data?.filter((m: BeneficiaryMedia) => m.type === "VIDEO") || []
+
+          if (videoMedia.length > 0) {
+            const video = videoMedia[0]
+            const videoSrc = video?.id
+              ? generatePublicUrl(video as unknown as MediaRow)
+              : video?.image_url || ""
+
+            if (videoSrc && videoSrc.trim() !== "") {
+              // Update the beneficiary object with the video URL
+              beneficiary.video_url = videoSrc
+            }
           }
         }
+      } catch (error) {
+        console.error("Failed to load images:", error)
+        setImages([])
+        setPrimaryImageUrl(null)
+      } finally {
+        setImageLoading(false)
       }
-    } catch (error) {
-      console.error("Failed to load images:", error)
-      setImages([])
-      setPrimaryImageUrl(null)
-    } finally {
-      setImageLoading(false)
-    }
-  }, [beneficiary])
+    },
+    [beneficiary]
+  )
 
   useEffect(() => {
     if (!open || !beneficiary.id) return
-    
+
     fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id)
     fetchActivitiesByBeneficiaryId(beneficiary.id)
     loadImages(beneficiary.id)
@@ -170,7 +186,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     return image.image_url || ""
   }
 
-  const fallbackImageSrc = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+  const fallbackImageSrc =
+    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
 
   const alreadyFulfilled =
     beneficiary.status === "Budget Fulfilled" ||
@@ -182,8 +199,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       (publicHardcodedDollars !== null
         ? amount === publicHardcodedDollars
         : remainingAmount < minimumAmount
-          ? amount > 0
-          : amount >= minimumAmount))
+        ? amount > 0
+        : amount >= minimumAmount))
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -342,33 +359,38 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
 
     setLoading(true)
-    
+
     // Create reservation when payment button is clicked
     try {
-      const reservationRes = await fetch('/api/sponsorships/reservations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const reservationRes = await fetch("/api/sponsorships/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ beneficiaryId: beneficiary.id }),
       })
-      
+
       if (!reservationRes.ok) {
         const data = await reservationRes.json().catch(() => ({}))
         toaster.create({
-          title: 'Already Reserved',
-          description: data?.error || 'Another user is currently sponsoring this child. Please try again shortly.',
+          title: "Already Reserved",
+          description:
+            data?.error ||
+            "Another user is currently sponsoring this child. Please try again shortly.",
         })
         setLoading(false)
         return
       }
-      
+
       // Mirror state locally for UI
       setSponsorshipInProgress(beneficiary.id, true, user?.id)
     } catch {
-      toaster.create({ title: 'Error', description: 'Unable to reserve at this time.' })
+      toaster.create({
+        title: "Error",
+        description: "Unable to reserve at this time.",
+      })
       setLoading(false)
       return
     }
-    
+
     try {
       const payload = {
         beneficiaryId: beneficiary.id,
@@ -405,10 +427,14 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       }
 
       const { clientSecret, url } = data
-      
+
       // Dispatch payment success event before redirecting
-      window.dispatchEvent(new CustomEvent('payment-success', { detail: { beneficiaryId: beneficiary.id } }))
-      
+      window.dispatchEvent(
+        new CustomEvent("payment-success", {
+          detail: { beneficiaryId: beneficiary.id },
+        })
+      )
+
       if (window.self !== window.top) {
         if (clientSecret)
           window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}`
@@ -448,7 +474,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           }>
         }) => Promise<string>
       }
-    },
+    }
   ) => {
     if (!canPay) {
       toaster.create({
@@ -463,32 +489,38 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
     // Create reservation when PayPal order is created
     try {
-      const reservationRes = await fetch('/api/sponsorships/reservations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const reservationRes = await fetch("/api/sponsorships/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ beneficiaryId: beneficiary.id }),
       })
-      
+
       if (!reservationRes.ok) {
         const data = await reservationRes.json().catch(() => ({}))
         toaster.create({
-          title: 'Already Reserved',
-          description: data?.error || 'Another user is currently sponsoring this child. Please try again shortly.',
+          title: "Already Reserved",
+          description:
+            data?.error ||
+            "Another user is currently sponsoring this child. Please try again shortly.",
         })
         throw new Error("Already reserved")
       }
-      
+
       // Mirror state locally for UI
       setSponsorshipInProgress(beneficiary.id, true, user?.id)
     } catch (error) {
       if (error instanceof Error && error.message === "Already reserved") {
         throw error
       }
-      toaster.create({ title: 'Error', description: 'Unable to reserve at this time.' })
+      toaster.create({
+        title: "Error",
+        description: "Unable to reserve at this time.",
+      })
       throw new Error("Reservation failed")
     }
 
-    const paymentAmount = remainingAmount < minimumAmount ? remainingAmount : amount
+    const paymentAmount =
+      remainingAmount < minimumAmount ? remainingAmount : amount
 
     return actions.order.create({
       purchase_units: [
@@ -504,13 +536,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   const handlePayPalApproval = async (data: { orderID: string }) => {
     try {
-      console.log('PayPal Approval - selectedOption:', selectedOption)
-      console.log('PayPal Approval - beneficiary:', beneficiary)
-      console.log('PayPal Approval - amount:', amount)
-      
+      console.log("PayPal Approval - selectedOption:", selectedOption)
+      console.log("PayPal Approval - beneficiary:", beneficiary)
+      console.log("PayPal Approval - amount:", amount)
+
       if (selectedOption === "subscription") {
-        console.log('Creating PayPal subscription...')
-        
+        console.log("Creating PayPal subscription...")
+
         const planRes = await fetch("/api/paypal/plan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -524,19 +556,19 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             currency_code: "USD",
           }),
         })
-        
+
         const planData = await planRes.json()
-        console.log('Plan creation response:', planData)
-        
+        console.log("Plan creation response:", planData)
+
         if (!planRes.ok) {
-          console.error('Plan creation failed:', planData)
+          console.error("Plan creation failed:", planData)
           throw new Error(
-            planData.error?.message || "Failed to create/get PayPal plan",
+            planData.error?.message || "Failed to create/get PayPal plan"
           )
         }
-        
+
         const plan_id = planData.plan.id
-        console.log('Plan ID:', plan_id)
+        console.log("Plan ID:", plan_id)
 
         const subRes = await fetch("/api/paypal", {
           method: "POST",
@@ -548,27 +580,31 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             subscriber_name: user?.email || "",
           }),
         })
-        
+
         const subData = await subRes.json()
-        console.log('Subscription creation response:', subData)
-        
+        console.log("Subscription creation response:", subData)
+
         if (!subRes.ok) {
-          console.error('Subscription creation failed:', subData)
+          console.error("Subscription creation failed:", subData)
           throw new Error(
-            subData.error?.message || "Failed to create PayPal subscription",
+            subData.error?.message || "Failed to create PayPal subscription"
           )
         }
 
         type PayPalLink = { rel?: string; href?: string }
         const approvalUrl = subData.subscription?.links?.find(
-          (l: PayPalLink) => l.rel === "approve",
+          (l: PayPalLink) => l.rel === "approve"
         )?.href
-        
-        console.log('Approval URL:', approvalUrl)
-        
+
+        console.log("Approval URL:", approvalUrl)
+
         if (approvalUrl) {
           // Dispatch payment success event before redirecting to PayPal
-          window.dispatchEvent(new CustomEvent('payment-success', { detail: { beneficiaryId: beneficiary.id } }))
+          window.dispatchEvent(
+            new CustomEvent("payment-success", {
+              detail: { beneficiaryId: beneficiary.id },
+            })
+          )
           // Don't clear reservation before redirecting to PayPal - wait for completion
           window.location.href = approvalUrl
           return
@@ -576,7 +612,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         throw new Error("No approval link returned from PayPal")
       }
 
-      console.log('Creating one-time payment...')
+      console.log("Creating one-time payment...")
       // One-time legacy flow
       const response = await fetch("/api/paypal", {
         method: "POST",
@@ -603,19 +639,23 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
       // Clear reservation before redirecting to success page
       try {
-        await fetch('/api/sponsorships/reservations', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
+        await fetch("/api/sponsorships/reservations", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ beneficiaryId: beneficiary.id }),
         })
       } catch (error) {
-        console.error('Failed to clear reservation:', error)
+        console.error("Failed to clear reservation:", error)
       }
       setSponsorshipInProgress(beneficiary.id, false)
-      
+
       // Dispatch payment success event before redirecting
-      window.dispatchEvent(new CustomEvent('payment-success', { detail: { beneficiaryId: beneficiary.id } }))
-      
+      window.dispatchEvent(
+        new CustomEvent("payment-success", {
+          detail: { beneficiaryId: beneficiary.id },
+        })
+      )
+
       toaster.create({
         title: "Success",
         description: "Your payment has been processed successfully!",
@@ -641,15 +681,21 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }
 
   const renderDisclaimer = () => {
-    const monthlyAmount = selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
-    if (beneficiary.budget_goal - beneficiary.budget_raised - amount * 100 > 0) {
+    const monthlyAmount =
+      selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
+    if (
+      beneficiary.budget_goal - beneficiary.budget_raised - amount * 100 >
+      0
+    ) {
       return (
         <>
-          This child has a monthly budget goal that must be met for enrollment in school.
+          This child has a monthly budget goal that must be met for enrollment
+          in school.
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+              monthly for this child.
             </>
           )}
           <br />
@@ -659,11 +705,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     } else if (beneficiary.budget_raised > 0) {
       return (
         <>
-          This child is partially sponsored. Your contribution will help reach their monthly budget goal!
+          This child is partially sponsored. Your contribution will help reach
+          their monthly budget goal!
           {selectedOption === "payment" && (
             <>
               <br />
-              Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+              monthly for this child.
             </>
           )}
         </>
@@ -671,11 +719,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
     return (
       <>
-        Your sponsorship will be applied towards the child's monthly budget goals.
+        Your sponsorship will be applied towards the child's monthly budget
+        goals.
         {selectedOption === "payment" && (
           <>
             <br />
-            Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.
+            Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+            monthly for this child.
           </>
         )}
       </>
@@ -686,43 +736,49 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const handleClose = async () => {
     // Clear server reservation if user closes modal without completing payment
     try {
-      await fetch('/api/sponsorships/reservations', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch("/api/sponsorships/reservations", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ beneficiaryId: beneficiary.id }),
       })
     } catch (error) {
-      console.error('Failed to clear reservation on close:', error)
+      console.error("Failed to clear reservation on close:", error)
     }
     setSponsorshipInProgress(beneficiary.id, false)
     onClose()
   }
 
   // Handle payment success events
-  const handlePaymentSuccess = useCallback(async (event: CustomEvent) => {
-    const { beneficiaryId } = event.detail || {}
-    if (beneficiaryId === beneficiary.id) {
-      try {
-        await fetch('/api/sponsorships/reservations', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ beneficiaryId }),
-        })
-      } catch (error) {
-        console.error('Failed to clear reservation on payment success:', error)
+  const handlePaymentSuccess = useCallback(
+    async (event: CustomEvent) => {
+      const { beneficiaryId } = event.detail || {}
+      if (beneficiaryId === beneficiary.id) {
+        try {
+          await fetch("/api/sponsorships/reservations", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ beneficiaryId }),
+          })
+        } catch (error) {
+          console.error(
+            "Failed to clear reservation on payment success:",
+            error
+          )
+        }
+        setSponsorshipInProgress(beneficiaryId, false)
       }
-      setSponsorshipInProgress(beneficiaryId, false)
-    }
-  }, [beneficiary.id, setSponsorshipInProgress])
+    },
+    [beneficiary.id, setSponsorshipInProgress]
+  )
 
   // Clear sponsorship in progress when payment is successful
   useEffect(() => {
     const handler = (event: Event) => handlePaymentSuccess(event as CustomEvent)
-    
-    window.addEventListener('payment-success', handler)
-    
+
+    window.addEventListener("payment-success", handler)
+
     return () => {
-      window.removeEventListener('payment-success', handler)
+      window.removeEventListener("payment-success", handler)
     }
   }, [handlePaymentSuccess])
 
@@ -781,7 +837,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     {beneficiary.birth_date
                       ? new Date(beneficiary.birth_date).toLocaleDateString(
                           "en-GB",
-                          { day: "numeric", month: "long", year: "numeric" },
+                          { day: "numeric", month: "long", year: "numeric" }
                         )
                       : "DOB"}
                   </Text>
@@ -811,7 +867,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                         ? Math.round(
                             (beneficiary.budget_raised /
                               beneficiary.budget_goal) *
-                              100,
+                              100
                           )
                         : 0}
                       %
@@ -827,7 +883,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                                 (beneficiary.budget_raised /
                                   beneficiary.budget_goal) *
                                   100,
-                                100,
+                                100
                               )
                             : 0
                         }%`,
@@ -931,7 +987,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   </SelectRoot>
                 </Box>
               </Box>
-              <Box className="grid grid-cols-2 gap-2.5 mb-1.5">
+              <Box
+                className={`grid ${
+                  isPayPalEnabled ? "grid-cols-2" : "grid-cols-1"
+                } gap-2.5 mb-1.5`}
+              >
                 <Button
                   onClick={handleStripePayment}
                   loading={loading}
@@ -943,34 +1003,37 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 >
                   Sponsor this child
                 </Button>
-                <PayPalScriptProvider
-                  options={{
-                    "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
-                    currency: "USD",
-                    intent: "capture",
-                  }}
-                >
-                  {canPay ? (
-                    <PayPalButtons
-                      style={{
-                        layout: "horizontal",
-                        tagline: false,
-                        height: 40,
-                      }}
-                      createOrder={handleCreateOrder}
-                      onApprove={handlePayPalApproval}
-                      onError={handlePayPalError}
-                    />
-                  ) : (
-                    <Box className="h-[40px] bg-gray-200 rounded flex items-center justify-center">
-                      <Text color="gray.500" fontSize="sm">
-                        {remainingAmount < minimumAmount
-                          ? "Enter amount greater than $0"
-                          : `Minimum amount is $${minimumAmount}`}
-                      </Text>
-                    </Box>
-                  )}
-                </PayPalScriptProvider>
+                {isPayPalEnabled && PayPalScriptProvider && PayPalButtons && (
+                  <PayPalScriptProvider
+                    options={{
+                      "client-id": process.env
+                        .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
+                      currency: "USD",
+                      intent: "capture",
+                    }}
+                  >
+                    {canPay ? (
+                      <PayPalButtons
+                        style={{
+                          layout: "horizontal",
+                          tagline: false,
+                          height: 40,
+                        }}
+                        createOrder={handleCreateOrder}
+                        onApprove={handlePayPalApproval}
+                        onError={handlePayPalError}
+                      />
+                    ) : (
+                      <Box className="h-[40px] bg-gray-200 rounded flex items-center justify-center">
+                        <Text color="gray.500" fontSize="sm">
+                          {remainingAmount < minimumAmount
+                            ? "Enter amount greater than $0"
+                            : `Minimum amount is $${minimumAmount}`}
+                        </Text>
+                      </Box>
+                    )}
+                  </PayPalScriptProvider>
+                )}
               </Box>
 
               <Box bg="#CDE1FE" p={4} borderRadius="xl">

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server"
 
+// Check if PayPal is enabled by checking if client ID is configured
+const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+
 interface PayPalError {
   message?: string
   error?: {
@@ -171,6 +174,13 @@ async function capturePayPalOrder(orderID: string, accessToken: string) {
 }
 
 export async function POST(request: Request) {
+  if (!isPayPalEnabled) {
+    return NextResponse.json(
+      { error: 'PayPal integration is not enabled' },
+      { status: 501 }
+    )
+  }
+
   try {
     const body = await request.json()
     console.log('PayPal API Request Body:', body)
@@ -371,5 +381,11 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
+  if (!isPayPalEnabled) {
+    return NextResponse.json(
+      { error: 'PayPal integration is not enabled' },
+      { status: 501 }
+    )
+  }
   return NextResponse.json({ message: "PayPal API endpoint" }, { status: 200 })
 }

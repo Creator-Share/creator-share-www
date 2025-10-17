@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/client"
 import { notifySponsorshipReceived } from "@/services/telegram"
 
+// Check if PayPal is enabled by checking if client ID is configured
+const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+
 // Helper to get raw body (Next.js API routes do not provide this by default)
 async function getRawBody(req: Request): Promise<string> {
   const reader = req.body?.getReader()
@@ -97,6 +100,13 @@ async function getPayPalPlanDetails(
 // }
 
 export async function POST(req: Request) {
+  if (!isPayPalEnabled) {
+    return NextResponse.json(
+      { error: 'PayPal integration is not enabled' },
+      { status: 501 }
+    )
+  }
+
   const supabase = createClient()
   try {
     // 1. Get raw body for signature verification
