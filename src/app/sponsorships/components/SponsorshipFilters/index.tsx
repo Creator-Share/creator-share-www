@@ -15,6 +15,7 @@ import { Tooltip } from "@/components/ui/tooltip"
 import { useFilterStore } from "@/store/filterStore"
 import { FiltersProps } from "@/types/propTypes"
 import { genders, status as statusOptions } from "./config"
+import { useAuthStore } from "@/store/authStore"
 
 const SponsorshipFilters: React.FC<
   FiltersProps & { variant?: "default" | "sidebar" }
@@ -36,6 +37,21 @@ const SponsorshipFilters: React.FC<
   )
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [mounted, setMounted] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const user = useAuthStore((state) => state.user)
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (user?.id) {
+        const response = await fetch("/api/auth/check-admin")
+        const { isAdmin } = await response.json()
+        setIsAdmin(isAdmin)
+      } else {
+        setIsAdmin(false)
+      }
+    }
+    checkAdminStatus()
+  }, [user])
 
   useEffect(() => {
     setMinAge(selectedAgeRange[0] || 0)
@@ -160,43 +176,47 @@ const SponsorshipFilters: React.FC<
               </SelectRoot>
             </Box>
 
-            {/* Status Select Dropdown */}
-            <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-              <SelectRoot
-                collection={statusOptions}
-                value={selectedStatus}
-                onValueChange={(details) => {
-                  const values = details.items.map((item) => item.value)
-                  handleFilterChange({ status: values })
-                }}
-                size="sm"
-                className="rounded-2xl w-full"
-                multiple
-              >
-                <SelectTrigger
-                  css={{
-                    borderRadius: "16px !important",
-                  }}
-                >
-                  <SelectValueText placeholder="Select Status">
-                    {() => {
-                      const selected = statusOptions.items
-                        .filter((item) => selectedStatus.includes(item.value))
-                        .map((item) => item.label)
-                        .join(", ")
-                      return selected || "Select Status"
+            {/* Status Select Dropdown - Admin Only */}
+            {user && isAdmin && (
+              <Tooltip content="Filter by funding status (Admin Only)">
+                <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+                  <SelectRoot
+                    collection={statusOptions}
+                    value={selectedStatus}
+                    onValueChange={(details) => {
+                      const values = details.items.map((item) => item.value)
+                      handleFilterChange({ status: values })
                     }}
-                  </SelectValueText>
-                </SelectTrigger>
-                <SelectContent>
-                  {statusOptions.items.map((option) => (
-                    <SelectItem item={option} key={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </SelectRoot>
-            </Box>
+                    size="sm"
+                    className="rounded-2xl w-full"
+                    multiple
+                  >
+                    <SelectTrigger
+                      css={{
+                        borderRadius: "16px !important",
+                      }}
+                    >
+                      <SelectValueText placeholder="Select Status">
+                        {() => {
+                          const selected = statusOptions.items
+                            .filter((item) => selectedStatus.includes(item.value))
+                            .map((item) => item.label)
+                            .join(", ")
+                          return selected || "Select Status"
+                        }}
+                      </SelectValueText>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusOptions.items.map((option) => (
+                        <SelectItem item={option} key={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </SelectRoot>
+                </Box>
+              </Tooltip>
+            )}
 
             <Box
               flex={{ base: "1 1 100%", md: "1 1 0" }}
