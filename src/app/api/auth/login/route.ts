@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { RoleAssignmentResponse } from "@/types"
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -36,17 +35,6 @@ export async function POST(request: Request) {
         { status: 500 }
       )
     }
-    const { data: roleData } = await supabase
-      .from("role_assignments")
-      .select(
-        `
-        roles:roles!role_assignments_role_id_fkey(name)
-      `
-      )
-      .eq("user_id", userId)
-
-    const typedRoleData = roleData as unknown as RoleAssignmentResponse
-    const roleName = typedRoleData[0]?.roles.name
 
     return NextResponse.json(
       { message: "Login successful.", redirect: "/" },

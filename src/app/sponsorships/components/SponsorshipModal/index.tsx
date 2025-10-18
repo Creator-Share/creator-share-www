@@ -13,6 +13,8 @@ import {
   FaCircleInfo,
   FaLink,
   FaShare,
+  FaChevronDown,
+  FaChevronUp,
 } from "react-icons/fa6"
 import { Beneficiaries } from "@/types/index"
 import {
@@ -20,9 +22,8 @@ import {
   fetchSponsorshipDetailsByBeneficiaryId,
 } from "@/actions"
 import BeneficiaryActivity from "../SponsorshipActivity"
-import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox"
 import { toaster } from "@/components/ui/toaster"
-import { Box, Text, Spinner, Flex, Input, InputAddon } from "@chakra-ui/react"
+import { Box, Text, Spinner, Flex, Input } from "@chakra-ui/react"
 
 // Conditionally import PayPal components only if enabled
 const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
@@ -34,13 +35,6 @@ if (isPayPalEnabled) {
   PayPalScriptProvider = paypalModule.PayPalScriptProvider
   PayPalButtons = paypalModule.PayPalButtons
 }
-import {
-  SelectRoot,
-  SelectTrigger,
-  SelectValueText,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select"
 import { useAuthStore } from "@/store/authStore"
 import { paymentOptionsCollection } from "../Payments/config"
 import { Button } from "@/components/ui/button"
@@ -94,6 +88,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false)
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
   const [imageLoading, setImageLoading] = useState<boolean>(false)
+  const [activitiesExpanded, setActivitiesExpanded] = useState<boolean>(false)
+  const [hasActivities, setHasActivities] = useState<boolean>(false)
 
   const [, setPrimaryImageUrl] = useState<string | null>(null)
 
@@ -170,7 +166,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     if (!open || !beneficiary.id) return
 
     fetchSponsorshipDetailsByBeneficiaryId(beneficiary.id)
-    fetchActivitiesByBeneficiaryId(beneficiary.id)
+
+    // Check if there are activities
+    fetchActivitiesByBeneficiaryId(beneficiary.id).then((activities) => {
+      setHasActivities(activities && activities.length > 0)
+    })
+
     loadImages(beneficiary.id)
   }, [open, beneficiary.id, loadImages])
 
@@ -333,10 +334,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     let newValue = parseInt(inputValue) || 0
     newValue = Math.min(newValue, remainingAmount)
     setAmount(newValue)
-  }
-
-  const handleSelectChange = (value: string) => {
-    setSelectedOption(value)
   }
 
   const handleStripePayment = async () => {
@@ -789,80 +786,126 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         if (!details.open) handleClose()
       }}
     >
-      <DialogContent className="max-w-[400px] md:min-w-[1000px] md:max-w-[1000px] w-full relative rounded-2xl">
-        <DialogHeader className="flex justify-between items-center p-6 pb-2">
-          <Text className="text-2xl font-bold text-gray-800">
-            Child Details
+      <DialogContent className="max-w-[95vw] md:max-w-[1100px] w-full relative rounded-2xl p-0 mt-8 md:mt-24">
+        <DialogHeader className="flex justify-between items-center px-6 md:px-8 pt-6 pb-4">
+          <Text className="text-xl md:text-2xl font-bold text-gray-800">
+            Sponsorship Details
           </Text>
           <DialogCloseTrigger>
-            <Box className="text-lg font-semibold cursor-pointer border-2 border-[#000000] rounded-full px-2">
+            <Box className="text-2xl font-normal cursor-pointer hover:bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center transition-colors">
               ×
             </Box>
           </DialogCloseTrigger>
         </DialogHeader>
-        <DialogBody className="p-0">
-          <Box className="px-8 md:grid md:grid-cols-12 md:gap-4 md:my-2.5">
-            <Box className="border border-[#0654C6] rounded-[10px] flex flex-col text-center gap-[11px] relative md:max-h-[523px] md:col-span-5">
-              {/* Status Overlay */}
-              <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#0654C6] rounded-[10px] p-[10px] flex items-center gap-2">
-                <FaCircleInfo />
-                <Text className="text-xs font-medium">
-                  {getStatusText(beneficiary.status)}
-                </Text>
+        <DialogBody className="p-8">
+          {/* Main Content - Two Column Layout */}
+          <Flex
+            direction={{ base: "column", md: "row" }}
+            gap={{ base: 6, md: 8 }}
+            mb={6}
+          >
+            {/* LEFT COLUMN - Image & Basic Info */}
+            <Box flex={{ base: "1", md: "0 0 40%" }} className="flex flex-col">
+              {/* Status Badge */}
+              <Box className="relative">
+                <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#0654C6] rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
+                  <FaCircleInfo />
+                  <Text className="text-xs font-semibold">
+                    {getStatusText(beneficiary.status)}
+                  </Text>
+                </Box>
+                {/* Hero Image Carousel */}
+                <Box
+                  position="relative"
+                  className="rounded-2xl overflow-hidden"
+                >
+                  {imageLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
+                      <Spinner size="lg" color="#0654C6" />
+                    </div>
+                  )}
+                  <ImageCarousel
+                    images={images}
+                    getImageSrc={getImageSrc}
+                    fallbackSrc={fallbackImageSrc}
+                    alt={beneficiary.name || "Child"}
+                    className="rounded-2xl aspect-[4/5] object-cover"
+                    showArrowsOnHover={true}
+                  />
+                </Box>
               </Box>
-              {/* Update the image section to show a simple spinner */}
-              {/* Use ImageCarousel component instead of custom implementation */}
-              <Box position="relative" className="group">
-                {imageLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-10 rounded-[15px]">
-                    <Spinner size="lg" color="#1C3C8C" />
-                  </div>
-                )}
-                <ImageCarousel
-                  images={images}
-                  getImageSrc={getImageSrc}
-                  fallbackSrc={fallbackImageSrc}
-                  alt={beneficiary.name || "Child"}
-                  className="rounded-[15px] p-2"
-                  showArrowsOnHover={true}
-                />
-              </Box>
-              <Box className="text-center mb-4 md:mb-0">
-                <Text className="text-xl font-bold text-gray-800 mb-2">
+
+              {/* Name & Details */}
+              <Box className="text-center space-y-3 mt-4">
+                <Text className="text-3xl md:text-4xl font-bold text-gray-900">
                   {beneficiary.name || "Full Name"}
                 </Text>
-                <Flex align="center" gap={2} mb={1} justify="center">
-                  <FaCalendar className="text-[#0654C6]" />
-                  <Text fontSize="md">
-                    {beneficiary.birth_date
-                      ? new Date(beneficiary.birth_date).toLocaleDateString(
-                          "en-GB",
-                          { day: "numeric", month: "long", year: "numeric" }
-                        )
-                      : "DOB"}
-                  </Text>
-                  <FaUser className="text-[#0654C6]" />
-                  <Text fontSize="md">{beneficiary.gender || "Gender"}</Text>
-                  <FaLocationDot className="text-[#0654C6]" />
-                  <Text fontSize="md">{beneficiary.country || "Location"}</Text>
+                <Flex
+                  align="center"
+                  gap={{ base: 2, md: 3 }}
+                  justify="center"
+                  wrap="wrap"
+                  className="text-gray-600"
+                  fontSize={{ base: "sm", md: "md" }}
+                >
+                  <Flex align="center" gap={1.5}>
+                    <FaCalendar className="text-[#0654C6]" />
+                    <Text>
+                      {beneficiary.birth_date
+                        ? `${Math.floor(
+                            (Date.now() -
+                              new Date(beneficiary.birth_date).getTime()) /
+                              (365.25 * 24 * 60 * 60 * 1000)
+                          )} years old`
+                        : "Age unknown"}
+                    </Text>
+                  </Flex>
+                  <Flex align="center" gap={1.5}>
+                    <FaUser className="text-[#0654C6]" />
+                    <Text>{beneficiary.gender || "Gender"}</Text>
+                  </Flex>
+                  <Flex align="center" gap={1.5}>
+                    <FaLocationDot className="text-[#0654C6]" />
+                    <Text>{beneficiary.country || "Location"}</Text>
+                  </Flex>
                 </Flex>
               </Box>
+
+              {/* Video - Only show if exists */}
+              {beneficiary.video_url?.trim() && (
+                <Box className="mt-4">
+                  <Box
+                    bg="white"
+                    borderRadius="xl"
+                    overflow="hidden"
+                    borderWidth="1px"
+                    borderColor="gray.200"
+                    boxShadow="sm"
+                  >
+                    <video
+                      className="w-full"
+                      src={beneficiary.video_url.trim()}
+                      controls
+                    />
+                  </Box>
+                </Box>
+              )}
             </Box>
+
+            {/* RIGHT COLUMN - Sponsorship Action */}
             <Box
-              borderRadius="xl"
-              className="h-[523px] mt-3 mb-2.5 md:my-0 md:col-span-7 md:gap-4"
+              flex={{ base: "1", md: "0 0 60%" }}
+              className="flex flex-col"
+              px={{ base: 0, md: 6 }}
             >
-              {/* Sponsorship Target */}
+              {/* Progress Bar - Cleaner Design */}
               {publicHardcodedCents == null && (
-                <Box mb={2} gap={10}>
-                  <Box className="flex justify-between">
-                    <Text
-                      className="text-base text-[#52667A] font-normal"
-                      mb={2}
-                    >
-                      Sponsorship Target
+                <Box className="space-y-2 mb-8">
+                  <Flex justify="space-between" align="center">
+                    <Text className="text-sm font-medium text-gray-600">
+                      Sponsorship Progress
                     </Text>
-                    <Text className="text-base font-semibold" mb={2}>
+                    <Text className="text-lg font-bold text-[#0654C6]">
                       {beneficiary.budget_goal > 0
                         ? Math.round(
                             (beneficiary.budget_raised /
@@ -872,10 +915,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                         : 0}
                       %
                     </Text>
-                  </Box>
-                  <Box className="w-full bg-[#CDE1FE] h-[13px] rounded-full mb-3">
+                  </Flex>
+                  <Box className="w-full bg-gray-200 h-3 rounded-full overflow-hidden">
                     <Box
-                      className="bg-[#0654C6] h-[13px] rounded-full"
+                      className="bg-[#0654C6] h-full rounded-full transition-all duration-300"
                       style={{
                         width: `${
                           beneficiary.budget_goal > 0
@@ -890,35 +933,50 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       }}
                     />
                   </Box>
-                  <Text className="text-sm text-[#52667A] font-normal">
-                    {`$${(
-                      (beneficiary.budget_raised || 0) / 100
-                    ).toLocaleString(undefined, {
-                      maximumFractionDigits: 0,
-                    })} of $${(
-                      (beneficiary.budget_goal || 0) / 100
-                    ).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                  <Text className="text-sm text-gray-500">
+                    $
+                    {((beneficiary.budget_raised || 0) / 100).toLocaleString(
+                      undefined,
+                      {
+                        maximumFractionDigits: 0,
+                      }
+                    )}{" "}
+                    raised of $
+                    {((beneficiary.budget_goal || 0) / 100).toLocaleString(
+                      undefined,
+                      { maximumFractionDigits: 0 }
+                    )}{" "}
+                    goal
                   </Text>
                 </Box>
               )}
 
-              <Box className="grid grid-cols-2 gap-2">
-                <Box>
-                  <Text mt={1} className="font-medium text-sm mb-[10px]">
-                    Amount
-                  </Text>
+              {/* Bio Section - Clean, Integrated */}
+              <Box className="bg-gray-100 rounded-xl p-5 space-y-2 mb-8">
+                <Text className="text-lg font-semibold text-gray-900">
+                  About {beneficiary.name?.split(" ")[0] || "Child"}
+                </Text>
+                <Text className="text-gray-700 leading-relaxed text-sm md:text-base">
+                  {beneficiary.biography || "No biography available."}
+                </Text>
+              </Box>
 
-                  {remainingAmount < minimumAmount ? (
-                    <Box>
+              {/* Sponsorship Section */}
+              <Box className="space-y-4">
+                <Text className="font-medium text-sm mb-2 text-gray-700">
+                  Monthly Sponsorship Amount
+                </Text>
+                <Flex gap={3} align="start">
+                  <Box flex="0 0 50%">
+                    {remainingAmount < minimumAmount ? (
                       <Flex
-                        className="border rounded-xl"
+                        className="border border-gray-300 rounded-xl bg-white overflow-hidden"
                         align="center"
-                        justify="center"
-                        gap={2}
+                        h="56px"
                       >
-                        <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">
+                        <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
                           $
-                        </InputAddon>
+                        </Box>
                         <Input
                           type="number"
                           value={
@@ -928,22 +986,19 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           }
                           readOnly={publicHardcodedDollars !== null}
                           disabled={publicHardcodedDollars !== null}
-                          className="px-4 h-[50px] bg-gray-100"
+                          className="px-4 h-full bg-gray-100 border-0 outline-none focus:ring-0 text-lg"
                           placeholder="Enter Amount"
                         />
                       </Flex>
-                    </Box>
-                  ) : (
-                    <>
+                    ) : (
                       <Flex
-                        className="border rounded-xl"
+                        className="border border-gray-300 rounded-xl bg-white focus-within:border-[#0654C6] transition-colors overflow-hidden"
                         align="center"
-                        justify="center"
-                        gap={2}
+                        h="56px"
                       >
-                        <InputAddon className="bg-[#E3EEFF] px-[15px] py-[5px] m-1 text-black text-base font-medium">
+                        <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
                           $
-                        </InputAddon>
+                        </Box>
                         <Input
                           type="number"
                           min="1"
@@ -951,164 +1006,139 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           value={amount || ""}
                           onChange={handleAmountChange}
                           readOnly={publicHardcodedDollars !== null}
-                          className="px-4 h-[48px]"
+                          className="px-4 h-full border-0 outline-none focus:ring-0 text-lg"
                           placeholder="Enter Amount"
                         />
                       </Flex>
-                    </>
-                  )}
-                </Box>
-                <Box>
-                  <Text className="font-medium text-sm mb-[10px]" mt={1}>
-                    Frequency
-                  </Text>
-                  <SelectRoot
-                    collection={paymentOptionsCollection}
-                    className="border rounded-xl"
-                    mt={2}
-                    mb={4}
-                    px={1}
-                    py={1}
-                    value={[selectedOption]}
-                    onValueChange={(details) =>
-                      handleSelectChange(details.value[0])
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValueText />
-                    </SelectTrigger>
-                    <SelectContent className="z-[9999]">
-                      {paymentOptionsCollection.items.map((option) => (
-                        <SelectItem key={option.value} item={option}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </SelectRoot>
-                </Box>
-              </Box>
-              <Box
-                className={`grid ${
-                  isPayPalEnabled ? "grid-cols-2" : "grid-cols-1"
-                } gap-2.5 mb-1.5`}
-              >
-                <Button
-                  onClick={handleStripePayment}
-                  loading={loading}
-                  loadingText="Processing..."
-                  disabled={loading || !canPay}
-                  className={`flex-1 py-2 bg-blue-700 text-white hover:bg-blue-800${
-                    !canPay ? " opacity-50 cursor-not-allowed" : ""
-                  }`}
-                >
-                  Sponsor this child
-                </Button>
-                {isPayPalEnabled && PayPalScriptProvider && PayPalButtons && (
-                  <PayPalScriptProvider
-                    options={{
-                      "client-id": process.env
-                        .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
-                      currency: "USD",
-                      intent: "capture",
-                    }}
-                  >
-                    {canPay ? (
-                      <PayPalButtons
-                        style={{
-                          layout: "horizontal",
-                          tagline: false,
-                          height: 40,
-                        }}
-                        createOrder={handleCreateOrder}
-                        onApprove={handlePayPalApproval}
-                        onError={handlePayPalError}
-                      />
-                    ) : (
-                      <Box className="h-[40px] bg-gray-200 rounded flex items-center justify-center">
-                        <Text color="gray.500" fontSize="sm">
-                          {remainingAmount < minimumAmount
-                            ? "Enter amount greater than $0"
-                            : `Minimum amount is $${minimumAmount}`}
-                        </Text>
-                      </Box>
                     )}
-                  </PayPalScriptProvider>
+                    <Text className="text-xs text-gray-500 mt-2">
+                      Fixed monthly contribution
+                    </Text>
+                  </Box>
+                  <Box flex="0 0 calc(50% - 12px)">
+                    <Button
+                      onClick={handleStripePayment}
+                      loading={loading}
+                      loadingText="Processing..."
+                      disabled={loading || !canPay}
+                      className={`w-full h-14 text-lg font-semibold bg-[#0654C6] text-white hover:bg-[#0545A5] rounded-xl transition-all shadow-md hover:shadow-lg${
+                        !canPay ? " opacity-50 cursor-not-allowed" : ""
+                      }`}
+                    >
+                      Sponsor {beneficiary.name?.split(" ")[0] || "Child"} 🪽
+                    </Button>
+                  </Box>
+                </Flex>
+
+                {/* PayPal Alternative */}
+                {isPayPalEnabled && PayPalScriptProvider && PayPalButtons && (
+                  <Box>
+                    <PayPalScriptProvider
+                      options={{
+                        "client-id": process.env
+                          .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
+                        currency: "USD",
+                        intent: "capture",
+                      }}
+                    >
+                      {canPay ? (
+                        <PayPalButtons
+                          style={{
+                            layout: "horizontal",
+                            tagline: false,
+                            height: 48,
+                          }}
+                          createOrder={handleCreateOrder}
+                          onApprove={handlePayPalApproval}
+                          onError={handlePayPalError}
+                        />
+                      ) : (
+                        <Box className="h-12 bg-gray-200 rounded-xl flex items-center justify-center">
+                          <Text color="gray.500" fontSize="sm">
+                            {remainingAmount < minimumAmount
+                              ? "Enter amount greater than $0"
+                              : `Minimum amount is $${minimumAmount}`}
+                          </Text>
+                        </Box>
+                      )}
+                    </PayPalScriptProvider>
+                  </Box>
                 )}
+              </Box>
+            </Box>
+          </Flex>
+
+          {/* Collapsible Activities Section - Only show if activities exist */}
+          {hasActivities && (
+            <Box className="mt-8 border-t pt-6">
+              <Box
+                className="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-3 rounded-lg transition-colors"
+                onClick={() => setActivitiesExpanded(!activitiesExpanded)}
+              >
+                <Flex align="center" gap={2}>
+                  <Text className="text-base font-semibold text-gray-700">
+                    ⚡ Latest Updates
+                  </Text>
+                  <Text className="text-sm text-gray-500">
+                    (Recent activities)
+                  </Text>
+                </Flex>
+                <Box className="text-gray-500">
+                  {activitiesExpanded ? <FaChevronUp /> : <FaChevronDown />}
+                </Box>
               </Box>
 
-              <Box bg="#CDE1FE" p={4} borderRadius="xl">
-                <Box className="max-h-[200px] overflow-hidden overflow-y-scroll">
-                  <Text fontSize="lg" fontWeight="bold" mb={2}>
-                    Child Bio
-                  </Text>
-                  <Text color="gray.600" fontSize="base">
-                    {beneficiary.biography}
-                  </Text>
-                </Box>
-              </Box>
-              <Flex mt={4} className="justify-center w-full">
-                <Flex gap={4} className="w-full md:w-50%">
-                  <Button
-                    className="flex-1 border border-black"
-                    height="40px"
-                    variant="outline"
-                    _hover={{ bg: "black", color: "white" }}
-                    onClick={handleCopyLink}
-                    bg="white"
-                  >
-                    <FaLink style={{ marginRight: 6 }} />
-                    Copy Link
-                  </Button>
-                  <Button
-                    className="flex-1 border border-black"
-                    height="40px"
-                    variant="outline"
-                    _hover={{ bg: "black", color: "white" }}
-                    onClick={handleShareProfile}
-                    bg="white"
-                  >
-                    <FaShare style={{ marginRight: 6 }} />
-                    Share Profile
-                  </Button>
-                </Flex>
-              </Flex>
-            </Box>
-          </Box>
-          <Box className="border mx-8 mb-2.5" />
-          <Box className="px-8 md:grid md:grid-cols-2 md:items-stretch gap-4">
-            <Box>
-              <BeneficiaryActivity
-                beneficiaryId={beneficiary.id}
-                username={beneficiary.username}
-              />
-            </Box>
-            <Box className="my-3 md:my-0">
-              <Box
-                bg="white"
-                borderRadius="xl"
-                mt={4}
-                className="flex justify-center items-center md:min-h-[191px] mb-2"
-              >
-                {beneficiary.video_url?.trim() !== "" ? (
-                  <video
-                    className="rounded-xl max-h-40 w-full"
-                    src={beneficiary.video_url?.trim() || undefined}
-                    controls
+              {activitiesExpanded && (
+                <Box className="mt-4 animate-in fade-in duration-300">
+                  <BeneficiaryActivity
+                    beneficiaryId={beneficiary.id}
+                    username={beneficiary.username}
                   />
-                ) : (
-                  <Text className="text-center text-gray-500">
-                    No videos available
-                  </Text>
-                )}
-              </Box>
-              <BeneficiarySubscribeBox beneficiary={beneficiary} />
+                </Box>
+              )}
             </Box>
-          </Box>
-          <Box className="px-8 my-4">
-            <Text color="gray.500" textAlign="center" p={1} fontSize="sm">
+          )}
+
+          {/* Footer - Disclaimer and Share Actions */}
+          <Flex
+            className="mt-6 pt-4 border-t"
+            justify="space-between"
+            align="center"
+            direction={{ base: "column", md: "row" }}
+            gap={4}
+          >
+            <Text
+              color="gray.400"
+              fontSize="xs"
+              textAlign="center"
+              className="leading-relaxed"
+              flex="1"
+            >
               {renderDisclaimer()}
             </Text>
-          </Box>
+
+            {/* Share Actions - Bottom Right */}
+            <Flex gap={2} flexShrink={0}>
+              <Button
+                className="border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                size="sm"
+                variant="outline"
+                onClick={handleCopyLink}
+              >
+                <FaLink className="mr-2" />
+                Copy Link
+              </Button>
+              <Button
+                className="border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                size="sm"
+                variant="outline"
+                onClick={handleShareProfile}
+              >
+                <FaShare className="mr-2" />
+                Share
+              </Button>
+            </Flex>
+          </Flex>
         </DialogBody>
       </DialogContent>
     </DialogRoot>
