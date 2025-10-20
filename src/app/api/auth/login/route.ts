@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { RoleAssignmentResponse } from "@/types"
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -36,7 +35,7 @@ export async function POST(request: Request) {
         { status: 500 }
       )
     }
-    const { data: roleData } = await supabase
+    const { error } = await supabase
       .from("role_assignments")
       .select(
         `
@@ -45,16 +44,21 @@ export async function POST(request: Request) {
       )
       .eq("user_id", userId)
 
-    const typedRoleData = roleData as unknown as RoleAssignmentResponse
-    const roleName = typedRoleData[0]?.roles.name
-
+    if (error) {
+      return NextResponse.json(
+        { error: error.message || "Failed to get role assignments." },
+        { status: 500 }
+      )
+    }
     return NextResponse.json(
       { message: "Login successful.", redirect: "/" },
       { status: 200 }
     )
-  } catch (err: unknown) {
-    const errorMessage =
-      err instanceof Error ? err.message : "Unexpected error occurred."
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+  } catch (error) {
+    console.error("Error logging in:", error)
+    return NextResponse.json(
+      { error: "Failed to login." },
+      { status: 500 }
+    )
   }
 }

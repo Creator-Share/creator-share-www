@@ -26,13 +26,20 @@ import { Box, Text, Spinner, Flex, Input, InputAddon } from "@chakra-ui/react"
 
 // Conditionally import PayPal components only if enabled
 const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
-let PayPalScriptProvider: any
-let PayPalButtons: any
+
+// Type-safe PayPal component references
+type PayPalComponent = React.ComponentType<Record<string, unknown>>
+let PayPalScriptProvider: PayPalComponent | undefined
+let PayPalButtons: PayPalComponent | undefined
 
 if (isPayPalEnabled) {
-  const paypalModule = require("@paypal/react-paypal-js")
-  PayPalScriptProvider = paypalModule.PayPalScriptProvider
-  PayPalButtons = paypalModule.PayPalButtons
+  // Use dynamic import for PayPal components
+  import("@paypal/react-paypal-js").then((module) => {
+    PayPalScriptProvider = module.PayPalScriptProvider as unknown as PayPalComponent
+    PayPalButtons = module.PayPalButtons as unknown as PayPalComponent
+  }).catch((err) => {
+    console.error("Failed to load PayPal SDK:", err)
+  })
 }
 import {
   SelectRoot,
