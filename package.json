@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "update-types-dev": "npx supabase gen types typescript --project-id \"destjwstohzmufshfnuy\" --schema public > src/lib/types/db.types.ts",
+    "update-types-dev": "npx supabase gen types typescript --project-id \"$SUPABASE_PROJECT_ID\" --schema public > src/lib/types/db.types.ts",
     "lint": "next lint",
     "format": "npx prettier --write .",
     "test": "playwright test",

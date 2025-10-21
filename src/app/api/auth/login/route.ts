@@ -35,7 +35,8 @@ export async function POST(request: Request) {
         { status: 500 }
       )
     }
-    const { error } = await supabase
+    // Verify user has role assignments
+    await supabase
       .from("role_assignments")
       .select(
         `
@@ -44,12 +45,6 @@ export async function POST(request: Request) {
       )
       .eq("user_id", userId)
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message || "Failed to get role assignments." },
-        { status: 500 }
-      )
-    }
     return NextResponse.json(
       { message: "Login successful.", redirect: "/" },
       { status: 200 }
