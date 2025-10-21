@@ -43,10 +43,7 @@ const BeneficiaryActivity = ({
     <>
       <Box
         className="md:min-h-[443px] md:max-h-[443px]"
-        borderWidth="1px"
-        borderRadius="md"
         p={4}
-        boxShadow="md"
         overflowY="auto"
       >
       <Text fontSize="lg" fontWeight="bold" mb={4}>
