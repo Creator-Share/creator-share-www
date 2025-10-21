@@ -49,9 +49,11 @@ export async function POST(request: Request) {
       { message: "Login successful.", redirect: "/" },
       { status: 200 }
     )
-  } catch (err: unknown) {
-    const errorMessage =
-      err instanceof Error ? err.message : "Unexpected error occurred."
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+  } catch (error) {
+    console.error("Error logging in:", error)
+    return NextResponse.json(
+      { error: "Failed to login." },
+      { status: 500 }
+    )
   }
 }

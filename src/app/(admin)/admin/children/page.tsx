@@ -1,7 +1,7 @@
 "use client"
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
-import { Box, Flex, Button, Spinner } from "@chakra-ui/react"
+import { Box, Flex, Button, Spinner, Text } from "@chakra-ui/react"
 import { toaster } from "@/components/ui/toaster"
 import DeleteDialog from "./components/DeleteDialog"
 import BeneficiaryCard from "./components/BeneficiaryCard"
@@ -16,10 +16,7 @@ import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
 import SponsorshipFilters from "@/app/sponsorships/components/SponsorshipFilters"
 
-const CreateDrawer = dynamic(() => import("./components/CreateDrawer"), {
-  ssr: false,
-})
-const EditDrawer = dynamic(() => import("./components/EditDrawer"), {
+const BeneficiaryModal = dynamic(() => import("./components/BeneficiaryModal"), {
   ssr: false,
 })
 
@@ -27,8 +24,6 @@ const ChildrenTable = () => {
   const {
     formData,
     setFormData,
-    formDataEdit,
-    setFormDataEdit,
     imageFiles,
     setImageFiles,
     videoFiles,
@@ -45,7 +40,6 @@ const ChildrenTable = () => {
       autoRetry: true,
     })
 
-  // Initialize admin filters to show all statuses
   useEffect(() => {
     const allStatuses = [
       "New",
@@ -56,8 +50,7 @@ const ChildrenTable = () => {
     ]
     setFilterStatus(allStatuses)
     handleFilterChange({ status: allStatuses })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Only run once on mount
+  }, [setFilterStatus, handleFilterChange]) // Only run once on mount (functions are stable)
 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
@@ -751,48 +744,61 @@ const ChildrenTable = () => {
         ))}
       </Flex>
 
-      {/* Grid Layout */}
+      {/* Scrollable Container with Grid Layout */}
       <Box
         ref={containerRef}
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+        width="100%"
+        className="border bg-white rounded-2xl"
+        style={{
+          minHeight: beneficiaries.length ? "auto" : "100px",
+          maxHeight: "200vh",
+          overflowY: "auto",
+        }}
       >
-        {beneficiaries.map((beneficiary) => (
-          <BeneficiaryCard
-            key={beneficiary.id || beneficiary.username}
-            beneficiary={beneficiary}
-            isSelected={
-              beneficiary.id ? selectedItems.has(beneficiary.id) : false
-            }
-            onSelect={handleSelectItem}
-            onEdit={handleEditBeneficiary}
-            beneficiaryImages={beneficiaryImages}
-            loadingImages={loadingImages}
-          />
-        ))}
+        <Box p={8}>
+          {beneficiaries.length === 0 && !isLoading ? (
+            <Flex justify="center" py={12} align="center" direction="column">
+              <Text fontSize="lg" color="gray.600" textAlign="center">
+                No children found
+              </Text>
+              <Text fontSize="sm" color="gray.500" textAlign="center" mt={2}>
+                Try adjusting your search or filters to find more results
+              </Text>
+            </Flex>
+          ) : (
+            <Box className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {beneficiaries.map((beneficiary) => (
+                <BeneficiaryCard
+                  key={beneficiary.id || beneficiary.username}
+                  beneficiary={beneficiary}
+                  isSelected={
+                    beneficiary.id ? selectedItems.has(beneficiary.id) : false
+                  }
+                  onSelect={handleSelectItem}
+                  onEdit={handleEditBeneficiary}
+                  beneficiaryImages={beneficiaryImages}
+                  loadingImages={loadingImages}
+                />
+              ))}
+            </Box>
+          )}
+        </Box>
+
+        {/* Infinite scroll loading indicator */}
+        {isLoading && (
+          <Flex justify="center" py={12} align="center">
+            <Spinner size="xl" color="blue.500" />
+          </Flex>
+        )}
       </Box>
 
-      {/* Infinite scroll loading indicator */}
-      {isLoading && (
-        <Flex justify="center" py={12} align="center">
-          <Spinner size="xl" color="blue.500" />
-        </Flex>
-      )}
-
-      {/* Edit Drawer */}
+      {/* Edit Modal */}
       {isEditDrawerOpen && selectedBeneficiary && (
-        <EditDrawer
-          selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
-          formDataEdit={formDataEdit as Partial<Beneficiaries>}
-          setFormDataEdit={(value) => {
-            if (typeof value === "function") {
-              const currentValue = value(formDataEdit)
-              setFormDataEdit(currentValue)
-            } else {
-              setFormDataEdit(value)
-            }
-          }}
-          isDrawerOpen={isEditDrawerOpen}
+        <BeneficiaryModal
+          mode="edit"
+          isOpen={isEditDrawerOpen}
           onClose={() => setIsEditDrawerOpen(false)}
+          selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
           onSave={handleSave}
           onDelete={handleDelete}
           imageFiles={imageFiles}
@@ -818,11 +824,12 @@ const ChildrenTable = () => {
         itemCount={selectedRowsForDeletion.length}
       />
 
-      {/* Create Drawer */}
-      <CreateDrawer
+      {/* Create Modal */}
+      <BeneficiaryModal
+        mode="create"
+        isOpen={isCreateDrawerOpen}
+        onClose={() => setIsCreateDrawerOpen(false)}
         formData={formData}
-        isDrawerOpen={isCreateDrawerOpen}
-        setIsDrawerOpen={setIsCreateDrawerOpen}
         setFormData={(value) => {
           if (typeof value === "function") {
             const currentValue = value(formData)
@@ -847,7 +854,6 @@ const ChildrenTable = () => {
             ? setVideoFiles(value(videoFiles))
             : setVideoFiles(value)
         }
-        handleDrawerClose={() => setIsCreateDrawerOpen(false)}
       />
     </AdminPageLayout>
   )
