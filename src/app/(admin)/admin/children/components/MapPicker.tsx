@@ -9,7 +9,6 @@ import {
   useMap,
 } from "react-leaflet"
 import { Box, Text, Input, Flex } from "@chakra-ui/react"
-import { Field } from "@/components/ui/field"
 import { Button } from "@/components/ui/button"
 import { toaster } from "@/components/ui/toaster"
 
@@ -146,6 +145,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
           location[0],
           location[1],
         )
+        setSearchQuery(locationStr) // Update search input with found location
         onSelectLocation(location, locationStr, country)
       } else {
         setIsError(true)
@@ -173,6 +173,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
           location[0],
           location[1],
         )
+        setSearchQuery(locationStr) // Update search input with selected location
         onSelectLocation(location, locationStr, country)
         setIsError(false)
       },
@@ -183,7 +184,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
 
   return (
     <Box>
-      <Field label="Location">
+      <Box>
         <Flex gap={2} mb={2} width="100%">
           <Input
             placeholder="Search location or click on map..."
@@ -248,7 +249,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
           Tip: If your exact location isn't found, try searching for a nearby
           city or landmark, then click on the map to refine the position.
         </Text>
-      </Field>
+      </Box>
     </Box>
   )
 }

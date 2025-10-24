@@ -218,9 +218,7 @@ export default function FullProfileDynamic() {
             About Me
           </Heading>
           <Text className="text-[#767070] text-base">
-            {beneficiary.biography ||
-              beneficiary.introduction ||
-              "No biography available."}
+            {beneficiary.biography || "No biography available."}
           </Text>
         </Box>
         <Heading

@@ -18,9 +18,8 @@ export async function POST(req: Request) {
       name: formData.get('name') as string,
       username: formData.get('username') as string,
       gender: formData.get('gender') as 'Boy' | 'Girl',
-      birth_date: formData.get('birth_date') as string,
+      birth_date: formData.get('birth_date')?.toString() || undefined,
       biography: formData.get('biography') as string,
-      introduction: formData.get('introduction') as string,
       budget_goal: formData.get('budget_goal') ? parseInt(formData.get('budget_goal') as string) : 0,
       budget_raised: formData.get('budget_raised') ? parseInt(formData.get('budget_raised') as string) : 0,
       status: formData.get('status') as Status,
@@ -31,7 +30,8 @@ export async function POST(req: Request) {
       beneficiary_type: formData.get('beneficiary_type') as BeneficiaryType,
     }
 
-    const insertData = { ...data, status: "New" }
+    const insertData = { ...data }
+    if (!insertData.status) insertData.status = "New"
     if (!insertData.country) insertData.country = "Unknown Country"
     if (!insertData.location_str) insertData.location_str = "Unknown Location"
     
@@ -68,7 +68,10 @@ export async function POST(req: Request) {
 
     // TODO: Handle file uploads (images and videos) here
     // For now, just return the created beneficiary
-    return NextResponse.json({ beneficiary: inserted }, { status: 201 })
+    return NextResponse.json({ 
+      beneficiary: inserted, 
+      beneficiaryId: inserted.id 
+    }, { status: 201 })
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error"
     return NextResponse.json({ error: errorMessage }, { status: 500 })

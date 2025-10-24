@@ -146,22 +146,6 @@ export const columns: ColumnDef<Beneficiaries>[] = [
     },
   },
   {
-    accessorKey: "introduction",
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      >
-        Introduction
-        <LuArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
-    cell: ({ row }) => {
-      const person = row.original
-      return <div className="line-clamp-2">{person.introduction}</div>
-    },
-  },
-  {
     accessorKey: "budget_goal",
     header: ({ column }) => (
       <Button
