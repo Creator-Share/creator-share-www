@@ -7,7 +7,6 @@ import MarkerClusterGroup from "react-leaflet-markercluster"
 import L, { LatLngBounds } from "leaflet"
 import "leaflet/dist/leaflet.css"
 import { BeneficiaryMapProps } from "@/types/propTypes"
-import Filters from "../Filters"
 
 const ANIMATION_DURATION = 1
 
@@ -390,7 +389,6 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
   beneficiaryData,
   onMarkerClick,
   onBoundsChange,
-  onFilterChange,
   beneficiaryType = "CHILD",
 }) => {
   const [isReady, setIsReady] = useState<boolean>(false)
@@ -631,25 +629,6 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
             : `Filter ${beneficiaryType === "ANIMAL" ? "Animals" : "Children"}`}
         </Button>
       </Box>
-
-      {showFilters && (
-        <Box
-          position="absolute"
-          top={16}
-          left={4}
-          zIndex={1000}
-          className="bg-transparent bg-opacity-95 backdrop-blur-sm p-4 rounded-xl shadow-md"
-          width="300px"
-          maxHeight="80%"
-          overflowY="auto"
-        >
-          <Filters
-            onFilterChange={onFilterChange}
-            variant="sidebar"
-            beneficiaryType={beneficiaryType}
-          />
-        </Box>
-      )}
     </Box>
   )
 }

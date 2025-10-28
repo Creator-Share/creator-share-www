@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useState } from "react"
 import { Text, Flex } from "@chakra-ui/react"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,6 +22,17 @@ const DeleteDialog: React.FC<DeleteDialogProps> = ({
   onConfirm,
   itemCount,
 }) => {
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleConfirm = async () => {
+    try {
+      setIsLoading(true)
+      await onConfirm()
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <DialogRoot open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
@@ -35,11 +46,19 @@ const DeleteDialog: React.FC<DeleteDialogProps> = ({
             action cannot be undone.
           </Text>
           <Flex gap={3} mt={4}>
-            <Button onClick={onClose} className="bg-gray-500 text-white p-4">
+            <Button 
+              onClick={onClose} 
+              className="bg-gray-500 text-white p-4"
+              disabled={isLoading}
+            >
               Cancel
             </Button>
-            <Button onClick={onConfirm} className="bg-red-500 text-white p-4">
-              Delete
+            <Button 
+              onClick={handleConfirm} 
+              className="bg-red-500 text-white p-4"
+              disabled={isLoading}
+            >
+              {isLoading ? "Deleting..." : "Delete"}
             </Button>
           </Flex>
         </DialogBody>

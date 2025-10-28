@@ -3,7 +3,6 @@ import { useEffect, useState } from "react"
 import {
   Box,
   Flex,
-  Link,
   Button,
   Image,
   VStack,
@@ -13,24 +12,22 @@ import {
 import NextLink from "next/link"
 import { useAuthStore } from "@/store/authStore"
 import { usePathname, useRouter } from "next/navigation"
-import { ColorModeButton } from "./ui/color-mode"
 import { GiHamburgerMenu } from "react-icons/gi"
 import { IoClose } from "react-icons/io5"
 
-const Links = [
-  { name: "Home", href: "/" },
-  // { name: "Lives", href: "/lives" },
-  // { name: "Projects", href: "/projects" },
-  // { name: "Causes", href: "/causes" },
-  // { name: "My Community", href: "/local" },
-  // { name: "Share Abundance", href: "/share" },
-  { name: "Sponsorships", href: "/sponsorships" },
-  // { name: "Strays Worth Saving", href: "/strays-worth-saving" },
-  // { name: "Sponsor-a-Family", href: "/family-in-need" },
-  // { name: "Street Involved", href: "/street-involved" },
-  // { name: "Child Laborers", href: "/child-labor" },
-  // { name: "I-Frame Test", href: "/iframe-test" },
-]
+// const Links = [
+//   // { name: "Sponsorships", href: "/" }, // Temporarily hidden
+//   // { name: "Lives", href: "/lives" },
+//   // { name: "Projects", href: "/projects" },
+//   // { name: "Causes", href: "/causes" },
+//   // { name: "My Community", href: "/local" },
+//   // { name: "Share Abundance", href: "/share" },
+//   // { name: "Strays Worth Saving", href: "/strays-worth-saving" },
+//   // { name: "Sponsor-a-Family", href: "/family-in-need" },
+//   // { name: "Street Involved", href: "/street-involved" },
+//   // { name: "Child Laborers", href: "/child-labor" },
+//   // { name: "I-Frame Test", href: "/iframe-test" },
+// ]
 
 export function PageNavbar() {
   const [isOpen, setIsOpen] = useState(false)
@@ -80,7 +77,7 @@ export function PageNavbar() {
   if (!mounted) return null
 
   return (
-    <Box className="w-full z-[1000] bg-[#FFFFFF]">
+    <Box className="w-full z-[1000] bg-[#FFFFFF] sticky top-0 shadow-md">
       <Flex className="w-full max-w-[1200px] mx-auto px-6 md:px-8 h-16 flex justify-between items-center relative">
         {/* Logo Centered */}
         <Box className="flex items-center flex-shrink-0">
@@ -96,6 +93,7 @@ export function PageNavbar() {
 
         {/* Desktop Menu */}
         <Flex as="nav" gap={4} display={{ base: "none", md: "flex" }}>
+          {/* Navigation links temporarily disabled
           {Links.map((link) => {
             const isActive = pathname === link.href
             return (
@@ -131,64 +129,57 @@ export function PageNavbar() {
                 {link.name}
               </Link>
             )
-          })}
+          })} */}
         </Flex>
 
         {/* Right Actions */}
-        <Flex gap={4} display={{ base: "none", md: "flex" }}>
-          {/* <ColorModeButton /> */}
-          {user ? (
-            <Menu.Root>
-              <Menu.Trigger asChild>
-                <Button size="sm" variant="ghost">
-                  {user.email}
-                </Button>
-              </Menu.Trigger>
-              <Portal>
-                <Menu.Positioner>
-                  <Menu.Content>
-                    {isAdmin && (
-                      <Menu.Item
-                        value="admin"
-                        onClick={() => {
-                          router.push("/admin")
-                        }}
-                      >
-                        Admin Dashboard
-                      </Menu.Item>
-                    )}
-                    <Menu.Item
-                      value="user-dashboard"
-                      onClick={() => {
-                        router.push("/app")
-                      }}
-                    >
-                      User Dashboard
-                    </Menu.Item>
-                    <Menu.Item
-                      value="logout"
-                      onClick={() => {
-                        handleLogout()
-                      }}
-                    >
-                      Logout
-                    </Menu.Item>
-                  </Menu.Content>
-                </Menu.Positioner>
-              </Portal>
-            </Menu.Root>
-          ) : (
+        <Flex
+          gap={4}
+          display={{ base: "none", md: "flex" }}
+          alignItems="center"
+        >
+          {user && (
             <>
-              <NextLink href="/login" passHref>
-                <Button size="sm" variant="ghost">
-                  Sign In
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant={pathname?.startsWith("/admin") ? "solid" : "ghost"}
+                  onClick={() => router.push("/admin")}
+                >
+                  Admin Dashboard
                 </Button>
-              </NextLink>
-              <NextLink href="/registration" passHref>
-                <Button size="sm" colorScheme="blue">
-                  Sign Up
-                </Button>
-              </NextLink>
+              )}
+              {/* Temporarily hidden
+              <Button
+                size="sm"
+                variant={pathname === "/app" ? "solid" : "ghost"}
+                onClick={() => router.push("/app")}
+              >
+                User Dashboard
+              </Button>
+              */}
+              <Menu.Root>
+                <Menu.Trigger asChild>
+                  <Button size="sm" variant="ghost">
+                    My Account ({user.email})
+                  </Button>
+                </Menu.Trigger>
+                <Portal>
+                  <Menu.Positioner>
+                    <Menu.Content>
+                      <Menu.Item
+                        value="logout"
+                        onClick={() => {
+                          handleLogout()
+                        }}
+                        cursor="pointer"
+                      >
+                        Logout
+                      </Menu.Item>
+                    </Menu.Content>
+                  </Menu.Positioner>
+                </Portal>
+              </Menu.Root>
             </>
           )}
         </Flex>
@@ -216,6 +207,7 @@ export function PageNavbar() {
           pointerEvents="auto"
         >
           <VStack gap={4} py={6}>
+            {/* Navigation links temporarily disabled
             {Links.map((link) => {
               const isActive = pathname === link.href
               return (
@@ -249,9 +241,8 @@ export function PageNavbar() {
                   {link.name}
                 </Link>
               )
-            })}
-            <ColorModeButton />
-            {user ? (
+            })} */}
+            {user && (
               <>
                 {isAdmin && (
                   <NextLink href="/admin" passHref>
@@ -271,19 +262,6 @@ export function PageNavbar() {
                 <NextLink href="/app" passHref>
                   <Button size="sm" variant="ghost" className="w-full">
                     Dashboard
-                  </Button>
-                </NextLink>
-              </>
-            ) : (
-              <>
-                <NextLink href="/login" passHref>
-                  <Button size="sm" variant="ghost" className="w-full">
-                    Sign In
-                  </Button>
-                </NextLink>
-                <NextLink href="/registration" passHref>
-                  <Button size="sm" colorScheme="blue" className="w-full">
-                    Sign Up
                   </Button>
                 </NextLink>
               </>

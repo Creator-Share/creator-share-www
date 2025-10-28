@@ -1,21 +1,38 @@
 import React, { useState } from "react"
-import { Button, Input, Textarea } from "@chakra-ui/react"
+import { Button, Input, Textarea, createListCollection } from "@chakra-ui/react"
 import { Activity } from "@/types/admin.types"
 import {
   FileUploadRoot,
   FileUploadTrigger,
   FileUploadList,
 } from "@/components/ui/file-upload"
+import {
+  SelectRoot,
+  SelectTrigger,
+  SelectValueText,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select"
 import { HiUpload } from "react-icons/hi"
+
+const activityTypeCollection = createListCollection({
+  items: [
+    { value: "INFO", label: "INFO" },
+    { value: "UPDATE", label: "UPDATE" },
+    { value: "SUBSCRIPTION", label: "SUBSCRIPTION" },
+  ],
+})
 
 interface CreateModalProps {
   open: boolean
   onClose: () => void
   title: string
   description: string
+  activityType: string
   beneficiaryId: string
   onTitleChange: (v: string) => void
   onDescriptionChange: (v: string) => void
+  onActivityTypeChange: (v: string) => void
   onCreate: (formData: FormData) => void
   creating: boolean
   error: string | null
@@ -26,9 +43,11 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   onClose,
   title,
   description,
+  activityType,
   beneficiaryId,
   onTitleChange,
   onDescriptionChange,
+  onActivityTypeChange,
   onCreate,
   creating,
   error,
@@ -40,6 +59,8 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
     const formData = new FormData()
     formData.append("title", title)
     formData.append("description", description)
+    formData.append("activity_type", activityType)
+    formData.append("activity_source", "admin") // Admin manually creates activity
     formData.append("beneficiary_id", beneficiaryId)
     imageFiles.forEach((file) => formData.append("images", file))
     videoFiles.forEach((file) => formData.append("videos", file))
@@ -76,6 +97,24 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         >
           Create Activity
         </div>
+        <SelectRoot
+          collection={activityTypeCollection}
+          className="border border-stone-600"
+          style={{ marginBottom: 12 }}
+          value={[activityType]}
+          onValueChange={(details) => onActivityTypeChange(details.value[0])}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValueText placeholder="Select Activity Type" />
+          </SelectTrigger>
+          <SelectContent>
+            {activityTypeCollection.items.map((option) => (
+              <SelectItem key={option.value} item={option}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </SelectRoot>
         <Input
           placeholder="Title"
           value={title}

@@ -1,40 +1,51 @@
 "use client"
-
 import React, { useEffect, useState } from "react"
 import { Beneficiaries } from "@/types/admin.types"
-import { Box, Text } from "@chakra-ui/react"
+import { Box } from "@chakra-ui/react"
 import ChakraSelect from "./components/SelectBeneficiary"
 import ActivitiesTable from "./components/ActivitiesTable"
-import GoBackButton from "@/components/ui/goBack"
+import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 
 const ActivitiesAdminPage: React.FC = () => {
-  const [children, setChildren] = useState<Beneficiaries[]>([])
-  const [selectedChild, setSelectedChild] = useState<string[]>([])
+  const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([])
+  const [selectedBeneficiary, setSelectedBeneficiary] = useState<string[]>([])
+  
   useEffect(() => {
-    const fetchChildren = async () => {
-      const res = await fetch("/api/admin/beneficiaries/retrieve")
-      const data = await res.json()
-      setChildren(data.children || [])
+    const fetchBeneficiaries = async () => {
+      try {
+        const res = await fetch("/api/admin/beneficiaries/retrieve?beneficiary_type=CHILD")
+        const data = await res.json()
+        setBeneficiaries(data.beneficiaries || [])
+      } catch (error) {
+        console.error("Failed to fetch beneficiaries:", error)
+        setBeneficiaries([])
+      }
     }
-    fetchChildren()
+    fetchBeneficiaries()
   }, [])
 
   return (
-    <Box className="container mx-auto h-[calc(100vh-200px)] mt-12">
-      <GoBackButton />
-      <Text className="text-3xl font-semibold leading-9 mb-6">Activities</Text>
+    <AdminPageLayout
+      title="Activities"
+      description="Manage activities for beneficiaries"
+      breadcrumb={[{ label: "Activities" }]}
+      searchPlaceholder="Search activities..."
+      searchValue=""
+      onSearchChange={() => {}}
+      showResults={true}
+    >
       <Box className="mb-6">
         <ChakraSelect
-          childrenList={children}
-          selectedChild={selectedChild}
-          setSelectedChild={setSelectedChild}
+          childrenList={beneficiaries}
+          selectedChild={selectedBeneficiary}
+          setSelectedChild={setSelectedBeneficiary}
         />
       </Box>
       <ActivitiesTable
         beneficiaryType="CHILD"
-        beneficiaryId={selectedChild[0] || ""}
+        beneficiaryId={selectedBeneficiary[0] || ""}
       />
-    </Box>
+    </AdminPageLayout>
   )
 }
 

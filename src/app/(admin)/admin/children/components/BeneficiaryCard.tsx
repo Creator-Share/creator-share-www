@@ -25,25 +25,56 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 }) => {
   const publicHardcoded = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
   const goal = Number(
-    publicHardcoded !== null ? publicHardcoded : beneficiary.budget_goal || 0,
+    publicHardcoded !== null ? publicHardcoded : beneficiary.budget_goal || 0
   )
   const raised = Number(beneficiary.budget_raised || 0)
   const progress =
     goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0
 
-  return (
-    <Box className="border rounded-xl p-4 bg-white space-y-3 relative">
-      {/* Individual checkbox positioned in top-right corner */}
-      {beneficiary.id && (
-        <Box className="absolute top-1 right-1 z-10">
-          <Checkbox
-            checked={isSelected}
-            onCheckedChange={(checked) => onSelect(beneficiary.id!, !!checked)}
-            className="h-5 w-5 border-2 bg-white/80 backdrop-blur-sm rounded"
-          />
-        </Box>
-      )}
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case "New":
+        return "blue"
+      case "Partially Funded":
+        return "orange"
+      case "Budget Fulfilled":
+        return "green"
+      case "Draft":
+        return "purple"
+      case "Archived":
+        return "red"
+      default:
+        return "gray"
+    }
+  }
 
+  const [isHovered, setIsHovered] = React.useState(false)
+
+  const handleCardClick = () => {
+    if (beneficiary.id) {
+      onSelect(beneficiary.id, !isSelected)
+    }
+  }
+
+  const getBackgroundColor = () => {
+    if (isSelected) return "#F0F7FF"
+    if (isHovered) return "#f9fafb"
+    return "white"
+  }
+
+  return (
+    <Box
+      className="rounded-xl relative transition-all duration-200 flex flex-col cursor-pointer"
+      style={{
+        border: isSelected ? "2px solid #2B7FF9" : "2px solid #e5e7eb",
+        padding: "16px",
+        backgroundColor: getBackgroundColor(),
+        height: "100%",
+      }}
+      onClick={handleCardClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <Box className="flex items-start gap-4">
         <Box className="relative w-[80px] h-[80px]">
           {!beneficiary.id ? (
@@ -74,18 +105,47 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
               @{beneficiary.username}
             </Text>
           </Box>
-          <Badge colorPalette="blue">{beneficiary.status}</Badge>
+          <Box className="flex flex-col items-end gap-2">
+            {/* Checkbox positioned at far right above status */}
+            {beneficiary.id && (
+              <Box onClick={(e) => e.stopPropagation()}>
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={(checked) =>
+                    onSelect(beneficiary.id!, !!checked)
+                  }
+                  colorPalette="blue"
+                  css={{
+                    "& [data-part='control']": {
+                      width: "20px",
+                      height: "20px",
+                      borderWidth: "2px",
+                      borderColor: isSelected ? "#2B7FF9" : "#d1d5db",
+                      backgroundColor: isSelected ? "#2B7FF9" : "white",
+                      _checked: {
+                        backgroundColor: "#2B7FF9",
+                        borderColor: "#2B7FF9",
+                      },
+                    },
+                  }}
+                />
+              </Box>
+            )}
+            <Badge colorPalette={getStatusBadgeColor(beneficiary.status)}>
+              {beneficiary.status}
+            </Badge>
+          </Box>
         </Box>
       </Box>
 
-      <Box className="text-sm text-gray-600">
+      <Box className="text-sm text-gray-600 mt-3">
         <Text>
           {beneficiary.country}
           {beneficiary.location_str ? ` • ${beneficiary.location_str}` : ""}
         </Text>
       </Box>
 
-      <Box className="space-y-1">
+      <Box className="space-y-1 mt-3">
         <Box className="flex justify-between text-sm">
           <Text>Raised</Text>
           <Text>
@@ -100,11 +160,17 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         </Progress.Root>
       </Box>
 
-      {/* Edit button */}
-      <Box className="pt-1">
+      {/* Spacer to push button to bottom */}
+      <Box className="flex-grow" />
+
+      {/* Edit button - always at bottom */}
+      <Box className="mt-3">
         <Button
           className="w-full bg-[#1C3C8C] text-white"
-          onClick={() => onEdit(beneficiary)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit(beneficiary)
+          }}
         >
           Edit
         </Button>

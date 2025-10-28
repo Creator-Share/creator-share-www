@@ -6,6 +6,7 @@ export interface FiltersProps {
     gender: string
     ageRange: [number, number]
     status: string[]
+    search?: string
   }) => void
   beneficiaryType?: "CHILD" | "ANIMAL"
 }
@@ -53,4 +54,4 @@ export interface SponsorshipDetailsProps {
   hideAmount?: boolean
 }
 
-// SponsorDialogProps removed; SponsorDialog replaced by BeneficiaryActivityModal
+// SponsorDialogProps removed; SponsorDialog replaced by BeneficiaryModal

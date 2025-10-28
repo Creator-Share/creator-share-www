@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server"
 
+// Check if PayPal is enabled by checking if client ID is configured
+const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+
 interface PayPalError {
   message?: string
   error?: {
@@ -171,26 +174,36 @@ async function capturePayPalOrder(orderID: string, accessToken: string) {
 }
 
 export async function POST(request: Request) {
+  if (!isPayPalEnabled) {
+    return NextResponse.json(
+      { error: 'PayPal integration is not enabled' },
+      { status: 501 }
+    )
+  }
+
   try {
     const body = await request.json()
+    console.log('PayPal API Request Body:', body)
+    
     const {
       beneficiaryId,
       beneficiaryName,
       amount,
-      // paymentType,
-      // location,
-      // userId,
       orderID,
       plan_id,
       subscriber_email,
       subscriber_name,
     } = body
 
+    console.log('Getting PayPal access token...')
     const accessToken = await getPayPalAccessToken()
+    console.log('PayPal access token obtained successfully')
 
     // If creating a subscription
     if (plan_id) {
       try {
+        console.log('Creating PayPal subscription with plan_id:', plan_id)
+        
         // Build subscriber object per PayPal docs
         type PayPalSubscriber = {
           email_address?: string
@@ -209,6 +222,26 @@ export async function POST(request: Request) {
           }
         }
 
+        const subscriptionPayload = {
+          plan_id,
+          custom_id: beneficiaryId || undefined,
+          subscriber,
+          application_context: {
+            brand_name: "Creator Share",
+            locale: "en-US",
+            shipping_preference: "NO_SHIPPING",
+            user_action: "SUBSCRIBE_NOW",
+            payment_method: {
+              payer_selected: "PAYPAL",
+              payee_preferred: "IMMEDIATE_PAYMENT_REQUIRED",
+            },
+            return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?sponsorship_id=${beneficiaryId}`,
+            cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed`,
+          },
+        }
+
+        console.log('PayPal subscription payload:', JSON.stringify(subscriptionPayload, null, 2))
+
         const response = await fetch(
           `${PAYPAL_API_URL}/v1/billing/subscriptions`,
           {
@@ -217,45 +250,34 @@ export async function POST(request: Request) {
               Authorization: `Bearer ${accessToken}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              plan_id,
-              custom_id: beneficiaryId || undefined,
-              subscriber,
-              application_context: {
-                brand_name: "Creator Share",
-                locale: "en-US",
-                shipping_preference: "NO_SHIPPING",
-                user_action: "SUBSCRIBE_NOW",
-                payment_method: {
-                  payer_selected: "PAYPAL",
-                  payee_preferred: "IMMEDIATE_PAYMENT_REQUIRED",
-                },
-                return_url:
-                  process.env.NEXT_PUBLIC_BASE_URL + "/payments/success",
-                cancel_url:
-                  process.env.NEXT_PUBLIC_BASE_URL + "/payments/failed",
-              },
-            }),
+            body: JSON.stringify(subscriptionPayload),
           },
         )
 
         const data = await response.json()
+        console.log('PayPal API Response Status:', response.status)
+        console.log('PayPal API Response Data:', JSON.stringify(data, null, 2))
 
         if (!response.ok) {
           console.error("PayPal subscription creation error:", data)
-          return NextResponse.json({ error: data }, { status: 400 })
+          return NextResponse.json({ 
+            error: data,
+            message: `PayPal API Error: ${data.message || 'Unknown error'}`,
+            details: data.details || null
+          }, { status: 400 })
         }
 
+        console.log('PayPal subscription created successfully')
         return NextResponse.json({ subscription: data })
-      } catch (error) {
-        console.error("Error creating PayPal subscription:", error)
-        return NextResponse.json(
-          { error: error instanceof Error ? error.message : "Unknown error" },
-          { status: 500 },
-        )
+      } catch (subscriptionError) {
+        console.error('Error creating PayPal subscription:', subscriptionError)
+        return NextResponse.json({ 
+          error: subscriptionError instanceof Error ? subscriptionError.message : 'Subscription creation failed',
+          details: subscriptionError
+        }, { status: 500 })
       }
     }
-
+    
     // If orderID is present, this is a capture request
     if (orderID) {
       try {
@@ -351,13 +373,19 @@ export async function POST(request: Request) {
       status: orderData.status,
     })
   } catch (error: unknown) {
-    console.error("Payment processing error:", error)
-    const errorMessage =
-      error instanceof Error ? error.message : "Internal server error"
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+    console.error('PayPal API Error:', error)
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Internal server error' 
+    }, { status: 500 })
   }
 }
 
 export async function GET() {
+  if (!isPayPalEnabled) {
+    return NextResponse.json(
+      { error: 'PayPal integration is not enabled' },
+      { status: 501 }
+    )
+  }
   return NextResponse.json({ message: "PayPal API endpoint" }, { status: 200 })
 }

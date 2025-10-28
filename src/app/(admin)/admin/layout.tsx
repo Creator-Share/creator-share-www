@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/utils/supabase/server"
-import { RoleAssignment } from "@/types"
+import {  RoleAssignmentResponse } from "@/types"
 
 export default async function AdminLayout({
   children,
@@ -16,16 +16,18 @@ export default async function AdminLayout({
     redirect("/login")
   }
 
-  const { data: roleData } = (await supabase
+  const { data: roleData } = await supabase
     .from("role_assignments")
     .select("roles:roles!role_assignments_role_id_fkey(name)")
-    .eq("user_id", user.id)) as unknown as { data: RoleAssignment[] }
+    .eq("user_id", user.id)
 
-  if (
-    !roleData ||
-    roleData.length === 0 ||
-    roleData[0]?.roles?.name !== "SUPER_ADMIN"
-  ) {
+  // Check if user has SUPER_ADMIN role among any of their assigned roles
+  const typedRoleData = (roleData as unknown) as RoleAssignmentResponse
+  const hasSuperAdminRole = typedRoleData?.some((assignment) => 
+    assignment.roles.name === "SUPER_ADMIN"
+  )
+
+  if (!roleData || !hasSuperAdminRole) {
     redirect("/not-found")
   }
 

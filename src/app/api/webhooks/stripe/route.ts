@@ -6,6 +6,7 @@ import {
   sendSponsorshipConfirmationEmail,
   sendPaymentFailedEmail,
 } from "@/utils/email"
+import { notifySponsorshipReceived } from "@/services/telegram"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY! as string)
 
@@ -159,7 +160,7 @@ export async function POST(req: Request) {
             payment_intent: session.payment_intent
               ? session.payment_intent.toString()
               : null,
-            sponsorship_id: session.subscription as string,
+            stripe_subscription_id: session.subscription as string,
             current_period_start: new Date(),
             current_period_end: new Date(
               Date.now() +
@@ -218,7 +219,7 @@ export async function POST(req: Request) {
                 payment_intent: session.payment_intent
                   ? session.payment_intent.toString()
                   : null,
-                sponsorship_id: session.subscription as string,
+                stripe_subscription_id: session.subscription as string,
                 current_period_start: new Date(),
                 current_period_end: new Date(
                   Date.now() +
@@ -456,7 +457,7 @@ export async function POST(req: Request) {
           const { error: subscriptionError } = await supabase
             .from("subscriptions")
             .insert({
-              sponsorship_id: session.subscription as string,
+              stripe_subscription_id: session.subscription as string,
               user_id: userId,
               beneficiary_id: beneficiaryId,
               status: "complete",
@@ -513,6 +514,23 @@ export async function POST(req: Request) {
           } catch (emailError) {
             console.error("Error in email sending process:", emailError)
           }
+        }
+
+        // Send Telegram notification for sponsorship
+        try {
+          await notifySponsorshipReceived({
+            sponsorName: session.customer_details?.name || customerEmail?.split('@')[0] || "Anonymous Sponsor",
+            sponsorEmail: customerEmail || "No email provided",
+            amount: amount,
+            beneficiaryId: beneficiaryId,
+            beneficiaryName: beneficiaryData.name,
+            paymentMethod: "Stripe",
+            paymentReference: session.id,
+            interval: interval,
+          });
+        } catch (telegramError) {
+          console.error('Telegram sponsorship notification failed:', telegramError);
+          // Don't fail the webhook if Telegram notification fails
         }
 
         return NextResponse.json(
@@ -598,7 +616,7 @@ export async function POST(req: Request) {
               card_number: last4,
               card_type: cardType,
               payment_intent: paymentIntent,
-              sponsorship_id: subscription.id,
+              stripe_subscription_id: subscription.id,
               current_period_start: new Date(
                 subscription.current_period_start * 1000,
               ),
@@ -652,7 +670,7 @@ export async function POST(req: Request) {
           const { error: subscriptionError } = await supabase
             .from("subscriptions")
             .insert({
-              sponsorship_id: subscription.id,
+              stripe_subscription_id: subscription.id,
               user_id: subscription.metadata?.userId,
               beneficiary_id: subscription.metadata?.beneficiaryId,
               status:
@@ -718,7 +736,7 @@ export async function POST(req: Request) {
         const { error: updateError } = await supabase
           .from("subscriptions")
           .update({ status: "incomplete" })
-          .eq("sponsorship_id", subscriptionId)
+          .eq("stripe_subscription_id", subscriptionId)
 
         if (updateError) {
           console.error("Error updating subscription status:", updateError)
@@ -727,7 +745,7 @@ export async function POST(req: Request) {
         const { data: subscriptionData } = await supabase
           .from("subscriptions")
           .select(`beneficiary_id`)
-          .eq("sponsorship_id", subscriptionId)
+          .eq("stripe_subscription_id", subscriptionId)
           .single()
 
         let beneficiaryName = "your sponsored beneficiary"
@@ -793,7 +811,7 @@ export async function POST(req: Request) {
               subscription.current_period_end * 1000,
             ),
           })
-          .eq("sponsorship_id", subscription.id)
+          .eq("stripe_subscription_id", subscription.id)
 
         if (updateError) {
           console.error("Error updating subscription:", updateError)
@@ -843,7 +861,7 @@ export async function POST(req: Request) {
             status: "cancelled",
             canceled_at: new Date(),
           })
-          .eq("sponsorship_id", subscription.id)
+          .eq("stripe_subscription_id", subscription.id)
 
         if (updateError) {
           console.error("Error cancelling subscription:", updateError)
@@ -870,7 +888,7 @@ export async function POST(req: Request) {
           await supabase
             .from("subscriptions")
             .update({ status: "complete" })
-            .eq("sponsorship_id", subscriptionId)
+            .eq("stripe_subscription_id", subscriptionId)
         }
 
         return NextResponse.json(

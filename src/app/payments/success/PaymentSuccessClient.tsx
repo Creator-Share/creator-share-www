@@ -3,6 +3,9 @@ import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { FaPaypal, FaStripe } from "react-icons/fa"
 
+// Check if PayPal is enabled
+const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+
 type StripeSessionDetails = {
   id: string
   amount_total?: number | null
@@ -32,6 +35,17 @@ type PayPalDetails = {
   update_time?: string
   custom_id?: string
   beneficiary_name?: string
+  subscription?: {
+    beneficiaries?: {
+      name?: string
+      location_str?: string
+    }
+  }
+  paypal_order?: {
+    payer?: {
+      email_address?: string
+    }
+  }
   [key: string]: unknown
 }
 
@@ -61,9 +75,25 @@ export default function PaymentSuccessClient() {
 
   useEffect(() => {
     const sessionId = searchParams.get("session_id")
-    const paypalSubscriptionId = searchParams.get("sponsorship_id")
-    const paypalToken =
-      searchParams.get("token") || searchParams.get("ba_token")
+    const paypalSubscriptionId = isPayPalEnabled
+      ? searchParams.get("subscription_id")
+      : null // Use subscription_id, not sponsorship_id
+    const paypalToken = isPayPalEnabled
+      ? searchParams.get("token") || searchParams.get("ba_token")
+      : null
+
+    // Function to clear reservation after successful payment
+    const clearReservation = async (beneficiaryId: string) => {
+      try {
+        await fetch("/api/sponsorships/reservations", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ beneficiaryId }),
+        })
+      } catch (error) {
+        console.error("Failed to clear reservation after payment:", error)
+      }
+    }
 
     if (sessionId) {
       fetch(`/api/stripe/success?session_id=${sessionId}`)
@@ -76,6 +106,10 @@ export default function PaymentSuccessClient() {
             message: "Your Stripe payment was successful!",
             details: data,
           })
+          // Clear reservation after successful payment
+          if (data.metadata?.beneficiaryId) {
+            await clearReservation(data.metadata.beneficiaryId)
+          }
         })
         .catch(() => {
           setStatus({
@@ -86,7 +120,9 @@ export default function PaymentSuccessClient() {
         })
     } else if (paypalSubscriptionId || paypalToken) {
       fetch(
-        `/api/paypal/verify?sponsorship_id=${paypalSubscriptionId || ""}&token=${paypalToken || ""}`,
+        `/api/paypal/verify?sponsorship_id=${
+          paypalSubscriptionId || ""
+        }&token=${paypalToken || ""}`
       )
         .then(async (res) => {
           if (!res.ok) throw new Error("Invalid PayPal session")
@@ -97,26 +133,30 @@ export default function PaymentSuccessClient() {
             message: "Your PayPal payment was successful!",
             details: data,
           })
+          // Clear reservation after successful payment
+          if (data.beneficiaryId) {
+            await clearReservation(data.beneficiaryId)
+          }
         })
         .catch(() => {
           setStatus({
             provider: "paypal",
             status: "error",
-            message: "Invalid session ID for PayPal payment.",
+            message: "Invalid PayPal session.",
           })
         })
     } else {
       setStatus({
         provider: "unknown",
         status: "error",
-        message: "Invalid session ID",
+        message: "No valid payment session found.",
       })
     }
   }, [searchParams])
 
   // UI helpers
   const getLogo = () => {
-    if (status?.provider === "paypal")
+    if (isPayPalEnabled && status?.provider === "paypal")
       return (
         <span
           style={{
@@ -155,11 +195,14 @@ export default function PaymentSuccessClient() {
 
   const getChildName = () => {
     if (
+      isPayPalEnabled &&
       status?.provider === "paypal" &&
       status.details &&
-      "beneficiary_name" in status.details
+      status.details.subscription &&
+      status.details.subscription.beneficiaries &&
+      status.details.subscription.beneficiaries.name
     ) {
-      return status.details.beneficiary_name || "—"
+      return status.details.subscription.beneficiaries.name
     }
     // For Stripe, you may have to get from metadata or elsewhere
     if (
@@ -175,6 +218,16 @@ export default function PaymentSuccessClient() {
 
   const getLocation = () => {
     if (
+      isPayPalEnabled &&
+      status?.provider === "paypal" &&
+      status.details &&
+      status.details.subscription &&
+      status.details.subscription.beneficiaries &&
+      status.details.subscription.beneficiaries.location_str
+    ) {
+      return status.details.subscription.beneficiaries.location_str
+    }
+    if (
       status?.provider === "stripe" &&
       status.details &&
       status.details.metadata &&
@@ -182,18 +235,19 @@ export default function PaymentSuccessClient() {
     ) {
       return String(status.details.metadata.childLocation)
     }
-    // For PayPal, location is not available in the response, so use placeholder
     return "—"
   }
 
   const getEmail = () => {
     if (
+      isPayPalEnabled &&
       status?.provider === "paypal" &&
       status.details &&
-      status.details.subscriber &&
-      status.details.subscriber.email_address
+      status.details.paypal_order &&
+      status.details.paypal_order.payer &&
+      status.details.paypal_order.payer.email_address
     ) {
-      return status.details.subscriber.email_address
+      return status.details.paypal_order.payer.email_address
     }
     if (
       status?.provider === "stripe" &&

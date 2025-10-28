@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/authStore"
 import { useState, useEffect } from "react"
 import { loginForm } from "@/types"
-import ToS from "@/components/ui/ToS"
+import AuthMessage from "@/components/ui/AuthMessage"
 import { toaster } from "@/components/ui/toaster"
 
 const Login = () => {
@@ -79,7 +79,10 @@ const Login = () => {
   }
 
   return (
-    <Box className="flex flex-col items-center justify-center min-h-screen p-4">
+    <Box className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-4">
+      <Box mb="6" className="max-w-md">
+        <AuthMessage />
+      </Box>
       <form
         onSubmit={handleSubmit(onSubmit)}
         className="w-full max-w-md p-6 md:border bg-[#FFFFFF] md:rounded-xl md:shadow-sm md:px-8 md:py-12"
@@ -181,9 +184,6 @@ const Login = () => {
           </Box>
         </Stack>
       </form>
-      <Box mt="6" className="max-w-md">
-        <ToS />
-      </Box>
     </Box>
   )
 }

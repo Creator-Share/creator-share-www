@@ -19,6 +19,7 @@ export interface Beneficiaries {
   name: string
   username: string
   gender: Gender
+  age?: number
   birth_date: string
   biography: string
   budget_goal: number
@@ -63,9 +64,19 @@ export interface Activity {
   description: string
   created_at: string
   beneficiary_id: string
+  user_id: string | null
   title: string
   images_url?: string[]
   videos_url?: string[]
+  activity_type: "INFO" | "UPDATE" | "SUBSCRIPTION"
+  created_by: string
+  metadata?: {
+    media?: {
+      images?: string[]
+      videos?: string[]
+    }
+  }
+  activity_source: "admin" | "sponsorship" | "system"
 }
 
 //Auth types
@@ -75,11 +86,21 @@ export interface loginForm {
   password: string
 }
 
+export interface Role {
+  name: string
+}
+
 export interface RoleAssignment {
+  roles: Role
+}
+
+export interface SingleRoleData {
   roles: {
     name: string
-  }
+  }[]
 }
+
+export type RoleAssignmentResponse = RoleAssignment[]
 
 export interface AuthState {
   user: User | null
@@ -100,3 +121,6 @@ export interface FilterState {
   resetToDefaults: () => void
   isDirty: () => boolean
 }
+
+// Export Telegram types
+export * from './telegram.types'
