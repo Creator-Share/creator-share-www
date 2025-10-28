@@ -1,34 +1,30 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { Beneficiaries, BeneficiaryType, Status } from "@/types/admin.types"
+import { Beneficiaries } from "@/types/admin.types"
 import { notifyChildCreated } from "@/services/telegram"
 import { calculateAge } from "@/utils/ageCalculator"
 
 export async function POST(req: Request) {
   const supabase = await createClient()
   try {
-    // Handle FormData instead of JSON
-    const formData = await req.formData()
-    
-    // Handle location_geo as JSON string
-    const locationGeo = formData.get('location_geo') as string
-    const parsedLocationGeo = locationGeo ? JSON.parse(locationGeo) : null
+    // Parse JSON request body
+    const body = await req.json()
 
     const data: Partial<Beneficiaries> = {
-      name: formData.get('name') as string,
-      username: formData.get('username') as string,
-      gender: formData.get('gender') as 'Boy' | 'Girl',
-      birth_date: formData.get('birth_date') as string,
-      biography: formData.get('biography') as string,
-      introduction: formData.get('introduction') as string,
-      budget_goal: formData.get('budget_goal') ? parseInt(formData.get('budget_goal') as string) : 0,
-      budget_raised: formData.get('budget_raised') ? parseInt(formData.get('budget_raised') as string) : 0,
-      status: formData.get('status') as Status,
-      country: formData.get('country') as string,
-      location_str: formData.get('location_str') as string,
-      location_geo: parsedLocationGeo, // Use parsed JSON
-      video_url: formData.get('video_url') as string,
-      beneficiary_type: formData.get('beneficiary_type') as BeneficiaryType,
+      name: body.name,
+      username: body.username,
+      gender: body.gender,
+      birth_date: body.birth_date,
+      biography: body.biography,
+      introduction: body.introduction,
+      budget_goal: body.budget_goal || 0,
+      budget_raised: body.budget_raised || 0,
+      status: body.status,
+      country: body.country,
+      location_str: body.location_str,
+      location_geo: body.location_geo,
+      video_url: body.video_url,
+      beneficiary_type: body.beneficiary_type,
     }
 
     const insertData = { ...data, status: "New" }
@@ -66,9 +62,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // TODO: Handle file uploads (images and videos) here
-    // For now, just return the created beneficiary
-    return NextResponse.json({ beneficiary: inserted }, { status: 201 })
+    // File uploads are handled separately via /api/admin/beneficiaries/media/upload
+    return NextResponse.json({ beneficiaryId: inserted.id, beneficiary: inserted }, { status: 201 })
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error"
     return NextResponse.json({ error: errorMessage }, { status: 500 })
