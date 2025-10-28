@@ -15,10 +15,9 @@ create index if not exists idx_bres_beneficiary_id on public.beneficiary_reserva
 create index if not exists idx_bres_expires_at on public.beneficiary_reservations(expires_at);
 create index if not exists idx_bres_token on public.beneficiary_reservations(reservation_token);
 
--- Ensure only one active reservation per beneficiary at a time
+-- Ensure only one reservation per beneficiary at a time
 create unique index if not exists uniq_active_reservation_per_beneficiary
-on public.beneficiary_reservations(beneficiary_id)
-where expires_at > now();
+on public.beneficiary_reservations(beneficiary_id);
 
 -- Row Level Security (optional basic policy to allow API service role to manage rows)
 alter table public.beneficiary_reservations enable row level security;

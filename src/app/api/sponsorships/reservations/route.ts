@@ -36,9 +36,6 @@ async function cleanupExpiredReservations(supabase: SupabaseClient) {
 export async function POST(req: Request) {
   const supabase = await createClient()
   
-  // Clean up expired reservations first
-  await cleanupExpiredReservations(supabase)
-  
   const body = await req.json().catch(() => ({}))
   const { beneficiaryId }: { beneficiaryId?: string } = body
   if (!beneficiaryId) {
@@ -53,19 +50,30 @@ export async function POST(req: Request) {
   const ip = hdrs.get("x-forwarded-for") || hdrs.get("x-real-ip") || ""
   const ua = hdrs.get("user-agent") || ""
 
-  // Try insert reservation with upsert-like behavior: if unique violation, report reserved
-  const { error } = await supabase.from("beneficiary_reservations").insert({
-    beneficiary_id: beneficiaryId,
-    reservation_token: token,
-    user_id: user?.id || null, // Include user ID if authenticated
-    expires_at: new Date(Date.now() + RES_MINUTES * 60 * 1000).toISOString(),
-    created_ip: ip,
-    user_agent: ua,
-  })
+  // First, delete any expired reservation for this specific beneficiary
+  await supabase
+    .from("beneficiary_reservations")
+    .delete()
+    .eq("beneficiary_id", beneficiaryId)
+    .lt("expires_at", new Date().toISOString())
+
+  // Upsert the reservation - will insert new or update existing
+  const { error } = await supabase
+    .from("beneficiary_reservations")
+    .upsert({
+      beneficiary_id: beneficiaryId,
+      reservation_token: token,
+      user_id: user?.id || null,
+      expires_at: new Date(Date.now() + RES_MINUTES * 60 * 1000).toISOString(),
+      created_ip: ip,
+      user_agent: ua,
+    }, {
+      onConflict: "beneficiary_id",
+    })
 
   if (error) {
-    // Unique constraint means someone else holds it
-    return NextResponse.json({ error: "Already reserved" }, { status: 409 })
+    console.error("Failed to create/update reservation:", error)
+    return NextResponse.json({ error: "Failed to create reservation" }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true, expiresInMinutes: RES_MINUTES })

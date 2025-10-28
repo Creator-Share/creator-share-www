@@ -203,6 +203,24 @@ creator-share-www/
 └── public/                   # Static assets
 ```
 
+## Database Schema Management
+
+We use custom scripts to manage database schema synchronization between local migrations and the remote Supabase database. These scripts bypass known issues with the Supabase CLI.
+
+For detailed instructions, see [scripts/db/README.md](./scripts/db/README.md).
+
+**Quick start:**
+```bash
+# Set environment variables
+export SUPABASE_DB_PASSWORD='your-password'
+export SUPABASE_DB_HOST='db.yourproject.supabase.co'
+
+# Run the sync workflow
+./scripts/db/full_sync.sh
+```
+
+See [docs/branches.md](./docs/branches.md) for detailed branching and deployment information.
+
 ## 🛠️ Development
 
 ### Available Scripts
