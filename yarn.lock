@@ -6058,15 +6058,15 @@ supabase-cli@^0.0.21:
     pg "^8.7.3"
     postgres-migrations "^5.3.0"
 
-supabase@^2.45.5:
-  version "2.45.5"
-  resolved "https://registry.npmjs.org/supabase/-/supabase-2.45.5.tgz"
-  integrity sha512-/toOX6bHYx2TUNA5AtlzrKKfvctbLQ8R6QqvUCAT20KtZOkR14HpBYav3TNDaU5owPeB58cT5Uftvxw36Tb95A==
+supabase@^2.51.0:
+  version "2.51.0"
+  resolved "https://registry.yarnpkg.com/supabase/-/supabase-2.51.0.tgz#8856f2c050aa0e07f4fa8b7505deb678295fff1d"
+  integrity sha512-/veWvAlztU+T+l012O1R3g6poEhP/nqAGbdU5ws0nICTD8cY9bMgn68YJFVDKcQJVhO7NCJ1LbX/IgyYKNNvBw==
   dependencies:
     bin-links "^5.0.0"
     https-proxy-agent "^7.0.2"
     node-fetch "^3.3.2"
-    tar "7.4.4"
+    tar "7.5.1"
 
 supports-color@^7.1.0:
   version "7.2.0"
@@ -6113,10 +6113,10 @@ tailwindcss@^3.4.1:
     resolve "^1.22.8"
     sucrase "^3.35.0"
 
-tar@7.4.4:
-  version "7.4.4"
-  resolved "https://registry.npmjs.org/tar/-/tar-7.4.4.tgz"
-  integrity sha512-O1z7ajPkjTgEgmTGz0v9X4eqeEXTDREPTO77pVC1Nbs86feBU1Zhdg+edzavPmYW1olxkwsqA2v4uOw6E8LeDg==
+tar@7.5.1:
+  version "7.5.1"
+  resolved "https://registry.yarnpkg.com/tar/-/tar-7.5.1.tgz#750a8bd63b7c44c1848e7bf982260a083cf747c9"
+  integrity sha512-nlGpxf+hv0v7GkWBK2V9spgactGOp0qvfWRxUMjqHyzrt3SgwE48DIv/FhqPHJYLHpgW1opq3nERbz5Anq7n1g==
   dependencies:
     "@isaacs/fs-minipass" "^4.0.0"
     chownr "^3.0.0"

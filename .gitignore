@@ -38,6 +38,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.env.db
 
 # vercel
 .vercel
@@ -45,3 +46,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Database schema comparison files (temporary)
+scripts/db/remote_schema.sql
+scripts/db/local_schema.sql
+scripts/db/diff.sql
+scripts/db/custom_types.sql
+scripts/db/push_preview.sql

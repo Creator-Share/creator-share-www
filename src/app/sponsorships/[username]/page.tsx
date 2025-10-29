@@ -1,64 +1,17 @@
 "use client"
 import React, { useEffect, useState } from "react"
-import { fetchActivitiesByBeneficiaryId } from "@/actions"
-import Link from "next/link"
-import {
-  Box,
-  Button,
-  Flex,
-  Heading,
-  Image,
-  Text,
-  VStack,
-  Spinner,
-} from "@chakra-ui/react"
+import { Box, Spinner, Flex, Text, Button } from "@chakra-ui/react"
 import { useParams } from "next/navigation"
-import SponsorshipDetails from "../components/SponsorshipDetails"
-import { Activity, Beneficiaries, BeneficiaryMedia } from "@/types"
+import { Beneficiaries } from "@/types"
 import BeneficiaryModal from "../components/SponsorshipModal"
-import BeneficiarySubscribeBox from "@/components/BeneficiarySubscribeBox"
-import { generatePublicUrl } from "@/utils/supabase/media"
-import { MediaRow } from "@/utils/supabase/media"
 
 export default function FullProfileDynamic() {
   const { username } = useParams()
   const [beneficiary, setBeneficiary] = useState<Beneficiaries | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [activityOpen, setActivityOpen] = useState(false)
-  const [images, setImages] = useState<BeneficiaryMedia[]>([])
   const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([])
   const [currentBeneficiaryIndex, setCurrentBeneficiaryIndex] = useState(0)
-  const [activities, setActivities] = useState<Activity[]>([])
-
-  const placeholderImage =
-    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
-
-  const fetchImages = async (beneficiaryId: string) => {
-    try {
-      const response = await fetch(
-        `/api/admin/beneficiaries/images/${beneficiaryId}`,
-      )
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
-      if (!Array.isArray(data)) {
-        console.error("Expected array of images but got:", data)
-        return
-      }
-      if (data.length > 0) {
-        setImages(
-          data.sort(
-            (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
-              a.order_index - b.order_index,
-          ),
-        )
-      }
-    } catch (error) {
-      console.error("Error fetching images:", error)
-    }
-  }
 
   useEffect(() => {
     async function fetchData() {
@@ -76,16 +29,12 @@ export default function FullProfileDynamic() {
         }
         setBeneficiary(child)
         if (child?.id) {
-          await fetchImages(child.id)
-
-          const activitiesData = await fetchActivitiesByBeneficiaryId(child.id)
-          setActivities(activitiesData)
           const res = await fetch("/api/beneficiaries/get")
           const data = await res.json()
           if (data.people) {
             setBeneficiaries(data.people)
             const index = data.people.findIndex(
-              (b: Beneficiaries) => b.username === username,
+              (b: Beneficiaries) => b.username === username
             )
             if (index !== -1) {
               setCurrentBeneficiaryIndex(index)
@@ -121,11 +70,12 @@ export default function FullProfileDynamic() {
     )
   }
 
+  // Just open the modal directly - the modal contains all the redesigned content
   return (
-    <Box minH="100vh" p={6}>
+    <Box minH="100vh" p={6} pt={12}>
       <Box maxW="6xl" mx="auto">
         {/* Navigation */}
-        <Flex justify="space-between" mb={4}>
+        <Flex justify="space-between" mb={8}>
           <Button
             onClick={() => {
               const newIndex = currentBeneficiaryIndex - 1

@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { Beneficiaries, BeneficiaryType, Status } from "@/types/admin.types"
+import { Beneficiaries } from "@/types/admin.types"
 import { notifyChildCreated } from "@/services/telegram"
 import { calculateAge } from "@/utils/ageCalculator"
 
 export async function POST(req: Request) {
   const supabase = await createClient()
   try {
-    // Handle FormData instead of JSON
-    const formData = await req.formData()
-    
-    // Handle location_geo as JSON string
-    const locationGeo = formData.get('location_geo') as string
-    const parsedLocationGeo = locationGeo ? JSON.parse(locationGeo) : null
+    // Parse JSON request body
+    const body = await req.json()
 
     const data: Partial<Beneficiaries> = {
       name: formData.get('name') as string,
