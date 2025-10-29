@@ -73,7 +73,7 @@ export async function POST(req: Request) {
 
       const respItem = {
         ...mediaRow,
-        public_url: getTransformedImageUrl('media', mediaRow.id, {
+        public_url: getTransformedImageUrl('media', `${beneficiaryId}/IMAGE/${mediaRow.id}.${extension}`, {
           width: 800,
           height: 800,
           quality: 90,

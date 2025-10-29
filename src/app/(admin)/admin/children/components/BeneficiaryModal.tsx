@@ -41,8 +41,7 @@ import { toaster } from "@/components/ui/toaster"
 import { dollarsToCents } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import {
-  uploadImagesForTransformation,
-  getTransformedImageUrl,
+  uploadImagesForTransformation
 } from "@/utils/supabase/imageTransform"
 
 type BeneficiaryModalMode = "create" | "edit"
@@ -309,9 +308,28 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           setProcessedImages(fileDetails.acceptedFiles)
           setUploadedImagePaths(optimizedPaths)
           
+          // Upload images immediately in edit mode
+          const formData = new FormData()
+          formData.append("beneficiaryId", selectedChild?.id || "")
+          fileDetails.acceptedFiles.forEach((f) => formData.append("images", f))
+
+          const response = await fetch(
+            "/api/admin/beneficiaries/images/create",
+            { method: "POST", body: formData }
+          )
+          if (!response.ok) throw new Error("Image upload failed")
+          
+          // Reset file states
+          setImageFiles([])
+          setProcessedImages([])
+          setUploadedImagePaths([])
+
+          // Refresh images list
+          await fetchImages()
+          
           toaster.create({
-            title: "Images Optimized",
-            description: `${fileDetails.acceptedFiles.length} images have been optimized and uploaded.`,
+            title: "Images Uploaded",
+            description: `${fileDetails.acceptedFiles.length} images have been uploaded successfully.`,
             type: "success",
             duration: 3000,
           })
@@ -425,58 +443,33 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       setIsSaving(true)
 
       if (isCreateMode && handleSubmit && setExternalFormData) {
-        // Create mode - optimize images before submission
-        if (imageFiles.length > 0) {
-          try {
-            setIsProcessingImages(true)
-            
-            // Upload and optimize images for create mode
-            const optimizedPaths = await uploadImagesForTransformation(
-              'media',
-              imageFiles,
-              'beneficiaries/temp'
-            )
-            
-            setProcessedImages(imageFiles)
-            setUploadedImagePaths(optimizedPaths)
-            
-            toaster.create({
-              title: "Images Optimized",
-              description: `${imageFiles.length} images have been optimized and are ready for upload.`,
-              type: "success",
-              duration: 3000,
-            })
-          } catch (error) {
-            console.error('Image optimization error:', error)
-            toaster.create({
-              title: "Optimization Error",
-              description: "Failed to optimize images. They will be uploaded as-is.",
-              type: "warning",
-              duration: 5000,
-            })
-          } finally {
-            setIsProcessingImages(false)
-          }
-        }
-
+        // Create beneficiary first
         if (publicHardcodedCents !== null) {
           const dollars = publicHardcodedCents / 100
           setExternalFormData({ ...(formData || {}), budget_goal: dollars })
         }
 
+        // Create beneficiary
         const success = await handleSubmit()
-        if (!success) return
+        if (!success) {
+          setIsSaving(false)
+          return
+        }
 
         // Clean up after successful save
-        imagePreviewUrls.forEach((url) => URL.revokeObjectURL(url))
-        if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl)
-        setHasUnsavedChanges(false)
-        setImagePreviewUrls([])
-        setVideoPreviewUrl(null)
+        if (imagePreviewUrls.length > 0) {
+          imagePreviewUrls.forEach(url => URL.revokeObjectURL(url))
+          setImagePreviewUrls([])
+        }
+        if (videoPreviewUrl) {
+          URL.revokeObjectURL(videoPreviewUrl)
+          setVideoPreviewUrl(null)
+        }
         setImageFiles([])
         setVideoFiles([])
         setProcessedImages([])
         setUploadedImagePaths([])
+        setHasUnsavedChanges(false)
         onClose()
       } else if (isEditMode && onSave) {
         // Edit mode
@@ -507,9 +500,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             )
             if (!response.ok) throw new Error("Image upload failed")
             
+            // Reset file states
             setImageFiles([])
             setProcessedImages([])
             setUploadedImagePaths([])
+
+            // Refresh images list
+            await fetchImages()
           } catch {
             toaster.create({
               title: "Error",
@@ -550,6 +547,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         setHasUnsavedChanges(false)
         setImageFiles([])
         setVideoFiles([])
+        
+        // Refresh images list after saving
+        await fetchImages()
       }
     } catch (error) {
       console.error("Error saving:", error)
@@ -701,7 +701,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 >
                   <Input
                     name="budget_goal"
-                    type={isCreateMode ? "text" : "number"}
+                    type="number"
+                    min="0"
+                    step="0.01"
                     className="border"
                     px={2}
                     onChange={handleInputChange}
@@ -752,12 +754,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           <Image
                             src={
                               image.id
-                                ? getTransformedImageUrl('media', image.id, {
-                                    width: 200,
-                                    height: 200,
-                                    quality: 80,
-                                    resize: 'cover'
-                                  })
+                                ? generatePublicUrl(image as unknown as MediaRow)
                                 : image.image_url
                             }
                             alt={`Child's photo ${index + 1}`}

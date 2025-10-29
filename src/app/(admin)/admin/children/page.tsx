@@ -333,34 +333,32 @@ const ChildrenTable = () => {
       return false
     }
 
-    const budgetGoalInCents = parseInt(dollarsToCents(formData.budget_goal || 0))
+    // Ensure budget_goal is a valid number
+    const budgetGoalInCents = Math.max(0, parseInt(dollarsToCents(formData.budget_goal || 0)))
 
     try {
-      // Create FormData object instead of JSON
-      const formDataToSend = new FormData()
-      formDataToSend.append("name", formData.name)
-      formDataToSend.append("username", formData.username)
-      formDataToSend.append("gender", formData.gender)
-      // Only append birth_date if it has a value
-      if (formData.birth_date) {
-        formDataToSend.append("birth_date", formData.birth_date)
-      }
-      formDataToSend.append("biography", formData.biography)
-      formDataToSend.append("budget_goal", budgetGoalInCents.toString())
-      formDataToSend.append("budget_raised", "0")
-      formDataToSend.append("status", formData.status)
-      formDataToSend.append("country", formData.country)
-      formDataToSend.append("location_str", formData.location_str || "")
-      formDataToSend.append("beneficiary_type", "CHILD")
-      
-      // Stringify location_geo if it exists
-      if (formData.location_geo) {
-        formDataToSend.append("location_geo", JSON.stringify(formData.location_geo))
+      // Send data as JSON
+      const dataToSend = {
+        name: formData.name,
+        username: formData.username,
+        gender: formData.gender,
+        birth_date: formData.birth_date || undefined,
+        biography: formData.biography,
+        budget_goal: Number(budgetGoalInCents),
+        budget_raised: 0,
+        status: formData.status,
+        country: formData.country,
+        location_str: formData.location_str || "",
+        location_geo: formData.location_geo || null,
+        beneficiary_type: "CHILD"
       }
 
       const res = await fetch("/api/admin/beneficiaries/create", {
         method: "POST",
-        body: formDataToSend, // Send FormData instead of JSON
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(dataToSend)
       })
 
       if (!res.ok) {
@@ -370,16 +368,46 @@ const ChildrenTable = () => {
       const responseData = await res.json()
       const beneficiaryId = responseData.beneficiary?.id || responseData.beneficiaryId
 
-      // Upload images and videos
-      if (imageFiles.length > 0 || videoFiles.length > 0) {
-        const formDataMedia = new FormData()
-        imageFiles.forEach((file) => formDataMedia.append("images", file))
-        videoFiles.forEach((file) => formDataMedia.append("videos", file))
+      // Upload images
+      if (imageFiles.length > 0) {
+        const formDataImages = new FormData()
+        formDataImages.append("beneficiaryId", beneficiaryId)
+        imageFiles.forEach((file) => formDataImages.append("images", file))
 
-        await fetch(`/api/admin/beneficiaries/media/upload/${beneficiaryId}`, {
+        const uploadImagesRes = await fetch(`/api/admin/beneficiaries/images/create`, {
           method: "POST",
-          body: formDataMedia,
+          body: formDataImages,
         })
+
+        if (!uploadImagesRes.ok) {
+          console.error('Failed to upload images:', await uploadImagesRes.text())
+          toaster.create({
+            title: "Warning",
+            description: "Child was created but image upload failed",
+            duration: 5000,
+          })
+        }
+      }
+
+      // Upload video
+      if (videoFiles.length > 0) {
+        const formDataVideo = new FormData()
+        formDataVideo.append("beneficiaryId", beneficiaryId)
+        formDataVideo.append("video", videoFiles[0]) // Only upload first video
+
+        const uploadVideoRes = await fetch(`/api/admin/beneficiaries/video/create`, {
+          method: "POST",
+          body: formDataVideo,
+        })
+
+        if (!uploadVideoRes.ok) {
+          console.error('Failed to upload video:', await uploadVideoRes.text())
+          toaster.create({
+            title: "Warning",
+            description: "Child was created but video upload failed",
+            duration: 5000,
+          })
+        }
       }
 
       setIsCreateDrawerOpen(false)

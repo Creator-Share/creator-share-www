@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react"
 import { Box, Spinner, Flex, Text, Button } from "@chakra-ui/react"
 import { useParams } from "next/navigation"
 import { Beneficiaries } from "@/types"
-import BeneficiaryModal from "../components/SponsorshipModal"
+// import BeneficiaryModal from "../components/SponsorshipModal"
 
 export default function FullProfileDynamic() {
   const { username } = useParams()
@@ -117,14 +117,14 @@ export default function FullProfileDynamic() {
 
         {/* Header */}
         <Flex justify="space-between" align="center" mb={6}>
-          <Heading
+          {/* <Heading
             as="h1"
             className="font-bold text-2xl md:text-[55px]"
             color="#2B7FF9"
           >
             {beneficiary.name}
-          </Heading>
-          <Button
+          </Heading> */}
+          {/* <Button
             bg="#1C3C8C"
             color="white"
             px={6}
@@ -134,12 +134,12 @@ export default function FullProfileDynamic() {
             className="font-semibold text-[15px]"
           >
             Sponsor this child
-          </Button>
-          <BeneficiaryModal
+          </Button> */}
+          {/* <BeneficiaryModal
             open={activityOpen}
             onClose={() => setActivityOpen(false)}
             beneficiary={beneficiary}
-          />
+          /> */}
         </Flex>
         <Box
           mb={8}
@@ -148,7 +148,7 @@ export default function FullProfileDynamic() {
           position="relative"
           h={{ base: "300px", md: "440px" }}
         >
-          <Image
+          {/* <Image
             src={
               images.length > 0
                 ? images[0].id
@@ -161,17 +161,17 @@ export default function FullProfileDynamic() {
             w="100%"
             h="100%"
             objectFit="cover"
-          />
+          /> */}
         </Box>
         <Box mb={8}>
-          <Heading as="h2" className="font-bold text-2xl" mb={4}>
+          {/* <Heading as="h2" className="font-bold text-2xl" mb={4}>
             About Me
-          </Heading>
+          </Heading> */}
           <Text className="text-[#767070] text-base">
             {beneficiary.biography || "No biography available."}
           </Text>
         </Box>
-        <Heading
+        {/* <Heading
           as="h3"
           size="lg"
           color="#2B7FF9"
@@ -179,10 +179,10 @@ export default function FullProfileDynamic() {
           className="font-bold text-2xl"
         >
           Latest Updates on {beneficiary.name}
-        </Heading>
+        </Heading> */}
         <Box className="md:grid md:grid-cols-5 gap-4">
           <Box mb={8} className="md:col-span-3">
-            <VStack gap={6} align="stretch">
+            {/* <VStack gap={6} align="stretch">
               {activities.length > 0 ? (
                 activities.map((activity: Activity) => (
                   <Link
@@ -224,13 +224,13 @@ export default function FullProfileDynamic() {
                   No activities available yet.
                 </Text>
               )}
-            </VStack>
+            </VStack> */}
           </Box>
           <Box className="md:col-span-2">
-            <VStack align={"stretch"} gap={6}>
+            {/* <VStack align={"stretch"} gap={6}>
               <SponsorshipDetails beneficiaryId={beneficiary.id} hideStatus />
               <BeneficiarySubscribeBox beneficiary={beneficiary} />
-            </VStack>
+            </VStack> */}
           </Box>
         </Box>
       </Box>

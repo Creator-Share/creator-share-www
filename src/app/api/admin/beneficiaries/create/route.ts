@@ -1,30 +1,56 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { Beneficiaries } from "@/types/admin.types"
+import { Beneficiaries, Status, BeneficiaryType } from "@/types/admin.types"
 import { notifyChildCreated } from "@/services/telegram"
 import { calculateAge } from "@/utils/ageCalculator"
 
 export async function POST(req: Request) {
   const supabase = await createClient()
   try {
-    // Parse JSON request body
-    const body = await req.json()
-
-    const data: Partial<Beneficiaries> = {
-      name: formData.get('name') as string,
-      username: formData.get('username') as string,
-      gender: formData.get('gender') as 'Boy' | 'Girl',
-      birth_date: formData.get('birth_date')?.toString() || undefined,
-      biography: formData.get('biography') as string,
-      budget_goal: formData.get('budget_goal') ? parseInt(formData.get('budget_goal') as string) : 0,
-      budget_raised: formData.get('budget_raised') ? parseInt(formData.get('budget_raised') as string) : 0,
-      status: formData.get('status') as Status,
-      country: formData.get('country') as string,
-      location_str: formData.get('location_str') as string,
-      location_geo: parsedLocationGeo, // Use parsed JSON
-      video_url: formData.get('video_url') as string,
-      beneficiary_type: formData.get('beneficiary_type') as BeneficiaryType,
+    // Parse JSON request body with error handling
+    let body;
+    try {
+      body = await req.json();
+      console.log('Received request body:', body);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      return NextResponse.json(
+        { error: 'Invalid JSON in request body' },
+        { status: 400 }
+      );
     }
+
+    // Validate required fields
+    const requiredFields = ['name', 'username', 'gender', 'biography'];
+    const missingFields = requiredFields.filter(field => !body[field]);
+    if (missingFields.length > 0) {
+      return NextResponse.json(
+        { error: `Missing required fields: ${missingFields.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    // Sanitize and validate input data
+    const data: Partial<Beneficiaries> = {
+      name: String(body.name).trim(),
+      username: String(body.username).trim(),
+      gender: body.gender === 'Boy' || body.gender === 'Girl' ? body.gender : 'Boy',
+      birth_date: body.birth_date || undefined,
+      biography: String(body.biography).trim(),
+      budget_goal: Math.max(0, Number(body.budget_goal) || 0),
+      budget_raised: Math.max(0, Number(body.budget_raised) || 0),
+      status: (body.status || 'New') as Status,
+      country: body.country ? String(body.country).trim() : 'Unknown Country',
+      location_str: body.location_str ? String(body.location_str).trim() : 'Unknown Location',
+      location_geo: body.location_geo || null,
+      video_url: body.video_url ? String(body.video_url).trim() : '',
+      active_subscriptions: 0,
+      metadata: {},
+      beneficiary_type: 'CHILD' as BeneficiaryType,
+      introduction: String(body.biography).trim() // Use biography for introduction
+    }
+
+    console.log('Processed data:', data);
 
     const insertData = { ...data }
     if (!insertData.status) insertData.status = "New"
