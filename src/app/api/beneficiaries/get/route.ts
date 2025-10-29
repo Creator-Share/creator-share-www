@@ -74,9 +74,10 @@ export async function GET(req: Request) {
           new Date(now.getFullYear() - years, now.getMonth(), now.getDate())
 
         // People between min and max age inclusive → born between (now - (max+1) years) and (now - min years)
+        // Also include those with null birth_date
         const minDob = dateYearsAgo(maxAgeInYears + 1).toISOString()
         const maxDob = dateYearsAgo(minAgeInYears).toISOString()
-        query = query.gte("birth_date", minDob).lte("birth_date", maxDob)
+        query = query.or(`birth_date.is.null,and(birth_date.gte.${minDob},birth_date.lte.${maxDob})`)
       }
     }
 

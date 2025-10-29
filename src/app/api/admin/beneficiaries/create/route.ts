@@ -11,23 +11,23 @@ export async function POST(req: Request) {
     const body = await req.json()
 
     const data: Partial<Beneficiaries> = {
-      name: body.name,
-      username: body.username,
-      gender: body.gender,
-      birth_date: body.birth_date,
-      biography: body.biography,
-      introduction: body.introduction,
-      budget_goal: body.budget_goal || 0,
-      budget_raised: body.budget_raised || 0,
-      status: body.status,
-      country: body.country,
-      location_str: body.location_str,
-      location_geo: body.location_geo,
-      video_url: body.video_url,
-      beneficiary_type: body.beneficiary_type,
+      name: formData.get('name') as string,
+      username: formData.get('username') as string,
+      gender: formData.get('gender') as 'Boy' | 'Girl',
+      birth_date: formData.get('birth_date')?.toString() || undefined,
+      biography: formData.get('biography') as string,
+      budget_goal: formData.get('budget_goal') ? parseInt(formData.get('budget_goal') as string) : 0,
+      budget_raised: formData.get('budget_raised') ? parseInt(formData.get('budget_raised') as string) : 0,
+      status: formData.get('status') as Status,
+      country: formData.get('country') as string,
+      location_str: formData.get('location_str') as string,
+      location_geo: parsedLocationGeo, // Use parsed JSON
+      video_url: formData.get('video_url') as string,
+      beneficiary_type: formData.get('beneficiary_type') as BeneficiaryType,
     }
 
-    const insertData = { ...data, status: "New" }
+    const insertData = { ...data }
+    if (!insertData.status) insertData.status = "New"
     if (!insertData.country) insertData.country = "Unknown Country"
     if (!insertData.location_str) insertData.location_str = "Unknown Location"
     
@@ -62,8 +62,12 @@ export async function POST(req: Request) {
       }
     }
 
-    // File uploads are handled separately via /api/admin/beneficiaries/media/upload
-    return NextResponse.json({ beneficiaryId: inserted.id, beneficiary: inserted }, { status: 201 })
+    // TODO: Handle file uploads (images and videos) here
+    // For now, just return the created beneficiary
+    return NextResponse.json({ 
+      beneficiary: inserted, 
+      beneficiaryId: inserted.id 
+    }, { status: 201 })
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error"
     return NextResponse.json({ error: errorMessage }, { status: 500 })

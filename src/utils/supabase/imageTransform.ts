@@ -40,19 +40,33 @@ export const getTransformedImageUrl = (
   path: string,
   options: ImageTransformOptions = {}
 ): string => {
+  const transformOptions: {
+    width: number;
+    height: number;
+    quality: number;
+    resize?: 'cover' | 'contain' | 'fill';
+    format?: 'origin';
+  } = {
+    width: options.width || 400,
+    height: options.height || 400,
+    quality: options.quality || 80,
+  }
+  
+  if (options.resize) {
+    transformOptions.resize = options.resize
+  }
+  
+  if (options.format) {
+    transformOptions.format = options.format
+  }
+
   const { data } = supabase.storage
     .from(bucket)
     .getPublicUrl(path, {
-      transform: {
-        width: options.width || 400,
-        height: options.height || 400,
-        quality: options.quality || 80,
-        resize: options.resize || 'contain',
-        // Note: Supabase automatically optimizes to WebP when supported
-        // Use format: 'origin' to disable automatic optimization
-      }
+      transform: transformOptions
     })
 
+  console.log('Generated transformed URL:', data.publicUrl, 'for path:', path, 'with options:', transformOptions)
   return data.publicUrl
 }
 
@@ -63,26 +77,22 @@ export const getImageVariants = (bucket: string, path: string) => ({
   thumbnail: getTransformedImageUrl(bucket, path, {
     width: 150,
     height: 150,
-    quality: 70,
-    resize: 'cover'
+    quality: 70
   }),
   small: getTransformedImageUrl(bucket, path, {
     width: 300,
     height: 300,
-    quality: 80,
-    resize: 'contain'
+    quality: 80
   }),
   medium: getTransformedImageUrl(bucket, path, {
     width: 600,
     height: 600,
-    quality: 85,
-    resize: 'contain'
+    quality: 85
   }),
   large: getTransformedImageUrl(bucket, path, {
     width: 1200,
     height: 1200,
-    quality: 90,
-    resize: 'contain'
+    quality: 90
   }),
   original: getTransformedImageUrl(bucket, path, {
     format: 'origin' // Keep original format
@@ -102,14 +112,22 @@ export const uploadImageForTransformation = async (
   path: string,
   file: File
 ): Promise<string> => {
-  const { error } = await supabase.storage
+  console.log('Uploading image:', file.name, 'to path:', path, 'with type:', file.type)
+  
+  const { data, error } = await supabase.storage
     .from(bucket)
-    .upload(path, file)
+    .upload(path, file, {
+      cacheControl: '3600',
+      upsert: true,
+      contentType: file.type
+    })
 
   if (error) {
+    console.error('Upload error:', error)
     throw new Error(`Failed to upload image: ${error.message}`)
   }
 
+  console.log('Upload successful:', data)
   return path
 }
 
@@ -164,8 +182,8 @@ export const getSignedTransformedUrl = async (
         width: options.width || 400,
         height: options.height || 400,
         quality: options.quality || 80,
-        resize: options.resize || 'contain',
         // Note: Supabase automatically optimizes to WebP when supported
+        ...(options.format && { format: options.format })
       }
     })
 
