@@ -1,11 +1,12 @@
-import { Portal, Select, createListCollection } from "@chakra-ui/react"
-import React, { useMemo } from "react"
+import { Portal, Select, createListCollection, Input } from "@chakra-ui/react"
+import React, { useMemo, useState } from "react"
 import { Beneficiaries } from "@/types/admin.types"
 const ChakraSelect: React.FC<{
   childrenList: Beneficiaries[]
   selectedChild: string[]
   setSelectedChild: (ids: string[]) => void
 }> = ({ childrenList, selectedChild, setSelectedChild }) => {
+  const [search, setSearch] = useState("")
   const collection = useMemo(
     () =>
       createListCollection({
@@ -16,6 +17,14 @@ const ChakraSelect: React.FC<{
       }),
     [childrenList],
   )
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return collection.items
+    return collection.items.filter((item) =>
+      (item.label || "").toLowerCase().includes(q),
+    )
+  }, [collection.items, search])
 
   return (
     <Select.Root
@@ -42,7 +51,15 @@ const ChakraSelect: React.FC<{
       <Portal>
         <Select.Positioner>
           <Select.Content>
-            {collection.items.length === 0 ? (
+            <div className="p-2">
+              <Input
+                size="sm"
+                placeholder="Search child by name..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            {filteredItems.length === 0 ? (
               <Select.Item
                 item={{ label: "No children available", value: "" }}
                 key=""
@@ -51,7 +68,7 @@ const ChakraSelect: React.FC<{
                 <Select.ItemIndicator />
               </Select.Item>
             ) : (
-              collection.items.map((item) => (
+              filteredItems.map((item) => (
                 <Select.Item item={item} key={item.value}>
                   {item.label}
                   <Select.ItemIndicator />

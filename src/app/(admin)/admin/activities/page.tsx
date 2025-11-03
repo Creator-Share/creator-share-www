@@ -9,6 +9,7 @@ import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 const ActivitiesAdminPage: React.FC = () => {
   const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([])
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<string[]>([])
+  const [search, setSearch] = useState("")
   
   useEffect(() => {
     const fetchBeneficiaries = async () => {
@@ -30,8 +31,8 @@ const ActivitiesAdminPage: React.FC = () => {
       description="Manage activities for beneficiaries"
       breadcrumb={[{ label: "Activities" }]}
       searchPlaceholder="Search activities..."
-      searchValue=""
-      onSearchChange={() => {}}
+      searchValue={search}
+      onSearchChange={setSearch}
       showResults={true}
     >
       <Box className="mb-6">
@@ -44,6 +45,7 @@ const ActivitiesAdminPage: React.FC = () => {
       <ActivitiesTable
         beneficiaryType="CHILD"
         beneficiaryId={selectedBeneficiary[0] || ""}
+        searchQuery={search}
       />
     </AdminPageLayout>
   )
