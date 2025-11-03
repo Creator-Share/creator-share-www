@@ -51,9 +51,13 @@ export async function POST(req: Request) {
       productImages = []
     } else {
       const safeImage = beneficiaryImage
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || ""
+      const isLocalBase = /localhost|127\.0\.0\.1/.test(baseUrl)
       const fullImageUrl = safeImage.startsWith("http")
         ? safeImage
-        : `${process.env.NEXT_PUBLIC_BASE_URL}${safeImage}`
+        : isLocalBase
+          ? "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+          : `${baseUrl}${safeImage}`
       productName = `${isMonthly ? "Monthly" : "Yearly"} Sponsorship for ${beneficiaryName}`
       productImages = [fullImageUrl]
     }
