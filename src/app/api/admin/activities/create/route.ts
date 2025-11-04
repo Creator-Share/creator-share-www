@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Only notify subscribers if created_by is 'admin'
+  // Only notify subscribers/sponsors if created_by is 'admin'
   if (inserted?.created_by === "admin") {
     try {
       const { data: subscribers, error: subError } = await supabase
@@ -150,50 +150,92 @@ export async function POST(req: NextRequest) {
         .select("email")
         .eq("beneficiary_id", beneficiary_id)
 
-      if (!subError && Array.isArray(subscribers)) {
-        const { data: beneficiaryData } = await supabase
-          .from("beneficiaries")
-          .select("name")
-          .eq("id", beneficiary_id)
-          .single()
+      // Fetch sponsors (users who have active/complete subscriptions for this beneficiary)
+      type SponsorRow = {
+        user_id: string | null
+        email_notification: boolean | null
+        users: { email: string } | { email: string }[] | null
+      }
+      const { data: sponsorRows, error: sponsorError } = await supabase
+        .from("subscriptions")
+        .select("user_id, email_notification, users(email)")
+        .eq("beneficiary_id", beneficiary_id)
+        .eq("status", "complete")
 
-        const { sendActivityNotificationEmail } = await import("@/utils/email")
-        if (beneficiaryData && beneficiaryData.name) {
-          for (const sub of subscribers) {
+      // Fetch beneficiary name once for both audiences
+      const { data: beneficiaryData } = await supabase
+        .from("beneficiaries")
+        .select("name")
+        .eq("id", beneficiary_id)
+        .single()
+
+      const { sendActivityNotificationEmail } = await import("@/utils/email")
+
+      const audienceEmails = new Set<string>()
+
+      // Add explicit activity subscribers
+      if (!subError && Array.isArray(subscribers)) {
+        for (const sub of subscribers) {
+          if (sub?.email) audienceEmails.add(sub.email)
+        }
+      }
+
+      // Add sponsor emails (respect email_notification flag if provided)
+      if (!sponsorError && Array.isArray(sponsorRows)) {
+        for (const row of sponsorRows as SponsorRow[]) {
+          if (row?.email_notification === false) continue
+          const email = Array.isArray(row.users)
+            ? row.users[0]?.email
+            : row.users?.email
+          if (email) audienceEmails.add(email)
+        }
+      }
+
+      if (beneficiaryData && beneficiaryData.name && audienceEmails.size > 0) {
+        const subject = `New update on ${beneficiaryData.name}`
+
+        type EmailResult = { success: boolean; error?: unknown; messageId?: string }
+        await Promise.allSettled(
+          Array.from(audienceEmails).map(async (email) => {
             try {
-              const emailResult = await sendActivityNotificationEmail(
-                sub.email,
+              const emailResult: EmailResult = await sendActivityNotificationEmail(
+                email,
                 beneficiaryData,
                 inserted,
               )
-              await supabase.from("email_logs").insert({
-                email: sub.email,
-                subject: `New update on ${beneficiaryData.name}`,
-                status: emailResult.success ? "sent" : "failed",
-                error: emailResult.error
-                  ? JSON.stringify(emailResult.error)
-                  : null,
-                message_id: emailResult.messageId,
-                created_at: new Date(),
-              })
+              try {
+                await supabase.from("email_logs").insert({
+                  email,
+                  subject,
+                  status: emailResult.success ? "sent" : "failed",
+                  error: emailResult.error
+                    ? JSON.stringify(emailResult.error)
+                    : null,
+                  message_id: emailResult.messageId,
+                  created_at: new Date(),
+                })
+              } catch (logErr) {
+                console.error("Error logging email attempt:", logErr)
+              }
             } catch (emailErr) {
-              console.error(
-                "Error sending activity notification email:",
-                emailErr,
-              )
-              await supabase.from("email_logs").insert({
-                email: sub.email,
-                subject: `New update on ${beneficiaryData.name}`,
-                status: "failed",
-                error:
-                  emailErr instanceof Error
-                    ? emailErr.message
-                    : String(emailErr),
-                created_at: new Date(),
-              })
+              console.error("Error sending activity notification email:", emailErr)
+              try {
+                await supabase.from("email_logs").insert({
+                  email,
+                  subject,
+                  status: "failed",
+                  error:
+                    emailErr instanceof Error
+                      ? emailErr.message
+                      : String(emailErr),
+                  created_at: new Date(),
+                })
+              } catch (logErr) {
+                console.error("Error logging failed email attempt:", logErr)
+              }
             }
-          }
-        }
+          }),
+        )
       }
     } catch (notifyError) {
       console.error("Error notifying subscribers:", notifyError)

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { generatePublicUrl, MediaRow, uploadFile } from "@/utils/supabase/media"
+import { MediaRow, uploadFile } from "@/utils/supabase/media"
+import { getTransformedImageUrl } from "@/utils/supabase/imageTransform"
 
 export async function POST(req: Request) {
   const { createClient } = await import("@/utils/supabase/server")
@@ -72,7 +73,12 @@ export async function POST(req: Request) {
 
       const respItem = {
         ...mediaRow,
-        public_url: generatePublicUrl(mediaRow),
+        public_url: getTransformedImageUrl('media', `${beneficiaryId}/IMAGE/${mediaRow.id}.${extension}`, {
+          width: 800,
+          height: 800,
+          quality: 90,
+          resize: 'cover'
+        }),
         upload_error: uploadErrorMessage,
       }
 

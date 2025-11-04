@@ -14,11 +14,13 @@ import { DataTable } from "@/components/admin-ui/Tables/data-table"
 interface ActivitiesTableProps {
   beneficiaryType: string
   beneficiaryId: string
+  searchQuery?: string
 }
 
 const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
   beneficiaryType,
   beneficiaryId,
+  searchQuery = "",
 }) => {
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
@@ -75,6 +77,9 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
           beneficiary_type: beneficiaryType,
           beneficiary_id: beneficiaryId,
         })
+        if (searchQuery && searchQuery.trim()) {
+          params.set("q", searchQuery.trim())
+        }
         const res = await fetch(
           `/api/admin/activities/retrieve?${params.toString()}`,
         )
@@ -89,7 +94,7 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
     if (beneficiaryId) {
       fetchActivities()
     }
-  }, [beneficiaryType, beneficiaryId])
+  }, [beneficiaryType, beneficiaryId, searchQuery])
 
   if (!beneficiaryId) {
     return (

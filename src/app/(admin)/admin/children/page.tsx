@@ -16,6 +16,14 @@ import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
 import SponsorshipFilters from "@/app/sponsorships/components/SponsorshipFilters"
 
+type FiltersState = {
+  gender: string
+  ageRange: [number, number]
+  status: string[]
+  search?: string
+  beneficiary_type?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED"
+}
+
 const BeneficiaryModal = dynamic(() => import("./components/BeneficiaryModal"), {
   ssr: false,
 })
@@ -41,6 +49,7 @@ const ChildrenTable = () => {
     })
 
   useEffect(() => {
+    // Set all statuses on mount and when formData.status changes
     const allStatuses = [
       "New",
       "Partially Funded",
@@ -50,7 +59,7 @@ const ChildrenTable = () => {
     ]
     setFilterStatus(allStatuses)
     handleFilterChange({ status: allStatuses })
-  }, [setFilterStatus, handleFilterChange]) // Only run once on mount (functions are stable)
+  }, [setFilterStatus, handleFilterChange])
 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
@@ -312,11 +321,9 @@ const ChildrenTable = () => {
       !formData.name ||
       !formData.username ||
       !formData.gender ||
-      !formData.birth_date ||
       !formData.biography ||
       !formData.status ||
-      !formData.country ||
-      !formData.introduction
+      !formData.country
     ) {
       toaster.create({
         title: "Error",
@@ -326,37 +333,81 @@ const ChildrenTable = () => {
       return false
     }
 
-    const formDataWithCents = {
-      ...formData,
-      budget_goal: parseInt(dollarsToCents(formData.budget_goal || 0)),
-    }
+    // Ensure budget_goal is a valid number
+    const budgetGoalInCents = Math.max(0, parseInt(dollarsToCents(formData.budget_goal || 0)))
 
     try {
+      // Send data as JSON
+      const dataToSend = {
+        name: formData.name,
+        username: formData.username,
+        gender: formData.gender,
+        birth_date: formData.birth_date || undefined,
+        biography: formData.biography,
+        budget_goal: Number(budgetGoalInCents),
+        budget_raised: 0,
+        status: formData.status,
+        country: formData.country,
+        location_str: formData.location_str || "",
+        location_geo: formData.location_geo || null,
+        beneficiary_type: "CHILD"
+      }
+
       const res = await fetch("/api/admin/beneficiaries/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formDataWithCents,
-          beneficiary_type: "CHILD",
-        }),
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(dataToSend)
       })
 
       if (!res.ok) {
         throw new Error("Failed to create beneficiary")
       }
 
-      const { beneficiaryId } = await res.json()
+      const responseData = await res.json()
+      const beneficiaryId = responseData.beneficiary?.id || responseData.beneficiaryId
 
-      // Upload images and videos
-      if (imageFiles.length > 0 || videoFiles.length > 0) {
-        const formDataMedia = new FormData()
-        imageFiles.forEach((file) => formDataMedia.append("images", file))
-        videoFiles.forEach((file) => formDataMedia.append("videos", file))
+      // Upload images
+      if (imageFiles.length > 0) {
+        const formDataImages = new FormData()
+        formDataImages.append("beneficiaryId", beneficiaryId)
+        imageFiles.forEach((file) => formDataImages.append("images", file))
 
-        await fetch(`/api/admin/beneficiaries/media/upload/${beneficiaryId}`, {
+        const uploadImagesRes = await fetch(`/api/admin/beneficiaries/images/create`, {
           method: "POST",
-          body: formDataMedia,
+          body: formDataImages,
         })
+
+        if (!uploadImagesRes.ok) {
+          console.error('Failed to upload images:', await uploadImagesRes.text())
+          toaster.create({
+            title: "Warning",
+            description: "Child was created but image upload failed",
+            duration: 5000,
+          })
+        }
+      }
+
+      // Upload video
+      if (videoFiles.length > 0) {
+        const formDataVideo = new FormData()
+        formDataVideo.append("beneficiaryId", beneficiaryId)
+        formDataVideo.append("video", videoFiles[0]) // Only upload first video
+
+        const uploadVideoRes = await fetch(`/api/admin/beneficiaries/video/create`, {
+          method: "POST",
+          body: formDataVideo,
+        })
+
+        if (!uploadVideoRes.ok) {
+          console.error('Failed to upload video:', await uploadVideoRes.text())
+          toaster.create({
+            title: "Warning",
+            description: "Child was created but video upload failed",
+            duration: 5000,
+          })
+        }
       }
 
       setIsCreateDrawerOpen(false)
@@ -366,8 +417,22 @@ const ChildrenTable = () => {
         duration: 5000,
       })
 
-      // Reload the list
-      window.location.reload()
+      // Refresh the list while maintaining current filter state
+      const allStatuses = [
+        "New",
+        "Partially Funded",
+        "Budget Fulfilled",
+        "Draft",
+        "Archived",
+      ]
+      setFilterStatus(allStatuses)
+      handleFilterChange({
+        gender: "",
+        ageRange: [0, 14] as [number, number],
+        status: allStatuses,
+        search: "",
+        beneficiary_type: "CHILD"
+      })
       return true
     } catch {
       toaster.create({
@@ -439,8 +504,16 @@ const ChildrenTable = () => {
         duration: 5000,
       })
 
-      // Reload to show changes
-      window.location.reload()
+      // Refresh the list using current filter state
+      const currentFilters: FiltersState = {
+        gender: "",
+        ageRange: [0, 14] as [number, number],
+        status: updated.status ? [updated.status] : ["New"],
+        search: "",
+        beneficiary_type: "CHILD"
+      }
+      setFilterStatus(currentFilters.status)
+      handleFilterChange(currentFilters)
     } catch {
       toaster.create({
         title: "Error",
@@ -492,8 +565,16 @@ const ChildrenTable = () => {
         duration: 5000,
       })
 
-      // Reload the list
-      window.location.reload()
+      // Refresh the list using current filter state
+      const currentFilters: FiltersState = {
+        gender: "",
+        ageRange: [0, 14] as [number, number],
+        status: ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"],
+        search: "",
+        beneficiary_type: "CHILD"
+      }
+      setFilterStatus(currentFilters.status)
+      handleFilterChange(currentFilters)
     } catch (error) {
       console.error("Bulk delete error:", error)
       toaster.create({
@@ -696,7 +777,14 @@ const ChildrenTable = () => {
       }
       primaryAction={
         <Button
-          onClick={() => setIsCreateDrawerOpen(true)}
+          onClick={() => {
+            // Open create modal without affecting filters
+            setIsCreateDrawerOpen(true)
+            // Ensure form data has default status
+            if (!formData.status) {
+              setFormData({ ...formData, status: "New" })
+            }
+          }}
           className="border-[2px] border-[#E0E0E0] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#1C3C8C] text-white"
         >
           <GoPlusCircle className="mr-2" />

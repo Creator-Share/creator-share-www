@@ -27,6 +27,7 @@ import {
   NativeSelectField,
   NativeSelectRoot,
 } from "@/components/ui/native-select"
+import { Tooltip } from "@/components/ui/tooltip"
 import { LuFileUp } from "react-icons/lu"
 import { HiUpload, HiX } from "react-icons/hi"
 import {
@@ -40,9 +41,7 @@ import { toaster } from "@/components/ui/toaster"
 import { dollarsToCents } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import {
-  uploadImagesForTransformation,
-  getTransformedImageUrl,
-  type ImageTransformOptions,
+  uploadImagesForTransformation
 } from "@/utils/supabase/imageTransform"
 
 type BeneficiaryModalMode = "create" | "edit"
@@ -124,6 +123,26 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     ? parseInt(publicHardcodedRaw, 10)
     : null
 
+  // Generate a short URL-style string
+  const generateShortUrl = useCallback(() => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+    let result = ''
+    for (let i = 0; i < 8; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    return result
+  }, [])
+
+  // Prepopulate username in create mode when modal opens
+  useEffect(() => {
+    if (isCreateMode && isOpen && !formData.username && setExternalFormData) {
+      setExternalFormData((prev: Partial<Beneficiaries>) => ({ 
+        ...prev, 
+        username: generateShortUrl() 
+      }))
+    }
+  }, [isCreateMode, isOpen, generateShortUrl, setExternalFormData, formData.username])
+
   // Update local form data when selectedChild changes (edit mode)
   useEffect(() => {
     if (isEditMode && selectedChild) {
@@ -173,15 +192,32 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     fetchImages()
   }, [fetchImages])
 
-  // Handle modal close with confirmation
-  const handleModalCloseWithConfirmation = () => {
+  // Handle modal close - data persists unless explicitly cancelled
+  const handleModalClose = () => {
+    // Simply close the modal without clearing data
+    onClose()
+  }
+
+  // Handle explicit cancel - clears data and resets
+  const handleCancel = () => {
     if (hasUnsavedChanges) {
       const confirmClose = window.confirm(
-        "You have unsaved changes. Are you sure you want to close?"
+        "You have unsaved changes. Clicking OK will discard all changes."
       )
       if (!confirmClose) return
     }
+    
+    // Clear all form data and reset state
     setHasUnsavedChanges(false)
+    setImagePreviewUrls([])
+    setVideoPreviewUrl(null)
+    setImageFiles([])
+    setVideoFiles([])
+    
+    if (isEditMode) {
+      setLocalFormData(selectedChild || {})
+    }
+    
     onClose()
   }
 
@@ -234,52 +270,84 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const handleImageChange = async (fileDetails: {
     acceptedFiles: File[]
   }) => {
-    if (fileDetails.acceptedFiles.length === 0) return
-
     if (isCreateMode) {
-      setIsProcessingImages(true)
-      try {
-        const uploadedPaths = await uploadImagesForTransformation(
-          "media",
-          fileDetails.acceptedFiles
-        )
-        const transformOptions: ImageTransformOptions = {
-          width: 400,
-          height: 400,
-          resize: "contain",
-          quality: 80,
-        }
-        const transformedUrls = uploadedPaths.map((path) =>
-          getTransformedImageUrl("media", path, transformOptions)
-        )
-        setImageFiles(fileDetails.acceptedFiles)
-        setProcessedImages(fileDetails.acceptedFiles)
-        setUploadedImagePaths(uploadedPaths)
-        setImagePreviewUrls(transformedUrls)
-        toaster.create({
-          title: "Images Uploaded & Optimized",
-          description: `${uploadedPaths.length} images uploaded and transformed by Supabase`,
-          type: "success",
-          duration: 3000,
-        })
-      } catch (error) {
-        console.error("Error processing images:", error)
-        toaster.create({
-          title: "Upload Error",
-          description: "Failed to upload images to Supabase. Please try again.",
-          type: "error",
-          duration: 5000,
-        })
-        const previewUrls = fileDetails.acceptedFiles.map((file) =>
-          URL.createObjectURL(file)
-        )
-        setImagePreviewUrls(previewUrls)
-        setImageFiles(fileDetails.acceptedFiles)
-      } finally {
-        setIsProcessingImages(false)
+      // In create mode, just store files locally - don't upload to Supabase yet
+      if (fileDetails.acceptedFiles.length === 0) {
+        // Clear everything if no files
+        setImageFiles([])
+        setImagePreviewUrls([])
+        return
       }
-    } else {
+      
+      const previewUrls = fileDetails.acceptedFiles.map((file) =>
+        URL.createObjectURL(file)
+      )
+      
       setImageFiles(fileDetails.acceptedFiles)
+      setImagePreviewUrls(previewUrls)
+      
+      toaster.create({
+        title: "Images Selected",
+        description: `${fileDetails.acceptedFiles.length} images selected. They will be optimized and uploaded when you save the child.`,
+        type: "success",
+        duration: 3000,
+      })
+    } else {
+      // In edit mode, upload and optimize immediately
+      if (fileDetails.acceptedFiles.length > 0) {
+        try {
+          setIsProcessingImages(true)
+          
+          // Upload and optimize images
+          const optimizedPaths = await uploadImagesForTransformation(
+            'media',
+            fileDetails.acceptedFiles,
+            `beneficiaries/${selectedChild?.id || 'temp'}`
+          )
+          
+          setProcessedImages(fileDetails.acceptedFiles)
+          setUploadedImagePaths(optimizedPaths)
+          
+          // Upload images immediately in edit mode
+          const formData = new FormData()
+          formData.append("beneficiaryId", selectedChild?.id || "")
+          fileDetails.acceptedFiles.forEach((f) => formData.append("images", f))
+
+          const response = await fetch(
+            "/api/admin/beneficiaries/images/create",
+            { method: "POST", body: formData }
+          )
+          if (!response.ok) throw new Error("Image upload failed")
+          
+          // Reset file states
+          setImageFiles([])
+          setProcessedImages([])
+          setUploadedImagePaths([])
+
+          // Refresh images list
+          await fetchImages()
+          
+          toaster.create({
+            title: "Images Uploaded",
+            description: `${fileDetails.acceptedFiles.length} images have been uploaded successfully.`,
+            type: "success",
+            duration: 3000,
+          })
+        } catch (error) {
+          console.error('Image optimization error:', error)
+          toaster.create({
+            title: "Optimization Error",
+            description: "Failed to optimize images. They will be uploaded as-is.",
+            type: "warning",
+            duration: 5000,
+          })
+          setImageFiles(fileDetails.acceptedFiles)
+        } finally {
+          setIsProcessingImages(false)
+        }
+      } else {
+        setImageFiles(fileDetails.acceptedFiles)
+      }
     }
   }
 
@@ -308,13 +376,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       }
 
       setAllImages((prev) => prev.filter((img) => img.id !== imageId))
-      setImageFiles([])
       toaster.create({
         title: "Success",
         description: "Image deleted successfully",
         duration: 3000,
       })
-    } catch {
+    } catch (error) {
+      console.error("Delete image error:", error)
       toaster.create({
         title: "Error",
         description: "Failed to delete image",
@@ -325,15 +393,35 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }
 
+  // Delete preview image (create mode only)
+  const handleDeletePreviewImage = (index: number) => {
+    const newFiles = [...imageFiles]
+    const newPreviewUrls = [...imagePreviewUrls]
+    
+    // Revoke the object URL to free memory
+    URL.revokeObjectURL(newPreviewUrls[index])
+    
+    // Remove the file and preview URL at the specified index
+    newFiles.splice(index, 1)
+    newPreviewUrls.splice(index, 1)
+    
+    setImageFiles(newFiles)
+    setImagePreviewUrls(newPreviewUrls)
+    
+    toaster.create({
+      title: "Image Removed",
+      description: "Image removed from selection",
+      duration: 2000,
+    })
+  }
+
   // Submit handler
   const handleFormSubmit = async () => {
     const baseRequired = [
       "name",
       "username",
       "gender",
-      "birth_date",
       "biography",
-      "introduction",
       "country",
     ] as const
     const requiredFields =
@@ -355,18 +443,32 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       setIsSaving(true)
 
       if (isCreateMode && handleSubmit && setExternalFormData) {
-        // Create mode
+        // Create beneficiary first
         if (publicHardcodedCents !== null) {
           const dollars = publicHardcodedCents / 100
           setExternalFormData({ ...(formData || {}), budget_goal: dollars })
         }
 
+        // Create beneficiary
         const success = await handleSubmit()
-        if (!success) return
+        if (!success) {
+          setIsSaving(false)
+          return
+        }
 
-        // Clean up
-        imagePreviewUrls.forEach((url) => URL.revokeObjectURL(url))
-        if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl)
+        // Clean up after successful save
+        if (imagePreviewUrls.length > 0) {
+          imagePreviewUrls.forEach(url => URL.revokeObjectURL(url))
+          setImagePreviewUrls([])
+        }
+        if (videoPreviewUrl) {
+          URL.revokeObjectURL(videoPreviewUrl)
+          setVideoPreviewUrl(null)
+        }
+        setImageFiles([])
+        setVideoFiles([])
+        setProcessedImages([])
+        setUploadedImagePaths([])
         setHasUnsavedChanges(false)
         onClose()
       } else if (isEditMode && onSave) {
@@ -382,19 +484,29 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             ? envCents
             : budgetGoalInCentsFromForm
 
-        // Handle image uploads
-        if (imageFiles.length > 0) {
+        // Handle image uploads - use optimized images if available
+        if (imageFiles.length > 0 || processedImages.length > 0) {
           try {
             const formData = new FormData()
             formData.append("beneficiaryId", selectedChild?.id || "")
-            imageFiles.forEach((f) => formData.append("images", f))
+            
+            // Use processed/optimized images if available, otherwise use original files
+            const filesToUpload = processedImages.length > 0 ? processedImages : imageFiles
+            filesToUpload.forEach((f) => formData.append("images", f))
 
             const response = await fetch(
               "/api/admin/beneficiaries/images/create",
               { method: "POST", body: formData }
             )
             if (!response.ok) throw new Error("Image upload failed")
+            
+            // Reset file states
             setImageFiles([])
+            setProcessedImages([])
+            setUploadedImagePaths([])
+
+            // Refresh images list
+            await fetchImages()
           } catch {
             toaster.create({
               title: "Error",
@@ -433,6 +545,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
         await onSave({ ...updatedData, budget_goal: budgetGoalInCents })
         setHasUnsavedChanges(false)
+        setImageFiles([])
+        setVideoFiles([])
+        
+        // Refresh images list after saving
+        await fetchImages()
       }
     } catch (error) {
       console.error("Error saving:", error)
@@ -462,7 +579,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     <DialogRoot
       open={isOpen}
       onOpenChange={({ open }) => {
-        if (!open) handleModalCloseWithConfirmation()
+        if (!open) handleModalClose()
       }}
     >
       <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -480,7 +597,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             </div>
           </DialogTitle>
           <DialogCloseTrigger
-            onClick={handleModalCloseWithConfirmation}
+            onClick={handleModalClose}
             className="text-gray-500 hover:text-gray-700"
           />
         </DialogHeader>
@@ -506,7 +623,16 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               </Field>
 
               <Field
-                label="Username"
+                label={
+                  <Tooltip
+                    content="⚠️ Warning: Changing this after children are created will break existing links to their profiles"
+                    showArrow
+                  >
+                    <span style={{ cursor: 'help', borderBottom: '1px dotted #666' }}>
+                      URL Shortcut
+                    </span>
+                  </Tooltip>
+                }
                 required
                 errorText="This field is required"
               >
@@ -536,9 +662,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               </Field>
 
               <Field
-                label="Birth Day"
-                required
-                errorText="This field is required"
+                label="Birth Date (Optional)"
+                helperText="Leave blank if unknown"
               >
                 <Input
                   name="birth_date"
@@ -554,6 +679,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 label="Biography"
                 required
                 errorText="This field is required"
+                helperText="Provide a detailed description about the child"
               >
                 <Textarea
                   name="biography"
@@ -566,22 +692,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 />
               </Field>
 
-              <Field
-                label="Introduction"
-                required
-                errorText="This field is required"
-              >
-                <Textarea
-                  name="introduction"
-                  size="xl"
-                  className="border"
-                  px={2}
-                  py={2}
-                  onChange={handleInputChange}
-                  value={formData.introduction || ""}
-                />
-              </Field>
-
               {/* Budget Goal */}
               {publicHardcodedCents === null ? (
                 <Field
@@ -591,7 +701,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 >
                   <Input
                     name="budget_goal"
-                    type={isCreateMode ? "text" : "number"}
+                    type="number"
+                    min="0"
+                    step="0.01"
                     className="border"
                     px={2}
                     onChange={handleInputChange}
@@ -616,23 +728,17 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               <Field label="Status" required errorText="This field is required">
                 <NativeSelectRoot>
                   <NativeSelectField
-                    className={`border ${isCreateMode ? "bg-gray-100" : ""}`}
+                    className="border"
                     px={2}
                     name="status"
                     onChange={(e) => handleSelectChange("status", e.target.value)}
                     value={formData.status || "New"}
-                    _disabled={isCreateMode ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
-                    {...(isCreateMode ? { disabled: true } : {})}
                   >
                     <option value="New">New</option>
-                    {isEditMode && (
-                      <>
-                        <option value="Partially Funded">Partially Funded</option>
-                        <option value="Budget Filled">Budget Filled</option>
-                        <option value="Archived">Archived</option>
-                        <option value="Draft">Draft</option>
-                      </>
-                    )}
+                    <option value="Partially Funded">Partially Funded</option>
+                    <option value="Budget Fulfilled">Budget Fulfilled</option>
+                    <option value="Archived">Archived</option>
+                    <option value="Draft">Draft</option>
                   </NativeSelectField>
                 </NativeSelectRoot>
               </Field>
@@ -680,9 +786,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     >
                       <FileUpload.HiddenInput />
                       <FileUpload.Label>
-                        {isProcessingImages
-                          ? "Uploading & Optimizing Images..."
-                          : "Upload Images (Auto-Optimized)"}
+                        Upload Images (Will be processed on save)
                       </FileUpload.Label>
                       <InputGroup
                         startElement={<LuFileUp />}
@@ -706,22 +810,19 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                         </Input>
                       </InputGroup>
 
-                      {isProcessingImages && (
-                        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                          <Text fontSize="sm" color="blue.600" textAlign="center">
-                            🔄 Uploading to Supabase and applying transformations...
-                          </Text>
-                        </div>
-                      )}
-
                       {imagePreviewUrls.length > 0 && (
                         <div className="mt-4">
                           <Text fontSize="sm" color="gray.600" mb={2}>
-                            Optimized Images via Supabase ({processedImages.length}):
+                            Selected Images ({imageFiles.length}):
+                            {isProcessingImages && (
+                              <Text as="span" color="blue.600" ml={2}>
+                                (Optimizing...)
+                              </Text>
+                            )}
                           </Text>
                           <div className="flex flex-wrap gap-4">
                             {imagePreviewUrls.map((url, index) => {
-                              const file = processedImages[index]
+                              const file = imageFiles[index]
                               const fileSizeKB = file
                                 ? Math.round(file.size / 1024)
                                 : 0
@@ -738,16 +839,19 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                                   <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
                                     {fileSizeKB}KB
                                   </div>
-                                  <FileUpload.ClearTrigger asChild>
-                                    <CloseButton
-                                      className="absolute top-2 right-2"
-                                      size="sm"
-                                      variant="solid"
-                                      bg="red.500"
-                                      color="white"
-                                      _hover={{ bg: "red.600" }}
-                                    />
-                                  </FileUpload.ClearTrigger>
+                                  <button
+                                    onClick={() => handleDeletePreviewImage(index)}
+                                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                  >
+                                    <HiX size={16} />
+                                  </button>
+                                  {isProcessingImages && (
+                                    <div className="absolute inset-0 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center">
+                                      <div className="bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-medium">
+                                        Optimizing...
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               )
                             })}
@@ -855,31 +959,42 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               </Field>
 
               {/* Map Picker */}
-              <MapPicker
-                onSelectLocation={handleLocationSelect}
-                initialLocation={
-                  isEditMode && selectedChild?.location_geo
-                    ? {
-                        coordinates: [
-                          selectedChild.location_geo.coordinates[1],
-                          selectedChild.location_geo.coordinates[0],
-                        ],
-                        locationStr: selectedChild.location_str || "",
-                        country: selectedChild.country || "",
-                      }
-                    : undefined
-                }
-              />
-
-              <Field label="Country" required errorText="This field is required">
-                <Input
-                  name="country"
-                  className="border"
-                  px={2}
-                  value={formData.country || ""}
-                  placeholder="Enter country name"
-                  disabled
+              <Field 
+                label="Location" 
+                required 
+                errorText="Please select a location on the map"
+                helperText="Click on the map to select a location. Country will be automatically detected."
+              >
+                <MapPicker
+                  onSelectLocation={handleLocationSelect}
+                  initialLocation={
+                    isEditMode && selectedChild?.location_geo
+                      ? {
+                          coordinates: [
+                            selectedChild.location_geo.coordinates[1],
+                            selectedChild.location_geo.coordinates[0],
+                          ],
+                          locationStr: selectedChild.location_str || "",
+                          country: selectedChild.country || "",
+                        }
+                      : undefined
+                  }
                 />
+                
+                {/* Show selected location details */}
+                {formData.country && (
+                  <div className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-200">
+                    <Text fontSize="sm" color="gray.700" fontWeight="medium">
+                      Selected Location:
+                    </Text>
+                    <Text fontSize="sm" color="gray.600">
+                      {formData.location_str || "Location set"}
+                    </Text>
+                    <Text fontSize="sm" color="blue.600" fontWeight="medium" mt={1}>
+                      Country: {formData.country}
+                    </Text>
+                  </div>
+                )}
               </Field>
             </Fieldset.Content>
           </Fieldset.Root>
@@ -898,7 +1013,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         <DialogFooter className="flex justify-end gap-3 p-6 pt-2">
           <Button
             className="bg-gray-500 text-white hover:bg-gray-600"
-            onClick={handleModalCloseWithConfirmation}
+            onClick={handleCancel}
             disabled={isSaving}
           >
             Cancel
@@ -947,4 +1062,3 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 }
 
 export default BeneficiaryModal
-

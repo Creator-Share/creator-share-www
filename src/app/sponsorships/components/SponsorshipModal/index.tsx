@@ -396,13 +396,23 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
 
     try {
+      // Prefer the first carousel image's public URL if available
+      const primaryImage = images && images.length > 0 ? images[0] : null
+      let primaryImageUrl = beneficiary.image_url || ""
+      if (primaryImage) {
+        try {
+          primaryImageUrl = generatePublicUrl(primaryImage as unknown as MediaRow)
+        } catch {
+          primaryImageUrl = primaryImage.image_url || primaryImageUrl
+        }
+      }
+
       const payload = {
         beneficiaryId: beneficiary.id,
         beneficiaryName: beneficiary.name,
         beneficiaryImage:
-          beneficiary.image_url ||
+          primaryImageUrl ||
           "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=",
-        // If public hardcoded amount is set, send that exact cents value to server.
         amount:
           publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
         paymentType: selectedOption,
