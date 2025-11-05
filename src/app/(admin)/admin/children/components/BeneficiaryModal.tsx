@@ -37,6 +37,7 @@ import {
 import MapPicker from "./MapPicker"
 import ActivitiesTable from "../../activities/components/ActivitiesTable"
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types"
+import ProofreadButton from "@/components/ai/ProofreadButton"
 import { toaster } from "@/components/ui/toaster"
 import { dollarsToCents } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
@@ -690,6 +691,24 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   onChange={handleInputChange}
                   value={formData.biography || ""}
                 />
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                  <ProofreadButton
+                    text={formData.biography || ""}
+                    onAccept={(proofreadText) => {
+                      if (isEditMode) {
+                        setLocalFormData((prev) => ({ ...prev, biography: proofreadText }))
+                      } else if (setExternalFormData) {
+                        setExternalFormData((prev: Partial<Beneficiaries>) => ({ 
+                          ...prev, 
+                          biography: proofreadText 
+                        }))
+                      }
+                      setHasUnsavedChanges(true)
+                    }}
+                    fieldLabel="Biography"
+                    size="sm"
+                  />
+                </div>
               </Field>
 
               {/* Budget Goal */}

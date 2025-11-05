@@ -1,6 +1,7 @@
 import React, { useState } from "react"
 import { Button, Input, Textarea, createListCollection } from "@chakra-ui/react"
 import { Activity } from "@/types/admin.types"
+import ProofreadButton from "@/components/ai/ProofreadButton"
 import {
   FileUploadRoot,
   FileUploadTrigger,
@@ -115,22 +116,40 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             ))}
           </SelectContent>
         </SelectRoot>
-        <Input
-          placeholder="Title"
-          value={title}
-          onChange={(e) => onTitleChange(e.target.value)}
-          style={{ marginBottom: 12 }}
-          p={2}
-          className="border border-stone-600"
-        />
-        <Textarea
-          placeholder="Description"
-          value={description}
-          onChange={(e) => onDescriptionChange(e.target.value)}
-          style={{ marginBottom: 12 }}
-          p={2}
-          className="border border-stone-600"
-        />
+        <div style={{ marginBottom: 12 }}>
+          <Input
+            placeholder="Title"
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            p={2}
+            className="border border-stone-600"
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+            <ProofreadButton
+              text={title}
+              onAccept={onTitleChange}
+              fieldLabel="Title"
+              size="sm"
+            />
+          </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <Textarea
+            placeholder="Description"
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            p={2}
+            className="border border-stone-600"
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+            <ProofreadButton
+              text={description}
+              onAccept={onDescriptionChange}
+              fieldLabel="Description"
+              size="sm"
+            />
+          </div>
+        </div>
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload Images</label>
           <FileUploadRoot
@@ -242,22 +261,40 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
         >
           Edit Activity
         </div>
-        <Input
-          placeholder="Title"
-          value={title}
-          onChange={(e) => onTitleChange(e.target.value)}
-          style={{ marginBottom: 12 }}
-          p={2}
-          className="border border-stone-600"
-        />
-        <Textarea
-          placeholder="Description"
-          value={description}
-          onChange={(e) => onDescriptionChange(e.target.value)}
-          style={{ marginBottom: 12 }}
-          p={2}
-          className="border border-stone-600"
-        />
+        <div style={{ marginBottom: 12 }}>
+          <Input
+            placeholder="Title"
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            p={2}
+            className="border border-stone-600"
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+            <ProofreadButton
+              text={title}
+              onAccept={onTitleChange}
+              fieldLabel="Title"
+              size="sm"
+            />
+          </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <Textarea
+            placeholder="Description"
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            p={2}
+            className="border border-stone-600"
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+            <ProofreadButton
+              text={description}
+              onAccept={onDescriptionChange}
+              fieldLabel="Description"
+              size="sm"
+            />
+          </div>
+        </div>
         {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
         <div
           style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}

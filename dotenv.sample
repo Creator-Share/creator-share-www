@@ -30,3 +30,8 @@ EMAIL_USER=
 EMAIL_PASSWORD=
 EMAIL_PORT=587
 EMAIL_SECURE=true
+
+# AI Proofreading (Google Gemini)
+# Get your free API key from: https://aistudio.google.com/app/apikey
+# Free tier: 15 requests/minute, 1,500 requests/day
+GEMINI_API_KEY=
