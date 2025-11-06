@@ -3,6 +3,8 @@ import React, { useEffect, useState } from "react"
 import { Box, Spinner, Flex, Text, Button } from "@chakra-ui/react"
 import { useParams } from "next/navigation"
 import { Beneficiaries } from "@/types"
+import { usePresence } from "@/hooks/usePresence"
+import ViewerIndicator from "@/components/presence/ViewerIndicator"
 // import BeneficiaryModal from "../components/SponsorshipModal"
 
 export default function FullProfileDynamic() {
@@ -12,6 +14,7 @@ export default function FullProfileDynamic() {
   const [error, setError] = useState("")
   const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([])
   const [currentBeneficiaryIndex, setCurrentBeneficiaryIndex] = useState(0)
+  const { joinProfilePresence, leaveProfilePresence } = usePresence()
 
   useEffect(() => {
     async function fetchData() {
@@ -51,6 +54,16 @@ export default function FullProfileDynamic() {
     }
     if (username) fetchData()
   }, [username])
+
+  // Join presence when beneficiary is loaded
+  useEffect(() => {
+    if (beneficiary?.id) {
+      joinProfilePresence(beneficiary.id)
+      return () => {
+        leaveProfilePresence(beneficiary.id)
+      }
+    }
+  }, [beneficiary?.id, joinProfilePresence, leaveProfilePresence])
 
   if (loading) {
     return (
@@ -115,8 +128,17 @@ export default function FullProfileDynamic() {
           </Button>
         </Flex>
 
-        {/* Header */}
+        {/* Header with Viewer Indicator */}
         <Flex justify="space-between" align="center" mb={6}>
+          {beneficiary && (
+            <Box>
+              <ViewerIndicator
+                profileId={beneficiary.id}
+                variant="badge"
+                popularThreshold={5}
+              />
+            </Box>
+          )}
           {/* <Heading
             as="h1"
             className="font-bold text-2xl md:text-[55px]"
