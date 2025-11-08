@@ -100,8 +100,9 @@ export async function GET(req: Request) {
       )
     }
 
-    // Stable ordering then limit
+    // Stable ordering: sort_weight DESC (higher weight first), then created_at DESC, then id DESC
     query = query
+      .order("sort_weight", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(limit)
