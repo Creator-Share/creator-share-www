@@ -38,28 +38,34 @@ const ChildrenTable = () => {
     setVideoFiles,
   } = useFormStore()
 
+  // Define all statuses for admin mode
+  const allStatuses = [
+    "New",
+    "Partially Funded",
+    "Budget Fulfilled",
+    "Draft",
+    "Archived",
+  ]
+
   const { setStatus: setFilterStatus } = useFilterStore()
 
-  // Use pagination hook for infinite scroll
+  // Use pagination hook for infinite scroll with admin mode configuration
+  // Initialize with all statuses to avoid race condition when all children are Draft
   const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore } =
     useBeneficiaryPagination({
       recordsPerPage: 9,
       beneficiaryType: "CHILD",
       autoRetry: true,
+      initialStatus: allStatuses, // Initialize with all statuses from the start
+      isAdminMode: true, // Enable admin mode (allows ageRange filtering with Draft)
     })
 
+  // Initialize filter store with admin statuses on mount
+  // This syncs the filter store with the hook's initial filters
   useEffect(() => {
-    // Set all statuses on mount and when formData.status changes
-    const allStatuses = [
-      "New",
-      "Partially Funded",
-      "Budget Fulfilled",
-      "Draft",
-      "Archived",
-    ]
     setFilterStatus(allStatuses)
-    handleFilterChange({ status: allStatuses })
-  }, [setFilterStatus, handleFilterChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setFilterStatus])
 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
@@ -714,8 +720,6 @@ const ChildrenTable = () => {
     selectedItems.size > 0 &&
     selectedItems.size < beneficiaries.filter((b) => b.id).length
 
-  const hasResults = beneficiaries.length > 0
-
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case "New":
@@ -791,7 +795,7 @@ const ChildrenTable = () => {
           Add New
         </Button>
       }
-      showResults={hasResults || isLoading}
+      showResults={true}
       noResultsMessage="No children found matching your search."
     >
       {/* Filters */}

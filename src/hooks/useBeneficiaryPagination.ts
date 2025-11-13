@@ -14,6 +14,8 @@ interface UseBeneficiaryPaginationOptions {
   recordsPerPage?: number
   beneficiaryType?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED"
   autoRetry?: boolean
+  initialStatus?: string[] // Optional initial status filter (for admin mode)
+  isAdminMode?: boolean // Flag to indicate admin mode (affects ageRange filtering with Draft)
 }
 
 interface UseBeneficiaryPaginationReturn {
@@ -43,12 +45,14 @@ export function useBeneficiaryPagination(
     recordsPerPage = 3,
     beneficiaryType = "CHILD",
     autoRetry = true,
+    initialStatus,
+    isAdminMode = false,
   } = options
 
   const [filters, setFilters] = useState<FiltersState>({
     gender: "",
     ageRange: [0, beneficiaryType === "ANIMAL" ? 20 : 14],
-    status: ["New", "Partially Funded"],
+    status: initialStatus || ["New", "Partially Funded"],
     search: "",
     beneficiary_type: beneficiaryType,
   })
@@ -85,15 +89,18 @@ export function useBeneficiaryPagination(
       )
       if (filters.gender) params.set("gender", filters.gender)
       if (filters.status?.length) params.set("status", filters.status.join(","))
+      // In admin mode, always apply ageRange filter if provided
+      // In public mode, skip ageRange when Draft is included (draft items may not have age data)
       const includesDraft = (filters.status || []).includes("Draft")
-      if (filters.ageRange && !includesDraft)
+      if (filters.ageRange && (isAdminMode || !includesDraft)) {
         params.set("ageRange", filters.ageRange.join(","))
+      }
       if (filters.search) params.set("search", filters.search)
       params.set("limit", String(recordsPerPage))
       if (nextCursor) params.set("cursor", nextCursor)
       return params.toString()
     },
-    [filters, beneficiaryType, recordsPerPage]
+    [filters, beneficiaryType, recordsPerPage, isAdminMode]
   )
 
   const fetchPage = useCallback(
