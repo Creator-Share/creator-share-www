@@ -39,21 +39,12 @@ const SponsorshipFilters: React.FC<
   const [maxAge, setMaxAge] = useState<number>(
     selectedAgeRange[1] || defaultMaxAge
   )
-  
-  // Debug logging
-  console.log('[AgeRange Debug] Component Render:', {
-    minAge,
-    maxAge,
-    selectedAgeRange,
-    defaultMaxAge,
-    beneficiaryType,
-  })
+
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [mounted, setMounted] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const user = useAuthStore((state) => state.user)
   
-  // Track if we're updating internally to prevent circular updates
   const isInternalUpdateRef = useRef(false)
   const ageRangeUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const previousAgeRangeRef = useRef<[number, number]>([minAge, maxAge])
@@ -72,60 +63,33 @@ const SponsorshipFilters: React.FC<
     checkAdminStatus()
   }, [user])
 
-  // Only sync from filter store when change is external (not from our own updates)
   useEffect(() => {
-    console.log('[AgeRange Debug] Filter Store Sync Effect Triggered:', {
-      isInternalUpdate: isInternalUpdateRef.current,
-      selectedAgeRange,
-      currentMinAge: minAge,
-      currentMaxAge: maxAge,
-      previousAgeRange: previousAgeRangeRef.current,
-    })
     
-    // Skip if this is an internal update
     if (isInternalUpdateRef.current) {
-      console.log('[AgeRange Debug] Skipping external sync - internal update in progress')
-      // Reset the flag after a short delay to allow state updates to propagate
       if (ageRangeUpdateTimeoutRef.current) {
         clearTimeout(ageRangeUpdateTimeoutRef.current)
       }
       ageRangeUpdateTimeoutRef.current = setTimeout(() => {
-        console.log('[AgeRange Debug] Resetting internal update flag')
         isInternalUpdateRef.current = false
       }, 150)
       return
     }
 
-    // Get values from filter store
     const newMin = selectedAgeRange[0] || 0
     const newMax = selectedAgeRange[1] || defaultMaxAge
     const newAgeRange: [number, number] = [newMin, newMax]
     
-    // Only update if the values actually changed and are different from previous
     const prevMin = previousAgeRangeRef.current[0]
     const prevMax = previousAgeRangeRef.current[1]
     
-    console.log('[AgeRange Debug] Comparing values:', {
-      newMin,
-      newMax,
-      prevMin,
-      prevMax,
-      willUpdate: newMin !== prevMin || newMax !== prevMax,
-    })
-    
     if (newMin !== prevMin || newMax !== prevMax) {
-      console.log('[AgeRange Debug] Updating local state from filter store:', {
-        from: [prevMin, prevMax],
-        to: [newMin, newMax],
-      })
       setMinAge(newMin)
       setMaxAge(newMax)
       previousAgeRangeRef.current = newAgeRange
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedAgeRange, defaultMaxAge]) // Removed minAge and maxAge from dependencies to prevent circular updates
+  }, [selectedAgeRange, defaultMaxAge])
   
-  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (ageRangeUpdateTimeoutRef.current) {
@@ -137,13 +101,7 @@ const SponsorshipFilters: React.FC<
     }
   }, [])
   
-  // Update ref when local state changes (for internal updates)
   useEffect(() => {
-    console.log('[AgeRange Debug] Local state changed, updating previousRef:', {
-      minAge,
-      maxAge,
-      previousRef: previousAgeRangeRef.current,
-    })
     previousAgeRangeRef.current = [minAge, maxAge]
   }, [minAge, maxAge])
 
@@ -157,9 +115,7 @@ const SponsorshipFilters: React.FC<
     status?: string[]
     search?: string
   }) => {
-    // Always include the current status if not explicitly changed
     const newStatus = updatedFilters.status ?? selectedStatus
-    console.log("New status:", newStatus)
 
     const newFilters = {
       gender: updatedFilters.gender ?? selectedGender,
@@ -185,18 +141,10 @@ const SponsorshipFilters: React.FC<
   const handleClearFilters = (e: React.MouseEvent) => {
     e.preventDefault()
 
-    console.log('[AgeRange Debug] Clearing filters:', {
-      currentMinAge: minAge,
-      currentMaxAge: maxAge,
-      defaultMaxAge,
-    })
-
-    // Determine default status based on mode
     const defaultStatus = isAdminMode
       ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
       : ["New", "Partially Funded"]
 
-    // Mark as internal update to prevent circular sync
     isInternalUpdateRef.current = true
     
     setGender("")
@@ -215,7 +163,6 @@ const SponsorshipFilters: React.FC<
     })
   }
 
-  // Determine if current filters differ from mode-specific defaults to enable Clear button
   const hasSearchQuery = mounted && searchQuery.trim().length > 0
 
   const modeDefaultStatus = isAdminMode
@@ -258,7 +205,6 @@ const SponsorshipFilters: React.FC<
             alignItems="center"
             width="100%"
           >
-            {/* Age Range Slider */}
             <Box
               flex={{ base: "1 1 100%", md: "1 1 0" }}
               w="100%"
@@ -286,50 +232,23 @@ const SponsorshipFilters: React.FC<
                       const [newMin, origMax] = details.value
                       let newMax = origMax
 
-                      console.log('[AgeRange Debug] Slider onChange:', {
-                        receivedValues: details.value,
-                        newMin,
-                        origMax,
-                        currentMinAge: minAge,
-                        currentMaxAge: maxAge,
-                        timestamp: Date.now(),
-                      })
-
                       const minDistance = 1
                       if (newMax - newMin < minDistance) {
-                        console.log('[AgeRange Debug] Adjusting maxAge for minimum distance')
                         newMax = Math.max(newMin + minDistance, maxAge)
                       }
 
-                      console.log('[AgeRange Debug] Updating local state immediately:', {
-                        newMin,
-                        newMax,
-                      })
-
-                      // Update local state immediately for responsive UI
                       setMinAge(newMin)
                       setMaxAge(newMax)
                       
-                      // Clear any existing debounce timeout
                       if (sliderDebounceTimeoutRef.current) {
-                        console.log('[AgeRange Debug] Clearing previous debounce timeout')
                         clearTimeout(sliderDebounceTimeoutRef.current)
                       }
                       
-                      // Debounce the filter store update to prevent rapid updates
-                      sliderDebounceTimeoutRef.current = setTimeout(() => {
-                        console.log('[AgeRange Debug] Debounced update - setting internal flag and updating filter store:', {
-                          newMin,
-                          newMax,
-                          timestamp: Date.now(),
-                        })
-                        
-                        // Mark as internal update to prevent circular sync
+                        sliderDebounceTimeoutRef.current = setTimeout(() => {
                         isInternalUpdateRef.current = true
                         
-                        // Update filter store and trigger filter change
                         handleFilterChange({ ageRange: [newMin, newMax] })
-                      }, 300) // 300ms debounce delay
+                      }, 300)
                     }
                   }}
                   showValue
@@ -337,7 +256,6 @@ const SponsorshipFilters: React.FC<
               </Box>
             </Box>
 
-            {/* Gender Select Dropdown */}
             <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
               <SelectRoot
                 collection={genders}
@@ -373,7 +291,6 @@ const SponsorshipFilters: React.FC<
               </SelectRoot>
             </Box>
 
-            {/* Status Select Dropdown - Admin Only */}
             {user && isAdmin && (
               <Tooltip content="Filter by funding status (Admin Only)">
                 <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
@@ -417,7 +334,6 @@ const SponsorshipFilters: React.FC<
               </Tooltip>
             )}
 
-            {/* Search Field */}
             <Box
               flex={{ base: "1 1 100%", md: "1 1 0" }}
               w="100%"
