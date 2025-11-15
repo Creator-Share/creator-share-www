@@ -89,10 +89,8 @@ export function useBeneficiaryPagination(
       )
       if (filters.gender) params.set("gender", filters.gender)
       if (filters.status?.length) params.set("status", filters.status.join(","))
-      // In admin mode, always apply ageRange filter if provided
-      // In public mode, skip ageRange when Draft is included (draft items may not have age data)
       const includesDraft = (filters.status || []).includes("Draft")
-      if (filters.ageRange && (isAdminMode || !includesDraft)) {
+      if (filters.ageRange && !includesDraft) {
         params.set("ageRange", filters.ageRange.join(","))
       }
       if (filters.search) params.set("search", filters.search)
