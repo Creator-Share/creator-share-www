@@ -10,11 +10,11 @@ import { dollarsToCents } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { useFormStore } from "@/store/formStore"
 import { useFilterStore } from "@/store/filterStore"
-import { BulkActionButton } from "@/components/admin-ui/BulkActionButton"
 import { GoPlusCircle } from "react-icons/go"
 import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
 import SponsorshipFilters from "@/app/sponsorships/components/SponsorshipFilters"
+import FloatingActionBar from "@/components/admin-ui/FloatingActionBar"
 
 type FiltersState = {
   gender: string
@@ -38,28 +38,34 @@ const ChildrenTable = () => {
     setVideoFiles,
   } = useFormStore()
 
+  // Define all statuses for admin mode
+  const allStatuses = [
+    "New",
+    "Partially Funded",
+    "Budget Fulfilled",
+    "Draft",
+    "Archived",
+  ]
+
   const { setStatus: setFilterStatus } = useFilterStore()
 
-  // Use pagination hook for infinite scroll
+  // Use pagination hook for infinite scroll with admin mode configuration
+  // Initialize with all statuses to avoid race condition when all children are Draft
   const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore } =
     useBeneficiaryPagination({
       recordsPerPage: 9,
       beneficiaryType: "CHILD",
       autoRetry: true,
+      initialStatus: allStatuses, // Initialize with all statuses from the start
+      isAdminMode: true, // Enable admin mode (allows ageRange filtering with Draft)
     })
 
+  // Initialize filter store with admin statuses on mount
+  // This syncs the filter store with the hook's initial filters
   useEffect(() => {
-    // Set all statuses on mount and when formData.status changes
-    const allStatuses = [
-      "New",
-      "Partially Funded",
-      "Budget Fulfilled",
-      "Draft",
-      "Archived",
-    ]
     setFilterStatus(allStatuses)
-    handleFilterChange({ status: allStatuses })
-  }, [setFilterStatus, handleFilterChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setFilterStatus])
 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
@@ -683,7 +689,7 @@ const ChildrenTable = () => {
         throw new Error("Failed to update status")
       }
 
-      // Clear selection BEFORE making the API call to prevent race conditions
+      // Clear selection after successful update
       setSelectedItems(new Set())
       setSelectedRowsForDeletion([])
 
@@ -693,8 +699,22 @@ const ChildrenTable = () => {
         duration: 5000,
       })
 
-      // Reload the list
-      window.location.reload()
+      // Refresh the list using current filter state instead of reloading
+      const allStatuses = [
+        "New",
+        "Partially Funded",
+        "Budget Fulfilled",
+        "Draft",
+        "Archived",
+      ]
+      setFilterStatus(allStatuses)
+      handleFilterChange({
+        gender: "",
+        ageRange: [0, 14] as [number, number],
+        status: allStatuses,
+        search: "",
+        beneficiary_type: "CHILD"
+      })
     } catch (error) {
       console.error("Bulk status update error:", error)
       toaster.create({
@@ -713,8 +733,6 @@ const ChildrenTable = () => {
   const isSomeSelected =
     selectedItems.size > 0 &&
     selectedItems.size < beneficiaries.filter((b) => b.id).length
-
-  const hasResults = beneficiaries.length > 0
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -745,36 +763,6 @@ const ChildrenTable = () => {
       onSelectAll={handleSelectAll}
       selectedCount={selectedItems.size}
       totalCount={beneficiaries.filter((b) => b.id).length}
-      bulkActions={
-        selectedItems.size > 0 ? (
-          <>
-            <Button
-              onClick={() => setSelectedItems(new Set())}
-              className="border-[2px] border-[#2B7FF9] rounded-md w-full md:w-fit h-[40px] px-10 bg-white text-[#2B7FF9] hover:bg-[#f0f7ff]"
-            >
-              Deselect All
-            </Button>
-            <BulkActionButton
-              label="Delete"
-              count={selectedItems.size}
-              action={handleBulkDelete}
-              className="border-[2px] border-transparent rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ff0000] text-white hover:bg-[#ff0000] hover:text-white"
-            />
-            <BulkActionButton
-              label="Archive"
-              count={selectedItems.size}
-              action={() => handleBulkStatusUpdate("Archived")}
-              className="border-[2px] border-[#000000] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ffffff] text-black hover:bg-[#f0f0f0] hover:text-black"
-            />
-            <BulkActionButton
-              label="Draft"
-              count={selectedItems.size}
-              action={() => handleBulkStatusUpdate("Draft")}
-              className="border-[2px] border-[#000000] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ffffff] text-black hover:bg-[#f0f0f0] hover:text-black"
-            />
-          </>
-        ) : undefined
-      }
       primaryAction={
         <Button
           onClick={() => {
@@ -791,7 +779,7 @@ const ChildrenTable = () => {
           Add New
         </Button>
       }
-      showResults={hasResults || isLoading}
+      showResults={true}
       noResultsMessage="No children found matching your search."
     >
       {/* Filters */}
@@ -942,6 +930,14 @@ const ChildrenTable = () => {
             ? setVideoFiles(value(videoFiles))
             : setVideoFiles(value)
         }
+      />
+
+      {/* Floating Action Bar */}
+      <FloatingActionBar
+        selectedCount={selectedItems.size}
+        onDeselectAll={() => setSelectedItems(new Set())}
+        onDelete={handleBulkDelete}
+        onSetStatus={handleBulkStatusUpdate}
       />
     </AdminPageLayout>
   )

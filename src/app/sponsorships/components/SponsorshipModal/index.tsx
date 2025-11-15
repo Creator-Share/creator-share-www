@@ -49,6 +49,8 @@ import { BeneficiaryMedia } from "@/types/admin.types"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { useSponsorship } from "../../hooks/useSponsorship"
+import { usePresence } from "@/hooks/usePresence"
+import ViewerIndicator from "@/components/presence/ViewerIndicator"
 
 interface BeneficiaryModalProps {
   open: boolean
@@ -65,6 +67,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [lastToastTime, setLastToastTime] = useState(0)
   const user = useAuthStore((state) => state.user)
   const { setSponsorshipInProgress } = useSponsorship()
+  const { joinProfilePresence, leaveProfilePresence } = usePresence()
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
   const publicHardcodedCents = publicHardcodedRaw
     ? parseInt(publicHardcodedRaw, 10)
@@ -99,6 +102,16 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [hasActivities, setHasActivities] = useState<boolean>(false)
 
   const [, setPrimaryImageUrl] = useState<string | null>(null)
+
+  // Join presence when modal opens
+  useEffect(() => {
+    if (open && beneficiary?.id) {
+      joinProfilePresence(beneficiary.id)
+      return () => {
+        leaveProfilePresence(beneficiary.id)
+      }
+    }
+  }, [open, beneficiary?.id, joinProfilePresence, leaveProfilePresence])
 
   // Remove automatic reservation on modal open - only reserve when payment buttons are clicked
 
@@ -805,9 +818,16 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     >
       <DialogContent className="max-w-[95vw] md:max-w-[1100px] w-full relative rounded-2xl p-0 mt-8 md:mt-24">
         <DialogHeader className="flex justify-between items-center px-6 md:px-8 pt-6 pb-4">
-          <Text className="text-xl md:text-2xl font-bold text-gray-800">
-            Sponsorship Details
-          </Text>
+          <Flex align="center" gap={3} flex="1">
+            <Text className="text-xl md:text-2xl font-bold text-gray-800">
+              Sponsorship Details
+            </Text>
+            <ViewerIndicator
+              profileId={beneficiary.id}
+              variant="badge"
+              showWhenZero={false}
+            />
+          </Flex>
           <DialogCloseTrigger>
             <Box className="text-2xl font-normal cursor-pointer hover:bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center transition-colors">
               ×

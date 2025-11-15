@@ -49,10 +49,12 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryCardProps> = ({
     fetchImages()
   }, [beneficiary.id])
 
-  const age = calculateAge(new Date(beneficiary.birth_date).toISOString())
-  const formattedBirthDate = formatDate(
-    new Date(beneficiary.birth_date).toISOString(),
-  )
+  const age = beneficiary.birth_date 
+    ? calculateAge(new Date(beneficiary.birth_date).toISOString())
+    : null
+  const formattedBirthDate = beneficiary.birth_date
+    ? formatDate(new Date(beneficiary.birth_date).toISOString())
+    : null
 
   const handleNextImage = () => {
     setCurrentImageIndex((prev) => (prev + 1) % images.length)
@@ -205,10 +207,15 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryCardProps> = ({
           {beneficiary.name}
         </Text>
         <Flex align="center" gap={3} mb={4}>
-          <FaCalendar />
-          <Text fontSize="sm" color="gray.500">
-            {formattedBirthDate} | {age} years old
-          </Text>
+          {formattedBirthDate && (
+            <>
+              <FaCalendar />
+              <Text fontSize="sm" color="gray.500">
+                {formattedBirthDate}
+                {age !== null && ` | ${age} years old`}
+              </Text>
+            </>
+          )}
           <FaLocationDot />
           <Text fontSize="sm" color="gray.500">
             {beneficiary.country}

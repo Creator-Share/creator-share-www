@@ -11,6 +11,7 @@ import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { useSponsorship } from "../../hooks/useSponsorship"
 import { useReservations } from "../../hooks/useReservations"
+import ViewerIndicator from "@/components/presence/ViewerIndicator"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -30,6 +31,9 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   
   // Get real-time reservation status from server
   const serverReservationStatus = getReservationStatus(beneficiary.id)
+
+  // Note: Presence tracking removed from card list view
+  // Only track presence when viewing the actual profile (modal or detail page)
   
   // Calculate time remaining for reservation
   const getTimeRemaining = (timestamp: number) => {
@@ -128,8 +132,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     return image.image_url || ""
   }
 
-  // Primary content
-  const age = calculateAge(new Date(beneficiary.birth_date).toISOString())
+  // Primary content - only calculate age if birth_date exists
+  const age = beneficiary.birth_date 
+    ? calculateAge(new Date(beneficiary.birth_date).toISOString())
+    : null
   
   // Check if child is reserved (real-time server-side + client-side fallback)
   const isReserved = isSponsorshipInProgress || serverReservationStatus?.reserved || false
@@ -170,6 +176,15 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           showArrowsOnHover={true}
         />
 
+        {/* Viewer Indicator */}
+        <Box position="absolute" top="12px" left="12px" zIndex={10}>
+          <ViewerIndicator
+            profileId={beneficiary.id}
+            variant="badge"
+            showWhenZero={false}
+          />
+        </Box>
+
         {/* Goal Badge */}
         {!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && (
           <Box position="absolute" top="0" right="0" zIndex={10}>
@@ -205,10 +220,12 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
         {/* Information Row */}
         <Flex gap={4} mb={4} flexWrap="wrap" className="text-[#666666]">
-          <Flex align="center" gap={1}>
-            <FaCalendar />
-            <Text fontSize="sm">{age ? `${age} years` : "DOB"}</Text>
-          </Flex>
+          {age !== null && (
+            <Flex align="center" gap={1}>
+              <FaCalendar />
+              <Text fontSize="sm">{age} years</Text>
+            </Flex>
+          )}
           <Flex align="center" gap={1}>
             <FaPerson />
             <Text fontSize="sm">{beneficiary.gender || "Gender"}</Text>

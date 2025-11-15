@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Box, Flex, Button, Text, Input, IconButton } from "@chakra-ui/react"
 import { Global, css } from "@emotion/react"
 import { Slider } from "@/components/ui/slider"
@@ -34,15 +34,21 @@ const SponsorshipFilters: React.FC<
     setAgeRange,
     setStatus,
   } = useFilterStore()
-  const [minAge, setMinAge] = useState<number>(selectedAgeRange[0] || 0)
   const defaultMaxAge = beneficiaryType === "ANIMAL" ? 20 : 14
+  const [minAge, setMinAge] = useState<number>(selectedAgeRange[0] || 0)
   const [maxAge, setMaxAge] = useState<number>(
     selectedAgeRange[1] || defaultMaxAge
   )
+
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [mounted, setMounted] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const user = useAuthStore((state) => state.user)
+  
+  const isInternalUpdateRef = useRef(false)
+  const ageRangeUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const previousAgeRangeRef = useRef<[number, number]>([minAge, maxAge])
+  const sliderDebounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -58,9 +64,46 @@ const SponsorshipFilters: React.FC<
   }, [user])
 
   useEffect(() => {
-    setMinAge(selectedAgeRange[0] || 0)
-    setMaxAge(selectedAgeRange[1] || defaultMaxAge)
+    
+    if (isInternalUpdateRef.current) {
+      if (ageRangeUpdateTimeoutRef.current) {
+        clearTimeout(ageRangeUpdateTimeoutRef.current)
+      }
+      ageRangeUpdateTimeoutRef.current = setTimeout(() => {
+        isInternalUpdateRef.current = false
+      }, 150)
+      return
+    }
+
+    const newMin = selectedAgeRange[0] || 0
+    const newMax = selectedAgeRange[1] || defaultMaxAge
+    const newAgeRange: [number, number] = [newMin, newMax]
+    
+    const prevMin = previousAgeRangeRef.current[0]
+    const prevMax = previousAgeRangeRef.current[1]
+    
+    if (newMin !== prevMin || newMax !== prevMax) {
+      setMinAge(newMin)
+      setMaxAge(newMax)
+      previousAgeRangeRef.current = newAgeRange
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAgeRange, defaultMaxAge])
+  
+  useEffect(() => {
+    return () => {
+      if (ageRangeUpdateTimeoutRef.current) {
+        clearTimeout(ageRangeUpdateTimeoutRef.current)
+      }
+      if (sliderDebounceTimeoutRef.current) {
+        clearTimeout(sliderDebounceTimeoutRef.current)
+      }
+    }
+  }, [])
+  
+  useEffect(() => {
+    previousAgeRangeRef.current = [minAge, maxAge]
+  }, [minAge, maxAge])
 
   useEffect(() => {
     setMounted(true)
@@ -72,9 +115,7 @@ const SponsorshipFilters: React.FC<
     status?: string[]
     search?: string
   }) => {
-    // Always include the current status if not explicitly changed
     const newStatus = updatedFilters.status ?? selectedStatus
-    console.log("New status:", newStatus)
 
     const newFilters = {
       gender: updatedFilters.gender ?? selectedGender,
@@ -100,11 +141,12 @@ const SponsorshipFilters: React.FC<
   const handleClearFilters = (e: React.MouseEvent) => {
     e.preventDefault()
 
-    // Determine default status based on mode
     const defaultStatus = isAdminMode
       ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
       : ["New", "Partially Funded"]
 
+    isInternalUpdateRef.current = true
+    
     setGender("")
     setAgeRange([0, defaultMaxAge])
     setStatus(defaultStatus)
@@ -121,7 +163,6 @@ const SponsorshipFilters: React.FC<
     })
   }
 
-  // Determine if current filters differ from mode-specific defaults to enable Clear button
   const hasSearchQuery = mounted && searchQuery.trim().length > 0
 
   const modeDefaultStatus = isAdminMode
@@ -164,7 +205,6 @@ const SponsorshipFilters: React.FC<
             alignItems="center"
             width="100%"
           >
-            {/* Age Range Slider */}
             <Box
               flex={{ base: "1 1 100%", md: "1 1 0" }}
               w="100%"
@@ -199,7 +239,16 @@ const SponsorshipFilters: React.FC<
 
                       setMinAge(newMin)
                       setMaxAge(newMax)
-                      handleFilterChange({ ageRange: [newMin, newMax] })
+                      
+                      if (sliderDebounceTimeoutRef.current) {
+                        clearTimeout(sliderDebounceTimeoutRef.current)
+                      }
+                      
+                        sliderDebounceTimeoutRef.current = setTimeout(() => {
+                        isInternalUpdateRef.current = true
+                        
+                        handleFilterChange({ ageRange: [newMin, newMax] })
+                      }, 300)
                     }
                   }}
                   showValue
@@ -207,7 +256,6 @@ const SponsorshipFilters: React.FC<
               </Box>
             </Box>
 
-            {/* Gender Select Dropdown */}
             <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
               <SelectRoot
                 collection={genders}
@@ -243,7 +291,6 @@ const SponsorshipFilters: React.FC<
               </SelectRoot>
             </Box>
 
-            {/* Status Select Dropdown - Admin Only */}
             {user && isAdmin && (
               <Tooltip content="Filter by funding status (Admin Only)">
                 <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
@@ -287,7 +334,6 @@ const SponsorshipFilters: React.FC<
               </Tooltip>
             )}
 
-            {/* Search Field */}
             <Box
               flex={{ base: "1 1 100%", md: "1 1 0" }}
               w="100%"
