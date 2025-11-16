@@ -1023,7 +1023,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           }
                           readOnly={publicHardcodedDollars !== null}
                           disabled={publicHardcodedDollars !== null}
-                          className="px-4 h-full bg-gray-100 border-0 outline-none focus:ring-0 text-lg"
+                          className="px-4 h-full bg-gray-100 border-0 outline-none focus:ring-0 text-lg text-gray-700"
                           placeholder="Enter Amount"
                         />
                       </Flex>
@@ -1043,7 +1043,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           value={amount || ""}
                           onChange={handleAmountChange}
                           readOnly={publicHardcodedDollars !== null}
-                          className="px-4 h-full border-0 outline-none focus:ring-0 text-lg"
+                          className="px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700"
                           placeholder="Enter Amount"
                         />
                       </Flex>
