@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { RoleAssignmentResponse } from "@/types"
 
-export async function PUT(request: Request) {
+export async function POST(request: Request) {
   try {
     const supabase = await createClient()
     const { userId, roleIds } = await request.json()
