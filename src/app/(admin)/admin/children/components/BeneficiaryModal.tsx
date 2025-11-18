@@ -471,6 +471,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         setProcessedImages([])
         setUploadedImagePaths([])
         setHasUnsavedChanges(false)
+        
+        // Reset the parent's form data
+        setExternalFormData({})
+        
         onClose()
       } else if (isEditMode && onSave) {
         // Edit mode

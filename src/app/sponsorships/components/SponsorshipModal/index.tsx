@@ -1000,7 +1000,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
               {/* Sponsorship Section */}
               <Box className="space-y-4">
-                <Text className="font-medium text-sm mb-2 text-gray-700">
+                <Text className="font-medium text-sm mb-2 text-gray-500">
                   Monthly Sponsorship Amount
                 </Text>
                 <Flex gap={3} align="start">
