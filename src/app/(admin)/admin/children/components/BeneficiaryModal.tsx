@@ -270,7 +270,23 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   // Image upload handler
   const handleImageChange = async (fileDetails: {
     acceptedFiles: File[]
+    rejectedFiles?: Array<{file: File, errors: Array<string | {code?: string, message?: string}>}>
   }) => {
+    // Show helpful error messages for rejected files
+    if (fileDetails.rejectedFiles && fileDetails.rejectedFiles.length > 0) {
+      const rejectedNames = fileDetails.rejectedFiles.map(r => r.file.name).join(', ')
+      const errorMessages = fileDetails.rejectedFiles.map(r => 
+        r.errors.map(e => typeof e === 'string' ? e : (e.message || e.code || 'Unknown error')).join(', ')
+      ).join('; ')
+      
+      toaster.create({
+        title: "Some Files Were Rejected",
+        description: `Files: ${rejectedNames}. Reason: ${errorMessages}. Accepted formats: PNG, JPG, JPEG, HEIC. If you're having issues with JPG files, try re-saving them or converting to PNG.`,
+        type: "error",
+        duration: 10000,
+      })
+    }
+    
     if (isCreateMode) {
       // In create mode, just store files locally - don't upload to Supabase yet
       if (fileDetails.acceptedFiles.length === 0) {
@@ -280,18 +296,46 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         return
       }
       
-      const previewUrls = fileDetails.acceptedFiles.map((file) =>
+      // Additional validation: check file extensions manually as a fallback
+      const validFiles: File[] = []
+      const invalidFiles: string[] = []
+      
+      fileDetails.acceptedFiles.forEach(file => {
+        const ext = file.name.split('.').pop()?.toLowerCase()
+        const validExtensions = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']
+        const isImage = file.type.startsWith('image/')
+        
+        // Accept if extension is valid OR if MIME type indicates it's an image
+        if ((ext && validExtensions.includes(ext)) || isImage) {
+          validFiles.push(file)
+        } else {
+          invalidFiles.push(file.name)
+        }
+      })
+      
+      if (invalidFiles.length > 0) {
+        toaster.create({
+          title: "Invalid File Format",
+          description: `These files were skipped: ${invalidFiles.join(', ')}. Please use PNG, JPG, JPEG, or HEIC formats.`,
+          type: "warning",
+          duration: 6000,
+        })
+      }
+      
+      if (validFiles.length === 0) return
+      
+      const previewUrls = validFiles.map((file) =>
         URL.createObjectURL(file)
       )
       
-      setImageFiles(fileDetails.acceptedFiles)
+      setImageFiles(validFiles)
       setImagePreviewUrls(previewUrls)
       
       toaster.create({
         title: "Images Selected",
-        description: `${fileDetails.acceptedFiles.length} images selected. They will be optimized and uploaded when you save the child.`,
+        description: `${validFiles.length} image${validFiles.length > 1 ? 's' : ''} selected. ${invalidFiles.length > 0 ? `${invalidFiles.length} file${invalidFiles.length > 1 ? 's' : ''} skipped.` : ''} Images will be optimized and uploaded when you save.`,
         type: "success",
-        duration: 3000,
+        duration: 4000,
       })
     } else {
       // In edit mode, upload and optimize immediately
@@ -804,7 +848,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       gap="1"
                       maxWidth="100%"
                       onFileChange={handleImageChange}
-                      accept={["image/*"]}
+                      accept={["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic"]}
                       maxFiles={5}
                     >
                       <FileUpload.HiddenInput />
@@ -885,7 +929,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   ) : (
                     <FileUploadRoot
                       onFileChange={handleImageChange}
-                      accept={["image/*"]}
+                      accept={["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic"]}
                       maxFiles={5}
                     >
                       <FileUploadTrigger asChild>
