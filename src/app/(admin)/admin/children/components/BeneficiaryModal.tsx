@@ -267,6 +267,62 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }
 
+  // Helper function to compress image if needed
+  const compressImage = async (file: File): Promise<File> => {
+    const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+    
+    // If file is under 10MB, return as is
+    if (file.size <= MAX_SIZE) {
+      return file
+    }
+    
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new window.Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+          
+          // Calculate new dimensions (max 4000px on longest side)
+          const maxDimension = 4000
+          if (width > height && width > maxDimension) {
+            height = (height * maxDimension) / width
+            width = maxDimension
+          } else if (height > maxDimension) {
+            width = (width * maxDimension) / height
+            height = maxDimension
+          }
+          
+          canvas.width = width
+          canvas.height = height
+          
+          const ctx = canvas.getContext('2d')
+          ctx?.drawImage(img, 0, 0, width, height)
+          
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                })
+                resolve(compressedFile)
+              } else {
+                resolve(file)
+              }
+            },
+            'image/jpeg',
+            0.85
+          )
+        }
+        img.src = e.target?.result as string
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
   // Image upload handler
   const handleImageChange = async (fileDetails: {
     acceptedFiles: File[]
@@ -296,47 +352,89 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         return
       }
       
-      // Additional validation: check file extensions manually as a fallback
-      const validFiles: File[] = []
-      const invalidFiles: string[] = []
+      // Show instant loading spinner
+      setIsProcessingImages(true)
       
-      fileDetails.acceptedFiles.forEach(file => {
-        const ext = file.name.split('.').pop()?.toLowerCase()
-        const validExtensions = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']
-        const isImage = file.type.startsWith('image/')
+      try {
+        // Additional validation: check file extensions and sizes
+        const validFiles: File[] = []
+        const invalidFiles: string[] = []
+        const largeFiles: string[] = []
         
-        // Accept if extension is valid OR if MIME type indicates it's an image
-        if ((ext && validExtensions.includes(ext)) || isImage) {
-          validFiles.push(file)
-        } else {
-          invalidFiles.push(file.name)
+        for (const file of fileDetails.acceptedFiles) {
+          const ext = file.name.split('.').pop()?.toLowerCase()
+          const validExtensions = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']
+          const isImage = file.type.startsWith('image/')
+          const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
+          
+          // Check file size
+          if (file.size > 50 * 1024 * 1024) { // 50MB hard limit
+            invalidFiles.push(`${file.name} (${fileSizeMB}MB - too large, max 50MB)`)
+            continue
+          }
+          
+          // Accept if extension is valid OR if MIME type indicates it's an image
+          if ((ext && validExtensions.includes(ext)) || isImage) {
+            // Check if file needs compression
+            if (file.size > 10 * 1024 * 1024) {
+              largeFiles.push(file.name)
+              const compressed = await compressImage(file)
+              validFiles.push(compressed)
+            } else {
+              validFiles.push(file)
+            }
+          } else {
+            invalidFiles.push(file.name)
+          }
         }
-      })
-      
-      if (invalidFiles.length > 0) {
+        
+        if (invalidFiles.length > 0) {
+          toaster.create({
+            title: "Invalid Files",
+            description: `These files were skipped: ${invalidFiles.join(', ')}. Please use PNG, JPG, JPEG, or HEIC formats under 50MB.`,
+            type: "warning",
+            duration: 6000,
+          })
+        }
+        
+        if (largeFiles.length > 0) {
+          toaster.create({
+            title: "Large Files Compressed",
+            description: `These files were over 10MB and have been automatically compressed: ${largeFiles.join(', ')}`,
+            type: "info",
+            duration: 6000,
+          })
+        }
+        
+        if (validFiles.length === 0) {
+          setIsProcessingImages(false)
+          return
+        }
+        
+        const previewUrls = validFiles.map((file) =>
+          URL.createObjectURL(file)
+        )
+        
+        setImageFiles(validFiles)
+        setImagePreviewUrls(previewUrls)
+        
         toaster.create({
-          title: "Invalid File Format",
-          description: `These files were skipped: ${invalidFiles.join(', ')}. Please use PNG, JPG, JPEG, or HEIC formats.`,
-          type: "warning",
-          duration: 6000,
+          title: "Images Ready",
+          description: `${validFiles.length} image${validFiles.length > 1 ? 's' : ''} ready to upload. ${invalidFiles.length > 0 ? `${invalidFiles.length} file${invalidFiles.length > 1 ? 's' : ''} skipped.` : ''} Images will be uploaded when you save.`,
+          type: "success",
+          duration: 4000,
         })
+      } catch (error) {
+        console.error('Error processing images:', error)
+        toaster.create({
+          title: "Processing Error",
+          description: "Failed to process some images. Please try again.",
+          type: "error",
+          duration: 5000,
+        })
+      } finally {
+        setIsProcessingImages(false)
       }
-      
-      if (validFiles.length === 0) return
-      
-      const previewUrls = validFiles.map((file) =>
-        URL.createObjectURL(file)
-      )
-      
-      setImageFiles(validFiles)
-      setImagePreviewUrls(previewUrls)
-      
-      toaster.create({
-        title: "Images Selected",
-        description: `${validFiles.length} image${validFiles.length > 1 ? 's' : ''} selected. ${invalidFiles.length > 0 ? `${invalidFiles.length} file${invalidFiles.length > 1 ? 's' : ''} skipped.` : ''} Images will be optimized and uploaded when you save.`,
-        type: "success",
-        duration: 4000,
-      })
     } else {
       // In edit mode, upload and optimize immediately
       if (fileDetails.acceptedFiles.length > 0) {
