@@ -377,37 +377,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
     setLoading(true)
 
-    // Create reservation when payment button is clicked
-    try {
-      const reservationRes = await fetch("/api/sponsorships/reservations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ beneficiaryId: beneficiary.id }),
-      })
-
-      if (!reservationRes.ok) {
-        const data = await reservationRes.json().catch(() => ({}))
-        toaster.create({
-          title: "Already Reserved",
-          description:
-            data?.error ||
-            "Another user is currently sponsoring this child. Please try again shortly.",
-        })
-        setLoading(false)
-        return
-      }
-
-      // Mirror state locally for UI
-      setSponsorshipInProgress(beneficiary.id, true, user?.id)
-    } catch {
-      toaster.create({
-        title: "Error",
-        description: "Unable to reserve at this time.",
-      })
-      setLoading(false)
-      return
-    }
-
     try {
       // Prefer the first carousel image's public URL if available
       const primaryImage = images && images.length > 0 ? images[0] : null
@@ -446,6 +415,20 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       const data = await res.json()
 
       if (!res.ok) {
+        // Handle duplicate sponsorship error specifically
+        if (data?.error === "DUPLICATE_SPONSORSHIP") {
+          toaster.create({
+            title: "Child Already Sponsored",
+            description: data?.message || "This child already has an active sponsorship. Please choose a different child to sponsor.",
+            duration: 8000,
+          })
+          // Close modal and let user select a different child
+          setTimeout(() => {
+            handleClose()
+          }, 2000)
+          return
+        }
+        
         toaster.create({
           title: "Payment Error",
           description: data?.error || "Something went wrong. Please try again.",
@@ -454,6 +437,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       }
 
       const { clientSecret, url } = data
+
+      // Store beneficiary ID in localStorage to cleanup on return
+      localStorage.setItem('pending_checkout_beneficiary', beneficiary.id)
 
       // Dispatch payment success event before redirecting
       window.dispatchEvent(
@@ -464,7 +450,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
       if (window.self !== window.top) {
         if (clientSecret)
-          window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}`
+          window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}&beneficiary_id=${beneficiary.id}`
         else if (url) window.location.href = url
         else
           toaster.create({
@@ -512,38 +498,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             : `Minimum amount is $${minimumAmount}.`,
       })
       throw new Error("Invalid amount")
-    }
-
-    // Create reservation when PayPal order is created
-    try {
-      const reservationRes = await fetch("/api/sponsorships/reservations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ beneficiaryId: beneficiary.id }),
-      })
-
-      if (!reservationRes.ok) {
-        const data = await reservationRes.json().catch(() => ({}))
-        toaster.create({
-          title: "Already Reserved",
-          description:
-            data?.error ||
-            "Another user is currently sponsoring this child. Please try again shortly.",
-        })
-        throw new Error("Already reserved")
-      }
-
-      // Mirror state locally for UI
-      setSponsorshipInProgress(beneficiary.id, true, user?.id)
-    } catch (error) {
-      if (error instanceof Error && error.message === "Already reserved") {
-        throw error
-      }
-      toaster.create({
-        title: "Error",
-        description: "Unable to reserve at this time.",
-      })
-      throw new Error("Reservation failed")
     }
 
     const paymentAmount =
@@ -664,25 +618,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         throw new Error(responseData.error || "Failed to process payment")
       }
 
-      // Clear reservation before redirecting to success page
-      try {
-        await fetch("/api/sponsorships/reservations", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ beneficiaryId: beneficiary.id }),
-        })
-      } catch (error) {
-        console.error("Failed to clear reservation:", error)
-      }
-      setSponsorshipInProgress(beneficiary.id, false)
-
-      // Dispatch payment success event before redirecting
-      window.dispatchEvent(
-        new CustomEvent("payment-success", {
-          detail: { beneficiaryId: beneficiary.id },
-        })
-      )
-
       toaster.create({
         title: "Success",
         description: "Your payment has been processed successfully!",
@@ -760,54 +695,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }
 
   // Clear sponsorship in progress when modal closes
-  const handleClose = async () => {
-    // Clear server reservation if user closes modal without completing payment
-    try {
-      await fetch("/api/sponsorships/reservations", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ beneficiaryId: beneficiary.id }),
-      })
-    } catch (error) {
-      console.error("Failed to clear reservation on close:", error)
-    }
-    setSponsorshipInProgress(beneficiary.id, false)
+  const handleClose = () => {
     onClose()
   }
-
-  // Handle payment success events
-  const handlePaymentSuccess = useCallback(
-    async (event: CustomEvent) => {
-      const { beneficiaryId } = event.detail || {}
-      if (beneficiaryId === beneficiary.id) {
-        try {
-          await fetch("/api/sponsorships/reservations", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ beneficiaryId }),
-          })
-        } catch (error) {
-          console.error(
-            "Failed to clear reservation on payment success:",
-            error
-          )
-        }
-        setSponsorshipInProgress(beneficiaryId, false)
-      }
-    },
-    [beneficiary.id, setSponsorshipInProgress]
-  )
-
-  // Clear sponsorship in progress when payment is successful
-  useEffect(() => {
-    const handler = (event: Event) => handlePaymentSuccess(event as CustomEvent)
-
-    window.addEventListener("payment-success", handler)
-
-    return () => {
-      window.removeEventListener("payment-success", handler)
-    }
-  }, [handlePaymentSuccess])
 
   return (
     <DialogRoot

@@ -152,7 +152,7 @@ export async function GET(req: Request) {
             subscription: {
               ...paypalData,
               beneficiaries: beneficiaryData,
-              status: paypalData.status?.toLowerCase() || "pending"
+              status: paypalData.status?.toLowerCase() || "incomplete"
             },
             paypal_order: null,
           })

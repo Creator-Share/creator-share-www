@@ -152,7 +152,7 @@ export async function POST(req: Request) {
 
           // Update partnership status and details
           const updateData = {
-            status: "active",
+            status: "complete",
             updated_at: new Date().toISOString(),
             customer_id: session.customer as string,
             card_number: last4,
@@ -188,7 +188,7 @@ export async function POST(req: Request) {
                 session.customer +
                 ",and(email.eq." +
                 email +
-                ",status.eq.pending)",
+                ",status.eq.incomplete)",
             )
             .limit(1)
 
@@ -210,7 +210,7 @@ export async function POST(req: Request) {
                 frequency:
                   paymentType === "subscription" ? "monthly" : "annually",
                 project,
-                status: "active",
+                status: "complete",
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 customer_id: session.customer as string,
@@ -334,6 +334,7 @@ export async function POST(req: Request) {
           )
         }
 
+
         // Fetch child data
         const { data: beneficiaryData, error: beneficiaryError } =
           await supabase
@@ -452,33 +453,148 @@ export async function POST(req: Request) {
           }
         }
 
-        if (session.mode === "subscription") {
-        } else {
-          const { error: subscriptionError } = await supabase
+        // Update or create subscription record
+        if (session.mode === "subscription" && session.subscription) {
+          // First try to update any pending subscription
+          const { data: pendingSubscription, error: pendingError } = await supabase
             .from("subscriptions")
-            .insert({
-              stripe_subscription_id: session.subscription as string,
-              user_id: userId,
-              beneficiary_id: beneficiaryId,
-              status: "complete",
-              amount: amount,
-              interval: interval,
-              current_period_start: new Date(),
-              current_period_end: new Date(
-                Date.now() +
-                  (interval === "month" ? 30 : 365) * 24 * 60 * 60 * 1000,
-              ),
-              customer_id: session.customer as string,
-              sponsorship_method: "STRIPE",
-            })
+            .select("id")
+            .eq("beneficiary_id", beneficiaryId)
+            .eq("status", "incomplete")
+            .single()
 
+          if (pendingError && pendingError.code !== 'PGRST116') { // PGRST116 = not found
+            console.error("Error checking pending subscription:", pendingError)
+          }
+
+          if (pendingSubscription) {
+            // Update the pending subscription to complete
+            const { error: updateError } = await supabase
+              .from("subscriptions")
+              .update({
+                stripe_subscription_id: session.subscription as string,
+                status: "complete",
+                amount: amount,
+                interval: interval,
+                current_period_start: new Date(),
+                current_period_end: new Date(
+                  Date.now() +
+                    (interval === "month" ? 30 : 365) * 24 * 60 * 60 * 1000,
+                ),
+                customer_id: session.customer as string,
+              })
+              .eq("id", pendingSubscription.id)
+
+            if (updateError) {
+              console.error("Error updating pending subscription:", updateError)
+              return NextResponse.json(
+                { error: "Failed to update subscription" },
+                { status: 500 }
+              )
+            }
+          } else {
+            // No pending subscription found, create new one
+            const { error: subscriptionError } = await supabase
+              .from("subscriptions")
+              .insert({
+                stripe_subscription_id: session.subscription as string,
+                user_id: userId,
+                beneficiary_id: beneficiaryId,
+                status: "complete",
+                amount: amount,
+                interval: interval,
+                current_period_start: new Date(),
+                current_period_end: new Date(
+                  Date.now() +
+                    (interval === "month" ? 30 : 365) * 24 * 60 * 60 * 1000,
+                ),
+                customer_id: session.customer as string,
+                sponsorship_method: "STRIPE",
+              })
+
+            // Check if this failed due to duplicate constraint
           if (subscriptionError) {
+            // Code 23505 = unique_violation in PostgreSQL
+            if (subscriptionError.code === '23505') {
+              console.warn("Duplicate sponsorship detected - DB constraint prevented duplicate:", {
+                beneficiaryId,
+                sessionId: session.id,
+                error: subscriptionError
+              })
+              
+              // Cancel the Stripe subscription to stop future charges
+              try {
+                if (session.subscription) {
+                  await stripe.subscriptions.cancel(session.subscription as string)
+                  console.log("Cancelled duplicate Stripe subscription:", session.subscription)
+                }
+              } catch (cancelError) {
+                console.error("Failed to cancel duplicate subscription:", cancelError)
+              }
+              
+              // Send apology email to the customer
+              if (customerEmail) {
+                try {
+                  const { sendDuplicateSponsorshipEmail } = await import("@/utils/email")
+                  await sendDuplicateSponsorshipEmail(
+                    customerEmail,
+                    beneficiaryData.name,
+                    amount
+                  )
+                  
+                  // Log the apology email
+                  await supabase.from("email_logs").insert({
+                    email: customerEmail,
+                    subject: `Important: Duplicate Sponsorship Prevented for ${beneficiaryData.name}`,
+                    status: "sent",
+                    created_at: new Date(),
+                  })
+                } catch (emailError) {
+                  console.error("Failed to send duplicate sponsorship email:", emailError)
+                  
+                  // If no custom email function exists, send a generic notification
+                  console.log("TODO: Create sendDuplicateSponsorshipEmail function")
+                  
+                  // Log the attempt anyway
+                  await supabase.from("email_logs").insert({
+                    email: customerEmail,
+                    subject: `Important: Duplicate Sponsorship Prevented for ${beneficiaryData.name}`,
+                    status: "failed",
+                    error: "Email function not implemented",
+                    created_at: new Date(),
+                  })
+                }
+              }
+              
+              // Return success to Stripe (we handled it gracefully)
+              return NextResponse.json(
+                { 
+                  message: "Duplicate sponsorship prevented - subscription cancelled and customer notified",
+                  duplicate: true
+                },
+                { status: 200 },
+              )
+            }
+            
+            // Other database errors
             console.error("Error creating subscription:", subscriptionError)
             return NextResponse.json(
               { error: "Failed to create subscription" },
               { status: 500 },
             )
           }
+          }
+        }
+
+        // Clear any reservations now that the subscription is successfully created
+        const { error: clearReservationError } = await supabase
+          .from("beneficiary_reservations")
+          .delete()
+          .eq("beneficiary_id", beneficiaryId)
+
+        if (clearReservationError) {
+          console.error("Error clearing reservation:", clearReservationError)
+          // Don't fail the webhook - reservations will expire naturally
         }
 
         // Send confirmation email if we have customer email
@@ -539,172 +655,6 @@ export async function POST(req: Request) {
         )
       }
 
-      case "customer.subscription.created": {
-        const subscription = event.data.object as Stripe.Subscription
-        const type = subscription.metadata?.type
-
-        if (type === "partnership") {
-          const email = subscription.metadata?.email
-          console.log("Subscription:", {
-            id: subscription.id,
-            customer: subscription.customer,
-            latest_invoice: subscription.latest_invoice,
-            metadata: subscription.metadata,
-          })
-
-          if (email) {
-            // Get payment method details
-            let last4: string | null = null
-            let cardType: string | null = null
-            let paymentMethodId: string | null = null
-
-            // Get latest invoice to get payment intent
-            const latestInvoice = await stripe.invoices.retrieve(
-              subscription.latest_invoice as string,
-            )
-            const paymentIntent = latestInvoice.payment_intent as string
-
-            if (paymentIntent) {
-              const pi = await stripe.paymentIntents.retrieve(paymentIntent, {
-                expand: ["payment_method"],
-              })
-
-              console.log("PaymentIntent:", {
-                id: pi.id,
-                payment_method: pi.payment_method,
-                card:
-                  typeof pi.payment_method !== "string"
-                    ? pi.payment_method?.card
-                    : null,
-              })
-
-              if (
-                typeof pi.payment_method !== "string" &&
-                pi.payment_method?.card
-              ) {
-                last4 = pi.payment_method.card.last4
-                cardType = pi.payment_method.card.brand
-                paymentMethodId = pi.payment_method.id
-              }
-            }
-
-            // If no card details found, try to get from customer's payment methods
-            if (!last4 || !cardType) {
-              const paymentMethods = await stripe.paymentMethods.list({
-                customer: subscription.customer as string,
-                type: "card",
-              })
-
-              console.log("Customer Payment Methods:", paymentMethods.data)
-
-              if (paymentMethods.data.length > 0) {
-                last4 = paymentMethods.data[0].card?.last4 || null
-                cardType = paymentMethods.data[0].card?.brand || null
-                paymentMethodId = paymentMethods.data[0].id
-              }
-            }
-
-            console.log("Card Details:", {
-              last4,
-              cardType,
-              paymentMethodId,
-            })
-
-            // Update partnership record
-            const updateData = {
-              customer_id: subscription.customer as string,
-              card_number: last4,
-              card_type: cardType,
-              payment_intent: paymentIntent,
-              stripe_subscription_id: subscription.id,
-              current_period_start: new Date(
-                subscription.current_period_start * 1000,
-              ),
-              current_period_end: new Date(
-                subscription.current_period_end * 1000,
-              ),
-            }
-
-            console.log("Updating partnership with:", updateData)
-
-            // First get the partnership record
-            const { data: partnerships, error: fetchError } = await supabase
-              .from("partnerships")
-              .select("*")
-              .eq("email", email)
-              .eq("status", "pending")
-              .limit(1)
-
-            if (fetchError) {
-              console.error("Error fetching partnership:", fetchError)
-              return NextResponse.json(
-                { error: "Failed to fetch partnership" },
-                { status: 500 },
-              )
-            }
-
-            if (!partnerships || partnerships.length === 0) {
-              console.error("No pending partnership found for email:", email)
-              return NextResponse.json(
-                { error: "No pending partnership found" },
-                { status: 404 },
-              )
-            }
-
-            // Now update the partnership
-            const { error: updateError } = await supabase
-              .from("partnerships")
-              .update(updateData)
-              .eq("id", partnerships[0].id)
-
-            if (updateError) {
-              console.error("Error updating partnership record:", updateError)
-              return NextResponse.json(
-                { error: "Failed to update partnership record" },
-                { status: 500 },
-              )
-            }
-          }
-        } else {
-          // Handle regular sponsorship subscription
-          const { error: subscriptionError } = await supabase
-            .from("subscriptions")
-            .insert({
-              stripe_subscription_id: subscription.id,
-              user_id: subscription.metadata?.userId,
-              beneficiary_id: subscription.metadata?.beneficiaryId,
-              status:
-                subscription.status === "active" ? "complete" : "incomplete",
-              amount: subscription.items.data[0].price.unit_amount,
-              interval: subscription.items.data[0].price.recurring?.interval,
-              current_period_start: new Date(
-                subscription.current_period_start * 1000,
-              ),
-              current_period_end: new Date(
-                subscription.current_period_end * 1000,
-              ),
-              customer_id: subscription.customer as string,
-              sponsorship_method: "STRIPE",
-            })
-
-          if (subscriptionError) {
-            console.error(
-              "Error creating subscription record:",
-              subscriptionError,
-            )
-            return NextResponse.json(
-              { error: "Failed to create subscription record" },
-              { status: 500 },
-            )
-          }
-        }
-
-        return NextResponse.json(
-          { message: "Subscription processed" },
-          { status: 200 },
-        )
-      }
-
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice
         const customerEmail = invoice.customer_email
@@ -720,7 +670,7 @@ export async function POST(req: Request) {
               updated_at: new Date().toISOString(),
             })
             .eq("email", customerEmail)
-            .eq("status", "active")
+            .eq("status", "complete")
 
           if (updateError) {
             console.error("Error updating partnership status:", updateError)
@@ -802,8 +752,7 @@ export async function POST(req: Request) {
         const { error: updateError } = await supabase
           .from("subscriptions")
           .update({
-            status:
-              subscription.status === "active" ? "complete" : "incomplete",
+            status: "complete",
             current_period_start: new Date(
               subscription.current_period_start * 1000,
             ),
@@ -841,7 +790,7 @@ export async function POST(req: Request) {
                 updated_at: new Date().toISOString(),
               })
               .eq("email", email)
-              .eq("status", "active")
+              .eq("status", "complete")
 
             if (updateError) {
               console.error("Error updating partnership status:", updateError)
@@ -878,7 +827,7 @@ export async function POST(req: Request) {
       }
 
       case "invoice.paid":
-      case "invoice.payment_succeeded":
+      case "invoice.payment_succeeded": {
         // These events indicate successful payment of an invoice
         // We can use them to update our database if needed
         const invoice = event.data.object as Stripe.Invoice
@@ -895,12 +844,40 @@ export async function POST(req: Request) {
           { message: "Invoice payment processed" },
           { status: 200 },
         )
+      }
 
-      case "payment_intent.succeeded":
+      case "payment_intent.succeeded": {
         return NextResponse.json(
           { message: "Payment intent succeeded" },
           { status: 200 },
         )
+      }
+
+      case "checkout.session.expired":
+      case "checkout.session.async_payment_failed": {
+        const session = event.data.object as Stripe.Checkout.Session
+        const beneficiaryId = session.metadata?.beneficiaryId
+
+        if (beneficiaryId) {
+          // Clean up any incomplete subscription (created during checkout init)
+          const { error: cleanupError } = await supabase
+            .from("subscriptions")
+            .delete()
+            .eq("beneficiary_id", beneficiaryId)
+            .eq("status", "incomplete")
+
+          if (cleanupError) {
+            console.error("Error cleaning up incomplete subscription:", cleanupError)
+          } else {
+            console.log("Cleaned up incomplete subscription for beneficiary:", beneficiaryId)
+          }
+        }
+
+        return NextResponse.json(
+          { message: "Cleaned up incomplete subscription" },
+          { status: 200 }
+        )
+      }
 
       default:
         console.log(`Unhandled event type: ${event.type}`)

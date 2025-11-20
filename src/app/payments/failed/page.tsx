@@ -49,6 +49,25 @@ const FailedPageContent = () => {
           name: session.metadata?.childName || "this beneficiary",
           location: session.metadata?.childLocation || "",
         })
+
+        // Cleanup incomplete subscription when payment fails/is cancelled
+        const beneficiaryId = session.metadata?.beneficiaryId
+        if (beneficiaryId) {
+          try {
+            console.log("🧹 Cleaning up failed checkout for beneficiary:", beneficiaryId)
+            const cleanupResponse = await fetch("/api/sponsorships/checkout/cleanup", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ beneficiaryId }),
+            })
+            
+            if (cleanupResponse.ok) {
+              console.log("✅ Cleanup successful - beneficiary is available again")
+            }
+          } catch (cleanupError) {
+            console.error("Failed to cleanup incomplete subscription:", cleanupError)
+          }
+        }
       } catch (error) {
         console.error("Error fetching session:", error)
         // Even if we can't get the session, we can still show the failed page

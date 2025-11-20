@@ -16,6 +16,27 @@ export default function Home() {
       autoRetry: true,
     })
 
+  // Cleanup abandoned checkout when returning to homepage
+  React.useEffect(() => {
+    const pendingBeneficiaryId = localStorage.getItem('pending_checkout_beneficiary')
+    if (pendingBeneficiaryId) {
+      console.log('🧹 Found abandoned checkout, cleaning up:', pendingBeneficiaryId)
+      
+      fetch('/api/sponsorships/checkout/cleanup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiaryId: pendingBeneficiaryId }),
+      })
+        .then(res => {
+          if (res.ok) {
+            console.log('✅ Abandoned checkout cleaned up successfully')
+            localStorage.removeItem('pending_checkout_beneficiary')
+          }
+        })
+        .catch(err => console.error('Failed to cleanup abandoned checkout:', err))
+    }
+  }, [])
+
   return (
     <Box>
       {/* Home Hero Section */}

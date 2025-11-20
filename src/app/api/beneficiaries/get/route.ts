@@ -16,6 +16,25 @@ export async function GET(req: Request) {
     console.error("Failed to cleanup expired reservations:", error)
   }
 
+  // Clean up old incomplete subscriptions (older than 2 minutes for testing)
+  try {
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
+    const { data: deletedSubs, error: cleanupError } = await supabase
+      .from("subscriptions")
+      .delete()
+      .eq("status", "incomplete")
+      .lt("created_at", twoMinutesAgo)
+      .select()
+    
+    if (cleanupError) {
+      console.error("Failed to cleanup old incomplete subscriptions:", cleanupError)
+    } else if (deletedSubs && deletedSubs.length > 0) {
+      console.log(`✅ Cleaned up ${deletedSubs.length} old incomplete subscription(s)`)
+    }
+  } catch (error) {
+    console.error("Failed to cleanup incomplete subscriptions:", error)
+  }
+
   const { searchParams } = new URL(req.url)
 
   const beneficiaryType = searchParams.get("beneficiary_type")
