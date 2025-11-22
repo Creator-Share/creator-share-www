@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { Beneficiaries } from "@/types"
 import { toaster } from "@/components/ui/toaster"
+import { createClient } from '@supabase/supabase-js'
 
 type FiltersState = {
   gender: string
@@ -236,6 +237,36 @@ export function useBeneficiaryPagination(
     fetchPage(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters])
+
+  // === Supabase Realtime subscription for instant updates ===
+  useEffect(() => {
+    // Avoid SSR: only subscribe in browser
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.warn("[useBeneficiaryPagination] Supabase env missing, realtime not enabled")
+      return
+    }
+    const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+    // Listen for changes to the subscriptions table (relevant to reservation/locking logic)
+    const channel = supabase
+      .channel("beneficiary_subscriptions_rt")
+      .on(
+        "postgres_changes",
+        { schema: "public", table: "subscriptions", event: "*" },
+        payload => {
+          // Any row insert/update/delete, refetch the list
+          console.log("[useBeneficiaryPagination] Supabase realtime: subscriptions event received, reloading list...", payload)
+          fetchPage(null)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [fetchPage])
 
   // Cleanup retry timeout on unmount
   useEffect(() => {

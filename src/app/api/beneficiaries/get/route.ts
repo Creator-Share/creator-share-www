@@ -70,7 +70,25 @@ export async function GET(req: Request) {
   }
 
   try {
-    let query = supabase.from("beneficiaries").select("*")
+    // STEP 1: Fetch currently 'locked' beneficiary IDs via subscriptions in incomplete or complete state
+    const { data: lockedSubscriptions, error: lockedError } = await supabase
+      .from("subscriptions")
+      .select("beneficiary_id")
+      .in("status", ["incomplete", "complete"]);
+    if (lockedError) {
+      console.error("Failed to fetch locked subscriptions:", lockedError);
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+    const lockedIds = (lockedSubscriptions || [])
+      .map(r => r.beneficiary_id)
+      .filter(Boolean);
+
+    // STEP 2: Normal query, excluding lockedIds
+    let query = supabase.from("beneficiaries").select("*");
+    if (lockedIds.length > 0) {
+      // Supabase expects .not(..., "(id1,id2,...)")
+      query = query.not("id", "in", `(${lockedIds.join(",")})`);
+    }
 
     if (beneficiaryType) {
       query = query.eq("beneficiary_type", beneficiaryType)
