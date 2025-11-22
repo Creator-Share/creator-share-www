@@ -5,6 +5,7 @@ import { centsToDollars } from "@/utils/currency"
 import {
   sendSponsorshipConfirmationEmail,
   sendPaymentFailedEmail,
+  sendMonthlyPaymentConfirmationEmail,
 } from "@/utils/email"
 import { notifySponsorshipReceived } from "@/services/telegram"
 
@@ -829,15 +830,90 @@ export async function POST(req: Request) {
       case "invoice.paid":
       case "invoice.payment_succeeded": {
         // These events indicate successful payment of an invoice
-        // We can use them to update our database if needed
+        // We can use them to update our database and send monthly payment confirmations
         const invoice = event.data.object as Stripe.Invoice
         const subscriptionId = invoice.subscription as string
 
         if (subscriptionId) {
+          // Update subscription status
           await supabase
             .from("subscriptions")
             .update({ status: "complete" })
             .eq("stripe_subscription_id", subscriptionId)
+
+          // Send monthly payment confirmation email
+          // Only send for recurring subscriptions (not one-time payments)
+          if (invoice.billing_reason === "subscription_cycle" || invoice.billing_reason === "subscription_update") {
+            try {
+              // Get subscription details to find beneficiary and customer email
+              const { data: subscriptionData } = await supabase
+                .from("subscriptions")
+                .select("beneficiary_id, user_id, amount")
+                .eq("stripe_subscription_id", subscriptionId)
+                .single()
+
+              if (subscriptionData?.beneficiary_id) {
+                // Get beneficiary name
+                const { data: beneficiaryData } = await supabase
+                  .from("beneficiaries")
+                  .select("name")
+                  .eq("id", subscriptionData.beneficiary_id)
+                  .single()
+
+                // Get customer email from Stripe
+                let customerEmail: string | null = null
+                if (invoice.customer) {
+                  try {
+                    const customer = await stripe.customers.retrieve(
+                      invoice.customer as string
+                    )
+                    if (!customer.deleted && "email" in customer) {
+                      customerEmail = customer.email
+                    }
+                  } catch (err) {
+                    console.error("Error fetching customer email:", err)
+                  }
+                }
+
+                // Send monthly payment confirmation email
+                if (customerEmail && beneficiaryData) {
+                  try {
+                    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+                      console.warn("Email configuration missing - skipping payment confirmation email")
+                    } else {
+                      const emailResult = await sendMonthlyPaymentConfirmationEmail(
+                        customerEmail,
+                        beneficiaryData.name,
+                        invoice.amount_paid,
+                      )
+
+                      // Log email attempt
+                      try {
+                        await supabase.from("email_logs").insert({
+                          user_id: subscriptionData.user_id,
+                          email: customerEmail,
+                          subject: `Payment Confirmation: Your Sponsorship for ${beneficiaryData.name}`,
+                          status: emailResult.success ? "sent" : "failed",
+                          error: emailResult.error
+                            ? JSON.stringify(emailResult.error)
+                            : null,
+                          message_id: emailResult.messageId,
+                          created_at: new Date(),
+                        })
+                      } catch (err) {
+                        console.error("Error logging email attempt:", err)
+                      }
+                    }
+                  } catch (emailError) {
+                    console.error("Error sending monthly payment confirmation email:", emailError)
+                  }
+                }
+              }
+            } catch (error) {
+              console.error("Error processing monthly payment confirmation:", error)
+              // Don't fail the webhook - payment was successful
+            }
+          }
         }
 
         return NextResponse.json(

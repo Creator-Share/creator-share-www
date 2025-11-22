@@ -47,7 +47,7 @@ export const Footer = () => {
         {/* Right Column */}
         <div>
           <h2 className="text-2xl font-semibold mb-4">Our Centers</h2>
-          <ul className="space-y-2">
+          <ul className="space-y-2 mb-6">
             <li>Feathers Tale Children's Village</li>
             <li>
               Angels Gate Rehabilitation Centre For Street Involved Children
@@ -57,6 +57,17 @@ export const Footer = () => {
             <li>Faith Rehabilitation Center</li>
             <li>Rainbow Tree Early Childhood Education Center</li>
           </ul>
+          <div className="mt-4">
+            <h3 className="text-lg font-semibold mb-2">Manage Subscription</h3>
+            <a
+              href="https://stripe.creatorshare.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-300 hover:text-white underline transition-colors"
+            >
+              Update Payment & Billing
+            </a>
+          </div>
         </div>
       </div>
 
