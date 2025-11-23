@@ -29,7 +29,6 @@ export const Footer = () => {
               href="https://www.facebook.com/sharetanzania"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:underline"
             >
               <FaFacebook className="w-6 h-6 cursor-pointer hover:opacity-80" />
             </a>
@@ -37,7 +36,6 @@ export const Footer = () => {
               href="https://www.instagram.com/creatorshare_tanzania?igsh=ajJoYmhiNGtpYXlq"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:underline"
             >
               <FaInstagram className="w-6 h-6 cursor-pointer hover:opacity-80" />
             </a>
