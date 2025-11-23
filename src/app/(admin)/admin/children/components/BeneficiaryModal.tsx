@@ -357,7 +357,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
       toaster.create({
         title: "Some Files Were Rejected",
-        description: `Files: ${rejectedNames}. Reason: ${errorMessages}. Accepted formats: PNG, JPG, JPEG, HEIC. If you're having issues with JPG files, try re-saving them or converting to PNG.`,
+        description: `Files: ${rejectedNames}. Reason: ${errorMessages}. Accepted formats: All image formats. If you're having issues, try re-saving the file or converting to a different format.`,
         type: "error",
         duration: 10000,
       })
@@ -380,8 +380,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         const largeFiles: string[] = []
 
         for (const file of fileDetails.acceptedFiles) {
-          const ext = file.name.split('.').pop()?.toLowerCase()
-          const validExtensions = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']
           const isImage = file.type.startsWith('image/')
           const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
 
@@ -391,8 +389,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             continue
           }
 
-          // Accept if extension is valid OR if MIME type indicates it's an image
-          if ((ext && validExtensions.includes(ext)) || isImage) {
+          // Accept all image files
+          if (isImage) {
             // Check if file needs compression
             if (file.size > 10 * 1024 * 1024) {
               largeFiles.push(file.name)
@@ -465,8 +463,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           const largeFiles: string[] = []
 
           for (const file of fileDetails.acceptedFiles) {
-            const ext = file.name.split('.').pop()?.toLowerCase()
-            const validExtensions = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']
             const isImage = file.type.startsWith('image/')
             const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
 
@@ -476,8 +472,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               continue
             }
 
-            // Accept if extension is valid OR if MIME type indicates it's an image
-            if ((ext && validExtensions.includes(ext)) || isImage) {
+            // Accept all image files
+            if (isImage) {
               // Check if file needs compression
               if (file.size > 10 * 1024 * 1024) {
                 largeFiles.push(file.name)
@@ -494,7 +490,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           if (invalidFiles.length > 0) {
             toaster.create({
               title: "Invalid Files",
-              description: `These files were skipped: ${invalidFiles.join(', ')}. Please use PNG, JPG, JPEG, or HEIC formats under 50MB.`,
+              description: `These files were skipped: ${invalidFiles.join(', ')}. Please use image files under 50MB.`,
               type: "warning",
               duration: 6000,
             })
@@ -1056,11 +1052,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       gap="1"
                       maxWidth="100%"
                       onFileChange={handleImageChange}
-                      accept={["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic"]}
+                      accept={["image/*"]}
                       maxFiles={5}
                       disabled={false}
                     >
-                      <FileUpload.HiddenInput />
+                      <FileUpload.HiddenInput 
+                        accept="image/*"
+                      />
                       <FileUpload.Label>
                         Upload Images (Will be processed on save)
                       </FileUpload.Label>
@@ -1144,11 +1142,14 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       gap="1"
                       maxWidth="100%"
                       onFileChange={handleImageChange}
-                      accept={["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic"]}
+                      accept={["image/*"]}
                       maxFiles={5}
                       disabled={disabled}
                     >
-                      <FileUpload.HiddenInput disabled={disabled} />
+                      <FileUpload.HiddenInput 
+                        disabled={disabled}
+                        accept="image/*"
+                      />
                       <FileUpload.Label>
                         Upload Images (Will be processed on save)
                       </FileUpload.Label>
