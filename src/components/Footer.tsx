@@ -1,6 +1,6 @@
 "use client"
 import React, { useEffect, useState } from "react"
-import {  FaFacebook, FaInstagram } from "react-icons/fa"
+import { FaFacebook, FaInstagram } from "react-icons/fa"
 import NextLink from "next/link"
 import { useAuthStore } from "@/store/authStore"
 
@@ -25,8 +25,22 @@ export const Footer = () => {
           <p className="mb-2">UK reg Charity 1169474</p>
           <p className="mb-6">enquiries@sharetanzania.com</p>
           <div className="flex gap-6">
-            <FaFacebook className="w-6 h-6 cursor-pointer hover:opacity-80" />
-            <FaInstagram className="w-6 h-6 cursor-pointer hover:opacity-80" />
+            <a
+              href="https://www.facebook.com/sharetanzania"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline"
+            >
+              <FaFacebook className="w-6 h-6 cursor-pointer hover:opacity-80" />
+            </a>
+            <a
+              href="https://www.instagram.com/creatorshare_tanzania?igsh=ajJoYmhiNGtpYXlq"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline"
+            >
+              <FaInstagram className="w-6 h-6 cursor-pointer hover:opacity-80" />
+            </a>
           </div>
         </div>
 
