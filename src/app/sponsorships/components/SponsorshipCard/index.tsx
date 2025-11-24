@@ -172,7 +172,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           getImageSrc={getImageSrc}
           fallbackSrc={placeholderImage}
           alt={beneficiary.name?.split(" ")[0] ?? ""}
-          className="w-full h-64 rounded-t-[20px]"
+          className="w-full h-[300px] rounded-t-[20px] object-cover"
           showArrowsOnHover={true}
         />
 

@@ -187,6 +187,7 @@ const ActivityDetailsModal: React.FC<ActivityDetailsModalProps> = ({
                                     fill
                                     className="rounded-lg object-contain"
                                     sizes="(max-width: 600px) 100vw, 600px"
+                                    unoptimized
                                     onError={() => {
                                       console.error('Image failed to load:', image.image_url)
                                     }}
