@@ -66,7 +66,7 @@ export function useBeneficiaryPagination(
 
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const toastIdRef = useRef<string | null>(null)
-  const activeRequestRef = useRef<string | null>(null) // Track active request cursor
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // Fibonacci sequence for retry delays (in seconds): 1, 1, 2, 3, 5, 8, 13...
   const getFibonacciDelay = useCallback((n: number): number => {
@@ -104,21 +104,20 @@ export function useBeneficiaryPagination(
 
   const fetchPage = useCallback(
     async (nextCursor: string | null) => {
-      // Prevent duplicate requests with the same cursor
-      const requestKey = nextCursor || "initial"
-      if (activeRequestRef.current === requestKey) {
-        console.log(
-          `[useBeneficiaryPagination] 🚫 Skipping duplicate request for cursor:`,
-          requestKey
-        )
-        return
+      const queryString = buildQuery(nextCursor)
+
+      // Abort any in-flight request when starting a fresh query (filters changed)
+      if (nextCursor === null && abortControllerRef.current) {
+        abortControllerRef.current.abort()
       }
 
-      activeRequestRef.current = requestKey
+      const controller = new AbortController()
+      abortControllerRef.current = controller
       setIsLoading(true)
       try {
         const res = await fetch(
-          `/api/beneficiaries/get?${buildQuery(nextCursor)}`
+          `/api/beneficiaries/get?${queryString}`,
+          { signal: controller.signal }
         )
         if (!res.ok) throw new Error("Failed to load beneficiaries")
         const data = await res.json()
@@ -162,9 +161,12 @@ export function useBeneficiaryPagination(
           toastIdRef.current = null
         }
 
-        // Clear active request
-        activeRequestRef.current = null
       } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          console.log("[useBeneficiaryPagination] Previous request aborted")
+          return
+        }
+
         const message = e instanceof Error ? e.message : "Unexpected error"
         console.error("[useBeneficiaryPagination] Fetch error:", message)
 
@@ -185,7 +187,6 @@ export function useBeneficiaryPagination(
                 clearTimeout(retryTimeoutRef.current)
               }
               setRetryCount(0)
-              activeRequestRef.current = null
               fetchPage(null)
             },
           },
@@ -201,17 +202,20 @@ export function useBeneficiaryPagination(
           }, delay)
         }
       } finally {
-        setIsLoading(false)
-        // Clear active request on error too
-        activeRequestRef.current = null
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null
+          setIsLoading(false)
+        }
       }
     },
     [buildQuery, autoRetry, getFibonacciDelay, retryCount, setRetryCount]
   )
 
   const memoizedRetryFetch = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
     setRetryCount(0)
-    activeRequestRef.current = null
     fetchPage(null)
   }, [fetchPage])
 
