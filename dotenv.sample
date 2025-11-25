@@ -30,6 +30,8 @@ EMAIL_USER=
 EMAIL_PASSWORD=
 EMAIL_PORT=587
 EMAIL_SECURE=true
+EMAIL_FROM="Creator Share" <noreply@creatorshare.com>
+
 
 # AI Proofreading (Google Gemini)
 # Get your free API key from: https://aistudio.google.com/app/apikey
