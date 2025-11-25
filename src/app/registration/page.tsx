@@ -13,6 +13,8 @@ import { create } from "zustand"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/authStore"
+import { validatePassword } from "@/utils/passwordValidation"
+import { PasswordStrengthIndicator } from "@/components/ui/PasswordStrengthIndicator"
 
 interface FormValues {
   first_name: string
@@ -64,15 +66,10 @@ const Register = () => {
 
   const passwordValidation = {
     required: "Password is required",
-    pattern: {
-      value: /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])/,
-      message:
-        "Password must contain at least one uppercase letter, one number, and one special character",
-    },
-    minLength: {
-      value: 8,
-      message: "Password must be at least 8 characters long",
-    },
+    validate: (value: string) => {
+      const validation = validatePassword(value)
+      return validation.isValid ? true : validation.error
+    }
   }
 
   const onSubmit = async (data: FormValues) => {
@@ -198,17 +195,24 @@ const Register = () => {
             errorText={errors.password?.message}
           >
             <Box className="relative w-full">
-              <Input
-                type={showPassword ? "text" : "password"}
-                {...register("password", passwordValidation)}
-                className="border border-[#8D9692] p-2 w-full"
-              />
-              <Box
-                onClick={togglePasswordVisibility}
-                className="absolute right-[10px] top-1/2 -translate-y-1/2 cursor-pointer"
-              >
-                {showPassword ? <FaRegEyeSlash /> : <FaRegEye />}
+              <Box className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  {...register("password", passwordValidation)}
+                  className="border border-[#8D9692] p-2 w-full"
+                />
+                <Box
+                  onClick={togglePasswordVisibility}
+                  className="absolute right-[10px] top-1/2 -translate-y-1/2 cursor-pointer"
+                >
+                  {showPassword ? <FaRegEyeSlash /> : <FaRegEye />}
+                </Box>
               </Box>
+              <PasswordStrengthIndicator password={watch("password")} />
+              <Text fontSize="xs" color="gray.600" mt={1}>
+                Password must contain at least 8 characters, including uppercase, lowercase, 
+                number, and special character (!@#$%^&*(),.?":{}|&lt;&gt;).
+              </Text>
             </Box>
           </Field>
           <Field
@@ -224,18 +228,20 @@ const Register = () => {
             }
           >
             <Box className="relative w-full">
-              <Input
-                type={showConfirmPassword ? "text" : "password"}
-                {...register("confirmPassword", {
-                  required: "Confirm Password is required",
-                })}
-                className="border border-[#8D9692] p-2 w-full"
-              />
-              <Box
-                onClick={toggleConfirmPasswordVisibility}
-                className="absolute right-[10px] top-1/2 -translate-y-1/2 cursor-pointer"
-              >
-                {showConfirmPassword ? <FaRegEyeSlash /> : <FaRegEye />}
+              <Box className="relative">
+                <Input
+                  type={showConfirmPassword ? "text" : "password"}
+                  {...register("confirmPassword", {
+                    required: "Confirm Password is required",
+                  })}
+                  className="border border-[#8D9692] p-2 w-full"
+                />
+                <Box
+                  onClick={toggleConfirmPasswordVisibility}
+                  className="absolute right-[10px] top-1/2 -translate-y-1/2 cursor-pointer"
+                >
+                  {showConfirmPassword ? <FaRegEyeSlash /> : <FaRegEye />}
+                </Box>
               </Box>
             </Box>
           </Field>

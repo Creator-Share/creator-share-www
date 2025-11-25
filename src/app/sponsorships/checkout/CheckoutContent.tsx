@@ -19,11 +19,14 @@ export default function CheckoutContent() {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
+  const [ ,setBeneficiaryId] = useState<string | null>(null)
 
   useEffect(() => {
     const secret = searchParams.get("client_secret")
+    const bId = searchParams.get("beneficiary_id")
     if (secret) {
       setClientSecret(secret)
+      setBeneficiaryId(bId)
       setLoading(false)
     } else {
       setError("No client secret provided")

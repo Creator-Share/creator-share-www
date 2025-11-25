@@ -9,8 +9,6 @@ import { BeneficiaryMedia } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
-import { useSponsorship } from "../../hooks/useSponsorship"
-import { useReservations } from "../../hooks/useReservations"
 import ViewerIndicator from "@/components/presence/ViewerIndicator"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
@@ -21,74 +19,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiaryType = "CHILD",
 }) => {
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
-  const [timeRemaining, setTimeRemaining] = useState<string>("")
-
-  // Add sponsorship state management
-  const { sponsorshipInProgress, getReservationInfo } = useSponsorship()
-  const { getReservationStatus, cleanupExpiredReservations } = useReservations()
-  const isSponsorshipInProgress = sponsorshipInProgress.has(beneficiary.id)
-  const reservationInfo = getReservationInfo(beneficiary.id)
-  
-  // Get real-time reservation status from server
-  const serverReservationStatus = getReservationStatus(beneficiary.id)
-
   // Note: Presence tracking removed from card list view
   // Only track presence when viewing the actual profile (modal or detail page)
-  
-  // Calculate time remaining for reservation
-  const getTimeRemaining = (timestamp: number) => {
-    const now = Date.now()
-    const reservationTimeoutMs = parseInt(process.env.NEXT_PUBLIC_RESERVATION_TIMEOUT_MINUTES || "15", 10) * 60 * 1000
-    const timeLeft = reservationTimeoutMs - (now - timestamp)
-    if (timeLeft <= 0) return "Expired"
-    
-    const minutes = Math.floor(timeLeft / (60 * 1000))
-    const seconds = Math.floor((timeLeft % (60 * 1000)) / 1000)
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
-  }
-
-  // Update time remaining every second when reservation is active
-  useEffect(() => {
-    // Prioritize server-side reservation status
-    if (!reservationInfo && !serverReservationStatus?.reserved) {
-      setTimeRemaining("")
-      return
-    }
-
-    const updateTime = () => {
-      let remaining = ""
-      
-      // Use server-side TTL if available (real-time data)
-      if (serverReservationStatus?.reserved && serverReservationStatus.ttlMs) {
-        const timeLeft = serverReservationStatus.ttlMs
-        if (timeLeft <= 0) {
-          remaining = "Expired"
-          // Trigger cleanup when reservation expires
-          cleanupExpiredReservations()
-        } else {
-          const minutes = Math.floor(timeLeft / (60 * 1000))
-          const seconds = Math.floor((timeLeft % (60 * 1000)) / 1000)
-          remaining = `${minutes}:${seconds.toString().padStart(2, '0')}`
-        }
-      } else if (reservationInfo) {
-        // Fallback to client-side reservation
-        remaining = getTimeRemaining(reservationInfo.timestamp)
-        if (remaining === "Expired") {
-          cleanupExpiredReservations()
-        }
-      }
-      
-      setTimeRemaining(remaining)
-    }
-
-    // Update immediately
-    updateTime()
-
-    // Set up interval to update every second
-    const interval = setInterval(updateTime, 1000)
-
-    return () => clearInterval(interval)
-  }, [reservationInfo, serverReservationStatus, cleanupExpiredReservations])
 
   const placeholderImage =
     "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
@@ -137,10 +69,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     ? calculateAge(new Date(beneficiary.birth_date).toISOString())
     : null
   
-  // Check if child is reserved (real-time server-side + client-side fallback)
-  const isReserved = isSponsorshipInProgress || serverReservationStatus?.reserved || false
-  const shouldShowOverlay = isReserved && (reservationInfo || serverReservationStatus?.reserved)
-
   return (
     <Box
       id={id}
@@ -148,9 +76,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       borderWidth={isSelected ? "4px" : "1px"}
       className={`bg-white mb-6 rounded-[20px] shadow-md ${
         isSelected ? "highlight-child" : ""
-      } hover:shadow-xl hover:shadow-black/20 hover:scale-105 transition-all duration-300 ${
-        isReserved ? "opacity-50 pointer-events-none" : ""
-      }`}
+      } hover:shadow-xl hover:shadow-black/20 hover:scale-105 transition-all duration-300`}
       suppressHydrationWarning={true}
       style={{ overflow: "hidden" }}
       maxW="sm"
@@ -159,10 +85,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       display="flex"
       flexDirection="column"
       transform="translateZ(0)"
-      cursor={isReserved ? "not-allowed" : "pointer"}
+      cursor="pointer"
       transition="border-color 200ms ease, border-width 200ms ease, box-shadow 200ms ease, transform 200ms ease"
-      _hover={{ borderColor: isReserved ? "gray.200" : "#2B7FF9", borderWidth: "1px" }}
-      onClick={() => !isReserved && onOpenDialog?.()}
+      _hover={{ borderColor: "#2B7FF9", borderWidth: "1px" }}
+      onClick={onOpenDialog}
       position="relative"
     >
       {/* Card Header: Image with Navigation using ImageCarousel */}
@@ -172,7 +98,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           getImageSrc={getImageSrc}
           fallbackSrc={placeholderImage}
           alt={beneficiary.name?.split(" ")[0] ?? ""}
-          className="w-full h-64 rounded-t-[20px]"
+          className="w-full h-[300px] rounded-t-[20px] object-cover"
           showArrowsOnHover={true}
         />
 
@@ -215,7 +141,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       >
         {/* Full Name Heading */}
         <Text fontSize="xl" fontWeight="bold" mb={3} className="text-gray-800">
-          {beneficiary.name?.split(" ")[0] || "Name"}
+          {beneficiary.name ? 
+            `${beneficiary.name.split(" ")[0]} ${beneficiary.name.split(" ")[2]?.[0] || ""}`.trim()
+            : "Name"
+          }
         </Text>
 
         {/* Information Row */}
@@ -255,31 +184,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         </Box>
       </Box>
 
-      {/* Sponsorship in Progress Overlay */}
-      {shouldShowOverlay && (
-        <Box
-          position="absolute"
-          top="50%"
-          left="50%"
-          transform="translate(-50%, -50%)"
-          bg="blue.500"
-          color="white"
-          px={4}
-          py={3}
-          borderRadius="md"
-          zIndex={20}
-          fontSize="sm"
-          fontWeight="semibold"
-          textAlign="center"
-          boxShadow="lg"
-          minW="200px"
-        >
-          <Text mb={1}>Sponsorship in Progress</Text>
-          <Text fontSize="xs" opacity={0.9}>
-            Time remaining: {timeRemaining}
-          </Text>
-        </Box>
-      )}
     </Box>
   )
 }

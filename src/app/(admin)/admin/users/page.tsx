@@ -50,11 +50,14 @@ const UserManagement = () => {
 
   useEffect(() => {
     if (error) {
-      toaster.create({
-        title: "Error",
-        description: error,
-        duration: 5000,
-      })
+      // Defer toast to avoid flushSync error
+      setTimeout(() => {
+        toaster.create({
+          title: "Error",
+          description: error,
+          duration: 5000,
+        })
+      }, 0)
       clearError()
     }
   }, [error, clearError])

@@ -49,6 +49,12 @@ export const ImageCarousel: React.FC<ImageCarouselProps> = ({
         src={getImageSrc(images[currentImageIndex]) || fallbackSrc}
         alt={alt}
         className={className}
+        style={{
+          objectFit: "cover",
+          width: "100%",
+          height: "100%",
+          objectPosition: "center",
+        }}
       />
       
       {images.length > 1 && (
@@ -122,4 +128,4 @@ export const ImageCarousel: React.FC<ImageCarouselProps> = ({
       )}
     </Box>
   )
-} 
+}

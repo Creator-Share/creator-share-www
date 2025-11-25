@@ -5,6 +5,13 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ["@chakra-ui/react"],
   },
 
+  // Increase body size limit for large image uploads
+  api: {
+    bodyParser: {
+      sizeLimit: '50mb',
+    },
+  },
+
   async redirects() {
     return [
       {

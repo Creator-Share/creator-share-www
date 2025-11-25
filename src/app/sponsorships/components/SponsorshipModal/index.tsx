@@ -113,12 +113,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }, [open, beneficiary?.id, joinProfilePresence, leaveProfilePresence])
 
-  // Remove automatic reservation on modal open - only reserve when payment buttons are clicked
-
-  // Clear local sponsorship state when modal closes (but don't clear server reservation if payment is in progress)
+  // Clear sponsorship state when modal closes
   useEffect(() => {
     if (!open) {
-      // Only clear local state, server reservation will be cleared after payment completion
       setSponsorshipInProgress(beneficiary.id, false)
     }
   }, [open, beneficiary.id, setSponsorshipInProgress])
@@ -377,37 +374,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
     setLoading(true)
 
-    // Create reservation when payment button is clicked
-    try {
-      const reservationRes = await fetch("/api/sponsorships/reservations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ beneficiaryId: beneficiary.id }),
-      })
-
-      if (!reservationRes.ok) {
-        const data = await reservationRes.json().catch(() => ({}))
-        toaster.create({
-          title: "Already Reserved",
-          description:
-            data?.error ||
-            "Another user is currently sponsoring this child. Please try again shortly.",
-        })
-        setLoading(false)
-        return
-      }
-
-      // Mirror state locally for UI
-      setSponsorshipInProgress(beneficiary.id, true, user?.id)
-    } catch {
-      toaster.create({
-        title: "Error",
-        description: "Unable to reserve at this time.",
-      })
-      setLoading(false)
-      return
-    }
-
     try {
       // Prefer the first carousel image's public URL if available
       const primaryImage = images && images.length > 0 ? images[0] : null
@@ -446,6 +412,20 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       const data = await res.json()
 
       if (!res.ok) {
+        // Handle duplicate sponsorship error specifically
+        if (data?.error === "DUPLICATE_SPONSORSHIP") {
+          toaster.create({
+            title: "Child Already Sponsored",
+            description: data?.message || "This child already has an active sponsorship. Please choose a different child to sponsor.",
+            duration: 8000,
+          })
+          // Close modal and let user select a different child
+          setTimeout(() => {
+            handleClose()
+          }, 2000)
+          return
+        }
+        
         toaster.create({
           title: "Payment Error",
           description: data?.error || "Something went wrong. Please try again.",
@@ -464,7 +444,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
       if (window.self !== window.top) {
         if (clientSecret)
-          window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}`
+          window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}&beneficiary_id=${beneficiary.id}`
         else if (url) window.location.href = url
         else
           toaster.create({
@@ -512,38 +492,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             : `Minimum amount is $${minimumAmount}.`,
       })
       throw new Error("Invalid amount")
-    }
-
-    // Create reservation when PayPal order is created
-    try {
-      const reservationRes = await fetch("/api/sponsorships/reservations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ beneficiaryId: beneficiary.id }),
-      })
-
-      if (!reservationRes.ok) {
-        const data = await reservationRes.json().catch(() => ({}))
-        toaster.create({
-          title: "Already Reserved",
-          description:
-            data?.error ||
-            "Another user is currently sponsoring this child. Please try again shortly.",
-        })
-        throw new Error("Already reserved")
-      }
-
-      // Mirror state locally for UI
-      setSponsorshipInProgress(beneficiary.id, true, user?.id)
-    } catch (error) {
-      if (error instanceof Error && error.message === "Already reserved") {
-        throw error
-      }
-      toaster.create({
-        title: "Error",
-        description: "Unable to reserve at this time.",
-      })
-      throw new Error("Reservation failed")
     }
 
     const paymentAmount =
@@ -632,7 +580,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               detail: { beneficiaryId: beneficiary.id },
             })
           )
-          // Don't clear reservation before redirecting to PayPal - wait for completion
           window.location.href = approvalUrl
           return
         }
@@ -663,25 +610,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         console.error("PayPal error response:", responseData)
         throw new Error(responseData.error || "Failed to process payment")
       }
-
-      // Clear reservation before redirecting to success page
-      try {
-        await fetch("/api/sponsorships/reservations", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ beneficiaryId: beneficiary.id }),
-        })
-      } catch (error) {
-        console.error("Failed to clear reservation:", error)
-      }
-      setSponsorshipInProgress(beneficiary.id, false)
-
-      // Dispatch payment success event before redirecting
-      window.dispatchEvent(
-        new CustomEvent("payment-success", {
-          detail: { beneficiaryId: beneficiary.id },
-        })
-      )
 
       toaster.create({
         title: "Success",
@@ -760,54 +688,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }
 
   // Clear sponsorship in progress when modal closes
-  const handleClose = async () => {
-    // Clear server reservation if user closes modal without completing payment
-    try {
-      await fetch("/api/sponsorships/reservations", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ beneficiaryId: beneficiary.id }),
-      })
-    } catch (error) {
-      console.error("Failed to clear reservation on close:", error)
-    }
-    setSponsorshipInProgress(beneficiary.id, false)
+  const handleClose = () => {
     onClose()
   }
-
-  // Handle payment success events
-  const handlePaymentSuccess = useCallback(
-    async (event: CustomEvent) => {
-      const { beneficiaryId } = event.detail || {}
-      if (beneficiaryId === beneficiary.id) {
-        try {
-          await fetch("/api/sponsorships/reservations", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ beneficiaryId }),
-          })
-        } catch (error) {
-          console.error(
-            "Failed to clear reservation on payment success:",
-            error
-          )
-        }
-        setSponsorshipInProgress(beneficiaryId, false)
-      }
-    },
-    [beneficiary.id, setSponsorshipInProgress]
-  )
-
-  // Clear sponsorship in progress when payment is successful
-  useEffect(() => {
-    const handler = (event: Event) => handlePaymentSuccess(event as CustomEvent)
-
-    window.addEventListener("payment-success", handler)
-
-    return () => {
-      window.removeEventListener("payment-success", handler)
-    }
-  }, [handlePaymentSuccess])
 
   return (
     <DialogRoot
@@ -1000,7 +883,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
               {/* Sponsorship Section */}
               <Box className="space-y-4">
-                <Text className="font-medium text-sm mb-2 text-gray-700">
+                <Text className="font-medium text-sm mb-2 text-gray-500">
                   Monthly Sponsorship Amount
                 </Text>
                 <Flex gap={3} align="start">
@@ -1023,7 +906,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           }
                           readOnly={publicHardcodedDollars !== null}
                           disabled={publicHardcodedDollars !== null}
-                          className="px-4 h-full bg-gray-100 border-0 outline-none focus:ring-0 text-lg"
+                          className="px-4 h-full bg-gray-100 border-0 outline-none focus:ring-0 text-lg text-gray-700"
                           placeholder="Enter Amount"
                         />
                       </Flex>
@@ -1043,7 +926,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           value={amount || ""}
                           onChange={handleAmountChange}
                           readOnly={publicHardcodedDollars !== null}
-                          className="px-4 h-full border-0 outline-none focus:ring-0 text-lg"
+                          className="px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700"
                           placeholder="Enter Amount"
                         />
                       </Flex>

@@ -27,13 +27,10 @@ import {
   NativeSelectField,
   NativeSelectRoot,
 } from "@/components/ui/native-select"
+import { Spinner } from "@chakra-ui/react"
 import { Tooltip } from "@/components/ui/tooltip"
 import { LuFileUp } from "react-icons/lu"
-import { HiUpload, HiX } from "react-icons/hi"
-import {
-  FileUploadRoot,
-  FileUploadTrigger,
-} from "@/components/ui/file-upload"
+import { HiX } from "react-icons/hi"
 import MapPicker from "./MapPicker"
 import ActivitiesTable from "../../activities/components/ActivitiesTable"
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types"
@@ -51,6 +48,7 @@ interface BeneficiaryModalProps {
   mode: BeneficiaryModalMode
   isOpen: boolean
   onClose: () => void
+  disabled?: boolean
   // For create mode
   formData?: Partial<Beneficiaries>
   setFormData?: React.Dispatch<React.SetStateAction<Partial<Beneficiaries>>>
@@ -79,6 +77,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   mode,
   isOpen,
   onClose,
+  disabled = false,
   formData: externalFormData,
   setFormData: setExternalFormData,
   handleInputChange: externalHandleInputChange,
@@ -114,6 +113,27 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [, setUploadedImagePaths] = useState<string[]>([])
   const [isProcessingImages, setIsProcessingImages] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [imageUploadKey, setImageUploadKey] = useState(0)
+  const [videoUploadKey, setVideoUploadKey] = useState(0)
+  const shouldShowOverlay = isProcessingImages || isImageLoading || disabled
+
+  const resetImageUploadInput = useCallback(() => {
+    if (imagePreviewUrls.length > 0) {
+      imagePreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+    }
+    setImagePreviewUrls([])
+    setImageFiles([])
+    setImageUploadKey((prev) => prev + 1)
+  }, [imagePreviewUrls, setImageFiles])
+
+  const resetVideoUploadInput = useCallback(() => {
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl)
+    }
+    setVideoPreviewUrl(null)
+    setVideoFiles([])
+    setVideoUploadKey((prev) => prev + 1)
+  }, [videoPreviewUrl, setVideoFiles])
 
   // Use the appropriate form data based on mode
   const formData = isEditMode ? localFormData : externalFormData || {}
@@ -137,9 +157,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   // Prepopulate username in create mode when modal opens
   useEffect(() => {
     if (isCreateMode && isOpen && !formData.username && setExternalFormData) {
-      setExternalFormData((prev: Partial<Beneficiaries>) => ({ 
-        ...prev, 
-        username: generateShortUrl() 
+      setExternalFormData((prev: Partial<Beneficiaries>) => ({
+        ...prev,
+        username: generateShortUrl()
       }))
     }
   }, [isCreateMode, isOpen, generateShortUrl, setExternalFormData, formData.username])
@@ -207,18 +227,18 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       )
       if (!confirmClose) return
     }
-    
+
     // Clear all form data and reset state
     setHasUnsavedChanges(false)
     setImagePreviewUrls([])
-    setVideoPreviewUrl(null)
+    resetVideoUploadInput()
     setImageFiles([])
-    setVideoFiles([])
-    
+    resetImageUploadInput()
+
     if (isEditMode) {
       setLocalFormData(selectedChild || {})
     }
-    
+
     onClose()
   }
 
@@ -267,67 +287,258 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }
 
+  // Helper function to compress image if needed
+  const compressImage = async (file: File): Promise<File> => {
+    const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+
+    // If file is under 10MB, return as is
+    if (file.size <= MAX_SIZE) {
+      return file
+    }
+
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new window.Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+
+          // Calculate new dimensions (max 4000px on longest side)
+          const maxDimension = 4000
+          if (width > height && width > maxDimension) {
+            height = (height * maxDimension) / width
+            width = maxDimension
+          } else if (height > maxDimension) {
+            width = (width * maxDimension) / height
+            height = maxDimension
+          }
+
+          canvas.width = width
+          canvas.height = height
+
+          const ctx = canvas.getContext('2d')
+          ctx?.drawImage(img, 0, 0, width, height)
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                })
+                resolve(compressedFile)
+              } else {
+                resolve(file)
+              }
+            },
+            'image/jpeg',
+            0.85
+          )
+        }
+        img.src = e.target?.result as string
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
   // Image upload handler
   const handleImageChange = async (fileDetails: {
     acceptedFiles: File[]
+    rejectedFiles?: Array<{ file: File, errors: Array<string | { code?: string, message?: string }> }>
   }) => {
+    // Show helpful error messages for rejected files
+    if (fileDetails.rejectedFiles && fileDetails.rejectedFiles.length > 0) {
+      const rejectedNames = fileDetails.rejectedFiles.map(r => r.file.name).join(', ')
+      const errorMessages = fileDetails.rejectedFiles.map(r =>
+        r.errors.map(e => typeof e === 'string' ? e : (e.message || e.code || 'Unknown error')).join(', ')
+      ).join('; ')
+
+      toaster.create({
+        title: "Some Files Were Rejected",
+        description: `Files: ${rejectedNames}. Reason: ${errorMessages}. Accepted formats: All image formats. If you're having issues, try re-saving the file or converting to a different format.`,
+        type: "error",
+        duration: 10000,
+      })
+    }
+
     if (isCreateMode) {
       // In create mode, just store files locally - don't upload to Supabase yet
       if (fileDetails.acceptedFiles.length === 0) {
-        // Clear everything if no files
-        setImageFiles([])
-        setImagePreviewUrls([])
+        resetImageUploadInput()
         return
       }
-      
-      const previewUrls = fileDetails.acceptedFiles.map((file) =>
-        URL.createObjectURL(file)
-      )
-      
-      setImageFiles(fileDetails.acceptedFiles)
-      setImagePreviewUrls(previewUrls)
-      
-      toaster.create({
-        title: "Images Selected",
-        description: `${fileDetails.acceptedFiles.length} images selected. They will be optimized and uploaded when you save the child.`,
-        type: "success",
-        duration: 3000,
-      })
+
+      // Show instant loading spinner
+      setIsProcessingImages(true)
+
+      try {
+        // Additional validation: check file extensions and sizes
+        const validFiles: File[] = []
+        const invalidFiles: string[] = []
+        const largeFiles: string[] = []
+
+        for (const file of fileDetails.acceptedFiles) {
+          const isImage = file.type.startsWith('image/')
+          const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
+
+          // Check file size
+          if (file.size > 50 * 1024 * 1024) { // 50MB hard limit
+            invalidFiles.push(`${file.name} (${fileSizeMB}MB - too large, max 50MB)`)
+            continue
+          }
+
+          // Accept all image files
+          if (isImage) {
+            // Check if file needs compression
+            if (file.size > 10 * 1024 * 1024) {
+              largeFiles.push(file.name)
+              const compressed = await compressImage(file)
+              validFiles.push(compressed)
+            } else {
+              validFiles.push(file)
+            }
+          } else {
+            invalidFiles.push(file.name)
+          }
+        }
+
+        if (invalidFiles.length > 0) {
+          toaster.create({
+            title: "Invalid Files",
+            description: `These files were skipped: ${invalidFiles.join(', ')}. Please use PNG, JPG, JPEG, or HEIC formats under 50MB.`,
+            type: "warning",
+            duration: 6000,
+          })
+        }
+
+        if (largeFiles.length > 0) {
+          toaster.create({
+            title: "Large Files Compressed",
+            description: `These files were over 10MB and have been automatically compressed: ${largeFiles.join(', ')}`,
+            type: "info",
+            duration: 6000,
+          })
+        }
+
+        if (validFiles.length === 0) {
+          setIsProcessingImages(false)
+          return
+        }
+
+        const previewUrls = validFiles.map((file) =>
+          URL.createObjectURL(file)
+        )
+
+        setImageFiles(validFiles)
+        setImagePreviewUrls(previewUrls)
+
+        toaster.create({
+          title: "Images Ready",
+          description: `${validFiles.length} image${validFiles.length > 1 ? 's' : ''} ready to upload. ${invalidFiles.length > 0 ? `${invalidFiles.length} file${invalidFiles.length > 1 ? 's' : ''} skipped.` : ''} Images will be uploaded when you save.`,
+          type: "success",
+          duration: 4000,
+        })
+      } catch (error) {
+        console.error('Error processing images:', error)
+        toaster.create({
+          title: "Processing Error",
+          description: "Failed to process some images. Please try again.",
+          type: "error",
+          duration: 5000,
+        })
+      } finally {
+        setIsProcessingImages(false)
+      }
     } else {
       // In edit mode, upload and optimize immediately
       if (fileDetails.acceptedFiles.length > 0) {
         try {
           setIsProcessingImages(true)
-          
-          // Upload and optimize images
+
+          // Additional validation and compression for edit mode
+          const validFiles: File[] = []
+          const invalidFiles: string[] = []
+          const largeFiles: string[] = []
+
+          for (const file of fileDetails.acceptedFiles) {
+            const isImage = file.type.startsWith('image/')
+            const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
+
+            // Check file size
+            if (file.size > 50 * 1024 * 1024) { // 50MB hard limit
+              invalidFiles.push(`${file.name} (${fileSizeMB}MB - too large, max 50MB)`)
+              continue
+            }
+
+            // Accept all image files
+            if (isImage) {
+              // Check if file needs compression
+              if (file.size > 10 * 1024 * 1024) {
+                largeFiles.push(file.name)
+                const compressed = await compressImage(file)
+                validFiles.push(compressed)
+              } else {
+                validFiles.push(file)
+              }
+            } else {
+              invalidFiles.push(file.name)
+            }
+          }
+
+          if (invalidFiles.length > 0) {
+            toaster.create({
+              title: "Invalid Files",
+              description: `These files were skipped: ${invalidFiles.join(', ')}. Please use image files under 50MB.`,
+              type: "warning",
+              duration: 6000,
+            })
+          }
+
+          if (largeFiles.length > 0) {
+            toaster.create({
+              title: "Large Files Compressed",
+              description: `These files were over 10MB and have been automatically compressed: ${largeFiles.join(', ')}`,
+              type: "info",
+              duration: 6000,
+            })
+          }
+
+          if (validFiles.length === 0) {
+            setIsProcessingImages(false)
+            return
+          }
+
+          // Upload and optimize valid images
           const optimizedPaths = await uploadImagesForTransformation(
             'media',
-            fileDetails.acceptedFiles,
+            validFiles,
             `beneficiaries/${selectedChild?.id || 'temp'}`
           )
-          
-          setProcessedImages(fileDetails.acceptedFiles)
+
+          setProcessedImages(validFiles)
           setUploadedImagePaths(optimizedPaths)
-          
-          // Upload images immediately in edit mode
+
+          // Upload optimized images immediately in edit mode
           const formData = new FormData()
           formData.append("beneficiaryId", selectedChild?.id || "")
-          fileDetails.acceptedFiles.forEach((f) => formData.append("images", f))
+          validFiles.forEach((f) => formData.append("images", f))
 
           const response = await fetch(
             "/api/admin/beneficiaries/images/create",
             { method: "POST", body: formData }
           )
           if (!response.ok) throw new Error("Image upload failed")
-          
+
           // Reset file states
-          setImageFiles([])
+          resetImageUploadInput()
           setProcessedImages([])
           setUploadedImagePaths([])
 
           // Refresh images list
           await fetchImages()
-          
+
           toaster.create({
             title: "Images Uploaded",
             description: `${fileDetails.acceptedFiles.length} images have been uploaded successfully.`,
@@ -354,9 +565,14 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   // Video upload handler
   const handleVideoChange = (fileDetails: { acceptedFiles: File[] }) => {
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl)
+    }
     setVideoFiles(fileDetails.acceptedFiles)
     if (fileDetails.acceptedFiles.length > 0) {
       setVideoPreviewUrl(URL.createObjectURL(fileDetails.acceptedFiles[0]))
+    } else {
+      setVideoPreviewUrl(null)
     }
   }
 
@@ -398,17 +614,21 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const handleDeletePreviewImage = (index: number) => {
     const newFiles = [...imageFiles]
     const newPreviewUrls = [...imagePreviewUrls]
-    
+
     // Revoke the object URL to free memory
     URL.revokeObjectURL(newPreviewUrls[index])
-    
+
     // Remove the file and preview URL at the specified index
     newFiles.splice(index, 1)
     newPreviewUrls.splice(index, 1)
-    
+
     setImageFiles(newFiles)
     setImagePreviewUrls(newPreviewUrls)
-    
+
+    if (newFiles.length === 0) {
+      resetImageUploadInput()
+    }
+
     toaster.create({
       title: "Image Removed",
       description: "Image removed from selection",
@@ -460,17 +680,16 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         // Clean up after successful save
         if (imagePreviewUrls.length > 0) {
           imagePreviewUrls.forEach(url => URL.revokeObjectURL(url))
-          setImagePreviewUrls([])
         }
-        if (videoPreviewUrl) {
-          URL.revokeObjectURL(videoPreviewUrl)
-          setVideoPreviewUrl(null)
-        }
-        setImageFiles([])
-        setVideoFiles([])
+        resetImageUploadInput()
+        resetVideoUploadInput()
         setProcessedImages([])
         setUploadedImagePaths([])
         setHasUnsavedChanges(false)
+
+        // Reset the parent's form data
+        setExternalFormData({})
+
         onClose()
       } else if (isEditMode && onSave) {
         // Edit mode
@@ -490,7 +709,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           try {
             const formData = new FormData()
             formData.append("beneficiaryId", selectedChild?.id || "")
-            
+
             // Use processed/optimized images if available, otherwise use original files
             const filesToUpload = processedImages.length > 0 ? processedImages : imageFiles
             filesToUpload.forEach((f) => formData.append("images", f))
@@ -500,9 +719,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               { method: "POST", body: formData }
             )
             if (!response.ok) throw new Error("Image upload failed")
-            
+
             // Reset file states
-            setImageFiles([])
+            resetImageUploadInput()
             setProcessedImages([])
             setUploadedImagePaths([])
 
@@ -547,8 +766,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         await onSave({ ...updatedData, budget_goal: budgetGoalInCents })
         setHasUnsavedChanges(false)
         setImageFiles([])
-        setVideoFiles([])
-        
+        resetVideoUploadInput()
+
         // Refresh images list after saving
         await fetchImages()
       }
@@ -576,15 +795,39 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }
 
+  const contentDimClass = shouldShowOverlay
+    ? "opacity-0 pointer-events-none select-none"
+    : "opacity-100"
+  const selectedFilesLabel =
+    imageFiles.length > 0
+      ? `${imageFiles.length} file${imageFiles.length > 1 ? "s" : ""}`
+      : "Select file(s)"
+  const currentVideoPreview = videoPreviewUrl || videoUrl
+
   return (
+    <>
     <DialogRoot
       open={isOpen}
       onOpenChange={({ open }) => {
         if (!open) handleModalClose()
       }}
     >
-      <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="flex justify-between items-center p-6 pb-2">
+      <DialogContent className="max-w-4xl w-full max-h-[90vh] relative flex flex-col">
+        {shouldShowOverlay && (
+          <div className="absolute inset-0 z-50 flex h-full w-full items-center justify-center bg-white/90 backdrop-blur-md">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <Spinner size="xl" color="#1C3C8C" />
+              <p className="text-lg font-medium text-[#1C3C8C]">
+                {isProcessingImages
+                  ? "Processing Images..."
+                  : isImageLoading
+                    ? "Uploading Images..."
+                    : "Form Disabled"}
+              </p>
+            </div>
+          </div>
+        )}
+        <DialogHeader className={`flex justify-between items-center p-6 pb-2 flex-none transition-opacity duration-200 ${contentDimClass}`}>
           <DialogTitle>
             <div className="flex items-center gap-2">
               <Text fontSize="3xl" fontWeight="bold">
@@ -603,7 +846,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           />
         </DialogHeader>
 
-        <DialogBody className="p-6">
+        <DialogBody className={`p-6 flex-1 overflow-y-auto transition-opacity duration-200 ${contentDimClass}`}>
           <Fieldset.Root size="lg">
             <Stack>
               <Fieldset.Legend>Child details</Fieldset.Legend>
@@ -620,6 +863,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   px={2}
                   onChange={handleInputChange}
                   value={formData.name || ""}
+                  disabled={false}
                 />
               </Field>
 
@@ -643,11 +887,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   px={2}
                   onChange={handleInputChange}
                   value={formData.username || ""}
+                  disabled={disabled}
                 />
               </Field>
 
               <Field label="Gender" required errorText="This field is required">
-                <NativeSelectRoot>
+                <NativeSelectRoot disabled={disabled}>
                   <NativeSelectField
                     className="border"
                     placeholder="Select Gender"
@@ -655,6 +900,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     name="gender"
                     onChange={(e) => handleSelectChange("gender", e.target.value)}
                     value={formData.gender || ""}
+                    _disabled={undefined}
                   >
                     <option value="Boy">Boy</option>
                     <option value="Girl">Girl</option>
@@ -669,10 +915,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 <Input
                   name="birth_date"
                   type="date"
-                  className="border"
+                  className={`border ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                   px={2}
                   onChange={handleInputChange}
                   value={formData.birth_date || ""}
+                  disabled={false}
                 />
               </Field>
 
@@ -685,22 +932,24 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 <Textarea
                   name="biography"
                   size="xl"
-                  className="border"
+                  className={`border ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                   px={2}
                   py={2}
                   onChange={handleInputChange}
                   value={formData.biography || ""}
+                  disabled={disabled}
                 />
                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
                   <ProofreadButton
                     text={formData.biography || ""}
+                    disabled={disabled}
                     onAccept={(proofreadText) => {
                       if (isEditMode) {
                         setLocalFormData((prev) => ({ ...prev, biography: proofreadText }))
                       } else if (setExternalFormData) {
-                        setExternalFormData((prev: Partial<Beneficiaries>) => ({ 
-                          ...prev, 
-                          biography: proofreadText 
+                        setExternalFormData((prev: Partial<Beneficiaries>) => ({
+                          ...prev,
+                          biography: proofreadText
                         }))
                       }
                       setHasUnsavedChanges(true)
@@ -723,10 +972,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     type="number"
                     min="0"
                     step="0.01"
-                    className="border"
+                    className={`border ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                     px={2}
                     onChange={handleInputChange}
                     value={formData.budget_goal || ""}
+                    disabled={disabled}
                   />
                 </Field>
               ) : (
@@ -745,13 +995,14 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
               {/* Status */}
               <Field label="Status" required errorText="This field is required">
-                <NativeSelectRoot>
+                <NativeSelectRoot disabled={disabled}>
                   <NativeSelectField
-                    className="border"
+                    className={`border ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                     px={2}
                     name="status"
                     onChange={(e) => handleSelectChange("status", e.target.value)}
                     value={formData.status || "New"}
+                    _disabled={undefined}
                   >
                     <option value="New">New</option>
                     <option value="Partially Funded">Partially Funded</option>
@@ -784,8 +1035,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           />
                           <button
                             onClick={() => handleDeleteImage(image.id)}
-                            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                            disabled={isImageLoading}
+                            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                            disabled={false}
                           >
                             <HiX size={16} />
                           </button>
@@ -797,13 +1048,17 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   {/* Upload new images */}
                   {isCreateMode ? (
                     <FileUpload.Root
+                      key={`image-upload-${imageUploadKey}`}
                       gap="1"
                       maxWidth="100%"
                       onFileChange={handleImageChange}
                       accept={["image/*"]}
                       maxFiles={5}
+                      disabled={false}
                     >
-                      <FileUpload.HiddenInput />
+                      <FileUpload.HiddenInput 
+                        accept="image/*"
+                      />
                       <FileUpload.Label>
                         Upload Images (Will be processed on save)
                       </FileUpload.Label>
@@ -824,7 +1079,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       >
                         <Input asChild>
                           <FileUpload.Trigger>
-                            <FileUpload.FileText lineClamp={1} />
+                            <Text as="span" className="truncate text-left w-full">
+                              {selectedFilesLabel}
+                            </Text>
                           </FileUpload.Trigger>
                         </Input>
                       </InputGroup>
@@ -860,7 +1117,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                                   </div>
                                   <button
                                     onClick={() => handleDeletePreviewImage(index)}
-                                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                                    disabled={disabled}
                                   >
                                     <HiX size={16} />
                                   </button>
@@ -879,20 +1137,96 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       )}
                     </FileUpload.Root>
                   ) : (
-                    <FileUploadRoot
+                    <FileUpload.Root
+                      key={`image-upload-${imageUploadKey}`}
+                      gap="1"
+                      maxWidth="100%"
                       onFileChange={handleImageChange}
                       accept={["image/*"]}
                       maxFiles={5}
+                      disabled={disabled}
                     >
-                      <FileUploadTrigger asChild>
-                        <Button variant="outline" size="sm" className="border" px={4}>
-                          <HiUpload />{" "}
-                          {allImages.length === 0
-                            ? "Upload Images"
-                            : "Add More Images"}
-                        </Button>
-                      </FileUploadTrigger>
-                    </FileUploadRoot>
+                      <FileUpload.HiddenInput 
+                        disabled={disabled}
+                        accept="image/*"
+                      />
+                      <FileUpload.Label>
+                        Upload Images (Will be processed on save)
+                      </FileUpload.Label>
+                      <InputGroup
+                        startElement={<LuFileUp />}
+                        endElement={
+                          <FileUpload.ClearTrigger asChild>
+                            <CloseButton
+                              me="-1"
+                              size="xs"
+                              variant="plain"
+                              focusVisibleRing="inside"
+                              focusRingWidth="2px"
+                              pointerEvents="auto"
+                            />
+                          </FileUpload.ClearTrigger>
+                        }
+                      >
+                        <Input asChild>
+                          <FileUpload.Trigger>
+                            <Text as="span" className="truncate text-left w-full">
+                              {selectedFilesLabel}
+                            </Text>
+                          </FileUpload.Trigger>
+                        </Input>
+                      </InputGroup>
+
+                      {imagePreviewUrls.length > 0 && (
+                        <div className="mt-4">
+                          <Text fontSize="sm" color="gray.600" mb={2}>
+                            Selected Images ({imageFiles.length}):
+                            {isProcessingImages && (
+                              <Text as="span" color="blue.600" ml={2}>
+                                (Optimizing...)
+                              </Text>
+                            )}
+                          </Text>
+                          <div className="flex flex-wrap gap-4">
+                            {imagePreviewUrls.map((url, index) => {
+                              const file = imageFiles[index]
+                              const fileSizeKB = file
+                                ? Math.round(file.size / 1024)
+                                : 0
+                              return (
+                                <div key={index} className="relative group">
+                                  <Image
+                                    src={url}
+                                    alt={`Preview ${index + 1}`}
+                                    width={200}
+                                    height={200}
+                                    objectFit="cover"
+                                    className="rounded-xl border-2 border-gray-200"
+                                  />
+                                  <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                                    {fileSizeKB}KB
+                                  </div>
+                                  <button
+                                    onClick={() => handleDeletePreviewImage(index)}
+                                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                                    disabled={disabled}
+                                  >
+                                    <HiX size={16} />
+                                  </button>
+                                  {isProcessingImages && (
+                                    <div className="absolute inset-0 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center">
+                                      <div className="bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-medium">
+                                        Optimizing...
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </FileUpload.Root>
                   )}
                 </div>
               </Field>
@@ -902,10 +1236,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 <div className="space-y-4">
                   {isCreateMode ? (
                     <FileUpload.Root
+                      key={`video-upload-${videoUploadKey}`}
                       gap="1"
                       maxWidth="100%"
                       onFileChange={handleVideoChange}
                       accept={["video/mp4"]}
+                      disabled={disabled}
                     >
                       <FileUpload.HiddenInput />
                       <FileUpload.Label>Upload Video</FileUpload.Label>
@@ -920,6 +1256,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                               focusVisibleRing="inside"
                               focusRingWidth="2px"
                               pointerEvents="auto"
+                              onClick={resetVideoUploadInput}
                             />
                           </FileUpload.ClearTrigger>
                         }
@@ -945,50 +1282,83 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                               bg="red.500"
                               color="white"
                               _hover={{ bg: "red.600" }}
+                              onClick={resetVideoUploadInput}
                             />
                           </FileUpload.ClearTrigger>
                         </div>
                       )}
                     </FileUpload.Root>
                   ) : (
-                    <FileUploadRoot
+                    <FileUpload.Root
+                      key={`video-upload-${videoUploadKey}`}
+                      gap="1"
+                      maxWidth="100%"
                       onFileChange={handleVideoChange}
                       accept={["video/mp4"]}
+                      disabled={disabled}
                     >
-                      <FileUploadTrigger asChild>
-                        {videoUrl ? (
+                      <FileUpload.HiddenInput />
+                      <FileUpload.Label>Upload Video</FileUpload.Label>
+                      <InputGroup
+                        startElement={<LuFileUp />}
+                        endElement={
+                          <FileUpload.ClearTrigger asChild>
+                            <CloseButton
+                              me="-1"
+                              size="xs"
+                              variant="plain"
+                              focusVisibleRing="inside"
+                              focusRingWidth="2px"
+                              pointerEvents="auto"
+                              onClick={resetVideoUploadInput}
+                            />
+                          </FileUpload.ClearTrigger>
+                        }
+                      >
+                        <Input asChild>
+                          <FileUpload.Trigger>
+                            <FileUpload.FileText lineClamp={1} />
+                          </FileUpload.Trigger>
+                        </Input>
+                      </InputGroup>
+
+                      {currentVideoPreview && (
+                        <div className="relative group mt-4">
                           <video width="200" height="200" controls>
-                            <source src={videoUrl} type="video/mp4" />
+                            <source src={currentVideoPreview} type="video/mp4" />
                             Your browser does not support the video tag.
                           </video>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border"
-                            px={4}
-                          >
-                            <HiUpload /> Upload Video
-                          </Button>
-                        )}
-                      </FileUploadTrigger>
-                    </FileUploadRoot>
+                          <FileUpload.ClearTrigger asChild>
+                            <CloseButton
+                              className="absolute top-2 right-2"
+                              size="sm"
+                              variant="solid"
+                              bg="red.500"
+                              color="white"
+                              _hover={{ bg: "red.600" }}
+                              onClick={resetVideoUploadInput}
+                            />
+                          </FileUpload.ClearTrigger>
+                        </div>
+                      )}
+                    </FileUpload.Root>
                   )}
                 </div>
               </Field>
 
               {/* Map Picker */}
-              <Field 
-                label="Location" 
-                required 
+              <Field
+                label="Location"
+                required
                 errorText="Please select a location on the map"
                 helperText="Click on the map to select a location. Country will be automatically detected."
               >
-                <MapPicker
-                  onSelectLocation={handleLocationSelect}
-                  initialLocation={
-                    isEditMode && selectedChild?.location_geo
-                      ? {
+                <div>
+                  <MapPicker
+                    onSelectLocation={handleLocationSelect}
+                    initialLocation={
+                      isEditMode && selectedChild?.location_geo
+                        ? {
                           coordinates: [
                             selectedChild.location_geo.coordinates[1],
                             selectedChild.location_geo.coordinates[0],
@@ -996,10 +1366,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           locationStr: selectedChild.location_str || "",
                           country: selectedChild.country || "",
                         }
-                      : undefined
-                  }
-                />
-                
+                        : undefined
+                    }
+                  />
+                </div>
+
                 {/* Show selected location details */}
                 {formData.country && (
                   <div className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-200">
@@ -1029,11 +1400,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           )}
         </DialogBody>
 
-        <DialogFooter className="flex justify-end gap-3 p-6 pt-2">
+        <DialogFooter className={`flex justify-end gap-3 p-6 pt-2 flex-none transition-opacity duration-200 ${contentDimClass}`}>
           <Button
-            className="bg-gray-500 text-white hover:bg-gray-600"
+            className="bg-gray-500 text-white hover:bg-gray-600 disabled:opacity-50"
             onClick={handleCancel}
-            disabled={isSaving}
+            disabled={isSaving || disabled}
           >
             Cancel
           </Button>
@@ -1042,7 +1413,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             <Button
               className="bg-red-500 text-white hover:bg-red-600"
               onClick={() => setIsDeleteDialogOpen(true)}
-              disabled={isDeleting || isSaving}
+              disabled={isDeleting || isSaving || disabled}
             >
               Delete
             </Button>
@@ -1052,7 +1423,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             type="button"
             onClick={handleFormSubmit}
             className="bg-[#1C3C8C] text-white disabled:opacity-50"
-            disabled={isSaving}
+            disabled={isSaving || disabled}
             loading={isSaving}
             loadingText={isCreateMode ? "Adding..." : "Saving..."}
           >
@@ -1077,6 +1448,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         />
       )}
     </DialogRoot>
+    </>
   )
 }
 

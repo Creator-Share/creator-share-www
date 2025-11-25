@@ -21,6 +21,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No images provided" }, { status: 400 })
     }
 
+    // Validate file sizes (50MB max per file)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+    for (const file of imageFiles) {
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          { error: `File ${file.name} is too large. Maximum size is 50MB.` },
+          { status: 413 },
+        )
+      }
+    }
+
     const responses: Array<Record<string, unknown>> = []
 
     for (let i = 0; i < imageFiles.length; i++) {

@@ -49,6 +49,7 @@ const FailedPageContent = () => {
           name: session.metadata?.childName || "this beneficiary",
           location: session.metadata?.childLocation || "",
         })
+
       } catch (error) {
         console.error("Error fetching session:", error)
         // Even if we can't get the session, we can still show the failed page

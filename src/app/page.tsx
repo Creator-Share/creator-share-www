@@ -14,6 +14,7 @@ export default function Home() {
       recordsPerPage: 9,
       beneficiaryType: "CHILD",
       autoRetry: true,
+      initialStatus: ["New", "Partially Funded"],
     })
 
   return (

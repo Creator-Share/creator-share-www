@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { Beneficiaries } from "@/types"
 import { toaster } from "@/components/ui/toaster"
+import { createClient } from '@supabase/supabase-js'
 
 type FiltersState = {
   gender: string
@@ -65,7 +66,7 @@ export function useBeneficiaryPagination(
 
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const toastIdRef = useRef<string | null>(null)
-  const activeRequestRef = useRef<string | null>(null) // Track active request cursor
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // Fibonacci sequence for retry delays (in seconds): 1, 1, 2, 3, 5, 8, 13...
   const getFibonacciDelay = useCallback((n: number): number => {
@@ -89,15 +90,14 @@ export function useBeneficiaryPagination(
       )
       if (filters.gender) params.set("gender", filters.gender)
       if (filters.status?.length) params.set("status", filters.status.join(","))
-      // In admin mode, always apply ageRange filter if provided
-      // In public mode, skip ageRange when Draft is included (draft items may not have age data)
       const includesDraft = (filters.status || []).includes("Draft")
-      if (filters.ageRange && (isAdminMode || !includesDraft)) {
+      if (filters.ageRange && !includesDraft) {
         params.set("ageRange", filters.ageRange.join(","))
       }
       if (filters.search) params.set("search", filters.search)
       params.set("limit", String(recordsPerPage))
       if (nextCursor) params.set("cursor", nextCursor)
+      if (isAdminMode) params.set("admin_mode", "true")
       return params.toString()
     },
     [filters, beneficiaryType, recordsPerPage, isAdminMode]
@@ -105,21 +105,20 @@ export function useBeneficiaryPagination(
 
   const fetchPage = useCallback(
     async (nextCursor: string | null) => {
-      // Prevent duplicate requests with the same cursor
-      const requestKey = nextCursor || "initial"
-      if (activeRequestRef.current === requestKey) {
-        console.log(
-          `[useBeneficiaryPagination] 🚫 Skipping duplicate request for cursor:`,
-          requestKey
-        )
-        return
+      const queryString = buildQuery(nextCursor)
+
+      // Abort any in-flight request when starting a fresh query (filters changed)
+      if (nextCursor === null && abortControllerRef.current) {
+        abortControllerRef.current.abort()
       }
 
-      activeRequestRef.current = requestKey
+      const controller = new AbortController()
+      abortControllerRef.current = controller
       setIsLoading(true)
       try {
         const res = await fetch(
-          `/api/beneficiaries/get?${buildQuery(nextCursor)}`
+          `/api/beneficiaries/get?${queryString}`,
+          { signal: controller.signal }
         )
         if (!res.ok) throw new Error("Failed to load beneficiaries")
         const data = await res.json()
@@ -163,9 +162,12 @@ export function useBeneficiaryPagination(
           toastIdRef.current = null
         }
 
-        // Clear active request
-        activeRequestRef.current = null
       } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          console.log("[useBeneficiaryPagination] Previous request aborted")
+          return
+        }
+
         const message = e instanceof Error ? e.message : "Unexpected error"
         console.error("[useBeneficiaryPagination] Fetch error:", message)
 
@@ -186,7 +188,6 @@ export function useBeneficiaryPagination(
                 clearTimeout(retryTimeoutRef.current)
               }
               setRetryCount(0)
-              activeRequestRef.current = null
               fetchPage(null)
             },
           },
@@ -202,17 +203,20 @@ export function useBeneficiaryPagination(
           }, delay)
         }
       } finally {
-        setIsLoading(false)
-        // Clear active request on error too
-        activeRequestRef.current = null
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null
+          setIsLoading(false)
+        }
       }
     },
     [buildQuery, autoRetry, getFibonacciDelay, retryCount, setRetryCount]
   )
 
   const memoizedRetryFetch = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
     setRetryCount(0)
-    activeRequestRef.current = null
     fetchPage(null)
   }, [fetchPage])
 
@@ -238,6 +242,36 @@ export function useBeneficiaryPagination(
     fetchPage(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters])
+
+  // === Supabase Realtime subscription for instant updates ===
+  useEffect(() => {
+    // Avoid SSR: only subscribe in browser
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.warn("[useBeneficiaryPagination] Supabase env missing, realtime not enabled")
+      return
+    }
+    const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+    // Listen for changes to the subscriptions table (relevant to locking logic)
+    const channel = supabase
+      .channel("beneficiary_subscriptions_rt")
+      .on(
+        "postgres_changes",
+        { schema: "public", table: "subscriptions", event: "*" },
+        payload => {
+          // Any row insert/update/delete, refetch the list
+          console.log("[useBeneficiaryPagination] Supabase realtime: subscriptions event received, reloading list...", payload)
+          fetchPage(null)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [fetchPage])
 
   // Cleanup retry timeout on unmount
   useEffect(() => {

@@ -6,6 +6,7 @@
 
 import { STORAGE_BUCKET } from "@/utils/supabase/buckets"
 import type { Database } from "@/lib/types/db.types"
+import { createClient } from "@/utils/supabase/client"
 
 export type MediaRow = Database["public"]["Tables"]["media"]["Row"]
 
@@ -47,8 +48,8 @@ export const getStorageKey = (media: MediaRow): string => {
 
 /**
  * Generate the public URL for a given media row.
- * Format:
- * `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${getStorageKey(media)}`
+ * For images, uses Supabase's image transformation API to ensure WebP format and proper sizing.
+ * For videos, returns the direct public URL.
  */
 export const generatePublicUrl = (media: MediaRow): string => {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -57,7 +58,27 @@ export const generatePublicUrl = (media: MediaRow): string => {
   }
 
   const key = getStorageKey(media)
-  return `${base.replace(/\/$/, "")}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
+  const supabase = createClient()
+
+  if (media.type === "IMAGE") {
+    // Use Supabase's built-in image transformation API
+    const { data } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(key, {
+        transform: {
+          width: 800,
+          height: 800,
+          quality: 85,
+          resize: "cover",
+        },
+      })
+
+    return data.publicUrl
+  }
+
+  // For videos and other media types, return the direct public URL
+  const normalizedBase = base.replace(/\/$/, "")
+  return `${normalizedBase}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
 }
 
 /**

@@ -6,16 +6,6 @@ import { Beneficiaries } from "@/types"
 export async function GET(req: Request) {
   const supabase = await createClient()
 
-  // Clean up expired reservations
-  try {
-    await supabase
-      .from("beneficiary_reservations")
-      .delete()
-      .lt("expires_at", new Date().toISOString())
-  } catch (error) {
-    console.error("Failed to cleanup expired reservations:", error)
-  }
-
   const { searchParams } = new URL(req.url)
 
   const beneficiaryType = searchParams.get("beneficiary_type")
@@ -51,7 +41,9 @@ export async function GET(req: Request) {
   }
 
   try {
-    let query = supabase.from("beneficiaries").select("*")
+
+    // STEP 1: Start with base query
+    let query = supabase.from("beneficiaries").select("*");
 
     if (beneficiaryType) {
       query = query.eq("beneficiary_type", beneficiaryType)
