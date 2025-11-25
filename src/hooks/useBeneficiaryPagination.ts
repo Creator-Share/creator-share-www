@@ -254,7 +254,7 @@ export function useBeneficiaryPagination(
     }
     const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-    // Listen for changes to the subscriptions table (relevant to reservation/locking logic)
+    // Listen for changes to the subscriptions table (relevant to locking logic)
     const channel = supabase
       .channel("beneficiary_subscriptions_rt")
       .on(

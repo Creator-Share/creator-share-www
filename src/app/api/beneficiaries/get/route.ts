@@ -6,16 +6,6 @@ import { Beneficiaries } from "@/types"
 export async function GET(req: Request) {
   const supabase = await createClient()
 
-  // Clean up expired reservations
-  try {
-    await supabase
-      .from("beneficiary_reservations")
-      .delete()
-      .lt("expires_at", new Date().toISOString())
-  } catch (error) {
-    console.error("Failed to cleanup expired reservations:", error)
-  }
-
   // Clean up old incomplete subscriptions (older than 2 minutes for testing)
   try {
     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()

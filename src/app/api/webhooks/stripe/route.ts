@@ -588,17 +588,6 @@ export async function POST(req: Request) {
           }
         }
 
-        // Clear any reservations now that the subscription is successfully created
-        const { error: clearReservationError } = await supabase
-          .from("beneficiary_reservations")
-          .delete()
-          .eq("beneficiary_id", beneficiaryId)
-
-        if (clearReservationError) {
-          console.error("Error clearing reservation:", clearReservationError)
-          // Don't fail the webhook - reservations will expire naturally
-        }
-
         // Send confirmation emails
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
           console.warn("Email configuration missing - skipping email send")

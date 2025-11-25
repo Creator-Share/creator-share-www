@@ -113,12 +113,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }, [open, beneficiary?.id, joinProfilePresence, leaveProfilePresence])
 
-  // Remove automatic reservation on modal open - only reserve when payment buttons are clicked
-
-  // Clear local sponsorship state when modal closes (but don't clear server reservation if payment is in progress)
+  // Clear sponsorship state when modal closes
   useEffect(() => {
     if (!open) {
-      // Only clear local state, server reservation will be cleared after payment completion
       setSponsorshipInProgress(beneficiary.id, false)
     }
   }, [open, beneficiary.id, setSponsorshipInProgress])
@@ -586,7 +583,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               detail: { beneficiaryId: beneficiary.id },
             })
           )
-          // Don't clear reservation before redirecting to PayPal - wait for completion
           window.location.href = approvalUrl
           return
         }
