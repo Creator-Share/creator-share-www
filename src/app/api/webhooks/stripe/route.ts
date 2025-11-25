@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       bodyLength: rawBody.length,
       secretConfigured: !!webhookSecret,
       secretPrefix: webhookSecret?.substring(0, 7),
-      bodyPreview: rawBody.substring(0, 100),
+      body: rawBody,
     })
 
     event = stripe.webhooks.constructEvent(
