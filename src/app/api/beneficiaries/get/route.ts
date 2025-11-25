@@ -6,25 +6,6 @@ import { Beneficiaries } from "@/types"
 export async function GET(req: Request) {
   const supabase = await createClient()
 
-  // Clean up old incomplete subscriptions (older than 2 minutes for testing)
-  try {
-    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
-    const { data: deletedSubs, error: cleanupError } = await supabase
-      .from("subscriptions")
-      .delete()
-      .eq("status", "incomplete")
-      .lt("created_at", twoMinutesAgo)
-      .select()
-    
-    if (cleanupError) {
-      console.error("Failed to cleanup old incomplete subscriptions:", cleanupError)
-    } else if (deletedSubs && deletedSubs.length > 0) {
-      console.log(`✅ Cleaned up ${deletedSubs.length} old incomplete subscription(s)`)
-    }
-  } catch (error) {
-    console.error("Failed to cleanup incomplete subscriptions:", error)
-  }
-
   const { searchParams } = new URL(req.url)
 
   const beneficiaryType = searchParams.get("beneficiary_type")
@@ -60,33 +41,9 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Check if we're in admin mode
-    const isAdminMode = searchParams.get("admin_mode") === "true";
 
     // STEP 1: Start with base query
     let query = supabase.from("beneficiaries").select("*");
-
-    // Only apply locking logic when not in admin mode
-    if (!isAdminMode) {
-      // Fetch currently 'locked' beneficiary IDs via subscriptions in incomplete or complete state
-      const { data: lockedSubscriptions, error: lockedError } = await supabase
-        .from("subscriptions")
-        .select("beneficiary_id")
-        .in("status", ["incomplete", "complete"]);
-      if (lockedError) {
-        console.error("Failed to fetch locked subscriptions:", lockedError);
-        return NextResponse.json({ error: "Database error" }, { status: 500 });
-      }
-      const lockedIds = (lockedSubscriptions || [])
-        .map(r => r.beneficiary_id)
-        .filter(Boolean);
-
-      // Exclude locked beneficiaries for non-admin views
-      if (lockedIds.length > 0) {
-        // Supabase expects .not(..., "(id1,id2,...)")
-        query = query.not("id", "in", `(${lockedIds.join(",")})`);
-      }
-    }
 
     if (beneficiaryType) {
       query = query.eq("beneficiary_type", beneficiaryType)

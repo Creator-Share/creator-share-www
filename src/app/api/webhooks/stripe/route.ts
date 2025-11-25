@@ -457,64 +457,25 @@ export async function POST(req: Request) {
 
         // Update or create subscription record
         if (session.mode === "subscription" && session.subscription) {
-          // First try to update any pending subscription
-          const { data: pendingSubscription, error: pendingError } = await supabase
+          const { error: subscriptionError } = await supabase
             .from("subscriptions")
-            .select("id")
-            .eq("beneficiary_id", beneficiaryId)
-            .eq("status", "incomplete")
-            .single()
+            .insert({
+              stripe_subscription_id: session.subscription as string,
+              user_id: userId,
+              beneficiary_id: beneficiaryId,
+              status: "complete",
+              amount: amount,
+              interval: interval,
+              current_period_start: new Date(),
+              current_period_end: new Date(
+                Date.now() +
+                  (interval === "month" ? 30 : 365) * 24 * 60 * 60 * 1000,
+              ),
+              customer_id: session.customer as string,
+              sponsorship_method: "STRIPE",
+            })
 
-          if (pendingError && pendingError.code !== 'PGRST116') { // PGRST116 = not found
-            console.error("Error checking pending subscription:", pendingError)
-          }
-
-          if (pendingSubscription) {
-            // Update the pending subscription to complete
-            const { error: updateError } = await supabase
-              .from("subscriptions")
-              .update({
-                stripe_subscription_id: session.subscription as string,
-                status: "complete",
-                amount: amount,
-                interval: interval,
-                current_period_start: new Date(),
-                current_period_end: new Date(
-                  Date.now() +
-                    (interval === "month" ? 30 : 365) * 24 * 60 * 60 * 1000,
-                ),
-                customer_id: session.customer as string,
-              })
-              .eq("id", pendingSubscription.id)
-
-            if (updateError) {
-              console.error("Error updating pending subscription:", updateError)
-              return NextResponse.json(
-                { error: "Failed to update subscription" },
-                { status: 500 }
-              )
-            }
-          } else {
-            // No pending subscription found, create new one
-            const { error: subscriptionError } = await supabase
-              .from("subscriptions")
-              .insert({
-                stripe_subscription_id: session.subscription as string,
-                user_id: userId,
-                beneficiary_id: beneficiaryId,
-                status: "complete",
-                amount: amount,
-                interval: interval,
-                current_period_start: new Date(),
-                current_period_end: new Date(
-                  Date.now() +
-                    (interval === "month" ? 30 : 365) * 24 * 60 * 60 * 1000,
-                ),
-                customer_id: session.customer as string,
-                sponsorship_method: "STRIPE",
-              })
-
-            // Check if this failed due to duplicate constraint
+          // Check if this failed due to duplicate constraint
           if (subscriptionError) {
             // Code 23505 = unique_violation in PostgreSQL
             if (subscriptionError.code === '23505') {
@@ -584,7 +545,6 @@ export async function POST(req: Request) {
               { error: "Failed to create subscription" },
               { status: 500 },
             )
-          }
           }
         }
 
@@ -955,26 +915,8 @@ export async function POST(req: Request) {
 
       case "checkout.session.expired":
       case "checkout.session.async_payment_failed": {
-        const session = event.data.object as Stripe.Checkout.Session
-        const beneficiaryId = session.metadata?.beneficiaryId
-
-        if (beneficiaryId) {
-          // Clean up any incomplete subscription (created during checkout init)
-          const { error: cleanupError } = await supabase
-            .from("subscriptions")
-            .delete()
-            .eq("beneficiary_id", beneficiaryId)
-            .eq("status", "incomplete")
-
-          if (cleanupError) {
-            console.error("Error cleaning up incomplete subscription:", cleanupError)
-          } else {
-            console.log("Cleaned up incomplete subscription for beneficiary:", beneficiaryId)
-          }
-        }
-
         return NextResponse.json(
-          { message: "Cleaned up incomplete subscription" },
+          { message: "Payment failed or expired" },
           { status: 200 }
         )
       }

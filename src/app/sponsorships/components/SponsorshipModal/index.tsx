@@ -435,9 +435,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
       const { clientSecret, url } = data
 
-      // Store beneficiary ID in localStorage to cleanup on return
-      localStorage.setItem('pending_checkout_beneficiary', beneficiary.id)
-
       // Dispatch payment success event before redirecting
       window.dispatchEvent(
         new CustomEvent("payment-success", {

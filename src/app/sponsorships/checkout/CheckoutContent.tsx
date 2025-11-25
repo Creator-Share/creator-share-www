@@ -19,7 +19,7 @@ export default function CheckoutContent() {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
-  const [beneficiaryId, setBeneficiaryId] = useState<string | null>(null)
+  const [ ,setBeneficiaryId] = useState<string | null>(null)
 
   useEffect(() => {
     const secret = searchParams.get("client_secret")
@@ -33,46 +33,6 @@ export default function CheckoutContent() {
       setLoading(false)
     }
   }, [searchParams])
-
-  // Cleanup incomplete subscription when user leaves checkout
-  useEffect(() => {
-    let cleanupTriggered = false
-
-    const cleanupIncompleteSubscription = async () => {
-      if (cleanupTriggered || !beneficiaryId) return
-      cleanupTriggered = true
-
-      try {
-        console.log("🧹 Cleaning up incomplete subscription for:", beneficiaryId)
-        // Call API to delete incomplete subscription
-        const response = await fetch("/api/sponsorships/checkout/cleanup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ beneficiaryId }),
-        })
-        
-        if (response.ok) {
-          console.log("✅ Cleanup successful")
-        } else {
-          console.error("❌ Cleanup failed:", await response.text())
-        }
-      } catch (err) {
-        console.error("Failed to cleanup incomplete subscription:", err)
-      }
-    }
-
-    // Auto-expire after 2 minutes for testing (simulates checkout expiration)
-    const expiryTimer = setTimeout(() => {
-      console.log("⏰ 2-minute checkout expired - triggering cleanup")
-      cleanupIncompleteSubscription()
-    }, 2 * 60 * 1000) // 2 minutes
-
-    // Cleanup when component unmounts (user navigates away)
-    return () => {
-      clearTimeout(expiryTimer)
-      cleanupIncompleteSubscription()
-    }
-  }, [beneficiaryId])
 
   const handleReturn = () => {
     router.push("/sponsorships")
