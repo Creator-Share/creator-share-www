@@ -70,24 +70,32 @@ export async function GET(req: Request) {
   }
 
   try {
-    // STEP 1: Fetch currently 'locked' beneficiary IDs via subscriptions in incomplete or complete state
-    const { data: lockedSubscriptions, error: lockedError } = await supabase
-      .from("subscriptions")
-      .select("beneficiary_id")
-      .in("status", ["incomplete", "complete"]);
-    if (lockedError) {
-      console.error("Failed to fetch locked subscriptions:", lockedError);
-      return NextResponse.json({ error: "Database error" }, { status: 500 });
-    }
-    const lockedIds = (lockedSubscriptions || [])
-      .map(r => r.beneficiary_id)
-      .filter(Boolean);
+    // Check if we're in admin mode
+    const isAdminMode = searchParams.get("admin_mode") === "true";
 
-    // STEP 2: Normal query, excluding lockedIds
+    // STEP 1: Start with base query
     let query = supabase.from("beneficiaries").select("*");
-    if (lockedIds.length > 0) {
-      // Supabase expects .not(..., "(id1,id2,...)")
-      query = query.not("id", "in", `(${lockedIds.join(",")})`);
+
+    // Only apply locking logic when not in admin mode
+    if (!isAdminMode) {
+      // Fetch currently 'locked' beneficiary IDs via subscriptions in incomplete or complete state
+      const { data: lockedSubscriptions, error: lockedError } = await supabase
+        .from("subscriptions")
+        .select("beneficiary_id")
+        .in("status", ["incomplete", "complete"]);
+      if (lockedError) {
+        console.error("Failed to fetch locked subscriptions:", lockedError);
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+      const lockedIds = (lockedSubscriptions || [])
+        .map(r => r.beneficiary_id)
+        .filter(Boolean);
+
+      // Exclude locked beneficiaries for non-admin views
+      if (lockedIds.length > 0) {
+        // Supabase expects .not(..., "(id1,id2,...)")
+        query = query.not("id", "in", `(${lockedIds.join(",")})`);
+      }
     }
 
     if (beneficiaryType) {

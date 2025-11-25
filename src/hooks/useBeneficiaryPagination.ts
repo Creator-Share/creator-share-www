@@ -97,6 +97,7 @@ export function useBeneficiaryPagination(
       if (filters.search) params.set("search", filters.search)
       params.set("limit", String(recordsPerPage))
       if (nextCursor) params.set("cursor", nextCursor)
+      if (isAdminMode) params.set("admin_mode", "true")
       return params.toString()
     },
     [filters, beneficiaryType, recordsPerPage, isAdminMode]
