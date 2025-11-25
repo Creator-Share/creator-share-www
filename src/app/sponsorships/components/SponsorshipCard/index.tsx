@@ -9,7 +9,6 @@ import { BeneficiaryMedia } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
-import { useSponsorship } from "../../hooks/useSponsorship"
 import ViewerIndicator from "@/components/presence/ViewerIndicator"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
@@ -20,10 +19,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiaryType = "CHILD",
 }) => {
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
-  // Add sponsorship state management
-  const { sponsorshipInProgress } = useSponsorship()
-  const isSponsorshipInProgress = sponsorshipInProgress.has(beneficiary.id)
-
   // Note: Presence tracking removed from card list view
   // Only track presence when viewing the actual profile (modal or detail page)
 
@@ -74,8 +69,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     ? calculateAge(new Date(beneficiary.birth_date).toISOString())
     : null
   
-  const isReserved = isSponsorshipInProgress
-
   return (
     <Box
       id={id}
@@ -83,9 +76,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       borderWidth={isSelected ? "4px" : "1px"}
       className={`bg-white mb-6 rounded-[20px] shadow-md ${
         isSelected ? "highlight-child" : ""
-      } hover:shadow-xl hover:shadow-black/20 hover:scale-105 transition-all duration-300 ${
-        isReserved ? "opacity-50 pointer-events-none" : ""
-      }`}
+      } hover:shadow-xl hover:shadow-black/20 hover:scale-105 transition-all duration-300`}
       suppressHydrationWarning={true}
       style={{ overflow: "hidden" }}
       maxW="sm"
@@ -94,10 +85,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       display="flex"
       flexDirection="column"
       transform="translateZ(0)"
-      cursor={isReserved ? "not-allowed" : "pointer"}
+      cursor="pointer"
       transition="border-color 200ms ease, border-width 200ms ease, box-shadow 200ms ease, transform 200ms ease"
-      _hover={{ borderColor: isReserved ? "gray.200" : "#2B7FF9", borderWidth: "1px" }}
-      onClick={() => !isReserved && onOpenDialog?.()}
+      _hover={{ borderColor: "#2B7FF9", borderWidth: "1px" }}
+      onClick={onOpenDialog}
       position="relative"
     >
       {/* Card Header: Image with Navigation using ImageCarousel */}
@@ -150,7 +141,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       >
         {/* Full Name Heading */}
         <Text fontSize="xl" fontWeight="bold" mb={3} className="text-gray-800">
-          {beneficiary.name?.split(" ")[0] || "Name"}
+          {beneficiary.name ? 
+            `${beneficiary.name.split(" ")[0]} ${beneficiary.name.split(" ")[2]?.[0] || ""}`.trim()
+            : "Name"
+          }
         </Text>
 
         {/* Information Row */}
@@ -190,28 +184,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         </Box>
       </Box>
 
-      {/* Sponsorship in Progress Overlay */}
-      {isReserved && (
-        <Box
-          position="absolute"
-          top="50%"
-          left="50%"
-          transform="translate(-50%, -50%)"
-          bg="blue.500"
-          color="white"
-          px={4}
-          py={3}
-          borderRadius="md"
-          zIndex={20}
-          fontSize="sm"
-          fontWeight="semibold"
-          textAlign="center"
-          boxShadow="lg"
-          minW="200px"
-        >
-          <Text>Sponsorship in Progress</Text>
-        </Box>
-      )}
     </Box>
   )
 }
