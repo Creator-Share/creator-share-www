@@ -403,6 +403,52 @@ export const sendDuplicateSponsorshipEmail = async (
  * Send monthly payment confirmation email when a subscription payment clears
  * This is separate from activity notifications and not unsubscribable
  */
+export const sendManagerSponsorshipNotificationEmail = async (
+  childName: string,
+  amount: number,
+  interval: string,
+  customerEmail?: string | null,
+  customerName?: string | null,
+) => {
+  const subject = `New Sponsorship Received for ${childName}`
+  const formattedAmount = (amount / 100).toFixed(2)
+  const intervalText = interval === "month" ? "monthly" : "yearly"
+
+  const html = `
+    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+      </div>
+      
+      <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">New Sponsorship Received!</h2>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">A new sponsorship has been received with the following details:</p>
+        
+        <div style="background-color: white; padding: 1rem; border-radius: 0.375rem; margin: 1rem 0;">
+          <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${childName}</p>
+          <p style="margin: 0.5rem 0;"><strong>Amount:</strong> $${formattedAmount}/${intervalText}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${customerName || 'Not provided'}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${customerEmail || 'Not provided'}</p>
+        </div>
+      </div>
+      
+      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+        <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
+      </div>
+      
+      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
+        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
+      </div>
+    </div>
+  `
+
+  return sendEmail({
+    to: "johnstjulien@sharetanzania.com",
+    subject,
+    html,
+  })
+}
+
 export const sendMonthlyPaymentConfirmationEmail = async (
   email: string,
   childName: string,

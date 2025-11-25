@@ -6,6 +6,7 @@ import {
   sendSponsorshipConfirmationEmail,
   sendPaymentFailedEmail,
   sendMonthlyPaymentConfirmationEmail,
+  sendManagerSponsorshipNotificationEmail,
 } from "@/utils/email"
 import { notifySponsorshipReceived } from "@/services/telegram"
 
@@ -598,12 +599,13 @@ export async function POST(req: Request) {
           // Don't fail the webhook - reservations will expire naturally
         }
 
-        // Send confirmation email if we have customer email
-        if (customerEmail) {
-          try {
-            if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-              console.warn("Email configuration missing - skipping email send")
-            } else {
+        // Send confirmation emails
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+          console.warn("Email configuration missing - skipping email send")
+        } else {
+          // Send confirmation to sponsor if we have their email
+          if (customerEmail) {
+            try {
               const emailResult = await sendSponsorshipConfirmationEmail(
                 customerEmail,
                 beneficiaryData.name,
@@ -627,9 +629,42 @@ export async function POST(req: Request) {
               } catch (err) {
                 console.error("Error logging email attempt:", err)
               }
+            } catch (emailError) {
+              console.error("Error in email sending process:", emailError)
             }
-          } catch (emailError) {
-            console.error("Error in email sending process:", emailError)
+          }
+
+          // Send notification to manager
+          if (!process.env.MANAGER_EMAIL) {
+            console.warn("MANAGER_EMAIL not configured - skipping manager notification")
+          } else {
+            try {
+              const managerEmailResult = await sendManagerSponsorshipNotificationEmail(
+              beneficiaryData.name,
+              amount,
+              interval,
+              customerEmail,
+              session.customer_details?.name,
+            )
+
+            // Log manager email attempt
+            try {
+              await supabase.from("email_logs").insert({
+                email: process.env.MANAGER_EMAIL!,
+                subject: `New Sponsorship Received for ${beneficiaryData.name}`,
+                status: managerEmailResult.success ? "sent" : "failed",
+                error: managerEmailResult.error
+                  ? JSON.stringify(managerEmailResult.error)
+                  : null,
+                message_id: managerEmailResult.messageId,
+                created_at: new Date(),
+              })
+            } catch (err) {
+              console.error("Error logging manager email attempt:", err)
+            }
+            } catch (emailError) {
+              console.error("Error sending manager notification:", emailError)
+            }
           }
         }
 
