@@ -10,6 +10,9 @@ import { notifySponsorshipReceived } from "@/services/telegram"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY! as string)
 
+// Force dynamic rendering to prevent body pre-processing
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: Request) {
   const supabase = createClient()
   const sig = req.headers.get("stripe-signature") as string
@@ -27,6 +30,16 @@ export async function POST(req: Request) {
 
   try {
     const rawBody = await req.text()
+
+    // Debug logging to identify the issue
+    console.log('Webhook Debug:', {
+      hasSignature: !!sig,
+      signatureHeader: sig,
+      bodyLength: rawBody.length,
+      secretConfigured: !!webhookSecret,
+      secretPrefix: webhookSecret?.substring(0, 7),
+      bodyPreview: rawBody.substring(0, 100),
+    })
 
     event = stripe.webhooks.constructEvent(
       rawBody,
