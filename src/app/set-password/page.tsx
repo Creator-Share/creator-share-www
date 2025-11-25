@@ -5,6 +5,8 @@ import { createClient } from "@/utils/supabase/client"
 import { Box, Text, Input, Button, Alert } from "@chakra-ui/react"
 import { toaster } from "@/components/ui/toaster"
 import Image from "next/image"
+import { validatePassword } from "@/utils/passwordValidation"
+import { PasswordStrengthIndicator } from "@/components/ui/PasswordStrengthIndicator"
 
 export default function SetPasswordPage() {
     const [password, setPassword] = useState("")
@@ -131,8 +133,9 @@ export default function SetPasswordPage() {
             return
         }
 
-        if (password.length < 6) {
-            setError("Password must be at least 6 characters")
+        const validation = validatePassword(password)
+        if (!validation.isValid) {
+            setError(validation.error)
             setLoading(false)
             return
         }
@@ -255,16 +258,21 @@ export default function SetPasswordPage() {
                         <Text fontSize="sm" fontWeight="medium" color="gray.700" mb={2}>
                             New Password
                         </Text>
-                        <Input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Enter your password"
-                            required
-                            className="w-full border border-gray-300 rounded-md"
-                            px={3}
-                            py={2}
-                        />
+                            <Input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="Enter your password"
+                                required
+                                className="w-full border border-gray-300 rounded-md"
+                                px={3}
+                                py={2}
+                            />
+                            <PasswordStrengthIndicator password={password} />
+                            <Text fontSize="xs" color="gray.600" mt={1}>
+                                Password must contain at least 8 characters, including uppercase, lowercase, 
+                                number, and special character (!@#$%^&*(),.?":{}|&lt;&gt;).
+                            </Text>
                     </Box>
 
                     <Box>
@@ -295,4 +303,4 @@ export default function SetPasswordPage() {
             </Box>
         </Box>
     )
-} 
+}

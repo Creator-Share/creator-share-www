@@ -8,6 +8,8 @@ import { useForm } from "react-hook-form"
 import Image from "next/image"
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa"
 import { create } from "zustand"
+import { validatePassword } from "@/utils/passwordValidation"
+import { PasswordStrengthIndicator } from "@/components/ui/PasswordStrengthIndicator"
 
 interface FormValues {
   password: string
@@ -58,6 +60,13 @@ const ResetPassword = () => {
   const onSubmit = async (data: FormValues) => {
     setLoading(true)
     setMessage("")
+
+    const validation = validatePassword(data.password)
+    if (!validation.isValid) {
+      setMessage(validation.error)
+      setLoading(false)
+      return
+    }
 
     try {
       const response = await fetch("/api/auth/change-password", {
@@ -122,9 +131,18 @@ const ResetPassword = () => {
                   type={showPassword ? "text" : "password"}
                   {...register("password", {
                     required: "Password is required",
+                    validate: (value) => {
+                      const validation = validatePassword(value)
+                      return validation.isValid || validation.error
+                    }
                   })}
                   className="border border-[#8D9692] p-2 w-full"
                 />
+                <PasswordStrengthIndicator password={watch("password")} />
+                <Text fontSize="xs" color="gray.600" mt={1}>
+                  Password must contain at least 8 characters, including uppercase, lowercase, 
+                  number, and special character (!@#$%^&*(),.?":{}|&lt;&gt;).
+                </Text>
                 <Box
                   onClick={togglePasswordVisibility}
                   className="absolute right-[10px] top-1/2 -translate-y-1/2 cursor-pointer"
