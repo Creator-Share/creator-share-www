@@ -328,15 +328,15 @@ export const sendGoalFulfilledEmail = async (
 }
 
 /**
- * Send duplicate sponsorship notification email
- * This is sent when someone attempts to sponsor a child that already has an active sponsorship
+ * Send budget fulfilled rejection notification email
+ * This is sent when someone attempts to sponsor a beneficiary whose budget goal has already been met
  */
-export const sendDuplicateSponsorshipEmail = async (
+export const sendBudgetFulfilledRejectionEmail = async (
   email: string,
-  childName: string,
+  beneficiaryName: string,
   amount: number,
 ) => {
-  const subject = `Important: Duplicate Sponsorship Prevented for ${childName}`
+  const subject = `Thank You - ${beneficiaryName} Has Been Fully Sponsored!`
   const formattedAmount = (amount / 100).toFixed(2)
 
   const html = `
@@ -345,44 +345,47 @@ export const sendDuplicateSponsorshipEmail = async (
         <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
-      <div style="background-color: #fffbeb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #f59e0b;">
-        <h2 style="color: #f59e0b; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Sponsorship Already Active</h2>
+      <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #10b981;">
+        <h2 style="color: #10b981; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Good News - ${beneficiaryName} is Fully Sponsored!</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Dear Friend,</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
-          Thank you for your generous heart in wanting to sponsor <strong>${childName}</strong>.
+          Thank you for your generous heart in wanting to sponsor <strong>${beneficiaryName}</strong>.
         </p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
-          However, we discovered that <strong>${childName} already has an active sponsorship</strong>. To ensure fairness and allow more children to receive support, we've automatically cancelled your subscription and <strong>no charges will be made</strong>.
+          We're delighted to share that <strong>${beneficiaryName} has already been fully sponsored</strong> by other generous supporters and has met their budget goal! This is wonderful news for ${beneficiaryName}.
         </p>
       </div>
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
-        <h3 style="font-size: 1.25rem; font-weight: 600; margin-top: 0; color: #1C3C8C;">What Happens Next?</h3>
+        <h3 style="font-size: 1.25rem; font-weight: 600; margin-top: 0; color: #1C3C8C;">What This Means for Your Payment</h3>
         <ul style="font-size: 1rem; line-height: 1.5; margin-bottom: 0;">
-          <li style="margin-bottom: 0.75rem;">Your payment of <strong>$${formattedAmount}</strong> has been cancelled</li>
-          <li style="margin-bottom: 0.75rem;">No charges will appear on your card</li>
-          <li style="margin-bottom: 0.75rem;">You're welcome to sponsor a different child who still needs support</li>
+          <li style="margin-bottom: 0.75rem;">Your subscription has been cancelled</li>
+          <li style="margin-bottom: 0.75rem;">Your payment of <strong>$${formattedAmount}</strong> will not be processed</li>
+          <li style="margin-bottom: 0.75rem;">If a charge appeared on your card, it will be refunded within 5-10 business days</li>
         </ul>
       </div>
       
       <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
-        <h3 style="font-size: 1.25rem; font-weight: 600; margin-top: 0; color: #1C3C8C;">Find Another Child to Sponsor</h3>
+        <h3 style="font-size: 1.25rem; font-weight: 600; margin-top: 0; color: #1C3C8C;">Sponsor Another Child in Need</h3>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
-          There are many other wonderful children waiting for a sponsor like you. Each child has their own unique story and dreams for the future.
+          While ${beneficiaryName}'s sponsorship needs have been met, there are many other wonderful children still waiting for a sponsor like you. Each child has their own unique story and dreams for the future.
         </p>
         <div style="text-align: center; margin-top: 1.5rem;">
-          <a href="https://creator-share-www.vercel.app/sponsorships" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Browse Available Children</a>
+          <a href="https://creatorshare.com" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Explore Children Needing Support</a>
         </div>
       </div>
       
-      <div style="border-left: 4px solid #1C3C8C; padding-left: 1rem; margin-bottom: 1.5rem;">
+      <div style="border-left: 4px solid #10b981; padding-left: 1rem; margin-bottom: 1.5rem;">
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">
-          We sincerely apologize for any inconvenience. If you have any questions or concerns, please don't hesitate to contact us.
+          Your willingness to make a difference is truly appreciated. We would be honored if you would consider extending your generosity to another child who still needs support.
+        </p>
+        <p style="font-size: 1rem; line-height: 1.5;">
+          If you have any questions or concerns, please don't hesitate to contact us.
         </p>
       </div>
       
       <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Thank you for your understanding and generosity,</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">With gratitude for your generous spirit,</p>
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
