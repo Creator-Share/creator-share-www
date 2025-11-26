@@ -34,6 +34,8 @@ export interface Beneficiaries {
   metadata: Record<string, unknown>
   beneficiary_type: BeneficiaryType
   image_url?: string
+  sort_weight?: number
+  created_at?: string
 }
 
 export interface BeneficiaryMedia {

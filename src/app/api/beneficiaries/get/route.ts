@@ -14,6 +14,19 @@ export async function GET(req: Request) {
   const status = statusString ? (statusString.split(",") as Status[]) : []
   const ageRangeParam = searchParams.get("ageRange")
   const searchQuery = searchParams.get("search")
+  const adminMode = searchParams.get("admin_mode")
+
+  // Debug logging to understand the issue
+  console.log("[API Debug] Received parameters:", {
+    beneficiaryType,
+    gender,
+    statusString,
+    status,
+    ageRangeParam,
+    searchQuery,
+    adminMode,
+    fullUrl: req.url
+  })
 
   // Pagination params
   const limitParam = Number(searchParams.get("limit") || "9")
@@ -24,19 +37,21 @@ export async function GET(req: Request) {
     ? Math.min(Math.max(limitParam, 1), 60)
     : 9
 
-  // Decode cursor (created_at|id) if provided
-  let cursorCreatedAt: string | null = null
-  let cursorId: string | null = null
+  console.log("[API Debug] Pagination params:", { limitParam, limit, cursorParam, mode: "offset-based" })
+
+  // TEMPORARY: Use offset-based pagination instead of cursor-based
+  // This is a workaround for the cursor pagination issues we were experiencing
+  // TODO: Switch back to cursor-based pagination after fixing the .or() filter conflicts
+  let offset = 0
   if (cursorParam) {
     try {
       const decoded = Buffer.from(cursorParam, "base64").toString("utf-8")
-      const [ts, id] = decoded.split("|")
-      if (ts && id) {
-        cursorCreatedAt = ts
-        cursorId = id
+      offset = Number(decoded)
+      if (!Number.isFinite(offset) || offset < 0) {
+        offset = 0
       }
     } catch {
-      // ignore invalid cursor
+      offset = 0
     }
   }
 
@@ -50,12 +65,15 @@ export async function GET(req: Request) {
     }
     if (gender) {
       query = query.eq("gender", gender)
+      console.log("[API Debug] Applying gender filter:", gender)
     }
     if (status.length > 0) {
       query = query.in("status", status)
+      console.log("[API Debug] Applying status filter:", status)
     }
 
     if (ageRangeParam) {
+      console.log("[API Debug] Age range param received:", ageRangeParam)
       const parts = ageRangeParam.split(",").map((v) => Number(v.trim()))
       if (parts.length === 2 && parts.every((n) => Number.isFinite(n))) {
         const [minAgeInYears, maxAgeInYears] =
@@ -69,8 +87,11 @@ export async function GET(req: Request) {
         // Also include those with null birth_date
         const minDob = dateYearsAgo(maxAgeInYears + 1).toISOString()
         const maxDob = dateYearsAgo(minAgeInYears).toISOString()
+        console.log("[API Debug] Applying age filter - Min DOB:", minDob, "Max DOB:", maxDob)
         query = query.or(`birth_date.is.null,and(birth_date.gte.${minDob},birth_date.lte.${maxDob})`)
       }
+    } else {
+      console.log("[API Debug] No age range filter applied")
     }
 
     // Search by name or username
@@ -81,23 +102,16 @@ export async function GET(req: Request) {
       )
     }
 
-    // Keyset (cursor) pagination: created_at DESC, id DESC
-    if (cursorCreatedAt && cursorId) {
-      // Records strictly older than the cursor in the composite order
-      query = query.or(
-        `created_at.lt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.lt.${cursorId})`
-      )
-      console.log(
-        `[Cursor Pagination] Using cursor: ${cursorCreatedAt}|${cursorId}`
-      )
-    }
-
-    // Stable ordering: sort_weight DESC (higher weight first), then created_at DESC, then id DESC
+    // Stable ordering: created_at DESC (nulls last), then id DESC
     query = query
-      .order("sort_weight", { ascending: false })
-      .order("created_at", { ascending: false })
+      .order("created_at", { ascending: false, nullsFirst: false })
       .order("id", { ascending: false })
-      .limit(limit)
+    
+    // TEMPORARY: Use offset-based pagination - always use .range() for consistency
+    const rangeStart = offset
+    const rangeEnd = offset + limit - 1
+    query = query.range(rangeStart, rangeEnd)
+    console.log(`[Offset Pagination] Using range: ${rangeStart} to ${rangeEnd} (offset: ${offset}, limit: ${limit})`)
 
     const { data, error } = await query
     if (error) {
@@ -108,32 +122,62 @@ export async function GET(req: Request) {
     // Log returned IDs to detect duplicates
     const returnedIds = (data || []).map((b: Beneficiaries) => b.id)
     console.log(
-      `[Cursor Pagination] Returned ${returnedIds.length} items:`,
+      `[Offset Pagination] Returned ${returnedIds.length} items (offset: ${offset}, limit: ${limit}):`,
       returnedIds.slice(0, 3),
       "..."
     )
+    
+    // Additional logging for status filtering
+    if (status.length > 0) {
+      const statusBreakdown = (data || []).reduce((acc: Record<string, number>, b: Beneficiaries) => {
+        acc[b.status || 'unknown'] = (acc[b.status || 'unknown'] || 0) + 1
+        return acc
+      }, {})
+      console.log("[API Debug] Status breakdown of returned records:", statusBreakdown)
+    }
+    
+    // Log created_at and id values to debug pagination
+    if (data && data.length > 0) {
+      console.log("[API Debug] Returned items (for cursor debugging):", 
+        data.slice(0, 3).map((b: Beneficiaries) => ({ 
+          id: b.id?.substring(0, 8), 
+          created_at: b.created_at, 
+          name: b.name 
+        })),
+        "...",
+        data.slice(-2).map((b: Beneficiaries) => ({ 
+          id: b.id?.substring(0, 8), 
+          created_at: b.created_at, 
+          name: b.name 
+        }))
+      )
+    }
 
     // Check for duplicates in this response
     const uniqueIds = new Set(returnedIds)
     if (uniqueIds.size !== returnedIds.length) {
       console.error(
-        `[Cursor Pagination] ⚠️  DUPLICATE IDs IN RESPONSE! Total: ${returnedIds.length}, Unique: ${uniqueIds.size}`
+        `[Offset Pagination] ⚠️  DUPLICATE IDs IN RESPONSE! Total: ${returnedIds.length}, Unique: ${uniqueIds.size}`
       )
     }
 
-    const lastItem = data && data.length > 0 ? data[data.length - 1] : null
+    const hasMoreData = Boolean(data && data.length === limit)
+    
+    
+    // If we returned fewer items than the limit, log a warning
+    if (data && data.length < limit && data.length > 0) {
+      console.warn(`[API Debug] ⚠️  Returned only ${data.length} items, expected ${limit}. This indicates end of data or a query issue.`)
+    }
 
     return NextResponse.json({
       people: (data || []) as Beneficiaries[],
       pageInfo: {
         limit,
         nextCursor:
-          data && data.length === limit && lastItem
-            ? Buffer.from(`${lastItem.created_at}|${lastItem.id}`).toString(
-                "base64"
-              )
+          data && data.length === limit
+            ? Buffer.from(String(offset + limit)).toString("base64")
             : null,
-        hasMore: Boolean(data && data.length === limit),
+        hasMore: hasMoreData,
       },
     })
   } catch (err) {

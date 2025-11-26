@@ -37,6 +37,7 @@ export interface Beneficiaries {
   beneficiary_type: BeneficiaryType
   image_url?: string
   created_at?: string
+  sort_weight?: number
 }
 
 export interface Activity {

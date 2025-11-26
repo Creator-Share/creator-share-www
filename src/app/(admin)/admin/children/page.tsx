@@ -100,6 +100,7 @@ const ChildrenTable = () => {
     },
   })
 
+
   // Fetch stats
   useEffect(() => {
     const fetchStats = async () => {
@@ -108,8 +109,9 @@ const ChildrenTable = () => {
           "/api/admin/beneficiaries/stats?beneficiary_type=CHILD"
         )
         if (res.ok) {
-          const data = await res.json()
-          setStats(data)
+        const data = await res.json()
+        setStats(data)
+        
         }
       } catch (error) {
         console.error("Error fetching stats:", error)
