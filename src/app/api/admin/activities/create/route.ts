@@ -154,11 +154,11 @@ export async function POST(req: NextRequest) {
       type SponsorRow = {
         user_id: string | null
         email_notification: boolean | null
-        users: { email: string } | { email: string }[] | null
+        users: { email: string; name?: string | null } | { email: string; name?: string | null }[] | null
       }
       const { data: sponsorRows, error: sponsorError } = await supabase
         .from("subscriptions")
-        .select("user_id, email_notification, users(email)")
+        .select("user_id, email_notification, users(email, name)")
         .eq("beneficiary_id", beneficiary_id)
         .eq("status", "complete")
 
@@ -171,12 +171,16 @@ export async function POST(req: NextRequest) {
 
       const { sendActivityNotificationEmail } = await import("@/utils/email")
 
-      const audienceEmails = new Set<string>()
+      // Map email to name for personalized greetings
+      type AudienceMember = { email: string; name?: string | null }
+      const audienceMap = new Map<string, AudienceMember>()
 
-      // Add explicit activity subscribers
+      // Add explicit activity subscribers (no name available for these)
       if (!subError && Array.isArray(subscribers)) {
         for (const sub of subscribers) {
-          if (sub?.email) audienceEmails.add(sub.email)
+          if (sub?.email) {
+            audienceMap.set(sub.email, { email: sub.email })
+          }
         }
       }
 
@@ -184,28 +188,34 @@ export async function POST(req: NextRequest) {
       if (!sponsorError && Array.isArray(sponsorRows)) {
         for (const row of sponsorRows as SponsorRow[]) {
           if (row?.email_notification === false) continue
-          const email = Array.isArray(row.users)
-            ? row.users[0]?.email
-            : row.users?.email
-          if (email) audienceEmails.add(email)
+          const userData = Array.isArray(row.users)
+            ? row.users[0]
+            : row.users
+          if (userData?.email) {
+            audienceMap.set(userData.email, {
+              email: userData.email,
+              name: userData.name || null,
+            })
+          }
         }
       }
 
-      if (beneficiaryData && beneficiaryData.name && audienceEmails.size > 0) {
+      if (beneficiaryData && beneficiaryData.name && audienceMap.size > 0) {
         const subject = `New update on ${beneficiaryData.name}`
 
         type EmailResult = { success: boolean; error?: unknown; messageId?: string }
         await Promise.allSettled(
-          Array.from(audienceEmails).map(async (email) => {
+          Array.from(audienceMap.values()).map(async (member) => {
             try {
               const emailResult: EmailResult = await sendActivityNotificationEmail(
-                email,
+                member.email,
                 beneficiaryData,
                 inserted,
+                member.name,
               )
               try {
                 await supabase.from("email_logs").insert({
-                  email,
+                  email: member.email,
                   subject,
                   status: emailResult.success ? "sent" : "failed",
                   error: emailResult.error
@@ -221,7 +231,7 @@ export async function POST(req: NextRequest) {
               console.error("Error sending activity notification email:", emailErr)
               try {
                 await supabase.from("email_logs").insert({
-                  email,
+                  email: member.email,
                   subject,
                   status: "failed",
                   error:

@@ -49,11 +49,13 @@ export const sendPartnershipConfirmationEmail = async (
   project: string,
   amount: number,
   interval: string,
+  partnerName?: string | null,
 ) => {
   const subject = `Thank you for partnering with Creator Share Foundation!`
 
   const formattedAmount = (amount / 100).toFixed(2)
   const intervalText = interval === "month" ? "monthly" : "yearly"
+  const greeting = partnerName ? `Dear ${partnerName},` : "Dear Partner,"
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
@@ -63,7 +65,7 @@ export const sendPartnershipConfirmationEmail = async (
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Partnership!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Dear Partner,</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> ${intervalText} to support our ${project} project.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your partnership makes a significant difference in helping us provide safety, healing, and a future full of promise for some of the most vulnerable children in the world.</p>
       </div>
@@ -96,12 +98,14 @@ export const sendSponsorshipConfirmationEmail = async (
   childName: string,
   amount: number,
   interval: string,
+  sponsorName?: string | null,
 ) => {
   const subject = `Thank you for sponsoring ${childName}!`
 
   const formattedAmount = (amount / 100).toFixed(2)
   const intervalText = interval === "month" ? "monthly" : "yearly"
   const stripePortalUrl = "https://stripe.creatorshare.com"
+  const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
@@ -111,7 +115,7 @@ export const sendSponsorshipConfirmationEmail = async (
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Dear Sponsor,</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> ${intervalText} to sponsor ${childName}.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your support makes a significant difference in providing education and opportunities for children in need.</p>
       </div>
@@ -149,6 +153,7 @@ export const sendPaymentFailedEmail = async (
   childName: string,
   amount: number,
   nextAttemptDate: Date | null,
+  sponsorName?: string | null,
 ) => {
   const subject = `Action Required: Your Sponsorship Payment for ${childName} Failed`
 
@@ -156,6 +161,7 @@ export const sendPaymentFailedEmail = async (
   const nextAttemptText = nextAttemptDate
     ? `We'll automatically try again on ${nextAttemptDate.toLocaleDateString()}.`
     : "We'll automatically try again soon."
+  const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
@@ -165,7 +171,7 @@ export const sendPaymentFailedEmail = async (
       
       <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">
         <h2 style="color: #dc2626; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Payment Failed</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Dear Sponsor,</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">We were unable to process your sponsorship payment of <strong>$${formattedAmount}</strong>.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${nextAttemptText}</p>
       </div>
@@ -203,8 +209,10 @@ export const sendPaymentFailedEmail = async (
 export const sendSubscriptionConfirmationEmail = async (
   email: string,
   beneficiaryName: string,
+  subscriberName?: string | null,
 ) => {
   const subject = `You're subscribed to updates for ${beneficiaryName}!`
+  const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
@@ -212,6 +220,7 @@ export const sendSubscriptionConfirmationEmail = async (
       </div>
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Subscription Confirmed!</h2>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for subscribing to updates for <strong>${beneficiaryName}</strong>.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">You'll receive an email whenever there's a new activity or update for this beneficiary.</p>
         <p style="font-size: 1rem; line-height: 1.5;">You can unsubscribe at any time by contacting us.</p>
@@ -239,8 +248,10 @@ export const sendActivityNotificationEmail = async (
   email: string,
   beneficiary: { name: string },
   activity: { title: string; description: string },
+  subscriberName?: string | null,
 ) => {
   const subject = `New update on ${beneficiary.name}`
+  const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
@@ -250,7 +261,7 @@ export const sendActivityNotificationEmail = async (
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">New Update for ${
           beneficiary.name
         }</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Dear Subscriber,</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">A new activity has been posted for <strong>${
           beneficiary.name
         }</strong>:</p>
@@ -284,6 +295,7 @@ export const sendActivityNotificationEmail = async (
 export const sendGoalFulfilledEmail = async (
   email: string,
   beneficiary: { name: string; budget_goal: number },
+  subscriberName?: string | null,
 ) => {
   const subject = `Goal Fulfilled for ${beneficiary.name}!`
   const formattedGoal = beneficiary.budget_goal
@@ -291,6 +303,7 @@ export const sendGoalFulfilledEmail = async (
         minimumFractionDigits: 2,
       })}`
     : "the goal amount"
+  const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
@@ -298,7 +311,7 @@ export const sendGoalFulfilledEmail = async (
       </div>
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Goal Fulfilled!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Dear Subscriber,</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
           We are excited to let you know that <strong>${
             beneficiary.name
@@ -335,9 +348,11 @@ export const sendBudgetFulfilledRejectionEmail = async (
   email: string,
   beneficiaryName: string,
   amount: number,
+  sponsorName?: string | null,
 ) => {
   const subject = `Thank You - ${beneficiaryName} Has Been Fully Sponsored!`
   const formattedAmount = (amount / 100).toFixed(2)
+  const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Friend,"
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
@@ -347,7 +362,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #10b981;">
         <h2 style="color: #10b981; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Good News - ${beneficiaryName} is Fully Sponsored!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Dear Friend,</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
           Thank you for your generous heart in wanting to sponsor <strong>${beneficiaryName}</strong>.
         </p>
@@ -456,10 +471,12 @@ export const sendMonthlyPaymentConfirmationEmail = async (
   email: string,
   childName: string,
   amount: number,
+  sponsorName?: string | null,
 ) => {
   const subject = `Payment Confirmation: Your Sponsorship for ${childName}`
   const formattedAmount = (amount / 100).toFixed(2)
   const stripePortalUrl = "https://stripe.creatorshare.com"
+  const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
@@ -469,7 +486,7 @@ export const sendMonthlyPaymentConfirmationEmail = async (
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Payment Confirmed</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Dear Sponsor,</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your monthly sponsorship payment of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> for <strong>${childName}</strong> has been successfully processed.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your continued support in making a difference in ${childName}'s life.</p>
       </div>

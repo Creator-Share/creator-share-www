@@ -33,14 +33,13 @@ export async function POST(req: Request) {
   try {
     const rawBody = await req.text()
 
-    // Debug logging to identify the issue
+    // Debug logging (without body to avoid signature issues)
     console.log('Webhook Debug:', {
       hasSignature: !!sig,
-      signatureHeader: sig,
+      signatureHeader: sig?.substring(0, 50) + '...',
       bodyLength: rawBody.length,
       secretConfigured: !!webhookSecret,
       secretPrefix: webhookSecret?.substring(0, 7),
-      body: rawBody,
     })
 
     event = stripe.webhooks.constructEvent(
@@ -57,6 +56,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    console.log(`Processing webhook event: ${event.type}`, { eventId: event.id })
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session
@@ -298,6 +298,7 @@ export async function POST(req: Request) {
                 project,
                 amount,
                 session.mode === "subscription" ? "month" : "year",
+                session.customer_details?.name || null,
               )
 
               // Log email attempt
@@ -368,7 +369,6 @@ export async function POST(req: Request) {
               ),
               customer_id: session.customer as string,
               sponsorship_method: "STRIPE",
-              sponsorship_id: session.id,
             })
 
           // Step 2: Handle subscription insert errors
@@ -423,9 +423,32 @@ export async function POST(req: Request) {
               
               // Step 3: Refund the payment
               try {
-                if (session.payment_intent) {
+                // Retrieve full session with expanded payment_intent if not already available
+                let paymentIntentId: string | null = session.payment_intent as string | null
+                
+                if (!paymentIntentId) {
+                  // Try to get payment intent from the session by retrieving it with expansion
+                  try {
+                    const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
+                      expand: ['payment_intent', 'invoice.payment_intent']
+                    })
+                    paymentIntentId = expandedSession.payment_intent as string | null
+                    
+                    // If still not found, try from invoice
+                    if (!paymentIntentId && expandedSession.invoice) {
+                      const invoice = typeof expandedSession.invoice === 'string' 
+                        ? await stripe.invoices.retrieve(expandedSession.invoice)
+                        : expandedSession.invoice
+                      paymentIntentId = invoice.payment_intent as string | null
+                    }
+                  } catch (retrieveError) {
+                    console.error("Error retrieving session for payment_intent:", retrieveError)
+                  }
+                }
+                
+                if (paymentIntentId) {
                   const refund = await stripe.refunds.create({
-                    payment_intent: session.payment_intent as string,
+                    payment_intent: paymentIntentId,
                     reason: 'requested_by_customer',
                     metadata: {
                       beneficiaryId: beneficiaryId,
@@ -450,7 +473,9 @@ export async function POST(req: Request) {
                     sessionId: session.id,
                     beneficiaryId,
                     amount,
-                    customerEmail
+                    customerEmail,
+                    sessionPaymentIntent: session.payment_intent,
+                    sessionInvoice: session.invoice
                   })
                 }
               } catch (refundError) {
@@ -473,7 +498,8 @@ export async function POST(req: Request) {
                   await sendBudgetFulfilledRejectionEmail(
                     customerEmail,
                     beneficiaryName,
-                    amount
+                    amount,
+                    session.customer_details?.name || null,
                   )
                   
                   emailSent = true
@@ -608,6 +634,7 @@ export async function POST(req: Request) {
                 beneficiaryName,
                 amount,
                 interval,
+                session.customer_details?.name || null,
               )
 
               // Log email attempt
@@ -725,19 +752,27 @@ export async function POST(req: Request) {
           console.error("Error updating subscription status:", updateError)
         }
 
-        const { data: subscriptionData } = await supabase
+        const { data: subscriptionData, error: subscriptionError } = await supabase
           .from("subscriptions")
           .select(`beneficiary_id`)
           .eq("stripe_subscription_id", subscriptionId)
-          .single()
+          .maybeSingle()
+
+        if (subscriptionError) {
+          console.error("Error fetching subscription for payment failed email:", subscriptionError)
+        }
 
         let beneficiaryName = "your sponsored beneficiary"
         if (subscriptionData?.beneficiary_id) {
-          const { data: sponsorship } = await supabase
+          const { data: sponsorship, error: beneficiaryError } = await supabase
             .from("beneficiaries")
             .select("name")
             .eq("id", subscriptionData.beneficiary_id)
-            .single()
+            .maybeSingle()
+
+          if (beneficiaryError) {
+            console.error("Error fetching beneficiary for payment failed email:", beneficiaryError)
+          }
 
           if (sponsorship) {
             beneficiaryName = sponsorship.name
@@ -747,6 +782,21 @@ export async function POST(req: Request) {
         // Send payment failed email
         if (customerEmail) {
           try {
+            // Get customer name from Stripe
+            let customerName: string | null = null
+            if (invoice.customer) {
+              try {
+                const customer = await stripe.customers.retrieve(
+                  invoice.customer as string
+                )
+                if (!customer.deleted && "name" in customer && customer.name) {
+                  customerName = customer.name
+                }
+              } catch (err) {
+                console.error("Error fetching customer name:", err)
+              }
+            }
+            
             await sendPaymentFailedEmail(
               customerEmail,
               beneficiaryName,
@@ -754,6 +804,7 @@ export async function POST(req: Request) {
               invoice.next_payment_attempt
                 ? new Date(invoice.next_payment_attempt * 1000)
                 : null,
+              customerName,
             )
 
             // Log email attempt
@@ -781,26 +832,41 @@ export async function POST(req: Request) {
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription
 
+        // Map Stripe subscription status to our database status
+        // Stripe statuses: active, past_due, canceled, unpaid, incomplete, incomplete_expired, trialing, paused
+        let dbStatus = "complete"
+        if (subscription.status === "active") {
+          dbStatus = "complete"
+        } else if (subscription.status === "past_due" || subscription.status === "unpaid") {
+          dbStatus = "incomplete"
+        } else if (subscription.status === "canceled") {
+          dbStatus = "cancelled"
+        } else if (subscription.status === "incomplete" || subscription.status === "incomplete_expired") {
+          dbStatus = "incomplete"
+        }
+
         // Update subscription record
         const { error: updateError } = await supabase
           .from("subscriptions")
           .update({
-            status: "complete",
-            current_period_start: new Date(
-              subscription.current_period_start * 1000,
-            ),
-            current_period_end: new Date(
-              subscription.current_period_end * 1000,
-            ),
+            status: dbStatus,
+            current_period_start: subscription.current_period_start
+              ? new Date(subscription.current_period_start * 1000)
+              : null,
+            current_period_end: subscription.current_period_end
+              ? new Date(subscription.current_period_end * 1000)
+              : null,
           })
           .eq("stripe_subscription_id", subscription.id)
 
         if (updateError) {
           console.error("Error updating subscription:", updateError)
-          return NextResponse.json(
-            { error: "Failed to update subscription" },
-            { status: 500 },
-          )
+          // Don't fail the webhook - log and continue
+          console.error("Subscription update failed for:", {
+            subscriptionId: subscription.id,
+            status: subscription.status,
+            error: updateError,
+          })
         }
 
         return NextResponse.json(
@@ -847,10 +913,11 @@ export async function POST(req: Request) {
 
         if (updateError) {
           console.error("Error cancelling subscription:", updateError)
-          return NextResponse.json(
-            { error: "Failed to cancel subscription" },
-            { status: 500 },
-          )
+          // Don't fail the webhook - subscription may not exist in our DB
+          console.warn("Subscription cancellation update failed:", {
+            subscriptionId: subscription.id,
+            error: updateError,
+          })
         }
 
         return NextResponse.json(
@@ -878,34 +945,31 @@ export async function POST(req: Request) {
           if (invoice.billing_reason === "subscription_cycle" || invoice.billing_reason === "subscription_update") {
             try {
               // Get subscription details to find beneficiary and customer email
-              const { data: subscriptionData } = await supabase
+              const { data: subscriptionData, error: subscriptionError } = await supabase
                 .from("subscriptions")
                 .select("beneficiary_id, user_id, amount")
                 .eq("stripe_subscription_id", subscriptionId)
-                .single()
+                .maybeSingle()
+
+              if (subscriptionError) {
+                console.error("Error fetching subscription:", subscriptionError)
+              }
 
               if (subscriptionData?.beneficiary_id) {
                 // Get beneficiary name
-                const { data: beneficiaryData } = await supabase
+                const { data: beneficiaryData, error: beneficiaryError } = await supabase
                   .from("beneficiaries")
                   .select("name")
                   .eq("id", subscriptionData.beneficiary_id)
-                  .single()
+                  .maybeSingle()
 
-                // Get customer email from Stripe
-                let customerEmail: string | null = null
-                if (invoice.customer) {
-                  try {
-                    const customer = await stripe.customers.retrieve(
-                      invoice.customer as string
-                    )
-                    if (!customer.deleted && "email" in customer) {
-                      customerEmail = customer.email
-                    }
-                  } catch (err) {
-                    console.error("Error fetching customer email:", err)
-                  }
+                if (beneficiaryError) {
+                  console.error("Error fetching beneficiary for payment confirmation:", beneficiaryError)
                 }
+
+                // Get customer email and name from invoice (available directly on invoice object)
+                const customerEmail = invoice.customer_email || null
+                const customerName = invoice.customer_name || null
 
                 // Send monthly payment confirmation email
                 if (customerEmail && beneficiaryData) {
@@ -917,6 +981,7 @@ export async function POST(req: Request) {
                         customerEmail,
                         beneficiaryData.name,
                         invoice.amount_paid,
+                        customerName,
                       )
 
                       // Log email attempt
@@ -977,13 +1042,22 @@ export async function POST(req: Request) {
         )
     }
   } catch (error) {
-    console.error("Detailed webhook error:", error)
+    console.error("Detailed webhook error:", {
+      error,
+      eventType: event?.type,
+      eventId: event?.id,
+      message: error instanceof Error ? error.message : "Unknown error occurred",
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+    // Always return 200 to Stripe to prevent retries for unexpected errors
+    // Log the error for investigation but don't fail the webhook
     return NextResponse.json(
       {
         error:
           error instanceof Error ? error.message : "Unknown error occurred",
+        received: true,
       },
-      { status: 500 },
+      { status: 200 },
     )
   }
 }

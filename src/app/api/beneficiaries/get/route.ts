@@ -127,31 +127,7 @@ export async function GET(req: Request) {
       "..."
     )
     
-    // Additional logging for status filtering
-    if (status.length > 0) {
-      const statusBreakdown = (data || []).reduce((acc: Record<string, number>, b: Beneficiaries) => {
-        acc[b.status || 'unknown'] = (acc[b.status || 'unknown'] || 0) + 1
-        return acc
-      }, {})
-      console.log("[API Debug] Status breakdown of returned records:", statusBreakdown)
-    }
     
-    // Log created_at and id values to debug pagination
-    if (data && data.length > 0) {
-      console.log("[API Debug] Returned items (for cursor debugging):", 
-        data.slice(0, 3).map((b: Beneficiaries) => ({ 
-          id: b.id?.substring(0, 8), 
-          created_at: b.created_at, 
-          name: b.name 
-        })),
-        "...",
-        data.slice(-2).map((b: Beneficiaries) => ({ 
-          id: b.id?.substring(0, 8), 
-          created_at: b.created_at, 
-          name: b.name 
-        }))
-      )
-    }
 
     // Check for duplicates in this response
     const uniqueIds = new Set(returnedIds)
@@ -164,10 +140,6 @@ export async function GET(req: Request) {
     const hasMoreData = Boolean(data && data.length === limit)
     
     
-    // If we returned fewer items than the limit, log a warning
-    if (data && data.length < limit && data.length > 0) {
-      console.warn(`[API Debug] ⚠️  Returned only ${data.length} items, expected ${limit}. This indicates end of data or a query issue.`)
-    }
 
     return NextResponse.json({
       people: (data || []) as Beneficiaries[],
