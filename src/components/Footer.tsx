@@ -110,14 +110,14 @@ export const Footer = () => {
             </li>
           </ul>
           <div className="mt-4">
-            <h3 className="text-lg font-semibold mb-2">Manage Subscription</h3>
+            <h3 className="text-lg font-semibold mb-2">Manage Subscriptions</h3>
             <a
               href="https://stripe.creatorshare.com"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:underline"
             >
-              Update Payment & Billing
+              Manage Subscriptions
             </a>
           </div>
         </div>
