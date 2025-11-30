@@ -14,19 +14,7 @@ export async function GET(req: Request) {
   const status = statusString ? (statusString.split(",") as Status[]) : []
   const ageRangeParam = searchParams.get("ageRange")
   const searchQuery = searchParams.get("search")
-  const adminMode = searchParams.get("admin_mode")
 
-  // Debug logging to understand the issue
-  console.log("[API Debug] Received parameters:", {
-    beneficiaryType,
-    gender,
-    statusString,
-    status,
-    ageRangeParam,
-    searchQuery,
-    adminMode,
-    fullUrl: req.url
-  })
 
   // Pagination params
   const limitParam = Number(searchParams.get("limit") || "9")
@@ -36,8 +24,6 @@ export async function GET(req: Request) {
   const limit = Number.isFinite(limitParam)
     ? Math.min(Math.max(limitParam, 1), 60)
     : 9
-
-  console.log("[API Debug] Pagination params:", { limitParam, limit, cursorParam, mode: "offset-based" })
 
   // TEMPORARY: Use offset-based pagination instead of cursor-based
   // This is a workaround for the cursor pagination issues we were experiencing
@@ -65,15 +51,12 @@ export async function GET(req: Request) {
     }
     if (gender) {
       query = query.eq("gender", gender)
-      console.log("[API Debug] Applying gender filter:", gender)
     }
     if (status.length > 0) {
       query = query.in("status", status)
-      console.log("[API Debug] Applying status filter:", status)
     }
 
     if (ageRangeParam) {
-      console.log("[API Debug] Age range param received:", ageRangeParam)
       const parts = ageRangeParam.split(",").map((v) => Number(v.trim()))
       if (parts.length === 2 && parts.every((n) => Number.isFinite(n))) {
         const [minAgeInYears, maxAgeInYears] =
@@ -87,11 +70,8 @@ export async function GET(req: Request) {
         // Also include those with null birth_date
         const minDob = dateYearsAgo(maxAgeInYears + 1).toISOString()
         const maxDob = dateYearsAgo(minAgeInYears).toISOString()
-        console.log("[API Debug] Applying age filter - Min DOB:", minDob, "Max DOB:", maxDob)
         query = query.or(`birth_date.is.null,and(birth_date.gte.${minDob},birth_date.lte.${maxDob})`)
       }
-    } else {
-      console.log("[API Debug] No age range filter applied")
     }
 
     // Search by name or username
@@ -111,7 +91,6 @@ export async function GET(req: Request) {
     const rangeStart = offset
     const rangeEnd = offset + limit - 1
     query = query.range(rangeStart, rangeEnd)
-    console.log(`[Offset Pagination] Using range: ${rangeStart} to ${rangeEnd} (offset: ${offset}, limit: ${limit})`)
 
     const { data, error } = await query
     if (error) {
@@ -121,14 +100,7 @@ export async function GET(req: Request) {
 
     // Log returned IDs to detect duplicates
     const returnedIds = (data || []).map((b: Beneficiaries) => b.id)
-    console.log(
-      `[Offset Pagination] Returned ${returnedIds.length} items (offset: ${offset}, limit: ${limit}):`,
-      returnedIds.slice(0, 3),
-      "..."
-    )
     
-    
-
     // Check for duplicates in this response
     const uniqueIds = new Set(returnedIds)
     if (uniqueIds.size !== returnedIds.length) {
