@@ -19,6 +19,7 @@ const Dashboard = () => {
     // { label: 'Manage Families in Need', path: '/admin/family-in-need' },
     // { label: 'Manage Animals', path: '/admin/animals' },
     { label: "Manage Activities", path: "/admin/activities" },
+    { label: "Welcome Packets", path: "/admin/welcome-packets" },
   ]
 
   return (

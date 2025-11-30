@@ -247,11 +247,47 @@ export const sendSubscriptionConfirmationEmail = async (
 export const sendActivityNotificationEmail = async (
   email: string,
   beneficiary: { name: string },
-  activity: { title: string; description: string },
+  activity: { title: string; description: string; imageUrls?: string[] },
   subscriberName?: string | null,
 ) => {
   const subject = `New update on ${beneficiary.name}`
   const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
+  
+  // Generate image HTML if images are provided
+  let imagesHtml = ""
+  if (activity.imageUrls && activity.imageUrls.length > 0) {
+    // Use table layout for better email client compatibility
+    const imagesPerRow = 2
+    const imageRows: string[][] = []
+    for (let i = 0; i < activity.imageUrls.length; i += imagesPerRow) {
+      imageRows.push(activity.imageUrls.slice(i, i + imagesPerRow))
+    }
+    
+    imagesHtml = `
+      <div style="margin: 1.5rem 0;">
+        <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1C3C8C;">Photos:</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+          ${imageRows.map((row) => `
+            <tr>
+              ${row.map((imageUrl) => `
+                <td style="padding: 0.5rem; width: 50%;">
+                  <div style="border-radius: 0.5rem; overflow: hidden; border: 1px solid #e5e7eb; background-color: #f9fafb;">
+                    <img 
+                      src="${imageUrl}" 
+                      alt="Activity photo" 
+                      style="width: 100%; max-width: 100%; height: auto; display: block; border: none;"
+                    />
+                  </div>
+                </td>
+              `).join("")}
+              ${row.length < imagesPerRow ? `<td style="width: 50%;"></td>` : ""}
+            </tr>
+          `).join("")}
+        </table>
+      </div>
+    `
+  }
+  
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
@@ -271,7 +307,8 @@ export const sendActivityNotificationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${
           activity.description
         }</p>
-        <p style="font-size: 1rem; line-height: 1.5;">Visit the site for more details and to see all updates.</p>
+        ${imagesHtml}
+        <p style="font-size: 1rem; line-height: 1.5; margin-top: 1.5rem;">Visit the site for more details and to see all updates.</p>
       </div>
       <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Thank you for staying connected,</p>
