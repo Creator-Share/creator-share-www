@@ -7,6 +7,7 @@ export type Status =
   | "Budget Fulfilled"
   | "Archived"
   | "Draft"
+  | "Sponsorship Cancelled"
 export type BeneficiaryType = "CHILD" | "ANIMAL" | "FAMILY"
 
 type Geography = {

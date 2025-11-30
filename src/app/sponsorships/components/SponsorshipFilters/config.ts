@@ -14,6 +14,7 @@ export const status = createListCollection({
     { label: "Budget Fulfilled", value: "Budget Fulfilled" },
     { label: "Draft", value: "Draft" },
     { label: "Archived", value: "Archived" },
+    { label: "Sponsorship Cancelled", value: "Sponsorship Cancelled" },
   ],
 })
 

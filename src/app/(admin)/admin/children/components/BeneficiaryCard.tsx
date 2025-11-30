@@ -43,6 +43,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         return "purple"
       case "Archived":
         return "red"
+      case "Sponsorship Cancelled":
+        return "yellow"
       default:
         return "gray"
     }

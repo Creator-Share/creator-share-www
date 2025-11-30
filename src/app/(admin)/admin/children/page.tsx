@@ -45,6 +45,7 @@ const ChildrenTable = () => {
     "Budget Fulfilled",
     "Draft",
     "Archived",
+    "Sponsorship Cancelled",
   ]
 
   const { setStatus: setFilterStatus } = useFilterStore()
@@ -97,6 +98,7 @@ const ChildrenTable = () => {
       "Budget Fulfilled": 0,
       Draft: 0,
       Archived: 0,
+      "Sponsorship Cancelled": 0,
     },
   })
 
@@ -432,6 +434,7 @@ const ChildrenTable = () => {
         "Budget Fulfilled",
         "Draft",
         "Archived",
+        "Sponsorship Cancelled",
       ]
       setFilterStatus(allStatuses)
       handleFilterChange({
@@ -577,7 +580,7 @@ const ChildrenTable = () => {
       const currentFilters: FiltersState = {
         gender: "",
         ageRange: [0, 14] as [number, number],
-        status: ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"],
+        status: ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived", "Sponsorship Cancelled"],
         search: "",
         beneficiary_type: "CHILD"
       }
@@ -708,6 +711,7 @@ const ChildrenTable = () => {
         "Budget Fulfilled",
         "Draft",
         "Archived",
+        "Sponsorship Cancelled",
       ]
       setFilterStatus(allStatuses)
       handleFilterChange({
@@ -722,6 +726,74 @@ const ChildrenTable = () => {
       toaster.create({
         title: "Error",
         description: `Failed to update selected beneficiaries: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+        duration: 5000,
+      })
+    }
+  }
+
+  // Reinstate children from "Sponsorship Cancelled" back to "New"
+  const handleReinstate = async () => {
+    // Filter selected items to only those with "Sponsorship Cancelled" status
+    const cancelledBeneficiaries = beneficiaries.filter(
+      (b) => b.id && selectedItems.has(b.id) && b.status === "Sponsorship Cancelled"
+    )
+
+    if (cancelledBeneficiaries.length === 0) {
+      toaster.create({
+        title: "No Selection",
+        description: "Please select children with 'Sponsorship Cancelled' status to reinstate.",
+        duration: 5000,
+      })
+      return
+    }
+
+    try {
+      const beneficiaryIds = cancelledBeneficiaries.map((b) => b.id!).filter((id): id is string => !!id)
+
+      const res = await fetch("/api/admin/beneficiaries/bulk-update-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: beneficiaryIds, status: "New" }),
+      })
+
+      if (!res.ok) {
+        throw new Error("Failed to reinstate beneficiaries")
+      }
+
+      // Clear selection after successful update
+      setSelectedItems(new Set())
+      setSelectedRowsForDeletion([])
+
+      toaster.create({
+        title: "Success",
+        description: `${cancelledBeneficiaries.length} child(ren) reinstated to "New" status successfully.`,
+        duration: 5000,
+      })
+
+      // Refresh the list
+      const allStatuses = [
+        "New",
+        "Partially Funded",
+        "Budget Fulfilled",
+        "Draft",
+        "Archived",
+        "Sponsorship Cancelled",
+      ]
+      setFilterStatus(allStatuses)
+      handleFilterChange({
+        gender: "",
+        ageRange: [0, 14] as [number, number],
+        status: allStatuses,
+        search: "",
+        beneficiary_type: "CHILD"
+      })
+    } catch (error) {
+      console.error("Reinstate error:", error)
+      toaster.create({
+        title: "Error",
+        description: `Failed to reinstate beneficiaries: ${
           error instanceof Error ? error.message : "Unknown error"
         }`,
         duration: 5000,
@@ -748,6 +820,8 @@ const ChildrenTable = () => {
         return "purple"
       case "Archived":
         return "red"
+      case "Sponsorship Cancelled":
+        return "yellow"
       default:
         return "gray"
     }
@@ -940,6 +1014,10 @@ const ChildrenTable = () => {
         onDeselectAll={() => setSelectedItems(new Set())}
         onDelete={handleBulkDelete}
         onSetStatus={handleBulkStatusUpdate}
+        onReinstate={handleReinstate}
+        hasCancelledSelected={beneficiaries.some(
+          (b) => b.id && selectedItems.has(b.id) && b.status === "Sponsorship Cancelled"
+        )}
       />
     </AdminPageLayout>
   )

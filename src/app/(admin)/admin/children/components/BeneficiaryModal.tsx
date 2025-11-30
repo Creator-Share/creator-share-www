@@ -1009,6 +1009,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     <option value="Budget Fulfilled">Budget Fulfilled</option>
                     <option value="Archived">Archived</option>
                     <option value="Draft">Draft</option>
+                    <option value="Sponsorship Cancelled">Sponsorship Cancelled</option>
                   </NativeSelectField>
                 </NativeSelectRoot>
               </Field>

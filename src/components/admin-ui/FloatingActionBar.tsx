@@ -9,6 +9,8 @@ interface FloatingActionBarProps {
   onDeselectAll: () => void
   onDelete: () => void
   onSetStatus: (status: string) => void
+  onReinstate?: () => void
+  hasCancelledSelected?: boolean
 }
 
 const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
@@ -16,6 +18,8 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
   onDeselectAll,
   onDelete,
   onSetStatus,
+  onReinstate,
+  hasCancelledSelected = false,
 }) => {
   if (selectedCount === 0) return null
 
@@ -47,6 +51,15 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
           >
             Delete ({selectedCount})
           </Button>
+          {/* Reinstate button - only show if there are cancelled children selected */}
+          {onReinstate && hasCancelledSelected && (
+            <Button
+              onClick={onReinstate}
+              className="border-[2px] border-[#10b981] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#10b981] text-white hover:bg-[#059669]"
+            >
+              Reinstate to New
+            </Button>
+          )}
           <MenuRoot>
             <MenuTrigger asChild>
               <Button
@@ -71,6 +84,9 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
               </MenuItem>
               <MenuItem value="Archived" onClick={() => onSetStatus("Archived")}>
                 Archived
+              </MenuItem>
+              <MenuItem value="Sponsorship Cancelled" onClick={() => onSetStatus("Sponsorship Cancelled")}>
+                Sponsorship Cancelled
               </MenuItem>
             </MenuContent>
           </MenuRoot>

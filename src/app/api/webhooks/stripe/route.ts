@@ -903,6 +903,18 @@ export async function POST(req: Request) {
         }
 
         // Handle regular sponsorship cancellation
+        // First, get the subscription to find beneficiary_id
+        const { data: subscriptionData, error: fetchError } = await supabase
+          .from("subscriptions")
+          .select("beneficiary_id, amount, user_id")
+          .eq("stripe_subscription_id", subscription.id)
+          .maybeSingle()
+
+        if (fetchError) {
+          console.error("Error fetching subscription:", fetchError)
+        }
+
+        // Update subscription status
         const { error: updateError } = await supabase
           .from("subscriptions")
           .update({
@@ -918,6 +930,65 @@ export async function POST(req: Request) {
             subscriptionId: subscription.id,
             error: updateError,
           })
+        }
+
+        // Check if beneficiary has any active subscriptions and update status if needed
+        if (subscriptionData?.beneficiary_id) {
+          const { data: activeSubscriptions, error: activeError } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("beneficiary_id", subscriptionData.beneficiary_id)
+            .eq("status", "complete")
+
+          if (!activeError && (!activeSubscriptions || activeSubscriptions.length === 0)) {
+            // No active subscriptions - check current status and update if needed
+            const { data: beneficiary, error: beneficiaryError } = await supabase
+              .from("beneficiaries")
+              .select("id, name, status")
+              .eq("id", subscriptionData.beneficiary_id)
+              .single()
+
+            if (!beneficiaryError && beneficiary) {
+              // Only update to "Sponsorship Cancelled" if not already Draft or Archived
+              if (beneficiary.status !== "Draft" && beneficiary.status !== "Archived") {
+                const { error: statusUpdateError } = await supabase
+                  .from("beneficiaries")
+                  .update({ status: "Sponsorship Cancelled" })
+                  .eq("id", subscriptionData.beneficiary_id)
+
+                if (statusUpdateError) {
+                  console.error("Error updating beneficiary status:", statusUpdateError)
+                } else {
+                  // Send email notification
+                  try {
+                    // Get customer email from Stripe customer object
+                    let customerEmail: string | null = null
+                    let customerName: string | null = null
+                    if (subscription.customer) {
+                      try {
+                        const customer = await stripe.customers.retrieve(subscription.customer as string)
+                        if (customer && !customer.deleted && typeof customer === 'object' && 'email' in customer) {
+                          customerEmail = customer.email || null
+                          customerName = customer.name || null
+                        }
+                      } catch (customerError) {
+                        console.error("Error fetching customer from Stripe:", customerError)
+                      }
+                    }
+                    const { sendSponsorshipCancellationNotificationEmail } = await import("@/utils/email")
+                    await sendSponsorshipCancellationNotificationEmail(
+                      beneficiary.name,
+                      customerEmail,
+                      customerName,
+                      subscriptionData.amount
+                    )
+                  } catch (emailError) {
+                    console.error("Error sending cancellation notification email:", emailError)
+                  }
+                }
+              }
+            }
+          }
         }
 
         return NextResponse.json(

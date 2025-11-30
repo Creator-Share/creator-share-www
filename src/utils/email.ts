@@ -523,3 +523,56 @@ export const sendMonthlyPaymentConfirmationEmail = async (
     html,
   })
 }
+
+/**
+ * Send sponsorship cancellation notification email to admin
+ * This is sent when a sponsorship is cancelled and the child has no active subscriptions
+ */
+export const sendSponsorshipCancellationNotificationEmail = async (
+  childName: string,
+  sponsorEmail?: string | null,
+  sponsorName?: string | null,
+  amount?: number | null,
+) => {
+  const subject = `Sponsorship Cancelled: ${childName}`
+  const formattedAmount = amount ? `$${(amount / 100).toFixed(2)}` : "N/A"
+
+  const html = `
+    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+      </div>
+      
+      <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">
+        <h2 style="color: #dc2626; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Sponsorship Cancelled</h2>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">A sponsorship has been cancelled and the child now has no active sponsorships.</p>
+        
+        <div style="background-color: white; padding: 1rem; border-radius: 0.375rem; margin: 1rem 0;">
+          <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${childName}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${sponsorName || 'Not provided'}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${sponsorEmail || 'Not provided'}</p>
+          <p style="margin: 0.5rem 0;"><strong>Amount:</strong> ${formattedAmount}</p>
+          <p style="margin: 0.5rem 0; color: #dc2626; font-weight: 600;"><strong>Status:</strong> Child moved to "Sponsorship Cancelled" status</p>
+        </div>
+        
+        <p style="font-size: 1rem; line-height: 1.5; margin-top: 1rem;">
+          The child has been moved to "Sponsorship Cancelled" status and can be reinstated to "New" status from the admin panel when ready.
+        </p>
+      </div>
+      
+      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+        <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
+      </div>
+      
+      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
+        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
+      </div>
+    </div>
+  `
+
+  return sendEmail({
+    to: "johnstjulien@sharetanzania.com",
+    subject,
+    html,
+  })
+}
