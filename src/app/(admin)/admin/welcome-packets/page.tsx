@@ -348,15 +348,27 @@ const WelcomePacketsPage: React.FC = () => {
                     Upload photos of the child to share with the new sponsor
                   </p>
                   <FileUploadRoot
+                    key={`images-${imageFiles.map(f => `${f.name}-${f.size}`).join('|')}`}
                     onFileChange={(fileDetails) => {
                       const newFiles = fileDetails.acceptedFiles
+                      
+                      // Clean up old preview URLs that are no longer in the list
+                      imagePreviewUrls.forEach((url, index) => {
+                        if (!newFiles[index] || newFiles[index] !== imageFiles[index]) {
+                          URL.revokeObjectURL(url)
+                        }
+                      })
+                      
+                      // Create new preview URLs for new files
+                      const newUrls = newFiles.map((file, index) => {
+                        // Reuse existing URL if file hasn't changed
+                        if (imageFiles[index] === file && imagePreviewUrls[index]) {
+                          return imagePreviewUrls[index]
+                        }
+                        return URL.createObjectURL(file)
+                      })
+                      
                       setImageFiles(newFiles)
-                      
-                      // Clean up old preview URLs
-                      imagePreviewUrls.forEach(url => URL.revokeObjectURL(url))
-                      
-                      // Create new preview URLs
-                      const newUrls = newFiles.map(file => URL.createObjectURL(file))
                       setImagePreviewUrls(newUrls)
                     }}
                     accept={["image/*"]}
@@ -367,15 +379,15 @@ const WelcomePacketsPage: React.FC = () => {
                         <HiUpload /> Upload Images
                       </Button>
                     </FileUploadTrigger>
-                    <FileUploadList showSize clearable />
+                    <FileUploadList showSize clearable files={imageFiles} />
                   </FileUploadRoot>
                   
                   {/* Image Previews */}
                   {imageFiles.length > 0 && (
-                    <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="mt-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                       {imageFiles.map((file, index) => (
                         <div key={`${file.name}-${index}`} className="relative group">
-                          <div className="aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50 relative">
+                          <div className="w-full h-[200px] rounded-lg overflow-hidden border border-gray-200 bg-gray-50 relative">
                             <Image
                               src={imagePreviewUrls[index]}
                               alt={`Preview ${index + 1}`}

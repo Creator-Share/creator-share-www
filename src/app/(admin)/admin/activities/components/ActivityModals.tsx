@@ -1,5 +1,6 @@
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import { Button, Input, Textarea, createListCollection } from "@chakra-ui/react"
+import Image from "next/image"
 import { Activity } from "@/types/admin.types"
 import ProofreadButton from "@/components/ai/ProofreadButton"
 import {
@@ -56,6 +57,72 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [videoFiles, setVideoFiles] = useState<File[]>([])
 
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
+  const [videoPreviews, setVideoPreviews] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!open) {
+      setImageFiles([])
+      setVideoFiles([])
+      setImagePreviews([])
+      setVideoPreviews([])
+      return
+    }
+  }, [open])
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (open) {
+      const originalStyle = window.getComputedStyle(document.body).overflow
+      document.body.style.overflow = "hidden"
+      return () => {
+        document.body.style.overflow = originalStyle
+      }
+    }
+  }, [open])
+
+  useEffect(() => {
+    const urls = imageFiles.map((file) => URL.createObjectURL(file))
+    setImagePreviews(urls)
+
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [imageFiles])
+
+  useEffect(() => {
+    const urls = videoFiles.map((file) => URL.createObjectURL(file))
+    setVideoPreviews(urls)
+
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [videoFiles])
+
+  const handleRemoveImage = (index: number) => {
+    // Revoke the object URL for the removed image
+    if (imagePreviews[index]) {
+      URL.revokeObjectURL(imagePreviews[index])
+    }
+    // Remove from both arrays
+    const newFiles = imageFiles.filter((_, i) => i !== index)
+    const newPreviews = imagePreviews.filter((_, i) => i !== index)
+    setImageFiles(newFiles)
+    setImagePreviews(newPreviews)
+  }
+
+  const handleRemoveVideo = (index: number) => {
+    // Revoke the object URL for the removed video
+    if (videoPreviews[index]) {
+      URL.revokeObjectURL(videoPreviews[index])
+    }
+    // Remove from both arrays
+    const newFiles = videoFiles.filter((_, i) => i !== index)
+    const newPreviews = videoPreviews.filter((_, i) => i !== index)
+    setVideoFiles(newFiles)
+    setVideoPreviews(newPreviews)
+  }
+
   const handleCreate = () => {
     const formData = new FormData()
     formData.append("title", title)
@@ -90,6 +157,8 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           borderRadius: 8,
           minWidth: 350,
           maxWidth: "90vw",
+          maxHeight: "90vh",
+          overflowY: "auto",
           boxShadow: "0 2px 16px rgba(0,0,0,0.2)",
         }}
       >
@@ -153,9 +222,29 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload Images</label>
           <FileUploadRoot
-            onFileChange={(fileDetails) =>
-              setImageFiles(fileDetails.acceptedFiles)
-            }
+            key={`images-${imageFiles.map(f => `${f.name}-${f.size}`).join('|')}`}
+            onFileChange={(fileDetails) => {
+              const newFiles = fileDetails.acceptedFiles
+              
+              // Clean up old preview URLs that are no longer in the list
+              imagePreviews.forEach((url, index) => {
+                if (!newFiles[index] || newFiles[index] !== imageFiles[index]) {
+                  URL.revokeObjectURL(url)
+                }
+              })
+              
+              // Create new preview URLs for new files
+              const newUrls = newFiles.map((file, index) => {
+                // Reuse existing URL if file hasn't changed
+                if (imageFiles[index] === file && imagePreviews[index]) {
+                  return imagePreviews[index]
+                }
+                return URL.createObjectURL(file)
+              })
+              
+              setImageFiles(newFiles)
+              setImagePreviews(newUrls)
+            }}
             accept={["image/*"]}
             maxFiles={5}
           >
@@ -164,15 +253,96 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
                 <HiUpload /> Upload Images
               </Button>
             </FileUploadTrigger>
-            <FileUploadList />
+            <FileUploadList showSize clearable files={imageFiles} />
           </FileUploadRoot>
+          {imagePreviews.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              {imagePreviews.map((src, index) => (
+                <div
+                  key={src}
+                  className="relative group"
+                  style={{
+                    width: 150,
+                    height: 150,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      border: "1px solid #e5e7eb",
+                      backgroundColor: "#f9fafb",
+                      position: "relative",
+                    }}
+                  >
+                    <Image
+                      src={src}
+                      alt={`Preview ${index + 1}`}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleRemoveImage(index)}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                    type="button"
+                    aria-label="Remove image"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload Videos</label>
           <FileUploadRoot
-            onFileChange={(fileDetails) =>
-              setVideoFiles(fileDetails.acceptedFiles)
-            }
+            key={`videos-${videoFiles.map(f => `${f.name}-${f.size}`).join('|')}`}
+            onFileChange={(fileDetails) => {
+              const newFiles = fileDetails.acceptedFiles
+              
+              // Clean up old preview URLs that are no longer in the list
+              videoPreviews.forEach((url, index) => {
+                if (!newFiles[index] || newFiles[index] !== videoFiles[index]) {
+                  URL.revokeObjectURL(url)
+                }
+              })
+              
+              // Create new preview URLs for new files
+              const newUrls = newFiles.map((file, index) => {
+                // Reuse existing URL if file hasn't changed
+                if (videoFiles[index] === file && videoPreviews[index]) {
+                  return videoPreviews[index]
+                }
+                return URL.createObjectURL(file)
+              })
+              
+              setVideoFiles(newFiles)
+              setVideoPreviews(newUrls)
+            }}
             accept={["video/*"]}
             maxFiles={5}
           >
@@ -181,8 +351,73 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
                 <HiUpload /> Upload Videos
               </Button>
             </FileUploadTrigger>
-            <FileUploadList />
+            <FileUploadList showSize clearable files={videoFiles} />
           </FileUploadRoot>
+          {videoPreviews.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              {videoPreviews.map((src, index) => (
+                <div
+                  key={src}
+                  className="relative group"
+                  style={{
+                    width: 240,
+                    height: 150,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      border: "1px solid #e5e7eb",
+                      backgroundColor: "#000",
+                    }}
+                  >
+                    <video
+                      src={src}
+                      controls
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        display: "block",
+                      }}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveVideo(index)}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+                    type="button"
+                    aria-label="Remove video"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
         <div
@@ -230,8 +465,19 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
   onSave,
   saving,
   error,
-}) =>
-  open ? (
+}) => {
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (open) {
+      const originalStyle = window.getComputedStyle(document.body).overflow
+      document.body.style.overflow = "hidden"
+      return () => {
+        document.body.style.overflow = originalStyle
+      }
+    }
+  }, [open])
+
+  return open ? (
     <div
       style={{
         position: "fixed",
@@ -253,6 +499,8 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
           borderRadius: 8,
           minWidth: 350,
           maxWidth: "90vw",
+          maxHeight: "90vh",
+          overflowY: "auto",
           boxShadow: "0 2px 16px rgba(0,0,0,0.2)",
         }}
       >
@@ -317,6 +565,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
       </div>
     </div>
   ) : null
+}
 
 interface DeleteModalProps {
   open: boolean
@@ -334,8 +583,19 @@ export const DeleteActivityModal: React.FC<DeleteModalProps> = ({
   onDelete,
   deleting,
   error,
-}) =>
-  open && activity ? (
+}) => {
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (open) {
+      const originalStyle = window.getComputedStyle(document.body).overflow
+      document.body.style.overflow = "hidden"
+      return () => {
+        document.body.style.overflow = originalStyle
+      }
+    }
+  }, [open])
+
+  return open && activity ? (
     <div
       style={{
         position: "fixed",
@@ -357,6 +617,8 @@ export const DeleteActivityModal: React.FC<DeleteModalProps> = ({
           borderRadius: 8,
           minWidth: 350,
           maxWidth: "90vw",
+          maxHeight: "90vh",
+          overflowY: "auto",
           boxShadow: "0 2px 16px rgba(0,0,0,0.2)",
         }}
       >
@@ -386,3 +648,4 @@ export const DeleteActivityModal: React.FC<DeleteModalProps> = ({
       </div>
     </div>
   ) : null
+}

@@ -247,7 +247,12 @@ export const sendSubscriptionConfirmationEmail = async (
 export const sendActivityNotificationEmail = async (
   email: string,
   beneficiary: { name: string },
-  activity: { title: string; description: string; imageUrls?: string[] },
+  activity: {
+    title: string
+    description: string
+    imageUrls?: string[]
+    videoUrls?: string[]
+  },
   subscriberName?: string | null,
 ) => {
   const subject = `New update on ${beneficiary.name}`
@@ -287,6 +292,33 @@ export const sendActivityNotificationEmail = async (
       </div>
     `
   }
+
+  // Generate video HTML if videos are provided
+  let videosHtml = ""
+  if (activity.videoUrls && activity.videoUrls.length > 0) {
+    // Many email clients do not support embedded video, so we render links
+    videosHtml = `
+      <div style="margin: 1.5rem 0;">
+        <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1C3C8C;">Videos:</h3>
+        <ul style="list-style: none; padding: 0; margin: 0;">
+          ${activity.videoUrls
+            .map(
+              (videoUrl, index) => `
+                <li style="margin-bottom: 0.75rem;">
+                  <a 
+                    href="${videoUrl}" 
+                    style="text-decoration: none; color: #1C3C8C; font-weight: 500;"
+                  >
+                    ▶ Watch video ${index + 1}
+                  </a>
+                </li>
+              `,
+            )
+            .join("")}
+        </ul>
+      </div>
+    `
+  }
   
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
@@ -308,6 +340,7 @@ export const sendActivityNotificationEmail = async (
           activity.description
         }</p>
         ${imagesHtml}
+        ${videosHtml}
         <p style="font-size: 1rem; line-height: 1.5; margin-top: 1.5rem;">Visit the site for more details and to see all updates.</p>
       </div>
       <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">

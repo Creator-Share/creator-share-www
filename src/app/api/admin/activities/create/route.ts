@@ -276,56 +276,101 @@ export async function POST(req: NextRequest) {
         type EmailResult = { success: boolean; error?: unknown; messageId?: string }
         
         console.log("📤 Sending emails to", audienceMap.size, "recipients")
-        
-        // Fetch image URLs for email
+
+        // Fetch media URLs for email
         const imageUrls: string[] = []
-        if (inserted?.metadata?.media?.images && Array.isArray(inserted.metadata.media.images)) {
+        const videoUrls: string[] = []
+
+        // Helper to generate public storage URLs
+        const generatePublicUrls = async (ids: string[], type: "IMAGE" | "VIDEO") => {
+          if (!ids || ids.length === 0) return []
+
           try {
             const { data: mediaRecords, error: mediaError } = await supabase
               .from("media")
               .select("*")
-              .in("id", inserted.metadata.media.images)
-            
+              .in("id", ids)
+
             if (mediaError) {
-              console.error("❌ Error fetching media records:", mediaError)
-            } else if (mediaRecords && mediaRecords.length > 0) {
-              console.log("📸 Found", mediaRecords.length, "media records")
-              
-              const { getStorageKey } = await import("@/utils/supabase/media")
-              const STORAGE_BUCKET = (await import("@/utils/supabase/buckets")).STORAGE_BUCKET
-              
-              for (const mediaRecord of mediaRecords) {
-                try {
-                  // Use direct public URL for emails (no transformation)
-                  // This ensures compatibility with email clients
-                  const key = getStorageKey(mediaRecord as unknown as import("@/utils/supabase/media").MediaRow)
-                  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
-                  
-                  if (!base) {
-                    console.error("❌ NEXT_PUBLIC_SUPABASE_URL not set")
-                    continue
-                  }
-                  
-                  // Generate direct public URL without transformation for email compatibility
-                  const normalizedBase = base.replace(/\/$/, "")
-                  const publicUrl = `${normalizedBase}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
-                  
-                  imageUrls.push(publicUrl)
-                  console.log("✅ Generated image URL:", publicUrl)
-                } catch (urlError) {
-                  console.error("❌ Error generating image URL for media", mediaRecord.id, ":", urlError)
-                }
-              }
-              
-              console.log("📧 Total image URLs for email:", imageUrls.length)
-            } else {
-              console.warn("⚠️ No media records found for image IDs:", inserted.metadata.media.images)
+              console.error(`❌ Error fetching ${type.toLowerCase()} media records:`, mediaError)
+              return []
             }
-          } catch (imageError) {
-            console.error("❌ Error fetching image URLs:", imageError)
+
+            if (!mediaRecords || mediaRecords.length === 0) {
+              console.warn(
+                `⚠️ No media records found for ${type.toLowerCase()} IDs:`,
+                ids,
+              )
+              return []
+            }
+
+            console.log(
+              type === "IMAGE" ? "📸 Found" : "🎥 Found",
+              mediaRecords.length,
+              `${type.toLowerCase()} media records`,
+            )
+
+            const { getStorageKey } = await import("@/utils/supabase/media")
+            const STORAGE_BUCKET = (await import("@/utils/supabase/buckets")).STORAGE_BUCKET
+
+            const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+            if (!base) {
+              console.error("❌ NEXT_PUBLIC_SUPABASE_URL not set")
+              return []
+            }
+            const normalizedBase = base.replace(/\/$/, "")
+
+            const urls: string[] = []
+            for (const mediaRecord of mediaRecords) {
+              try {
+                // Use direct public URL for emails (no transformation)
+                // This ensures compatibility with email clients
+                const key = getStorageKey(
+                  mediaRecord as unknown as import("@/utils/supabase/media").MediaRow,
+                )
+                const publicUrl = `${normalizedBase}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(
+                  key,
+                )}`
+                urls.push(publicUrl)
+                console.log(
+                  type === "IMAGE" ? "✅ Generated image URL:" : "✅ Generated video URL:",
+                  publicUrl,
+                )
+              } catch (urlError) {
+                console.error(`❌ Error generating ${type.toLowerCase()} URL for media:`, urlError)
+              }
+            }
+
+            return urls
+          } catch (error) {
+            console.error(
+              `❌ Error fetching ${type.toLowerCase()} URLs for email:`,
+              error,
+            )
+            return []
           }
+        }
+
+        if (inserted?.metadata?.media?.images && Array.isArray(inserted.metadata.media.images)) {
+          const urls = await generatePublicUrls(
+            inserted.metadata.media.images,
+            "IMAGE",
+          )
+          imageUrls.push(...urls)
+          console.log("📧 Total image URLs for email:", imageUrls.length)
         } else {
           console.log("ℹ️ No images in activity metadata")
+        }
+
+        if (inserted?.metadata?.media?.videos && Array.isArray(inserted.metadata.media.videos)) {
+          const urls = await generatePublicUrls(
+            inserted.metadata.media.videos,
+            "VIDEO",
+          )
+          videoUrls.push(...urls)
+          console.log("📧 Total video URLs for email:", videoUrls.length)
+        } else {
+          console.log("ℹ️ No videos in activity metadata")
         }
 
         const results = await Promise.allSettled(
@@ -339,6 +384,7 @@ export async function POST(req: NextRequest) {
                   title: inserted?.title || "",
                   description: inserted?.description || "",
                   imageUrls,
+                  videoUrls,
                 },
                 member.name,
               )
