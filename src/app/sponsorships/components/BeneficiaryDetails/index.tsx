@@ -4,12 +4,15 @@ import { FaCalendar } from "react-icons/fa"
 import { FaLocationDot } from "react-icons/fa6"
 import { calculateAge } from "@/utils/ageCalculator"
 import { formatDate } from "@/utils/dateFormatter"
-import { BeneficiaryCardProps } from "@/types/propTypes"
+import { Beneficiaries, BeneficiaryMedia } from "@/types"
 import { useState, useEffect } from "react"
-import { BeneficiaryMedia } from "@/types"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 
-const BeneficiaryDetailsCard: React.FC<BeneficiaryCardProps> = ({
+interface BeneficiaryDetailsProps {
+  beneficiary: Beneficiaries
+}
+
+const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
   beneficiary,
 }) => {
   const [images, setImages] = useState<BeneficiaryMedia[]>([])

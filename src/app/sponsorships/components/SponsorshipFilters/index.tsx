@@ -63,6 +63,25 @@ const SponsorshipFilters: React.FC<
     checkAdminStatus()
   }, [user])
 
+  // Initialize admin status filter when in admin mode
+  useEffect(() => {
+    if (isAdminMode && mounted) {
+      const allStatuses = ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
+      // Only update if current status doesn't include all admin statuses
+      const hasAllStatuses = allStatuses.every(status => selectedStatus.includes(status))
+      if (!hasAllStatuses) {
+        console.log("[SponsorshipFilters] Initializing admin mode with all statuses")
+        setStatus(allStatuses)
+        onFilterChange({
+          gender: selectedGender,
+          ageRange: selectedAgeRange,
+          status: allStatuses,
+          search: searchQuery,
+        })
+      }
+    }
+  }, [isAdminMode, mounted])
+
   useEffect(() => {
     
     if (isInternalUpdateRef.current) {

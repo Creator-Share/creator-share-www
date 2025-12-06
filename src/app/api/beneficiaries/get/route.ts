@@ -15,6 +15,7 @@ export async function GET(req: Request) {
   const ageRangeParam = searchParams.get("ageRange")
   const searchQuery = searchParams.get("search")
 
+
   // Pagination params
   const limitParam = Number(searchParams.get("limit") || "9")
   const cursorParam = searchParams.get("cursor")
@@ -24,19 +25,19 @@ export async function GET(req: Request) {
     ? Math.min(Math.max(limitParam, 1), 60)
     : 9
 
-  // Decode cursor (created_at|id) if provided
-  let cursorCreatedAt: string | null = null
-  let cursorId: string | null = null
+  // TEMPORARY: Use offset-based pagination instead of cursor-based
+  // This is a workaround for the cursor pagination issues we were experiencing
+  // TODO: Switch back to cursor-based pagination after fixing the .or() filter conflicts
+  let offset = 0
   if (cursorParam) {
     try {
       const decoded = Buffer.from(cursorParam, "base64").toString("utf-8")
-      const [ts, id] = decoded.split("|")
-      if (ts && id) {
-        cursorCreatedAt = ts
-        cursorId = id
+      offset = Number(decoded)
+      if (!Number.isFinite(offset) || offset < 0) {
+        offset = 0
       }
     } catch {
-      // ignore invalid cursor
+      offset = 0
     }
   }
 
@@ -81,23 +82,15 @@ export async function GET(req: Request) {
       )
     }
 
-    // Keyset (cursor) pagination: created_at DESC, id DESC
-    if (cursorCreatedAt && cursorId) {
-      // Records strictly older than the cursor in the composite order
-      query = query.or(
-        `created_at.lt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.lt.${cursorId})`
-      )
-      console.log(
-        `[Cursor Pagination] Using cursor: ${cursorCreatedAt}|${cursorId}`
-      )
-    }
-
-    // Stable ordering: sort_weight DESC (higher weight first), then created_at DESC, then id DESC
+    // Stable ordering: created_at DESC (nulls last), then id DESC
     query = query
-      .order("sort_weight", { ascending: false })
-      .order("created_at", { ascending: false })
+      .order("created_at", { ascending: false, nullsFirst: false })
       .order("id", { ascending: false })
-      .limit(limit)
+    
+    // TEMPORARY: Use offset-based pagination - always use .range() for consistency
+    const rangeStart = offset
+    const rangeEnd = offset + limit - 1
+    query = query.range(rangeStart, rangeEnd)
 
     const { data, error } = await query
     if (error) {
@@ -107,33 +100,28 @@ export async function GET(req: Request) {
 
     // Log returned IDs to detect duplicates
     const returnedIds = (data || []).map((b: Beneficiaries) => b.id)
-    console.log(
-      `[Cursor Pagination] Returned ${returnedIds.length} items:`,
-      returnedIds.slice(0, 3),
-      "..."
-    )
-
+    
     // Check for duplicates in this response
     const uniqueIds = new Set(returnedIds)
     if (uniqueIds.size !== returnedIds.length) {
       console.error(
-        `[Cursor Pagination] ⚠️  DUPLICATE IDs IN RESPONSE! Total: ${returnedIds.length}, Unique: ${uniqueIds.size}`
+        `[Offset Pagination] ⚠️  DUPLICATE IDs IN RESPONSE! Total: ${returnedIds.length}, Unique: ${uniqueIds.size}`
       )
     }
 
-    const lastItem = data && data.length > 0 ? data[data.length - 1] : null
+    const hasMoreData = Boolean(data && data.length === limit)
+    
+    
 
     return NextResponse.json({
       people: (data || []) as Beneficiaries[],
       pageInfo: {
         limit,
         nextCursor:
-          data && data.length === limit && lastItem
-            ? Buffer.from(`${lastItem.created_at}|${lastItem.id}`).toString(
-                "base64"
-              )
+          data && data.length === limit
+            ? Buffer.from(String(offset + limit)).toString("base64")
             : null,
-        hasMore: Boolean(data && data.length === limit),
+        hasMore: hasMoreData,
       },
     })
   } catch (err) {

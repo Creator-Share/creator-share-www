@@ -33,14 +33,13 @@ export async function POST(req: Request) {
   try {
     const rawBody = await req.text()
 
-    // Debug logging to identify the issue
+    // Debug logging (without body to avoid signature issues)
     console.log('Webhook Debug:', {
       hasSignature: !!sig,
-      signatureHeader: sig,
+      signatureHeader: sig?.substring(0, 50) + '...',
       bodyLength: rawBody.length,
       secretConfigured: !!webhookSecret,
       secretPrefix: webhookSecret?.substring(0, 7),
-      body: rawBody,
     })
 
     event = stripe.webhooks.constructEvent(
@@ -57,6 +56,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    console.log(`Processing webhook event: ${event.type}`, { eventId: event.id })
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session
@@ -298,6 +298,7 @@ export async function POST(req: Request) {
                 project,
                 amount,
                 session.mode === "subscription" ? "month" : "year",
+                session.customer_details?.name || null,
               )
 
               // Log email attempt
@@ -350,125 +351,7 @@ export async function POST(req: Request) {
         }
 
 
-        // Fetch child data
-        const { data: beneficiaryData, error: beneficiaryError } =
-          await supabase
-            .from("beneficiaries")
-            .select("name, budget_raised, budget_goal, goal_fulfilled_at")
-            .eq("id", beneficiaryId)
-            .single()
-
-        if (beneficiaryError || !beneficiaryData) {
-          console.error("Error fetching beneficiary data:", beneficiaryError)
-          return NextResponse.json(
-            { error: "Failed to fetch beneficiary data" },
-            { status: 500 },
-          )
-        }
-
-        // Create transaction record
-        const { error: transactionError } = await supabase
-          .from("transaction_ledger")
-          .insert({
-            beneficiary_id: beneficiaryId,
-            user_id: userId,
-            description: `Sponsorship to ${beneficiaryData.name} with amount of ${amount}`,
-            reference: session.invoice as string,
-            credit: amount,
-            subscription_type:
-              session.mode === "subscription" ? "subscription" : "payment",
-            tx_action: "SPONSORSHIP",
-            customer_name: session.customer_details?.name || null,
-            customer_email: customerEmail || null,
-          })
-
-        if (transactionError) {
-          console.error("Error creating transaction:", transactionError)
-          return NextResponse.json(
-            { error: "Failed to create transaction" },
-            { status: 500 },
-          )
-        }
-
-        // Create activity record
-        const { error: activityError } = await supabase
-          .from("activities")
-          .insert({
-            title: "SPONSORSHIP",
-            description: `Someone sponsored with $${centsToDollars(
-              amount,
-            )}/${interval}`,
-            beneficiary_id: beneficiaryId,
-            user_id: userId,
-          })
-
-        if (activityError) {
-          console.error("Error creating activity:", activityError)
-          // Continue processing even if activity creation fails
-        }
-
-        // Check if budget goal is fulfilled and notification should be sent
-        // Use server-side hardcoded override when configured
-        const hardcoded = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
-        const effectiveGoal =
-          hardcoded !== null ? hardcoded : beneficiaryData.budget_goal
-
-        if (
-          beneficiaryData.goal_fulfilled_at == null &&
-          beneficiaryData.budget_raised + amount >= effectiveGoal
-        ) {
-          // Set goal_fulfilled_at
-          const { error: updateGoalError } = await supabase
-            .from("beneficiaries")
-            .update({ goal_fulfilled_at: new Date().toISOString() })
-            .eq("id", beneficiaryId)
-
-          if (updateGoalError) {
-            console.error("Error updating goal_fulfilled_at:", updateGoalError)
-          } else {
-            // Fetch all activity_subscriptions for this beneficiary
-            const { data: subscribers, error: subError } = await supabase
-              .from("activity_subscriptions")
-              .select("email")
-              .eq("beneficiary_id", beneficiaryId)
-
-            if (!subError && Array.isArray(subscribers)) {
-              const { sendGoalFulfilledEmail } = await import("@/utils/email")
-              for (const sub of subscribers) {
-                try {
-                  const emailResult = await sendGoalFulfilledEmail(sub.email, {
-                    name: beneficiaryData.name,
-                    budget_goal: beneficiaryData.budget_goal,
-                  })
-                  await supabase.from("email_logs").insert({
-                    email: sub.email,
-                    subject: `Goal Fulfilled for ${beneficiaryData.name}!`,
-                    status: emailResult.success ? "sent" : "failed",
-                    error: emailResult.error
-                      ? JSON.stringify(emailResult.error)
-                      : null,
-                    message_id: emailResult.messageId,
-                    created_at: new Date(),
-                  })
-                } catch (emailErr) {
-                  console.error("Error sending goal fulfilled email:", emailErr)
-                  await supabase.from("email_logs").insert({
-                    email: sub.email,
-                    subject: `Goal Fulfilled for ${beneficiaryData.name}!`,
-                    status: "failed",
-                    error:
-                      emailErr instanceof Error
-                        ? emailErr.message
-                        : String(emailErr),
-                    created_at: new Date(),
-                  })
-                }
-              }
-            }
-          }
-        }
-
-        // Update or create subscription record
+        // Step 1: Insert subscription first - trigger will validate atomically
         if (session.mode === "subscription" && session.subscription) {
           const { error: subscriptionError } = await supabase
             .from("subscriptions")
@@ -488,77 +371,255 @@ export async function POST(req: Request) {
               sponsorship_method: "STRIPE",
             })
 
-          // Check if this failed due to duplicate constraint
+          // Step 2: Handle subscription insert errors
           if (subscriptionError) {
-            // Code 23505 = unique_violation in PostgreSQL
-            if (subscriptionError.code === '23505') {
-              console.warn("Duplicate sponsorship detected - DB constraint prevented duplicate:", {
+            console.error("Subscription insert failed:", subscriptionError)
+            
+            // Check for beneficiary status rejection from trigger
+            if (subscriptionError.message?.includes('beneficiary_not_accepting_subscriptions')) {
+              
+              console.warn("Beneficiary cannot accept subscriptions - initiating rejection flow:", {
                 beneficiaryId,
                 sessionId: session.id,
-                error: subscriptionError
+                amount,
+                interval,
+                customerEmail,
+                error: subscriptionError.message
               })
               
-              // Cancel the Stripe subscription to stop future charges
+              // Step 1: Fetch beneficiary name for emails
+              const { data: beneficiaryData } = await supabase
+                .from("beneficiaries")
+                .select("name")
+                .eq("id", beneficiaryId)
+                .single()
+              
+              const beneficiaryName = beneficiaryData?.name || "Unknown Beneficiary"
+              
+              // Track operation statuses
+              let subscriptionCancelled = false
+              let paymentRefunded = false
+              let emailSent = false
+              
+              // Step 2: Cancel the Stripe subscription
               try {
                 if (session.subscription) {
                   await stripe.subscriptions.cancel(session.subscription as string)
-                  console.log("Cancelled duplicate Stripe subscription:", session.subscription)
+                  subscriptionCancelled = true
+                  console.log("Cancelled subscription for fulfilled beneficiary:", {
+                    subscriptionId: session.subscription,
+                    beneficiaryId,
+                    sessionId: session.id
+                  })
                 }
               } catch (cancelError) {
-                console.error("Failed to cancel duplicate subscription:", cancelError)
+                console.error("Failed to cancel subscription:", {
+                  error: cancelError,
+                  subscriptionId: session.subscription,
+                  beneficiaryId,
+                  sessionId: session.id
+                })
               }
               
-              // Send apology email to the customer
+              // Step 3: Refund the payment
+              try {
+                // Retrieve full session with expanded payment_intent if not already available
+                let paymentIntentId: string | null = session.payment_intent as string | null
+                
+                if (!paymentIntentId) {
+                  // Try to get payment intent from the session by retrieving it with expansion
+                  try {
+                    const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
+                      expand: ['payment_intent', 'invoice.payment_intent']
+                    })
+                    paymentIntentId = expandedSession.payment_intent as string | null
+                    
+                    // If still not found, try from invoice
+                    if (!paymentIntentId && expandedSession.invoice) {
+                      const invoice = typeof expandedSession.invoice === 'string' 
+                        ? await stripe.invoices.retrieve(expandedSession.invoice)
+                        : expandedSession.invoice
+                      paymentIntentId = invoice.payment_intent as string | null
+                    }
+                  } catch (retrieveError) {
+                    console.error("Error retrieving session for payment_intent:", retrieveError)
+                  }
+                }
+                
+                if (paymentIntentId) {
+                  const refund = await stripe.refunds.create({
+                    payment_intent: paymentIntentId,
+                    reason: 'requested_by_customer',
+                    metadata: {
+                      beneficiaryId: beneficiaryId,
+                      beneficiaryName: beneficiaryName,
+                      sessionId: session.id,
+                      rejectionReason: 'beneficiary_already_fulfilled',
+                      amount: amount.toString(),
+                      customerEmail: customerEmail || 'unknown'
+                    }
+                  })
+                  
+                  paymentRefunded = true
+                  console.log("Refund created for fulfilled beneficiary:", {
+                    refundId: refund.id,
+                    amount: refund.amount,
+                    status: refund.status,
+                    beneficiaryId,
+                    sessionId: session.id
+                  })
+                } else {
+                  console.error("CRITICAL: No payment_intent available for refund:", {
+                    sessionId: session.id,
+                    beneficiaryId,
+                    amount,
+                    customerEmail,
+                    sessionPaymentIntent: session.payment_intent,
+                    sessionInvoice: session.invoice
+                  })
+                }
+              } catch (refundError) {
+                console.error("CRITICAL: Failed to refund payment:", {
+                  error: refundError,
+                  errorMessage: refundError instanceof Error ? refundError.message : String(refundError),
+                  paymentIntent: session.payment_intent,
+                  beneficiaryId,
+                  sessionId: session.id,
+                  amount,
+                  customerEmail,
+                  requiresManualIntervention: true
+                })
+              }
+              
+              // Step 4: Send rejection email
               if (customerEmail) {
                 try {
-                  const { sendDuplicateSponsorshipEmail } = await import("@/utils/email")
-                  await sendDuplicateSponsorshipEmail(
+                  const { sendBudgetFulfilledRejectionEmail } = await import("@/utils/email")
+                  await sendBudgetFulfilledRejectionEmail(
                     customerEmail,
-                    beneficiaryData.name,
-                    amount
+                    beneficiaryName,
+                    amount,
+                    session.customer_details?.name || null,
                   )
                   
-                  // Log the apology email
+                  emailSent = true
+                  
                   await supabase.from("email_logs").insert({
+                    user_id: userId,
                     email: customerEmail,
-                    subject: `Important: Duplicate Sponsorship Prevented for ${beneficiaryData.name}`,
+                    subject: `Thank You - ${beneficiaryName} Has Been Fully Sponsored!`,
                     status: "sent",
                     created_at: new Date(),
                   })
                 } catch (emailError) {
-                  console.error("Failed to send duplicate sponsorship email:", emailError)
+                  console.error("Failed to send rejection email:", {
+                    error: emailError,
+                    customerEmail,
+                    sessionId: session.id
+                  })
                   
-                  // If no custom email function exists, send a generic notification
-                  console.log("TODO: Create sendDuplicateSponsorshipEmail function")
-                  
-                  // Log the attempt anyway
                   await supabase.from("email_logs").insert({
+                    user_id: userId,
                     email: customerEmail,
-                    subject: `Important: Duplicate Sponsorship Prevented for ${beneficiaryData.name}`,
+                    subject: `Thank You - ${beneficiaryName} Has Been Fully Sponsored!`,
                     status: "failed",
-                    error: "Email function not implemented",
+                    error: emailError instanceof Error ? emailError.message : "Email send failed",
                     created_at: new Date(),
                   })
                 }
               }
               
-              // Return success to Stripe (we handled it gracefully)
+              // Step 5: Final logging
+              if (paymentRefunded && subscriptionCancelled && emailSent) {
+                console.log("Beneficiary rejection flow completed successfully:", {
+                  beneficiaryId,
+                  beneficiaryName,
+                  sessionId: session.id,
+                  operations: { subscriptionCancelled, paymentRefunded, emailSent }
+                })
+              } else {
+                console.error("Beneficiary rejection flow partially failed:", {
+                  beneficiaryId,
+                  sessionId: session.id,
+                  operations: { subscriptionCancelled, paymentRefunded, emailSent },
+                  requiresManualIntervention: !paymentRefunded
+                })
+              }
+              
+              // Step 6: Return success to Stripe
               return NextResponse.json(
-                { 
-                  message: "Duplicate sponsorship prevented - subscription cancelled and customer notified",
-                  duplicate: true
+                {
+                  message: "Beneficiary fulfilled - subscription cancelled and payment refunded",
+                  rejected: true,
+                  beneficiaryId,
+                  operations: { subscriptionCancelled, paymentRefunded, emailSent }
                 },
-                { status: 200 },
+                { status: 200 }
               )
             }
             
-            // Other database errors
-            console.error("Error creating subscription:", subscriptionError)
-            return NextResponse.json(
-              { error: "Failed to create subscription" },
-              { status: 500 },
-            )
+            // Other database errors - re-throw
+            throw subscriptionError
           }
+        }
+
+        // Step 3: Fetch beneficiary name for emails and transaction ledger (AFTER successful insert)
+        const { data: beneficiaryData, error: beneficiaryError } = await supabase
+          .from("beneficiaries")
+          .select("name")
+          .eq("id", beneficiaryId)
+          .single()
+
+        if (beneficiaryError || !beneficiaryData) {
+          console.error("Error fetching beneficiary data:", beneficiaryError)
+          // Continue processing - this is not critical
+        }
+
+        const beneficiaryName = beneficiaryData?.name || "Unknown Beneficiary"
+
+        // Step 4: Create transaction ledger entry (AFTER successful subscription insert)
+        // This is a separate operation - log error but don't rollback subscription
+        const { error: transactionError } = await supabase
+          .from("transaction_ledger")
+          .insert({
+            beneficiary_id: beneficiaryId,
+            user_id: userId,
+            description: `Sponsorship to ${beneficiaryName} with amount of ${amount}`,
+            reference: session.invoice as string,
+            credit: amount,
+            subscription_type:
+              session.mode === "subscription" ? "subscription" : "payment",
+            tx_action: "SPONSORSHIP",
+            customer_name: session.customer_details?.name || null,
+            customer_email: customerEmail || null,
+          })
+
+        if (transactionError) {
+          console.error("CRITICAL: Transaction ledger insert failed (subscription already created):", {
+            beneficiaryId,
+            userId,
+            amount,
+            sessionId: session.id,
+            error: transactionError
+          })
+          // Log but continue - subscription is already created successfully
+        }
+
+        // Step 5: Create activity record
+        const { error: activityError } = await supabase
+          .from("activities")
+          .insert({
+            title: "SPONSORSHIP",
+            description: `Someone sponsored with $${centsToDollars(
+              amount,
+            )}/${interval}`,
+            beneficiary_id: beneficiaryId,
+            user_id: userId,
+          })
+
+        if (activityError) {
+          console.error("Error creating activity:", activityError)
+          // Continue - not critical
         }
 
         // Send confirmation emails
@@ -570,9 +631,10 @@ export async function POST(req: Request) {
             try {
               const emailResult = await sendSponsorshipConfirmationEmail(
                 customerEmail,
-                beneficiaryData.name,
+                beneficiaryName,
                 amount,
                 interval,
+                session.customer_details?.name || null,
               )
 
               // Log email attempt
@@ -580,7 +642,7 @@ export async function POST(req: Request) {
                 await supabase.from("email_logs").insert({
                   user_id: userId,
                   email: customerEmail,
-                  subject: `Thank you for sponsoring ${beneficiaryData.name}!`,
+                  subject: `Thank you for sponsoring ${beneficiaryName}!`,
                   status: emailResult.success ? "sent" : "failed",
                   error: emailResult.error
                     ? JSON.stringify(emailResult.error)
@@ -602,7 +664,7 @@ export async function POST(req: Request) {
           } else {
             try {
               const managerEmailResult = await sendManagerSponsorshipNotificationEmail(
-              beneficiaryData.name,
+              beneficiaryName,
               amount,
               interval,
               customerEmail,
@@ -613,7 +675,7 @@ export async function POST(req: Request) {
             try {
               await supabase.from("email_logs").insert({
                 email: process.env.MANAGER_EMAIL!,
-                subject: `New Sponsorship Received for ${beneficiaryData.name}`,
+                subject: `New Sponsorship Received for ${beneficiaryName}`,
                 status: managerEmailResult.success ? "sent" : "failed",
                 error: managerEmailResult.error
                   ? JSON.stringify(managerEmailResult.error)
@@ -637,7 +699,7 @@ export async function POST(req: Request) {
             sponsorEmail: customerEmail || "No email provided",
             amount: amount,
             beneficiaryId: beneficiaryId,
-            beneficiaryName: beneficiaryData.name,
+            beneficiaryName: beneficiaryName,
             paymentMethod: "Stripe",
             paymentReference: session.id,
             interval: interval,
@@ -690,19 +752,27 @@ export async function POST(req: Request) {
           console.error("Error updating subscription status:", updateError)
         }
 
-        const { data: subscriptionData } = await supabase
+        const { data: subscriptionData, error: subscriptionError } = await supabase
           .from("subscriptions")
           .select(`beneficiary_id`)
           .eq("stripe_subscription_id", subscriptionId)
-          .single()
+          .maybeSingle()
+
+        if (subscriptionError) {
+          console.error("Error fetching subscription for payment failed email:", subscriptionError)
+        }
 
         let beneficiaryName = "your sponsored beneficiary"
         if (subscriptionData?.beneficiary_id) {
-          const { data: sponsorship } = await supabase
+          const { data: sponsorship, error: beneficiaryError } = await supabase
             .from("beneficiaries")
             .select("name")
             .eq("id", subscriptionData.beneficiary_id)
-            .single()
+            .maybeSingle()
+
+          if (beneficiaryError) {
+            console.error("Error fetching beneficiary for payment failed email:", beneficiaryError)
+          }
 
           if (sponsorship) {
             beneficiaryName = sponsorship.name
@@ -712,6 +782,21 @@ export async function POST(req: Request) {
         // Send payment failed email
         if (customerEmail) {
           try {
+            // Get customer name from Stripe
+            let customerName: string | null = null
+            if (invoice.customer) {
+              try {
+                const customer = await stripe.customers.retrieve(
+                  invoice.customer as string
+                )
+                if (!customer.deleted && "name" in customer && customer.name) {
+                  customerName = customer.name
+                }
+              } catch (err) {
+                console.error("Error fetching customer name:", err)
+              }
+            }
+            
             await sendPaymentFailedEmail(
               customerEmail,
               beneficiaryName,
@@ -719,6 +804,7 @@ export async function POST(req: Request) {
               invoice.next_payment_attempt
                 ? new Date(invoice.next_payment_attempt * 1000)
                 : null,
+              customerName,
             )
 
             // Log email attempt
@@ -746,26 +832,41 @@ export async function POST(req: Request) {
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription
 
+        // Map Stripe subscription status to our database status
+        // Stripe statuses: active, past_due, canceled, unpaid, incomplete, incomplete_expired, trialing, paused
+        let dbStatus = "complete"
+        if (subscription.status === "active") {
+          dbStatus = "complete"
+        } else if (subscription.status === "past_due" || subscription.status === "unpaid") {
+          dbStatus = "incomplete"
+        } else if (subscription.status === "canceled") {
+          dbStatus = "cancelled"
+        } else if (subscription.status === "incomplete" || subscription.status === "incomplete_expired") {
+          dbStatus = "incomplete"
+        }
+
         // Update subscription record
         const { error: updateError } = await supabase
           .from("subscriptions")
           .update({
-            status: "complete",
-            current_period_start: new Date(
-              subscription.current_period_start * 1000,
-            ),
-            current_period_end: new Date(
-              subscription.current_period_end * 1000,
-            ),
+            status: dbStatus,
+            current_period_start: subscription.current_period_start
+              ? new Date(subscription.current_period_start * 1000)
+              : null,
+            current_period_end: subscription.current_period_end
+              ? new Date(subscription.current_period_end * 1000)
+              : null,
           })
           .eq("stripe_subscription_id", subscription.id)
 
         if (updateError) {
           console.error("Error updating subscription:", updateError)
-          return NextResponse.json(
-            { error: "Failed to update subscription" },
-            { status: 500 },
-          )
+          // Don't fail the webhook - log and continue
+          console.error("Subscription update failed for:", {
+            subscriptionId: subscription.id,
+            status: subscription.status,
+            error: updateError,
+          })
         }
 
         return NextResponse.json(
@@ -802,6 +903,18 @@ export async function POST(req: Request) {
         }
 
         // Handle regular sponsorship cancellation
+        // First, get the subscription to find beneficiary_id
+        const { data: subscriptionData, error: fetchError } = await supabase
+          .from("subscriptions")
+          .select("beneficiary_id, amount, user_id")
+          .eq("stripe_subscription_id", subscription.id)
+          .maybeSingle()
+
+        if (fetchError) {
+          console.error("Error fetching subscription:", fetchError)
+        }
+
+        // Update subscription status
         const { error: updateError } = await supabase
           .from("subscriptions")
           .update({
@@ -812,10 +925,70 @@ export async function POST(req: Request) {
 
         if (updateError) {
           console.error("Error cancelling subscription:", updateError)
-          return NextResponse.json(
-            { error: "Failed to cancel subscription" },
-            { status: 500 },
-          )
+          // Don't fail the webhook - subscription may not exist in our DB
+          console.warn("Subscription cancellation update failed:", {
+            subscriptionId: subscription.id,
+            error: updateError,
+          })
+        }
+
+        // Check if beneficiary has any active subscriptions and update status if needed
+        if (subscriptionData?.beneficiary_id) {
+          const { data: activeSubscriptions, error: activeError } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("beneficiary_id", subscriptionData.beneficiary_id)
+            .eq("status", "complete")
+
+          if (!activeError && (!activeSubscriptions || activeSubscriptions.length === 0)) {
+            // No active subscriptions - check current status and update if needed
+            const { data: beneficiary, error: beneficiaryError } = await supabase
+              .from("beneficiaries")
+              .select("id, name, status")
+              .eq("id", subscriptionData.beneficiary_id)
+              .single()
+
+            if (!beneficiaryError && beneficiary) {
+              // Only update to "Sponsorship Cancelled" if not already Draft or Archived
+              if (beneficiary.status !== "Draft" && beneficiary.status !== "Archived") {
+                const { error: statusUpdateError } = await supabase
+                  .from("beneficiaries")
+                  .update({ status: "Sponsorship Cancelled" })
+                  .eq("id", subscriptionData.beneficiary_id)
+
+                if (statusUpdateError) {
+                  console.error("Error updating beneficiary status:", statusUpdateError)
+                } else {
+                  // Send email notification
+                  try {
+                    // Get customer email from Stripe customer object
+                    let customerEmail: string | null = null
+                    let customerName: string | null = null
+                    if (subscription.customer) {
+                      try {
+                        const customer = await stripe.customers.retrieve(subscription.customer as string)
+                        if (customer && !customer.deleted && typeof customer === 'object' && 'email' in customer) {
+                          customerEmail = customer.email || null
+                          customerName = customer.name || null
+                        }
+                      } catch (customerError) {
+                        console.error("Error fetching customer from Stripe:", customerError)
+                      }
+                    }
+                    const { sendSponsorshipCancellationNotificationEmail } = await import("@/utils/email")
+                    await sendSponsorshipCancellationNotificationEmail(
+                      beneficiary.name,
+                      customerEmail,
+                      customerName,
+                      subscriptionData.amount
+                    )
+                  } catch (emailError) {
+                    console.error("Error sending cancellation notification email:", emailError)
+                  }
+                }
+              }
+            }
+          }
         }
 
         return NextResponse.json(
@@ -843,34 +1016,31 @@ export async function POST(req: Request) {
           if (invoice.billing_reason === "subscription_cycle" || invoice.billing_reason === "subscription_update") {
             try {
               // Get subscription details to find beneficiary and customer email
-              const { data: subscriptionData } = await supabase
+              const { data: subscriptionData, error: subscriptionError } = await supabase
                 .from("subscriptions")
                 .select("beneficiary_id, user_id, amount")
                 .eq("stripe_subscription_id", subscriptionId)
-                .single()
+                .maybeSingle()
+
+              if (subscriptionError) {
+                console.error("Error fetching subscription:", subscriptionError)
+              }
 
               if (subscriptionData?.beneficiary_id) {
                 // Get beneficiary name
-                const { data: beneficiaryData } = await supabase
+                const { data: beneficiaryData, error: beneficiaryError } = await supabase
                   .from("beneficiaries")
                   .select("name")
                   .eq("id", subscriptionData.beneficiary_id)
-                  .single()
+                  .maybeSingle()
 
-                // Get customer email from Stripe
-                let customerEmail: string | null = null
-                if (invoice.customer) {
-                  try {
-                    const customer = await stripe.customers.retrieve(
-                      invoice.customer as string
-                    )
-                    if (!customer.deleted && "email" in customer) {
-                      customerEmail = customer.email
-                    }
-                  } catch (err) {
-                    console.error("Error fetching customer email:", err)
-                  }
+                if (beneficiaryError) {
+                  console.error("Error fetching beneficiary for payment confirmation:", beneficiaryError)
                 }
+
+                // Get customer email and name from invoice (available directly on invoice object)
+                const customerEmail = invoice.customer_email || null
+                const customerName = invoice.customer_name || null
 
                 // Send monthly payment confirmation email
                 if (customerEmail && beneficiaryData) {
@@ -882,6 +1052,7 @@ export async function POST(req: Request) {
                         customerEmail,
                         beneficiaryData.name,
                         invoice.amount_paid,
+                        customerName,
                       )
 
                       // Log email attempt
@@ -942,13 +1113,22 @@ export async function POST(req: Request) {
         )
     }
   } catch (error) {
-    console.error("Detailed webhook error:", error)
+    console.error("Detailed webhook error:", {
+      error,
+      eventType: event?.type,
+      eventId: event?.id,
+      message: error instanceof Error ? error.message : "Unknown error occurred",
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+    // Always return 200 to Stripe to prevent retries for unexpected errors
+    // Log the error for investigation but don't fail the webhook
     return NextResponse.json(
       {
         error:
           error instanceof Error ? error.message : "Unknown error occurred",
+        received: true,
       },
-      { status: 500 },
+      { status: 200 },
     )
   }
 }

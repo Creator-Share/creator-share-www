@@ -33,6 +33,7 @@ export async function GET(req: Request) {
       "Budget Fulfilled": 0,
       "Draft": 0,
       "Archived": 0,
+      "Sponsorship Cancelled": 0,
     }
 
     let total = 0

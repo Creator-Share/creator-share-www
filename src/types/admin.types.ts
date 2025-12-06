@@ -5,6 +5,7 @@ export type Status =
   | "Budget Fulfilled"
   | "Archived"
   | "Draft"
+  | "Sponsorship Cancelled"
 export type BeneficiaryType =
   | "CHILD"
   | "ANIMAL"
@@ -37,6 +38,7 @@ export interface Beneficiaries {
   beneficiary_type: BeneficiaryType
   image_url?: string
   created_at?: string
+  sort_weight?: number
 }
 
 export interface Activity {

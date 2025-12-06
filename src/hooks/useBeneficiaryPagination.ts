@@ -90,14 +90,24 @@ export function useBeneficiaryPagination(
       )
       if (filters.gender) params.set("gender", filters.gender)
       if (filters.status?.length) params.set("status", filters.status.join(","))
-      const includesDraft = (filters.status || []).includes("Draft")
-      if (filters.ageRange && !includesDraft) {
+      
+      // Skip age range filtering for statuses that may include beneficiaries of any age
+      // or with incomplete data (Draft, Archived, Budget Fulfilled)
+      const skipAgeRangeStatuses = ["Draft", "Archived", "Budget Fulfilled"]
+      const shouldSkipAgeRange = (filters.status || []).some(status => 
+        skipAgeRangeStatuses.includes(status)
+      )
+      
+      
+      if (filters.ageRange && !shouldSkipAgeRange) {
         params.set("ageRange", filters.ageRange.join(","))
       }
       if (filters.search) params.set("search", filters.search)
       params.set("limit", String(recordsPerPage))
       if (nextCursor) params.set("cursor", nextCursor)
       if (isAdminMode) params.set("admin_mode", "true")
+      
+      
       return params.toString()
     },
     [filters, beneficiaryType, recordsPerPage, isAdminMode]
@@ -132,24 +142,18 @@ export function useBeneficiaryPagination(
             return people
           }
 
-          // Deduplicate by ID to prevent duplicate key errors
-          const existingIds = new Set(prev.map((b) => b.id))
-          const newItems = people.filter((b) => !existingIds.has(b.id))
-
-          const duplicateCount = people.length - newItems.length
-          if (duplicateCount > 0) {
-            console.error(
-              `[useBeneficiaryPagination] ⚠️  Filtered out ${duplicateCount} duplicate(s) from API response`
-            )
-            console.error(
-              `[useBeneficiaryPagination] Duplicate IDs:`,
-              people.filter((b) => existingIds.has(b.id)).map((b) => b.id)
+          // Deduplicate: filter out any items that already exist in prev
+          const existingIds = new Set(prev.map(b => b.id))
+          const newItems = people.filter(b => !existingIds.has(b.id))
+          const duplicatesFiltered = people.length - newItems.length
+          
+          
+          if (duplicatesFiltered > 0) {
+            console.warn(
+              `[useBeneficiaryPagination] ⚠️  ${duplicatesFiltered} duplicate(s) detected! Total unique items: ${prev.length + newItems.length}`
             )
           }
-
-          console.log(
-            `[useBeneficiaryPagination] Loading more: ${newItems.length} new items (${duplicateCount} duplicates filtered)`
-          )
+          
           return [...prev, ...newItems]
         })
         setCursor(data?.pageInfo?.nextCursor || null)
