@@ -18,6 +18,11 @@ export interface Geography {
   type: "Point"
 }
 
+export interface BeneficiaryMetadata {
+  birth_date_is_estimate?: boolean
+  [key: string]: unknown
+}
+
 export interface Beneficiaries {
   id?: string
   name: string
@@ -34,7 +39,7 @@ export interface Beneficiaries {
   video_url: string
   introduction: string
   active_subscriptions: number
-  metadata: Record<string, unknown>
+  metadata: BeneficiaryMetadata
   beneficiary_type: BeneficiaryType
   image_url?: string
   created_at?: string

@@ -78,6 +78,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       : beneficiary.budget_goal || 0
   const remainingAmount =
     (effectiveGoalCents - (beneficiary.budget_raised || 0)) / 100
+  const birthDateIsEstimate = Boolean(
+    (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
+      ?.birth_date_is_estimate
+  )
 
   const minimumAmount = 10
   const maxSelectableAmount =
@@ -791,7 +795,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                             (Date.now() -
                               new Date(beneficiary.birth_date).getTime()) /
                               (365.25 * 24 * 60 * 60 * 1000)
-                          )} years old`
+                          )} years old${birthDateIsEstimate ? " (estimated)" : ""}`
                         : "Age unknown"}
                     </Text>
                   </Flex>

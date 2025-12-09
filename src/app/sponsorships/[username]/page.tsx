@@ -643,7 +643,12 @@ export default function FullProfileDynamic() {
                           (Date.now() -
                             new Date(beneficiary.birth_date).getTime()) /
                             (365.25 * 24 * 60 * 60 * 1000)
-                        )} years old`
+                        )} years old${
+                          (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
+                            ?.birth_date_is_estimate
+                            ? " (estimated)"
+                            : ""
+                        }`
                       : "Age unknown"}
                   </Text>
                 </Flex>

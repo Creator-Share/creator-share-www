@@ -58,6 +58,10 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
   const formattedBirthDate = beneficiary.birth_date
     ? formatDate(new Date(beneficiary.birth_date).toISOString())
     : null
+  const birthDateIsEstimate = Boolean(
+    (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
+      ?.birth_date_is_estimate
+  )
 
   const handleNextImage = () => {
     setCurrentImageIndex((prev) => (prev + 1) % images.length)
@@ -215,7 +219,8 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
               <FaCalendar />
               <Text fontSize="sm" color="gray.500">
                 {formattedBirthDate}
-                {age !== null && ` | ${age} years old`}
+                {age !== null &&
+                  ` | ${age} years old${birthDateIsEstimate ? " (estimated)" : ""}`}
               </Text>
             </>
           )}

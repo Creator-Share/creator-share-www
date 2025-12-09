@@ -82,6 +82,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   const age = beneficiary.birth_date 
     ? calculateAge(new Date(beneficiary.birth_date).toISOString())
     : null
+  const birthDateIsEstimate = Boolean(
+    (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
+      ?.birth_date_is_estimate
+  )
   
   return (
     <Box
@@ -167,7 +171,9 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           {age !== null && (
             <Flex align="center" gap={1}>
               <FaCalendar />
-              <Text fontSize="sm">{age} years</Text>
+              <Text fontSize="sm">
+                {age} years{birthDateIsEstimate ? " (estimated)" : ""}
+              </Text>
             </Flex>
           )}
           <Flex align="center" gap={1}>
