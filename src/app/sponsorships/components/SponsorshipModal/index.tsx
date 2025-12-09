@@ -46,7 +46,7 @@ import { useAuthStore } from "@/store/authStore"
 import { paymentOptionsCollection } from "../Payments/config"
 import { Button } from "@/components/ui/button"
 import { BeneficiaryMedia } from "@/types/admin.types"
-import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { useSponsorship } from "../../hooks/useSponsorship"
 import { usePresence } from "@/hooks/usePresence"
@@ -202,6 +202,20 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       }
     }
     return image.image_url || ""
+  }
+
+  // Helper function for generating thumbnail URLs for progressive loading
+  // Returns undefined if thumbnail generation fails, which will skip progressive loading
+  const getThumbnailSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generateThumbnailUrl(image as unknown as MediaRow)
+      } catch {
+        // Silently fail and skip thumbnail - component will use full image
+        return undefined
+      }
+    }
+    return undefined
   }
 
   const fallbackImageSrc =
@@ -747,6 +761,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   <ImageCarousel
                     images={images}
                     getImageSrc={getImageSrc}
+                    getThumbnailSrc={getThumbnailSrc}
                     fallbackSrc={fallbackImageSrc}
                     alt={beneficiary.name || "Child"}
                     className="rounded-2xl aspect-[4/5] object-cover"

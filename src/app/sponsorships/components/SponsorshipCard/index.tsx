@@ -7,7 +7,7 @@ import { calculateAge } from "@/utils/ageCalculator"
 import { BeneficiaryCardProps } from "@/types/propTypes"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
-import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import ViewerIndicator from "@/components/presence/ViewerIndicator"
 
@@ -64,6 +64,20 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     return image.image_url || ""
   }
 
+  // Helper function for generating thumbnail URLs for progressive loading
+  // Returns undefined if thumbnail generation fails, which will skip progressive loading
+  const getThumbnailSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generateThumbnailUrl(image as unknown as MediaRow)
+      } catch {
+        // Silently fail and skip thumbnail - component will use full image
+        return undefined
+      }
+    }
+    return undefined
+  }
+
   // Primary content - only calculate age if birth_date exists
   const age = beneficiary.birth_date 
     ? calculateAge(new Date(beneficiary.birth_date).toISOString())
@@ -92,13 +106,14 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       position="relative"
     >
       {/* Card Header: Image with Navigation using ImageCarousel */}
-      <Box position="relative" flexShrink={0} className="group">
+      <Box position="relative" flexShrink={0} className="group" height="300px" width="100%">
         <ImageCarousel
           images={images}
           getImageSrc={getImageSrc}
+          getThumbnailSrc={getThumbnailSrc}
           fallbackSrc={placeholderImage}
           alt={beneficiary.name?.split(" ")[0] ?? ""}
-          className="w-full h-[300px] rounded-t-[20px] object-cover"
+          className="w-full h-full rounded-t-[20px] object-cover"
           showArrowsOnHover={true}
         />
 

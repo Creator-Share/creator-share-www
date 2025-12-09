@@ -7,7 +7,7 @@ import { usePresence } from "@/hooks/usePresence"
 import { FaCalendar, FaUser, FaLocationDot, FaCircleInfo, FaLink, FaShare, FaChevronDown, FaChevronUp } from "react-icons/fa6"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { BeneficiaryMedia } from "@/types/admin.types"
-import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
 import { useSponsorship } from "../hooks/useSponsorship"
 import { useAuthStore } from "@/store/authStore"
 import { paymentOptionsCollection } from "../components/Payments/config"
@@ -227,6 +227,20 @@ export default function FullProfileDynamic() {
       }
     }
     return image.image_url || ""
+  }
+
+  // Helper function for generating thumbnail URLs for progressive loading
+  // Returns undefined if thumbnail generation fails, which will skip progressive loading
+  const getThumbnailSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generateThumbnailUrl(image as unknown as MediaRow)
+      } catch {
+        // Silently fail and skip thumbnail - component will use full image
+        return undefined
+      }
+    }
+    return undefined
   }
 
   const fallbackImageSrc = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
@@ -599,6 +613,7 @@ export default function FullProfileDynamic() {
                 <ImageCarousel
                   images={images}
                   getImageSrc={getImageSrc}
+                  getThumbnailSrc={getThumbnailSrc}
                   fallbackSrc={fallbackImageSrc}
                   alt={beneficiary.name || "Child"}
                   className="rounded-2xl aspect-[4/5] object-cover"
