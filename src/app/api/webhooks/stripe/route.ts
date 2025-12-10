@@ -761,6 +761,49 @@ export async function POST(req: Request) {
           // Don't fail the webhook if Telegram notification fails
         }
 
+        // Step 6: Auto-match blind sponsorships
+        if (isBlindSponsorship && session.subscription) {
+          console.log("Attempting to auto-match blind sponsorship:", {
+            stripeSubscriptionId: session.subscription,
+            sessionId: session.id,
+          })
+          
+          try {
+            // Call the matching endpoint to automatically assign an available beneficiary
+            const matchResponse = await fetch(
+              `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/admin/blind-sponsorships/match?stripeSubscriptionId=${session.subscription}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+              }
+            )
+            
+            if (matchResponse.ok) {
+              const matchData = await matchResponse.json()
+              console.log("Blind sponsorship auto-matched successfully:", {
+                subscriptionId: session.subscription,
+                beneficiary: matchData.beneficiary,
+              })
+            } else {
+              const errorData = await matchResponse.json()
+              console.warn("Blind sponsorship auto-match failed:", {
+                subscriptionId: session.subscription,
+                status: matchResponse.status,
+                error: errorData.error,
+              })
+              // Don't fail the webhook - matching can be done manually later
+            }
+          } catch (matchError) {
+            console.error("Error auto-matching blind sponsorship:", {
+              subscriptionId: session.subscription,
+              error: matchError instanceof Error ? matchError.message : String(matchError),
+            })
+            // Don't fail the webhook - matching can be done manually later
+          }
+        }
+
         return NextResponse.json(
           { message: "Transaction processed successfully" },
           { status: 200 },

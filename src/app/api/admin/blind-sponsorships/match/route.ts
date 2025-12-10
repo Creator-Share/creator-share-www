@@ -23,8 +23,31 @@ export async function POST(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const subscriptionId = searchParams.get("subscriptionId")
+    const stripeSubscriptionId = searchParams.get("stripeSubscriptionId")
     const beneficiaryId = searchParams.get("beneficiaryId")
     const auto = searchParams.get("auto") === "true"
+
+    // If Stripe subscription ID provided, look up database ID first
+    if (stripeSubscriptionId) {
+      const { data: subscription } = await supabase
+        .from("subscriptions")
+        .select("id")
+        .eq("stripe_subscription_id", stripeSubscriptionId)
+        .single()
+      
+      if (subscription) {
+        return await matchSpecificSubscription(
+          supabase,
+          subscription.id,
+          beneficiaryId || undefined,
+        )
+      }
+      
+      return NextResponse.json(
+        { error: "Subscription not found" },
+        { status: 404 },
+      )
+    }
 
     // If specific subscription ID provided, match that one
     if (subscriptionId) {
@@ -61,9 +84,6 @@ export async function POST(req: Request) {
   }
 }
 
-/**
- * Match a specific blind sponsorship subscription
- */
 async function matchSpecificSubscription(
   supabase: SupabaseClient,
   subscriptionId: string,
@@ -104,9 +124,21 @@ async function matchSpecificSubscription(
     .single()
 
   if (updateError) {
-    console.error("Error updating subscription:", updateError)
+    console.error("Error updating subscription:", {
+      subscriptionId,
+      targetBeneficiaryId,
+      error: updateError,
+      message: updateError.message,
+      details: updateError.details,
+      hint: updateError.hint,
+      code: updateError.code
+    })
     return NextResponse.json(
-      { error: "Failed to update subscription" },
+      { 
+        error: "Failed to update subscription",
+        details: updateError.message,
+        code: updateError.code
+      },
       { status: 500 },
     )
   }
@@ -323,24 +355,33 @@ async function matchBeneficiaryToOldestBlindSponsorship(
 /**
  * Find the best beneficiary match for a blind sponsorship
  * Priority:
- * 1. Status: "New" or "Partially Funded"
+ * 1. Status: "New" (no active subscriptions yet)
  * 2. Sort by: sort_weight DESC (higher priority), then created_at ASC (oldest first)
  * 3. Not already fulfilled
+ * 4. Does NOT have any active subscriptions (due to unique constraint)
  */
 async function findBestBeneficiaryMatch(
   supabase: SupabaseClient
 ): Promise<string | null> {
+  // Get beneficiaries with NO active subscriptions
   const { data: beneficiaries, error } = await supabase
     .from("beneficiaries")
     .select("id, name, status, budget_goal, budget_raised, sort_weight")
     .or("beneficiary_type.eq.CHILD,beneficiary_type.is.null")
-    .in("status", ["New", "Partially Funded"])
+    .eq("status", "New") // Only "New" beneficiaries have no active subscriptions
     .is("goal_fulfilled_at", null)
+    .eq("active_subscriptions", 0) // Explicitly check for 0 active subscriptions
     .order("sort_weight", { ascending: false }) // Higher weight = higher priority
     .order("created_at", { ascending: true }) // Oldest first
     .limit(10) // Get top candidates
 
-  if (error || !beneficiaries || beneficiaries.length === 0) {
+  if (error) {
+    console.error("Error finding beneficiary match:", error)
+    return null
+  }
+
+  if (!beneficiaries || beneficiaries.length === 0) {
+    console.log("No eligible beneficiaries found for blind sponsorship matching")
     return null
   }
 
@@ -348,9 +389,16 @@ async function findBestBeneficiaryMatch(
   for (const beneficiary of beneficiaries) {
     const remaining = (beneficiary.budget_goal || 0) - (beneficiary.budget_raised || 0)
     if (remaining > 0) {
+      console.log("Found matching beneficiary:", {
+        id: beneficiary.id,
+        name: beneficiary.name,
+        status: beneficiary.status,
+        budgetRemaining: remaining
+      })
       return beneficiary.id
     }
   }
 
+  console.log("No beneficiaries with remaining budget found")
   return null
 }
