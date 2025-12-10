@@ -333,7 +333,7 @@ async function findBestBeneficiaryMatch(
   const { data: beneficiaries, error } = await supabase
     .from("beneficiaries")
     .select("id, name, status, budget_goal, budget_raised, sort_weight")
-    .eq("beneficiary_type", "CHILD")
+    .or("beneficiary_type.eq.CHILD,beneficiary_type.is.null")
     .in("status", ["New", "Partially Funded"])
     .is("goal_fulfilled_at", null)
     .order("sort_weight", { ascending: false }) // Higher weight = higher priority
@@ -354,4 +354,3 @@ async function findBestBeneficiaryMatch(
 
   return null
 }
-

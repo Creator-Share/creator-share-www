@@ -3,45 +3,58 @@ import { useEffect, useState } from "react"
 import { DataTable } from "@/components/admin-ui/Tables/data-table"
 import { columns, type Subscription } from "./columns"
 import { createClient } from "@/utils/supabase/client"
-import { Box, Heading, Text } from "@chakra-ui/react"
+import { Box, Heading, Text, Button } from "@chakra-ui/react"
 import { useAuthStore } from "@/store/authStore"
 import { ColumnDef } from "@tanstack/react-table"
+import { BeneficiarySelectionModal } from "./components/BeneficiarySelectionModal"
 
 const UserDashboard = () => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string | null>(null)
   const { user } = useAuthStore()
 
-  useEffect(() => {
-    async function fetchSubscriptions() {
-      if (!user) return
+  const fetchSubscriptions = async () => {
+    if (!user) return
 
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from("subscriptions")
-        .select(
-          `
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select(
+        `
           *,
           child:beneficiaries(
             name,
             username
           )
         `,
-        )
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
+      )
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
 
-      if (error) {
-        console.error("Error fetching subscriptions:", error)
-        return
-      }
-
-      setSubscriptions(data || [])
-      setLoading(false)
+    if (error) {
+      console.error("Error fetching subscriptions:", error)
+      return
     }
 
+    setSubscriptions(data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
     fetchSubscriptions()
   }, [user])
+
+  const handleChooseChild = (subscriptionId: string) => {
+    setSelectedSubscriptionId(subscriptionId)
+    setIsModalOpen(true)
+  }
+
+  const handleAssignmentSuccess = () => {
+    // Refresh subscriptions after successful assignment
+    fetchSubscriptions()
+  }
 
   if (loading) {
     return <div>Loading...</div>
@@ -74,11 +87,18 @@ const UserDashboard = () => {
           <Text fontWeight="semibold" color="yellow.800" mb={2}>
             📋 Awaiting Match
           </Text>
-          <Text fontSize="sm" color="yellow.700">
+          <Text fontSize="sm" color="yellow.700" mb={3}>
             You have {blindSponsorships.length} blind sponsorship
             {blindSponsorships.length > 1 ? "s" : ""} waiting to be matched with a child.
-            You&apos;ll receive an email notification once we&apos;ve found a match!
+            You can either wait for us to automatically match you, or choose a child yourself!
           </Text>
+          <Button
+            size="sm"
+            colorScheme="blue"
+            onClick={() => handleChooseChild(blindSponsorships[0].id)}
+          >
+            Choose a Child
+          </Button>
         </Box>
       )}
 
@@ -108,10 +128,26 @@ const UserDashboard = () => {
 
       <DataTable
         columns={columns as unknown as ColumnDef<unknown, unknown>[]}
-        data={subscriptions}
+        data={subscriptions.map(sub => ({
+          ...sub,
+          onChooseChild: handleChooseChild
+        }))}
         controls="bottom"
         tableHeight="h-[50vh]"
       />
+
+      {/* Beneficiary Selection Modal */}
+      {selectedSubscriptionId && (
+        <BeneficiarySelectionModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false)
+            setSelectedSubscriptionId(null)
+          }}
+          subscriptionId={selectedSubscriptionId}
+          onSuccess={handleAssignmentSuccess}
+        />
+      )}
     </Box>
   )
 }

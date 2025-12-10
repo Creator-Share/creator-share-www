@@ -144,6 +144,7 @@ export type Subscription = {
     name: string
     username: string
   } | null
+  onChooseChild?: (subscriptionId: string) => void
 }
 
 export const columns: ColumnDef<Subscription>[] = [
@@ -165,7 +166,7 @@ export const columns: ColumnDef<Subscription>[] = [
       // Check if this is a blind sponsorship (beneficiary_id is null)
       if (!subscription.beneficiary_id) {
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <div>
               <div className="font-medium text-gray-700">Awaiting Match</div>
               <div className="text-xs text-gray-500">Blind Sponsorship</div>
@@ -173,6 +174,18 @@ export const columns: ColumnDef<Subscription>[] = [
             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
               Pending
             </span>
+            {subscription.onChooseChild && (
+              <Button
+                size="xs"
+                colorScheme="blue"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  subscription.onChooseChild?.(subscription.id)
+                }}
+              >
+                Choose Child
+              </Button>
+            )}
           </div>
         )
       }
