@@ -93,13 +93,17 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
             ) : (
               <Flex direction="column" gap={4}>
                 <Text>
-                  Are you sure you want to cancel your sponsorship for{" "}
-                  <strong>{subscription.child?.name || "this child"}</strong>?
+                  Are you sure you want to cancel your sponsorship
+                  {subscription.beneficiary_id ? (
+                    <> for <strong>{subscription.child?.name || "this child"}</strong>?</>
+                  ) : (
+                    <>? This is a blind sponsorship that hasn't been matched yet.</>
+                  )}
                 </Text>
                 <Text fontSize="sm" color="gray.600">
                   This action cannot be undone. Your recurring payment of{" "}
-                  <strong>${(subscription.amount / 100).toFixed(2)}</strong> will stop,
-                  and you'll no longer be supporting this child.
+                  <strong>${(subscription.amount / 100).toFixed(2)}</strong> will stop
+                  {subscription.beneficiary_id && ", and you'll no longer be supporting this child"}.
                 </Text>
                 <Flex gap={3} mt={4}>
                   <Button
@@ -129,7 +133,7 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
 
 export type Subscription = {
   id: string
-  beneficiary_id: string
+  beneficiary_id: string | null
   status: string
   amount: number
   interval: string
@@ -138,7 +142,8 @@ export type Subscription = {
   sponsorship_id: string
   child: {
     name: string
-  }
+    username: string
+  } | null
 }
 
 export const columns: ColumnDef<Subscription>[] = [
@@ -154,8 +159,38 @@ export const columns: ColumnDef<Subscription>[] = [
       </Button>
     ),
     cell: ({ row }) => {
-      const child = row.original.child
-      return <div>{child?.name || "N/A"}</div>
+      const subscription = row.original
+      const child = subscription.child
+      
+      // Check if this is a blind sponsorship (beneficiary_id is null)
+      if (!subscription.beneficiary_id) {
+        return (
+          <div className="flex items-center gap-2">
+            <div>
+              <div className="font-medium text-gray-700">Awaiting Match</div>
+              <div className="text-xs text-gray-500">Blind Sponsorship</div>
+            </div>
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+              Pending
+            </span>
+          </div>
+        )
+      }
+      
+      return (
+        <div>
+          {child?.name ? (
+            <a
+              href={`/sponsorships/${child.username || child.name.toLowerCase().replace(/\s+/g, '-')}`}
+              className="text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              {child.name}
+            </a>
+          ) : (
+            "N/A"
+          )}
+        </div>
+      )
     },
   },
   {

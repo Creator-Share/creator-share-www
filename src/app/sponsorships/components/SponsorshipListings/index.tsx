@@ -1,9 +1,10 @@
 "use client"
-import { Box, Flex, SimpleGrid, Spinner, Text } from "@chakra-ui/react"
+import { Box, Button, Flex, SimpleGrid, Spinner, Text } from "@chakra-ui/react"
 import React, { useState, useEffect, useRef } from "react"
 import BeneficiaryCard from "../SponsorshipCard"
 import BeneficiaryModal from "../SponsorshipModal"
 import { BeneficiaryListingsProps } from "@/types/propTypes"
+import BlindSponsorshipModal from "../BlindSponsorshipModal"
 
 const BeneficiaryListings = React.forwardRef<
   HTMLDivElement,
@@ -31,6 +32,7 @@ const BeneficiaryListings = React.forwardRef<
     const SCROLL_THRESHOLD_PX = 300
     const [visibleCount, setVisibleCount] = useState(itemsPerPage)
     const [dialogOpen, setDialogOpen] = useState<boolean>(false)
+    const [blindModalOpen, setBlindModalOpen] = useState<boolean>(false)
     // const [activeBeneficiaryId, setActiveBeneficiaryId] = useState<string | null>(null);
     const isInIframe =
       typeof window !== "undefined" && window.self !== window.top
@@ -254,6 +256,10 @@ const BeneficiaryListings = React.forwardRef<
         }}
         suppressHydrationWarning={true}
       >
+        <BlindSponsorshipModal
+          open={blindModalOpen}
+          onClose={() => setBlindModalOpen(false)}
+        />
         {visibleBeneficiary.length > 0 && (
           <BeneficiaryModal
             open={dialogOpen}
@@ -265,6 +271,38 @@ const BeneficiaryListings = React.forwardRef<
         )}
 
         <Box p={8}>
+          <Box
+            mb={6}
+            p={4}
+            bg="#F7FAFC"
+            borderRadius="lg"
+            border="1px solid #E2E8F0"
+          >
+            <Flex
+              align={{ base: "start", md: "center" }}
+              justify="space-between"
+              gap={4}
+              direction={{ base: "column", md: "row" }}
+            >
+              <Box>
+                <Text fontWeight="bold" color="gray.800">
+                  Prefer us to match you?
+                </Text>
+                <Text fontSize="sm" color="gray.600">
+                  Start a blind sponsorship and we&apos;ll pair you with the
+                  next child who needs support.
+                </Text>
+              </Box>
+              <Button
+                colorScheme="blue"
+                onClick={() => setBlindModalOpen(true)}
+                width={{ base: "100%", md: "auto" }}
+              >
+                Start blind sponsorship
+              </Button>
+            </Flex>
+          </Box>
+
           {visibleBeneficiary.length === 0 && !isLoading ? (
             <Flex justify="center" py={12} align="center" direction="column">
               <Text fontSize="lg" color="gray.600" textAlign="center">
@@ -273,6 +311,13 @@ const BeneficiaryListings = React.forwardRef<
               <Text fontSize="sm" color="gray.500" textAlign="center" mt={2}>
                 Try adjusting your search or filters to find more results
               </Text>
+              <Button
+                mt={6}
+                colorScheme="blue"
+                onClick={() => setBlindModalOpen(true)}
+              >
+                Start a blind sponsorship instead
+              </Button>
             </Flex>
           ) : (
             <SimpleGrid columns={{ base: 1, md: 3 }} gap="1.5rem">

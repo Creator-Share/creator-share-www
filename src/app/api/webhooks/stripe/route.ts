@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/client"
 import { centsToDollars } from "@/utils/currency"
 import {
   sendSponsorshipConfirmationEmail,
+  sendBlindSponsorshipConfirmationEmail,
   sendPaymentFailedEmail,
   sendMonthlyPaymentConfirmationEmail,
   sendManagerSponsorshipNotificationEmail,
@@ -32,15 +33,6 @@ export async function POST(req: Request) {
 
   try {
     const rawBody = await req.text()
-
-    // Debug logging (without body to avoid signature issues)
-    console.log('Webhook Debug:', {
-      hasSignature: !!sig,
-      signatureHeader: sig?.substring(0, 50) + '...',
-      bodyLength: rawBody.length,
-      secretConfigured: !!webhookSecret,
-      secretPrefix: webhookSecret?.substring(0, 7),
-    })
 
     event = stripe.webhooks.constructEvent(
       rawBody,
@@ -335,11 +327,16 @@ export async function POST(req: Request) {
           )
         }
 
-        // Handle regular sponsorship checkout
-        const beneficiaryId = session.metadata?.beneficiaryId
+        // Handle regular or blind sponsorship checkout
+        const sponsorshipMode = session.metadata?.sponsorshipMode || "standard"
+        const isBlindSponsorship = sponsorshipMode === "blind"
+        const beneficiaryId = session.metadata?.beneficiaryId || null
+        const beneficiaryNameFromMetadata = session.metadata?.beneficiaryName
+        const blindLabel =
+          session.metadata?.blindLabel || "the next child who needs support"
         const userId = session.metadata?.userId || null
 
-        if (!beneficiaryId || !amount) {
+        if ((!beneficiaryId && !isBlindSponsorship) || !amount) {
           console.error(
             "Missing required metadata in Stripe session:",
             session.metadata,
@@ -358,7 +355,7 @@ export async function POST(req: Request) {
             .insert({
               stripe_subscription_id: session.subscription as string,
               user_id: userId,
-              beneficiary_id: beneficiaryId,
+              beneficiary_id: beneficiaryId || null,
               status: "complete",
               amount: amount,
               interval: interval,
@@ -564,25 +561,34 @@ export async function POST(req: Request) {
         }
 
         // Step 3: Fetch beneficiary name for emails and transaction ledger (AFTER successful insert)
-        const { data: beneficiaryData, error: beneficiaryError } = await supabase
-          .from("beneficiaries")
-          .select("name")
-          .eq("id", beneficiaryId)
-          .single()
+        let beneficiaryName =
+          beneficiaryNameFromMetadata ||
+          (isBlindSponsorship
+            ? `Blind sponsorship for ${blindLabel}`
+            : "Unknown Beneficiary")
 
-        if (beneficiaryError || !beneficiaryData) {
-          console.error("Error fetching beneficiary data:", beneficiaryError)
-          // Continue processing - this is not critical
+        if (beneficiaryId) {
+          const { data: beneficiaryData, error: beneficiaryError } =
+            await supabase
+              .from("beneficiaries")
+              .select("name")
+              .eq("id", beneficiaryId)
+              .single()
+
+          if (beneficiaryError || !beneficiaryData) {
+            console.error("Error fetching beneficiary data:", beneficiaryError)
+            // Continue processing - this is not critical
+          } else if (beneficiaryData?.name) {
+            beneficiaryName = beneficiaryData.name
+          }
         }
-
-        const beneficiaryName = beneficiaryData?.name || "Unknown Beneficiary"
 
         // Step 4: Create transaction ledger entry (AFTER successful subscription insert)
         // This is a separate operation - log error but don't rollback subscription
         const { error: transactionError } = await supabase
           .from("transaction_ledger")
           .insert({
-            beneficiary_id: beneficiaryId,
+            beneficiary_id: beneficiaryId || null,
             user_id: userId,
             description: `Sponsorship to ${beneficiaryName} with amount of ${amount}`,
             reference: session.invoice as string,
@@ -613,7 +619,7 @@ export async function POST(req: Request) {
             description: `Someone sponsored with $${centsToDollars(
               amount,
             )}/${interval}`,
-            beneficiary_id: beneficiaryId,
+            beneficiary_id: beneficiaryId || null,
             user_id: userId,
           })
 
@@ -629,20 +635,45 @@ export async function POST(req: Request) {
           // Send confirmation to sponsor if we have their email
           if (customerEmail) {
             try {
-              const emailResult = await sendSponsorshipConfirmationEmail(
-                customerEmail,
-                beneficiaryName,
+              console.log("Sending blind sponsorship confirmation email:", {
+                email: customerEmail,
+                isBlindSponsorship,
                 amount,
                 interval,
-                session.customer_details?.name || null,
-              )
+                blindLabel,
+                sessionId: session.id,
+              })
+              
+              const emailResult = isBlindSponsorship
+                ? await sendBlindSponsorshipConfirmationEmail(
+                    customerEmail,
+                    amount,
+                    interval,
+                    blindLabel,
+                    session.customer_details?.name || null,
+                  )
+                : await sendSponsorshipConfirmationEmail(
+                    customerEmail,
+                    beneficiaryName,
+                    amount,
+                    interval,
+                    session.customer_details?.name || null,
+                  )
+
+              console.log("Email send result:", {
+                success: emailResult.success,
+                messageId: emailResult.messageId,
+                error: emailResult.error,
+              })
 
               // Log email attempt
               try {
                 await supabase.from("email_logs").insert({
                   user_id: userId,
                   email: customerEmail,
-                  subject: `Thank you for sponsoring ${beneficiaryName}!`,
+                  subject: isBlindSponsorship
+                    ? "Thank you for your blind sponsorship!"
+                    : `Thank you for sponsoring ${beneficiaryName}!`,
                   status: emailResult.success ? "sent" : "failed",
                   error: emailResult.error
                     ? JSON.stringify(emailResult.error)
@@ -655,7 +686,28 @@ export async function POST(req: Request) {
               }
             } catch (emailError) {
               console.error("Error in email sending process:", emailError)
+              // Log the error to email_logs even if sending failed
+              try {
+                await supabase.from("email_logs").insert({
+                  user_id: userId,
+                  email: customerEmail,
+                  subject: isBlindSponsorship
+                    ? "Thank you for your blind sponsorship!"
+                    : `Thank you for sponsoring ${beneficiaryName}!`,
+                  status: "failed",
+                  error: emailError instanceof Error ? emailError.message : String(emailError),
+                  created_at: new Date(),
+                })
+              } catch (logErr) {
+                console.error("Error logging failed email attempt:", logErr)
+              }
             }
+          } else {
+            console.warn("No customer email found in session, skipping email send:", {
+              sessionId: session.id,
+              customerDetails: session.customer_details,
+              metadata: session.metadata,
+            })
           }
 
           // Send notification to manager

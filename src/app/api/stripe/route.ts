@@ -18,9 +18,27 @@ export async function POST(req: Request) {
       type,
       project,
       email,
+      sponsorshipMode,
+      blindLabel,
     } = await req.json()
 
-    // If a hardcoded server-side price is configured, enforce it.
+    const resolvedSponsorshipMode =
+      type === "blind_sponsorship" || sponsorshipMode === "blind"
+        ? "blind"
+        : "standard"
+    const isBlindSponsorship = resolvedSponsorshipMode === "blind"
+    const resolvedBeneficiaryName =
+      beneficiaryName ||
+      (isBlindSponsorship
+        ? "Blind sponsorship - we will match you with a child"
+        : "Unknown Beneficiary")
+    const resolvedBlindLabel =
+      blindLabel || "the next child who needs support"
+    const fallbackImage =
+      "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+
+    // For blind sponsorships, always use $33.33 (3333 cents) regardless of env var
+    // For regular sponsorships, check if a hardcoded server-side price is configured
     const hardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
     const hardcoded = hardcodedRaw ? parseInt(hardcodedRaw, 10) : null
     if (hardcoded !== null && (isNaN(hardcoded) || hardcoded <= 0)) {
@@ -30,8 +48,13 @@ export async function POST(req: Request) {
       )
     }
 
-    // Use the hardcoded value if present, otherwise use the client-provided amount.
-    const enforcedAmount = hardcoded !== null ? hardcoded : amount
+    let enforcedAmount: number
+    if (isBlindSponsorship) {
+      enforcedAmount = 3333 // Fixed $33.33 for blind sponsorships
+    } else {
+      // Use the hardcoded value if present, otherwise use the client-provided amount.
+      enforcedAmount = hardcoded !== null ? hardcoded : amount
+    }
 
     // Validate enforced amount (keep existing minimum unless overriden intentionally)
     if (!enforcedAmount || (enforcedAmount < 1000 && !allowBelowMinimum)) {
@@ -49,6 +72,9 @@ export async function POST(req: Request) {
     if (type === "partnership") {
       productName = `${isMonthly ? "Monthly" : "Yearly"} Partnership - ${project}`
       productImages = []
+    } else if (isBlindSponsorship) {
+      productName = `${isMonthly ? "Monthly" : "Yearly"} Blind Sponsorship`
+      productImages = [fallbackImage]
     } else {
       const safeImage = beneficiaryImage
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || ""
@@ -58,7 +84,7 @@ export async function POST(req: Request) {
         : isLocalBase
           ? "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
           : `${baseUrl}${safeImage}`
-      productName = `${isMonthly ? "Monthly" : "Yearly"} Sponsorship for ${beneficiaryName}`
+      productName = `${isMonthly ? "Monthly" : "Yearly"} Sponsorship for ${resolvedBeneficiaryName}`
       productImages = [fullImageUrl]
     }
 
@@ -82,10 +108,13 @@ export async function POST(req: Request) {
               hardcoded_override: hardcoded !== null ? "true" : "false",
             }
           : {
-              beneficiaryId,
+              beneficiaryId: beneficiaryId || null,
               userId: userId || null,
               amount: enforcedAmount.toString(),
               hardcoded_override: hardcoded !== null ? "true" : "false",
+              sponsorshipMode: resolvedSponsorshipMode,
+              blindLabel: resolvedBlindLabel,
+              beneficiaryName: resolvedBeneficiaryName,
             },
     })
 
@@ -110,14 +139,16 @@ export async function POST(req: Request) {
               hardcoded_override: hardcoded !== null ? "true" : "false",
             }
           : {
-              beneficiaryId,
-              beneficiaryName,
-              childName: beneficiaryName,
+              beneficiaryId: beneficiaryId || undefined,
+              beneficiaryName: resolvedBeneficiaryName,
+              childName: resolvedBeneficiaryName,
               amount: enforcedAmount.toString(),
               childLocation: location,
               userId: userId || null,
               paymentType,
               hardcoded_override: hardcoded !== null ? "true" : "false",
+              sponsorshipMode: resolvedSponsorshipMode,
+              blindLabel: resolvedBlindLabel,
             },
       subscription_data: {
         metadata:
@@ -130,10 +161,13 @@ export async function POST(req: Request) {
                 hardcoded_override: hardcoded !== null ? "true" : "false",
               }
             : {
-                beneficiaryId,
+                beneficiaryId: beneficiaryId || undefined,
                 userId: userId || null,
                 amount: enforcedAmount.toString(),
                 hardcoded_override: hardcoded !== null ? "true" : "false",
+                sponsorshipMode: resolvedSponsorshipMode,
+                blindLabel: resolvedBlindLabel,
+                beneficiaryName: resolvedBeneficiaryName,
               },
       },
     }

@@ -23,11 +23,13 @@ const UserDashboard = () => {
           `
           *,
           child:beneficiaries(
-            name
+            name,
+            username
           )
         `,
         )
         .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
 
       if (error) {
         console.error("Error fetching subscriptions:", error)
@@ -45,6 +47,14 @@ const UserDashboard = () => {
     return <div>Loading...</div>
   }
 
+  // Count blind sponsorships awaiting match
+  const blindSponsorships = subscriptions.filter(
+    (sub) => !sub.beneficiary_id && sub.status === "complete"
+  )
+  const matchedSponsorships = subscriptions.filter(
+    (sub) => sub.beneficiary_id && sub.status === "complete"
+  )
+
   return (
     <Box className="container mx-auto py-8">
       <Box className="mb-8">
@@ -55,6 +65,46 @@ const UserDashboard = () => {
           Manage your active sponsorships and view payment history
         </Text>
       </Box>
+
+      {/* Blind Sponsorship Status Alert */}
+      {blindSponsorships.length > 0 && (
+        <Box
+          className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg"
+        >
+          <Text fontWeight="semibold" color="yellow.800" mb={2}>
+            📋 Awaiting Match
+          </Text>
+          <Text fontSize="sm" color="yellow.700">
+            You have {blindSponsorships.length} blind sponsorship
+            {blindSponsorships.length > 1 ? "s" : ""} waiting to be matched with a child.
+            You&apos;ll receive an email notification once we&apos;ve found a match!
+          </Text>
+        </Box>
+      )}
+
+      {/* Summary Stats */}
+      {subscriptions.length > 0 && (
+        <Box className="mb-6 flex gap-4">
+          <Box className="px-4 py-2 bg-blue-50 rounded-lg">
+            <Text fontSize="sm" color="gray.600">
+              Active Sponsorships
+            </Text>
+            <Text fontSize="xl" fontWeight="bold" color="blue.700">
+              {matchedSponsorships.length}
+            </Text>
+          </Box>
+          {blindSponsorships.length > 0 && (
+            <Box className="px-4 py-2 bg-yellow-50 rounded-lg">
+              <Text fontSize="sm" color="gray.600">
+                Awaiting Match
+              </Text>
+              <Text fontSize="xl" fontWeight="bold" color="yellow.700">
+                {blindSponsorships.length}
+              </Text>
+            </Box>
+          )}
+        </Box>
+      )}
 
       <DataTable
         columns={columns as unknown as ColumnDef<unknown, unknown>[]}

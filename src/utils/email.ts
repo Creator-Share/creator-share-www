@@ -148,6 +148,124 @@ export const sendSponsorshipConfirmationEmail = async (
   })
 }
 
+export const sendBlindSponsorshipConfirmationEmail = async (
+  email: string,
+  amount: number,
+  interval: string,
+  blindLabel: string,
+  sponsorName?: string | null,
+) => {
+  const subject = `Thank you for your blind sponsorship!`
+
+  const formattedAmount = (amount / 100).toFixed(2)
+  const intervalText = interval === "month" ? "monthly" : "yearly"
+  const stripePortalUrl = "https://stripe.creatorshare.com"
+  const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+
+  const html = `
+    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+      </div>
+      
+      <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> ${intervalText} to support ${blindLabel}.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">We'll match you with a child who needs support, and you'll receive updates as soon as your sponsorship is matched.</p>
+      </div>
+      
+      <div style="border-left: 4px solid #1C3C8C; padding-left: 1rem; margin-bottom: 1.5rem;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">Your support makes a significant difference in providing education and opportunities for children in need.</p>
+        <p style="font-size: 1rem; line-height: 1.5;">We'll keep you updated once we've matched you with a child and share their progress with you.</p>
+      </div>
+      
+      <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Manage your subscription, update payment methods, or view billing history:</p>
+        <a href="${stripePortalUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Manage Subscription</a>
+      </div>
+      
+      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Warm regards,</p>
+        <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
+      </div>
+      
+      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
+        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
+      </div>
+    </div>
+  `
+
+  return sendEmail({
+    to: email,
+    subject,
+    html,
+  })
+}
+
+export const sendBlindSponsorshipMatchedEmail = async (
+  email: string,
+  childName: string,
+  amount: number,
+  interval: string,
+  sponsorName?: string | null,
+  childUsername?: string | null,
+) => {
+  const subject = `Great news! You've been matched with ${childName}!`
+
+  const formattedAmount = (amount / 100).toFixed(2)
+  const intervalText = interval === "month" ? "monthly" : "yearly"
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
+  const profileUrl = childUsername 
+    ? `${baseUrl}/sponsorships/${childUsername}`
+    : `${baseUrl}/sponsorships`
+  const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+
+  const html = `
+    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+      </div>
+      
+      <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #22c55e;">
+        <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">You've Been Matched! 🎉</h2>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Great news! We've matched your blind sponsorship with <strong style="color: #1C3C8C;">${childName}</strong>.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your ${intervalText} contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> will now go directly to supporting ${childName}'s education and well-being.</p>
+      </div>
+      
+      <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h3 style="font-size: 1.25rem; font-weight: 600; margin-top: 0; color: #1C3C8C;">What's Next?</h3>
+        <ul style="font-size: 1rem; line-height: 1.5;">
+          <li style="margin-bottom: 0.5rem;">You'll receive regular updates about ${childName}'s progress</li>
+          <li style="margin-bottom: 0.5rem;">We'll share photos and stories of how your support is making a difference</li>
+          <li style="margin-bottom: 0.5rem;">You can view ${childName}'s profile and learn more about them</li>
+        </ul>
+      </div>
+      
+      <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">View ${childName}'s profile and learn more about how your sponsorship is helping:</p>
+        <a href="${profileUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">View ${childName}'s Profile</a>
+      </div>
+      
+      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Thank you for your generous support,</p>
+        <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
+      </div>
+      
+      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
+        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
+      </div>
+    </div>
+  `
+
+  return sendEmail({
+    to: email,
+    subject,
+    html,
+  })
+}
+
 export const sendPaymentFailedEmail = async (
   email: string,
   childName: string,
