@@ -271,7 +271,7 @@ const BeneficiaryListings = React.forwardRef<
         )}
 
         <Box p={8}>
-          <Box
+          {/* <Box
             mb={6}
             p={4}
             bg="#F7FAFC"
@@ -302,6 +302,7 @@ const BeneficiaryListings = React.forwardRef<
               </Button>
             </Flex>
           </Box>
+          */}        
 
           {visibleBeneficiary.length === 0 && !isLoading ? (
             <Flex justify="center" py={12} align="center" direction="column">
