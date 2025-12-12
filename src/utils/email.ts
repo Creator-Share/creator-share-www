@@ -1,4 +1,6 @@
 import nodemailer from "nodemailer"
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { createServiceRoleClient } from "@/utils/supabase/server"
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
@@ -44,6 +46,61 @@ export const sendEmail = async ({
   }
 }
 
+/**
+ * Get the first image URL for a beneficiary
+ * Uses service role client for database access in webhook context
+ */
+async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | null> {
+  try {
+    console.log(`[Email] Fetching image for beneficiary: ${beneficiaryId}`)
+    // Use service role client for email operations (no user session in webhook context)
+    const supabase = createServiceRoleClient()
+    
+    // Query media table directly for images
+    const { data: mediaData, error } = await supabase
+      .from("media")
+      .select("*")
+      .eq("parent_id", beneficiaryId)
+      .eq("type", "IMAGE")
+      .order("weight", { ascending: false })
+      .limit(1)
+
+    if (error) {
+      console.error(`[Email] Failed to fetch images for beneficiary ${beneficiaryId}:`, error)
+      return null
+    }
+
+    if (!mediaData || mediaData.length === 0) {
+      console.log(`[Email] No images found for beneficiary ${beneficiaryId}`)
+      return null
+    }
+
+    console.log(`[Email] Found ${mediaData.length} image(s) for beneficiary ${beneficiaryId}`)
+    const firstImage = mediaData[0] as unknown as MediaRow
+    
+    // Try to generate public URL using the media utility
+    try {
+      const publicUrl = generatePublicUrl(firstImage)
+      console.log(`[Email] Generated public URL for beneficiary ${beneficiaryId}: ${publicUrl}`)
+      return publicUrl
+    } catch (urlError) {
+      console.error(`[Email] Failed to generate public URL for beneficiary ${beneficiaryId}:`, urlError)
+      return null
+    }
+  } catch (error) {
+    console.error(`[Email] Error fetching image for beneficiary ${beneficiaryId}:`, error)
+    return null
+  }
+}
+
+/**
+ * Helper function to get the logo URL using NEXT_PUBLIC_BASE_URL
+ */
+function getLogoUrl(): string {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://creatorshare.com'
+  return `${baseUrl.replace(/\/$/, '')}/logo_text.svg`
+}
+
 export const sendPartnershipConfirmationEmail = async (
   email: string,
   project: string,
@@ -56,11 +113,12 @@ export const sendPartnershipConfirmationEmail = async (
   const formattedAmount = (amount / 100).toFixed(2)
   const intervalText = interval === "month" ? "monthly" : "yearly"
   const greeting = partnerName ? `Dear ${partnerName},` : "Dear Partner,"
+  const logoUrl = getLogoUrl()
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
@@ -99,6 +157,7 @@ export const sendSponsorshipConfirmationEmail = async (
   amount: number,
   interval: string,
   sponsorName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `Thank you for sponsoring ${childName}!`
 
@@ -106,12 +165,38 @@ export const sendSponsorshipConfirmationEmail = async (
   const intervalText = interval === "month" ? "monthly" : "yearly"
   const stripePortalUrl = "https://stripe.creatorshare.com"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    console.log(`[Email] Attempting to fetch image for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      console.log(`[Email] Successfully fetched image URL for ${childName}: ${childImageUrl}`)
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${childName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    }
+  } else {
+    console.warn(`[Email] No beneficiaryId provided for child: ${childName}`)
+  }
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      
+      ${childImageHtml}
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
@@ -161,11 +246,12 @@ export const sendBlindSponsorshipConfirmationEmail = async (
   const intervalText = interval === "month" ? "monthly" : "yearly"
   const stripePortalUrl = "https://stripe.creatorshare.com"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+  const logoUrl = getLogoUrl()
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
@@ -224,7 +310,7 @@ export const sendBlindSponsorshipMatchedEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #22c55e;">
@@ -284,7 +370,7 @@ export const sendPaymentFailedEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">
@@ -334,7 +420,7 @@ export const sendSubscriptionConfirmationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Subscription Confirmed!</h2>
@@ -441,7 +527,7 @@ export const sendActivityNotificationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">New Update for ${
@@ -495,7 +581,7 @@ export const sendGoalFulfilledEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Goal Fulfilled!</h2>
@@ -545,7 +631,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #10b981;">
@@ -615,16 +701,43 @@ export const sendManagerSponsorshipNotificationEmail = async (
   interval: string,
   customerEmail?: string | null,
   customerName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `New Sponsorship Received for ${childName}`
   const formattedAmount = (amount / 100).toFixed(2)
   const intervalText = interval === "month" ? "monthly" : "yearly"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    console.log(`[Email] Manager notification - Attempting to fetch image for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      console.log(`[Email] Manager notification - Successfully fetched image URL for ${childName}: ${childImageUrl}`)
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${childName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Manager notification - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    }
+  } else {
+    console.warn(`[Email] Manager notification - No beneficiaryId provided for child: ${childName}`)
+  }
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      
+      ${childImageHtml}
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">New Sponsorship Received!</h2>
@@ -665,11 +778,12 @@ export const sendMonthlyPaymentConfirmationEmail = async (
   const formattedAmount = (amount / 100).toFixed(2)
   const stripePortalUrl = "https://stripe.creatorshare.com"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+  const logoUrl = getLogoUrl()
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
@@ -728,7 +842,7 @@ export const sendSponsorshipCancellationNotificationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">
