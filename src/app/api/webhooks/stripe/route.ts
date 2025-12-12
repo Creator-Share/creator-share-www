@@ -624,6 +624,7 @@ export async function POST(req: Request) {
                     amount,
                     interval,
                     session.customer_details?.name || null,
+                    beneficiaryId || null,
                   )
 
               console.log("Email send result:", {
@@ -687,6 +688,7 @@ export async function POST(req: Request) {
               interval,
               customerEmail,
               session.customer_details?.name,
+              beneficiaryId || null,
             )
 
             // Log manager email attempt
