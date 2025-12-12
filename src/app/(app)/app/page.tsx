@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { DataTable } from "@/components/admin-ui/Tables/data-table"
 import { columns, type Subscription } from "./columns"
 import { createClient } from "@/utils/supabase/client"
@@ -15,7 +15,7 @@ const UserDashboard = () => {
   const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string | null>(null)
   const { user } = useAuthStore()
 
-  const fetchSubscriptions = async () => {
+  const fetchSubscriptions = useCallback(async () => {
     if (!user) return
 
     const supabase = createClient()
@@ -40,11 +40,11 @@ const UserDashboard = () => {
 
     setSubscriptions(data || [])
     setLoading(false)
-  }
+  }, [user])
 
   useEffect(() => {
     fetchSubscriptions()
-  }, [user])
+  }, [fetchSubscriptions])
 
   const handleChooseChild = (subscriptionId: string) => {
     setSelectedSubscriptionId(subscriptionId)

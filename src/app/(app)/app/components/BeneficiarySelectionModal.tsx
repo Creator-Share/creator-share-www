@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   DialogRoot,
   DialogContent,
@@ -49,12 +49,6 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<BeneficiaryWithImages | null>(null)
   const [assigning, setAssigning] = useState(false)
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchAvailableBeneficiaries()
-    }
-  }, [isOpen])
-
   const calculateAge = (birthDate: string | null | undefined): number | undefined => {
     if (!birthDate) return undefined
     const birth = new Date(birthDate)
@@ -67,7 +61,7 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
     return age
   }
 
-  const fetchAvailableBeneficiaries = async () => {
+  const fetchAvailableBeneficiaries = useCallback(async () => {
     setLoading(true)
     const supabase = createClient()
 
@@ -146,7 +140,13 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
 
     setBeneficiaries(available)
     setLoading(false)
-  }
+  }, [])
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchAvailableBeneficiaries()
+    }
+  }, [isOpen, fetchAvailableBeneficiaries])
 
   const handleAssign = async () => {
     if (!selectedBeneficiary) return

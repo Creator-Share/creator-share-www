@@ -16,6 +16,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY! as string)
 // Force dynamic rendering to prevent body pre-processing
 export const dynamic = 'force-dynamic'
 
+// Debug mode - only enable in development or for troubleshooting
+const DEBUG_MODE = process.env.STRIPE_WEBHOOK_DEBUG === 'true'
+
 export async function POST(req: Request) {
   const supabase = createClient()
   const sig = req.headers.get("stripe-signature") as string
@@ -48,7 +51,10 @@ export async function POST(req: Request) {
   }
 
   try {
-    console.log(`Processing webhook event: ${event.type}`, { eventId: event.id })
+    if (DEBUG_MODE) {
+      console.log(`[DEBUG] Processing event: ${event.type}`, { eventId: event.id })
+    }
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session
@@ -63,27 +69,19 @@ export async function POST(req: Request) {
           const project = session.metadata?.project
 
           if (!email || !amount || !project) {
-            console.error(
-              "Missing required partnership metadata:",
-              session.metadata,
-            )
+            if (DEBUG_MODE) {
+              console.log('[DEBUG] Partnership payment missing required metadata - silently rejecting')
+            }
+            // Partnership payment missing required metadata - silently reject
             return NextResponse.json(
-              { error: "Invalid metadata" },
-              { status: 400 },
+              { received: true },
+              { status: 200 },
             )
           }
 
           // Get payment method details
           let last4: string | null = null
           let cardType: string | null = null
-          let paymentMethodId: string | null = null
-
-          console.log("Session:", {
-            customer: session.customer,
-            payment_intent: session.payment_intent,
-            subscription: session.subscription,
-            mode: session.mode,
-          })
 
           // Try to get payment method from setup intent first
           if (session.setup_intent) {
@@ -94,18 +92,12 @@ export async function POST(req: Request) {
               },
             )
 
-            console.log("SetupIntent:", {
-              id: setupIntent.id,
-              payment_method: setupIntent.payment_method,
-            })
-
             if (
               typeof setupIntent.payment_method !== "string" &&
               setupIntent.payment_method?.card
             ) {
               last4 = setupIntent.payment_method.card.last4
               cardType = setupIntent.payment_method.card.brand
-              paymentMethodId = setupIntent.payment_method.id
             }
           }
           // If no setup intent or no card details found, try payment intent
@@ -117,22 +109,12 @@ export async function POST(req: Request) {
               },
             )
 
-            console.log("PaymentIntent:", {
-              id: paymentIntent.id,
-              payment_method: paymentIntent.payment_method,
-              card:
-                typeof paymentIntent.payment_method !== "string"
-                  ? paymentIntent.payment_method?.card
-                  : null,
-            })
-
             if (
               typeof paymentIntent.payment_method !== "string" &&
               paymentIntent.payment_method?.card
             ) {
               last4 = paymentIntent.payment_method.card.last4
               cardType = paymentIntent.payment_method.card.brand
-              paymentMethodId = paymentIntent.payment_method.id
             }
           }
           // If still no card details, try to get from customer's payment methods
@@ -142,20 +124,11 @@ export async function POST(req: Request) {
               type: "card",
             })
 
-            console.log("Customer Payment Methods:", paymentMethods.data)
-
             if (paymentMethods.data.length > 0) {
               last4 = paymentMethods.data[0].card?.last4 || null
               cardType = paymentMethods.data[0].card?.brand || null
-              paymentMethodId = paymentMethods.data[0].id
             }
           }
-
-          console.log("Card Details:", {
-            last4,
-            cardType,
-            paymentMethodId,
-          })
 
           // Update partnership status and details
           const updateData = {
@@ -178,13 +151,6 @@ export async function POST(req: Request) {
                   1000,
             ),
           }
-
-          console.log("Session customer:", session.customer)
-          console.log("Session subscription:", session.subscription)
-          console.log("Session payment_intent:", session.payment_intent)
-          console.log("Card details - last4:", last4, "type:", cardType)
-
-          console.log("Updating partnership with:", updateData)
 
           // First check if there's any existing partnership for this customer
           const { data: partnerships, error: fetchError } = await supabase
@@ -247,14 +213,11 @@ export async function POST(req: Request) {
             }
           } else {
             // Now update the partnership
-            const { data: updateResult, error: updateError } = await supabase
+            const { error: updateError } = await supabase
               .from("partnerships")
               .update(updateData)
               .eq("id", partnerships[0].id)
               .select()
-
-            console.log("Update result:", updateResult)
-            console.log("Update error:", updateError)
 
             if (updateError) {
               console.error("Error updating partnership status:", updateError)
@@ -337,13 +300,16 @@ export async function POST(req: Request) {
         const userId = session.metadata?.userId || null
 
         if ((!beneficiaryId && !isBlindSponsorship) || !amount) {
-          console.error(
-            "Missing required metadata in Stripe session:",
-            session.metadata,
-          )
+          if (DEBUG_MODE) {
+            console.error(
+              "Missing required metadata in Stripe session:",
+              session.metadata,
+            )
+          }
+          // Non-application payment - silently acknowledge without logging customer data
           return NextResponse.json(
-            { error: "Invalid metadata" },
-            { status: 400 },
+            { received: true },
+            { status: 200 },
           )
         }
 
@@ -816,6 +782,14 @@ export async function POST(req: Request) {
         const subscriptionId = invoice.subscription as string
         const type = invoice.metadata?.type
 
+        // Silently acknowledge non-application payments
+        if (type !== "partnership" && !subscriptionId) {
+          if (DEBUG_MODE) {
+            console.log('[DEBUG] Non-application invoice.payment_failed event - silently acknowledging')
+          }
+          return NextResponse.json({ received: true }, { status: 200 })
+        }
+
         if (type === "partnership") {
           // Update partnership status
           const { error: updateError } = await supabase
@@ -926,6 +900,15 @@ export async function POST(req: Request) {
 
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription
+        const type = subscription.metadata?.type
+
+        // Silently acknowledge non-application subscriptions (no type or unknown type)
+        if (!type || (type !== "partnership" && type !== "sponsorship")) {
+          if (DEBUG_MODE) {
+            console.log('[DEBUG] Non-application subscription.updated event - silently acknowledging')
+          }
+          return NextResponse.json({ received: true }, { status: 200 })
+        }
 
         // Map Stripe subscription status to our database status
         // Stripe statuses: active, past_due, canceled, unpaid, incomplete, incomplete_expired, trialing, paused
@@ -973,6 +956,14 @@ export async function POST(req: Request) {
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription
         const type = subscription.metadata?.type
+
+        // Silently acknowledge non-application subscriptions (no type or unknown type)
+        if (!type || (type !== "partnership" && type !== "sponsorship")) {
+          if (DEBUG_MODE) {
+            console.log('[DEBUG] Non-application subscription.deleted event - silently acknowledging')
+          }
+          return NextResponse.json({ received: true }, { status: 200 })
+        }
 
         if (type === "partnership") {
           const email = subscription.metadata?.email
@@ -1100,6 +1091,21 @@ export async function POST(req: Request) {
         const subscriptionId = invoice.subscription as string
 
         if (subscriptionId) {
+          // Check if this is an application subscription by querying our database
+          const { data: subscriptionData } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("stripe_subscription_id", subscriptionId)
+            .maybeSingle()
+
+          // Silently acknowledge non-application subscription invoices
+          if (!subscriptionData) {
+            if (DEBUG_MODE) {
+              console.log('[DEBUG] Non-application invoice payment event - silently acknowledging')
+            }
+            return NextResponse.json({ received: true }, { status: 200 })
+          }
+
           // Update subscription status
           await supabase
             .from("subscriptions")
@@ -1201,9 +1207,12 @@ export async function POST(req: Request) {
       }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`)
+        if (DEBUG_MODE) {
+          console.log(`[DEBUG] Unhandled event type: ${event.type}`)
+        }
+        // Silently acknowledge unhandled event types
         return NextResponse.json(
-          { message: `Received ${event.type} event` },
+          { received: true },
           { status: 200 },
         )
     }

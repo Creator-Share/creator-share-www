@@ -80,7 +80,7 @@ const SponsorshipFilters: React.FC<
         })
       }
     }
-  }, [isAdminMode, mounted])
+  }, [isAdminMode, mounted, selectedStatus, selectedGender, selectedAgeRange, searchQuery, setStatus, onFilterChange])
 
   useEffect(() => {
     
