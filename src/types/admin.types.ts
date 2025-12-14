@@ -57,6 +57,7 @@ export interface Activity {
   videos_url?: string[]
   activity_type: "INFO" | "UPDATE" | "SUBSCRIPTION"
   created_by: string
+  is_public?: boolean
   metadata?: {
     media?: {
       images?: string[]

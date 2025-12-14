@@ -18,6 +18,7 @@ const Dashboard = () => {
     // { label: 'Manage Street Involved', path: '/admin/street-involved' },
     // { label: 'Manage Families in Need', path: '/admin/family-in-need' },
     // { label: 'Manage Animals', path: '/admin/animals' },
+    { label: "Messaging", path: "/admin/messaging" },
     { label: "Manage Activities", path: "/admin/activities" },
     { label: "Welcome Packets", path: "/admin/welcome-packets" },
   ]
