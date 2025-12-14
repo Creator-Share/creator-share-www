@@ -9,6 +9,8 @@ export async function POST(req: NextRequest) {
   const activity_type = formData.get("activity_type") as string | null
   const activity_source = formData.get("activity_source") as string | null
   const beneficiary_id = formData.get("beneficiary_id") as string | null
+  const is_public = formData.get("is_public") === "true"
+  const selectedSponsorIds = formData.get("selected_sponsor_ids") as string | null
 
   if (!description || !beneficiary_id || !activity_type || !activity_source) {
     return NextResponse.json(
@@ -16,6 +18,11 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     )
   }
+
+  // Parse selected sponsor IDs (comma-separated string)
+  const sponsorIds = selectedSponsorIds
+    ? selectedSponsorIds.split(",").filter((id) => id.trim().length > 0)
+    : []
   const images: File[] = []
   const videos: File[] = []
   for (const [key, value] of formData.entries()) {
@@ -37,6 +44,7 @@ export async function POST(req: NextRequest) {
         activity_type,
         activity_source,
         beneficiary_id,
+        is_public,
         created_at: new Date().toISOString(),
         created_by: "admin",
       },
@@ -166,15 +174,28 @@ export async function POST(req: NextRequest) {
         name?: string | null
       }
       type SponsorRow = {
+        id: string
         user_id: string | null
         email_notification: boolean | null
         users: UserData | UserData[] | null
       }
-      const { data: sponsorRows, error: sponsorError } = await supabase
+      
+      // Build query - if sponsorIds is provided, only fetch those specific sponsors
+      let sponsorQuery = supabase
         .from("subscriptions")
-        .select("user_id, email_notification, users(email, first_name, last_name)")
+        .select("id, user_id, email_notification, users(email, first_name, last_name)")
         .eq("beneficiary_id", beneficiary_id)
         .eq("status", "complete")
+      
+      // If specific sponsors are selected, filter to only those
+      if (sponsorIds.length > 0) {
+        sponsorQuery = sponsorQuery.in("id", sponsorIds)
+        console.log("📧 Filtering to selected sponsors:", sponsorIds)
+      } else {
+        console.log("📧 No sponsors selected - will send to all (if any)")
+      }
+      
+      const { data: sponsorRows, error: sponsorError } = await sponsorQuery
 
       if (sponsorError) {
         console.error("❌ Error fetching sponsor subscriptions:", sponsorError)
@@ -216,8 +237,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Add sponsor emails (respect email_notification flag if provided)
-      if (!sponsorError && Array.isArray(sponsorRows)) {
+      // Add sponsor emails - only if sponsorIds were specified (opt-in for email)
+      if (!sponsorError && Array.isArray(sponsorRows) && sponsorIds.length > 0) {
         for (const row of sponsorRows as SponsorRow[]) {
           if (row?.email_notification === false) {
             console.log("⏭️ Skipping sponsor (email_notification=false):", row.user_id)
