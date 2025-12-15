@@ -95,10 +95,18 @@ async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | n
 
 /**
  * Helper function to get the logo URL using NEXT_PUBLIC_BASE_URL
+ * Falls back to production URL if localhost is detected to ensure emails work
  */
 function getLogoUrl(): string {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://creatorshare.com'
-  return `${baseUrl.replace(/\/$/, '')}/logo_text.svg`
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://creator-share-www.vercel.app'
+  
+  // If localhost is detected, use production URL instead
+  // Email clients cannot access localhost URLs
+  if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
+    return 'https://creator-share-www.vercel.app/logo_text.png'
+  }
+  
+  return `${baseUrl.replace(/\/$/, '')}/logo_text.png`
 }
 
 export const sendPartnershipConfirmationEmail = async (
