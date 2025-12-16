@@ -25,11 +25,25 @@ export const HomeHero = () => {
           as="h1"
           fontSize={{ base: "3xl", md: "5xl" }}
           fontWeight="bold"
-          color="#1C3C8C"
+          color="black"
           lineHeight="1.1"
           maxW="4xl"
         >
-          One Child at a time, your love is changing thousands of lives...
+          One Child at a time, your love is
+          <br />
+          <Box
+            as="span"
+            display="inline-block"
+            bg="blue.100"
+            color="blue.600"
+            px={3}
+            py={1}
+            borderRadius="full"
+            fontWeight="bold"
+          >
+            changing
+          </Box>{" "}
+          thousands of lives
         </Heading>
         <Text
           fontSize={{ base: "md", md: "lg" }}
