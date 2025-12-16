@@ -29,7 +29,7 @@ export const HomeHero = () => {
           lineHeight="1.1"
           maxW="4xl"
         >
-          One Child at a time, your love is
+          One Child at a time, love is
           <br />
           <Box
             as="span"
