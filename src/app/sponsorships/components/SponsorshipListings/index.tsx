@@ -265,6 +265,39 @@ const BeneficiaryListings = React.forwardRef<
         )}
 
         <Box p={8}>
+          {/* <Box
+            mb={6}
+            p={4}
+            bg="#F7FAFC"
+            borderRadius="lg"
+            border="1px solid #E2E8F0"
+          >
+            <Flex
+              align={{ base: "start", md: "center" }}
+              justify="space-between"
+              gap={4}
+              direction={{ base: "column", md: "row" }}
+            >
+              <Box>
+                <Text fontWeight="bold" color="gray.800">
+                  Prefer us to match you?
+                </Text>
+                <Text fontSize="sm" color="gray.600">
+                  Start a blind sponsorship and we&apos;ll pair you with the
+                  next child who needs support.
+                </Text>
+              </Box>
+              <Button
+                colorScheme="blue"
+                onClick={() => setBlindModalOpen(true)}
+                width={{ base: "100%", md: "auto" }}
+              >
+                Start blind sponsorship
+              </Button>
+            </Flex>
+          </Box>
+          */}        
+
           {visibleBeneficiary.length === 0 && !isLoading ? (
             <Flex justify="center" py={12} align="center" direction="column">
               <Text fontSize="lg" color="gray.600" textAlign="center">
