@@ -48,6 +48,7 @@ import { Button } from "@/components/ui/button"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
+import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
 import { usePresence } from "@/hooks/usePresence"
 import ViewerIndicator from "@/components/presence/ViewerIndicator"
@@ -222,8 +223,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     return undefined
   }
 
-  const fallbackImageSrc =
-    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+  const fallbackImageSrc = PERSON_PLACEHOLDER_PATH
 
   const alreadyFulfilled =
     beneficiary.status === "Budget Fulfilled" ||
@@ -409,7 +409,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         beneficiaryName: beneficiary.name,
         beneficiaryImage:
           primaryImageUrl ||
-          "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=",
+          PERSON_PLACEHOLDER_PATH,
         amount:
           publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
         paymentType: selectedOption,

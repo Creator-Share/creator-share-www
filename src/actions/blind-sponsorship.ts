@@ -2,10 +2,12 @@
 
 import Stripe from "stripe"
 
+import { getPlaceholderImageUrl } from "@/utils/placeholders"
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string)
 
-const FALLBACK_IMAGE =
-  "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+// For Stripe product images, we need a full URL
+const FALLBACK_IMAGE = getPlaceholderImageUrl()
 const BLIND_LABEL = "the next child who needs support"
 const BLIND_SPONSORSHIP_AMOUNT_CENTS = 3333 // Fixed $33.33 for blind sponsorships
 
