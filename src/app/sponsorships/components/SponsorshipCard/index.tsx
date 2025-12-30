@@ -10,6 +10,7 @@ import { centsToDollars } from "@/utils/currency"
 import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import ViewerIndicator from "@/components/presence/ViewerIndicator"
+import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -22,8 +23,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   // Note: Presence tracking removed from card list view
   // Only track presence when viewing the actual profile (modal or detail page)
 
-  const placeholderImage =
-    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+  const placeholderImage = PERSON_PLACEHOLDER_PATH
 
   useEffect(() => {
     const fetchImages = async () => {

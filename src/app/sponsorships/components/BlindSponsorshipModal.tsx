@@ -20,15 +20,12 @@ import { paymentOptionsCollection } from "./Payments/config"
 import { toaster } from "@/components/ui/toaster"
 import { useAuthStore } from "@/store/authStore"
 import { useSponsorship } from "../hooks/useSponsorship"
+import { createBlindSponsorshipCheckout } from "@/actions/blind-sponsorship"
 
 type BlindSponsorshipModalProps = {
   open: boolean
   onClose: () => void
 }
-
-const FALLBACK_IMAGE =
-  "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
-const BLIND_LABEL = "the next child who needs support"
 
 const BlindSponsorshipModal: React.FC<BlindSponsorshipModalProps> = ({
   open,
@@ -49,51 +46,33 @@ const BlindSponsorshipModal: React.FC<BlindSponsorshipModalProps> = ({
   // Amount is fixed, no change handler needed
 
   const handleSubmit = async () => {
-    // Amount is fixed at $33.33
-    const resolvedAmountCents = Math.round(FIXED_AMOUNT * 100) // 3333 cents
-
     setLoading(true)
     setSponsorshipInProgress("blind_sponsorship", true)
 
     try {
-      const payload = {
-        amount: resolvedAmountCents,
+      const result = await createBlindSponsorshipCheckout({
         paymentType: selectedOption,
-        beneficiaryName: `Blind sponsorship for ${BLIND_LABEL}`,
-        beneficiaryImage: FALLBACK_IMAGE,
-        location: "Flexible",
         userId: user?.id,
+        email: user?.email,
         isEmbedded,
-        allowBelowMinimum: false,
-        type: "blind_sponsorship",
-        sponsorshipMode: "blind",
-        blindLabel: BLIND_LABEL,
-      }
-
-      const res = await fetch("/api/stripe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
       })
 
-      const data = await res.json()
-
-      if (!res.ok) {
+      if (!result.success) {
         toaster.create({
           title: "Unable to start sponsorship",
           description:
-            data?.error ||
+            result.error ||
             "Something went wrong while starting your sponsorship. Please try again.",
           type: "error",
         })
         return
       }
 
-      if (data.url) {
-        window.location.href = data.url
-      } else if (data.clientSecret) {
+      if (result.url) {
+        window.location.href = result.url
+      } else if (result.clientSecret) {
         // Embedded checkout flow
-        window.location.href = `/sponsorships/checkout?client_secret=${data.clientSecret}`
+        window.location.href = `/sponsorships/checkout?client_secret=${result.clientSecret}`
       } else {
         toaster.create({
           title: "Unexpected response",

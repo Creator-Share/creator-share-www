@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
+import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string)
 
@@ -34,8 +35,10 @@ export async function POST(req: Request) {
         : "Unknown Beneficiary")
     const resolvedBlindLabel =
       blindLabel || "the next child who needs support"
-    const fallbackImage =
-      "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+    // Use SVG directly from public folder
+    // For Stripe product images, we need a full URL (Stripe requires absolute URLs)
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
+    const fallbackImage = `${baseUrl}${PERSON_PLACEHOLDER_PATH}`
 
     // For blind sponsorships, always use $33.33 (3333 cents) regardless of env var
     // For regular sponsorships, check if a hardcoded server-side price is configured
@@ -82,7 +85,7 @@ export async function POST(req: Request) {
       const fullImageUrl = safeImage.startsWith("http")
         ? safeImage
         : isLocalBase
-          ? "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+          ? `${baseUrl}${PERSON_PLACEHOLDER_PATH}` // Use path constant, construct full URL for Stripe
           : `${baseUrl}${safeImage}`
       productName = `${isMonthly ? "Monthly" : "Yearly"} Sponsorship for ${resolvedBeneficiaryName}`
       productImages = [fullImageUrl]

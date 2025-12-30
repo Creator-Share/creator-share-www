@@ -8,6 +8,7 @@ import { FaCalendar, FaUser, FaLocationDot, FaCircleInfo, FaLink, FaShare, FaChe
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
+import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../hooks/useSponsorship"
 import { useAuthStore } from "@/store/authStore"
 import { paymentOptionsCollection } from "../components/Payments/config"
@@ -243,7 +244,7 @@ export default function FullProfileDynamic() {
     return undefined
   }
 
-  const fallbackImageSrc = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+  const fallbackImageSrc = PERSON_PLACEHOLDER_PATH
 
   if (loading) {
     return (

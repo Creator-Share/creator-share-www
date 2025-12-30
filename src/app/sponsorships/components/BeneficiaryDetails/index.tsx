@@ -1,12 +1,14 @@
 "use client"
-import { Box, Flex, Text, Image, Button } from "@chakra-ui/react"
+import { Box, Flex, Text, Image } from "@chakra-ui/react"
 import { FaCalendar } from "react-icons/fa"
 import { FaLocationDot } from "react-icons/fa6"
 import { calculateAge } from "@/utils/ageCalculator"
 import { formatDate } from "@/utils/dateFormatter"
 import { Beneficiaries, BeneficiaryMedia } from "@/types"
 import { useState, useEffect } from "react"
-import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
+import { ImageCarousel } from "@/components/common/ImageCarousel"
+import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 
 interface BeneficiaryDetailsProps {
   beneficiary: Beneficiaries
@@ -16,10 +18,8 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
   beneficiary,
 }) => {
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
-  const [currentImageIndex, setCurrentImageIndex] = useState<number>(0)
 
-  const placeholderImage =
-    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+  const placeholderImage = PERSON_PLACEHOLDER_PATH
 
   useEffect(() => {
     const fetchImages = async () => {
@@ -63,8 +63,28 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
       ?.birth_date_is_estimate
   )
 
-  const handleNextImage = () => {
-    setCurrentImageIndex((prev) => (prev + 1) % images.length)
+  // Helper function for ImageCarousel
+  const getImageSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generatePublicUrl(image as unknown as MediaRow)
+      } catch {
+        return image.image_url || ""
+      }
+    }
+    return image.image_url || ""
+  }
+
+  // Helper function for generating thumbnail URLs for progressive loading
+  const getThumbnailSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generateThumbnailUrl(image as unknown as MediaRow)
+      } catch {
+        return undefined
+      }
+    }
+    return undefined
   }
 
   const getStatusText = (status: string) => {
@@ -123,85 +143,15 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
         p={0}
       >
         <Box position="relative" width="100%" height="100%">
-          <Image
-            src={
-              images.length > 0 && images[currentImageIndex]?.id
-                ? generatePublicUrl(
-                    images[currentImageIndex] as unknown as MediaRow,
-                  )
-                : images.length > 0 && images[currentImageIndex]?.id
-                  ? generatePublicUrl(
-                      images[currentImageIndex] as unknown as MediaRow,
-                    )
-                  : images.length > 0 && images[currentImageIndex]?.image_url
-                    ? images[currentImageIndex].image_url
-                    : placeholderImage
-            }
+          <ImageCarousel
+            images={images}
+            getImageSrc={getImageSrc}
+            getThumbnailSrc={getThumbnailSrc}
+            fallbackSrc={placeholderImage}
             alt={beneficiary.name}
-            objectFit="cover"
-            width="100%"
-            height="100%"
-            borderRadius="xl"
+            className="w-full h-full rounded-xl object-cover"
+            showArrowsOnHover={true}
           />
-          {images.length > 1 && (
-            <>
-              <Flex
-                position="absolute"
-                bottom="4"
-                left="50%"
-                transform="translateX(-50%)"
-                gap={2}
-              >
-                {images.map((_, index) => (
-                  <Box
-                    key={index}
-                    w="2"
-                    h="2"
-                    borderRadius="full"
-                    bg={
-                      currentImageIndex === index ? "white" : "whiteAlpha.600"
-                    }
-                    cursor="pointer"
-                    onClick={() => setCurrentImageIndex(index)}
-                  />
-                ))}
-              </Flex>
-              <Button
-                position="absolute"
-                left="2"
-                top="50%"
-                transform="translateY(-50%)"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setCurrentImageIndex(
-                    (prev) => (prev - 1 + images.length) % images.length,
-                  )
-                }}
-                size="sm"
-                variant="ghost"
-                color="white"
-                _hover={{ bg: "whiteAlpha.200" }}
-              >
-                ←
-              </Button>
-              <Button
-                position="absolute"
-                right="2"
-                top="50%"
-                transform="translateY(-50%)"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleNextImage()
-                }}
-                size="sm"
-                variant="ghost"
-                color="white"
-                _hover={{ bg: "whiteAlpha.200" }}
-              >
-                →
-              </Button>
-            </>
-          )}
         </Box>
       </Box>
       <Box flex="1" px={{ base: 0, md: 6 }} py={4}>
