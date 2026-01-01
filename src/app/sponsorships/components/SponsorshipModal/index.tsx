@@ -50,8 +50,6 @@ import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supab
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
-import { usePresence } from "@/hooks/usePresence"
-import ViewerIndicator from "@/components/presence/ViewerIndicator"
 
 interface BeneficiaryModalProps {
   open: boolean
@@ -68,7 +66,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [lastToastTime, setLastToastTime] = useState(0)
   const user = useAuthStore((state) => state.user)
   const { setSponsorshipInProgress } = useSponsorship()
-  const { joinProfilePresence, leaveProfilePresence } = usePresence()
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
   const publicHardcodedCents = publicHardcodedRaw
     ? parseInt(publicHardcodedRaw, 10)
@@ -107,16 +104,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [hasActivities, setHasActivities] = useState<boolean>(false)
 
   const [, setPrimaryImageUrl] = useState<string | null>(null)
-
-  // Join presence when modal opens
-  useEffect(() => {
-    if (open && beneficiary?.id) {
-      joinProfilePresence(beneficiary.id)
-      return () => {
-        leaveProfilePresence(beneficiary.id)
-      }
-    }
-  }, [open, beneficiary?.id, joinProfilePresence, leaveProfilePresence])
 
   // Clear sponsorship state when modal closes
   useEffect(() => {
@@ -723,11 +710,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             <Text className="text-xl md:text-2xl font-bold text-gray-800">
               Sponsorship Details
             </Text>
-            <ViewerIndicator
-              profileId={beneficiary.id}
-              variant="badge"
-              showWhenZero={false}
-            />
           </Flex>
           <DialogCloseTrigger>
             <Box className="text-2xl font-normal cursor-pointer hover:bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center transition-colors">

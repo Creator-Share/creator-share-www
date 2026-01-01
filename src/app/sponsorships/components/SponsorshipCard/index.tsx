@@ -9,7 +9,6 @@ import { BeneficiaryMedia } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
 import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
-import ViewerIndicator from "@/components/presence/ViewerIndicator"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
@@ -20,8 +19,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiaryType = "CHILD",
 }) => {
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
-  // Note: Presence tracking removed from card list view
-  // Only track presence when viewing the actual profile (modal or detail page)
 
   const placeholderImage = PERSON_PLACEHOLDER_PATH
 
@@ -120,15 +117,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           className="w-full h-full rounded-t-[20px] object-cover"
           showArrowsOnHover={true}
         />
-
-        {/* Viewer Indicator */}
-        <Box position="absolute" top="12px" left="12px" zIndex={10}>
-          <ViewerIndicator
-            profileId={beneficiary.id}
-            variant="badge"
-            showWhenZero={false}
-          />
-        </Box>
 
         {/* Goal Badge */}
         {!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && (
