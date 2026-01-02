@@ -3,7 +3,6 @@ import React, { useEffect, useState, useCallback } from "react"
 import { Box, Spinner, Flex, Text, Button, Input } from "@chakra-ui/react"
 import { useParams } from "next/navigation"
 import { Beneficiaries } from "@/types"
-import { usePresence } from "@/hooks/usePresence"
 import { FaCalendar, FaUser, FaLocationDot, FaCircleInfo, FaLink, FaShare, FaChevronDown, FaChevronUp } from "react-icons/fa6"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { BeneficiaryMedia } from "@/types/admin.types"
@@ -48,7 +47,6 @@ export default function FullProfileDynamic() {
   const [hasActivities, setHasActivities] = useState<boolean>(false)
   const [toastCount, setToastCount] = useState(0)
   const [lastToastTime, setLastToastTime] = useState(0)
-  const { joinProfilePresence, leaveProfilePresence } = usePresence()
   const { setSponsorshipInProgress } = useSponsorship()
   const user = useAuthStore((state) => state.user)
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
@@ -153,16 +151,6 @@ export default function FullProfileDynamic() {
     }
     if (username) fetchData()
   }, [username])
-
-  // Join presence when beneficiary is loaded
-  useEffect(() => {
-    if (beneficiary?.id) {
-      joinProfilePresence(beneficiary.id)
-      return () => {
-        leaveProfilePresence(beneficiary.id)
-      }
-    }
-  }, [beneficiary?.id, joinProfilePresence, leaveProfilePresence])
 
   // Load images and check activities when beneficiary is loaded
   useEffect(() => {
