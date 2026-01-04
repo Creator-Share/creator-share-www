@@ -168,6 +168,7 @@ async function matchSpecificSubscription(
         subscription.interval || "month",
         user.first_name || user.last_name ? `${user.first_name || ""} ${user.last_name || ""}`.trim() : null,
         beneficiary.username,
+        targetBeneficiaryId,
       )
     } catch (emailError) {
       console.error("Error sending match notification email:", emailError)
@@ -259,6 +260,7 @@ async function autoMatchBlindSponsorships(
         subscription.interval || "month",
         user.first_name || user.last_name ? `${user.first_name || ""} ${user.last_name || ""}`.trim() : null,
         beneficiary.username,
+        beneficiaryId,
       )
     } catch (emailError) {
       console.error("Error sending match notification email:", emailError)
@@ -339,6 +341,7 @@ async function matchBeneficiaryToOldestBlindSponsorship(
         subscription.interval || "month",
         user.first_name || user.last_name ? `${user.first_name || ""} ${user.last_name || ""}`.trim() : null,
         beneficiary.username,
+        beneficiaryId,
       )
     } catch (emailError) {
       console.error("Error sending match notification email:", emailError)
@@ -381,7 +384,6 @@ async function findBestBeneficiaryMatch(
   }
 
   if (!beneficiaries || beneficiaries.length === 0) {
-    console.log("No eligible beneficiaries found for blind sponsorship matching")
     return null
   }
 
@@ -389,16 +391,9 @@ async function findBestBeneficiaryMatch(
   for (const beneficiary of beneficiaries) {
     const remaining = (beneficiary.budget_goal || 0) - (beneficiary.budget_raised || 0)
     if (remaining > 0) {
-      console.log("Found matching beneficiary:", {
-        id: beneficiary.id,
-        name: beneficiary.name,
-        status: beneficiary.status,
-        budgetRemaining: remaining
-      })
       return beneficiary.id
     }
   }
 
-  console.log("No beneficiaries with remaining budget found")
   return null
 }

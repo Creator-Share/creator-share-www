@@ -70,7 +70,6 @@ const SponsorshipFilters: React.FC<
       // Only update if current status doesn't include all admin statuses
       const hasAllStatuses = allStatuses.every(status => selectedStatus.includes(status))
       if (!hasAllStatuses) {
-        console.log("[SponsorshipFilters] Initializing admin mode with all statuses")
         setStatus(allStatuses)
         onFilterChange({
           gender: selectedGender,

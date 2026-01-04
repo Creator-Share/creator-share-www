@@ -106,6 +106,7 @@ export async function POST(req: Request) {
             ? `${userRecord.first_name || ""} ${userRecord.last_name || ""}`.trim() 
             : null,
           beneficiary.username,
+          beneficiaryId,
         )
       } catch (emailError) {
         console.error("Error sending assignment notification email:", emailError)

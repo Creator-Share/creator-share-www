@@ -32,13 +32,11 @@ test.describe("Infinite Scroll Tests", () => {
     const initialCards = await page
       .locator(".rounded-\\[20px\\].bg-white")
       .count()
-    console.log(`Initial cards loaded: ${initialCards}`)
 
     // Get initial IDs from the card containers
     const initialIds = await page
       .locator(".rounded-\\[20px\\].bg-white")
       .evaluateAll((elements) => elements.map((el) => el.id).filter((id) => id))
-    console.log(`Initial IDs:`, initialIds)
 
     // Scroll to bottom to trigger infinite scroll
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
@@ -52,14 +50,12 @@ test.describe("Infinite Scroll Tests", () => {
         { timeout: 5000 }
       )
 
-      console.log(`Loaded more data from: ${response.url()}`)
       await page.waitForTimeout(1500)
 
       // Count cards after scroll
       const afterScrollCards = await page
         .locator(".rounded-\\[20px\\].bg-white")
         .count()
-      console.log(`Cards after scroll: ${afterScrollCards}`)
 
       // Get all IDs after scroll
       const afterScrollIds = await page
@@ -67,7 +63,6 @@ test.describe("Infinite Scroll Tests", () => {
         .evaluateAll((elements) =>
           elements.map((el) => el.id).filter((id) => id)
         )
-      console.log(`After scroll IDs:`, afterScrollIds)
 
       // Check for duplicate IDs in the DOM
       const idSet = new Set(afterScrollIds)
@@ -101,7 +96,6 @@ test.describe("Infinite Scroll Tests", () => {
       expect(duplicateKeyErrors).toHaveLength(0)
     } catch (error) {
       // If no more data to load, that's okay
-      console.log("No more data to load or already at end")
     }
   })
 

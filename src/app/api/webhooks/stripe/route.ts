@@ -51,9 +51,6 @@ export async function POST(req: Request) {
   }
 
   try {
-    if (DEBUG_MODE) {
-      console.log(`[DEBUG] Processing event: ${event.type}`, { eventId: event.id })
-    }
 
     switch (event.type) {
       case "checkout.session.completed": {
@@ -70,7 +67,7 @@ export async function POST(req: Request) {
 
           if (!email || !amount || !project) {
             if (DEBUG_MODE) {
-              console.log('[DEBUG] Partnership payment missing required metadata - silently rejecting')
+              console.log ('[DEBUG] Partnership payment missing required metadata - silently rejecting')
             }
             // Partnership payment missing required metadata - silently reject
             return NextResponse.json(
@@ -463,6 +460,7 @@ export async function POST(req: Request) {
                     beneficiaryName,
                     amount,
                     session.customer_details?.name || null,
+                    beneficiaryId,
                   )
                   
                   emailSent = true
@@ -876,6 +874,7 @@ export async function POST(req: Request) {
                 ? new Date(invoice.next_payment_attempt * 1000)
                 : null,
               customerName,
+              subscriptionData?.beneficiary_id || null,
             )
 
             // Log email attempt
@@ -1156,6 +1155,7 @@ export async function POST(req: Request) {
                         beneficiaryData.name,
                         invoice.amount_paid,
                         customerName,
+                        subscriptionData.beneficiary_id,
                       )
 
                       // Log email attempt

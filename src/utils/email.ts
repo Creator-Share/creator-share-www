@@ -12,6 +12,24 @@ const transporter = nodemailer.createTransport({
   },
 })
 
+/**
+ * Email Deliverability Best Practices:
+ * 
+ * For optimal email deliverability, ensure your SMTP server is properly configured:
+ * 1. SPF (Sender Policy Framework) records in DNS
+ * 2. DKIM (DomainKeys Identified Mail) signatures
+ * 3. DMARC (Domain-based Message Authentication) policy
+ * 4. Reverse DNS (PTR) records pointing back to your domain
+ * 5. Proper FROM address matching your domain
+ * 6. Consistent sender reputation (avoid spam triggers)
+ * 
+ * The current configuration uses:
+ * - Secure connections (TLS/SSL) via EMAIL_SECURE
+ * - Proper FROM address from EMAIL_FROM env var
+ * - Error handling and logging for troubleshooting
+ * - Image URLs use production URLs (not localhost) for email client compatibility
+ */
+
 interface SendEmailParams {
   to: string
   subject: string
@@ -52,7 +70,6 @@ export const sendEmail = async ({
  */
 async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | null> {
   try {
-    console.log(`[Email] Fetching image for beneficiary: ${beneficiaryId}`)
     // Use service role client for email operations (no user session in webhook context)
     const supabase = createServiceRoleClient()
     
@@ -71,17 +88,14 @@ async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | n
     }
 
     if (!mediaData || mediaData.length === 0) {
-      console.log(`[Email] No images found for beneficiary ${beneficiaryId}`)
       return null
     }
 
-    console.log(`[Email] Found ${mediaData.length} image(s) for beneficiary ${beneficiaryId}`)
     const firstImage = mediaData[0] as unknown as MediaRow
     
     // Try to generate public URL using the media utility
     try {
       const publicUrl = generatePublicUrl(firstImage)
-      console.log(`[Email] Generated public URL for beneficiary ${beneficiaryId}: ${publicUrl}`)
       return publicUrl
     } catch (urlError) {
       console.error(`[Email] Failed to generate public URL for beneficiary ${beneficiaryId}:`, urlError)
@@ -178,10 +192,8 @@ export const sendSponsorshipConfirmationEmail = async (
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
   if (beneficiaryId) {
-    console.log(`[Email] Attempting to fetch image for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
     const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
     if (childImageUrl) {
-      console.log(`[Email] Successfully fetched image URL for ${childName}: ${childImageUrl}`)
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
@@ -304,6 +316,7 @@ export const sendBlindSponsorshipMatchedEmail = async (
   interval: string,
   sponsorName?: string | null,
   childUsername?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `Great news! You've been matched with ${childName}!`
 
@@ -314,12 +327,36 @@ export const sendBlindSponsorshipMatchedEmail = async (
     ? `${baseUrl}/sponsorships/${childUsername}`
     : `${baseUrl}/sponsorships`
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${childName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Blind sponsorship matched - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    }
+  } else {
+    console.warn(`[Email] Blind sponsorship matched - No beneficiaryId provided for child: ${childName}`)
+  }
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      
+      ${childImageHtml}
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #22c55e;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">You've Been Matched! 🎉</h2>
@@ -366,6 +403,7 @@ export const sendPaymentFailedEmail = async (
   amount: number,
   nextAttemptDate: Date | null,
   sponsorName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `Action Required: Your Sponsorship Payment for ${childName} Failed`
 
@@ -374,12 +412,36 @@ export const sendPaymentFailedEmail = async (
     ? `We'll automatically try again on ${nextAttemptDate.toLocaleDateString()}.`
     : "We'll automatically try again soon."
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${childName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Payment failed - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    }
+  } else {
+    console.warn(`[Email] Payment failed - No beneficiaryId provided for child: ${childName}`)
+  }
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      
+      ${childImageHtml}
       
       <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">
         <h2 style="color: #dc2626; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Payment Failed</h2>
@@ -422,14 +484,39 @@ export const sendSubscriptionConfirmationEmail = async (
   email: string,
   beneficiaryName: string,
   subscriberName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `You're subscribed to updates for ${beneficiaryName}!`
   const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${beneficiaryName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Subscription confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`)
+    }
+  } else {
+    console.warn(`[Email] Subscription confirmation - No beneficiaryId provided for beneficiary: ${beneficiaryName}`)
+  }
+
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      ${childImageHtml}
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Subscription Confirmed!</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
@@ -466,9 +553,32 @@ export const sendActivityNotificationEmail = async (
     videoUrls?: string[]
   },
   subscriberName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `New update on ${beneficiary.name}`
   const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary profile image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${beneficiary.name}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Activity notification - No profile image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiary.name}`)
+    }
+  } else {
+    console.warn(`[Email] Activity notification - No beneficiaryId provided for beneficiary: ${beneficiary.name}`)
+  }
   
   // Generate image HTML if images are provided
   let imagesHtml = ""
@@ -535,8 +645,9 @@ export const sendActivityNotificationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      ${childImageHtml}
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">New Update for ${
           beneficiary.name
@@ -578,6 +689,7 @@ export const sendGoalFulfilledEmail = async (
   email: string,
   beneficiary: { name: string; budget_goal: number },
   subscriberName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `Goal Fulfilled for ${beneficiary.name}!`
   const formattedGoal = beneficiary.budget_goal
@@ -586,11 +698,35 @@ export const sendGoalFulfilledEmail = async (
       })}`
     : "the goal amount"
   const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${beneficiary.name}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Goal fulfilled - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiary.name}`)
+    }
+  } else {
+    console.warn(`[Email] Goal fulfilled - No beneficiaryId provided for beneficiary: ${beneficiary.name}`)
+  }
+
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      ${childImageHtml}
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Goal Fulfilled!</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
@@ -631,16 +767,41 @@ export const sendBudgetFulfilledRejectionEmail = async (
   beneficiaryName: string,
   amount: number,
   sponsorName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `Thank You - ${beneficiaryName} Has Been Fully Sponsored!`
   const formattedAmount = (amount / 100).toFixed(2)
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Friend,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${beneficiaryName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Budget fulfilled rejection - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`)
+    }
+  } else {
+    console.warn(`[Email] Budget fulfilled rejection - No beneficiaryId provided for beneficiary: ${beneficiaryName}`)
+  }
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      
+      ${childImageHtml}
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #10b981;">
         <h2 style="color: #10b981; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Good News - ${beneficiaryName} is Fully Sponsored!</h2>
@@ -719,10 +880,8 @@ export const sendManagerSponsorshipNotificationEmail = async (
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
   if (beneficiaryId) {
-    console.log(`[Email] Manager notification - Attempting to fetch image for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
     const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
     if (childImageUrl) {
-      console.log(`[Email] Manager notification - Successfully fetched image URL for ${childName}: ${childImageUrl}`)
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
@@ -781,6 +940,7 @@ export const sendMonthlyPaymentConfirmationEmail = async (
   childName: string,
   amount: number,
   sponsorName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `Payment Confirmation: Your Sponsorship for ${childName}`
   const formattedAmount = (amount / 100).toFixed(2)
@@ -788,11 +948,34 @@ export const sendMonthlyPaymentConfirmationEmail = async (
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
   const logoUrl = getLogoUrl()
 
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${childName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Monthly payment confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    }
+  } else {
+    console.warn(`[Email] Monthly payment confirmation - No beneficiaryId provided for child: ${childName}`)
+  }
+
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
         <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      
+      ${childImageHtml}
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Payment Confirmed</h2>
