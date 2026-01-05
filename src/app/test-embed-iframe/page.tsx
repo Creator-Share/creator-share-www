@@ -23,7 +23,6 @@ const IframeTest = () => {
 
       // Handle makeDialogSticky message from the iframe
       if (event.data?.type === "makeDialogSticky") {
-        console.log("Received makeDialogSticky request from iframe", event.data)
 
         // We don't need to scroll - the dialog should stay in place
         // Just ensure the iframe is visible
@@ -41,7 +40,6 @@ const IframeTest = () => {
 
       // Handle sponsorship complete message
       else if (event.data?.type === "sponsorship_complete") {
-        console.log("Received sponsorship_complete from iframe", event.data)
         setPaymentStatus("complete")
 
         // You could show a success message or redirect the user
@@ -55,7 +53,6 @@ const IframeTest = () => {
 
       // Handle navigation message
       else if (event.data?.type === "navigation") {
-        console.log("Received navigation request from iframe", event.data)
 
         if (event.data.action === "return") {
           // Reset the iframe to the embed page
@@ -114,7 +111,6 @@ window.addEventListener('message', function(event) {
     
     // Handle makeDialogSticky message from the iframe
     if (event.data?.type === 'makeDialogSticky') {
-        console.log('Received makeDialogSticky request from iframe', event.data);
         
         // We don't need to scroll - the dialog should stay in place
         // Just ensure the iframe is visible
@@ -133,7 +129,6 @@ window.addEventListener('message', function(event) {
     
     // Handle sponsorship complete message
     else if (event.data?.type === 'sponsorship_complete') {
-        console.log('Received sponsorship_complete from iframe', event.data);
         
         // You could show a success message or redirect the user
         var iframe = document.querySelector('iframe[src*="embedded=true"]');
@@ -147,7 +142,6 @@ window.addEventListener('message', function(event) {
     
     // Handle navigation message
     else if (event.data?.type === 'navigation') {
-        console.log('Received navigation request from iframe', event.data);
         
         if (event.data.action === 'return') {
             // Reset the iframe to the embed page

@@ -54,6 +54,8 @@ export async function POST(req: NextRequest) {
       const emailResult = await sendSubscriptionConfirmationEmail(
         email,
         beneficiary,
+        null,
+        beneficiaryData.id,
       )
       await supabase.from("email_logs").insert({
         email,

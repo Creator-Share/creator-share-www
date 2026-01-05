@@ -136,9 +136,6 @@ export function useBeneficiaryPagination(
 
         setBeneficiaries((prev) => {
           if (!nextCursor) {
-            console.log(
-              `[useBeneficiaryPagination] Initial load: ${people.length} items`
-            )
             return people
           }
 

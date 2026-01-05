@@ -153,7 +153,6 @@ export async function POST(req: NextRequest) {
   // Only notify subscribers/sponsors if created_by is 'admin'
   if (inserted?.created_by === "admin") {
     try {
-      console.log("📧 Starting email notification process for beneficiary:", beneficiary_id)
       
       const { data: subscribers, error: subError } = await supabase
         .from("activity_subscriptions")
@@ -163,7 +162,6 @@ export async function POST(req: NextRequest) {
       if (subError) {
         console.error("❌ Error fetching activity subscribers:", subError)
       } else {
-        console.log("✅ Found activity subscribers:", subscribers?.length || 0)
       }
 
       // Fetch sponsors (users who have active/complete subscriptions for this beneficiary)
@@ -232,7 +230,6 @@ export async function POST(req: NextRequest) {
         for (const sub of subscribers) {
           if (sub?.email) {
             audienceMap.set(sub.email, { email: sub.email })
-            console.log("➕ Added activity subscriber:", sub.email)
           }
         }
       }
@@ -241,7 +238,6 @@ export async function POST(req: NextRequest) {
       if (!sponsorError && Array.isArray(sponsorRows) && sponsorIds.length > 0) {
         for (const row of sponsorRows as SponsorRow[]) {
           if (row?.email_notification === false) {
-            console.log("⏭️ Skipping sponsor (email_notification=false):", row.user_id)
             continue
           }
           
@@ -260,7 +256,6 @@ export async function POST(req: NextRequest) {
               email: userData.email,
               name,
             })
-            console.log("➕ Added sponsor:", userData.email, "Name:", name)
           } else {
             console.warn("⚠️ Sponsor row has no user email:", row.user_id)
             // Try to fetch user email directly if relationship didn't work
@@ -280,7 +275,6 @@ export async function POST(req: NextRequest) {
                   email: userData.email,
                   name,
                 })
-                console.log("➕ Added sponsor (direct query):", userData.email, "Name:", name)
               } else {
                 console.error("❌ Could not fetch user data for:", row.user_id, userError)
               }
@@ -289,14 +283,12 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      console.log("📊 Total audience size:", audienceMap.size)
 
       if (beneficiaryData && beneficiaryData.name && audienceMap.size > 0) {
         const subject = `New update on ${beneficiaryData.name}`
 
         type EmailResult = { success: boolean; error?: unknown; messageId?: string }
         
-        console.log("📤 Sending emails to", audienceMap.size, "recipients")
 
         // Fetch media URLs for email
         const imageUrls: string[] = []
@@ -325,12 +317,6 @@ export async function POST(req: NextRequest) {
               return []
             }
 
-            console.log(
-              type === "IMAGE" ? "📸 Found" : "🎥 Found",
-              mediaRecords.length,
-              `${type.toLowerCase()} media records`,
-            )
-
             const { getStorageKey } = await import("@/utils/supabase/media")
             const STORAGE_BUCKET = (await import("@/utils/supabase/buckets")).STORAGE_BUCKET
 
@@ -353,10 +339,6 @@ export async function POST(req: NextRequest) {
                   key,
                 )}`
                 urls.push(publicUrl)
-                console.log(
-                  type === "IMAGE" ? "✅ Generated image URL:" : "✅ Generated video URL:",
-                  publicUrl,
-                )
               } catch (urlError) {
                 console.error(`❌ Error generating ${type.toLowerCase()} URL for media:`, urlError)
               }
@@ -378,9 +360,6 @@ export async function POST(req: NextRequest) {
             "IMAGE",
           )
           imageUrls.push(...urls)
-          console.log("📧 Total image URLs for email:", imageUrls.length)
-        } else {
-          console.log("ℹ️ No images in activity metadata")
         }
 
         if (inserted?.metadata?.media?.videos && Array.isArray(inserted.metadata.media.videos)) {
@@ -389,15 +368,11 @@ export async function POST(req: NextRequest) {
             "VIDEO",
           )
           videoUrls.push(...urls)
-          console.log("📧 Total video URLs for email:", videoUrls.length)
-        } else {
-          console.log("ℹ️ No videos in activity metadata")
         }
 
-        const results = await Promise.allSettled(
+        await Promise.allSettled(
           Array.from(audienceMap.values()).map(async (member) => {
             try {
-              console.log("📧 Sending email to:", member.email)
               const emailResult: EmailResult = await sendActivityNotificationEmail(
                 member.email,
                 beneficiaryData,
@@ -408,9 +383,9 @@ export async function POST(req: NextRequest) {
                   videoUrls,
                 },
                 member.name,
+                beneficiary_id,
               )
               
-              console.log("📧 Email result for", member.email, ":", emailResult.success ? "✅ sent" : "❌ failed", emailResult.error)
               
               try {
                 await supabase.from("email_logs").insert({
@@ -449,9 +424,6 @@ export async function POST(req: NextRequest) {
           }),
         )
         
-        const successCount = results.filter(r => r.status === "fulfilled" && r.value?.success).length
-        const failCount = results.length - successCount
-        console.log(`📊 Email sending complete: ${successCount} sent, ${failCount} failed`)
       } else {
         if (!beneficiaryData || !beneficiaryData.name) {
           console.warn("⚠️ No beneficiary data or name found")

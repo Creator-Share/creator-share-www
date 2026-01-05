@@ -9,8 +9,6 @@ export async function DELETE(
     const supabase = await createClient()
     const { id } = await params
 
-    console.log("Deleting expense with ID:", id)
-
     // First, check if the expense exists
     const { data: existingExpense, error: checkError } = await supabase
       .from("expenses")
@@ -34,7 +32,6 @@ export async function DELETE(
       )
     }
 
-    console.log("Expense deleted successfully")
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error in expense DELETE:", error)

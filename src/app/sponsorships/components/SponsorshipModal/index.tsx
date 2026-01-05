@@ -516,12 +516,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   const handlePayPalApproval = async (data: { orderID: string }) => {
     try {
-      console.log("PayPal Approval - selectedOption:", selectedOption)
-      console.log("PayPal Approval - beneficiary:", beneficiary)
-      console.log("PayPal Approval - amount:", amount)
+      
 
       if (selectedOption === "subscription") {
-        console.log("Creating PayPal subscription...")
+      
 
         const planRes = await fetch("/api/paypal/plan", {
           method: "POST",
@@ -538,7 +536,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         })
 
         const planData = await planRes.json()
-        console.log("Plan creation response:", planData)
 
         if (!planRes.ok) {
           console.error("Plan creation failed:", planData)
@@ -548,7 +545,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         }
 
         const plan_id = planData.plan.id
-        console.log("Plan ID:", plan_id)
 
         const subRes = await fetch("/api/paypal", {
           method: "POST",
@@ -562,7 +558,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         })
 
         const subData = await subRes.json()
-        console.log("Subscription creation response:", subData)
 
         if (!subRes.ok) {
           console.error("Subscription creation failed:", subData)
@@ -576,7 +571,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           (l: PayPalLink) => l.rel === "approve"
         )?.href
 
-        console.log("Approval URL:", approvalUrl)
 
         if (approvalUrl) {
           // Dispatch payment success event before redirecting to PayPal
@@ -591,7 +585,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         throw new Error("No approval link returned from PayPal")
       }
 
-      console.log("Creating one-time payment...")
       // One-time legacy flow
       const response = await fetch("/api/paypal", {
         method: "POST",
