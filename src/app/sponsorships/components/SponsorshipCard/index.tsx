@@ -107,14 +107,23 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       position="relative"
     >
       {/* Card Header: Image with Navigation using ImageCarousel */}
-      <Box position="relative" flexShrink={0} className="group" height="300px" width="100%">
+      <Box 
+        position="relative" 
+        flexShrink={0} 
+        className="group" 
+        height="300px" 
+        minHeight="300px"
+        maxHeight="300px"
+        width="100%" 
+        overflow="hidden"
+      >
         <ImageCarousel
           images={images}
           getImageSrc={getImageSrc}
           getThumbnailSrc={getThumbnailSrc}
           fallbackSrc={placeholderImage}
           alt={beneficiary.name?.split(" ")[0] ?? ""}
-          className="w-full h-full rounded-t-[20px] object-cover"
+          className="w-full h-full rounded-t-[20px]"
           showArrowsOnHover={true}
         />
 
@@ -138,44 +147,48 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         )}
       </Box>
 
-      {/* Card Content */}
+      {/* Card Content - Fixed Layout Structure */}
       <Box
         p={6}
-        flex="1"
         display="flex"
         flexDirection="column"
-        className="items-center text-center justify-center"
+        className="items-center text-center"
+        minHeight="200px"
       >
-        {/* Full Name Heading */}
-        <Text fontSize="xl" fontWeight="bold" mb={3} className="text-gray-800">
-          {beneficiary.name ? 
-            `${beneficiary.name.split(" ")[0]} ${beneficiary.name.split(" ")[2]?.[0] || ""}`.trim()
-            : "Name"
-          }
-        </Text>
+        {/* Full Name Heading - Fixed height to prevent layout shift */}
+        <Box minHeight="32px" mb={3} display="flex" alignItems="center" justifyContent="center">
+          <Text fontSize="xl" fontWeight="bold" className="text-gray-800" lineHeight="1.2">
+            {beneficiary.name ? 
+              `${beneficiary.name.split(" ")[0]} ${beneficiary.name.split(" ")[2]?.[0] || ""}`.trim()
+              : "Name"
+            }
+          </Text>
+        </Box>
 
-        {/* Information Row */}
-        <Flex gap={4} mb={4} flexWrap="wrap" className="text-[#666666]">
-          {age !== null && (
+        {/* Information Row - Fixed minimum height */}
+        <Box minHeight="48px" mb={4} display="flex" alignItems="center" justifyContent="center">
+          <Flex gap={4} flexWrap="wrap" className="text-[#666666]" justifyContent="center">
+            {age !== null && (
+              <Flex align="center" gap={1}>
+                <FaCalendar />
+                <Text fontSize="sm">
+                  {age} years{birthDateIsEstimate ? " (estimated)" : ""}
+                </Text>
+              </Flex>
+            )}
             <Flex align="center" gap={1}>
-              <FaCalendar />
-              <Text fontSize="sm">
-                {age} years{birthDateIsEstimate ? " (estimated)" : ""}
-              </Text>
+              <FaPerson />
+              <Text fontSize="sm">{beneficiary.gender || "Gender"}</Text>
             </Flex>
-          )}
-          <Flex align="center" gap={1}>
-            <FaPerson />
-            <Text fontSize="sm">{beneficiary.gender || "Gender"}</Text>
+            <Flex align="center" gap={1}>
+              <FaLocationDot />
+              <Text fontSize="sm">{beneficiary.country || "Location"}</Text>
+            </Flex>
           </Flex>
-          <Flex align="center" gap={1}>
-            <FaLocationDot />
-            <Text fontSize="sm">{beneficiary.country || "Location"}</Text>
-          </Flex>
-        </Flex>
+        </Box>
 
-        {/* Info Section */}
-        <Box mb={4} flex="1">
+        {/* Biography Section - Fixed minimum height to maintain consistency */}
+        <Box minHeight="84px" width="100%">
           <Text
             fontSize="sm"
             style={{
@@ -186,9 +199,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
               textOverflow: "ellipsis",
               lineHeight: "1.4",
               color: "#666666",
+              minHeight: "84px", // 3 lines × 1.4 line-height × 20px (approx)
             }}
           >
-            {beneficiary?.biography}
+            {beneficiary?.biography || ""}
           </Text>
         </Box>
       </Box>
