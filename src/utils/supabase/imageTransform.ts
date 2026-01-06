@@ -66,7 +66,6 @@ export const getTransformedImageUrl = (
       transform: transformOptions
     })
 
-  console.log('Generated transformed URL:', data.publicUrl, 'for path:', path, 'with options:', transformOptions)
   return data.publicUrl
 }
 
@@ -112,9 +111,8 @@ export const uploadImageForTransformation = async (
   path: string,
   file: File
 ): Promise<string> => {
-  console.log('Uploading image:', file.name, 'to path:', path, 'with type:', file.type)
   
-  const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
     .from(bucket)
     .upload(path, file, {
       cacheControl: '3600',
@@ -127,7 +125,6 @@ export const uploadImageForTransformation = async (
     throw new Error(`Failed to upload image: ${error.message}`)
   }
 
-  console.log('Upload successful:', data)
   return path
 }
 

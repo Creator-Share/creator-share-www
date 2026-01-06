@@ -33,7 +33,8 @@ import { LuFileUp } from "react-icons/lu"
 import { HiX } from "react-icons/hi"
 import MapPicker from "./MapPicker"
 import ActivitiesTable from "../../activities/components/ActivitiesTable"
-import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types"
+import { Beneficiaries, BeneficiaryMedia, BeneficiaryMetadata } from "@/types/admin.types"
+import { Checkbox } from "@/components/ui/checkbox"
 import ProofreadButton from "@/components/ai/ProofreadButton"
 import { toaster } from "@/components/ui/toaster"
 import { dollarsToCents } from "@/utils/currency"
@@ -137,6 +138,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   // Use the appropriate form data based on mode
   const formData = isEditMode ? localFormData : externalFormData || {}
+  const birthDateIsEstimate = Boolean(
+    (formData.metadata as BeneficiaryMetadata | undefined)?.birth_date_is_estimate
+  )
 
   // Environment variable for sponsorship amount
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
@@ -257,6 +261,31 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       externalHandleInputChange(e)
     }
   }
+
+  const updateMetadataField = useCallback(
+    (key: keyof BeneficiaryMetadata | string, value: unknown) => {
+      setHasUnsavedChanges(true)
+      if (isEditMode) {
+        setLocalFormData((prev) => ({
+          ...prev,
+          metadata: { ...(prev.metadata || {}), [key]: value },
+        }))
+      } else if (setExternalFormData) {
+        setExternalFormData((prev: Partial<Beneficiaries>) => ({
+          ...(prev || {}),
+          metadata: {
+            ...(((prev || {}).metadata as BeneficiaryMetadata) || {}),
+            [key]: value,
+          },
+        }))
+      }
+    },
+    [isEditMode, setExternalFormData]
+  )
+
+  const toggleBirthDateEstimate = useCallback(() => {
+    updateMetadataField("birth_date_is_estimate", !birthDateIsEstimate)
+  }, [birthDateIsEstimate, updateMetadataField])
 
   // Select change handler
   const handleSelectChange = (name: string, value: string) => {
@@ -693,7 +722,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         onClose()
       } else if (isEditMode && onSave) {
         // Edit mode
-        const updatedData = { ...localFormData }
+        const mergedMetadata = {
+          ...(localFormData.metadata || {}),
+          birth_date_is_estimate: birthDateIsEstimate,
+        }
+        const updatedData = { ...localFormData, metadata: mergedMetadata }
         const envRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
         const envCents = envRaw ? parseInt(envRaw, 10) : null
         const budgetGoalInCentsFromForm = parseInt(
@@ -910,7 +943,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
               <Field
                 label="Birth Date (Optional)"
-                helperText="Leave blank if unknown"
+                helperText="Leave blank if unknown. Mark as estimated if it is a best guess."
               >
                 <Input
                   name="birth_date"
@@ -921,6 +954,18 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   value={formData.birth_date || ""}
                   disabled={false}
                 />
+                <Checkbox
+                  className="mt-2"
+                  checked={birthDateIsEstimate}
+                  onCheckedChange={(checked) =>
+                    updateMetadataField("birth_date_is_estimate", Boolean(checked))
+                  }
+                  onClick={toggleBirthDateEstimate}
+                  disabled={disabled}
+                  colorPalette="blue"
+                >
+                  Birth date is estimated
+                </Checkbox>
               </Field>
 
               <Field

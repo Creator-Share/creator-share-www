@@ -82,6 +82,46 @@ export const generatePublicUrl = (media: MediaRow): string => {
 }
 
 /**
+ * Generate a thumbnail URL for progressive image loading.
+ * Creates a small, low-quality version for blur-up placeholder effect.
+ * Falls back to the regular image URL if transformation fails.
+ */
+export const generateThumbnailUrl = (media: MediaRow): string | undefined => {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!base) {
+    return undefined
+  }
+
+  const key = getStorageKey(media)
+  const supabase = createClient()
+
+  if (media.type === "IMAGE") {
+    try {
+      // Generate a small, low-quality thumbnail for progressive loading
+      // Supabase's transform API uses /render/image/ endpoint - this is correct!
+      const { data } = supabase.storage
+        .from(STORAGE_BUCKET)
+        .getPublicUrl(key, {
+          transform: {
+            width: 40,
+            height: 40,
+            quality: 20,
+            resize: "cover",
+          },
+        })
+
+      return data.publicUrl
+    } catch (error) {
+      console.warn('Failed to generate thumbnail URL:', error)
+      return undefined
+    }
+  }
+
+  // For videos and other media types, don't generate thumbnails
+  return undefined
+}
+
+/**
  * Generate a public URL directly from a storage key (no bucket name).
  */
 export const getPublicUrlFromKey = (key: string): string => {

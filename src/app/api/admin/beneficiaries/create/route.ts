@@ -30,6 +30,10 @@ export async function POST(req: Request) {
       );
     }
 
+    const birthDateIsEstimate =
+      Boolean(body.birth_date_is_estimate) ||
+      Boolean(body.metadata?.birth_date_is_estimate)
+
     // Sanitize and validate input data
     const data: Partial<Beneficiaries> = {
       name: String(body.name).trim(),
@@ -45,7 +49,10 @@ export async function POST(req: Request) {
       location_geo: body.location_geo || null,
       video_url: body.video_url ? String(body.video_url).trim() : '',
       active_subscriptions: 0,
-      metadata: {},
+      metadata: {
+        ...(body.metadata || {}),
+        birth_date_is_estimate: birthDateIsEstimate,
+      },
       beneficiary_type: 'CHILD' as BeneficiaryType,
       introduction: String(body.biography).trim() // Use biography for introduction
     }

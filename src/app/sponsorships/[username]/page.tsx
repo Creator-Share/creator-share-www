@@ -3,11 +3,11 @@ import React, { useEffect, useState, useCallback } from "react"
 import { Box, Spinner, Flex, Text, Button, Input } from "@chakra-ui/react"
 import { useParams } from "next/navigation"
 import { Beneficiaries } from "@/types"
-import { usePresence } from "@/hooks/usePresence"
 import { FaCalendar, FaUser, FaLocationDot, FaCircleInfo, FaLink, FaShare, FaChevronDown, FaChevronUp } from "react-icons/fa6"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { BeneficiaryMedia } from "@/types/admin.types"
-import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
+import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../hooks/useSponsorship"
 import { useAuthStore } from "@/store/authStore"
 import { paymentOptionsCollection } from "../components/Payments/config"
@@ -47,7 +47,6 @@ export default function FullProfileDynamic() {
   const [hasActivities, setHasActivities] = useState<boolean>(false)
   const [toastCount, setToastCount] = useState(0)
   const [lastToastTime, setLastToastTime] = useState(0)
-  const { joinProfilePresence, leaveProfilePresence } = usePresence()
   const { setSponsorshipInProgress } = useSponsorship()
   const user = useAuthStore((state) => state.user)
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
@@ -153,16 +152,6 @@ export default function FullProfileDynamic() {
     if (username) fetchData()
   }, [username])
 
-  // Join presence when beneficiary is loaded
-  useEffect(() => {
-    if (beneficiary?.id) {
-      joinProfilePresence(beneficiary.id)
-      return () => {
-        leaveProfilePresence(beneficiary.id)
-      }
-    }
-  }, [beneficiary?.id, joinProfilePresence, leaveProfilePresence])
-
   // Load images and check activities when beneficiary is loaded
   useEffect(() => {
     if (!beneficiary?.id) return
@@ -229,7 +218,21 @@ export default function FullProfileDynamic() {
     return image.image_url || ""
   }
 
-  const fallbackImageSrc = "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+  // Helper function for generating thumbnail URLs for progressive loading
+  // Returns undefined if thumbnail generation fails, which will skip progressive loading
+  const getThumbnailSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generateThumbnailUrl(image as unknown as MediaRow)
+      } catch {
+        // Silently fail and skip thumbnail - component will use full image
+        return undefined
+      }
+    }
+    return undefined
+  }
+
+  const fallbackImageSrc = PERSON_PLACEHOLDER_PATH
 
   if (loading) {
     return (
@@ -599,6 +602,7 @@ export default function FullProfileDynamic() {
                 <ImageCarousel
                   images={images}
                   getImageSrc={getImageSrc}
+                  getThumbnailSrc={getThumbnailSrc}
                   fallbackSrc={fallbackImageSrc}
                   alt={beneficiary.name || "Child"}
                   className="rounded-2xl aspect-[4/5] object-cover"
@@ -628,7 +632,12 @@ export default function FullProfileDynamic() {
                           (Date.now() -
                             new Date(beneficiary.birth_date).getTime()) /
                             (365.25 * 24 * 60 * 60 * 1000)
-                        )} years old`
+                        )} years old${
+                          (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
+                            ?.birth_date_is_estimate
+                            ? " (estimated)"
+                            : ""
+                        }`
                       : "Age unknown"}
                   </Text>
                 </Flex>

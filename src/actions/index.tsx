@@ -36,6 +36,7 @@ export async function fetchActivitiesByBeneficiaryId(beneficiaryId: string) {
     .from("activities")
     .select("*")
     .eq("beneficiary_id", beneficiaryId)
+    .eq("is_public", true) // Only fetch public activities for public display
     .order("created_at", { ascending: false })
 
   if (error) {

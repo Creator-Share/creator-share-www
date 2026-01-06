@@ -46,11 +46,10 @@ import { useAuthStore } from "@/store/authStore"
 import { paymentOptionsCollection } from "../Payments/config"
 import { Button } from "@/components/ui/button"
 import { BeneficiaryMedia } from "@/types/admin.types"
-import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
+import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
-import { usePresence } from "@/hooks/usePresence"
-import ViewerIndicator from "@/components/presence/ViewerIndicator"
 
 interface BeneficiaryModalProps {
   open: boolean
@@ -67,7 +66,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [lastToastTime, setLastToastTime] = useState(0)
   const user = useAuthStore((state) => state.user)
   const { setSponsorshipInProgress } = useSponsorship()
-  const { joinProfilePresence, leaveProfilePresence } = usePresence()
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
   const publicHardcodedCents = publicHardcodedRaw
     ? parseInt(publicHardcodedRaw, 10)
@@ -78,6 +76,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       : beneficiary.budget_goal || 0
   const remainingAmount =
     (effectiveGoalCents - (beneficiary.budget_raised || 0)) / 100
+  const birthDateIsEstimate = Boolean(
+    (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
+      ?.birth_date_is_estimate
+  )
 
   const minimumAmount = 10
   const maxSelectableAmount =
@@ -102,16 +104,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [hasActivities, setHasActivities] = useState<boolean>(false)
 
   const [, setPrimaryImageUrl] = useState<string | null>(null)
-
-  // Join presence when modal opens
-  useEffect(() => {
-    if (open && beneficiary?.id) {
-      joinProfilePresence(beneficiary.id)
-      return () => {
-        leaveProfilePresence(beneficiary.id)
-      }
-    }
-  }, [open, beneficiary?.id, joinProfilePresence, leaveProfilePresence])
 
   // Clear sponsorship state when modal closes
   useEffect(() => {
@@ -204,8 +196,21 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     return image.image_url || ""
   }
 
-  const fallbackImageSrc =
-    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+  // Helper function for generating thumbnail URLs for progressive loading
+  // Returns undefined if thumbnail generation fails, which will skip progressive loading
+  const getThumbnailSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generateThumbnailUrl(image as unknown as MediaRow)
+      } catch {
+        // Silently fail and skip thumbnail - component will use full image
+        return undefined
+      }
+    }
+    return undefined
+  }
+
+  const fallbackImageSrc = PERSON_PLACEHOLDER_PATH
 
   const alreadyFulfilled =
     beneficiary.status === "Budget Fulfilled" ||
@@ -391,7 +396,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         beneficiaryName: beneficiary.name,
         beneficiaryImage:
           primaryImageUrl ||
-          "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y=",
+          PERSON_PLACEHOLDER_PATH,
         amount:
           publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
         paymentType: selectedOption,
@@ -511,12 +516,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   const handlePayPalApproval = async (data: { orderID: string }) => {
     try {
-      console.log("PayPal Approval - selectedOption:", selectedOption)
-      console.log("PayPal Approval - beneficiary:", beneficiary)
-      console.log("PayPal Approval - amount:", amount)
+      
 
       if (selectedOption === "subscription") {
-        console.log("Creating PayPal subscription...")
+      
 
         const planRes = await fetch("/api/paypal/plan", {
           method: "POST",
@@ -533,7 +536,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         })
 
         const planData = await planRes.json()
-        console.log("Plan creation response:", planData)
 
         if (!planRes.ok) {
           console.error("Plan creation failed:", planData)
@@ -543,7 +545,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         }
 
         const plan_id = planData.plan.id
-        console.log("Plan ID:", plan_id)
 
         const subRes = await fetch("/api/paypal", {
           method: "POST",
@@ -557,7 +558,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         })
 
         const subData = await subRes.json()
-        console.log("Subscription creation response:", subData)
 
         if (!subRes.ok) {
           console.error("Subscription creation failed:", subData)
@@ -571,7 +571,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           (l: PayPalLink) => l.rel === "approve"
         )?.href
 
-        console.log("Approval URL:", approvalUrl)
 
         if (approvalUrl) {
           // Dispatch payment success event before redirecting to PayPal
@@ -586,7 +585,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         throw new Error("No approval link returned from PayPal")
       }
 
-      console.log("Creating one-time payment...")
       // One-time legacy flow
       const response = await fetch("/api/paypal", {
         method: "POST",
@@ -705,11 +703,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             <Text className="text-xl md:text-2xl font-bold text-gray-800">
               Sponsorship Details
             </Text>
-            <ViewerIndicator
-              profileId={beneficiary.id}
-              variant="badge"
-              showWhenZero={false}
-            />
           </Flex>
           <DialogCloseTrigger>
             <Box className="text-2xl font-normal cursor-pointer hover:bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center transition-colors">
@@ -747,6 +740,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   <ImageCarousel
                     images={images}
                     getImageSrc={getImageSrc}
+                    getThumbnailSrc={getThumbnailSrc}
                     fallbackSrc={fallbackImageSrc}
                     alt={beneficiary.name || "Child"}
                     className="rounded-2xl aspect-[4/5] object-cover"
@@ -776,7 +770,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                             (Date.now() -
                               new Date(beneficiary.birth_date).getTime()) /
                               (365.25 * 24 * 60 * 60 * 1000)
-                          )} years old`
+                          )} years old${birthDateIsEstimate ? " (estimated)" : ""}`
                         : "Age unknown"}
                     </Text>
                   </Flex>

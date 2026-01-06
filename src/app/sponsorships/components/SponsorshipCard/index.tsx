@@ -7,9 +7,9 @@ import { calculateAge } from "@/utils/ageCalculator"
 import { BeneficiaryCardProps } from "@/types/propTypes"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
-import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
-import ViewerIndicator from "@/components/presence/ViewerIndicator"
+import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -19,11 +19,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiaryType = "CHILD",
 }) => {
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
-  // Note: Presence tracking removed from card list view
-  // Only track presence when viewing the actual profile (modal or detail page)
 
-  const placeholderImage =
-    "https://media.istockphoto.com/id/1288129985/vector/missing-image-of-a-person-placeholder.jpg?s=612x612&w=0&k=20&c=9kE777krx5mrFHsxx02v60ideRWvIgI1RWzR1X4MG2Y="
+  const placeholderImage = PERSON_PLACEHOLDER_PATH
 
   useEffect(() => {
     const fetchImages = async () => {
@@ -64,10 +61,28 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
     return image.image_url || ""
   }
 
+  // Helper function for generating thumbnail URLs for progressive loading
+  // Returns undefined if thumbnail generation fails, which will skip progressive loading
+  const getThumbnailSrc = (image: { id?: string; image_url?: string }) => {
+    if (image.id) {
+      try {
+        return generateThumbnailUrl(image as unknown as MediaRow)
+      } catch {
+        // Silently fail and skip thumbnail - component will use full image
+        return undefined
+      }
+    }
+    return undefined
+  }
+
   // Primary content - only calculate age if birth_date exists
   const age = beneficiary.birth_date 
     ? calculateAge(new Date(beneficiary.birth_date).toISOString())
     : null
+  const birthDateIsEstimate = Boolean(
+    (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
+      ?.birth_date_is_estimate
+  )
   
   return (
     <Box
@@ -92,24 +107,25 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       position="relative"
     >
       {/* Card Header: Image with Navigation using ImageCarousel */}
-      <Box position="relative" flexShrink={0} className="group">
+      <Box 
+        position="relative" 
+        flexShrink={0} 
+        className="group" 
+        height="300px" 
+        minHeight="300px"
+        maxHeight="300px"
+        width="100%" 
+        overflow="hidden"
+      >
         <ImageCarousel
           images={images}
           getImageSrc={getImageSrc}
+          getThumbnailSrc={getThumbnailSrc}
           fallbackSrc={placeholderImage}
           alt={beneficiary.name?.split(" ")[0] ?? ""}
-          className="w-full h-[300px] rounded-t-[20px] object-cover"
+          className="w-full h-full rounded-t-[20px]"
           showArrowsOnHover={true}
         />
-
-        {/* Viewer Indicator */}
-        <Box position="absolute" top="12px" left="12px" zIndex={10}>
-          <ViewerIndicator
-            profileId={beneficiary.id}
-            variant="badge"
-            showWhenZero={false}
-          />
-        </Box>
 
         {/* Goal Badge */}
         {!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && (
@@ -131,42 +147,48 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         )}
       </Box>
 
-      {/* Card Content */}
+      {/* Card Content - Fixed Layout Structure */}
       <Box
         p={6}
-        flex="1"
         display="flex"
         flexDirection="column"
-        className="items-center text-center justify-center"
+        className="items-center text-center"
+        minHeight="200px"
       >
-        {/* Full Name Heading */}
-        <Text fontSize="xl" fontWeight="bold" mb={3} className="text-gray-800">
-          {beneficiary.name ? 
-            `${beneficiary.name.split(" ")[0]} ${beneficiary.name.split(" ")[2]?.[0] || ""}`.trim()
-            : "Name"
-          }
-        </Text>
+        {/* Full Name Heading - Fixed height to prevent layout shift */}
+        <Box minHeight="32px" mb={3} display="flex" alignItems="center" justifyContent="center">
+          <Text fontSize="xl" fontWeight="bold" className="text-gray-800" lineHeight="1.2">
+            {beneficiary.name ? 
+              `${beneficiary.name.split(" ")[0]} ${beneficiary.name.split(" ")[2]?.[0] || ""}`.trim()
+              : "Name"
+            }
+          </Text>
+        </Box>
 
-        {/* Information Row */}
-        <Flex gap={4} mb={4} flexWrap="wrap" className="text-[#666666]">
-          {age !== null && (
+        {/* Information Row - Fixed minimum height */}
+        <Box minHeight="48px" mb={4} display="flex" alignItems="center" justifyContent="center">
+          <Flex gap={4} flexWrap="wrap" className="text-[#666666]" justifyContent="center">
+            {age !== null && (
+              <Flex align="center" gap={1}>
+                <FaCalendar />
+                <Text fontSize="sm">
+                  {age} years{birthDateIsEstimate ? " (estimated)" : ""}
+                </Text>
+              </Flex>
+            )}
             <Flex align="center" gap={1}>
-              <FaCalendar />
-              <Text fontSize="sm">{age} years</Text>
+              <FaPerson />
+              <Text fontSize="sm">{beneficiary.gender || "Gender"}</Text>
             </Flex>
-          )}
-          <Flex align="center" gap={1}>
-            <FaPerson />
-            <Text fontSize="sm">{beneficiary.gender || "Gender"}</Text>
+            <Flex align="center" gap={1}>
+              <FaLocationDot />
+              <Text fontSize="sm">{beneficiary.country || "Location"}</Text>
+            </Flex>
           </Flex>
-          <Flex align="center" gap={1}>
-            <FaLocationDot />
-            <Text fontSize="sm">{beneficiary.country || "Location"}</Text>
-          </Flex>
-        </Flex>
+        </Box>
 
-        {/* Info Section */}
-        <Box mb={4} flex="1">
+        {/* Biography Section - Fixed minimum height to maintain consistency */}
+        <Box minHeight="84px" width="100%">
           <Text
             fontSize="sm"
             style={{
@@ -177,9 +199,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
               textOverflow: "ellipsis",
               lineHeight: "1.4",
               color: "#666666",
+              minHeight: "84px", // 3 lines × 1.4 line-height × 20px (approx)
             }}
           >
-            {beneficiary?.biography}
+            {beneficiary?.biography || ""}
           </Text>
         </Box>
       </Box>

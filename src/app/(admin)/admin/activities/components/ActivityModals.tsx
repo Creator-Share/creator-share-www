@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react"
-import { Button, Input, Textarea, createListCollection } from "@chakra-ui/react"
+import { Button, Input, Textarea, createListCollection, Box, Flex, Text, Spinner } from "@chakra-ui/react"
 import Image from "next/image"
 import { Activity } from "@/types/admin.types"
 import ProofreadButton from "@/components/ai/ProofreadButton"
@@ -15,7 +15,9 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { HiUpload } from "react-icons/hi"
+import { createClient } from "@/utils/supabase/client"
 
 const activityTypeCollection = createListCollection({
   items: [
@@ -24,6 +26,16 @@ const activityTypeCollection = createListCollection({
     { value: "SUBSCRIPTION", label: "SUBSCRIPTION" },
   ],
 })
+
+interface SponsorInfo {
+  subscriptionId: string
+  userId: string | null
+  email: string
+  name: string | null
+  amount: number | null
+  interval: string | null
+  emailNotification: boolean | null
+}
 
 interface CreateModalProps {
   open: boolean
@@ -56,9 +68,17 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
 }) => {
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [videoFiles, setVideoFiles] = useState<File[]>([])
-
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [videoPreviews, setVideoPreviews] = useState<string[]>([])
+  
+  // Sponsor and messaging features
+  const [isPublic, setIsPublic] = useState(false)
+  const [sendToSponsors, setSendToSponsors] = useState(false)
+  const [sponsors, setSponsors] = useState<SponsorInfo[]>([])
+  const [selectedSponsorIds, setSelectedSponsorIds] = useState<Set<string>>(new Set())
+  const [loadingSponsors, setLoadingSponsors] = useState(false)
+  
+  const supabase = createClient()
 
   useEffect(() => {
     if (!open) {
@@ -66,9 +86,41 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       setVideoFiles([])
       setImagePreviews([])
       setVideoPreviews([])
+      setIsPublic(false)
+      setSendToSponsors(false)
+      setSponsors([])
+      setSelectedSponsorIds(new Set())
       return
     }
   }, [open])
+  
+  // Fetch sponsors when beneficiary is selected and sendToSponsors is enabled
+  useEffect(() => {
+    const fetchSponsors = async () => {
+      if (!open || !beneficiaryId || !sendToSponsors) {
+        setSponsors([])
+        return
+      }
+
+      setLoadingSponsors(true)
+      try {
+        const res = await fetch(
+          `/api/admin/messaging/sponsors?beneficiary_id=${beneficiaryId}`,
+        )
+        const data = await res.json()
+        setSponsors(data.sponsors || [])
+        // Auto-select all sponsors by default
+        setSelectedSponsorIds(new Set((data.sponsors || []).map((s: SponsorInfo) => s.subscriptionId)))
+      } catch (error) {
+        console.error("Failed to fetch sponsors:", error)
+        setSponsors([])
+      } finally {
+        setLoadingSponsors(false)
+      }
+    }
+
+    fetchSponsors()
+  }, [open, beneficiaryId, sendToSponsors, supabase])
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -123,13 +175,38 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
     setVideoPreviews(newPreviews)
   }
 
+  const handleToggleSponsor = (subscriptionId: string) => {
+    const newSet = new Set(selectedSponsorIds)
+    if (newSet.has(subscriptionId)) {
+      newSet.delete(subscriptionId)
+    } else {
+      newSet.add(subscriptionId)
+    }
+    setSelectedSponsorIds(newSet)
+  }
+
+  const handleSelectAllSponsors = () => {
+    if (selectedSponsorIds.size === sponsors.length) {
+      setSelectedSponsorIds(new Set())
+    } else {
+      setSelectedSponsorIds(new Set(sponsors.map((s) => s.subscriptionId)))
+    }
+  }
+
   const handleCreate = () => {
     const formData = new FormData()
     formData.append("title", title)
     formData.append("description", description)
     formData.append("activity_type", activityType)
-    formData.append("activity_source", "admin") // Admin manually creates activity
+    formData.append("activity_source", "admin")
     formData.append("beneficiary_id", beneficiaryId)
+    formData.append("is_public", isPublic.toString())
+    
+    // Add sponsor selection if sending emails
+    if (sendToSponsors) {
+      formData.append("selected_sponsor_ids", Array.from(selectedSponsorIds).join(","))
+    }
+    
     imageFiles.forEach((file) => formData.append("images", file))
     videoFiles.forEach((file) => formData.append("videos", file))
     onCreate(formData)
@@ -155,8 +232,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           background: "white",
           padding: 24,
           borderRadius: 8,
-          minWidth: 350,
-          maxWidth: "90vw",
+          width: "min(1200px, 90vw)",
           maxHeight: "90vh",
           overflowY: "auto",
           boxShadow: "0 2px 16px rgba(0,0,0,0.2)",
@@ -166,6 +242,113 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           style={{ fontWeight: "bold", fontSize: "1.125rem", marginBottom: 16 }}
         >
           Create Activity
+        </div>
+
+                {/* Public/Private Toggle */}
+                <div style={{ marginBottom: 12, padding: 12, background: "#f3f4f6", borderRadius: 8 }}>
+          <Flex align="center" gap={3}>
+            <Checkbox
+              checked={isPublic}
+              onCheckedChange={(checked) => setIsPublic(!!checked)}
+            />
+            <Box flex={1}>
+              <Text fontWeight="semibold" fontSize="sm">Make this activity public</Text>
+              <Text fontSize="xs" color="gray.600">
+                Public activities appear on the beneficiary's profile page
+              </Text>
+            </Box>
+            <Box
+              px={2}
+              py={1}
+              borderRadius={4}
+              fontWeight="semibold"
+              fontSize="xs"
+              bg={isPublic ? "green.100" : "gray.200"}
+              color={isPublic ? "green.800" : "gray.600"}
+            >
+              {isPublic ? "PUBLIC" : "PRIVATE"}
+            </Box>
+          </Flex>
+        </div>
+
+        {/* Send to Sponsors Toggle */}
+        <div style={{ marginBottom: 12, padding: 12, background: "#eff6ff", borderRadius: 8 }}>
+          <Flex align="center" gap={3}>
+            <Checkbox
+              checked={sendToSponsors}
+              onCheckedChange={(checked) => setSendToSponsors(!!checked)}
+            />
+            <Box flex={1}>
+              <Text fontWeight="semibold" fontSize="sm">Send email notifications to sponsors</Text>
+              <Text fontSize="xs" color="gray.600">
+                Email this update to selected sponsors
+              </Text>
+            </Box>
+          </Flex>
+          
+          {/* Sponsor Selection */}
+          {sendToSponsors && (
+            <Box mt={3} p={3} bg="white" borderRadius={6} border="1px solid #e5e7eb">
+              <Flex justify="space-between" align="center" mb={2}>
+                <Text fontSize="sm" fontWeight="medium">
+                  Sponsors ({sponsors.length})
+                </Text>
+                {sponsors.length > 0 && (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={handleSelectAllSponsors}
+                    colorScheme="blue"
+                  >
+                    {selectedSponsorIds.size === sponsors.length
+                      ? "Deselect All"
+                      : "Select All"}
+                  </Button>
+                )}
+              </Flex>
+              
+              {loadingSponsors ? (
+                <Flex justify="center" py={4}>
+                  <Spinner size="sm" />
+                </Flex>
+              ) : sponsors.length === 0 ? (
+                <Text fontSize="sm" color="gray.500">
+                  No sponsors found for this beneficiary
+                </Text>
+              ) : (
+                <Box maxH="200px" overflowY="auto" className="space-y-2">
+                  {sponsors.map((sponsor) => (
+                    <Flex
+                      key={sponsor.subscriptionId}
+                      align="center"
+                      gap={2}
+                      p={2}
+                      borderRadius={4}
+                      _hover={{ bg: "gray.50" }}
+                    >
+                      <Checkbox
+                        checked={selectedSponsorIds.has(sponsor.subscriptionId)}
+                        onCheckedChange={() => handleToggleSponsor(sponsor.subscriptionId)}
+                      />
+                      <Box flex={1}>
+                        <Text fontSize="sm" fontWeight="medium">
+                          {sponsor.name || "Unknown"}
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          {sponsor.email}
+                        </Text>
+                      </Box>
+                      {sponsor.emailNotification === false && (
+                        <Text fontSize="xs" color="gray.400" fontStyle="italic">
+                          (Notifications disabled)
+                        </Text>
+                      )}
+                    </Flex>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          )}
         </div>
         <SelectRoot
           collection={activityTypeCollection}
@@ -222,25 +405,14 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload Images</label>
           <FileUploadRoot
-            key={`images-${imageFiles.map(f => `${f.name}-${f.size}`).join('|')}`}
             onFileChange={(fileDetails) => {
               const newFiles = fileDetails.acceptedFiles
               
-              // Clean up old preview URLs that are no longer in the list
-              imagePreviews.forEach((url, index) => {
-                if (!newFiles[index] || newFiles[index] !== imageFiles[index]) {
-                  URL.revokeObjectURL(url)
-                }
-              })
+              // Revoke all old URLs
+              imagePreviews.forEach(url => URL.revokeObjectURL(url))
               
-              // Create new preview URLs for new files
-              const newUrls = newFiles.map((file, index) => {
-                // Reuse existing URL if file hasn't changed
-                if (imageFiles[index] === file && imagePreviews[index]) {
-                  return imagePreviews[index]
-                }
-                return URL.createObjectURL(file)
-              })
+              // Create fresh URLs for all files
+              const newUrls = newFiles.map(file => URL.createObjectURL(file))
               
               setImageFiles(newFiles)
               setImagePreviews(newUrls)
@@ -320,25 +492,14 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload Videos</label>
           <FileUploadRoot
-            key={`videos-${videoFiles.map(f => `${f.name}-${f.size}`).join('|')}`}
             onFileChange={(fileDetails) => {
               const newFiles = fileDetails.acceptedFiles
               
-              // Clean up old preview URLs that are no longer in the list
-              videoPreviews.forEach((url, index) => {
-                if (!newFiles[index] || newFiles[index] !== videoFiles[index]) {
-                  URL.revokeObjectURL(url)
-                }
-              })
+              // Revoke all old URLs
+              videoPreviews.forEach(url => URL.revokeObjectURL(url))
               
-              // Create new preview URLs for new files
-              const newUrls = newFiles.map((file, index) => {
-                // Reuse existing URL if file hasn't changed
-                if (videoFiles[index] === file && videoPreviews[index]) {
-                  return videoPreviews[index]
-                }
-                return URL.createObjectURL(file)
-              })
+              // Create fresh URLs for all files
+              const newUrls = newFiles.map(file => URL.createObjectURL(file))
               
               setVideoFiles(newFiles)
               setVideoPreviews(newUrls)

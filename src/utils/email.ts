@@ -1,4 +1,6 @@
 import nodemailer from "nodemailer"
+import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { createServiceRoleClient } from "@/utils/supabase/server"
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
@@ -9,6 +11,24 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASSWORD,
   },
 })
+
+/**
+ * Email Deliverability Best Practices:
+ * 
+ * For optimal email deliverability, ensure your SMTP server is properly configured:
+ * 1. SPF (Sender Policy Framework) records in DNS
+ * 2. DKIM (DomainKeys Identified Mail) signatures
+ * 3. DMARC (Domain-based Message Authentication) policy
+ * 4. Reverse DNS (PTR) records pointing back to your domain
+ * 5. Proper FROM address matching your domain
+ * 6. Consistent sender reputation (avoid spam triggers)
+ * 
+ * The current configuration uses:
+ * - Secure connections (TLS/SSL) via EMAIL_SECURE
+ * - Proper FROM address from EMAIL_FROM env var
+ * - Error handling and logging for troubleshooting
+ * - Image URLs use production URLs (not localhost) for email client compatibility
+ */
 
 interface SendEmailParams {
   to: string
@@ -44,6 +64,65 @@ export const sendEmail = async ({
   }
 }
 
+/**
+ * Get the first image URL for a beneficiary
+ * Uses service role client for database access in webhook context
+ */
+async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | null> {
+  try {
+    // Use service role client for email operations (no user session in webhook context)
+    const supabase = createServiceRoleClient()
+    
+    // Query media table directly for images
+    const { data: mediaData, error } = await supabase
+      .from("media")
+      .select("*")
+      .eq("parent_id", beneficiaryId)
+      .eq("type", "IMAGE")
+      .order("weight", { ascending: false })
+      .limit(1)
+
+    if (error) {
+      console.error(`[Email] Failed to fetch images for beneficiary ${beneficiaryId}:`, error)
+      return null
+    }
+
+    if (!mediaData || mediaData.length === 0) {
+      return null
+    }
+
+    const firstImage = mediaData[0] as unknown as MediaRow
+    
+    // Try to generate public URL using the media utility
+    try {
+      const publicUrl = generatePublicUrl(firstImage)
+      return publicUrl
+    } catch (urlError) {
+      console.error(`[Email] Failed to generate public URL for beneficiary ${beneficiaryId}:`, urlError)
+      return null
+    }
+  } catch (error) {
+    console.error(`[Email] Error fetching image for beneficiary ${beneficiaryId}:`, error)
+    return null
+  }
+}
+
+/**
+ * Helper function to get the logo URL using NEXT_PUBLIC_BASE_URL
+ * Falls back to production URL if localhost is detected to ensure emails work
+ */
+function getLogoUrl(): string {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://creator-share-www.vercel.app'
+  
+  // If localhost is detected, use production URL instead
+  // Email clients cannot access localhost URLs
+  if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
+    return 'https://creator-share-www.vercel.app/logo_text.png'
+  }
+  
+  return `${baseUrl.replace(/\/$/, '')}/logo_text.png`
+}
+
 export const sendPartnershipConfirmationEmail = async (
   email: string,
   project: string,
@@ -56,11 +135,12 @@ export const sendPartnershipConfirmationEmail = async (
   const formattedAmount = (amount / 100).toFixed(2)
   const intervalText = interval === "month" ? "monthly" : "yearly"
   const greeting = partnerName ? `Dear ${partnerName},` : "Dear Partner,"
+  const logoUrl = getLogoUrl()
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
@@ -99,6 +179,7 @@ export const sendSponsorshipConfirmationEmail = async (
   amount: number,
   interval: string,
   sponsorName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `Thank you for sponsoring ${childName}!`
 
@@ -106,12 +187,36 @@ export const sendSponsorshipConfirmationEmail = async (
   const intervalText = interval === "month" ? "monthly" : "yearly"
   const stripePortalUrl = "https://stripe.creatorshare.com"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${childName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    }
+  } else {
+    console.warn(`[Email] No beneficiaryId provided for child: ${childName}`)
+  }
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      
+      ${childImageHtml}
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
@@ -148,12 +253,157 @@ export const sendSponsorshipConfirmationEmail = async (
   })
 }
 
+export const sendBlindSponsorshipConfirmationEmail = async (
+  email: string,
+  amount: number,
+  interval: string,
+  blindLabel: string,
+  sponsorName?: string | null,
+) => {
+  const subject = `Thank you for your blind sponsorship!`
+
+  const formattedAmount = (amount / 100).toFixed(2)
+  const intervalText = interval === "month" ? "monthly" : "yearly"
+  const stripePortalUrl = "https://stripe.creatorshare.com"
+  const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+  const logoUrl = getLogoUrl()
+
+  const html = `
+    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+      </div>
+      
+      <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> ${intervalText} to support ${blindLabel}.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">We'll match you with a child who needs support, and you'll receive updates as soon as your sponsorship is matched.</p>
+      </div>
+      
+      <div style="border-left: 4px solid #1C3C8C; padding-left: 1rem; margin-bottom: 1.5rem;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">Your support makes a significant difference in providing education and opportunities for children in need.</p>
+        <p style="font-size: 1rem; line-height: 1.5;">We'll keep you updated once we've matched you with a child and share their progress with you.</p>
+      </div>
+      
+      <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Manage your subscription, update payment methods, or view billing history:</p>
+        <a href="${stripePortalUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Manage Subscription</a>
+      </div>
+      
+      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Warm regards,</p>
+        <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
+      </div>
+      
+      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
+        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
+      </div>
+    </div>
+  `
+
+  return sendEmail({
+    to: email,
+    subject,
+    html,
+  })
+}
+
+export const sendBlindSponsorshipMatchedEmail = async (
+  email: string,
+  childName: string,
+  amount: number,
+  interval: string,
+  sponsorName?: string | null,
+  childUsername?: string | null,
+  beneficiaryId?: string | null,
+) => {
+  const subject = `Great news! You've been matched with ${childName}!`
+
+  const formattedAmount = (amount / 100).toFixed(2)
+  const intervalText = interval === "month" ? "monthly" : "yearly"
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
+  const profileUrl = childUsername 
+    ? `${baseUrl}/sponsorships/${childUsername}`
+    : `${baseUrl}/sponsorships`
+  const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${childName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Blind sponsorship matched - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    }
+  } else {
+    console.warn(`[Email] Blind sponsorship matched - No beneficiaryId provided for child: ${childName}`)
+  }
+
+  const html = `
+    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+      </div>
+      
+      ${childImageHtml}
+      
+      <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #22c55e;">
+        <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">You've Been Matched! 🎉</h2>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Great news! We've matched your blind sponsorship with <strong style="color: #1C3C8C;">${childName}</strong>.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your ${intervalText} contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> will now go directly to supporting ${childName}'s education and well-being.</p>
+      </div>
+      
+      <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h3 style="font-size: 1.25rem; font-weight: 600; margin-top: 0; color: #1C3C8C;">What's Next?</h3>
+        <ul style="font-size: 1rem; line-height: 1.5;">
+          <li style="margin-bottom: 0.5rem;">You'll receive regular updates about ${childName}'s progress</li>
+          <li style="margin-bottom: 0.5rem;">We'll share photos and stories of how your support is making a difference</li>
+          <li style="margin-bottom: 0.5rem;">You can view ${childName}'s profile and learn more about them</li>
+        </ul>
+      </div>
+      
+      <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">View ${childName}'s profile and learn more about how your sponsorship is helping:</p>
+        <a href="${profileUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">View ${childName}'s Profile</a>
+      </div>
+      
+      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Thank you for your generous support,</p>
+        <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
+      </div>
+      
+      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
+        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
+      </div>
+    </div>
+  `
+
+  return sendEmail({
+    to: email,
+    subject,
+    html,
+  })
+}
+
 export const sendPaymentFailedEmail = async (
   email: string,
   childName: string,
   amount: number,
   nextAttemptDate: Date | null,
   sponsorName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `Action Required: Your Sponsorship Payment for ${childName} Failed`
 
@@ -162,12 +412,36 @@ export const sendPaymentFailedEmail = async (
     ? `We'll automatically try again on ${nextAttemptDate.toLocaleDateString()}.`
     : "We'll automatically try again soon."
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${childName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Payment failed - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    }
+  } else {
+    console.warn(`[Email] Payment failed - No beneficiaryId provided for child: ${childName}`)
+  }
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      
+      ${childImageHtml}
       
       <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">
         <h2 style="color: #dc2626; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Payment Failed</h2>
@@ -210,14 +484,39 @@ export const sendSubscriptionConfirmationEmail = async (
   email: string,
   beneficiaryName: string,
   subscriberName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `You're subscribed to updates for ${beneficiaryName}!`
   const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${beneficiaryName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Subscription confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`)
+    }
+  } else {
+    console.warn(`[Email] Subscription confirmation - No beneficiaryId provided for beneficiary: ${beneficiaryName}`)
+  }
+
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      ${childImageHtml}
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Subscription Confirmed!</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
@@ -254,9 +553,32 @@ export const sendActivityNotificationEmail = async (
     videoUrls?: string[]
   },
   subscriberName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `New update on ${beneficiary.name}`
   const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary profile image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${beneficiary.name}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Activity notification - No profile image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiary.name}`)
+    }
+  } else {
+    console.warn(`[Email] Activity notification - No beneficiaryId provided for beneficiary: ${beneficiary.name}`)
+  }
   
   // Generate image HTML if images are provided
   let imagesHtml = ""
@@ -323,8 +645,9 @@ export const sendActivityNotificationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      ${childImageHtml}
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">New Update for ${
           beneficiary.name
@@ -366,6 +689,7 @@ export const sendGoalFulfilledEmail = async (
   email: string,
   beneficiary: { name: string; budget_goal: number },
   subscriberName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `Goal Fulfilled for ${beneficiary.name}!`
   const formattedGoal = beneficiary.budget_goal
@@ -374,11 +698,35 @@ export const sendGoalFulfilledEmail = async (
       })}`
     : "the goal amount"
   const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${beneficiary.name}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Goal fulfilled - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiary.name}`)
+    }
+  } else {
+    console.warn(`[Email] Goal fulfilled - No beneficiaryId provided for beneficiary: ${beneficiary.name}`)
+  }
+
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      ${childImageHtml}
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Goal Fulfilled!</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
@@ -419,16 +767,41 @@ export const sendBudgetFulfilledRejectionEmail = async (
   beneficiaryName: string,
   amount: number,
   sponsorName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `Thank You - ${beneficiaryName} Has Been Fully Sponsored!`
   const formattedAmount = (amount / 100).toFixed(2)
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Friend,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${beneficiaryName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Budget fulfilled rejection - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`)
+    }
+  } else {
+    console.warn(`[Email] Budget fulfilled rejection - No beneficiaryId provided for beneficiary: ${beneficiaryName}`)
+  }
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      
+      ${childImageHtml}
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #10b981;">
         <h2 style="color: #10b981; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Good News - ${beneficiaryName} is Fully Sponsored!</h2>
@@ -497,16 +870,41 @@ export const sendManagerSponsorshipNotificationEmail = async (
   interval: string,
   customerEmail?: string | null,
   customerName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `New Sponsorship Received for ${childName}`
   const formattedAmount = (amount / 100).toFixed(2)
   const intervalText = interval === "month" ? "monthly" : "yearly"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${childName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Manager notification - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    }
+  } else {
+    console.warn(`[Email] Manager notification - No beneficiaryId provided for child: ${childName}`)
+  }
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      
+      ${childImageHtml}
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">New Sponsorship Received!</h2>
@@ -542,17 +940,42 @@ export const sendMonthlyPaymentConfirmationEmail = async (
   childName: string,
   amount: number,
   sponsorName?: string | null,
+  beneficiaryId?: string | null,
 ) => {
   const subject = `Payment Confirmation: Your Sponsorship for ${childName}`
   const formattedAmount = (amount / 100).toFixed(2)
   const stripePortalUrl = "https://stripe.creatorshare.com"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
+  const logoUrl = getLogoUrl()
+
+  // Fetch beneficiary image if beneficiaryId is provided
+  let childImageHtml = ""
+  if (beneficiaryId) {
+    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
+    if (childImageUrl) {
+      childImageHtml = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <img 
+            src="${childImageUrl}" 
+            alt="${childName}" 
+            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
+          />
+        </div>
+      `
+    } else {
+      console.warn(`[Email] Monthly payment confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+    }
+  } else {
+    console.warn(`[Email] Monthly payment confirmation - No beneficiaryId provided for child: ${childName}`)
+  }
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
+      
+      ${childImageHtml}
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Payment Confirmed</h2>
@@ -610,7 +1033,7 @@ export const sendSponsorshipCancellationNotificationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="https://creator-share-www.vercel.app/logo_text.svg" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">

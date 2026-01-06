@@ -348,6 +348,10 @@ const ChildrenTable = () => {
 
     try {
       // Send data as JSON
+      const birthDateIsEstimate =
+        Boolean(formData.metadata?.birth_date_is_estimate) ||
+        Boolean((formData as { birth_date_is_estimate?: boolean }).birth_date_is_estimate)
+
       const dataToSend = {
         name: formData.name,
         username: formData.username,
@@ -360,6 +364,10 @@ const ChildrenTable = () => {
         country: formData.country,
         location_str: formData.location_str || "",
         location_geo: formData.location_geo || null,
+        metadata: {
+          ...(formData.metadata || {}),
+          birth_date_is_estimate: birthDateIsEstimate,
+        },
         beneficiary_type: "CHILD"
       }
 

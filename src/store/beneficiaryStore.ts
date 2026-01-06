@@ -90,7 +90,6 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
         // Upload videos
         if (videoFiles.length > 0) {
           try {
-            console.log('Uploading videos:', videoFiles.length)
             const videoFormData = new FormData()
             videoFormData.append("beneficiaryId", beneficiaryId)
             videoFormData.append("video", videoFiles[0])
@@ -106,8 +105,6 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
               throw new Error(`Video upload failed: ${errorText}`)
             }
             
-            const videoData = await videoResponse.json()
-            console.log("Video upload successful:", videoData)
           } catch (error) {
             console.error("Video upload error:", error)
             // Don't throw here - let the creation succeed even if video fails
@@ -204,8 +201,6 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
 
   bulkUpdateStatus: async (type, ids, status) => {
     try {
-      console.log('Bulk update status request:', { type, ids, status })
-      
       const res = await fetch("/api/admin/beneficiaries/bulk-update-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -221,7 +216,7 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
       await get().fetchBeneficiaries(type)
     } catch (error) {
       console.error("Bulk status update error:", error)
-      throw error // Re-throw to be handled by the component
+      throw error
     }
   },
 }))

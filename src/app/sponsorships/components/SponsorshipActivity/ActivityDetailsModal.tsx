@@ -179,7 +179,7 @@ const ActivityDetailsModal: React.FC<ActivityDetailsModalProps> = ({
                         ) : images.length > 0 ? (
                           <Box className="space-y-2">
                             {images.map((image, index) => (
-                              <Box key={index} position="relative" width="100%" height="256px">
+                              <Box key={index} position="relative" width="100%" height="256px" bg="gray.100">
                                 {image.image_url ? (
                                   <Image
                                     src={image.image_url}
@@ -194,8 +194,12 @@ const ActivityDetailsModal: React.FC<ActivityDetailsModalProps> = ({
                                   />
                                 ) : (
                                   <Box 
-                                    className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center text-gray-500"
-                                    minH="100px"
+                                    className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center text-gray-500 flex items-center justify-center"
+                                    position="absolute"
+                                    top={0}
+                                    left={0}
+                                    width="100%"
+                                    height="100%"
                                   >
                                     <Text fontSize="sm">Image {index + 1} - URL not available</Text>
                                   </Box>

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react"
-import { Box, Flex, Image, IconButton } from "@chakra-ui/react"
+import { Box, Flex, IconButton } from "@chakra-ui/react"
 import { LuChevronLeft, LuChevronRight } from "react-icons/lu"
+import { ProgressiveImage } from "./ProgressiveImage"
 
 interface ImageCarouselProps {
   images: Array<{ id?: string; image_url?: string }>
   getImageSrc: (image: { id?: string; image_url?: string }) => string
+  getThumbnailSrc?: (image: { id?: string; image_url?: string }) => string | undefined
   fallbackSrc: string
   alt: string
   className?: string
@@ -14,6 +16,7 @@ interface ImageCarouselProps {
 export const ImageCarousel: React.FC<ImageCarouselProps> = ({
   images,
   getImageSrc,
+  getThumbnailSrc,
   fallbackSrc,
   alt,
   className = "",
@@ -39,16 +42,31 @@ export const ImageCarousel: React.FC<ImageCarouselProps> = ({
     setCurrentImageIndex(index)
   }
 
+  const currentImage = images[currentImageIndex]
+  const imageSrc = currentImage ? getImageSrc(currentImage) : fallbackSrc
+  const thumbnailSrc = currentImage && getThumbnailSrc 
+    ? getThumbnailSrc(currentImage) 
+    : undefined
+
   if (images.length === 0) {
-    return <Image src={fallbackSrc} alt={alt} className={className} />
+    return (
+      <ProgressiveImage
+        src={fallbackSrc}
+        alt={alt}
+        className={className}
+        fallbackSrc={fallbackSrc}
+      />
+    )
   }
 
   return (
-    <Box position="relative" className="group">
-      <Image
-        src={getImageSrc(images[currentImageIndex]) || fallbackSrc}
+    <Box position="relative" className={`group ${className}`} width="100%" height="100%">
+      <ProgressiveImage
+        src={imageSrc || fallbackSrc}
+        thumbnailSrc={thumbnailSrc}
         alt={alt}
-        className={className}
+        className=""
+        fallbackSrc={fallbackSrc}
         style={{
           objectFit: "cover",
           width: "100%",

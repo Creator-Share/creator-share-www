@@ -1,9 +1,10 @@
 "use client"
-import { Box, Flex, SimpleGrid, Spinner, Text } from "@chakra-ui/react"
+import { Box, Button, Flex, SimpleGrid, Spinner, Text } from "@chakra-ui/react"
 import React, { useState, useEffect, useRef } from "react"
 import BeneficiaryCard from "../SponsorshipCard"
 import BeneficiaryModal from "../SponsorshipModal"
 import { BeneficiaryListingsProps } from "@/types/propTypes"
+import BlindSponsorshipModal from "../BlindSponsorshipModal"
 
 const BeneficiaryListings = React.forwardRef<
   HTMLDivElement,
@@ -31,6 +32,7 @@ const BeneficiaryListings = React.forwardRef<
     const SCROLL_THRESHOLD_PX = 300
     const [visibleCount, setVisibleCount] = useState(itemsPerPage)
     const [dialogOpen, setDialogOpen] = useState<boolean>(false)
+    const [blindModalOpen, setBlindModalOpen] = useState<boolean>(false)
     // const [activeBeneficiaryId, setActiveBeneficiaryId] = useState<string | null>(null);
     const isInIframe =
       typeof window !== "undefined" && window.self !== window.top
@@ -254,6 +256,10 @@ const BeneficiaryListings = React.forwardRef<
         }}
         suppressHydrationWarning={true}
       >
+        <BlindSponsorshipModal
+          open={blindModalOpen}
+          onClose={() => setBlindModalOpen(false)}
+        />
         {visibleBeneficiary.length > 0 && (
           <BeneficiaryModal
             open={dialogOpen}
@@ -306,6 +312,13 @@ const BeneficiaryListings = React.forwardRef<
               <Text fontSize="sm" color="gray.500" textAlign="center" mt={2}>
                 Try adjusting your search or filters to find more results
               </Text>
+              <Button
+                mt={6}
+                colorScheme="blue"
+                onClick={() => setBlindModalOpen(true)}
+              >
+                Start a blind sponsorship instead
+              </Button>
             </Flex>
           ) : (
             <SimpleGrid columns={{ base: 1, md: 3 }} gap="1.5rem">

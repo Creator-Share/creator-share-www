@@ -6,7 +6,6 @@
 import {
   TelegramNotificationService,
   TelegramConfig,
-  TelegramApiResponse,
   SponsorshipNotificationData,
 } from "@/types/telegram.types"
 import { Beneficiaries } from "@/types"
@@ -70,11 +69,7 @@ export class TelegramBotService implements TelegramNotificationService {
         return false;
       }
 
-      const responseData: TelegramApiResponse = await response.json();
-      console.log('Telegram message sent successfully:', {
-        messageId: responseData.result?.message_id,
-        chatId: targetChatId
-      });
+
       return true;
     } catch (error) {
       console.error('Telegram sendMessage error:', {
@@ -130,11 +125,6 @@ export class TelegramBotService implements TelegramNotificationService {
         return false;
       }
 
-      const responseData: TelegramApiResponse = await response.json();
-      console.log('Telegram photo sent successfully:', {
-        messageId: responseData.result?.message_id,
-        chatId: targetChatId
-      });
       return true;
     } catch (error) {
       console.error('Telegram sendPhoto error:', {
@@ -214,7 +204,7 @@ export class TelegramBotService implements TelegramNotificationService {
       const mediaData = await response.json();
       
       if (!Array.isArray(mediaData) || mediaData.length === 0) {
-        console.log(`No images found for beneficiary ${beneficiaryId}`);
+
         return null;
       }
 
@@ -222,7 +212,6 @@ export class TelegramBotService implements TelegramNotificationService {
       const imageMedia = mediaData.filter((item: { type: string }) => item.type === "IMAGE");
       
       if (imageMedia.length === 0) {
-        console.log(`No IMAGE type media found for beneficiary ${beneficiaryId}`);
         return null;
       }
 
@@ -232,7 +221,6 @@ export class TelegramBotService implements TelegramNotificationService {
       try {
         const { generatePublicUrl } = await import('@/utils/supabase/media');
         const publicUrl = generatePublicUrl(firstImage);
-        console.log(`Generated public URL for beneficiary ${beneficiaryId}:`, publicUrl);
         return publicUrl;
       } catch (urlError) {
         console.warn('Failed to generate public URL, trying fallback:', urlError);
