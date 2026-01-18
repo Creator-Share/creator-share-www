@@ -51,9 +51,7 @@ export const HomeHero = () => {
           lineHeight="1.6"
           maxW="3xl"
         >
-          Sharing with the children you will find here, provides education, medical
-          care, access to adequate nutrition and above all the opportunity to pursue
-          their hopes and dreams
+          Sharing with the children you see here provides education, medical care, access to adequate nutrition, and an opportunity their hopes and dreams
         </Text>
       </Box>
     </Box>

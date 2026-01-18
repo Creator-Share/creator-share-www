@@ -237,8 +237,9 @@ export function useBeneficiaryPagination(
 
   // Fetch initial data and when filters change
   useEffect(() => {
-    console.log("[useBeneficiaryPagination] Filters changed, resetting list")
-    setBeneficiaries([]) // Clear list immediately when filters change
+    console.log("[useBeneficiaryPagination] Filters changed, fetching new results")
+    // Don't clear beneficiaries immediately - keep showing old results until new ones arrive
+    // This prevents scroll position from jumping when filters change
     setCursor(null)
     fetchPage(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps

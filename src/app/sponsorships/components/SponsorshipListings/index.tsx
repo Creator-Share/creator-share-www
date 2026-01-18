@@ -184,7 +184,7 @@ const BeneficiaryListings = React.forwardRef<
 
     const [currentDialogIndex, setCurrentDialogIndex] = useState<number>(0)
 
-    // Scroll detection for infinite loading
+    // Scroll detection for infinite loading (uses window scroll for full-page infinite scroll)
     useEffect(() => {
       const container = containerRef.current
       if (!container) return
@@ -199,22 +199,9 @@ const BeneficiaryListings = React.forwardRef<
         requestAnimationFrame(() => {
           const now = Date.now()
 
-          // Check if container has internal scroll
-          const hasInternalScroll =
-            container.scrollHeight > container.clientHeight
-
-          let distanceFromBottom
-          if (hasInternalScroll) {
-            // Container is scrolling internally
-            const scrollTop = container.scrollTop
-            const scrollHeight = container.scrollHeight
-            const clientHeight = container.clientHeight
-            distanceFromBottom = scrollHeight - (scrollTop + clientHeight)
-          } else {
-            // Container fits in viewport, use window scroll position
-            const rect = container.getBoundingClientRect()
-            distanceFromBottom = rect.bottom - window.innerHeight
-          }
+          // Use window scroll position - container is now full-page
+          const rect = container.getBoundingClientRect()
+          const distanceFromBottom = rect.bottom - window.innerHeight
 
           if (
             distanceFromBottom <= SCROLL_THRESHOLD_PX &&
@@ -229,11 +216,9 @@ const BeneficiaryListings = React.forwardRef<
         })
       }
 
-      // Listen to both container scroll and window scroll
-      container.addEventListener("scroll", onScroll, { passive: true })
+      // Listen to window scroll for full-page infinite scroll
       window.addEventListener("scroll", onScroll, { passive: true })
       return () => {
-        container.removeEventListener("scroll", onScroll)
         window.removeEventListener("scroll", onScroll)
       }
     }, [hasMore, isLoading, onLoadMore])
@@ -249,11 +234,6 @@ const BeneficiaryListings = React.forwardRef<
         width="100%"
         className="border bg-white rounded-2xl"
         mt={4}
-        style={{
-          minHeight: visibleBeneficiary.length ? "auto" : "100px",
-          maxHeight: "200vh",
-          overflowY: "auto",
-        }}
         suppressHydrationWarning={true}
       >
         <BlindSponsorshipModal
@@ -270,58 +250,10 @@ const BeneficiaryListings = React.forwardRef<
           />
         )}
 
-        <Box p={8}>
-          {/* <Box
-            mb={6}
-            p={4}
-            bg="#F7FAFC"
-            borderRadius="lg"
-            border="1px solid #E2E8F0"
-          >
-            <Flex
-              align={{ base: "start", md: "center" }}
-              justify="space-between"
-              gap={4}
-              direction={{ base: "column", md: "row" }}
-            >
-              <Box>
-                <Text fontWeight="bold" color="gray.800">
-                  Prefer us to match you?
-                </Text>
-                <Text fontSize="sm" color="gray.600">
-                  Start a blind sponsorship and we&apos;ll pair you with the
-                  next child who needs support.
-                </Text>
-              </Box>
-              <Button
-                colorScheme="blue"
-                onClick={() => setBlindModalOpen(true)}
-                width={{ base: "100%", md: "auto" }}
-              >
-                Start blind sponsorship
-              </Button>
-            </Flex>
-          </Box>
-          */}        
-
-          {visibleBeneficiary.length === 0 && !isLoading ? (
-            <Flex justify="center" py={12} align="center" direction="column">
-              <Text fontSize="lg" color="gray.600" textAlign="center">
-                No matching children
-              </Text>
-              <Text fontSize="sm" color="gray.500" textAlign="center" mt={2}>
-                Try adjusting your search or filters to find more results
-              </Text>
-              <Button
-                mt={6}
-                colorScheme="blue"
-                onClick={() => setBlindModalOpen(true)}
-              >
-                Start a blind sponsorship instead
-              </Button>
-            </Flex>
-          ) : (
-            <SimpleGrid columns={{ base: 1, md: 3 }} gap="1.5rem">
+        {/* Children grid - only render wrapper when there are children */}
+        {visibleBeneficiary.length > 0 && (
+          <Box p={{ base: 4, lg: 8 }}>
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap="1rem">
               {visibleBeneficiary.map((beneficiary) =>
                 beneficiary.id ? (
                   <Box
@@ -343,13 +275,88 @@ const BeneficiaryListings = React.forwardRef<
                 ) : null
               )}
             </SimpleGrid>
-          )}
-        </Box>
-        {/* Infinite scroll loading indicator */}
+          </Box>
+        )}
+
+        {/* Loading indicator */}
         {isLoading && (
           <Flex justify="center" py={12} align="center">
             <Spinner size="xl" color="gray.300" />
           </Flex>
+        )}
+        
+        {/* End state messages - styled identically */}
+        {!isLoading && (
+          <>
+            {/* No matching children */}
+            {visibleBeneficiary.length === 0 && (
+              <Flex 
+                justify="center" 
+                py={20}
+                align="center" 
+                direction="column"
+                mx={8}
+              >
+                <Text 
+                  fontSize="lg" 
+                  fontWeight="medium" 
+                  color="gray.500"
+                  textAlign="center"
+                >
+                  No matching children
+                </Text>
+                <Text 
+                  fontSize="sm" 
+                  color="gray.400" 
+                  textAlign="center" 
+                  mt={1}
+                >
+                  Try adjusting your search or filters to find more results
+                </Text>
+                <Button
+                  mt={6}
+                  bg="#1C3C8C"
+                  color="white"
+                  borderRadius="16px"
+                  _hover={{ bg: "#1C2B7A" }}
+                  onClick={() => setBlindModalOpen(true)}
+                >
+                  Start a blind sponsorship instead
+                </Button>
+              </Flex>
+            )}
+
+            {/* End of results - shown when we have children and no more to load */}
+            {visibleBeneficiary.length > 0 && !hasMore && (
+              <Flex 
+                justify="center" 
+                py={20} 
+                align="center" 
+                direction="column"
+                mx={8}
+              >
+                <Text 
+                  fontSize="lg" 
+                  fontWeight="medium" 
+                  color="gray.500"
+                  textAlign="center"
+                >
+                  That&apos;s all for now.
+                </Text>
+                <Text 
+                  fontSize="sm" 
+                  color="gray.400" 
+                  textAlign="center" 
+                  mt={1}
+                >
+                  {visibleBeneficiary.length === 1 
+                    ? "No further matching children found"
+                    : `No further matching children found (${visibleBeneficiary.length} total)`
+                  }
+                </Text>
+              </Flex>
+            )}
+          </>
         )}
       </Box>
     )

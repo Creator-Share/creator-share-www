@@ -19,12 +19,13 @@ import { useAuthStore } from "@/store/authStore"
 import { IoClose } from "react-icons/io5"
 
 const SponsorshipFilters: React.FC<
-  FiltersProps & { variant?: "default" | "sidebar"; isAdminMode?: boolean }
+  FiltersProps & { variant?: "default" | "sidebar"; isAdminMode?: boolean; isSticky?: boolean }
 > = ({
   onFilterChange,
   variant = "default",
   beneficiaryType = "CHILD",
   isAdminMode = false,
+  isSticky = false,
 }) => {
   const {
     selectedGender,
@@ -207,8 +208,14 @@ const SponsorshipFilters: React.FC<
         `}
       />
       <Box
-        className="bg-white border rounded-3xl shadow-sm"
+        className={`bg-white border ${isSticky ? 'rounded-b-3xl rounded-t-none' : 'rounded-3xl'}`}
         p={{ base: 4, md: 5 }}
+        transition="box-shadow 0.3s ease, border-radius 0.3s ease"
+        style={{
+          boxShadow: isSticky 
+            ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)" 
+            : "0 1px 2px 0 rgb(0 0 0 / 0.05)"
+        }}
       >
         <Box className="bg-transparent rounded-2xl" width="100%">
           <Flex

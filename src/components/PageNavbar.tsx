@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import {
   Box,
   Flex,
@@ -14,6 +14,8 @@ import { useAuthStore } from "@/store/authStore"
 import { usePathname, useRouter } from "next/navigation"
 import { GiHamburgerMenu } from "react-icons/gi"
 import { IoClose } from "react-icons/io5"
+import { AboutUsModal } from "./AboutUsModal"
+import { SignInModal } from "./SignInModal"
 
 // const Links = [
 //   // { name: "Sponsorships", href: "/" }, // Temporarily hidden
@@ -29,9 +31,17 @@ import { IoClose } from "react-icons/io5"
 //   // { name: "I-Frame Test", href: "/iframe-test" },
 // ]
 
+// Valid tab anchors for the About modal
+const ABOUT_TAB_ANCHORS = ["about", "centers", "contact"] as const
+type AboutTabAnchor = typeof ABOUT_TAB_ANCHORS[number]
+
 export function PageNavbar() {
   const [isOpen, setIsOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [isScrolled, setIsScrolled] = useState(false)
+  const [aboutUsOpen, setAboutUsOpen] = useState(false)
+  const [aboutUsDefaultTab, setAboutUsDefaultTab] = useState<AboutTabAnchor>("about")
+  const [signInOpen, setSignInOpen] = useState(false)
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
   const fetchUser = useAuthStore((state) => state.fetchUser)
@@ -39,10 +49,41 @@ export function PageNavbar() {
   const pathname = usePathname()
   const [isAdmin, setIsAdmin] = useState(false)
 
+  // Scroll detection for navbar shadow/blur effect
+  const handleScroll = useCallback(() => {
+    const scrollTop = window.scrollY || document.documentElement.scrollTop
+    setIsScrolled(scrollTop > 10)
+  }, [])
+
+  // Check URL hash for modals (About tabs and Sign In)
+  const checkHashAndOpenModal = useCallback(() => {
+    if (typeof window === "undefined") return
+    const hash = window.location.hash.slice(1) // Remove the #
+    if (ABOUT_TAB_ANCHORS.includes(hash as AboutTabAnchor)) {
+      setAboutUsDefaultTab(hash as AboutTabAnchor)
+      setAboutUsOpen(true)
+    } else if (hash === "signin") {
+      setSignInOpen(true)
+    }
+  }, [])
+
   useEffect(() => {
     setMounted(true)
     fetchUser()
-  }, [fetchUser])
+    
+    // Set up scroll listener
+    window.addEventListener("scroll", handleScroll, { passive: true })
+    handleScroll() // Check initial scroll position
+
+    // Check hash on mount and listen for changes
+    checkHashAndOpenModal()
+    window.addEventListener("hashchange", checkHashAndOpenModal)
+    
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+      window.removeEventListener("hashchange", checkHashAndOpenModal)
+    }
+  }, [fetchUser, handleScroll, checkHashAndOpenModal])
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -77,8 +118,29 @@ export function PageNavbar() {
   if (!mounted) return null
 
   return (
-    <Box className="w-full z-[1000] bg-[#FFFFFF] sticky top-0 shadow-md">
-      <Flex className="w-full max-w-[1200px] mx-auto px-6 md:px-8 h-16 flex justify-between items-center relative">
+    <>
+      <AboutUsModal 
+        open={aboutUsOpen} 
+        onClose={() => setAboutUsOpen(false)} 
+        defaultTab={aboutUsDefaultTab}
+      />
+      <SignInModal
+        open={signInOpen}
+        onClose={() => setSignInOpen(false)}
+      />
+      <Box 
+        className={`w-full z-[1000] sticky top-0 transition-all duration-300 border-b border-gray-200 ${
+          isScrolled 
+            ? "bg-white/95 backdrop-blur-md" 
+            : "bg-white"
+        }`}
+        style={{
+          boxShadow: isScrolled 
+            ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)" 
+            : "none"
+        }}
+      >
+        <Flex className="w-full max-w-[1200px] mx-auto px-6 md:px-8 h-16 flex justify-between items-center relative">
         {/* Logo Centered */}
         <Box className="flex items-center flex-shrink-0">
           <NextLink href="/" passHref>
@@ -138,7 +200,14 @@ export function PageNavbar() {
           display={{ base: "none", md: "flex" }}
           alignItems="center"
         >
-          {user && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setAboutUsOpen(true)}
+          >
+            About Us
+          </Button>
+          {user ? (
             <>
               {isAdmin && (
                 <Button
@@ -181,6 +250,17 @@ export function PageNavbar() {
                 </Portal>
               </Menu.Root>
             </>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                window.history.replaceState(null, "", "#signin")
+                setSignInOpen(true)
+              }}
+            >
+              Sign In
+            </Button>
           )}
         </Flex>
 
@@ -207,6 +287,19 @@ export function PageNavbar() {
           pointerEvents="auto"
         >
           <VStack gap={4} py={6}>
+            {/* About Us - always visible */}
+            <Button
+              size="sm"
+              variant="ghost"
+              color="white"
+              onClick={() => {
+                setIsOpen(false)
+                setAboutUsOpen(true)
+              }}
+              className="w-full"
+            >
+              About Us
+            </Button>
             {/* Navigation links temporarily disabled
             {Links.map((link) => {
               const isActive = pathname === link.href
@@ -242,11 +335,11 @@ export function PageNavbar() {
                 </Link>
               )
             })} */}
-            {user && (
+            {user ? (
               <>
                 {isAdmin && (
                   <NextLink href="/admin" passHref>
-                    <Button size="sm" variant="ghost" className="w-full">
+                    <Button size="sm" variant="ghost" color="white" className="w-full">
                       Admin
                     </Button>
                   </NextLink>
@@ -254,21 +347,38 @@ export function PageNavbar() {
                 <Button
                   size="sm"
                   variant="ghost"
+                  color="white"
                   onClick={handleLogout}
                   className="w-full"
                 >
                   Logout
                 </Button>
                 <NextLink href="/app" passHref>
-                  <Button size="sm" variant="ghost" className="w-full">
+                  <Button size="sm" variant="ghost" color="white" className="w-full">
                     Dashboard
                   </Button>
                 </NextLink>
               </>
+            ) : (
+              <Button
+                size="sm"
+                bg="white"
+                color="#1C3C8C"
+                _hover={{ bg: "gray.100" }}
+                className="w-full"
+                onClick={() => {
+                  setIsOpen(false)
+                  window.history.replaceState(null, "", "#signin")
+                  setSignInOpen(true)
+                }}
+              >
+                Sign In
+              </Button>
             )}
           </VStack>
         </Box>
       )}
-    </Box>
+      </Box>
+    </>
   )
 }
