@@ -275,7 +275,14 @@ export function PageNavbar() {
           display={{ base: "block", md: "none" }}
           onClick={() => setIsOpen(!isOpen)}
           aria-label="Toggle Menu"
+          variant="ghost"
+          color={isOpen ? "white" : "inherit"}
           className="absolute right-4 z-[1101]"
+          _hover={{
+            transform: isOpen ? "scale(1.15)" : undefined,
+            bg: isOpen ? "transparent" : undefined,
+          }}
+          transition="transform 0.2s ease"
         >
           {isOpen ? (
             <IoClose className="w-6 h-6" />
@@ -298,6 +305,7 @@ export function PageNavbar() {
               size="sm"
               variant="ghost"
               color="white"
+              _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
               onClick={() => {
                 setIsOpen(false)
                 window.history.replaceState(null, "", "#about")
@@ -346,7 +354,7 @@ export function PageNavbar() {
               <>
                 {isAdmin && (
                   <NextLink href="/admin" passHref>
-                    <Button size="sm" variant="ghost" color="white" className="w-full">
+                    <Button size="sm" variant="ghost" color="white" _hover={{ bg: "rgba(255, 255, 255, 0.1)" }} className="w-full">
                       Admin
                     </Button>
                   </NextLink>
@@ -355,13 +363,14 @@ export function PageNavbar() {
                   size="sm"
                   variant="ghost"
                   color="white"
+                  _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
                   onClick={handleLogout}
                   className="w-full"
                 >
                   Logout
                 </Button>
                 <NextLink href="/app" passHref>
-                  <Button size="sm" variant="ghost" color="white" className="w-full">
+                  <Button size="sm" variant="ghost" color="white" _hover={{ bg: "rgba(255, 255, 255, 0.1)" }} className="w-full">
                     Dashboard
                   </Button>
                 </NextLink>
@@ -371,6 +380,7 @@ export function PageNavbar() {
                 size="sm"
                 variant="ghost"
                 color="white"
+                _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
                 className="w-full"
                 onClick={() => {
                   setIsOpen(false)
