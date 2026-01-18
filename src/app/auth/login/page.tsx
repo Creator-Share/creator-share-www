@@ -1,18 +1,18 @@
 "use client"
 import { Box } from "@chakra-ui/react"
 import React, { useState, useEffect, useCallback, useRef } from "react"
-import { useParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { HomeHero } from "@/components/HomeHero"
-import SponsorshipFilters from "../components/SponsorshipFilters"
-import SponsorshipListings from "../components/SponsorshipListings"
+import SponsorshipFilters from "../../sponsorships/components/SponsorshipFilters"
+import SponsorshipListings from "../../sponsorships/components/SponsorshipListings"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
+import { useAuthStore } from "@/store/authStore"
 
-// This page renders the same homepage content but with the modal initially open
-// for the child specified in the URL. This allows direct linking to child profiles
-// while maintaining the modal-based UX.
-export default function ChildProfilePage() {
-  const params = useParams()
-  const username = typeof params.username === "string" ? params.username : null
+// This page renders the homepage content with the sign-in modal open.
+// The PageNavbar detects the #signin hash and opens the SignInModal.
+export default function LoginPage() {
+  const router = useRouter()
+  const user = useAuthStore((state) => state.user)
   const listRef = React.useRef<HTMLDivElement>(null)
   const filtersRef = useRef<HTMLDivElement>(null)
   const [isFiltersSticky, setIsFiltersSticky] = useState(false)
@@ -25,11 +25,18 @@ export default function ChildProfilePage() {
       initialStatus: ["New", "Partially Funded"],
     })
 
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      router.push("/")
+    }
+  }, [user, router])
+
+
   // Detect when filters become sticky
   const handleScroll = useCallback(() => {
     if (!filtersRef.current) return
     const rect = filtersRef.current.getBoundingClientRect()
-    // Filters are sticky when their top is at or near the sticky position (60px)
     setIsFiltersSticky(rect.top <= 64)
   }, [])
 
@@ -59,7 +66,7 @@ export default function ChildProfilePage() {
           />
         </Box>
 
-        {/* Listings - with initial modal open for the username */}
+        {/* Listings */}
         <SponsorshipListings
           ref={listRef}
           beneficiaryData={beneficiaries}
@@ -69,7 +76,6 @@ export default function ChildProfilePage() {
           onLoadMore={loadMore}
           hasMore={hasMore}
           isLoading={isLoading}
-          initialOpenUsername={username}
         />
       </Box>
     </Box>

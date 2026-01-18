@@ -55,14 +55,16 @@ export function PageNavbar() {
     setIsScrolled(scrollTop > 10)
   }, [])
 
-  // Check URL hash for modals (About tabs and Sign In)
+  // Check URL hash or path for modals (About tabs and Sign In)
   const checkHashAndOpenModal = useCallback(() => {
     if (typeof window === "undefined") return
     const hash = window.location.hash.slice(1) // Remove the #
+    const isLoginPage = window.location.pathname === "/auth/login"
+    
     if (ABOUT_TAB_ANCHORS.includes(hash as AboutTabAnchor)) {
       setAboutUsDefaultTab(hash as AboutTabAnchor)
       setAboutUsOpen(true)
-    } else if (hash === "signin") {
+    } else if (hash === "signin" || isLoginPage) {
       setSignInOpen(true)
     }
   }, [])
@@ -104,10 +106,11 @@ export function PageNavbar() {
     }
   }, [isOpen])
 
-  // Close menu on route change
+  // Close menu on route change and check for modal triggers
   useEffect(() => {
     setIsOpen(false)
-  }, [pathname])
+    checkHashAndOpenModal()
+  }, [pathname, checkHashAndOpenModal])
 
   const handleLogout = async () => {
     setIsOpen(false)
@@ -203,7 +206,10 @@ export function PageNavbar() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => setAboutUsOpen(true)}
+            onClick={() => {
+              window.history.replaceState(null, "", "#about")
+              setAboutUsOpen(true)
+            }}
           >
             About Us
           </Button>
@@ -255,7 +261,7 @@ export function PageNavbar() {
               size="sm"
               variant="ghost"
               onClick={() => {
-                window.history.replaceState(null, "", "#signin")
+                window.history.pushState({ modal: true }, "", "/auth/login")
                 setSignInOpen(true)
               }}
             >
@@ -294,6 +300,7 @@ export function PageNavbar() {
               color="white"
               onClick={() => {
                 setIsOpen(false)
+                window.history.replaceState(null, "", "#about")
                 setAboutUsOpen(true)
               }}
               className="w-full"
@@ -368,7 +375,7 @@ export function PageNavbar() {
                 className="w-full"
                 onClick={() => {
                   setIsOpen(false)
-                  window.history.replaceState(null, "", "#signin")
+                  window.history.pushState({ modal: true }, "", "/auth/login")
                   setSignInOpen(true)
                 }}
               >

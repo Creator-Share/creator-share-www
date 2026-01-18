@@ -697,18 +697,18 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         if (!details.open) handleClose()
       }}
     >
-      <DialogContent className="max-w-[95vw] md:max-w-[1100px] w-full relative rounded-2xl p-0 mt-8 md:mt-24">
-        <DialogHeader className="flex justify-between items-center px-6 md:px-8 pt-6 pb-4">
-          <Flex align="center" gap={3} flex="1">
-            <Text className="text-xl md:text-2xl font-bold text-gray-800">
-              Sponsorship Details
-            </Text>
-          </Flex>
-          <DialogCloseTrigger>
-            <Box className="text-2xl font-normal cursor-pointer hover:bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center transition-colors">
-              ×
-            </Box>
-          </DialogCloseTrigger>
+      <DialogContent 
+        className="max-w-[95vw] md:max-w-[1100px] w-full relative rounded-3xl p-0 mt-8 md:mt-24 mx-4 overflow-hidden"
+        style={{
+          boxShadow: "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)",
+          borderRadius: "24px"
+        }}
+      >
+        <DialogHeader className="bg-[#1C3C8C] text-white px-10 py-6">
+          <Text fontSize="xl" fontWeight="bold">
+            Sponsor a Child
+          </Text>
+          <DialogCloseTrigger className="text-white hover:bg-white/20" />
         </DialogHeader>
         <DialogBody className="p-8">
           {/* Main Content - Two Column Layout */}
