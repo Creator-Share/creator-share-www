@@ -295,7 +295,8 @@ export function PageNavbar() {
       {/* Mobile Menu (Dropdown) */}
       {isOpen && (
         <Box
-          className="fixed inset-0 bg-[#2B7FF9] shadow-lg md:hidden flex flex-col items-center justify-center"
+          className="fixed top-0 left-0 right-0 bg-[#2B7FF9] shadow-lg md:hidden flex flex-col items-center justify-center"
+          style={{ height: "100dvh" }}
           zIndex="1100"
           pointerEvents="auto"
         >

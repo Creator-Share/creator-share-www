@@ -880,8 +880,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 <Text className="font-medium text-sm mb-2 text-gray-500">
                   Monthly Sponsorship Amount
                 </Text>
-                <Flex gap={3} align="start">
-                  <Box flex="0 0 50%">
+                <Flex gap={3} align="start" direction={{ base: "column", md: "row" }}>
+                  <Box flex={{ base: "1", md: "0 0 50%" }} width={{ base: "100%", md: "auto" }}>
                     {remainingAmount < minimumAmount ? (
                       <Flex
                         className="border border-gray-300 rounded-xl bg-white overflow-hidden"
@@ -929,7 +929,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       Fixed monthly contribution
                     </Text>
                   </Box>
-                  <Box flex="0 0 calc(50% - 12px)">
+                  <Box flex={{ base: "1", md: "0 0 calc(50% - 12px)" }} width={{ base: "100%", md: "auto" }}>
                     <Button
                       onClick={handleStripePayment}
                       loading={loading}

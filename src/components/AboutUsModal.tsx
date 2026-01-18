@@ -77,10 +77,10 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
       open={open} 
       onOpenChange={(e) => !e.open && handleClose()}
       size="xl"
-      scrollBehavior="inside"
+      scrollBehavior="outside"
     >
       <DialogContent 
-        className="max-w-4xl mx-4 max-h-[90vh] rounded-3xl overflow-hidden"
+        className="max-w-4xl mx-4 rounded-3xl overflow-hidden"
         style={{
           boxShadow: "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)",
           borderRadius: "24px"
@@ -93,13 +93,13 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
           <DialogCloseTrigger className="text-white hover:bg-white/20" />
         </DialogHeader>
         
-        <DialogBody p={0} className="overflow-y-auto">
+        <DialogBody p={0}>
           <Tabs.Root 
             value={activeTab} 
             onValueChange={(e) => handleTabChange(e.value)}
             variant="line"
           >
-            <Tabs.List className="bg-gray-50 px-12 border-b">
+            <Tabs.List className="bg-gray-50 px-0 md:px-12 border-b justify-center md:justify-start">
               <Tabs.Trigger 
                 value="about"
                 className="px-6 py-6 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
@@ -121,7 +121,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
             </Tabs.List>
 
             {/* About Tab */}
-            <Tabs.Content value="about" className="p-12">
+            <Tabs.Content value="about" className="p-6 md:p-12">
               <Box>
                 <Text fontSize="2xl" fontWeight="bold" color="gray.800" mb={4}>
                   The Creator Share Foundation
@@ -183,7 +183,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
             </Tabs.Content>
 
             {/* Centers Tab */}
-            <Tabs.Content value="centers" className="p-12">
+            <Tabs.Content value="centers" className="p-6 md:p-12">
               <Text fontSize="xl" fontWeight="bold" color="gray.800" mb={4}>
                 Our Centers
               </Text>
@@ -212,7 +212,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
             </Tabs.Content>
 
             {/* Contact Tab */}
-            <Tabs.Content value="contact" className="p-12">
+            <Tabs.Content value="contact" className="p-6 md:p-12">
               <Text fontSize="xl" fontWeight="bold" color="gray.800" mb={6}>
                 Contact Us
               </Text>

@@ -223,7 +223,7 @@ const SponsorshipFilters: React.FC<
             className={
               variant === "sidebar" ? "flex-col" : "flex-col lg:flex-row"
             }
-            gap={8}
+            gap={{ base: 4, lg: 8 }}
             px={{ base: 2, md: 4 }}
             py={2}
             position="relative"
