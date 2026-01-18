@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect, useCallback } from "react"
-import { Box, Button, Input, Stack, Text, Spinner, Flex, Image } from "@chakra-ui/react"
+import { Box, Button, Input, Stack, Text, Spinner } from "@chakra-ui/react"
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa"
 import { Field } from "@/components/ui/field"
 import { useForm } from "react-hook-form"
@@ -42,10 +42,17 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose }) => {
   const password = watch("password", "")
   const togglePasswordVisibility = () => setShowPassword(!showPassword)
 
-  // Clear hash when modal closes
+  // Restore URL when modal closes (no navigation, just like child modals)
   const handleClose = useCallback(() => {
-    if (typeof window !== "undefined" && window.location.hash === "#signin") {
-      window.history.replaceState(null, "", window.location.pathname + window.location.search)
+    if (typeof window !== "undefined") {
+      const currentPath = window.location.pathname
+      if (currentPath === "/auth/login") {
+        // Restore URL to homepage without navigation
+        window.history.replaceState({}, "", "/")
+      } else if (window.location.hash === "#signin") {
+        // Just clear the hash if on another page
+        window.history.replaceState(null, "", currentPath + window.location.search)
+      }
     }
     reset()
     onClose()
@@ -117,17 +124,9 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose }) => {
         }}
       >
         <DialogHeader className="bg-[#1C3C8C] text-white px-10 py-6">
-          <Flex align="center" gap={4}>
-            <Image
-              src="/logo_text.svg"
-              alt="Creator Share"
-              height="40px"
-              filter="brightness(0) invert(1)"
-            />
-            <DialogTitle fontSize="xl" fontWeight="bold">
-              Sign In
-            </DialogTitle>
-          </Flex>
+          <DialogTitle fontSize="xl" fontWeight="bold">
+            Sign In
+          </DialogTitle>
           <DialogCloseTrigger className="text-white hover:bg-white/20" />
         </DialogHeader>
         
@@ -135,19 +134,17 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose }) => {
           {/* Admin-only message */}
           <Box className="text-center mb-6 p-4 bg-gray-50 rounded-xl">
             <Text className="text-[#8D9692] text-sm">
-              👋 Login is only required for administrators managing the platform.
-              <br />
-              You can browse and support children without creating an account.
+              👋 Login is only required to manage the platform. You can browse and support children without creating an account.
             </Text>
           </Box>
 
           <form onSubmit={handleSubmit(onSubmit)}>
-            <Box className="text-center mb-6">
-              <Text className="text-[#03150E] font-semibold text-xl">Welcome</Text>
-              <Text className="text-[#8D9692] text-sm">
-                Sign in to your Creator Share account
-              </Text>
-            </Box>
+            {/*<Box className="text-center mb-6">*/}
+            {/*  <Text className="text-[#03150E] font-semibold text-xl">Welcome</Text>*/}
+            {/*  <Text className="text-[#8D9692] text-sm">*/}
+            {/*    Sign in to your Creator Share account*/}
+            {/*  </Text>*/}
+            {/*</Box>*/}
             <Stack gap="4" className="text-[#8D9692]">
               <Box>
                 <Field
@@ -222,18 +219,18 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose }) => {
                   "Sign In"
                 )}
               </Button>
-              <Box className="mt-4 text-center">
-                <Text fontSize="sm" color="gray.600">
-                  New to Creator Share?{" "}
-                  <Link
-                    href="/registration"
-                    className="text-[#1C3C8C] hover:underline"
-                    onClick={handleClose}
-                  >
-                    Sign up here →
-                  </Link>
-                </Text>
-              </Box>
+              {/*<Box className="mt-4 text-center">*/}
+              {/*  <Text fontSize="sm" color="gray.600">*/}
+              {/*    New to Creator Share?{" "}*/}
+              {/*    <Link*/}
+              {/*      href="/registration"*/}
+              {/*      className="text-[#1C3C8C] hover:underline"*/}
+              {/*      onClick={handleClose}*/}
+              {/*    >*/}
+              {/*      Sign up here →*/}
+              {/*    </Link>*/}
+              {/*  </Text>*/}
+              {/*</Box>*/}
             </Stack>
           </form>
         </DialogBody>

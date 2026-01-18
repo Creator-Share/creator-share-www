@@ -1,8 +1,7 @@
 "use client"
 import React, { useEffect, useState, useCallback } from "react"
-import { Box, Flex, Text, Tabs, Image } from "@chakra-ui/react"
+import { Box, Flex, Text, Tabs } from "@chakra-ui/react"
 import { FaFacebook, FaInstagram, FaExternalLinkAlt } from "react-icons/fa"
-import NextLink from "next/link"
 import {
   DialogRoot,
   DialogContent,
@@ -11,9 +10,9 @@ import {
   DialogCloseTrigger,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { useAuthStore } from "@/store/authStore"
 
 // Valid tab anchors that can open the modal
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const TAB_ANCHORS = ["about", "centers", "contact"] as const
 type TabAnchor = typeof TAB_ANCHORS[number]
 
@@ -24,10 +23,7 @@ interface AboutUsModalProps {
 }
 
 export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defaultTab = "about" }) => {
-  const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<TabAnchor>(defaultTab)
-  const user = useAuthStore((state) => state.user)
-  const fetchUser = useAuthStore((state) => state.fetchUser)
 
   // Handle tab changes - update URL hash
   const handleTabChange = useCallback((value: string) => {
@@ -45,11 +41,6 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
     }
     onClose()
   }, [onClose])
-
-  useEffect(() => {
-    setMounted(true)
-    fetchUser()
-  }, [fetchUser])
 
   // Sync active tab with defaultTab prop when modal opens
   useEffect(() => {
@@ -96,17 +87,9 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
         }}
       >
         <DialogHeader className="bg-[#1C3C8C] text-white px-10 py-6">
-          <Flex align="center" gap={4}>
-            <Image
-              src="/logo_text.svg"
-              alt="Creator Share"
-              height="40px"
-              filter="brightness(0) invert(1)"
-            />
-            <DialogTitle fontSize="xl" fontWeight="bold">
-              About Us
-            </DialogTitle>
-          </Flex>
+          <DialogTitle fontSize="xl" fontWeight="bold">
+            About Us
+          </DialogTitle>
           <DialogCloseTrigger className="text-white hover:bg-white/20" />
         </DialogHeader>
         
@@ -116,29 +99,29 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
             onValueChange={(e) => handleTabChange(e.value)}
             variant="line"
           >
-            <Tabs.List className="bg-gray-50 px-8 border-b">
+            <Tabs.List className="bg-gray-50 px-12 border-b">
               <Tabs.Trigger 
                 value="about"
-                className="px-4 py-3 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
+                className="px-6 py-6 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
               >
                 About
               </Tabs.Trigger>
               <Tabs.Trigger 
                 value="centers"
-                className="px-4 py-3 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
+                className="px-6 py-6 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
               >
                 Our Centers
               </Tabs.Trigger>
               <Tabs.Trigger 
                 value="contact"
-                className="px-4 py-3 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
+                className="px-6 py-6 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
               >
                 Contact
               </Tabs.Trigger>
             </Tabs.List>
 
             {/* About Tab */}
-            <Tabs.Content value="about" className="p-10">
+            <Tabs.Content value="about" className="p-12">
               <Box>
                 <Text fontSize="2xl" fontWeight="bold" color="gray.800" mb={4}>
                   The Creator Share Foundation
@@ -146,14 +129,14 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
                 <Text color="gray.600" mb={4}>
                   UK Registered Charity 1169474
                 </Text>
-                <Text color="gray.700" lineHeight="1.8" mb={6}>
+                <Text color="gray.700" lineHeight="1.8" mb={8}>
                   Creator Share connects sponsors with children in need, providing education, 
                   medical care, adequate nutrition, and the opportunity to pursue their hopes 
                   and dreams. One child at a time, love is changing thousands of lives.
                 </Text>
 
                 {/* Social Links */}
-                <Box mb={6}>
+                <Box mb={8}>
                   <Text fontWeight="semibold" color="gray.800" mb={3}>
                     Follow Us
                   </Text>
@@ -181,7 +164,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
 
                 {/* Manage Subscriptions Link */}
                 <Box
-                  className="bg-gray-50 rounded-lg p-4 border border-gray-200"
+                  className="bg-gray-50 rounded-lg p-5 border border-gray-200"
                 >
                   <Text fontWeight="semibold" color="gray.800" mb={2}>
                     Manage Your Sponsorship
@@ -196,39 +179,26 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
                     Manage Subscriptions via Stripe
                   </a>
                 </Box>
-
-                {/* Sign In - only show if not logged in */}
-                {mounted && !user && (
-                  <Box mt={6} textAlign="center">
-                    <NextLink
-                      href="/login"
-                      onClick={onClose}
-                      className="inline-block bg-[#1C3C8C] text-white px-8 py-3 rounded-lg font-semibold hover:bg-[#1C2B7A] transition-colors"
-                    >
-                      Sign In
-                    </NextLink>
-                  </Box>
-                )}
               </Box>
             </Tabs.Content>
 
             {/* Centers Tab */}
-            <Tabs.Content value="centers" className="p-10">
+            <Tabs.Content value="centers" className="p-12">
               <Text fontSize="xl" fontWeight="bold" color="gray.800" mb={4}>
                 Our Centers
               </Text>
-              <Text color="gray.600" mb={6}>
+              <Text color="gray.600" mb={8}>
                 We operate multiple centers in Tanzania, each dedicated to supporting 
                 vulnerable populations in different ways.
               </Text>
-              <Box className="space-y-3">
+              <Box className="space-y-4">
                 {centers.map((center, index) => (
                   <a
                     key={index}
                     href={center.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 group"
+                    className="flex items-center gap-3 p-5 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 group"
                   >
                     <Box className="flex-1">
                       <Text fontWeight="medium" color="gray.800" className="group-hover:text-[#1C3C8C]">
@@ -242,14 +212,14 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
             </Tabs.Content>
 
             {/* Contact Tab */}
-            <Tabs.Content value="contact" className="p-10">
-              <Text fontSize="xl" fontWeight="bold" color="gray.800" mb={4}>
+            <Tabs.Content value="contact" className="p-12">
+              <Text fontSize="xl" fontWeight="bold" color="gray.800" mb={6}>
                 Contact Us
               </Text>
               
               <Box className="grid md:grid-cols-2 gap-6">
                 {/* Email */}
-                <Box className="bg-gray-50 rounded-lg p-5 border border-gray-200">
+                <Box className="bg-gray-50 rounded-lg p-6 border border-gray-200">
                   <Text fontWeight="semibold" color="gray-800" mb={2}>
                     Email
                   </Text>
@@ -262,7 +232,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
                 </Box>
 
                 {/* Address */}
-                <Box className="bg-gray-50 rounded-lg p-5 border border-gray-200">
+                <Box className="bg-gray-50 rounded-lg p-6 border border-gray-200">
                   <Text fontWeight="semibold" color="gray.800" mb={2}>
                     Our Address
                   </Text>
@@ -277,7 +247,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
               </Box>
 
               {/* Map placeholder or additional contact info could go here */}
-              <Box mt-={6} className="text-center text-gray-500 text-sm mt-6">
+              <Box className="text-center text-gray-500 text-sm mt-8">
                 <Text>
                   We&apos;d love to hear from you. Reach out with any questions about 
                   sponsorships, donations, or volunteering opportunities.

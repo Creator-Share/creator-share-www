@@ -46,7 +46,7 @@ export function ScrollToTop() {
       display="flex"
       alignItems="center"
       justifyContent="center"
-      boxShadow="lg"
+      boxShadow="xl"
       cursor="pointer"
       opacity={isVisible ? 1 : 0}
       visibility={isVisible ? "visible" : "hidden"}

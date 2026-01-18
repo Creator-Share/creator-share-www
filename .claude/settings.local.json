@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "Bash(tree:*)",
+      "Bash(find:*)",
+      "Bash(git rev-parse:*)"
+    ]
+  }
+}

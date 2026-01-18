@@ -7,7 +7,6 @@ import { Field } from "@/components/ui/field"
 import { useForm } from "react-hook-form"
 import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
-import AuthMessage from "@/components/ui/AuthMessage"
 import Link from "next/link"
 import { create } from "zustand"
 import { useEffect, useState } from "react"
@@ -137,7 +136,11 @@ const Register = () => {
   return (
     <Box className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-4 md:p-12">
       <Box mb="6" className="max-w-md">
-        <AuthMessage />
+        <Text className="text-[#8D9692] text-sm text-center">
+          👋 Login is only required for administrators managing the platform.
+          <br />
+          You can browse and support children without creating an account.
+        </Text>
       </Box>
       <form
         onSubmit={handleSubmit(onSubmit)}
@@ -268,7 +271,7 @@ const Register = () => {
           <Box className="mt-6 text-center">
             <Text fontSize="sm" color="gray.600">
               Already have an account?{" "}
-              <Link href="/login" className="text-[#1C3C8C] hover:underline">
+              <Link href="/auth/login" className="text-[#1C3C8C] hover:underline">
                 Sign in here →
               </Link>
             </Text>

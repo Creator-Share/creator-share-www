@@ -1,6 +1,6 @@
 "use client"
 import { Box, Button, Flex, SimpleGrid, Spinner, Text } from "@chakra-ui/react"
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import BeneficiaryCard from "../SponsorshipCard"
 import BeneficiaryModal from "../SponsorshipModal"
 import { BeneficiaryListingsProps } from "@/types/propTypes"
@@ -12,6 +12,7 @@ const BeneficiaryListings = React.forwardRef<
     onLoadMore?: () => void
     hasMore?: boolean
     isLoading?: boolean
+    initialOpenUsername?: string | null
   }
 >(
   (
@@ -24,6 +25,7 @@ const BeneficiaryListings = React.forwardRef<
       onLoadMore,
       hasMore = false,
       isLoading = false,
+      initialOpenUsername = null,
     },
     ref
   ) => {
@@ -39,6 +41,8 @@ const BeneficiaryListings = React.forwardRef<
     const containerRef = useRef<HTMLDivElement | null>(null)
     const [animatingItems, setAnimatingItems] = useState<Set<string>>(new Set())
     const prevVisibleCountRef = useRef(visibleCount)
+    const previousUrlRef = useRef<string | null>(null)
+    const isInitialOpenHandledRef = useRef(false)
 
     const filteredBeneficiary = React.useMemo(() => {
       const safeBeneficiaryData = Array.isArray(beneficiaryData)
@@ -170,19 +174,111 @@ const BeneficiaryListings = React.forwardRef<
     //   setActiveBeneficiaryId(null);
     // }, [currentPage]);
 
-    // Handle opening the dialog for a specific child
-    const handleOpenDialog = (beneficiaryId?: string) => {
+    const [currentDialogIndex, setCurrentDialogIndex] = useState<number>(0)
+
+    // Handle opening the dialog for a specific child (with URL update)
+    const handleOpenDialog = useCallback((beneficiaryId?: string) => {
       if (!beneficiaryId) return
       const index = visibleBeneficiary.findIndex(
         (beneficiary) => beneficiary.id === beneficiaryId
       )
       if (index !== -1) {
+        const beneficiary = visibleBeneficiary[index]
         setCurrentDialogIndex(index)
         setDialogOpen(true)
+        
+        // Update URL to bookmarkable child page without navigation
+        if (typeof window !== "undefined" && beneficiary?.username) {
+          previousUrlRef.current = window.location.pathname + window.location.search
+          window.history.pushState(
+            { modal: true, username: beneficiary.username },
+            "",
+            `/sponsorships/${beneficiary.username}`
+          )
+        }
       }
-    }
+    }, [visibleBeneficiary])
 
-    const [currentDialogIndex, setCurrentDialogIndex] = useState<number>(0)
+    // Handle closing the dialog (restore URL)
+    const handleCloseDialog = useCallback(() => {
+      setDialogOpen(false)
+      
+      // Restore URL to homepage
+      if (typeof window !== "undefined") {
+        const currentPath = window.location.pathname
+        if (currentPath.startsWith("/sponsorships/") && currentPath !== "/sponsorships/checkout") {
+          // Use replaceState to go back to homepage without adding to history
+          window.history.replaceState({}, "", previousUrlRef.current || "/")
+        }
+        previousUrlRef.current = null
+      }
+    }, [])
+
+    // Handle browser back/forward navigation
+    useEffect(() => {
+      const handlePopState = () => {
+        const path = window.location.pathname
+        if (path.startsWith("/sponsorships/") && path !== "/sponsorships/checkout") {
+          // URL is for a child, try to open their modal
+          const username = path.split("/sponsorships/")[1]
+          if (username) {
+            const index = visibleBeneficiary.findIndex(
+              (b) => b.username === username
+            )
+            if (index !== -1) {
+              setCurrentDialogIndex(index)
+              setDialogOpen(true)
+              return
+            }
+          }
+        }
+        // Otherwise close the modal
+        setDialogOpen(false)
+      }
+
+      window.addEventListener("popstate", handlePopState)
+      return () => window.removeEventListener("popstate", handlePopState)
+    }, [visibleBeneficiary])
+
+    // Handle initial open from URL or prop
+    useEffect(() => {
+      if (isInitialOpenHandledRef.current || visibleBeneficiary.length === 0) return
+      
+      // Check for initialOpenUsername prop (from redirect)
+      if (initialOpenUsername) {
+        const index = visibleBeneficiary.findIndex(
+          (b) => b.username === initialOpenUsername
+        )
+        if (index !== -1) {
+          setCurrentDialogIndex(index)
+          setDialogOpen(true)
+          isInitialOpenHandledRef.current = true
+          // Update URL to reflect the child page
+          window.history.replaceState(
+            { modal: true, username: initialOpenUsername },
+            "",
+            `/sponsorships/${initialOpenUsername}`
+          )
+          return
+        }
+      }
+
+      // Check URL for /sponsorships/[username] pattern (direct navigation)
+      const path = window.location.pathname
+      if (path.startsWith("/sponsorships/") && path !== "/sponsorships/checkout") {
+        const username = path.split("/sponsorships/")[1]
+        if (username) {
+          const index = visibleBeneficiary.findIndex(
+            (b) => b.username === username
+          )
+          if (index !== -1) {
+            setCurrentDialogIndex(index)
+            setDialogOpen(true)
+            isInitialOpenHandledRef.current = true
+          }
+        }
+      }
+    }, [visibleBeneficiary, initialOpenUsername])
 
     // Scroll detection for infinite loading (uses window scroll for full-page infinite scroll)
     useEffect(() => {
@@ -243,7 +339,7 @@ const BeneficiaryListings = React.forwardRef<
         {visibleBeneficiary.length > 0 && (
           <BeneficiaryModal
             open={dialogOpen}
-            onClose={(open?: boolean) => setDialogOpen(Boolean(open))}
+            onClose={() => handleCloseDialog()}
             beneficiary={
               visibleBeneficiary[currentDialogIndex] || visibleBeneficiary[0]
             }
