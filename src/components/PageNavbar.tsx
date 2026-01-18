@@ -369,11 +369,6 @@ export function PageNavbar() {
                 >
                   Logout
                 </Button>
-                <NextLink href="/app" passHref>
-                  <Button size="sm" variant="ghost" color="white" _hover={{ bg: "rgba(255, 255, 255, 0.1)" }} className="w-full">
-                    Dashboard
-                  </Button>
-                </NextLink>
               </>
             ) : (
               <Button
