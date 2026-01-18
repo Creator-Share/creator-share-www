@@ -41,7 +41,7 @@ export async function updateSession(request: NextRequest) {
       request.nextUrl.pathname.startsWith("/admin"))
   ) {
     const url = request.nextUrl.clone()
-    url.pathname = "/auth/login"
+    url.pathname = "/login"
     return NextResponse.redirect(url)
   }
 

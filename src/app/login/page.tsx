@@ -3,13 +3,13 @@ import { Box } from "@chakra-ui/react"
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { HomeHero } from "@/components/HomeHero"
-import SponsorshipFilters from "../../sponsorships/components/SponsorshipFilters"
-import SponsorshipListings from "../../sponsorships/components/SponsorshipListings"
+import SponsorshipFilters from "../sponsorships/components/SponsorshipFilters"
+import SponsorshipListings from "../sponsorships/components/SponsorshipListings"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
 import { useAuthStore } from "@/store/authStore"
 
 // This page renders the homepage content with the sign-in modal open.
-// The PageNavbar detects the #signin hash and opens the SignInModal.
+// The PageNavbar detects the /login path and opens the SignInModal.
 export default function LoginPage() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)

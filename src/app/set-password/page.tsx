@@ -185,7 +185,7 @@ export default function SetPasswordPage() {
 
             // Small delay before redirect to show success message
             setTimeout(() => {
-                router.push("/auth/login")
+                router.push("/login")
             }, 1000)
         } catch {
             setError("An unexpected error occurred")
@@ -210,7 +210,7 @@ export default function SetPasswordPage() {
                             <Alert.Title>{error}</Alert.Title>
                         </Alert.Root>
                         <Button
-                            onClick={() => router.push("/auth/login")}
+                            onClick={() => router.push("/login")}
                             className="w-full bg-[#1C3C8C] text-white hover:bg-[#1C3C8C]"
                         >
                             Go to Login

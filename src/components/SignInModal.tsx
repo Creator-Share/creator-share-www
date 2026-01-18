@@ -47,7 +47,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose }) => {
   const handleClose = useCallback(() => {
     if (typeof window !== "undefined") {
       const currentPath = window.location.pathname
-      if (currentPath === "/auth/login") {
+      if (currentPath === "/login") {
         // Restore URL to homepage without navigation
         window.history.replaceState({}, "", "/")
       } else if (window.location.hash === "#signin") {
@@ -222,7 +222,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose }) => {
                 <Text fontSize="sm" color="gray.600">
                   New to Creator Share?{" "}
                   <Link
-                    href="/registration"
+                    href="/register"
                     className="text-[#1C3C8C] hover:underline"
                     onClick={handleClose}
                   >

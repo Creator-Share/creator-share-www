@@ -59,7 +59,7 @@ export function PageNavbar() {
   const checkHashAndOpenModal = useCallback(() => {
     if (typeof window === "undefined") return
     const hash = window.location.hash.slice(1) // Remove the #
-    const isLoginPage = window.location.pathname === "/auth/login"
+    const isLoginPage = window.location.pathname === "/login"
     
     if (ABOUT_TAB_ANCHORS.includes(hash as AboutTabAnchor)) {
       setAboutUsDefaultTab(hash as AboutTabAnchor)
@@ -261,7 +261,7 @@ export function PageNavbar() {
               size="sm"
               variant="ghost"
               onClick={() => {
-                window.history.pushState({ modal: true }, "", "/auth/login")
+                window.history.pushState({ modal: true }, "", "/login")
                 setSignInOpen(true)
               }}
             >
@@ -369,13 +369,12 @@ export function PageNavbar() {
             ) : (
               <Button
                 size="sm"
-                bg="white"
-                color="#1C3C8C"
-                _hover={{ bg: "gray.100" }}
+                variant="ghost"
+                color="white"
                 className="w-full"
                 onClick={() => {
                   setIsOpen(false)
-                  window.history.pushState({ modal: true }, "", "/auth/login")
+                  window.history.pushState({ modal: true }, "", "/login")
                   setSignInOpen(true)
                 }}
               >

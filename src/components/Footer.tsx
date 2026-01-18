@@ -127,7 +127,7 @@ export const Footer = () => {
       {mounted && !user && (
         <div className="container mx-auto px-4 mt-8 text-center">
           <NextLink
-            href="/auth/login"
+            href="/login"
             className="inline-block bg-white text-[#1C3C8C] px-6 py-2 rounded-md font-semibold hover:bg-gray-100 transition-colors cursor-pointer"
           >
             Sign In

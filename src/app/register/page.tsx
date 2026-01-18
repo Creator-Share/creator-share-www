@@ -268,7 +268,7 @@ const Register = () => {
           <Box className="mt-6 text-center">
             <Text fontSize="sm" color="gray.600">
               Already have an account?{" "}
-              <Link href="/auth/login" className="text-[#1C3C8C] hover:underline">
+              <Link href="/login" className="text-[#1C3C8C] hover:underline">
                 Sign in here →
               </Link>
             </Text>

@@ -82,7 +82,7 @@ const ResetPassword = () => {
       }
 
       setMessage("Password reset successful! Please log in again.")
-      setTimeout(() => router.push("/auth/login"), 2000)
+      setTimeout(() => router.push("/login"), 2000)
     } catch (err) {
       setMessage((err as Error).message || "Failed to reset password.")
     } finally {
