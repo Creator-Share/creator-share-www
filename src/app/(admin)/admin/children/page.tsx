@@ -8,6 +8,7 @@ import BeneficiaryCard from "./components/BeneficiaryCard"
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types"
 import { dollarsToCents } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
+import { compressImages } from "@/utils/imageCompression"
 import { useFormStore } from "@/store/formStore"
 import { useFilterStore } from "@/store/filterStore"
 import { GoPlusCircle } from "react-icons/go"
@@ -386,19 +387,33 @@ const ChildrenTable = () => {
       const responseData = await res.json()
       const beneficiaryId = responseData.beneficiary?.id || responseData.beneficiaryId
 
-      // Upload images
+      // Upload images (compressed to ensure under 4MB)
       if (imageFiles.length > 0) {
-        const formDataImages = new FormData()
-        formDataImages.append("beneficiaryId", beneficiaryId)
-        imageFiles.forEach((file) => formDataImages.append("images", file))
+        try {
+          // Compress images before upload
+          const compressedFiles = await compressImages(imageFiles, {
+            maxSizeMB: 3.5,
+          })
 
-        const uploadImagesRes = await fetch(`/api/admin/beneficiaries/images/create`, {
-          method: "POST",
-          body: formDataImages,
-        })
+          const formDataImages = new FormData()
+          formDataImages.append("beneficiaryId", beneficiaryId)
+          compressedFiles.forEach((file) => formDataImages.append("images", file))
 
-        if (!uploadImagesRes.ok) {
-          console.error('Failed to upload images:', await uploadImagesRes.text())
+          const uploadImagesRes = await fetch(`/api/admin/beneficiaries/images/create`, {
+            method: "POST",
+            body: formDataImages,
+          })
+
+          if (!uploadImagesRes.ok) {
+            console.error('Failed to upload images:', await uploadImagesRes.text())
+            toaster.create({
+              title: "Warning",
+              description: "Child was created but image upload failed",
+              duration: 5000,
+            })
+          }
+        } catch (error) {
+          console.error('Image upload error:', error)
           toaster.create({
             title: "Warning",
             description: "Child was created but image upload failed",

@@ -39,9 +39,7 @@ import ProofreadButton from "@/components/ai/ProofreadButton"
 import { toaster } from "@/components/ui/toaster"
 import { dollarsToCents } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
-import {
-  uploadImagesForTransformation
-} from "@/utils/supabase/imageTransform"
+import { compressImage, compressImages } from "@/utils/imageCompression"
 
 type BeneficiaryModalMode = "create" | "edit"
 
@@ -113,6 +111,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [processedImages, setProcessedImages] = useState<File[]>([])
   const [, setUploadedImagePaths] = useState<string[]>([])
   const [isProcessingImages, setIsProcessingImages] = useState(false)
+  const [compressionProgress, setCompressionProgress] = useState<{
+    current: number
+    total: number
+    percent: number
+    currentFileName?: string
+  } | null>(null)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [imageUploadKey, setImageUploadKey] = useState(0)
   const [videoUploadKey, setVideoUploadKey] = useState(0)
@@ -316,61 +320,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }
 
-  // Helper function to compress image if needed
-  const compressImage = async (file: File): Promise<File> => {
-    const MAX_SIZE = 10 * 1024 * 1024 // 10MB
-
-    // If file is under 10MB, return as is
-    if (file.size <= MAX_SIZE) {
-      return file
-    }
-
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const img = new window.Image()
-        img.onload = () => {
-          const canvas = document.createElement('canvas')
-          let width = img.width
-          let height = img.height
-
-          // Calculate new dimensions (max 4000px on longest side)
-          const maxDimension = 4000
-          if (width > height && width > maxDimension) {
-            height = (height * maxDimension) / width
-            width = maxDimension
-          } else if (height > maxDimension) {
-            width = (width * maxDimension) / height
-            height = maxDimension
-          }
-
-          canvas.width = width
-          canvas.height = height
-
-          const ctx = canvas.getContext('2d')
-          ctx?.drawImage(img, 0, 0, width, height)
-
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                const compressedFile = new File([blob], file.name, {
-                  type: 'image/jpeg',
-                  lastModified: Date.now(),
-                })
-                resolve(compressedFile)
-              } else {
-                resolve(file)
-              }
-            },
-            'image/jpeg',
-            0.85
-          )
-        }
-        img.src = e.target?.result as string
-      }
-      reader.readAsDataURL(file)
-    })
-  }
+  // Compression is now handled by the utility function imported above
 
   // Image upload handler
   const handleImageChange = async (fileDetails: {
@@ -407,8 +357,18 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         const validFiles: File[] = []
         const invalidFiles: string[] = []
         const largeFiles: string[] = []
+        const imageFiles = fileDetails.acceptedFiles.filter(f => f.type.startsWith('image/'))
+        const totalImages = imageFiles.length
 
-        for (const file of fileDetails.acceptedFiles) {
+        // Initialize compression progress
+        setCompressionProgress({
+          current: 0,
+          total: totalImages,
+          percent: 0,
+        })
+
+        for (let i = 0; i < fileDetails.acceptedFiles.length; i++) {
+          const file = fileDetails.acceptedFiles[i]
           const isImage = file.type.startsWith('image/')
           const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
 
@@ -420,18 +380,41 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
           // Accept all image files
           if (isImage) {
-            // Check if file needs compression
-            if (file.size > 10 * 1024 * 1024) {
-              largeFiles.push(file.name)
-              const compressed = await compressImage(file)
+            // Always compress to ensure files are under 4MB for Vercel
+            try {
+              const imageIndex = imageFiles.indexOf(file)
+              const compressed = await compressImage(file, {
+                maxSizeMB: 3.5, // Target 3.5MB to leave buffer
+                onProgress: (progress) => {
+                  // Update progress for current file
+                  const overallProgress = ((imageIndex + progress / 100) / totalImages) * 100
+                  setCompressionProgress({
+                    current: imageIndex + 1,
+                    total: totalImages,
+                    percent: Math.round(overallProgress),
+                    currentFileName: file.name,
+                  })
+                }
+              })
+              
+              if (compressed.size < file.size) {
+                const sizeReduction = ((1 - compressed.size / file.size) * 100).toFixed(0)
+                largeFiles.push(`${file.name} (${sizeReduction}% smaller)`)
+              }
+              
               validFiles.push(compressed)
-            } else {
+            } catch (error) {
+              console.error(`Failed to compress ${file.name}:`, error)
+              // If compression fails, try original file (API will validate size)
               validFiles.push(file)
             }
           } else {
             invalidFiles.push(file.name)
           }
         }
+
+        // Clear compression progress when done
+        setCompressionProgress(null)
 
         if (invalidFiles.length > 0) {
           toaster.create({
@@ -479,6 +462,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         })
       } finally {
         setIsProcessingImages(false)
+        setCompressionProgress(null)
       }
     } else {
       // In edit mode, upload and optimize immediately
@@ -490,8 +474,18 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           const validFiles: File[] = []
           const invalidFiles: string[] = []
           const largeFiles: string[] = []
+          const imageFiles = fileDetails.acceptedFiles.filter(f => f.type.startsWith('image/'))
+          const totalImages = imageFiles.length
 
-          for (const file of fileDetails.acceptedFiles) {
+          // Initialize compression progress
+          setCompressionProgress({
+            current: 0,
+            total: totalImages,
+            percent: 0,
+          })
+
+          for (let i = 0; i < fileDetails.acceptedFiles.length; i++) {
+            const file = fileDetails.acceptedFiles[i]
             const isImage = file.type.startsWith('image/')
             const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
 
@@ -503,18 +497,41 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
             // Accept all image files
             if (isImage) {
-              // Check if file needs compression
-              if (file.size > 10 * 1024 * 1024) {
-                largeFiles.push(file.name)
-                const compressed = await compressImage(file)
+              // Always compress to ensure files are under 4MB for Vercel
+              try {
+                const imageIndex = imageFiles.indexOf(file)
+                const compressed = await compressImage(file, {
+                  maxSizeMB: 3.5, // Target 3.5MB to leave buffer
+                  onProgress: (progress) => {
+                    // Update progress for current file
+                    const overallProgress = ((imageIndex + progress / 100) / totalImages) * 100
+                    setCompressionProgress({
+                      current: imageIndex + 1,
+                      total: totalImages,
+                      percent: Math.round(overallProgress),
+                      currentFileName: file.name,
+                    })
+                  }
+                })
+                
+                if (compressed.size < file.size) {
+                  const sizeReduction = ((1 - compressed.size / file.size) * 100).toFixed(0)
+                  largeFiles.push(`${file.name} (${sizeReduction}% smaller)`)
+                }
+                
                 validFiles.push(compressed)
-              } else {
+              } catch (error) {
+                console.error(`Failed to compress ${file.name}:`, error)
+                // If compression fails, try original file (API will validate size)
                 validFiles.push(file)
               }
             } else {
               invalidFiles.push(file.name)
             }
           }
+
+          // Clear compression progress when done
+          setCompressionProgress(null)
 
           if (invalidFiles.length > 0) {
             toaster.create({
@@ -539,17 +556,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             return
           }
 
-          // Upload and optimize valid images
-          const optimizedPaths = await uploadImagesForTransformation(
-            'media',
-            validFiles,
-            `beneficiaries/${selectedChild?.id || 'temp'}`
-          )
-
-          setProcessedImages(validFiles)
-          setUploadedImagePaths(optimizedPaths)
-
-          // Upload optimized images immediately in edit mode
+          // Upload compressed images via API (now guaranteed to be under 4MB)
           const formData = new FormData()
           formData.append("beneficiaryId", selectedChild?.id || "")
           validFiles.forEach((f) => formData.append("images", f))
@@ -558,7 +565,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             "/api/admin/beneficiaries/images/create",
             { method: "POST", body: formData }
           )
-          if (!response.ok) throw new Error("Image upload failed")
+          if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(`Image upload failed: ${errorText}`)
+          }
 
           // Reset file states
           resetImageUploadInput()
@@ -737,21 +747,30 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             ? envCents
             : budgetGoalInCentsFromForm
 
-        // Handle image uploads - use optimized images if available
+        // Handle image uploads - upload directly to Supabase (bypasses Vercel's 4.5MB limit)
         if (imageFiles.length > 0 || processedImages.length > 0) {
           try {
-            const formData = new FormData()
-            formData.append("beneficiaryId", selectedChild?.id || "")
-
             // Use processed/optimized images if available, otherwise use original files
             const filesToUpload = processedImages.length > 0 ? processedImages : imageFiles
-            filesToUpload.forEach((f) => formData.append("images", f))
+
+            // Compress images before upload to ensure they're under 4MB
+            const compressedFiles = await compressImages(filesToUpload, {
+              maxSizeMB: 3.5,
+            })
+
+            // Upload compressed images via API
+            const formData = new FormData()
+            formData.append("beneficiaryId", selectedChild?.id || "")
+            compressedFiles.forEach((f) => formData.append("images", f))
 
             const response = await fetch(
               "/api/admin/beneficiaries/images/create",
               { method: "POST", body: formData }
             )
-            if (!response.ok) throw new Error("Image upload failed")
+            if (!response.ok) {
+              const errorText = await response.text()
+              throw new Error(`Image upload failed: ${errorText}`)
+            }
 
             // Reset file states
             resetImageUploadInput()
@@ -760,7 +779,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
             // Refresh images list
             await fetchImages()
-          } catch {
+          } catch (error) {
+            console.error('Image upload error:', error)
             toaster.create({
               title: "Error",
               description: "Failed to upload images",
@@ -852,11 +872,31 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               <Spinner size="xl" color="#1C3C8C" />
               <p className="text-lg font-medium text-[#1C3C8C]">
                 {isProcessingImages
-                  ? "Processing Images..."
+                  ? compressionProgress
+                    ? `Compressing Images... ${compressionProgress.percent}%`
+                    : "Processing Images..."
                   : isImageLoading
                     ? "Uploading Images..."
                     : "Form Disabled"}
               </p>
+              {compressionProgress && (
+                <div className="w-64 mt-2">
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-[#1C3C8C] h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${compressionProgress.percent}%` }}
+                    />
+                  </div>
+                  <p className="text-sm text-gray-600 mt-2">
+                    {compressionProgress.currentFileName && (
+                      <>Compressing: {compressionProgress.currentFileName}</>
+                    )}
+                    {!compressionProgress.currentFileName && (
+                      <>File {compressionProgress.current} of {compressionProgress.total}</>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -1,0 +1,9 @@
+{
+  "functions": {
+    "src/app/api/admin/beneficiaries/images/create/route.ts": {
+      "maxDuration": 60,
+      "memory": 3008
+    }
+  },
+  "regions": ["sfo1"]
+}
