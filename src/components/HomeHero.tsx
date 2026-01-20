@@ -1,17 +1,17 @@
 import React from "react"
-import { Box, Heading, Text, Image } from "@chakra-ui/react"
+import { Box, Heading, Text } from "@chakra-ui/react"
 
 export const HomeHero = () => {
   return (
     <Box className="text-center py-10 md:py-14">
       {/* Logo - Centered */}
-      <Image
-        src="/logo_text.svg"
-        alt="Creator Share"
-        height={{ base: "64px", md: "96px" }}
-        mx="auto"
-        mb={6}
-      />
+      {/*<Image*/}
+      {/*  src="/logo_text.svg"*/}
+      {/*  alt="Creator Share"*/}
+      {/*  height={{ base: "64px", md: "96px" }}*/}
+      {/*  mx="auto"*/}
+      {/*  mb={6}*/}
+      {/*/>*/}
 
       {/* Heading Content */}
       <Box
@@ -29,7 +29,7 @@ export const HomeHero = () => {
           lineHeight="1.1"
           maxW="4xl"
         >
-          One Child at a time, love is
+          One child at a time, we can
           <br />
           <Box
             as="span"
@@ -41,7 +41,7 @@ export const HomeHero = () => {
             borderRadius="full"
             fontWeight="bold"
           >
-            changing
+            change
           </Box>{" "}
           thousands of lives
         </Heading>
@@ -51,9 +51,7 @@ export const HomeHero = () => {
           lineHeight="1.6"
           maxW="3xl"
         >
-          Sharing with the children you will find here, provides education, medical
-          care, access to adequate nutrition and above all the opportunity to pursue
-          their hopes and dreams
+          Sharing with the children you see here provides education, medical care, access to adequate nutrition, and the hope to pursue their dreams.
         </Text>
       </Box>
     </Box>

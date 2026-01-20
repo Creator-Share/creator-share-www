@@ -12,7 +12,7 @@ const VerifyAccount = () => {
 
   useEffect(() => {
     if (!registrationEmail) {
-      router.push("/registration")
+      router.push("/register")
     }
   }, [registrationEmail, router])
 
