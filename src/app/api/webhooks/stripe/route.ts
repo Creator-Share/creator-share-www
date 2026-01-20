@@ -592,7 +592,15 @@ export async function POST(req: Request) {
           // Continue - not critical
         }
 
-        // Send confirmation emails
+        // ============================================================
+        // STEP 6: Send confirmation emails
+        // ============================================================
+        // IMPORTANT: This code is only reached if subscription was successfully inserted
+        // into the database (no errors in Step 1). If subscription insert failed:
+        //   - beneficiary_not_accepting_subscriptions → rejection email sent, returned early (line 445)
+        //   - other errors → thrown and caught in outer catch, no email sent
+        // Therefore, confirmation emails are ONLY sent for successful sponsorships.
+        // ============================================================
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
           console.warn("Email configuration missing - skipping email send")
         } else {
@@ -1114,7 +1122,10 @@ export async function POST(req: Request) {
             .eq("stripe_subscription_id", subscriptionId)
 
           // Send monthly payment confirmation email
-          // Only send for recurring subscriptions (not one-time payments)
+          // Only send for recurring payments, not for initial subscription creation
+          // subscription_cycle = regular recurring payment
+          // subscription_update = subscription was updated (amount, items, etc.)
+          // subscription_create = first payment (already handled by checkout.session.completed)
           if (invoice.billing_reason === "subscription_cycle" || invoice.billing_reason === "subscription_update") {
             try {
               // Get subscription details to find beneficiary and customer email

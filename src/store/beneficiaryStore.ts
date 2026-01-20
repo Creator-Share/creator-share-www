@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { Beneficiaries, BeneficiaryType } from "@/types/admin.types"
+import { compressImages } from "@/utils/imageCompression"
 
 interface BeneficiaryStoreState {
   data: Beneficiaries[]
@@ -75,16 +76,26 @@ export const useBeneficiaryStore = create<BeneficiaryStoreState>((set, get) => (
 
       // Upload files if beneficiary was created successfully
       if (beneficiaryId) {
-        // Upload images
+        // Upload images (compressed to ensure under 4MB)
         if (imageFiles.length > 0) {
-          const imageFormData = new FormData()
-          imageFormData.append("beneficiaryId", beneficiaryId)
-          imageFiles.forEach((f) => imageFormData.append("images", f))
+          try {
+            // Compress images before upload
+            const compressedFiles = await compressImages(imageFiles, {
+              maxSizeMB: 3.5,
+            })
 
-          await fetch("/api/admin/beneficiaries/images/create", {
-            method: "POST",
-            body: imageFormData,
-          })
+            const imageFormData = new FormData()
+            imageFormData.append("beneficiaryId", beneficiaryId)
+            compressedFiles.forEach((f) => imageFormData.append("images", f))
+
+            await fetch("/api/admin/beneficiaries/images/create", {
+              method: "POST",
+              body: imageFormData,
+            })
+          } catch (error) {
+            console.error("Image upload error:", error)
+            // Don't throw - let the creation succeed even if image upload fails
+          }
         }
 
         // Upload videos

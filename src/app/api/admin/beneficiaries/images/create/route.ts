@@ -2,6 +2,10 @@ import { NextResponse } from "next/server"
 import { MediaRow, uploadFile } from "@/utils/supabase/media"
 import { getTransformedImageUrl } from "@/utils/supabase/imageTransform"
 
+// Route segment config for Vercel deployment
+export const runtime = "nodejs"
+export const maxDuration = 60
+
 export async function POST(req: Request) {
   const { createClient } = await import("@/utils/supabase/server")
   const supabase = await createClient()
