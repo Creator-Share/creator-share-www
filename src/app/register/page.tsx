@@ -7,7 +7,6 @@ import { Field } from "@/components/ui/field"
 import { useForm } from "react-hook-form"
 import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
-import AuthMessage from "@/components/ui/AuthMessage"
 import Link from "next/link"
 import { create } from "zustand"
 import { useEffect, useState } from "react"
@@ -15,6 +14,7 @@ import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/authStore"
 import { validatePassword } from "@/utils/passwordValidation"
 import { PasswordStrengthIndicator } from "@/components/ui/PasswordStrengthIndicator"
+import { AuthMessage } from "@/components/ui/AuthMessage"
 
 interface FormValues {
   first_name: string

@@ -1,6 +1,6 @@
 "use client"
 import { Box, Button, Flex, SimpleGrid, Spinner, Text } from "@chakra-ui/react"
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import BeneficiaryCard from "../SponsorshipCard"
 import BeneficiaryModal from "../SponsorshipModal"
 import { BeneficiaryListingsProps } from "@/types/propTypes"
@@ -12,6 +12,7 @@ const BeneficiaryListings = React.forwardRef<
     onLoadMore?: () => void
     hasMore?: boolean
     isLoading?: boolean
+    initialOpenUsername?: string | null
   }
 >(
   (
@@ -24,6 +25,7 @@ const BeneficiaryListings = React.forwardRef<
       onLoadMore,
       hasMore = false,
       isLoading = false,
+      initialOpenUsername = null,
     },
     ref
   ) => {
@@ -39,6 +41,8 @@ const BeneficiaryListings = React.forwardRef<
     const containerRef = useRef<HTMLDivElement | null>(null)
     const [animatingItems, setAnimatingItems] = useState<Set<string>>(new Set())
     const prevVisibleCountRef = useRef(visibleCount)
+    const previousUrlRef = useRef<string | null>(null)
+    const isInitialOpenHandledRef = useRef(false)
 
     const filteredBeneficiary = React.useMemo(() => {
       const safeBeneficiaryData = Array.isArray(beneficiaryData)
@@ -170,21 +174,113 @@ const BeneficiaryListings = React.forwardRef<
     //   setActiveBeneficiaryId(null);
     // }, [currentPage]);
 
-    // Handle opening the dialog for a specific child
-    const handleOpenDialog = (beneficiaryId?: string) => {
+    const [currentDialogIndex, setCurrentDialogIndex] = useState<number>(0)
+
+    // Handle opening the dialog for a specific child (with URL update)
+    const handleOpenDialog = useCallback((beneficiaryId?: string) => {
       if (!beneficiaryId) return
       const index = visibleBeneficiary.findIndex(
         (beneficiary) => beneficiary.id === beneficiaryId
       )
       if (index !== -1) {
+        const beneficiary = visibleBeneficiary[index]
         setCurrentDialogIndex(index)
         setDialogOpen(true)
+        
+        // Update URL to bookmarkable child page without navigation
+        if (typeof window !== "undefined" && beneficiary?.username) {
+          previousUrlRef.current = window.location.pathname + window.location.search
+          window.history.pushState(
+            { modal: true, username: beneficiary.username },
+            "",
+            `/sponsorships/${beneficiary.username}`
+          )
+        }
       }
-    }
+    }, [visibleBeneficiary])
 
-    const [currentDialogIndex, setCurrentDialogIndex] = useState<number>(0)
+    // Handle closing the dialog (restore URL)
+    const handleCloseDialog = useCallback(() => {
+      setDialogOpen(false)
+      
+      // Restore URL to homepage
+      if (typeof window !== "undefined") {
+        const currentPath = window.location.pathname
+        if (currentPath.startsWith("/sponsorships/") && currentPath !== "/sponsorships/checkout") {
+          // Use replaceState to go back to homepage without adding to history
+          window.history.replaceState({}, "", previousUrlRef.current || "/")
+        }
+        previousUrlRef.current = null
+      }
+    }, [])
 
-    // Scroll detection for infinite loading
+    // Handle browser back/forward navigation
+    useEffect(() => {
+      const handlePopState = () => {
+        const path = window.location.pathname
+        if (path.startsWith("/sponsorships/") && path !== "/sponsorships/checkout") {
+          // URL is for a child, try to open their modal
+          const username = path.split("/sponsorships/")[1]
+          if (username) {
+            const index = visibleBeneficiary.findIndex(
+              (b) => b.username === username
+            )
+            if (index !== -1) {
+              setCurrentDialogIndex(index)
+              setDialogOpen(true)
+              return
+            }
+          }
+        }
+        // Otherwise close the modal
+        setDialogOpen(false)
+      }
+
+      window.addEventListener("popstate", handlePopState)
+      return () => window.removeEventListener("popstate", handlePopState)
+    }, [visibleBeneficiary])
+
+    // Handle initial open from URL or prop
+    useEffect(() => {
+      if (isInitialOpenHandledRef.current || visibleBeneficiary.length === 0) return
+      
+      // Check for initialOpenUsername prop (from redirect)
+      if (initialOpenUsername) {
+        const index = visibleBeneficiary.findIndex(
+          (b) => b.username === initialOpenUsername
+        )
+        if (index !== -1) {
+          setCurrentDialogIndex(index)
+          setDialogOpen(true)
+          isInitialOpenHandledRef.current = true
+          // Update URL to reflect the child page
+          window.history.replaceState(
+            { modal: true, username: initialOpenUsername },
+            "",
+            `/sponsorships/${initialOpenUsername}`
+          )
+          return
+        }
+      }
+
+      // Check URL for /sponsorships/[username] pattern (direct navigation)
+      const path = window.location.pathname
+      if (path.startsWith("/sponsorships/") && path !== "/sponsorships/checkout") {
+        const username = path.split("/sponsorships/")[1]
+        if (username) {
+          const index = visibleBeneficiary.findIndex(
+            (b) => b.username === username
+          )
+          if (index !== -1) {
+            setCurrentDialogIndex(index)
+            setDialogOpen(true)
+            isInitialOpenHandledRef.current = true
+          }
+        }
+      }
+    }, [visibleBeneficiary, initialOpenUsername])
+
+    // Scroll detection for infinite loading (uses window scroll for full-page infinite scroll)
     useEffect(() => {
       const container = containerRef.current
       if (!container) return
@@ -199,22 +295,9 @@ const BeneficiaryListings = React.forwardRef<
         requestAnimationFrame(() => {
           const now = Date.now()
 
-          // Check if container has internal scroll
-          const hasInternalScroll =
-            container.scrollHeight > container.clientHeight
-
-          let distanceFromBottom
-          if (hasInternalScroll) {
-            // Container is scrolling internally
-            const scrollTop = container.scrollTop
-            const scrollHeight = container.scrollHeight
-            const clientHeight = container.clientHeight
-            distanceFromBottom = scrollHeight - (scrollTop + clientHeight)
-          } else {
-            // Container fits in viewport, use window scroll position
-            const rect = container.getBoundingClientRect()
-            distanceFromBottom = rect.bottom - window.innerHeight
-          }
+          // Use window scroll position - container is now full-page
+          const rect = container.getBoundingClientRect()
+          const distanceFromBottom = rect.bottom - window.innerHeight
 
           if (
             distanceFromBottom <= SCROLL_THRESHOLD_PX &&
@@ -229,11 +312,9 @@ const BeneficiaryListings = React.forwardRef<
         })
       }
 
-      // Listen to both container scroll and window scroll
-      container.addEventListener("scroll", onScroll, { passive: true })
+      // Listen to window scroll for full-page infinite scroll
       window.addEventListener("scroll", onScroll, { passive: true })
       return () => {
-        container.removeEventListener("scroll", onScroll)
         window.removeEventListener("scroll", onScroll)
       }
     }, [hasMore, isLoading, onLoadMore])
@@ -249,11 +330,6 @@ const BeneficiaryListings = React.forwardRef<
         width="100%"
         className="border bg-white rounded-2xl"
         mt={4}
-        style={{
-          minHeight: visibleBeneficiary.length ? "auto" : "100px",
-          maxHeight: "200vh",
-          overflowY: "auto",
-        }}
         suppressHydrationWarning={true}
       >
         <BlindSponsorshipModal
@@ -263,65 +339,17 @@ const BeneficiaryListings = React.forwardRef<
         {visibleBeneficiary.length > 0 && (
           <BeneficiaryModal
             open={dialogOpen}
-            onClose={(open?: boolean) => setDialogOpen(Boolean(open))}
+            onClose={() => handleCloseDialog()}
             beneficiary={
               visibleBeneficiary[currentDialogIndex] || visibleBeneficiary[0]
             }
           />
         )}
 
-        <Box p={8}>
-          {/* <Box
-            mb={6}
-            p={4}
-            bg="#F7FAFC"
-            borderRadius="lg"
-            border="1px solid #E2E8F0"
-          >
-            <Flex
-              align={{ base: "start", md: "center" }}
-              justify="space-between"
-              gap={4}
-              direction={{ base: "column", md: "row" }}
-            >
-              <Box>
-                <Text fontWeight="bold" color="gray.800">
-                  Prefer us to match you?
-                </Text>
-                <Text fontSize="sm" color="gray.600">
-                  Start a blind sponsorship and we&apos;ll pair you with the
-                  next child who needs support.
-                </Text>
-              </Box>
-              <Button
-                colorScheme="blue"
-                onClick={() => setBlindModalOpen(true)}
-                width={{ base: "100%", md: "auto" }}
-              >
-                Start blind sponsorship
-              </Button>
-            </Flex>
-          </Box>
-          */}        
-
-          {visibleBeneficiary.length === 0 && !isLoading ? (
-            <Flex justify="center" py={12} align="center" direction="column">
-              <Text fontSize="lg" color="gray.600" textAlign="center">
-                No matching children
-              </Text>
-              <Text fontSize="sm" color="gray.500" textAlign="center" mt={2}>
-                Try adjusting your search or filters to find more results
-              </Text>
-              <Button
-                mt={6}
-                colorScheme="blue"
-                onClick={() => setBlindModalOpen(true)}
-              >
-                Start a blind sponsorship instead
-              </Button>
-            </Flex>
-          ) : (
-            <SimpleGrid columns={{ base: 1, md: 3 }} gap="1.5rem">
+        {/* Children grid - only render wrapper when there are children */}
+        {visibleBeneficiary.length > 0 && (
+          <Box p={{ base: 4, lg: 8 }}>
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap="1rem">
               {visibleBeneficiary.map((beneficiary) =>
                 beneficiary.id ? (
                   <Box
@@ -343,13 +371,88 @@ const BeneficiaryListings = React.forwardRef<
                 ) : null
               )}
             </SimpleGrid>
-          )}
-        </Box>
-        {/* Infinite scroll loading indicator */}
+          </Box>
+        )}
+
+        {/* Loading indicator */}
         {isLoading && (
           <Flex justify="center" py={12} align="center">
             <Spinner size="xl" color="gray.300" />
           </Flex>
+        )}
+        
+        {/* End state messages - styled identically */}
+        {!isLoading && (
+          <>
+            {/* No matching children */}
+            {visibleBeneficiary.length === 0 && (
+              <Flex 
+                justify="center" 
+                py={20}
+                align="center" 
+                direction="column"
+                mx={8}
+              >
+                <Text 
+                  fontSize="lg" 
+                  fontWeight="medium" 
+                  color="gray.500"
+                  textAlign="center"
+                >
+                  No matching children
+                </Text>
+                <Text 
+                  fontSize="sm" 
+                  color="gray.400" 
+                  textAlign="center" 
+                  mt={1}
+                >
+                  Try adjusting your search or filters to find more results
+                </Text>
+                <Button
+                  mt={6}
+                  bg="#1C3C8C"
+                  color="white"
+                  borderRadius="16px"
+                  _hover={{ bg: "#1C2B7A" }}
+                  onClick={() => setBlindModalOpen(true)}
+                >
+                  Start a blind sponsorship instead
+                </Button>
+              </Flex>
+            )}
+
+            {/* End of results - shown when we have children and no more to load */}
+            {visibleBeneficiary.length > 0 && !hasMore && (
+              <Flex 
+                justify="center" 
+                py={20} 
+                align="center" 
+                direction="column"
+                mx={8}
+              >
+                <Text 
+                  fontSize="lg" 
+                  fontWeight="medium" 
+                  color="gray.500"
+                  textAlign="center"
+                >
+                  That&apos;s all for now.
+                </Text>
+                <Text 
+                  fontSize="sm" 
+                  color="gray.400" 
+                  textAlign="center" 
+                  mt={1}
+                >
+                  {visibleBeneficiary.length === 1 
+                    ? "No further matching children found"
+                    : `No further matching children found (${visibleBeneficiary.length} total)`
+                  }
+                </Text>
+              </Flex>
+            )}
+          </>
         )}
       </Box>
     )
