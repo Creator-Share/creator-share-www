@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const beneficiaryId = searchParams.get("beneficiary_id")
 
+  console.log("🔍 [SPONSORS API] Fetching sponsors for beneficiary_id:", beneficiaryId)
+
   if (!beneficiaryId) {
     return NextResponse.json(
       { error: "beneficiary_id is required" },
@@ -24,62 +26,98 @@ export async function GET(req: NextRequest) {
 
   const supabase = await createClient()
 
-  // Fetch all subscriptions for this beneficiary with user information
-  const { data: subscriptions, error } = await supabase
+  // Step 1: Fetch all active subscriptions for this beneficiary
+  const { data: subscriptions, error: subsError } = await supabase
     .from("subscriptions")
-    .select(
-      `
-      id,
-      user_id,
-      amount,
-      interval,
-      email_notification,
-      users(
-        email,
-        first_name,
-        last_name
-      )
-    `,
-    )
+    .select("id, user_id, amount, interval, email_notification, customer_id")
     .eq("beneficiary_id", beneficiaryId)
     .eq("status", "complete")
     .order("created_at", { ascending: false })
 
-  if (error) {
-    console.error("Error fetching sponsors:", error)
+  console.log("📊 [SPONSORS API] Subscriptions query result:", {
+    error: subsError?.message || null,
+    subscriptionCount: subscriptions?.length || 0,
+  })
+
+  if (subsError) {
+    console.error("❌ [SPONSORS API] Error fetching subscriptions:", subsError)
     return NextResponse.json(
-      { error: error.message },
+      { error: subsError.message },
       { status: 500 },
     )
   }
 
-  // Transform the data to a cleaner format
-  const sponsors: SponsorInfo[] = (subscriptions || [])
-    .map((sub) => {
-      // Handle user data - may be an object or array
-      const userData = Array.isArray(sub.users) ? sub.users[0] : sub.users
+  if (!subscriptions || subscriptions.length === 0) {
+    console.log("ℹ️ [SPONSORS API] No active subscriptions found")
+    return NextResponse.json({ sponsors: [] }, { status: 200 })
+  }
 
-      const email = userData?.email || null
-      const firstName = userData?.first_name || null
-      const lastName = userData?.last_name || null
-      const name =
-        firstName && lastName
-          ? `${firstName} ${lastName}`
-          : firstName || lastName || null
+  // Step 2: For each subscription, get customer info from transaction_ledger
+  const sponsors: SponsorInfo[] = []
 
-      // If no email, try to fetch it directly from auth.users
-      if (!email && sub.user_id) {
-        // Note: We can't directly query auth.users from here, but we can return
-        // the user_id and let the frontend handle it if needed
-        // For now, we'll just skip entries without email
-        return null
+  for (const sub of subscriptions) {
+    let email: string | null = null
+    let name: string | null = null
+
+    // First, try to get customer info from transaction_ledger
+    // Get the most recent transaction for this beneficiary that matches the subscription
+    const { data: transactions, error: txError } = await supabase
+      .from("transaction_ledger")
+      .select("customer_email, customer_name, customer_id")
+      .eq("beneficiary_id", beneficiaryId)
+      .eq("subscription_type", "subscription")
+      .not("customer_email", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(10) // Get recent transactions to find a match
+
+    if (txError) {
+      console.error("⚠️ [SPONSORS API] Error fetching transaction_ledger:", txError)
+    }
+
+    // Try to match transaction to subscription by customer_id if available
+    let matchedTransaction = null
+    if (transactions && transactions.length > 0) {
+      if (sub.customer_id) {
+        // Try to match by customer_id first
+        matchedTransaction = transactions.find(
+          (tx) => tx.customer_id === sub.customer_id
+        )
+      }
+      // If no match by customer_id or customer_id not available, use most recent
+      if (!matchedTransaction) {
+        matchedTransaction = transactions[0]
+      }
+    }
+
+    if (matchedTransaction) {
+      email = matchedTransaction.customer_email
+      name = matchedTransaction.customer_name
+    }
+
+    // Fallback: Try to get from users table if user_id exists
+    if (!email && sub.user_id) {
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("email, first_name, last_name")
+        .eq("id", sub.user_id)
+        .single()
+
+      if (userError) {
+        console.error("⚠️ [SPONSORS API] Error fetching user:", userError)
       }
 
-      if (!email) {
-        return null
+      if (userData) {
+        email = userData.email
+        name =
+          userData.first_name && userData.last_name
+            ? `${userData.first_name} ${userData.last_name}`
+            : userData.first_name || userData.last_name || null
       }
+    }
 
-      return {
+    // Only include sponsors with valid email
+    if (email) {
+      sponsors.push({
         subscriptionId: sub.id,
         userId: sub.user_id,
         email,
@@ -87,9 +125,16 @@ export async function GET(req: NextRequest) {
         amount: sub.amount,
         interval: sub.interval,
         emailNotification: sub.email_notification,
-      }
-    })
-    .filter((sponsor): sponsor is SponsorInfo => sponsor !== null)
+      })
+    } else {
+      console.log(`⚠️ [SPONSORS API] No email found for subscription ${sub.id}`)
+    }
+  }
+
+  console.log("✅ [SPONSORS API] Successfully fetched sponsors:", {
+    totalSponsors: sponsors.length,
+    sponsors: sponsors.map(s => ({ email: s.email, name: s.name }))
+  })
 
   return NextResponse.json({ sponsors }, { status: 200 })
 }

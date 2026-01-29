@@ -18,6 +18,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { HiUpload } from "react-icons/hi"
 import { createClient } from "@/utils/supabase/client"
+import { compressImage } from "@/utils/imageCompression"
+import { toaster } from "@/components/ui/toaster"
 
 const activityTypeCollection = createListCollection({
   items: [
@@ -77,6 +79,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   const [sponsors, setSponsors] = useState<SponsorInfo[]>([])
   const [selectedSponsorIds, setSelectedSponsorIds] = useState<Set<string>>(new Set())
   const [loadingSponsors, setLoadingSponsors] = useState(false)
+  const [compressing, setCompressing] = useState(false)
   
   const supabase = createClient()
 
@@ -193,23 +196,71 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
     }
   }
 
-  const handleCreate = () => {
-    const formData = new FormData()
-    formData.append("title", title)
-    formData.append("description", description)
-    formData.append("activity_type", activityType)
-    formData.append("activity_source", "admin")
-    formData.append("beneficiary_id", beneficiaryId)
-    formData.append("is_public", isPublic.toString())
+  const handleCreate = async () => {
+    setCompressing(true)
     
-    // Add sponsor selection if sending emails
-    if (sendToSponsors) {
-      formData.append("selected_sponsor_ids", Array.from(selectedSponsorIds).join(","))
+    try {
+      // Compress images before uploading
+      const compressedImages: File[] = []
+      const largeFiles: string[] = []
+      
+      for (const file of imageFiles) {
+        try {
+          const compressed = await compressImage(file, {
+            maxSizeMB: 3.5, // Target 3.5MB to leave buffer under Vercel's 4.5MB limit
+          })
+          
+          if (compressed.size < file.size) {
+            const sizeReduction = ((1 - compressed.size / file.size) * 100).toFixed(0)
+            largeFiles.push(`${file.name} (${sizeReduction}% smaller)`)
+          }
+          
+          compressedImages.push(compressed)
+        } catch (error) {
+          console.error(`Failed to compress ${file.name}:`, error)
+          // If compression fails, use original file (API will validate size)
+          compressedImages.push(file)
+        }
+      }
+      
+      if (largeFiles.length > 0) {
+        toaster.create({
+          title: "Large Files Compressed",
+          description: `These files were automatically compressed: ${largeFiles.join(', ')}`,
+          type: "info",
+          duration: 5000,
+        })
+      }
+      
+      const formData = new FormData()
+      formData.append("title", title)
+      formData.append("description", description)
+      formData.append("activity_type", activityType)
+      formData.append("activity_source", "admin")
+      formData.append("beneficiary_id", beneficiaryId)
+      formData.append("is_public", isPublic.toString())
+      
+      // Add sponsor selection if sending emails
+      if (sendToSponsors) {
+        formData.append("selected_sponsor_ids", Array.from(selectedSponsorIds).join(","))
+      }
+      
+      // Use compressed images
+      compressedImages.forEach((file) => formData.append("images", file))
+      videoFiles.forEach((file) => formData.append("videos", file))
+      
+      onCreate(formData)
+    } catch (error) {
+      console.error("Error preparing activity:", error)
+      toaster.create({
+        title: "Error",
+        description: "Failed to prepare files for upload",
+        type: "error",
+        duration: 5000,
+      })
+    } finally {
+      setCompressing(false)
     }
-    
-    imageFiles.forEach((file) => formData.append("images", file))
-    videoFiles.forEach((file) => formData.append("videos", file))
-    onCreate(formData)
   }
 
   return open ? (
@@ -587,16 +638,16 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           <Button
             onClick={onClose}
             style={{ marginRight: 12 }}
-            disabled={creating}
+            disabled={creating || compressing}
           >
             Cancel
           </Button>
           <Button
             colorScheme="blue"
             onClick={handleCreate}
-            disabled={!title || !description || creating}
+            disabled={!title || !description || creating || compressing}
           >
-            {creating ? "Creating..." : "Create"}
+            {compressing ? "Compressing..." : creating ? "Creating..." : "Create"}
           </Button>
         </div>
       </div>

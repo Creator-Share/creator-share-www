@@ -3,6 +3,8 @@ import { createClient } from "@/utils/supabase/server"
 import { MediaRow, uploadFile } from "@/utils/supabase/media"
 
 export async function POST(req: NextRequest) {
+  console.log("🎬 [CREATE ACTIVITY] Starting activity creation")
+  
   const formData = await req.formData()
   const title = formData.get("title") as string | null
   const description = formData.get("description") as string | null
@@ -12,7 +14,18 @@ export async function POST(req: NextRequest) {
   const is_public = formData.get("is_public") === "true"
   const selectedSponsorIds = formData.get("selected_sponsor_ids") as string | null
 
+  console.log("📝 [CREATE ACTIVITY] Form data:", {
+    title,
+    description: description?.substring(0, 50) + "...",
+    activity_type,
+    activity_source,
+    beneficiary_id,
+    is_public,
+    selectedSponsorIds
+  })
+
   if (!description || !beneficiary_id || !activity_type || !activity_source) {
+    console.error("❌ [CREATE ACTIVITY] Missing required fields")
     return NextResponse.json(
       { error: "Missing required fields" },
       { status: 400 },
@@ -34,6 +47,8 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createClient()
 
+  console.log("💾 [CREATE ACTIVITY] Inserting activity into database")
+
   // Insert activity record first (we'll attach media via the media table)
   const { data: activityInserted, error: insertErr } = await supabase
     .from("activities")
@@ -42,19 +57,20 @@ export async function POST(req: NextRequest) {
         title,
         description,
         activity_type,
-        activity_source,
+        created_by: activity_source,
         beneficiary_id,
-        is_public,
         created_at: new Date().toISOString(),
-        created_by: "admin",
       },
     ])
     .select()
     .single()
 
   if (insertErr) {
+    console.error("❌ [CREATE ACTIVITY] Failed to insert activity:", insertErr)
     return NextResponse.json({ error: insertErr.message }, { status: 500 })
   }
+
+  console.log("✅ [CREATE ACTIVITY] Activity inserted successfully, ID:", activityInserted?.id)
 
   const activityId = (activityInserted as unknown as MediaRow).id
 
@@ -124,31 +140,14 @@ export async function POST(req: NextRequest) {
     videoMediaIds.push(mediaRow.id)
   }
 
-  // Persist media references in activity.metadata.media (images/videos)
-  let inserted = activityInserted
-  try {
-    const metadata = { media: { images: imageMediaIds, videos: videoMediaIds } }
-    const { data: updatedActivity, error: updateErr } = await supabase
-      .from("activities")
-      .update({ metadata })
-      .eq("id", activityId)
-      .select()
-      .single()
-
-    if (updateErr) {
-      console.error(
-        "Failed to update activity with media references:",
-        updateErr,
-      )
-    } else {
-      inserted = updatedActivity || activityInserted
-    }
-  } catch (e) {
-    console.error(
-      "Unexpected error updating activity with media references:",
-      e,
-    )
-  }
+  // Note: The activities table doesn't have a metadata field, so media is stored in the media table
+  // with parent_id referencing the activity. No need to update the activity record.
+  const inserted = activityInserted
+  
+  console.log("📸 [CREATE ACTIVITY] Media uploaded:", {
+    images: imageMediaIds.length,
+    videos: videoMediaIds.length
+  })
 
   // Only notify subscribers/sponsors if created_by is 'admin'
   if (inserted?.created_by === "admin") {
@@ -164,43 +163,102 @@ export async function POST(req: NextRequest) {
       } else {
       }
 
-      // Fetch sponsors (users who have active/complete subscriptions for this beneficiary)
-      type UserData = {
-        email: string
-        first_name?: string | null
-        last_name?: string | null
-        name?: string | null
-      }
-      type SponsorRow = {
-        id: string
-        user_id: string | null
-        email_notification: boolean | null
-        users: UserData | UserData[] | null
-      }
+      // Fetch sponsors using same logic as /api/admin/messaging/sponsors
+      console.log("📧 [CREATE ACTIVITY] Fetching sponsor information")
       
-      // Build query - if sponsorIds is provided, only fetch those specific sponsors
+      // Step 1: Fetch subscriptions
       let sponsorQuery = supabase
         .from("subscriptions")
-        .select("id, user_id, email_notification, users(email, first_name, last_name)")
+        .select("id, user_id, email_notification, customer_id")
         .eq("beneficiary_id", beneficiary_id)
         .eq("status", "complete")
       
       // If specific sponsors are selected, filter to only those
       if (sponsorIds.length > 0) {
         sponsorQuery = sponsorQuery.in("id", sponsorIds)
-        console.log("📧 Filtering to selected sponsors:", sponsorIds)
+        console.log("📧 [CREATE ACTIVITY] Filtering to selected sponsors:", sponsorIds)
       } else {
-        console.log("📧 No sponsors selected - will send to all (if any)")
+        console.log("📧 [CREATE ACTIVITY] No sponsors selected - will send to all (if any)")
       }
       
       const { data: sponsorRows, error: sponsorError } = await sponsorQuery
 
       if (sponsorError) {
-        console.error("❌ Error fetching sponsor subscriptions:", sponsorError)
+        console.error("❌ [CREATE ACTIVITY] Error fetching sponsor subscriptions:", sponsorError)
       } else {
-        console.log("✅ Found sponsor subscriptions:", sponsorRows?.length || 0)
-        console.log("📋 Sponsor rows data:", JSON.stringify(sponsorRows, null, 2))
+        console.log("✅ [CREATE ACTIVITY] Found sponsor subscriptions:", sponsorRows?.length || 0)
       }
+      
+      // Step 2: For each subscription, get customer info from transaction_ledger or users
+      type SponsorInfo = {
+        subscriptionId: string
+        email: string
+        name: string | null
+        emailNotification: boolean | null
+      }
+      
+      const sponsorInfoList: SponsorInfo[] = []
+      
+      if (sponsorRows && sponsorRows.length > 0) {
+        for (const sub of sponsorRows) {
+          let email: string | null = null
+          let name: string | null = null
+          
+          // Try to get customer info from transaction_ledger
+          const { data: transactions } = await supabase
+            .from("transaction_ledger")
+            .select("customer_email, customer_name, customer_id")
+            .eq("beneficiary_id", beneficiary_id)
+            .eq("subscription_type", "subscription")
+            .not("customer_email", "is", null)
+            .order("created_at", { ascending: false })
+            .limit(10)
+          
+          if (transactions && transactions.length > 0) {
+            let matchedTx = null
+            if (sub.customer_id) {
+              matchedTx = transactions.find(tx => tx.customer_id === sub.customer_id)
+            }
+            if (!matchedTx) {
+              matchedTx = transactions[0]
+            }
+            
+            if (matchedTx) {
+              email = matchedTx.customer_email
+              name = matchedTx.customer_name
+            }
+          }
+          
+          // Fallback to users table
+          if (!email && sub.user_id) {
+            const { data: userData } = await supabase
+              .from("users")
+              .select("email, first_name, last_name")
+              .eq("id", sub.user_id)
+              .single()
+            
+            if (userData) {
+              email = userData.email
+              name = userData.first_name && userData.last_name
+                ? `${userData.first_name} ${userData.last_name}`
+                : userData.first_name || userData.last_name || null
+            }
+          }
+          
+          if (email) {
+            sponsorInfoList.push({
+              subscriptionId: sub.id,
+              email,
+              name,
+              emailNotification: sub.email_notification
+            })
+          } else {
+            console.warn("⚠️ [CREATE ACTIVITY] No email found for subscription:", sub.id)
+          }
+        }
+      }
+      
+      console.log("✅ [CREATE ACTIVITY] Compiled sponsor info list:", sponsorInfoList.length)
 
       // Fetch beneficiary name once for both audiences
       const { data: beneficiaryData } = await supabase
@@ -235,51 +293,18 @@ export async function POST(req: NextRequest) {
       }
 
       // Add sponsor emails - only if sponsorIds were specified (opt-in for email)
-      if (!sponsorError && Array.isArray(sponsorRows) && sponsorIds.length > 0) {
-        for (const row of sponsorRows as SponsorRow[]) {
-          if (row?.email_notification === false) {
+      if (!sponsorError && sponsorIds.length > 0) {
+        console.log("📧 [CREATE ACTIVITY] Adding sponsors to audience:", sponsorInfoList.length)
+        for (const sponsor of sponsorInfoList) {
+          if (sponsor.emailNotification === false) {
+            console.log("⏭️ [CREATE ACTIVITY] Skipping sponsor (notifications disabled):", sponsor.email)
             continue
           }
           
-          // Handle user data - may be an object or array
-          const userData = Array.isArray(row.users)
-            ? row.users[0]
-            : row.users
-          
-          if (userData?.email) {
-            // Construct name from first_name and last_name
-            const name = userData.first_name && userData.last_name
-              ? `${userData.first_name} ${userData.last_name}`
-              : userData.first_name || userData.last_name || userData.name || null
-            
-            audienceMap.set(userData.email, {
-              email: userData.email,
-              name,
-            })
-          } else {
-            console.warn("⚠️ Sponsor row has no user email:", row.user_id)
-            // Try to fetch user email directly if relationship didn't work
-            if (row.user_id) {
-              const { data: userData, error: userError } = await supabase
-                .from("users")
-                .select("email, first_name, last_name")
-                .eq("id", row.user_id)
-                .single()
-              
-              if (!userError && userData?.email) {
-                const name = userData.first_name && userData.last_name
-                  ? `${userData.first_name} ${userData.last_name}`
-                  : userData.first_name || userData.last_name || null
-                
-                audienceMap.set(userData.email, {
-                  email: userData.email,
-                  name,
-                })
-              } else {
-                console.error("❌ Could not fetch user data for:", row.user_id, userError)
-              }
-            }
-          }
+          audienceMap.set(sponsor.email, {
+            email: sponsor.email,
+            name: sponsor.name,
+          })
         }
       }
 
@@ -354,21 +379,21 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        if (inserted?.metadata?.media?.images && Array.isArray(inserted.metadata.media.images)) {
-          const urls = await generatePublicUrls(
-            inserted.metadata.media.images,
-            "IMAGE",
-          )
+        // Generate media URLs from the media IDs we tracked
+        if (imageMediaIds.length > 0) {
+          const urls = await generatePublicUrls(imageMediaIds, "IMAGE")
           imageUrls.push(...urls)
         }
 
-        if (inserted?.metadata?.media?.videos && Array.isArray(inserted.metadata.media.videos)) {
-          const urls = await generatePublicUrls(
-            inserted.metadata.media.videos,
-            "VIDEO",
-          )
+        if (videoMediaIds.length > 0) {
+          const urls = await generatePublicUrls(videoMediaIds, "VIDEO")
           videoUrls.push(...urls)
         }
+        
+        console.log("🖼️ [CREATE ACTIVITY] Generated media URLs:", {
+          images: imageUrls.length,
+          videos: videoUrls.length
+        })
 
         await Promise.allSettled(
           Array.from(audienceMap.values()).map(async (member) => {
@@ -437,5 +462,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  console.log("🎉 [CREATE ACTIVITY] Activity created successfully, ID:", activityId)
   return NextResponse.json({ activity: inserted }, { status: 201 })
 }
