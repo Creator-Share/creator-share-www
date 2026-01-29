@@ -64,13 +64,15 @@ const SponsorshipFilters: React.FC<
     checkAdminStatus()
   }, [user])
 
-  // Initialize admin status filter when in admin mode
+  // Initialize admin status filter when in admin mode (only on mount)
+  const hasInitializedRef = useRef(false)
   useEffect(() => {
-    if (isAdminMode && mounted) {
+    if (isAdminMode && mounted && !hasInitializedRef.current) {
       const allStatuses = ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
-      // Only update if current status doesn't include all admin statuses
+      // Only initialize if status is empty or doesn't match admin defaults
       const hasAllStatuses = allStatuses.every(status => selectedStatus.includes(status))
-      if (!hasAllStatuses) {
+      if (!hasAllStatuses && selectedStatus.length === 0) {
+        hasInitializedRef.current = true
         setStatus(allStatuses)
         onFilterChange({
           gender: selectedGender,
@@ -78,9 +80,12 @@ const SponsorshipFilters: React.FC<
           status: allStatuses,
           search: searchQuery,
         })
+      } else {
+        hasInitializedRef.current = true
       }
     }
-  }, [isAdminMode, mounted, selectedStatus, selectedGender, selectedAgeRange, searchQuery, setStatus, onFilterChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminMode, mounted])
 
   useEffect(() => {
     
@@ -323,7 +328,10 @@ const SponsorshipFilters: React.FC<
                     collection={statusOptions}
                     value={selectedStatus}
                     onValueChange={(details) => {
-                      const values = details.items.map((item) => item.value)
+                      // When multiple is true, details.value is an array of selected values
+                      const values = Array.isArray(details.value) 
+                        ? details.value 
+                        : details.items.map((item) => item.value)
                       handleFilterChange({ status: values })
                     }}
                     size="sm"
