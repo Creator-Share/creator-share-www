@@ -120,6 +120,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [imageUploadKey, setImageUploadKey] = useState(0)
   const [videoUploadKey, setVideoUploadKey] = useState(0)
+  const [showBiographyComparison, setShowBiographyComparison] = useState(false)
   const shouldShowOverlay = isProcessingImages || isImageLoading || disabled
 
   const resetImageUploadInput = useCallback(() => {
@@ -1014,35 +1015,38 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 errorText="This field is required"
                 helperText="Provide a detailed description about the child"
               >
-                <Textarea
-                  name="biography"
-                  size="xl"
-                  className={`border ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  px={2}
-                  py={2}
-                  onChange={handleInputChange}
-                  value={formData.biography || ""}
-                  disabled={disabled}
-                />
-                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-                  <ProofreadButton
-                    text={formData.biography || ""}
+                {!showBiographyComparison && (
+                  <Textarea
+                    name="biography"
+                    size="xl"
+                    rows={12}
+                    className={`border ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    px={2}
+                    py={2}
+                    onChange={handleInputChange}
+                    value={formData.biography || ""}
                     disabled={disabled}
-                    onAccept={(proofreadText) => {
-                      if (isEditMode) {
-                        setLocalFormData((prev) => ({ ...prev, biography: proofreadText }))
-                      } else if (setExternalFormData) {
-                        setExternalFormData((prev: Partial<Beneficiaries>) => ({
-                          ...prev,
-                          biography: proofreadText
-                        }))
-                      }
-                      setHasUnsavedChanges(true)
-                    }}
-                    fieldLabel="Biography"
-                    size="sm"
                   />
-                </div>
+                )}
+                <ProofreadButton
+                  text={formData.biography || ""}
+                  disabled={disabled}
+                  onAccept={(proofreadText) => {
+                    if (isEditMode) {
+                      setLocalFormData((prev) => ({ ...prev, biography: proofreadText }))
+                    } else if (setExternalFormData) {
+                      setExternalFormData((prev: Partial<Beneficiaries>) => ({
+                        ...prev,
+                        biography: proofreadText
+                      }))
+                    }
+                    setHasUnsavedChanges(true)
+                  }}
+                  fieldLabel="Biography"
+                  size="sm"
+                  type="biography"
+                  onShowComparison={setShowBiographyComparison}
+                />
               </Field>
 
               {/* Budget Goal */}

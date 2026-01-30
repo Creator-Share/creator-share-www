@@ -33,7 +33,19 @@ EMAIL_SECURE=true
 EMAIL_FROM="Creator Share" <noreply@creatorshare.com>
 
 
-# AI Proofreading (Google Gemini)
-# Get your free API key from: https://aistudio.google.com/app/apikey
-# Free tier: 15 requests/minute, 1,500 requests/day
-GEMINI_API_KEY=
+# AI Proofreading (OpenAI-Compatible API)
+# Supports: OpenAI, Azure OpenAI, OpenRouter, Anthropic (via proxy), local models (LM Studio, Ollama), etc.
+# 
+# Required environment variables:
+LLM_API_KEY=           # Your API key for the LLM provider
+LLM_API_HOST=          # API base path (see examples below - NO trailing slash)
+# 
+# Optional:
+LLM_MODEL=             # Model name (defaults to gpt-4o-mini if not specified)
+#
+# Example configurations (openai-edge library appends /chat/completions):
+# OpenAI:         LLM_API_HOST=https://api.openai.com/v1
+# OpenRouter:     LLM_API_HOST=https://openrouter.ai/api/v1
+# Azure OpenAI:   LLM_API_HOST=https://{resource}.openai.azure.com/openai/deployments/{deployment}
+# Local (Ollama): LLM_API_HOST=http://localhost:11434/v1
+# Local (LM Studio): LLM_API_HOST=http://localhost:1234/v1

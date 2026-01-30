@@ -433,6 +433,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
               onAccept={onTitleChange}
               fieldLabel="Title"
               size="sm"
+              type="activity"
             />
           </div>
         </div>
@@ -450,6 +451,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
               onAccept={onDescriptionChange}
               fieldLabel="Description"
               size="sm"
+              type="activity"
             />
           </div>
         </div>
@@ -735,6 +737,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
               onAccept={onTitleChange}
               fieldLabel="Title"
               size="sm"
+              type="activity"
             />
           </div>
         </div>
@@ -752,6 +755,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
               onAccept={onDescriptionChange}
               fieldLabel="Description"
               size="sm"
+              type="activity"
             />
           </div>
         </div>
