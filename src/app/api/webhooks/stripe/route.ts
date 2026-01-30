@@ -1128,6 +1128,35 @@ export async function POST(req: Request) {
           // subscription_create = first payment (already handled by checkout.session.completed)
           if (invoice.billing_reason === "subscription_cycle" || invoice.billing_reason === "subscription_update") {
             try {
+              // Get customer email and name from invoice (available directly on invoice object)
+              const customerEmail = invoice.customer_email || null
+              const customerName = invoice.customer_name || null
+
+              // Deduplication: Check if we've already sent an email for this invoice
+              // This prevents duplicate emails when both invoice.paid and invoice.payment_succeeded fire
+              // Check for emails sent to the same customer in the last 5 minutes with payment confirmation subject
+              if (customerEmail) {
+                const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+                const { data: existingEmailLog } = await supabase
+                  .from("email_logs")
+                  .select("id")
+                  .eq("email", customerEmail)
+                  .like("subject", "Payment Confirmation: Your Sponsorship for%")
+                  .gte("created_at", fiveMinutesAgo)
+                  .limit(1)
+                  .maybeSingle()
+
+                if (existingEmailLog) {
+                  if (DEBUG_MODE) {
+                    console.log(`[DEBUG] Email already sent for invoice ${invoice.id} (customer: ${customerEmail}) - skipping duplicate`)
+                  }
+                  return NextResponse.json(
+                    { message: "Invoice payment processed (email already sent)" },
+                    { status: 200 },
+                  )
+                }
+              }
+
               // Get subscription details to find beneficiary and customer email
               const { data: subscriptionData, error: subscriptionError } = await supabase
                 .from("subscriptions")
@@ -1150,10 +1179,6 @@ export async function POST(req: Request) {
                 if (beneficiaryError) {
                   console.error("Error fetching beneficiary for payment confirmation:", beneficiaryError)
                 }
-
-                // Get customer email and name from invoice (available directly on invoice object)
-                const customerEmail = invoice.customer_email || null
-                const customerName = invoice.customer_name || null
 
                 // Send monthly payment confirmation email
                 if (customerEmail && beneficiaryData) {
