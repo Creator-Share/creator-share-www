@@ -16,7 +16,7 @@
   "dependencies": {
     "@chakra-ui/react": "^3.27.0",
     "@emotion/react": "^11.14.0",
-    "@google/generative-ai": "^0.24.1",
+    "openai-edge": "^1.2.2",
     "@paypal/checkout-server-sdk": "^1.0.3",
     "@paypal/react-paypal-js": "^8.8.3",
     "@stripe/react-stripe-js": "^3.5.1",

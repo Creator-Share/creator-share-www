@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
-import { proofreadText } from "@/utils/ai/gemini"
+import { proofreadText } from "@/utils/ai/llm"
+import { isLLMConfigured } from "@/utils/ai/config"
 
 export async function POST(req: NextRequest) {
+  // Early check for configuration
+  if (!isLLMConfigured()) {
+    return NextResponse.json(
+      { error: "AI proofreading is not configured on this server." },
+      { status: 503 }
+    )
+  }
+
   try {
-    const { text } = await req.json()
+    const { text, type, instructions } = await req.json()
 
     if (!text || typeof text !== "string") {
       return NextResponse.json(
@@ -19,7 +28,23 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const result = await proofreadText(text)
+    // Validate type if provided
+    if (type && !["biography", "activity"].includes(type)) {
+      return NextResponse.json(
+        { error: "Type must be 'biography' or 'activity'" },
+        { status: 400 }
+      )
+    }
+
+    // Validate instructions if provided
+    if (instructions && typeof instructions !== "string") {
+      return NextResponse.json(
+        { error: "Instructions must be a string" },
+        { status: 400 }
+      )
+    }
+
+    const result = await proofreadText(text, type || "biography", instructions)
 
     if (!result.success) {
       return NextResponse.json(
@@ -30,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      proofreadText: result.proofreadText,
+      proofreadText: result.proofreadText
     })
   } catch (error) {
     console.error("Proofread API error:", error)
