@@ -15,12 +15,14 @@ interface ActivitiesTableProps {
   beneficiaryType: string
   beneficiaryId: string
   searchQuery?: string
+  userRole?: string | null
 }
 
 const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
   beneficiaryType,
   beneficiaryId,
   searchQuery = "",
+  userRole = null,
 }) => {
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
@@ -36,8 +38,6 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
   // Edit Activity Modal State
   const [editOpen, setEditOpen] = useState(false)
   const [editActivity, setEditActivity] = useState<Activity | null>(null)
-  const [editTitle, setEditTitle] = useState<string>("")
-  const [editDescription, setEditDescription] = useState<string>("")
   const [editError, setEditError] = useState<string | null>(null)
   const [editSaving, setEditSaving] = useState(false)
 
@@ -121,19 +121,20 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
         </Button>
       </div>
       <DataTable
-        columns={getActivityColumns({
-          onEdit: (activity: Activity) => {
-            setEditActivity(activity)
-            setEditTitle(activity.title)
-            setEditDescription(activity.description)
-            setEditError(null)
-            setEditOpen(true)
+        columns={getActivityColumns(
+          {
+            onEdit: (activity: Activity) => {
+              setEditActivity(activity)
+              setEditError(null)
+              setEditOpen(true)
+            },
+            onDelete: (activity: Activity) => {
+              setDeleteActivity(activity)
+              setDeleteOpen(true)
+            },
           },
-          onDelete: (activity: Activity) => {
-            setDeleteActivity(activity)
-            setDeleteOpen(true)
-          },
-        })}
+          userRole === "SUPER_ADMIN",
+        )}
         data={activities}
         controls="bottom"
         tableHeight="h-64"
@@ -145,34 +146,27 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
         description={newDescription}
         activityType={newActivityType}
         beneficiaryId={beneficiaryId}
+        beneficiaryName=""
         onTitleChange={setNewTitle}
         onDescriptionChange={setNewDescription}
         onActivityTypeChange={setNewActivityType}
         onCreate={handleCreateActivity}
+        onSuccess={() => {}}
         creating={creating}
         error={error}
       />
       <EditActivityModal
         open={editOpen}
         onClose={() => setEditOpen(false)}
-        title={editTitle}
-        description={editDescription}
-        onTitleChange={setEditTitle}
-        onDescriptionChange={setEditDescription}
-        onSave={async () => {
+        activity={editActivity}
+        onSave={async (formData: FormData) => {
           setEditSaving(true)
           setEditError(null)
           try {
             if (!editActivity) return
             const res = await fetch("/api/admin/activities/update", {
               method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                id: editActivity.id,
-                title: editTitle,
-                description: editDescription,
-                beneficiary_id: editActivity.beneficiary_id,
-              }),
+              body: formData,
             })
             if (!res.ok) throw new Error("Failed to update activity")
             const data = await res.json()

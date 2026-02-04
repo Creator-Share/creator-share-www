@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { redactEmail } from "@/utils/privacy"
 
 export interface SponsorInfo {
   subscriptionId: string
   userId: string | null
-  email: string
+  emailRedacted: string
   name: string | null
   amount: number | null
   interval: string | null
@@ -120,7 +121,7 @@ export async function GET(req: NextRequest) {
       sponsors.push({
         subscriptionId: sub.id,
         userId: sub.user_id,
-        email,
+        emailRedacted: redactEmail(email),
         name,
         amount: sub.amount,
         interval: sub.interval,
@@ -133,7 +134,7 @@ export async function GET(req: NextRequest) {
 
   console.log("✅ [SPONSORS API] Successfully fetched sponsors:", {
     totalSponsors: sponsors.length,
-    sponsors: sponsors.map(s => ({ email: s.email, name: s.name }))
+    sponsors: sponsors.map(s => ({ emailRedacted: s.emailRedacted, name: s.name }))
   })
 
   return NextResponse.json({ sponsors }, { status: 200 })

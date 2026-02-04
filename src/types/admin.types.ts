@@ -67,6 +67,12 @@ export interface Activity {
   activity_source: "admin" | "sponsorship" | "system"
 }
 
+export interface BeneficiaryWithActivity extends Beneficiaries {
+  last_activity_date: string | null
+  days_since_last_activity: number | null
+  has_activity: boolean
+}
+
 export interface BeneficiaryMedia {
   id: string
   beneficiary_id: string
