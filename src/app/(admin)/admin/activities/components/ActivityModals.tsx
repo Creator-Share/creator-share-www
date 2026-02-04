@@ -32,7 +32,7 @@ const activityTypeCollection = createListCollection({
 interface SponsorInfo {
   subscriptionId: string
   userId: string | null
-  email: string
+  emailRedacted: string
   name: string | null
   amount: number | null
   interval: string | null
@@ -75,7 +75,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   
   // Sponsor and messaging features
   const [isPublic, setIsPublic] = useState(false)
-  const [sendToSponsors, setSendToSponsors] = useState(false)
+  const [sendToSponsors, setSendToSponsors] = useState(true)
   const [sponsors, setSponsors] = useState<SponsorInfo[]>([])
   const [selectedSponsorIds, setSelectedSponsorIds] = useState<Set<string>>(new Set())
   const [loadingSponsors, setLoadingSponsors] = useState(false)
@@ -90,7 +90,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       setImagePreviews([])
       setVideoPreviews([])
       setIsPublic(false)
-      setSendToSponsors(false)
+      setSendToSponsors(true)
       setSponsors([])
       setSelectedSponsorIds(new Set())
       return
@@ -386,7 +386,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
                           {sponsor.name || "Unknown"}
                         </Text>
                         <Text fontSize="xs" color="gray.500">
-                          {sponsor.email}
+                          {sponsor.emailRedacted}
                         </Text>
                       </Box>
                       {sponsor.emailNotification === false && (
