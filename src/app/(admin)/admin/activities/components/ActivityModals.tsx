@@ -46,10 +46,12 @@ interface CreateModalProps {
   description: string
   activityType: string
   beneficiaryId: string
+  beneficiaryName: string
   onTitleChange: (v: string) => void
   onDescriptionChange: (v: string) => void
   onActivityTypeChange: (v: string) => void
   onCreate: (formData: FormData) => void
+  onSuccess: () => void
   creating: boolean
   error: string | null
 }
@@ -61,10 +63,12 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   description,
   activityType,
   beneficiaryId,
+  beneficiaryName,
   onTitleChange,
   onDescriptionChange,
   onActivityTypeChange,
   onCreate,
+  onSuccess, // eslint-disable-line @typescript-eslint/no-unused-vars
   creating,
   error,
 }) => {
@@ -249,6 +253,8 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       compressedImages.forEach((file) => formData.append("images", file))
       videoFiles.forEach((file) => formData.append("videos", file))
       
+      // Call onCreate to trigger the parent's API call
+      // The parent should handle res.ok check and call onSuccess()
       onCreate(formData)
     } catch (error) {
       console.error("Error preparing activity:", error)
@@ -292,7 +298,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         <div
           style={{ fontWeight: "bold", fontSize: "1.125rem", marginBottom: 16 }}
         >
-          Create Activity
+          Create Activity for {beneficiaryName}
         </div>
 
                 {/* Public/Private Toggle */}
@@ -660,11 +666,8 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
 interface EditModalProps {
   open: boolean
   onClose: () => void
-  title: string
-  description: string
-  onTitleChange: (v: string) => void
-  onDescriptionChange: (v: string) => void
-  onSave: () => void
+  activity: Activity | null
+  onSave: (formData: FormData) => void
   saving: boolean
   error: string | null
 }
@@ -672,14 +675,46 @@ interface EditModalProps {
 export const EditActivityModal: React.FC<EditModalProps> = ({
   open,
   onClose,
-  title,
-  description,
-  onTitleChange,
-  onDescriptionChange,
+  activity,
   onSave,
   saving,
   error,
 }) => {
+  // State variables
+  const [title, setTitle] = useState(activity?.title || "")
+  const [description, setDescription] = useState(activity?.description || "")
+  const [activityType, setActivityType] = useState<"INFO" | "UPDATE" | "SUBSCRIPTION">(activity?.activity_type || "UPDATE")
+  const [imageFiles, setImageFiles] = useState<File[]>([])
+  const [videoFiles, setVideoFiles] = useState<File[]>([])
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
+  const [videoPreviews, setVideoPreviews] = useState<string[]>([])
+  const [existingImages, setExistingImages] = useState<string[]>(activity?.images_url || [])
+  const [existingVideos, setExistingVideos] = useState<string[]>(activity?.videos_url || [])
+  const [isPublic, setIsPublic] = useState(activity?.is_public || false)
+  const [compressing, setCompressing] = useState(false)
+
+  // Sync with activity prop changes
+  useEffect(() => {
+    if (activity) {
+      setTitle(activity.title || "")
+      setDescription(activity.description || "")
+      setActivityType(activity.activity_type || "UPDATE")
+      setExistingImages(activity.images_url || [])
+      setExistingVideos(activity.videos_url || [])
+      setIsPublic(activity.is_public || false)
+    }
+  }, [activity])
+
+  // Clear file uploads when modal closes
+  useEffect(() => {
+    if (!open) {
+      setImageFiles([])
+      setVideoFiles([])
+      setImagePreviews([])
+      setVideoPreviews([])
+    }
+  }, [open])
+
   // Prevent body scroll when modal is open
   useEffect(() => {
     if (open) {
@@ -690,6 +725,126 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
       }
     }
   }, [open])
+
+  // Create previews for new images
+  useEffect(() => {
+    const urls = imageFiles.map((file) => URL.createObjectURL(file))
+    setImagePreviews(urls)
+
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [imageFiles])
+
+  // Create previews for new videos
+  useEffect(() => {
+    const urls = videoFiles.map((file) => URL.createObjectURL(file))
+    setVideoPreviews(urls)
+
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [videoFiles])
+
+  const handleRemoveImage = (index: number) => {
+    // Revoke the object URL for the removed image
+    if (imagePreviews[index]) {
+      URL.revokeObjectURL(imagePreviews[index])
+    }
+    // Remove from both arrays
+    const newFiles = imageFiles.filter((_, i) => i !== index)
+    const newPreviews = imagePreviews.filter((_, i) => i !== index)
+    setImageFiles(newFiles)
+    setImagePreviews(newPreviews)
+  }
+
+  const handleRemoveVideo = (index: number) => {
+    // Revoke the object URL for the removed video
+    if (videoPreviews[index]) {
+      URL.revokeObjectURL(videoPreviews[index])
+    }
+    // Remove from both arrays
+    const newFiles = videoFiles.filter((_, i) => i !== index)
+    const newPreviews = videoPreviews.filter((_, i) => i !== index)
+    setVideoFiles(newFiles)
+    setVideoPreviews(newPreviews)
+  }
+
+  const handleRemoveExistingImage = (index: number) => {
+    setExistingImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleRemoveExistingVideo = (index: number) => {
+    setExistingVideos((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSave = async () => {
+    if (!activity) return
+    
+    setCompressing(true)
+    
+    try {
+      // Compress images before uploading
+      const compressedImages: File[] = []
+      const largeFiles: string[] = []
+      
+      for (const file of imageFiles) {
+        try {
+          const compressed = await compressImage(file, {
+            maxSizeMB: 3.5, // Target 3.5MB to leave buffer under Vercel's 4.5MB limit
+          })
+          
+          if (compressed.size < file.size) {
+            const sizeReduction = ((1 - compressed.size / file.size) * 100).toFixed(0)
+            largeFiles.push(`${file.name} (${sizeReduction}% smaller)`)
+          }
+          
+          compressedImages.push(compressed)
+        } catch (error) {
+          console.error(`Failed to compress ${file.name}:`, error)
+          // If compression fails, use original file (API will validate size)
+          compressedImages.push(file)
+        }
+      }
+      
+      if (largeFiles.length > 0) {
+        toaster.create({
+          title: "Large Files Compressed",
+          description: `These files were automatically compressed: ${largeFiles.join(', ')}`,
+          type: "info",
+          duration: 5000,
+        })
+      }
+      
+      const formData = new FormData()
+      formData.append("id", activity.id)
+      formData.append("title", title)
+      formData.append("description", description)
+      formData.append("activity_type", activityType)
+      formData.append("is_public", String(isPublic))
+      formData.append("beneficiary_id", activity.beneficiary_id)
+      
+      // Append existing media that wasn't removed
+      formData.append("existing_images", JSON.stringify(existingImages))
+      formData.append("existing_videos", JSON.stringify(existingVideos))
+      
+      // Append new media files (use compressed images)
+      compressedImages.forEach((file) => formData.append("images", file))
+      videoFiles.forEach((file) => formData.append("videos", file))
+      
+      onSave(formData)
+    } catch (error) {
+      console.error("Error preparing activity:", error)
+      toaster.create({
+        title: "Error",
+        description: "Failed to prepare files for upload",
+        type: "error",
+        duration: 5000,
+      })
+    } finally {
+      setCompressing(false)
+    }
+  }
 
   return open ? (
     <div
@@ -711,8 +866,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
           background: "white",
           padding: 24,
           borderRadius: 8,
-          minWidth: 350,
-          maxWidth: "90vw",
+          width: "min(1200px, 90vw)",
           maxHeight: "90vh",
           overflowY: "auto",
           boxShadow: "0 2px 16px rgba(0,0,0,0.2)",
@@ -723,42 +877,417 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
         >
           Edit Activity
         </div>
+
+        {/* Public/Private Toggle */}
+        <div style={{ marginBottom: 12, padding: 12, background: "#f3f4f6", borderRadius: 8 }}>
+          <Flex align="center" gap={3}>
+            <Checkbox
+              checked={isPublic}
+              onCheckedChange={(checked) => setIsPublic(!!checked)}
+            />
+            <Box flex={1}>
+              <Text fontWeight="semibold" fontSize="sm">Make this activity public</Text>
+              <Text fontSize="xs" color="gray.600">
+                Public activities appear on the beneficiary's profile page
+              </Text>
+            </Box>
+            <Box
+              px={2}
+              py={1}
+              borderRadius={4}
+              fontWeight="semibold"
+              fontSize="xs"
+              bg={isPublic ? "green.100" : "gray.200"}
+              color={isPublic ? "green.800" : "gray.600"}
+            >
+              {isPublic ? "PUBLIC" : "PRIVATE"}
+            </Box>
+          </Flex>
+        </div>
+
+        {/* Activity Type Dropdown */}
+        <SelectRoot
+          collection={activityTypeCollection}
+          className="border border-stone-600"
+          style={{ marginBottom: 12 }}
+          value={[activityType]}
+          onValueChange={(details) => {
+            const newType = details.value[0]
+            if (newType === "INFO" || newType === "UPDATE" || newType === "SUBSCRIPTION") {
+              setActivityType(newType)
+            }
+          }}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValueText placeholder="Select Activity Type" />
+          </SelectTrigger>
+          <SelectContent>
+            {activityTypeCollection.items.map((option) => (
+              <SelectItem key={option.value} item={option}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </SelectRoot>
+
+        {/* Title Input */}
         <div style={{ marginBottom: 12 }}>
           <Input
             placeholder="Title"
             value={title}
-            onChange={(e) => onTitleChange(e.target.value)}
+            onChange={(e) => setTitle(e.target.value)}
             p={2}
             className="border border-stone-600"
           />
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
             <ProofreadButton
               text={title}
-              onAccept={onTitleChange}
+              onAccept={setTitle}
               fieldLabel="Title"
               size="sm"
               type="activity"
             />
           </div>
         </div>
+
+        {/* Description Textarea */}
         <div style={{ marginBottom: 12 }}>
           <Textarea
             placeholder="Description"
             value={description}
-            onChange={(e) => onDescriptionChange(e.target.value)}
+            onChange={(e) => setDescription(e.target.value)}
             p={2}
             className="border border-stone-600"
           />
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
             <ProofreadButton
               text={description}
-              onAccept={onDescriptionChange}
+              onAccept={setDescription}
               fieldLabel="Description"
               size="sm"
               type="activity"
             />
           </div>
         </div>
+
+        {/* Existing Images */}
+        {existingImages.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontWeight: 500 }}>Current Images</label>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              {existingImages.map((src, index) => (
+                <div
+                  key={src}
+                  className="relative group"
+                  style={{
+                    width: 150,
+                    height: 150,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      border: "1px solid #e5e7eb",
+                      backgroundColor: "#f9fafb",
+                      position: "relative",
+                    }}
+                  >
+                    <Image
+                      src={src}
+                      alt={`Existing ${index + 1}`}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleRemoveExistingImage(index)}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                    type="button"
+                    aria-label="Remove image"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Upload New Images */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontWeight: 500 }}>Upload New Images</label>
+          <FileUploadRoot
+            onFileChange={(fileDetails) => {
+              const newFiles = fileDetails.acceptedFiles
+              
+              // Revoke all old URLs
+              imagePreviews.forEach(url => URL.revokeObjectURL(url))
+              
+              // Create fresh URLs for all files
+              const newUrls = newFiles.map(file => URL.createObjectURL(file))
+              
+              setImageFiles(newFiles)
+              setImagePreviews(newUrls)
+            }}
+            accept={["image/*"]}
+            maxFiles={5}
+          >
+            <FileUploadTrigger asChild>
+              <Button variant="outline" size="sm" className="border" px={4}>
+                <HiUpload /> Upload Images
+              </Button>
+            </FileUploadTrigger>
+            <FileUploadList showSize clearable files={imageFiles} />
+          </FileUploadRoot>
+          {imagePreviews.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              {imagePreviews.map((src, index) => (
+                <div
+                  key={src}
+                  className="relative group"
+                  style={{
+                    width: 150,
+                    height: 150,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      border: "1px solid #e5e7eb",
+                      backgroundColor: "#f9fafb",
+                      position: "relative",
+                    }}
+                  >
+                    <Image
+                      src={src}
+                      alt={`Preview ${index + 1}`}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleRemoveImage(index)}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                    type="button"
+                    aria-label="Remove image"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Existing Videos */}
+        {existingVideos.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontWeight: 500 }}>Current Videos</label>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              {existingVideos.map((src, index) => (
+                <div
+                  key={src}
+                  className="relative group"
+                  style={{
+                    width: 240,
+                    height: 150,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      border: "1px solid #e5e7eb",
+                      backgroundColor: "#000",
+                    }}
+                  >
+                    <video
+                      src={src}
+                      controls
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        display: "block",
+                      }}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveExistingVideo(index)}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+                    type="button"
+                    aria-label="Remove video"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Upload New Videos */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontWeight: 500 }}>Upload New Videos</label>
+          <FileUploadRoot
+            onFileChange={(fileDetails) => {
+              const newFiles = fileDetails.acceptedFiles
+              
+              // Revoke all old URLs
+              videoPreviews.forEach(url => URL.revokeObjectURL(url))
+              
+              // Create fresh URLs for all files
+              const newUrls = newFiles.map(file => URL.createObjectURL(file))
+              
+              setVideoFiles(newFiles)
+              setVideoPreviews(newUrls)
+            }}
+            accept={["video/*"]}
+            maxFiles={5}
+          >
+            <FileUploadTrigger asChild>
+              <Button variant="outline" size="sm" className="border" px={4}>
+                <HiUpload /> Upload Videos
+              </Button>
+            </FileUploadTrigger>
+            <FileUploadList showSize clearable files={videoFiles} />
+          </FileUploadRoot>
+          {videoPreviews.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              {videoPreviews.map((src, index) => (
+                <div
+                  key={src}
+                  className="relative group"
+                  style={{
+                    width: 240,
+                    height: 150,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      border: "1px solid #e5e7eb",
+                      backgroundColor: "#000",
+                    }}
+                  >
+                    <video
+                      src={src}
+                      controls
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        display: "block",
+                      }}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveVideo(index)}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+                    type="button"
+                    aria-label="Remove video"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
         <div
           style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}
@@ -766,16 +1295,16 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
           <Button
             onClick={onClose}
             style={{ marginRight: 12 }}
-            disabled={saving}
+            disabled={saving || compressing}
           >
             Cancel
           </Button>
           <Button
             colorScheme="blue"
-            onClick={onSave}
-            disabled={!title || !description}
+            onClick={handleSave}
+            disabled={!title || !description || saving || compressing}
           >
-            Save
+            {compressing ? "Compressing..." : saving ? "Saving..." : "Save"}
           </Button>
         </div>
       </div>

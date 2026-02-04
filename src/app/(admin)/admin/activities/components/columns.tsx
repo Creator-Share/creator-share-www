@@ -13,6 +13,7 @@ export type ActivityActionHandlers = {
 
 export function getActivityColumns(
   handlers: ActivityActionHandlers,
+  showDeleteButton: boolean = true,
 ): ColumnDef<unknown, unknown>[] {
   return [
     {
@@ -46,13 +47,15 @@ export function getActivityColumns(
           >
             Edit
           </Button>
-          <Button
-            size="xs"
-            colorScheme="red"
-            onClick={() => handlers.onDelete(row.original as Activity)}
-          >
-            Delete
-          </Button>
+          {showDeleteButton && (
+            <Button
+              size="xs"
+              colorScheme="red"
+              onClick={() => handlers.onDelete(row.original as Activity)}
+            >
+              Delete
+            </Button>
+          )}
         </div>
       ),
       meta: { excludeFromClick: true },
