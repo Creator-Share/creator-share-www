@@ -3,12 +3,23 @@ import type { NextConfig } from "next"
 const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["@chakra-ui/react"],
+    serverActions: {
+      bodySizeLimit: '100mb',
+    },
+    // Increase body size limit for App Router API routes
+    serverComponentsExternalPackages: [],
+  },
+  
+  // Configure body size limit for App Router routes
+  // This applies to all /app/api/* routes
+  serverRuntimeConfig: {
+    maxRequestBodySize: '100mb',
   },
 
-  // Increase body size limit for large image uploads
+  // Increase body size limit for large image uploads (Pages Router)
   api: {
     bodyParser: {
-      sizeLimit: '50mb',
+      sizeLimit: '100mb',
     },
   },
 

@@ -27,7 +27,6 @@ const ActivitiesAdminPage: React.FC = () => {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [activityType, setActivityType] = useState("UPDATE")
-  const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const fetchedImagesRef = useRef<Set<string>>(new Set())
@@ -167,47 +166,23 @@ const ActivitiesAdminPage: React.FC = () => {
   }
 
   // Handle activity created
+  // Note: The modal now handles the API calls internally
+  // This is just called to clean up and navigate
   const handleActivityCreated = async (formData: FormData) => {
     if (!selectedBeneficiary) return
-
-    setCreating(true)
-    setError(null)
-
-    try {
-      const res = await fetch("/api/admin/activities/create", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || "Failed to create activity")
-      }
-
-      toaster.create({
-        title: "Success",
-        description: "Activity created successfully",
-        type: "success",
-        duration: 5000,
-      })
-
+    
+    // Check if this was handled by the modal (new pattern)
+    if (formData.has("_handled")) {
+      // Modal handled everything, just navigate
       setCreateModalOpen(false)
+      const beneficiaryIdToNavigate = selectedBeneficiary.id
       setSelectedBeneficiary(null)
-      
-      // Navigate to beneficiary page immediately
-      router.push(`/admin/beneficiary/${selectedBeneficiary.id}`)
-    } catch (error) {
-      console.error("Failed to create activity:", error)
-      setError(error instanceof Error ? error.message : "Failed to create activity")
-      toaster.create({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create activity",
-        type: "error",
-        duration: 5000,
-      })
-    } finally {
-      setCreating(false)
+      router.push(`/admin/beneficiary/${beneficiaryIdToNavigate}`)
+      return
     }
+    
+    // Old pattern - should not reach here anymore
+    console.warn("Received unhandled FormData - this should not happen")
   }
 
   const handleCloseModal = () => {
@@ -298,7 +273,7 @@ const ActivitiesAdminPage: React.FC = () => {
             // This is called after successful creation but before navigation
             // We handle the navigation in handleActivityCreated
           }}
-          creating={creating}
+          creating={false}
           error={error}
         />
       )}

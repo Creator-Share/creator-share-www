@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { generatePublicUrl } from "@/utils/supabase/media"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -24,11 +25,46 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const { data, error } = await query
+  const { data: activities, error } = await query
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ activities: data || [] })
+  // Fetch media for each activity
+  const activitiesWithMedia = await Promise.all(
+    (activities || []).map(async (activity) => {
+      const { data: mediaRecords } = await supabase
+        .from("media")
+        .select("*")
+        .eq("parent_id", activity.id)
+        .order("created_at", { ascending: true })
+
+      const images_url: string[] = []
+      const videos_url: string[] = []
+
+      if (mediaRecords) {
+        for (const media of mediaRecords) {
+          try {
+            const url = generatePublicUrl(media as unknown as import('@/utils/supabase/media').MediaRow)
+            if (media.type === "IMAGE") {
+              images_url.push(url)
+            } else if (media.type === "VIDEO") {
+              videos_url.push(url)
+            }
+          } catch (error) {
+            console.error(`Failed to generate URL for media ${media.id}:`, error)
+          }
+        }
+      }
+
+      return {
+        ...activity,
+        images_url,
+        videos_url,
+      }
+    })
+  )
+
+  return NextResponse.json({ activities: activitiesWithMedia })
 }
