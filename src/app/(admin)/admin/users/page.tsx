@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { GoPlusCircle } from "react-icons/go"
 import { HiDotsVertical } from "react-icons/hi"
 import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
+import { LogoLoader } from "@/components/common/LogoLoader"
 
 const UserManagement = () => {
   const {
@@ -391,11 +392,7 @@ const UserManagement = () => {
   }
 
   if (loading) {
-    return (
-      <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
-      </div>
-    )
+    return <LogoLoader size="lg" minHeight="100vh" />
   }
 
   const totalFilteredUsers =

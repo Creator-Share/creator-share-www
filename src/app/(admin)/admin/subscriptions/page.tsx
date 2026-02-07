@@ -8,6 +8,7 @@ import { Box } from "@chakra-ui/react"
 import { ColumnDef } from "@tanstack/react-table"
 import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 import { toaster } from "@/components/ui/toaster"
+import { LogoLoader } from "@/components/common/LogoLoader"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { RawSubscription } from "@/types/admin.types"
 
@@ -187,10 +188,7 @@ const AdminSubscriptionsPage = () => {
     >
       <Box className="container mx-auto py-8">
         {loading ? (
-          <div className="text-center py-8">
-            <div className="text-lg">Loading subscriptions...</div>
-            <div className="text-sm text-gray-500 mt-2">Found {subscriptions.length} subscriptions</div>
-          </div>
+          <LogoLoader size="lg" minHeight="60vh" />
         ) : subscriptions.length === 0 ? (
           <div className="text-center py-8">
             <div className="text-lg">No subscriptions found</div>

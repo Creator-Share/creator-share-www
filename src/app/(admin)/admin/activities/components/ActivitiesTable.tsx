@@ -10,6 +10,7 @@ import {
 import { getActivityColumns } from "./columns"
 import { Activity } from "@/types/admin.types"
 import { DataTable } from "@/components/admin-ui/Tables/data-table"
+import { LogoLoader } from "@/components/common/LogoLoader"
 
 interface ActivitiesTableProps {
   beneficiaryType: string
@@ -105,11 +106,7 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
   }
 
   if (loading) {
-    return (
-      <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
-        <div>Loading activities...</div>
-      </div>
-    )
+    return <LogoLoader size="md" minHeight="400px" />
   }
 
   return (
