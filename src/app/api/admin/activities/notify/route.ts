@@ -184,6 +184,7 @@ export async function POST(req: NextRequest) {
       // Fetch media URLs (now they should exist!)
       const imageUrls: string[] = []
       const videoUrls: string[] = []
+      const documentUrls: string[] = []
 
       const { data: mediaRecords } = await supabase
         .from("media")
@@ -211,6 +212,8 @@ export async function POST(req: NextRequest) {
                 imageUrls.push(publicUrl)
               } else if (mediaRecord.type === "VIDEO") {
                 videoUrls.push(publicUrl)
+              } else if (mediaRecord.type === "DOCUMENT") {
+                documentUrls.push(publicUrl)
               }
             } catch (urlError) {
               console.error("❌ Error generating URL for media:", urlError)
@@ -221,7 +224,8 @@ export async function POST(req: NextRequest) {
       
       console.log("🖼️ [NOTIFY ACTIVITY] Generated media URLs:", {
         images: imageUrls.length,
-        videos: videoUrls.length
+        videos: videoUrls.length,
+        documents: documentUrls.length
       })
 
       await Promise.allSettled(
@@ -235,6 +239,7 @@ export async function POST(req: NextRequest) {
                 description: activity?.description || "",
                 imageUrls,
                 videoUrls,
+                documentUrls,
               },
               member.name,
               beneficiaryId,
