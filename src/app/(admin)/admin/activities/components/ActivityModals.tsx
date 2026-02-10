@@ -50,10 +50,12 @@ interface CreateModalProps {
   onTitleChange: (v: string) => void
   onDescriptionChange: (v: string) => void
   onActivityTypeChange: (v: string) => void
-  onCreate: (formData: FormData) => void
-  onSuccess: () => void
-  creating: boolean
-  error: string | null
+  /**
+   * Called after the activity (and any media / notifications) have been
+   * successfully created. Use this to close the modal, refresh data, or
+   * navigate. No FormData is passed – the modal owns the API workflow.
+   */
+  onComplete?: () => void
 }
 
 export const CreateActivityModal: React.FC<CreateModalProps> = ({
@@ -67,10 +69,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   onTitleChange,
   onDescriptionChange,
   onActivityTypeChange,
-  onCreate,
-  onSuccess, // eslint-disable-line @typescript-eslint/no-unused-vars
-  creating,
-  error,
+  onComplete,
 }) => {
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [videoFiles, setVideoFiles] = useState<File[]>([])
@@ -215,13 +214,8 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         is_public: isPublic,
         selected_sponsor_ids: sendToSponsors ? Array.from(selectedSponsorIds) : [],
       }
-      
-      // Create a fake FormData to maintain compatibility with parent's signature
-      // but we'll handle the actual upload ourselves
-      const fakeFormData = new FormData()
-      fakeFormData.append("_handled", "true")
-      
-      // Make the actual API calls here instead of passing to parent
+
+      // Make the actual API calls here instead of passing work to the parent
       const createResponse = await fetch('/api/admin/activities/create', {
         method: 'POST',
         headers: {
@@ -310,8 +304,12 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
               
               if (uploadErr) {
                 console.error('Failed to upload video to storage:', uploadErr)
-                // Delete the media record if upload fails
-                await supabase.from('media').delete().eq('id', mediaRecord.id)
+                // Best-effort cleanup for failed uploads – don't throw if this fails
+                try {
+                  await supabase.from('media').delete().eq('id', mediaRecord.id)
+                } catch (deleteErr) {
+                  console.error('Failed to clean up failed media record:', deleteErr)
+                }
               }
             } catch (error) {
               console.error('Error uploading individual video:', error)
@@ -356,12 +354,10 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         type: "success",
         duration: 5000,
       })
-      
-      onSuccess()
-      
-      // Close modal and notify parent
-      // Pass fake FormData to maintain signature compatibility
-      onCreate(fakeFormData)
+
+      // Let the parent know we're done so it can close the modal,
+      // refresh data, or navigate as needed.
+      onComplete?.()
     } catch (error) {
       console.error("Error creating activity:", error)
       toaster.create({
@@ -745,23 +741,22 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             </div>
           )}
         </div>
-        {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
         <div
           style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}
         >
           <Button
             onClick={onClose}
             style={{ marginRight: 12 }}
-            disabled={creating || compressing}
+            disabled={compressing}
           >
             Cancel
           </Button>
           <Button
             colorScheme="blue"
             onClick={handleCreate}
-            disabled={!title || !description || creating || compressing}
+            disabled={!title || !description || compressing}
           >
-            {compressing ? "Compressing..." : creating ? "Creating..." : "Create"}
+            {compressing ? "Compressing..." : "Create"}
           </Button>
         </div>
       </div>

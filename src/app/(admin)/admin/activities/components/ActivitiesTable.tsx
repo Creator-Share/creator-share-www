@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import { Button, useDisclosure } from "@chakra-ui/react"
 import {
   CreateActivityModal,
@@ -33,8 +33,6 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
   const [newTitle, setNewTitle] = useState<string>("")
   const [newDescription, setNewDescription] = useState<string>("")
   const [newActivityType, setNewActivityType] = useState<string>("INFO")
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   // Edit Activity Modal State
   const [editOpen, setEditOpen] = useState(false)
@@ -48,54 +46,42 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  const handleCreateActivity = async (formData: FormData) => {
-    setCreating(true)
-    setError(null)
+  const fetchActivities = useCallback(async () => {
+    setLoading(true)
     try {
-      const res = await fetch("/api/admin/activities/create", {
-        method: "POST",
-        body: formData,
+      const params = new URLSearchParams({
+        beneficiary_type: beneficiaryType,
+        beneficiary_id: beneficiaryId,
       })
-      if (!res.ok) throw new Error("Failed to create activity")
-      const data = await res.json()
-      setActivities((prev) => [data.activity, ...prev])
-      setNewTitle("")
-      setNewDescription("")
-      setNewActivityType("INFO")
-      onClose()
-    } catch (e: Error | unknown) {
-      setError(e instanceof Error ? e.message : "Failed to create activity")
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  useEffect(() => {
-    const fetchActivities = async () => {
-      setLoading(true)
-      try {
-        const params = new URLSearchParams({
-          beneficiary_type: beneficiaryType,
-          beneficiary_id: beneficiaryId,
-        })
-        if (searchQuery && searchQuery.trim()) {
-          params.set("q", searchQuery.trim())
-        }
-        const res = await fetch(
-          `/api/admin/activities/retrieve?${params.toString()}`,
-        )
-        if (!res.ok) throw new Error("Failed to fetch activities")
-        const data = await res.json()
-        setActivities(data.activities || [])
-      } catch {
-        setActivities([])
+      if (searchQuery && searchQuery.trim()) {
+        params.set("q", searchQuery.trim())
       }
+      const res = await fetch(
+        `/api/admin/activities/retrieve?${params.toString()}`,
+      )
+      if (!res.ok) throw new Error("Failed to fetch activities")
+      const data = await res.json()
+      setActivities(data.activities || [])
+    } catch {
+      setActivities([])
+    } finally {
       setLoading(false)
     }
+  }, [beneficiaryType, beneficiaryId, searchQuery])
+
+  useEffect(() => {
     if (beneficiaryId) {
       fetchActivities()
     }
-  }, [beneficiaryType, beneficiaryId, searchQuery])
+  }, [beneficiaryId, fetchActivities])
+
+  const handleCreateComplete = async () => {
+    await fetchActivities()
+    setNewTitle("")
+    setNewDescription("")
+    setNewActivityType("INFO")
+    onClose()
+  }
 
   if (!beneficiaryId) {
     return (
@@ -147,10 +133,7 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
         onTitleChange={setNewTitle}
         onDescriptionChange={setNewDescription}
         onActivityTypeChange={setNewActivityType}
-        onCreate={handleCreateActivity}
-        onSuccess={() => {}}
-        creating={creating}
-        error={error}
+        onComplete={handleCreateComplete}
       />
       <EditActivityModal
         open={editOpen}

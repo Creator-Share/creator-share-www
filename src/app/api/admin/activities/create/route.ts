@@ -34,7 +34,6 @@ export async function POST(req: NextRequest) {
       activity_source,
       beneficiary_id,
       is_public,
-      selected_sponsor_ids,
     } = body
 
     console.log("📝 [CREATE ACTIVITY] Request data:", {
@@ -44,7 +43,6 @@ export async function POST(req: NextRequest) {
       activity_source,
       beneficiary_id,
       is_public,
-      selected_sponsor_ids
     })
 
     if (!description || !beneficiary_id || !activity_type || !activity_source) {
@@ -56,7 +54,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Selected sponsor IDs are handled by the frontend in the notify endpoint
-    // const sponsorIds = selected_sponsor_ids || []
 
     const supabase = await createClient()
 
@@ -72,6 +69,7 @@ export async function POST(req: NextRequest) {
           activity_type,
           created_by: activity_source,
           beneficiary_id,
+          is_public: typeof is_public === "boolean" ? is_public : false,
           created_at: new Date().toISOString(),
         },
       ])

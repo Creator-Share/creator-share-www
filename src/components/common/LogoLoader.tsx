@@ -22,12 +22,7 @@ export function LogoLoader({ size = "md", minHeight = "400px" }: LogoLoaderProps
       minH={minHeight}
       width="100%"
     >
-      <Box
-        className="animate-pulse"
-        style={{
-          animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-        }}
-      >
+      <Box className="animate-pulse">
         <Image
           src="/logo_icon.svg"
           alt="Loading..."

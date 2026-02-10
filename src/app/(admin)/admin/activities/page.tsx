@@ -28,7 +28,6 @@ const ActivitiesAdminPage: React.FC = () => {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [activityType, setActivityType] = useState("UPDATE")
-  const [error, setError] = useState<string | null>(null)
 
   const fetchedImagesRef = useRef<Set<string>>(new Set())
 
@@ -163,27 +162,16 @@ const ActivitiesAdminPage: React.FC = () => {
     setTitle("")
     setDescription("")
     setActivityType("UPDATE")
-    setError(null)
   }
 
-  // Handle activity created
-  // Note: The modal now handles the API calls internally
-  // This is just called to clean up and navigate
-  const handleActivityCreated = async (formData: FormData) => {
+  // Handle activity created – the modal owns the API work, we just navigate
+  const handleActivityCompleted = () => {
     if (!selectedBeneficiary) return
-    
-    // Check if this was handled by the modal (new pattern)
-    if (formData.has("_handled")) {
-      // Modal handled everything, just navigate
-      setCreateModalOpen(false)
-      const beneficiaryIdToNavigate = selectedBeneficiary.id
-      setSelectedBeneficiary(null)
-      router.push(`/admin/beneficiary/${beneficiaryIdToNavigate}`)
-      return
-    }
-    
-    // Old pattern - should not reach here anymore
-    console.warn("Received unhandled FormData - this should not happen")
+
+    setCreateModalOpen(false)
+    const beneficiaryIdToNavigate = selectedBeneficiary.id
+    setSelectedBeneficiary(null)
+    router.push(`/admin/beneficiary/${beneficiaryIdToNavigate}`)
   }
 
   const handleCloseModal = () => {
@@ -192,7 +180,6 @@ const ActivitiesAdminPage: React.FC = () => {
     setTitle("")
     setDescription("")
     setActivityType("UPDATE")
-    setError(null)
   }
 
   return (
@@ -267,13 +254,7 @@ const ActivitiesAdminPage: React.FC = () => {
           onTitleChange={setTitle}
           onDescriptionChange={setDescription}
           onActivityTypeChange={setActivityType}
-          onCreate={handleActivityCreated}
-          onSuccess={() => {
-            // This is called after successful creation but before navigation
-            // We handle the navigation in handleActivityCreated
-          }}
-          creating={false}
-          error={error}
+          onComplete={handleActivityCompleted}
         />
       )}
     </AdminPageLayout>
