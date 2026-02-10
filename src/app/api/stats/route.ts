@@ -5,12 +5,13 @@ export async function GET() {
   const supabase = await createClient()
 
   try {
-    // Children in need = on platform, not draft/archived, and not yet receiving support
+    // Children in need = listable as "in need" (New, Partially Funded, Sponsorship Cancelled)
+    // and not yet receiving support. Excludes Draft/Archived.
     const { count: childrenInNeed, error: inNeedError } = await supabase
       .from("beneficiaries")
       .select("*", { count: "exact", head: true })
       .eq("beneficiary_type", "CHILD")
-      .not("status", "in", '("Draft","Archived")')
+      .in("status", ["New", "Partially Funded", "Sponsorship Cancelled"])
       .or("active_subscriptions.eq.0,active_subscriptions.is.null")
 
     if (inNeedError) {

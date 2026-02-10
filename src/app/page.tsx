@@ -17,7 +17,7 @@ export default function Home() {
       recordsPerPage: 9,
       beneficiaryType: "CHILD",
       autoRetry: true,
-      initialStatus: ["New", "Partially Funded"],
+      initialStatus: ["New", "Partially Funded", "Sponsorship Cancelled"],
     })
 
   // Detect when filters become sticky
