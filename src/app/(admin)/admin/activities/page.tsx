@@ -1,8 +1,9 @@
 "use client"
 import React, { useEffect, useState, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Box, Spinner, Flex, Text } from "@chakra-ui/react"
+import { Box, Flex, Text } from "@chakra-ui/react"
 import { toaster } from "@/components/ui/toaster"
+import { LogoLoader } from "@/components/common/LogoLoader"
 import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 import { ActivitySection } from "./components/ActivitySection"
 import { CreateActivityModal } from "./components/ActivityModals"
@@ -27,8 +28,6 @@ const ActivitiesAdminPage: React.FC = () => {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [activityType, setActivityType] = useState("UPDATE")
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const fetchedImagesRef = useRef<Set<string>>(new Set())
 
@@ -163,51 +162,16 @@ const ActivitiesAdminPage: React.FC = () => {
     setTitle("")
     setDescription("")
     setActivityType("UPDATE")
-    setError(null)
   }
 
-  // Handle activity created
-  const handleActivityCreated = async (formData: FormData) => {
+  // Handle activity created – the modal owns the API work, we just navigate
+  const handleActivityCompleted = () => {
     if (!selectedBeneficiary) return
 
-    setCreating(true)
-    setError(null)
-
-    try {
-      const res = await fetch("/api/admin/activities/create", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || "Failed to create activity")
-      }
-
-      toaster.create({
-        title: "Success",
-        description: "Activity created successfully",
-        type: "success",
-        duration: 5000,
-      })
-
-      setCreateModalOpen(false)
-      setSelectedBeneficiary(null)
-      
-      // Navigate to beneficiary page immediately
-      router.push(`/admin/beneficiary/${selectedBeneficiary.id}`)
-    } catch (error) {
-      console.error("Failed to create activity:", error)
-      setError(error instanceof Error ? error.message : "Failed to create activity")
-      toaster.create({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create activity",
-        type: "error",
-        duration: 5000,
-      })
-    } finally {
-      setCreating(false)
-    }
+    setCreateModalOpen(false)
+    const beneficiaryIdToNavigate = selectedBeneficiary.id
+    setSelectedBeneficiary(null)
+    router.push(`/admin/beneficiary/${beneficiaryIdToNavigate}`)
   }
 
   const handleCloseModal = () => {
@@ -216,7 +180,6 @@ const ActivitiesAdminPage: React.FC = () => {
     setTitle("")
     setDescription("")
     setActivityType("UPDATE")
-    setError(null)
   }
 
   return (
@@ -230,9 +193,7 @@ const ActivitiesAdminPage: React.FC = () => {
       showResults={true}
     >
       {loading ? (
-        <Flex justify="center" py={12} align="center">
-          <Spinner size="xl" color="blue.500" />
-        </Flex>
+        <LogoLoader size="lg" minHeight="60vh" />
       ) : beneficiaries.length === 0 ? (
         <Flex justify="center" py={12} align="center" direction="column">
           <Text fontSize="lg" color="gray.600" textAlign="center">
@@ -293,13 +254,7 @@ const ActivitiesAdminPage: React.FC = () => {
           onTitleChange={setTitle}
           onDescriptionChange={setDescription}
           onActivityTypeChange={setActivityType}
-          onCreate={handleActivityCreated}
-          onSuccess={() => {
-            // This is called after successful creation but before navigation
-            // We handle the navigation in handleActivityCreated
-          }}
-          creating={creating}
-          error={error}
+          onComplete={handleActivityCompleted}
         />
       )}
     </AdminPageLayout>

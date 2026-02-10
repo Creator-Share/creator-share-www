@@ -618,7 +618,7 @@ export const sendActivityNotificationEmail = async (
   // Generate video HTML if videos are provided
   let videosHtml = ""
   if (activity.videoUrls && activity.videoUrls.length > 0) {
-    // Many email clients do not support embedded video, so we render links
+    // Simple text links for videos
     videosHtml = `
       <div style="margin: 1.5rem 0;">
         <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1C3C8C;">Videos:</h3>
@@ -629,9 +629,9 @@ export const sendActivityNotificationEmail = async (
                 <li style="margin-bottom: 0.75rem;">
                   <a 
                     href="${videoUrl}" 
-                    style="text-decoration: none; color: #1C3C8C; font-weight: 500;"
+                    style="color: #1C3C8C; font-weight: 500; text-decoration: underline;"
                   >
-                    ▶ Watch video ${index + 1}
+                    Watch Video ${index + 1}
                   </a>
                 </li>
               `,

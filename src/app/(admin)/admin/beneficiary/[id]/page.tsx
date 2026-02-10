@@ -10,7 +10,6 @@ import {
   Input,
   Textarea,
   Progress,
-  Spinner,
 } from "@chakra-ui/react"
 import { NativeSelectRoot, NativeSelectField } from "@/components/ui/native-select"
 import Image from "next/image"
@@ -21,6 +20,7 @@ import { Beneficiaries, Activity, BeneficiaryMedia } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import ProofreadButton from "@/components/ai/ProofreadButton"
+import { LogoLoader } from "@/components/common/LogoLoader"
 
 const BeneficiaryDetailPage = () => {
   const params = useParams()
@@ -240,20 +240,7 @@ const BeneficiaryDetailPage = () => {
   }
 
   if (loading) {
-    return (
-      <AdminPageLayout
-        title="Loading..."
-        breadcrumb={[
-          { label: "Beneficiaries", href: "/admin/children" },
-          { label: "Loading..." },
-        ]}
-        hideSearchSection
-      >
-        <Flex justify="center" align="center" minH="400px">
-          <Spinner size="xl" />
-        </Flex>
-      </AdminPageLayout>
-    )
+    return <LogoLoader size="lg" minHeight="100vh" />
   }
 
   if (!beneficiary) {

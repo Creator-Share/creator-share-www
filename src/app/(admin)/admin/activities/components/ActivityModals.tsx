@@ -50,10 +50,12 @@ interface CreateModalProps {
   onTitleChange: (v: string) => void
   onDescriptionChange: (v: string) => void
   onActivityTypeChange: (v: string) => void
-  onCreate: (formData: FormData) => void
-  onSuccess: () => void
-  creating: boolean
-  error: string | null
+  /**
+   * Called after the activity (and any media / notifications) have been
+   * successfully created. Use this to close the modal, refresh data, or
+   * navigate. No FormData is passed – the modal owns the API workflow.
+   */
+  onComplete?: () => void
 }
 
 export const CreateActivityModal: React.FC<CreateModalProps> = ({
@@ -67,10 +69,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   onTitleChange,
   onDescriptionChange,
   onActivityTypeChange,
-  onCreate,
-  onSuccess, // eslint-disable-line @typescript-eslint/no-unused-vars
-  creating,
-  error,
+  onComplete,
 }) => {
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [videoFiles, setVideoFiles] = useState<File[]>([])
@@ -204,63 +203,166 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
     setCompressing(true)
     
     try {
-      // Compress images before uploading
-      const compressedImages: File[] = []
-      const largeFiles: string[] = []
+      // Step 1: Create activity with JSON only (no files)
+      // Build JSON payload
+      const activityData = {
+        title,
+        description,
+        activity_type: activityType,
+        activity_source: "admin",
+        beneficiary_id: beneficiaryId,
+        is_public: isPublic,
+        selected_sponsor_ids: sendToSponsors ? Array.from(selectedSponsorIds) : [],
+      }
+
+      // Make the actual API calls here instead of passing work to the parent
+      const createResponse = await fetch('/api/admin/activities/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(activityData),
+      })
       
-      for (const file of imageFiles) {
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json()
+        throw new Error(errorData.error || "Failed to create activity")
+      }
+      
+      const { activityId } = await createResponse.json()
+      
+      // Step 2: Upload media if any files exist
+      // Follow the same pattern as beneficiary uploads
+      if (imageFiles.length > 0) {
         try {
-          const compressed = await compressImage(file, {
-            maxSizeMB: 3.5, // Target 3.5MB to leave buffer under Vercel's 4.5MB limit
+          // Compress all images together (following beneficiary pattern)
+          const { compressImages } = await import('@/utils/imageCompression')
+          const compressedFiles = await compressImages(imageFiles, {
+            maxSizeMB: 3.5,
           })
-          
-          if (compressed.size < file.size) {
-            const sizeReduction = ((1 - compressed.size / file.size) * 100).toFixed(0)
-            largeFiles.push(`${file.name} (${sizeReduction}% smaller)`)
+
+          const formDataImages = new FormData()
+          formDataImages.append('activityId', activityId)
+          compressedFiles.forEach((file) => formDataImages.append('images', file))
+
+          const uploadImagesRes = await fetch('/api/admin/activities/media/create', {
+            method: 'POST',
+            body: formDataImages,
+          })
+
+          if (!uploadImagesRes.ok) {
+            console.error('Failed to upload images:', await uploadImagesRes.text())
+            toaster.create({
+              title: "Warning",
+              description: "Activity created but image upload failed",
+              type: "warning",
+              duration: 5000,
+            })
           }
-          
-          compressedImages.push(compressed)
         } catch (error) {
-          console.error(`Failed to compress ${file.name}:`, error)
-          // If compression fails, use original file (API will validate size)
-          compressedImages.push(file)
+          console.error('Image upload error:', error)
+          toaster.create({
+            title: "Warning",
+            description: "Activity created but image upload failed",
+            type: "warning",
+            duration: 5000,
+          })
+        }
+      }
+
+      // Upload videos directly to Supabase Storage (bypassing Next.js 10MB limit)
+      if (videoFiles.length > 0) {
+        try {
+          const supabase = createClient()
+          const { STORAGE_BUCKET } = await import('@/utils/supabase/buckets')
+          
+          for (const file of videoFiles) {
+            try {
+              // 1. Create media record in database
+              const ext = (file.name.split('.').pop() || '').toLowerCase()
+              const { data: mediaRecord, error: mediaInsertErr } = await supabase
+                .from('media')
+                .insert([{ parent_id: activityId, extension: ext, type: 'VIDEO' }])
+                .select()
+                .single()
+              
+              if (mediaInsertErr || !mediaRecord) {
+                console.error('Failed to create media record:', mediaInsertErr)
+                continue
+              }
+              
+              // 2. Upload file directly to Supabase Storage
+              const { getStorageKey } = await import('@/utils/supabase/media')
+              const storageKey = getStorageKey(mediaRecord as unknown as import('@/utils/supabase/media').MediaRow)
+              
+              const { error: uploadErr } = await supabase.storage
+                .from(STORAGE_BUCKET)
+                .upload(storageKey, file, {
+                  contentType: file.type,
+                  upsert: false,
+                })
+              
+              if (uploadErr) {
+                console.error('Failed to upload video to storage:', uploadErr)
+                // Best-effort cleanup for failed uploads – don't throw if this fails
+                try {
+                  await supabase.from('media').delete().eq('id', mediaRecord.id)
+                } catch (deleteErr) {
+                  console.error('Failed to clean up failed media record:', deleteErr)
+                }
+              }
+            } catch (error) {
+              console.error('Error uploading individual video:', error)
+            }
+          }
+        } catch (error) {
+          console.error('Video upload error:', error)
+          toaster.create({
+            title: "Warning",
+            description: "Activity created but some video uploads may have failed",
+            type: "warning",
+            duration: 5000,
+          })
         }
       }
       
-      if (largeFiles.length > 0) {
-        toaster.create({
-          title: "Large Files Compressed",
-          description: `These files were automatically compressed: ${largeFiles.join(', ')}`,
-          type: "info",
-          duration: 5000,
-        })
+      // Step 3: Send email notifications AFTER media is uploaded
+      // This ensures emails include the uploaded images/videos
+      if (sendToSponsors && selectedSponsorIds.size > 0) {
+        try {
+          await fetch('/api/admin/activities/notify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              activityId,
+              beneficiaryId,
+              selectedSponsorIds: Array.from(selectedSponsorIds),
+            }),
+          })
+          // Don't fail if notifications fail - activity was still created
+        } catch (error) {
+          console.error('Failed to send email notifications:', error)
+        }
       }
       
-      const formData = new FormData()
-      formData.append("title", title)
-      formData.append("description", description)
-      formData.append("activity_type", activityType)
-      formData.append("activity_source", "admin")
-      formData.append("beneficiary_id", beneficiaryId)
-      formData.append("is_public", isPublic.toString())
-      
-      // Add sponsor selection if sending emails
-      if (sendToSponsors) {
-        formData.append("selected_sponsor_ids", Array.from(selectedSponsorIds).join(","))
-      }
-      
-      // Use compressed images
-      compressedImages.forEach((file) => formData.append("images", file))
-      videoFiles.forEach((file) => formData.append("videos", file))
-      
-      // Call onCreate to trigger the parent's API call
-      // The parent should handle res.ok check and call onSuccess()
-      onCreate(formData)
+      // Success!
+      toaster.create({
+        title: "Success",
+        description: "Activity created successfully",
+        type: "success",
+        duration: 5000,
+      })
+
+      // Let the parent know we're done so it can close the modal,
+      // refresh data, or navigate as needed.
+      onComplete?.()
     } catch (error) {
-      console.error("Error preparing activity:", error)
+      console.error("Error creating activity:", error)
       toaster.create({
         title: "Error",
-        description: "Failed to prepare files for upload",
+        description: error instanceof Error ? error.message : "Failed to create activity",
         type: "error",
         duration: 5000,
       })
@@ -639,23 +741,22 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             </div>
           )}
         </div>
-        {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
         <div
           style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}
         >
           <Button
             onClick={onClose}
             style={{ marginRight: 12 }}
-            disabled={creating || compressing}
+            disabled={compressing}
           >
             Cancel
           </Button>
           <Button
             colorScheme="blue"
             onClick={handleCreate}
-            disabled={!title || !description || creating || compressing}
+            disabled={!title || !description || compressing}
           >
-            {compressing ? "Compressing..." : creating ? "Creating..." : "Create"}
+            {compressing ? "Compressing..." : "Create"}
           </Button>
         </div>
       </div>

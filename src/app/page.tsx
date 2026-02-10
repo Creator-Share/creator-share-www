@@ -2,6 +2,7 @@
 import { Box } from "@chakra-ui/react"
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { HomeHero } from "@/components/HomeHero"
+import { StatsSection } from "@/components/StatsSection"
 import SponsorshipFilters from "./sponsorships/components/SponsorshipFilters"
 import SponsorshipListings from "./sponsorships/components/SponsorshipListings"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
@@ -37,6 +38,9 @@ export default function Home() {
     <Box minH="130vh" pb={40}>
       {/* Home Hero Section */}
       <HomeHero />
+
+      {/* Stats Section */}
+      <StatsSection />
 
       {/* Filters and Listings Container */}
       <Box>
