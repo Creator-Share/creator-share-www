@@ -7,6 +7,7 @@ import { Expense } from "@/types/admin.types"
 import { centsToDollars, dollarsToCents } from "@/utils/currency"
 import GoBackButton from "@/components/ui/goBack"
 import { HiPlus, HiTrash, HiPencil } from "react-icons/hi"
+import { LogoLoader } from "@/components/common/LogoLoader"
 
 const ExpensesPage = () => {
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -209,11 +210,7 @@ const ExpensesPage = () => {
   }
 
   if (loading) {
-    return (
-      <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
-      </div>
-    )
+    return <LogoLoader size="lg" minHeight="100vh" />
   }
 
   return (

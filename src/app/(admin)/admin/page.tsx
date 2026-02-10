@@ -2,12 +2,13 @@
 import { useAuthStore } from "@/store/authStore"
 import Link from "next/link"
 import { Button, Box, SimpleGrid } from "@chakra-ui/react"
+import { LogoLoader } from "@/components/common/LogoLoader"
 
 const Dashboard = () => {
   const { user } = useAuthStore()
 
   if (!user) {
-    return <h1>Loading...</h1>
+    return <LogoLoader size="lg" minHeight="100vh" />
   }
 
   const navigationItems = [
