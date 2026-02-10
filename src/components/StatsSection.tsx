@@ -3,8 +3,8 @@ import { Box, Container, Flex, Text, Spinner } from "@chakra-ui/react"
 import { useEffect, useState } from "react"
 
 interface StatsData {
-  totalChildren: number
-  totalActiveSubscriptions: number
+  childrenInNeed: number
+  childrenSupported: number
 }
 
 export function StatsSection() {
@@ -69,7 +69,7 @@ export function StatsSection() {
                     color="gray.800"
                     lineHeight="1"
                   >
-                    {stats?.totalChildren.toLocaleString() || 0}
+                    {stats?.childrenInNeed.toLocaleString() || 0}
                   </Text>
                   <Text
                     mt={1}
@@ -77,7 +77,7 @@ export function StatsSection() {
                     color="gray.700"
                     fontWeight="medium"
                   >
-                    Children Under Care
+                    Children In Need
                   </Text>
                 </Flex>
               </>
@@ -108,7 +108,7 @@ export function StatsSection() {
                     color="gray.800"
                     lineHeight="1"
                   >
-                    {stats?.totalActiveSubscriptions.toLocaleString() || 0}
+                    {stats?.childrenSupported.toLocaleString() || 0}
                   </Text>
                   <Text
                     mt={1}
@@ -116,7 +116,7 @@ export function StatsSection() {
                     color="gray.700"
                     fontWeight="medium"
                   >
-                    Actively Sponsored
+                    Children Supported
                   </Text>
                 </Flex>
               </>
