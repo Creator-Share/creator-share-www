@@ -29,7 +29,7 @@ export const HomeHero = () => {
           lineHeight="1.1"
           maxW="4xl"
         >
-          One child at a time, we can
+          One child at a time, love is
           <br />
           <Box
             as="span"
@@ -41,7 +41,7 @@ export const HomeHero = () => {
             borderRadius="full"
             fontWeight="bold"
           >
-            change
+            changing
           </Box>{" "}
           thousands of lives
         </Heading>
@@ -51,7 +51,9 @@ export const HomeHero = () => {
           lineHeight="1.6"
           maxW="3xl"
         >
-          Sharing with the children you see here provides education, medical care, access to adequate nutrition, and the hope to pursue their dreams.
+          Sharing with the children you see here provides education, medical
+          care, access to adequate nutrition, and the hope to pursue their
+          dreams.
         </Text>
       </Box>
     </Box>
