@@ -45,5 +45,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // API admin routes require authentication (defense-in-depth; routes also check SUPER_ADMIN)
+  if (!user && request.nextUrl.pathname.startsWith("/api/admin")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   return supabaseResponse
 }

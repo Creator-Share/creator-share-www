@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 export async function PUT(
   req: Request,
@@ -7,6 +8,8 @@ export async function PUT(
 ) {
   const { id } = await params
   const supabase = await createClient()
+  const auth = await requireSuperAdmin(supabase)
+  if (!auth.ok) return auth.response
   try {
     const data = await req.json()
 
