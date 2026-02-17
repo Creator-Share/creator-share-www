@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 // New endpoint to send email notifications AFTER media is uploaded
 export const runtime = "nodejs"
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = await createClient()
+    const auth = await requireSuperAdmin(supabase)
+    if (!auth.ok) return auth.response
 
     // Fetch the activity
     const { data: activity } = await supabase

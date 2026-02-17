@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/server"
 import { NextRequest, NextResponse } from "next/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { Expense } from "@/types/admin.types"
 
 export async function PUT(
@@ -8,6 +9,8 @@ export async function PUT(
 ) {
   try {
     const supabase = await createClient()
+    const auth = await requireSuperAdmin(supabase)
+    if (!auth.ok) return auth.response
     const { id } = await params
 
     const body: Expense = await request.json()

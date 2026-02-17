@@ -1,10 +1,13 @@
 import { createClient } from "@/utils/supabase/server"
 import { NextRequest, NextResponse } from "next/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { ExpenseAssignment } from "@/types/admin.types"
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
+    const auth = await requireSuperAdmin(supabase)
+    if (!auth.ok) return auth.response
 
     const body: ExpenseAssignment = await request.json()
 

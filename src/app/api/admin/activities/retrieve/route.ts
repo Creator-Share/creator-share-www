@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { generatePublicUrl } from "@/utils/supabase/media"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -8,6 +9,9 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get("q")?.trim()
 
   const supabase = await createClient()
+  const auth = await requireSuperAdmin(supabase)
+  if (!auth.ok) return auth.response
+
   let query = supabase
     .from("activities")
     .select("*")
