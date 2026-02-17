@@ -8,6 +8,7 @@ export async function POST(request: Request) {
     const supabase = await createClient()
     const auth = await requireSuperAdmin(supabase)
     if (!auth.ok) return auth.response
+    const { user } = auth
 
     const serviceSupabase = createServiceRoleClient()
     const invitation: UserInvitation = await request.json()
