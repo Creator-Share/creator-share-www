@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { deleteFile, MediaRow } from "@/utils/supabase/media"
 
 export async function POST(req: Request) {
   const supabase = await createClient()
+  const auth = await requireSuperAdmin(supabase)
+  if (!auth.ok) return auth.response
   try {
     const { ids } = await req.json()
     if (!Array.isArray(ids) || ids.length === 0) {

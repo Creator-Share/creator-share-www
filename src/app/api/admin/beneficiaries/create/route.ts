@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { Beneficiaries, Status, BeneficiaryType } from "@/types/admin.types"
 import { notifyChildCreated } from "@/services/telegram"
 import { calculateAge } from "@/utils/ageCalculator"
 
 export async function POST(req: Request) {
   const supabase = await createClient()
+  const auth = await requireSuperAdmin(supabase)
+  if (!auth.ok) return auth.response
   try {
     // Parse JSON request body with error handling
     let body;

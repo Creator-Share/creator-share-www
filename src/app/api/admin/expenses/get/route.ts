@@ -1,8 +1,12 @@
 import { createClient } from "@/utils/supabase/server"
 import { NextResponse } from "next/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+
 export async function GET() {
   try {
     const supabase = await createClient()
+    const auth = await requireSuperAdmin(supabase)
+    if (!auth.ok) return auth.response
 
     const { data: expenses, error } = await supabase
       .from("expenses")

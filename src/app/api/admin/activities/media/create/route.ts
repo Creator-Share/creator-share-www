@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { uploadFile } from "@/utils/supabase/media"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import type { Database } from "@/lib/types/db.types"
 
 type MediaRow = Database["public"]["Tables"]["media"]["Row"]
@@ -27,6 +28,8 @@ export async function POST(req: Request) {
     }
 
     const supabase = await createClient()
+    const auth = await requireSuperAdmin(supabase)
+    if (!auth.ok) return auth.response
 
     // Collect all uploaded media IDs
     const uploadedMediaIds: string[] = []

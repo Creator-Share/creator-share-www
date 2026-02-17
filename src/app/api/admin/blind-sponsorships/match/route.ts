@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { sendBlindSponsorshipMatchedEmail } from "@/utils/email"
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>
@@ -19,6 +20,8 @@ type SupabaseClient = Awaited<ReturnType<typeof createClient>>
  */
 export async function POST(req: Request) {
   const supabase = await createClient()
+  const auth = await requireSuperAdmin(supabase)
+  if (!auth.ok) return auth.response
 
   try {
     const { searchParams } = new URL(req.url)

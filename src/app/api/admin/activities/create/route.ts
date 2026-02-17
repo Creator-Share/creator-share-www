@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 // Configure route for JSON requests (no large file uploads)
 export const runtime = "nodejs"
@@ -24,6 +25,10 @@ export async function POST(req: NextRequest) {
   }
   
   try {
+    const supabase = await createClient()
+    const auth = await requireSuperAdmin(supabase)
+    if (!auth.ok) return auth.response
+
     // Parse JSON body (lightweight - no files)
     const body = await req.json()
     
@@ -54,8 +59,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Selected sponsor IDs are handled by the frontend in the notify endpoint
-
-    const supabase = await createClient()
 
     console.log("💾 [CREATE ACTIVITY] Inserting activity into database")
 

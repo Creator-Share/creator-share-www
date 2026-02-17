@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { BeneficiaryType } from "@/types/admin.types"
 
 export async function GET(req: Request) {
   const supabase = await createClient()
+  const auth = await requireSuperAdmin(supabase)
+  if (!auth.ok) return auth.response
   const { searchParams } = new URL(req.url)
   const beneficiaryType = searchParams.get("beneficiary_type") as BeneficiaryType | null
 
