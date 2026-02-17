@@ -216,10 +216,10 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       }
 
       // Make the actual API calls here instead of passing work to the parent
-      const createResponse = await fetch('/api/admin/activities/create', {
-        method: 'POST',
+      const createResponse = await fetch("/api/admin/activities/create", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(activityData),
       })
@@ -231,95 +231,58 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       
       const { activityId } = await createResponse.json()
       
-      // Step 2: Upload media if any files exist
-      // Follow the same pattern as beneficiary uploads
-      if (imageFiles.length > 0) {
+      // Step 2: Upload media (images and/or videos) via server-side endpoint
+      // This routes all storage writes through /api/admin/activities/media/create,
+      // which applies server-side validation and SuperAdmin auth.
+      if (imageFiles.length > 0 || videoFiles.length > 0) {
         try {
-          // Compress all images together (following beneficiary pattern)
-          const { compressImages } = await import('@/utils/imageCompression')
-          const compressedFiles = await compressImages(imageFiles, {
-            maxSizeMB: 3.5,
-          })
+          const formDataMedia = new FormData()
+          formDataMedia.append("activityId", activityId)
 
-          const formDataImages = new FormData()
-          formDataImages.append('activityId', activityId)
-          compressedFiles.forEach((file) => formDataImages.append('images', file))
+          // Compress and append images (following beneficiary pattern)
+          if (imageFiles.length > 0) {
+            const { compressImages } = await import("@/utils/imageCompression")
+            const compressedFiles = await compressImages(imageFiles, {
+              maxSizeMB: 3.5,
+            })
 
-          const uploadImagesRes = await fetch('/api/admin/activities/media/create', {
-            method: 'POST',
-            body: formDataImages,
-          })
+            compressedFiles.forEach((file) =>
+              formDataMedia.append("images", file),
+            )
+          }
 
-          if (!uploadImagesRes.ok) {
-            console.error('Failed to upload images:', await uploadImagesRes.text())
+          // Append videos directly; size/type validation is enforced server-side
+          if (videoFiles.length > 0) {
+            videoFiles.forEach((file) => formDataMedia.append("videos", file))
+          }
+
+          const uploadMediaRes = await fetch(
+            "/api/admin/activities/media/create",
+            {
+              method: "POST",
+              body: formDataMedia,
+            },
+          )
+
+          if (!uploadMediaRes.ok) {
+            console.error(
+              "Failed to upload media:",
+              await uploadMediaRes.text(),
+            )
             toaster.create({
               title: "Warning",
-              description: "Activity created but image upload failed",
+              description:
+                "Activity created but media upload failed. Please try again from the activity editor.",
               type: "warning",
               duration: 5000,
             })
           }
         } catch (error) {
-          console.error('Image upload error:', error)
+          console.error("Media upload error:", error)
           toaster.create({
             title: "Warning",
-            description: "Activity created but image upload failed",
-            type: "warning",
-            duration: 5000,
-          })
-        }
-      }
-
-      // Upload videos directly to Supabase Storage (bypassing Next.js 10MB limit)
-      if (videoFiles.length > 0) {
-        try {
-          const supabase = createClient()
-          const { STORAGE_BUCKET } = await import('@/utils/supabase/buckets')
-          
-          for (const file of videoFiles) {
-            try {
-              // 1. Create media record in database
-              const ext = (file.name.split('.').pop() || '').toLowerCase()
-              const { data: mediaRecord, error: mediaInsertErr } = await supabase
-                .from('media')
-                .insert([{ parent_id: activityId, extension: ext, type: 'VIDEO' }])
-                .select()
-                .single()
-              
-              if (mediaInsertErr || !mediaRecord) {
-                console.error('Failed to create media record:', mediaInsertErr)
-                continue
-              }
-              
-              // 2. Upload file directly to Supabase Storage
-              const { getStorageKey } = await import('@/utils/supabase/media')
-              const storageKey = getStorageKey(mediaRecord as unknown as import('@/utils/supabase/media').MediaRow)
-              
-              const { error: uploadErr } = await supabase.storage
-                .from(STORAGE_BUCKET)
-                .upload(storageKey, file, {
-                  contentType: file.type,
-                  upsert: false,
-                })
-              
-              if (uploadErr) {
-                console.error('Failed to upload video to storage:', uploadErr)
-                // Best-effort cleanup for failed uploads – don't throw if this fails
-                try {
-                  await supabase.from('media').delete().eq('id', mediaRecord.id)
-                } catch (deleteErr) {
-                  console.error('Failed to clean up failed media record:', deleteErr)
-                }
-              }
-            } catch (error) {
-              console.error('Error uploading individual video:', error)
-            }
-          }
-        } catch (error) {
-          console.error('Video upload error:', error)
-          toaster.create({
-            title: "Warning",
-            description: "Activity created but some video uploads may have failed",
+            description:
+              "Activity created but media upload failed. Please try again from the activity editor.",
             type: "warning",
             duration: 5000,
           })
