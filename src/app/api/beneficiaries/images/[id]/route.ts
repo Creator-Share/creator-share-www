@@ -12,8 +12,8 @@ export async function GET(
     const { data, error } = await supabase
       .from("media")
       .select("*")
-      .eq("beneficiary_id", id)
-      .order("order_index")
+      .eq("parent_id", id)
+      .order("weight")
 
     if (error) {
       console.error("Supabase error:", error)

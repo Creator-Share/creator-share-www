@@ -197,19 +197,19 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         const media = await response.json()
         const validImages = media.filter(
           (item: BeneficiaryMedia) =>
-            item && (item.id || item.image_url) && item.type === "IMAGE"
+            item && item.id && item.type === "IMAGE"
         )
         setAllImages(validImages)
 
         const videoMedia = media.filter(
           (item: BeneficiaryMedia) =>
-            item && (item.id || item.image_url) && item.type === "VIDEO"
+            item && item.id && item.type === "VIDEO"
         )
         if (videoMedia.length > 0) {
           const video = videoMedia[0]
           const videoSrc = video?.id
             ? generatePublicUrl(video as unknown as MediaRow)
-            : video?.image_url || ""
+            : ""
           if (videoSrc && videoSrc.trim() !== "") {
             setVideoUrl(videoSrc)
           }
@@ -1112,11 +1112,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       {allImages.map((image, index) => (
                         <div key={image.id} className="relative group">
                           <Image
-                            src={
-                              image.id
-                                ? generatePublicUrl(image as unknown as MediaRow)
-                                : image.image_url
-                            }
+                            src={generatePublicUrl(image as unknown as MediaRow)}
                             alt={`Child's photo ${index + 1}`}
                             width={200}
                             height={200}
