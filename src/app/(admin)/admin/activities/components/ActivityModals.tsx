@@ -84,6 +84,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   const [selectedSponsorIds, setSelectedSponsorIds] = useState<Set<string>>(new Set())
   const [loadingSponsors, setLoadingSponsors] = useState(false)
   const [compressing, setCompressing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
   const supabase = createClient()
 
@@ -98,6 +99,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       setSendToSponsors(true)
       setSponsors([])
       setSelectedSponsorIds(new Set())
+      setError(null)
       return
     }
   }, [open])
@@ -202,6 +204,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   }
 
   const handleCreate = async () => {
+    setError(null)
     setCompressing(true)
     
     try {
@@ -422,11 +425,13 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       // Let the parent know we're done so it can close the modal,
       // refresh data, or navigate as needed.
       onComplete?.()
-    } catch (error) {
-      console.error("Error creating activity:", error)
+    } catch (err) {
+      console.error("Error creating activity:", err)
+      const message = err instanceof Error ? err.message : "Failed to create activity"
+      setError(message)
       toaster.create({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create activity",
+        description: message,
         type: "error",
         duration: 5000,
       })
