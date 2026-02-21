@@ -5,44 +5,43 @@ export async function GET() {
   const supabase = await createClient()
 
   try {
-    // Get total number of children under care (all statuses except Draft and Archived)
-    const { count: totalChildren, error: childrenError } = await supabase
+    // Children in need = listable as "in need" (New, Partially Funded, Sponsorship Cancelled)
+    // and not yet receiving support. Excludes Draft/Archived.
+    const { count: childrenInNeed, error: inNeedError } = await supabase
+      .from("beneficiaries")
+      .select("*", { count: "exact", head: true })
+      .eq("beneficiary_type", "CHILD")
+      .in("status", ["New", "Partially Funded", "Sponsorship Cancelled"])
+      .or("active_subscriptions.eq.0,active_subscriptions.is.null")
+
+    if (inNeedError) {
+      console.error("Error fetching children in need count:", inNeedError)
+      return NextResponse.json(
+        { error: "Failed to fetch children in need count" },
+        { status: 500 }
+      )
+    }
+
+    // Children supported = at least one active subscription (excluding Draft/Archived)
+    // (excluding Draft and Archived, same as above)
+    const { count: childrenSupported, error: supportedError } = await supabase
       .from("beneficiaries")
       .select("*", { count: "exact", head: true })
       .eq("beneficiary_type", "CHILD")
       .not("status", "in", '("Draft","Archived")')
+      .gt("active_subscriptions", 0)
 
-    if (childrenError) {
-      console.error("Error fetching children count:", childrenError)
+    if (supportedError) {
+      console.error("Error fetching supported children count:", supportedError)
       return NextResponse.json(
-        { error: "Failed to fetch children count" },
+        { error: "Failed to fetch supported children count" },
         { status: 500 }
       )
     }
-
-    // Get total number of active sponsorships across the platform
-    const { data: sponsorshipData, error: sponsorshipError } = await supabase
-      .from("beneficiaries")
-      .select("active_subscriptions")
-      .eq("beneficiary_type", "CHILD")
-
-    if (sponsorshipError) {
-      console.error("Error fetching sponsorships:", sponsorshipError)
-      return NextResponse.json(
-        { error: "Failed to fetch sponsorships count" },
-        { status: 500 }
-      )
-    }
-
-    // Sum up all active subscriptions
-    const totalActiveSubscriptions = sponsorshipData?.reduce(
-      (sum, beneficiary) => sum + (beneficiary.active_subscriptions || 0),
-      0
-    ) || 0
 
     return NextResponse.json({
-      totalChildren: totalChildren || 0,
-      totalActiveSubscriptions,
+      childrenInNeed: childrenInNeed || 0,
+      childrenSupported: childrenSupported || 0,
     })
   } catch (err) {
     console.error("Unexpected error fetching stats:", err)

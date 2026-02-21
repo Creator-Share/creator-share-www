@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { deleteFile, MediaRow } from "@/utils/supabase/media"
 
 // GET: Retrieve all images for a beneficiary by beneficiary_id
@@ -8,6 +9,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await createClient()
+  const auth = await requireSuperAdmin(supabase)
+  if (!auth.ok) return auth.response
   const { id } = await params
   const beneficiary_id = id
   try {
@@ -34,6 +37,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await createClient()
+  const auth = await requireSuperAdmin(supabase)
+  if (!auth.ok) return auth.response
   const { id } = await params
   const image_id = id
   try {

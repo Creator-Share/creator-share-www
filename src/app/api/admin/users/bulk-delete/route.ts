@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
-import { SingleRoleData } from "@/types"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 export async function POST(req: Request) {
   try {
@@ -10,25 +10,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No user IDs provided" }, { status: 400 })
     }
 
-    // Check if current user is SUPER_ADMIN
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Check if user has SUPER_ADMIN role
-    const { data: roleData, error: roleError } = await supabase
-      .from("role_assignments")
-      .select("roles(name)")
-      .eq("user_id", user.id)
-      .single()
-
-    const typedRoleData = (roleData as unknown) as SingleRoleData
-    if (roleError || !typedRoleData?.roles?.length || !typedRoleData.roles.some(role => role.name === "SUPER_ADMIN")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    const auth = await requireSuperAdmin(supabase)
+    if (!auth.ok) return auth.response
 
     // Use service role client for bulk operations
     const serviceSupabase = createServiceRoleClient()

@@ -117,7 +117,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       setImageLoading(true)
       try {
         const res = await fetch(
-          `/api/admin/beneficiaries/images/${beneficiaryId}`
+          `/api/beneficiaries/images/${beneficiaryId}`
         )
         if (res.ok) {
           const data: BeneficiaryMedia[] = await res.json()
@@ -125,9 +125,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             data
               ?.filter(
                 (m: BeneficiaryMedia) =>
-                  m.type === "IMAGE" || m.type === "images"
+                  m.type === "IMAGE"
               )
-              ?.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)) ||
+              ?.sort((a, b) => (a.weight ?? 0) - (b.weight ?? 0)) ||
             []
 
           setImages(sortedImages)
@@ -137,8 +137,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               setPrimaryImageUrl(
                 generatePublicUrl(sortedImages[0] as unknown as MediaRow)
               )
-            } catch {
-              setPrimaryImageUrl(sortedImages[0]?.image_url || null)
+            } catch (error) {
+              console.error("Error generating primary image URL:", error)
+              setPrimaryImageUrl(null)
             }
           } else {
             setPrimaryImageUrl(null)
@@ -152,7 +153,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             const video = videoMedia[0]
             const videoSrc = video?.id
               ? generatePublicUrl(video as unknown as MediaRow)
-              : video?.image_url || ""
+              : ""
 
             if (videoSrc && videoSrc.trim() !== "") {
               // Update the beneficiary object with the video URL
@@ -386,8 +387,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       if (primaryImage) {
         try {
           primaryImageUrl = generatePublicUrl(primaryImage as unknown as MediaRow)
-        } catch {
-          primaryImageUrl = primaryImage.image_url || primaryImageUrl
+        } catch (error) {
+          console.error("Error generating primary image URL:", error)
+          primaryImageUrl = beneficiary.image_url || ""
         }
       }
 

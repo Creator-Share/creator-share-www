@@ -75,12 +75,11 @@ export interface BeneficiaryWithActivity extends Beneficiaries {
 
 export interface BeneficiaryMedia {
   id: string
-  beneficiary_id: string
-  image_url: string
-  order_index: number
-  created_at: string
-  acitivy_id?: string
-  type?: "IMAGE" | "VIDEO" | "images" | "videos" // Add this field
+  parent_id: string
+  extension: string
+  type: "IMAGE" | "VIDEO"
+  weight: number | null
+  created_at: string | null
 }
 
 export type AnimalBeneficiary = {

@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import type { BeneficiaryWithActivity } from "@/types/admin.types"
 
 export async function GET() {
   try {
     const supabase = await createClient()
+    const auth = await requireSuperAdmin(supabase)
+    if (!auth.ok) return auth.response
 
     // Fetch all sponsored beneficiaries (CHILD type with active subscriptions)
     const { data: beneficiaries, error: beneficiariesError } = await supabase

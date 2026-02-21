@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { redactEmail } from "@/utils/privacy"
 
 export interface SponsorInfo {
@@ -26,6 +27,8 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = await createClient()
+  const auth = await requireSuperAdmin(supabase)
+  if (!auth.ok) return auth.response
 
   // Step 1: Fetch all active subscriptions for this beneficiary
   const { data: subscriptions, error: subsError } = await supabase

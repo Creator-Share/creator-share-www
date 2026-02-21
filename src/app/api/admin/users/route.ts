@@ -1,36 +1,12 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { RoleAssignmentResponse } from "@/types"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 export async function GET() {
   try {
     const supabase = await createClient()
-    
-    // Check if user is authenticated and has SUPER_ADMIN role
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Check user role - handle multiple roles
-    const { data: roleData, error: roleError } = await supabase
-      .from("role_assignments")
-      .select(`
-        roles:roles!role_assignments_role_id_fkey(name)
-      `)
-      .eq("user_id", user.id)
-
-    const typedRoleData = (roleData as unknown) as RoleAssignmentResponse
-    const hasSuperAdminRole = typedRoleData?.some((assignment) => 
-      assignment.roles.name === "SUPER_ADMIN"
-    )
-
-    if (roleError || !roleData || !hasSuperAdminRole) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    const auth = await requireSuperAdmin(supabase)
+    if (!auth.ok) return auth.response
 
     // Fetch all users first
     const { data: allUsers, error: usersError } = await supabase

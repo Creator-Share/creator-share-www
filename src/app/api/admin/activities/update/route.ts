@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { MediaRow, uploadFile } from "@/utils/supabase/media"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 export async function PUT(req: NextRequest) {
   console.log("🔄 [UPDATE ACTIVITY] Starting activity update")
@@ -49,6 +50,8 @@ export async function PUT(req: NextRequest) {
   }
 
   const supabase = await createClient()
+  const auth = await requireSuperAdmin(supabase)
+  if (!auth.ok) return auth.response
 
   // Update activity record
   const updateData: {

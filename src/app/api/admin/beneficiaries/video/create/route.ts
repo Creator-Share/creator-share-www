@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { generatePublicUrl, uploadFile } from "@/utils/supabase/media"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import type { Database } from "@/lib/types/db.types"
 
 type MediaRow = Database["public"]["Tables"]["media"]["Row"]
@@ -7,6 +8,8 @@ type MediaRow = Database["public"]["Tables"]["media"]["Row"]
 export async function POST(req: Request) {
   const { createClient } = await import("@/utils/supabase/server")
   const supabase = await createClient()
+  const auth = await requireSuperAdmin(supabase)
+  if (!auth.ok) return auth.response
 
   try {
     const formData = await req.formData()
