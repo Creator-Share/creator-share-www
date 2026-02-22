@@ -73,6 +73,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
 }) => {
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [videoFiles, setVideoFiles] = useState<File[]>([])
+  const [documentFiles, setDocumentFiles] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [videoPreviews, setVideoPreviews] = useState<string[]>([])
   
@@ -83,6 +84,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   const [selectedSponsorIds, setSelectedSponsorIds] = useState<Set<string>>(new Set())
   const [loadingSponsors, setLoadingSponsors] = useState(false)
   const [compressing, setCompressing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
   const supabase = createClient()
 
@@ -90,12 +92,14 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
     if (!open) {
       setImageFiles([])
       setVideoFiles([])
+      setDocumentFiles([])
       setImagePreviews([])
       setVideoPreviews([])
       setIsPublic(false)
       setSendToSponsors(true)
       setSponsors([])
       setSelectedSponsorIds(new Set())
+      setError(null)
       return
     }
   }, [open])
@@ -200,6 +204,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   }
 
   const handleCreate = async () => {
+    setError(null)
     setCompressing(true)
     
     try {
@@ -325,6 +330,68 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           })
         }
       }
+
+      // Upload documents (PDFs, etc.) directly to Supabase Storage
+      if (documentFiles.length > 0) {
+        console.log('📄 [DOCUMENT UPLOAD] Starting upload for', documentFiles.length, 'documents')
+        try {
+          const supabase = createClient()
+          const { STORAGE_BUCKET } = await import('@/utils/supabase/buckets')
+          
+          for (const file of documentFiles) {
+            console.log('📄 [DOCUMENT UPLOAD] Uploading:', file.name, '- Size:', (file.size / 1024 / 1024).toFixed(2), 'MB')
+            try {
+              // 1. Create media record in database
+              const ext = (file.name.split('.').pop() || '').toLowerCase()
+              console.log('📄 [DOCUMENT UPLOAD] Extension:', ext)
+              const { data: mediaRecord, error: mediaInsertErr } = await supabase
+                .from('media')
+                .insert([{ parent_id: activityId, extension: ext, type: 'DOCUMENT' }])
+                .select()
+                .single()
+              
+              if (mediaInsertErr || !mediaRecord) {
+                console.error('❌ [DOCUMENT UPLOAD] Failed to create document media record:', mediaInsertErr)
+                continue
+              }
+              
+              console.log('✅ [DOCUMENT UPLOAD] Media record created:', mediaRecord.id)
+              
+              // 2. Upload file directly to Supabase Storage
+              const { getStorageKey } = await import('@/utils/supabase/media')
+              const storageKey = getStorageKey(mediaRecord as unknown as import('@/utils/supabase/media').MediaRow)
+              
+              console.log('📄 [DOCUMENT UPLOAD] Storage key:', storageKey)
+              
+              const { error: uploadErr } = await supabase.storage
+                .from(STORAGE_BUCKET)
+                .upload(storageKey, file, {
+                  contentType: file.type || 'application/pdf',
+                  upsert: false,
+                })
+              
+              if (uploadErr) {
+                console.error('❌ [DOCUMENT UPLOAD] Failed to upload document to storage:', uploadErr)
+                // Delete the media record if upload fails
+                await supabase.from('media').delete().eq('id', mediaRecord.id)
+              } else {
+                console.log('✅ [DOCUMENT UPLOAD] Successfully uploaded:', file.name)
+              }
+            } catch (error) {
+              console.error('❌ [DOCUMENT UPLOAD] Error uploading individual document:', error)
+            }
+          }
+          console.log('✅ [DOCUMENT UPLOAD] Finished uploading all documents')
+        } catch (error) {
+          console.error('❌ [DOCUMENT UPLOAD] Fatal document upload error:', error)
+          toaster.create({
+            title: "Warning",
+            description: "Activity created but some document uploads may have failed",
+            type: "warning",
+            duration: 5000,
+          })
+        }
+      }
       
       // Step 3: Send email notifications AFTER media is uploaded
       // This ensures emails include the uploaded images/videos
@@ -358,11 +425,13 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       // Let the parent know we're done so it can close the modal,
       // refresh data, or navigate as needed.
       onComplete?.()
-    } catch (error) {
-      console.error("Error creating activity:", error)
+    } catch (err) {
+      console.error("Error creating activity:", err)
+      const message = err instanceof Error ? err.message : "Failed to create activity"
+      setError(message)
       toaster.create({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create activity",
+        description: message,
         type: "error",
         duration: 5000,
       })
@@ -741,6 +810,91 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             </div>
           )}
         </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontWeight: 500 }}>Upload Documents (PDFs, etc.)</label>
+          <FileUploadRoot
+            onFileChange={(fileDetails) => {
+              setDocumentFiles(fileDetails.acceptedFiles)
+            }}
+            accept={["application/pdf", ".pdf"]}
+            maxFiles={5}
+          >
+            <FileUploadTrigger asChild>
+              <Button variant="outline" size="sm" className="border" px={4}>
+                <HiUpload /> Upload Documents
+              </Button>
+            </FileUploadTrigger>
+            <FileUploadList showSize clearable files={documentFiles} />
+          </FileUploadRoot>
+          {documentFiles.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              {documentFiles.map((file, index) => (
+                <div
+                  key={file.name}
+                  style={{
+                    padding: 12,
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 8,
+                    backgroundColor: "#f9fafb",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <svg
+                    className="w-8 h-8 text-red-500"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <div style={{ flex: 1 }}>
+                    <Text fontSize="sm" fontWeight="medium">
+                      {file.name}
+                    </Text>
+                    <Text fontSize="xs" color="gray.500">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB
+                    </Text>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setDocumentFiles((prev) => prev.filter((_, i) => i !== index))
+                    }}
+                    className="text-red-500 hover:text-red-600"
+                    type="button"
+                    aria-label="Remove document"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
         <div
           style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}
         >

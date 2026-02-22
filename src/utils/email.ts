@@ -551,6 +551,7 @@ export const sendActivityNotificationEmail = async (
     description: string
     imageUrls?: string[]
     videoUrls?: string[]
+    documentUrls?: string[]
   },
   subscriberName?: string | null,
   beneficiaryId?: string | null,
@@ -641,6 +642,40 @@ export const sendActivityNotificationEmail = async (
       </div>
     `
   }
+
+  // Generate documents HTML if documents are provided
+  let documentsHtml = ""
+  if (activity.documentUrls && activity.documentUrls.length > 0) {
+    documentsHtml = `
+      <div style="margin: 1.5rem 0;">
+        <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1C3C8C;">Documents:</h3>
+        <ul style="list-style: none; padding: 0; margin: 0;">
+          ${activity.documentUrls
+            .map(
+              (documentUrl, index) => {
+                // Extract filename from URL
+                const filename = documentUrl.split('/').pop()?.split('?')[0] || `Document ${index + 1}`
+                const decodedFilename = decodeURIComponent(filename)
+                
+                return `
+                  <li style="margin-bottom: 0.75rem;">
+                    <a 
+                      href="${documentUrl}" 
+                      style="display: inline-flex; align-items: center; gap: 0.5rem; color: #1C3C8C; font-weight: 500; text-decoration: none; padding: 0.5rem 1rem; background-color: #eff6ff; border-radius: 0.375rem; border: 1px solid #bfdbfe;"
+                      download
+                    >
+                      <span style="font-size: 1.25rem;">📄</span>
+                      <span>${decodedFilename}</span>
+                    </a>
+                  </li>
+                `
+              },
+            )
+            .join("")}
+        </ul>
+      </div>
+    `
+  }
   
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
@@ -664,6 +699,7 @@ export const sendActivityNotificationEmail = async (
         }</p>
         ${imagesHtml}
         ${videosHtml}
+        ${documentsHtml}
         <p style="font-size: 1rem; line-height: 1.5; margin-top: 1.5rem;">Visit the site for more details and to see all updates.</p>
       </div>
       <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
