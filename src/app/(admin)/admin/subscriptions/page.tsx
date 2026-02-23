@@ -34,9 +34,6 @@ const AdminSubscriptionsPage = () => {
 
     const initialize = async () => {
       try {
-        console.log("🔄 Initializing subscriptions...")
-        
-        // Load initial subscriptions
         const { data, error } = await supabase
           .from("subscriptions")
           .select(`
@@ -45,13 +42,10 @@ const AdminSubscriptionsPage = () => {
           `)
           .order("created_at", { ascending: false })
 
-        console.log("📊 Subscription query result:", { data, error })
-
         if (error) throw error
 
         if (mounted) {
           const transformedData = data?.map(transformSubscription) || []
-          console.log("✅ Setting subscriptions:", transformedData.length, "items")
           setSubscriptions(transformedData)
           setLoading(false)
         }

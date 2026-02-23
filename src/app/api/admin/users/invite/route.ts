@@ -20,9 +20,6 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
-
-    console.log("Attempting to invite user:", email, "with roles:", role_ids)
-
     // Use Supabase's built-in inviteUserByEmail with first role as primary
     const { data: inviteData, error: inviteError } = await serviceSupabase.auth.admin.inviteUserByEmail(
       email,
@@ -42,9 +39,7 @@ export async function POST(request: Request) {
         details: inviteError.message 
       }, { status: 500 })
     }
-
-    console.log("Invitation sent successfully:", inviteData)
-
+    
     return NextResponse.json(
       { 
         message: "User invited successfully", 

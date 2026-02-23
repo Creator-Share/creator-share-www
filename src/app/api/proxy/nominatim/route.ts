@@ -19,7 +19,6 @@ export async function GET(req: Request) {
   }
 
   try {
-    console.log('Fetching from Nominatim:', url)
     
     const response = await fetch(url, {
       headers: {
@@ -28,8 +27,6 @@ export async function GET(req: Request) {
         "Accept": "application/json",
       },
     })
-    
-    console.log('Nominatim response status:', response.status)
     
     if (!response.ok) {
       const errorText = await response.text()
@@ -41,7 +38,6 @@ export async function GET(req: Request) {
     }
     
     const data = await response.json()
-    console.log('Nominatim response data:', data)
     return NextResponse.json(data)
   } catch (error) {
     console.error('Proxy error:', error)

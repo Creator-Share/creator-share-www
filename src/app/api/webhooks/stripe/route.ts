@@ -245,39 +245,15 @@ export async function POST(req: Request) {
               const { sendPartnershipConfirmationEmail } = await import(
                 "@/utils/email"
               )
-              const emailResult = await sendPartnershipConfirmationEmail(
+              await sendPartnershipConfirmationEmail(
                 email,
                 project,
                 amount,
                 session.mode === "subscription" ? "month" : "year",
                 session.customer_details?.name || null,
               )
-
-              // Log email attempt
-              await supabase.from("email_logs").insert({
-                email: email,
-                subject: `Thank you for your partnership with Creator Share Foundation!`,
-                status: emailResult.success ? "sent" : "failed",
-                error: emailResult.error
-                  ? JSON.stringify(emailResult.error)
-                  : null,
-                message_id: emailResult.messageId,
-                created_at: new Date(),
-              })
             } catch (emailError) {
               console.error("Error sending partnership email:", emailError)
-
-              // Log failed email attempt
-              await supabase.from("email_logs").insert({
-                email: email,
-                subject: `Thank you for your partnership with Creator Share Foundation!`,
-                status: "failed",
-                error:
-                  emailError instanceof Error
-                    ? emailError.message
-                    : String(emailError),
-                created_at: new Date(),
-              })
             }
           }
 
@@ -338,15 +314,6 @@ export async function POST(req: Request) {
             // Check for beneficiary status rejection from trigger
             if (subscriptionError.message?.includes('beneficiary_not_accepting_subscriptions')) {
               
-              console.warn("Beneficiary cannot accept subscriptions - initiating rejection flow:", {
-                beneficiaryId,
-                sessionId: session.id,
-                amount,
-                interval,
-                customerEmail,
-                error: subscriptionError.message
-              })
-              
               // Step 1: Fetch beneficiary name for emails
               const { data: beneficiaryData } = await supabase
                 .from("beneficiaries")
@@ -366,11 +333,6 @@ export async function POST(req: Request) {
                 if (session.subscription) {
                   await stripe.subscriptions.cancel(session.subscription as string)
                   subscriptionCancelled = true
-                  console.log("Cancelled subscription for fulfilled beneficiary:", {
-                    subscriptionId: session.subscription,
-                    beneficiaryId,
-                    sessionId: session.id
-                  })
                 }
               } catch (cancelError) {
                 console.error("Failed to cancel subscription:", {
@@ -407,7 +369,7 @@ export async function POST(req: Request) {
                 }
                 
                 if (paymentIntentId) {
-                  const refund = await stripe.refunds.create({
+                  await stripe.refunds.create({
                     payment_intent: paymentIntentId,
                     reason: 'requested_by_customer',
                     metadata: {
@@ -418,16 +380,8 @@ export async function POST(req: Request) {
                       amount: amount.toString(),
                       customerEmail: customerEmail || 'unknown'
                     }
-                  })
-                  
+                  })        
                   paymentRefunded = true
-                  console.log("Refund created for fulfilled beneficiary:", {
-                    refundId: refund.id,
-                    amount: refund.amount,
-                    status: refund.status,
-                    beneficiaryId,
-                    sessionId: session.id
-                  })
                 } else {
                   console.error("CRITICAL: No payment_intent available for refund:", {
                     sessionId: session.id,
@@ -455,7 +409,7 @@ export async function POST(req: Request) {
               if (customerEmail) {
                 try {
                   const { sendBudgetFulfilledRejectionEmail } = await import("@/utils/email")
-                  await sendBudgetFulfilledRejectionEmail(
+                  const emailResult = await sendBudgetFulfilledRejectionEmail(
                     customerEmail,
                     beneficiaryName,
                     amount,
@@ -463,42 +417,18 @@ export async function POST(req: Request) {
                     beneficiaryId,
                   )
                   
-                  emailSent = true
-                  
-                  await supabase.from("email_logs").insert({
-                    user_id: userId,
-                    email: customerEmail,
-                    subject: `Thank You - ${beneficiaryName} Has Been Fully Sponsored!`,
-                    status: "sent",
-                    created_at: new Date(),
-                  })
+                  emailSent = emailResult.success
                 } catch (emailError) {
                   console.error("Failed to send rejection email:", {
                     error: emailError,
                     customerEmail,
                     sessionId: session.id
                   })
-                  
-                  await supabase.from("email_logs").insert({
-                    user_id: userId,
-                    email: customerEmail,
-                    subject: `Thank You - ${beneficiaryName} Has Been Fully Sponsored!`,
-                    status: "failed",
-                    error: emailError instanceof Error ? emailError.message : "Email send failed",
-                    created_at: new Date(),
-                  })
                 }
               }
               
-              // Step 5: Final logging
-              if (paymentRefunded && subscriptionCancelled && emailSent) {
-                console.log("Beneficiary rejection flow completed successfully:", {
-                  beneficiaryId,
-                  beneficiaryName,
-                  sessionId: session.id,
-                  operations: { subscriptionCancelled, paymentRefunded, emailSent }
-                })
-              } else {
+              // Step 5: Final logging (errors only)
+              if (!paymentRefunded || !subscriptionCancelled || !emailSent) {
                 console.error("Beneficiary rejection flow partially failed:", {
                   beneficiaryId,
                   sessionId: session.id,
@@ -601,94 +531,36 @@ export async function POST(req: Request) {
         //   - other errors → thrown and caught in outer catch, no email sent
         // Therefore, confirmation emails are ONLY sent for successful sponsorships.
         // ============================================================
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-          console.warn("Email configuration missing - skipping email send")
-        } else {
-          // Send confirmation to sponsor if we have their email
-          if (customerEmail) {
-            try {
-              console.log("Sending blind sponsorship confirmation email:", {
-                email: customerEmail,
-                isBlindSponsorship,
+        // Send confirmation to sponsor if we have their email
+        if (customerEmail) {
+          try {
+            if (isBlindSponsorship) {
+              await sendBlindSponsorshipConfirmationEmail(
+                customerEmail,
                 amount,
                 interval,
                 blindLabel,
-                sessionId: session.id,
-              })
-              
-              const emailResult = isBlindSponsorship
-                ? await sendBlindSponsorshipConfirmationEmail(
-                    customerEmail,
-                    amount,
-                    interval,
-                    blindLabel,
-                    session.customer_details?.name || null,
-                  )
-                : await sendSponsorshipConfirmationEmail(
-                    customerEmail,
-                    beneficiaryName,
-                    amount,
-                    interval,
-                    session.customer_details?.name || null,
-                    beneficiaryId || null,
-                  )
-
-              console.log("Email send result:", {
-                success: emailResult.success,
-                messageId: emailResult.messageId,
-                error: emailResult.error,
-              })
-
-              // Log email attempt
-              try {
-                await supabase.from("email_logs").insert({
-                  user_id: userId,
-                  email: customerEmail,
-                  subject: isBlindSponsorship
-                    ? "Thank you for your blind sponsorship!"
-                    : `Thank you for sponsoring ${beneficiaryName}!`,
-                  status: emailResult.success ? "sent" : "failed",
-                  error: emailResult.error
-                    ? JSON.stringify(emailResult.error)
-                    : null,
-                  message_id: emailResult.messageId,
-                  created_at: new Date(),
-                })
-              } catch (err) {
-                console.error("Error logging email attempt:", err)
-              }
-            } catch (emailError) {
-              console.error("Error in email sending process:", emailError)
-              // Log the error to email_logs even if sending failed
-              try {
-                await supabase.from("email_logs").insert({
-                  user_id: userId,
-                  email: customerEmail,
-                  subject: isBlindSponsorship
-                    ? "Thank you for your blind sponsorship!"
-                    : `Thank you for sponsoring ${beneficiaryName}!`,
-                  status: "failed",
-                  error: emailError instanceof Error ? emailError.message : String(emailError),
-                  created_at: new Date(),
-                })
-              } catch (logErr) {
-                console.error("Error logging failed email attempt:", logErr)
-              }
+                session.customer_details?.name || null,
+              )
+            } else {
+              await sendSponsorshipConfirmationEmail(
+                customerEmail,
+                beneficiaryName,
+                amount,
+                interval,
+                session.customer_details?.name || null,
+                beneficiaryId || null,
+              )
             }
-          } else {
-            console.warn("No customer email found in session, skipping email send:", {
-              sessionId: session.id,
-              customerDetails: session.customer_details,
-              metadata: session.metadata,
-            })
+          } catch (emailError) {
+            console.error("Error in email sending process:", emailError)
           }
+        }
 
-          // Send notification to manager
-          if (!process.env.MANAGER_EMAIL) {
-            console.warn("MANAGER_EMAIL not configured - skipping manager notification")
-          } else {
-            try {
-              const managerEmailResult = await sendManagerSponsorshipNotificationEmail(
+        // Send notification to manager
+        if (process.env.MANAGER_EMAIL) {
+          try {
+            await sendManagerSponsorshipNotificationEmail(
               beneficiaryName,
               amount,
               interval,
@@ -696,25 +568,8 @@ export async function POST(req: Request) {
               session.customer_details?.name,
               beneficiaryId || null,
             )
-
-            // Log manager email attempt
-            try {
-              await supabase.from("email_logs").insert({
-                email: process.env.MANAGER_EMAIL!,
-                subject: `New Sponsorship Received for ${beneficiaryName}`,
-                status: managerEmailResult.success ? "sent" : "failed",
-                error: managerEmailResult.error
-                  ? JSON.stringify(managerEmailResult.error)
-                  : null,
-                message_id: managerEmailResult.messageId,
-                created_at: new Date(),
-              })
-            } catch (err) {
-              console.error("Error logging manager email attempt:", err)
-            }
-            } catch (emailError) {
-              console.error("Error sending manager notification:", emailError)
-            }
+          } catch (emailError) {
+            console.error("Error sending manager notification:", emailError)
           }
         }
 
@@ -737,11 +592,6 @@ export async function POST(req: Request) {
 
         // Step 6: Auto-match blind sponsorships
         if (isBlindSponsorship && session.subscription) {
-          console.log("Attempting to auto-match blind sponsorship:", {
-            stripeSubscriptionId: session.subscription,
-            sessionId: session.id,
-          })
-          
           try {
             // Call the matching endpoint to automatically assign an available beneficiary
             const matchResponse = await fetch(
@@ -755,14 +605,10 @@ export async function POST(req: Request) {
             )
             
             if (matchResponse.ok) {
-              const matchData = await matchResponse.json()
-              console.log("Blind sponsorship auto-matched successfully:", {
-                subscriptionId: session.subscription,
-                beneficiary: matchData.beneficiary,
-              })
+              await matchResponse.json()
             } else {
               const errorData = await matchResponse.json()
-              console.warn("Blind sponsorship auto-match failed:", {
+              console.error("Blind sponsorship auto-match failed:", {
                 subscriptionId: session.subscription,
                 status: matchResponse.status,
                 error: errorData.error,
@@ -793,7 +639,6 @@ export async function POST(req: Request) {
         // Silently acknowledge non-application payments
         if (type !== "partnership" && !subscriptionId) {
           if (DEBUG_MODE) {
-            console.log('[DEBUG] Non-application invoice.payment_failed event - silently acknowledging')
           }
           return NextResponse.json({ received: true }, { status: 200 })
         }
@@ -884,18 +729,6 @@ export async function POST(req: Request) {
               customerName,
               subscriptionData?.beneficiary_id || null,
             )
-
-            // Log email attempt
-            try {
-              await supabase.from("email_logs").insert({
-                email: customerEmail,
-                subject: `Payment failed for ${beneficiaryName} sponsorship`,
-                status: "sent",
-                created_at: new Date(),
-              })
-            } catch (err) {
-              console.error("Error logging email attempt:", err)
-            }
           } catch (emailError) {
             console.error("Error sending payment failed email:", emailError)
           }
@@ -914,7 +747,6 @@ export async function POST(req: Request) {
         // Silently acknowledge non-application subscriptions (no type or unknown type)
         if (!type || (type !== "partnership" && type !== "sponsorship")) {
           if (DEBUG_MODE) {
-            console.log('[DEBUG] Non-application subscription.updated event - silently acknowledging')
           }
           return NextResponse.json({ received: true }, { status: 200 })
         }
@@ -969,7 +801,6 @@ export async function POST(req: Request) {
         // Silently acknowledge non-application subscriptions (no type or unknown type)
         if (!type || (type !== "partnership" && type !== "sponsorship")) {
           if (DEBUG_MODE) {
-            console.log('[DEBUG] Non-application subscription.deleted event - silently acknowledging')
           }
           return NextResponse.json({ received: true }, { status: 200 })
         }
@@ -1021,7 +852,7 @@ export async function POST(req: Request) {
         if (updateError) {
           console.error("Error cancelling subscription:", updateError)
           // Don't fail the webhook - subscription may not exist in our DB
-          console.warn("Subscription cancellation update failed:", {
+          console.error("Subscription cancellation update failed:", {
             subscriptionId: subscription.id,
             error: updateError,
           })
@@ -1110,7 +941,6 @@ export async function POST(req: Request) {
           // Silently acknowledge non-application subscription invoices
           if (!subscriptionData) {
             if (DEBUG_MODE) {
-              console.log('[DEBUG] Non-application invoice payment event - silently acknowledging')
             }
             return NextResponse.json({ received: true }, { status: 200 })
           }
@@ -1158,34 +988,13 @@ export async function POST(req: Request) {
                 // Send monthly payment confirmation email
                 if (customerEmail && beneficiaryData) {
                   try {
-                    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-                      console.warn("Email configuration missing - skipping payment confirmation email")
-                    } else {
-                      const emailResult = await sendMonthlyPaymentConfirmationEmail(
+                    await sendMonthlyPaymentConfirmationEmail(
                         customerEmail,
                         beneficiaryData.name,
                         invoice.amount_paid,
                         customerName,
                         subscriptionData.beneficiary_id,
                       )
-
-                      // Log email attempt
-                      try {
-                        await supabase.from("email_logs").insert({
-                          user_id: subscriptionData.user_id,
-                          email: customerEmail,
-                          subject: `Payment Confirmation: Your Sponsorship for ${beneficiaryData.name}`,
-                          status: emailResult.success ? "sent" : "failed",
-                          error: emailResult.error
-                            ? JSON.stringify(emailResult.error)
-                            : null,
-                          message_id: emailResult.messageId,
-                          created_at: new Date(),
-                        })
-                      } catch (err) {
-                        console.error("Error logging email attempt:", err)
-                      }
-                    }
                   } catch (emailError) {
                     console.error("Error sending monthly payment confirmation email:", emailError)
                   }
@@ -1221,7 +1030,6 @@ export async function POST(req: Request) {
 
       default:
         if (DEBUG_MODE) {
-          console.log(`[DEBUG] Unhandled event type: ${event.type}`)
         }
         // Silently acknowledge unhandled event types
         return NextResponse.json(

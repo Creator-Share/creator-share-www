@@ -166,13 +166,9 @@ export default function SetPasswordPage() {
                 if (!roleResponse.ok) {
                     const roleError = await roleResponse.json()
                     console.error("Role assignment failed:", roleError)
-                    // Don't fail the password setting if role assignment fails
-                } else {
-                    console.log("Role assigned successfully")
                 }
             } catch (roleError) {
                 console.error("Error assigning role:", roleError)
-                // Don't fail the password setting if role assignment fails
             }
 
             setPasswordCompleted(true)
@@ -183,7 +179,6 @@ export default function SetPasswordPage() {
                 duration: 3000,
             })
 
-            // Small delay before redirect to show success message
             setTimeout(() => {
                 router.push("/login")
             }, 1000)

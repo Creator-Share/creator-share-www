@@ -13,10 +13,6 @@ export async function POST() {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
-    console.log("User metadata:", user.user_metadata)
-
-    // Get the role_ids from the user's metadata (set during invitation)
     const roleIds = user.user_metadata?.role_ids
 
     if (!roleIds || roleIds.length === 0) {
@@ -24,9 +20,6 @@ export async function POST() {
       return NextResponse.json({ error: "No roles assigned" }, { status: 400 })
     }
 
-    console.log("Assigning roles:", roleIds)
-
-    // Check if all roles exist
     const { data: roles, error: rolesError } = await serviceSupabase
       .from("roles")
       .select("id, name")
@@ -62,9 +55,6 @@ export async function POST() {
       console.error("Error adding new role assignments:", insertError)
       return NextResponse.json({ error: "Failed to assign roles" }, { status: 500 })
     }
-
-    console.log("Roles assigned successfully:", newAssignments)
-
     return NextResponse.json({ 
       message: "Roles assigned successfully",
       roles: roles

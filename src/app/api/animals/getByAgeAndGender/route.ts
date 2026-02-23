@@ -22,12 +22,10 @@ export async function GET(req: Request) {
     }
 
     if (status.length > 0) {
-      console.log("Status filter:", status)
       query = query.in("status", status)
     }
 
     const { data, error } = await query
-    console.log("Query result:", data)
     if (error) {
       console.error("Supabase error:", error)
       return NextResponse.json({ error: "Database error" }, { status: 500 })

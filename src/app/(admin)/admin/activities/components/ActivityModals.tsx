@@ -332,18 +332,14 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       }
 
       // Upload documents (PDFs, etc.) directly to Supabase Storage
-      if (documentFiles.length > 0) {
-        console.log('📄 [DOCUMENT UPLOAD] Starting upload for', documentFiles.length, 'documents')
+      if (documentFiles.length > 0) { 
         try {
           const supabase = createClient()
           const { STORAGE_BUCKET } = await import('@/utils/supabase/buckets')
-          
           for (const file of documentFiles) {
-            console.log('📄 [DOCUMENT UPLOAD] Uploading:', file.name, '- Size:', (file.size / 1024 / 1024).toFixed(2), 'MB')
             try {
               // 1. Create media record in database
               const ext = (file.name.split('.').pop() || '').toLowerCase()
-              console.log('📄 [DOCUMENT UPLOAD] Extension:', ext)
               const { data: mediaRecord, error: mediaInsertErr } = await supabase
                 .from('media')
                 .insert([{ parent_id: activityId, extension: ext, type: 'DOCUMENT' }])
@@ -355,13 +351,9 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
                 continue
               }
               
-              console.log('✅ [DOCUMENT UPLOAD] Media record created:', mediaRecord.id)
-              
               // 2. Upload file directly to Supabase Storage
               const { getStorageKey } = await import('@/utils/supabase/media')
               const storageKey = getStorageKey(mediaRecord as unknown as import('@/utils/supabase/media').MediaRow)
-              
-              console.log('📄 [DOCUMENT UPLOAD] Storage key:', storageKey)
               
               const { error: uploadErr } = await supabase.storage
                 .from(STORAGE_BUCKET)
@@ -374,14 +366,11 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
                 console.error('❌ [DOCUMENT UPLOAD] Failed to upload document to storage:', uploadErr)
                 // Delete the media record if upload fails
                 await supabase.from('media').delete().eq('id', mediaRecord.id)
-              } else {
-                console.log('✅ [DOCUMENT UPLOAD] Successfully uploaded:', file.name)
               }
             } catch (error) {
               console.error('❌ [DOCUMENT UPLOAD] Error uploading individual document:', error)
             }
           }
-          console.log('✅ [DOCUMENT UPLOAD] Finished uploading all documents')
         } catch (error) {
           console.error('❌ [DOCUMENT UPLOAD] Fatal document upload error:', error)
           toaster.create({

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 
+export const runtime = "nodejs"
+
 export async function POST(req: NextRequest) {
   try {
     const { email, beneficiary } = await req.json()
@@ -51,29 +53,14 @@ export async function POST(req: NextRequest) {
       const { sendSubscriptionConfirmationEmail } = await import(
         "@/utils/email"
       )
-      const emailResult = await sendSubscriptionConfirmationEmail(
+      await sendSubscriptionConfirmationEmail(
         email,
         beneficiary,
         null,
         beneficiaryData.id,
       )
-      await supabase.from("email_logs").insert({
-        email,
-        subject: `You're subscribed to updates for ${beneficiary}`,
-        status: emailResult.success ? "sent" : "failed",
-        error: emailResult.error ? JSON.stringify(emailResult.error) : null,
-        message_id: emailResult.messageId,
-        created_at: new Date(),
-      })
     } catch (emailErr) {
       console.error("Error sending subscription confirmation email:", emailErr)
-      await supabase.from("email_logs").insert({
-        email,
-        subject: `You're subscribed to updates for ${beneficiary}`,
-        status: "failed",
-        error: emailErr instanceof Error ? emailErr.message : String(emailErr),
-        created_at: new Date(),
-      })
     }
 
     return NextResponse.json({ message: "Subscribed successfully" })

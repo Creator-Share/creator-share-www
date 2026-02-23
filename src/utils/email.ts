@@ -35,6 +35,7 @@ interface SendEmailParams {
   subject: string
   text?: string
   html?: string
+  emailType?: string
 }
 
 export const sendEmail = async ({
@@ -42,9 +43,25 @@ export const sendEmail = async ({
   subject,
   text,
   html,
+  emailType,
 }: SendEmailParams) => {
+  const type = emailType || "generic"
+
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
     console.error("Email configuration is missing")
+    try {
+      const supabase = createServiceRoleClient()
+      await supabase.from("email_logs").insert({
+        email: to,
+        subject,
+        status: "failed",
+        error: "Email service not configured",
+        email_type: type,
+        created_at: new Date().toISOString(),
+      })
+    } catch (logError) {
+      console.error("[Email] Failed to log missing email configuration:", logError)
+    }
     return { success: false, error: "Email service not configured" }
   }
 
@@ -57,9 +74,42 @@ export const sendEmail = async ({
       html,
     })
 
+    try {
+      const supabase = createServiceRoleClient()
+      await supabase.from("email_logs").insert({
+        email: to,
+        subject,
+        status: "sent",
+        error: null,
+        message_id: info.messageId,
+        email_type: type,
+        created_at: new Date().toISOString(),
+      })
+    } catch (logError) {
+      console.error("[Email] Failed to log successful email send:", logError)
+    }
+
     return { success: true, messageId: info.messageId }
   } catch (error) {
     console.error("Error sending email - full details:", error)
+    try {
+      const supabase = createServiceRoleClient()
+      await supabase.from("email_logs").insert({
+        email: to,
+        subject,
+        status: "failed",
+        error:
+          error instanceof Error
+            ? error.message
+            : typeof error === "string"
+              ? error
+              : JSON.stringify(error),
+        email_type: type,
+        created_at: new Date().toISOString(),
+      })
+    } catch (logError) {
+      console.error("[Email] Failed to log failed email send:", logError)
+    }
     return { success: false, error }
   }
 }
@@ -170,6 +220,7 @@ export const sendPartnershipConfirmationEmail = async (
     to: email,
     subject,
     html,
+    emailType: "partnership_confirmation",
   })
 }
 
@@ -250,6 +301,7 @@ export const sendSponsorshipConfirmationEmail = async (
     to: email,
     subject,
     html,
+    emailType: "sponsorship_confirmation",
   })
 }
 
@@ -306,6 +358,7 @@ export const sendBlindSponsorshipConfirmationEmail = async (
     to: email,
     subject,
     html,
+    emailType: "blind_sponsorship_confirmation",
   })
 }
 
@@ -394,6 +447,7 @@ export const sendBlindSponsorshipMatchedEmail = async (
     to: email,
     subject,
     html,
+    emailType: "blind_sponsorship_matched",
   })
 }
 
@@ -477,6 +531,7 @@ export const sendPaymentFailedEmail = async (
     to: email,
     subject,
     html,
+    emailType: "payment_failed",
   })
 }
 
@@ -537,6 +592,7 @@ export const sendSubscriptionConfirmationEmail = async (
     to: email,
     subject,
     html,
+    emailType: "subscription_confirmation",
   })
 }
 
@@ -715,6 +771,7 @@ export const sendActivityNotificationEmail = async (
     to: email,
     subject,
     html,
+    emailType: "activity_notification",
   })
 }
 
@@ -791,6 +848,7 @@ export const sendGoalFulfilledEmail = async (
     to: email,
     subject,
     html,
+    emailType: "goal_fulfilled",
   })
 }
 
@@ -893,6 +951,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
     to: email,
     subject,
     html,
+    emailType: "budget_fulfilled_rejection",
   })
 }
 
@@ -968,6 +1027,7 @@ export const sendManagerSponsorshipNotificationEmail = async (
     to: "johnstjulien@sharetanzania.com",
     subject,
     html,
+    emailType: "manager_sponsorship_notification",
   })
 }
 
@@ -1050,6 +1110,7 @@ export const sendMonthlyPaymentConfirmationEmail = async (
     to: email,
     subject,
     html,
+    emailType: "monthly_payment_confirmation",
   })
 }
 
@@ -1103,5 +1164,6 @@ export const sendSponsorshipCancellationNotificationEmail = async (
     to: "johnstjulien@sharetanzania.com",
     subject,
     html,
+    emailType: "sponsorship_cancellation_notification",
   })
 }

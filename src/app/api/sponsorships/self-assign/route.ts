@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { sendBlindSponsorshipMatchedEmail } from "@/utils/email"
 
+export const runtime = "nodejs"
+
 /**
  * API endpoint for users to self-assign their blind sponsorships to a beneficiary
  * 
