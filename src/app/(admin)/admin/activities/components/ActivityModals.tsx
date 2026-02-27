@@ -50,11 +50,6 @@ interface CreateModalProps {
   onTitleChange: (v: string) => void
   onDescriptionChange: (v: string) => void
   onActivityTypeChange: (v: string) => void
-  /**
-   * Called after the activity (and any media / notifications) have been
-   * successfully created. Use this to close the modal, refresh data, or
-   * navigate. No FormData is passed – the modal owns the API workflow.
-   */
   onComplete?: () => void
 }
 
@@ -208,6 +203,10 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
     setCompressing(true)
     
     try {
+      // Track whether any media upload fails so we can abort the whole flow
+      let mediaUploadFailed = false
+      let mediaErrorMessage: string | null = null
+
       // Step 1: Create activity with JSON only (no files)
       // Build JSON payload
       const activityData = {
@@ -256,22 +255,26 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           })
 
           if (!uploadImagesRes.ok) {
-            console.error('Failed to upload images:', await uploadImagesRes.text())
-            toaster.create({
-              title: "Warning",
-              description: "Activity created but image upload failed",
-              type: "warning",
-              duration: 5000,
-            })
+            const errorText = await uploadImagesRes.text()
+            console.error('Failed to upload images:', errorText)
+            mediaUploadFailed = true
+            if (!mediaErrorMessage) {
+              mediaErrorMessage =
+                errorText?.trim()
+                  ? `Image upload failed: ${errorText.trim()}`
+                  : "Image upload failed. Your images may be too large or invalid."
+            }
           }
         } catch (error) {
           console.error('Image upload error:', error)
-          toaster.create({
-            title: "Warning",
-            description: "Activity created but image upload failed",
-            type: "warning",
-            duration: 5000,
-          })
+          mediaUploadFailed = true
+          if (!mediaErrorMessage) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Image upload failed. Your images may be too large or invalid."
+            mediaErrorMessage = `Image upload failed: ${message}`
+          }
         }
       }
 
@@ -309,6 +312,13 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
               
               if (uploadErr) {
                 console.error('Failed to upload video to storage:', uploadErr)
+                mediaUploadFailed = true
+                if (!mediaErrorMessage) {
+                  const uploadMsg =
+                    uploadErr.message ||
+                    "Video upload failed. The file may be too large or in an unsupported format."
+                  mediaErrorMessage = `Video upload failed: ${uploadMsg}`
+                }
                 // Best-effort cleanup for failed uploads – don't throw if this fails
                 try {
                   await supabase.from('media').delete().eq('id', mediaRecord.id)
@@ -322,12 +332,14 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           }
         } catch (error) {
           console.error('Video upload error:', error)
-          toaster.create({
-            title: "Warning",
-            description: "Activity created but some video uploads may have failed",
-            type: "warning",
-            duration: 5000,
-          })
+          mediaUploadFailed = true
+          if (!mediaErrorMessage) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Video upload failed. The file may be too large or in an unsupported format."
+            mediaErrorMessage = `Video upload failed: ${message}`
+          }
         }
       }
 
@@ -366,6 +378,13 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
                 console.error('❌ [DOCUMENT UPLOAD] Failed to upload document to storage:', uploadErr)
                 // Delete the media record if upload fails
                 await supabase.from('media').delete().eq('id', mediaRecord.id)
+                mediaUploadFailed = true
+                if (!mediaErrorMessage) {
+                  const uploadMsg =
+                    uploadErr.message ||
+                    "Document upload failed. The file may be too large or in an unsupported format."
+                  mediaErrorMessage = `Document upload failed: ${uploadMsg}`
+                }
               }
             } catch (error) {
               console.error('❌ [DOCUMENT UPLOAD] Error uploading individual document:', error)
@@ -373,18 +392,51 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           }
         } catch (error) {
           console.error('❌ [DOCUMENT UPLOAD] Fatal document upload error:', error)
-          toaster.create({
-            title: "Warning",
-            description: "Activity created but some document uploads may have failed",
-            type: "warning",
-            duration: 5000,
-          })
+          mediaUploadFailed = true
+          if (!mediaErrorMessage) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Document upload failed. The file may be too large or in an unsupported format."
+            mediaErrorMessage = `Document upload failed: ${message}`
+          }
         }
       }
       
+      // If any media upload failed, roll back the created activity and abort
+      if (mediaUploadFailed) {
+        try {
+          await fetch('/api/admin/activities/delete', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ id: activityId }),
+          })
+        } catch (rollbackError) {
+          console.error('Failed to rollback activity after media upload failure:', rollbackError)
+        }
+
+        const message =
+          mediaErrorMessage ||
+          "One or more media uploads failed (likely due to file size limits), so this activity was not created. Please adjust the files and try again."
+
+        setError(message)
+        toaster.create({
+          title: "Error",
+          description: message,
+          type: "error",
+          duration: 8000,
+        })
+        return
+      }
+      
       // Step 3: Send email notifications AFTER media is uploaded
-      // This ensures emails include the uploaded images/videos
-      if (sendToSponsors && selectedSponsorIds.size > 0) {
+      // Only send emails if media uploads succeeded so attachments/links match
+      const shouldSendEmails =
+        !mediaUploadFailed && sendToSponsors && selectedSponsorIds.size > 0
+
+      if (shouldSendEmails) {
         try {
           await fetch('/api/admin/activities/notify', {
             method: 'POST',
@@ -400,6 +452,12 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           // Don't fail if notifications fail - activity was still created
         } catch (error) {
           console.error('Failed to send email notifications:', error)
+          toaster.create({
+            title: "Warning",
+            description: "Activity created but email notifications failed to send.",
+            type: "warning",
+            duration: 5000,
+          })
         }
       }
       
