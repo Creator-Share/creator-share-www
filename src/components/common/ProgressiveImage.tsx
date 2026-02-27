@@ -146,37 +146,39 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
       overflow="hidden"
       className={className}
       style={style}
-      bg="gray.100"
+      bg={hasThumbnail ? "transparent" : "gray.100"}
       minHeight={fill ? undefined : height || 200}
       minWidth={fill ? undefined : width || 200}
     >
-      {/* Placeholder background - ensures consistent sizing before any image loads */}
-      <Box
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        bg="gray.100"
-        zIndex={0}
-        display="flex"
-        alignItems="center"
-        justifyContent="center"
-      >
-        {!thumbnailLoaded && !imageLoaded && (
-          <Image
-            src={defaultPlaceholder}
-            alt=""
-            fill={fill}
-            width={fill ? undefined : width || 200}
-            height={fill ? undefined : height || 200}
-            className="object-cover opacity-30"
-            sizes={sizes || "100vw"}
-            unoptimized
-            aria-hidden="true"
-          />
-        )}
-      </Box>
+      {/* Placeholder background - only show if no thumbnail available */}
+      {!hasThumbnail && (
+        <Box
+          position="absolute"
+          top={0}
+          left={0}
+          width="100%"
+          height="100%"
+          bg="gray.100"
+          zIndex={0}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+        >
+          {!imageLoaded && (
+            <Image
+              src={defaultPlaceholder}
+              alt=""
+              fill={fill}
+              width={fill ? undefined : width || 200}
+              height={fill ? undefined : height || 200}
+              className="object-cover opacity-30"
+              sizes={sizes || "100vw"}
+              unoptimized
+              aria-hidden="true"
+            />
+          )}
+        </Box>
+      )}
 
       {/* Thumbnail/Placeholder - Only show if we have a separate thumbnail and it hasn't errored */}
       {hasThumbnail && thumbnailSrc && (
@@ -190,7 +192,7 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
           style={{
             filter: thumbnailLoaded && !imageLoaded ? "blur(10px)" : "none",
             transform: thumbnailLoaded && !imageLoaded ? "scale(1.1)" : "scale(1)",
-            transition: "filter 0.3s ease-out, transform 0.3s ease-out, opacity 0.3s ease-out",
+            transition: "filter 0.3s ease-out, transform 0.3s ease-out, opacity 0.5s ease-out",
             opacity: imageLoaded ? 0 : 1,
           }}
         >
@@ -204,7 +206,8 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
               onLoad={handleThumbnailLoad}
               onError={handleThumbnailError}
               unoptimized={isThumbnailLocal}
-              style={{ objectPosition: "center" }}
+              style={{ objectPosition: "center 5%" }}
+              priority
             />
           ) : (
             <Image
@@ -216,7 +219,8 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
               onLoad={handleThumbnailLoad}
               onError={handleThumbnailError}
               unoptimized={isThumbnailLocal}
-              style={{ objectPosition: "center" }}
+              style={{ objectPosition: "center 5%" }}
+              priority
             />
           )}
         </Box>
@@ -236,10 +240,8 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
               ? 1 // Show immediately if no thumbnail
               : imageLoaded 
                 ? 1 
-                : thumbnailLoaded 
-                  ? 0 
-                  : 0.5, // Show partially if thumbnail hasn't loaded yet
-          transition: "opacity 0.3s ease-in",
+                : 0, // Hide until loaded when using thumbnail
+          transition: "opacity 0.5s ease-in",
         }}
       >
         {fill ? (
@@ -254,7 +256,7 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
             onError={handleImageError}
             sizes={sizes || "100vw"}
             unoptimized={isLocalImage}
-            style={{ objectPosition: "center" }}
+            style={{ objectPosition: "center 5%" }}
           />
         ) : (
           <Image
@@ -268,7 +270,7 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
             onLoad={handleImageLoad}
             onError={handleImageError}
             unoptimized={isLocalImage}
-            style={{ objectPosition: "center" }}
+            style={{ objectPosition: "center 5%" }}
           />
         )}
       </Box>

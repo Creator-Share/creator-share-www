@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { sendPaymentFailedEmail } from "@/utils/email"
 
+export const runtime = "nodejs"
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)

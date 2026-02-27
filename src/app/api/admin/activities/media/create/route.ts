@@ -5,16 +5,12 @@ import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import type { Database } from "@/lib/types/db.types"
 
 type MediaRow = Database["public"]["Tables"]["media"]["Row"]
-
-// Configure route for handling large file uploads
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-// Set max duration for long-running uploads (important for large videos)
-export const maxDuration = 300 // 5 minutes max
+export const maxDuration = 300
 
 export async function POST(req: Request) {
-  console.log("📤 [ACTIVITY MEDIA] Starting media upload")
   
   try {
     const formData = await req.formData()
@@ -41,8 +37,6 @@ export async function POST(req: Request) {
         imageFiles.push(value)
       }
     }
-
-    console.log(`📷 [ACTIVITY MEDIA] Processing ${imageFiles.length} images`)
 
     for (const file of imageFiles) {
       const ext = (file.name.split(".").pop() || "").toLowerCase()
@@ -84,8 +78,6 @@ export async function POST(req: Request) {
       }
     }
 
-    console.log(`🎥 [ACTIVITY MEDIA] Processing ${videoFiles.length} videos`)
-
     for (const file of videoFiles) {
       const ext = (file.name.split(".").pop() || "").toLowerCase()
 
@@ -116,8 +108,6 @@ export async function POST(req: Request) {
         console.error("❌ [ACTIVITY MEDIA] Unexpected error uploading video:", e)
       }
     }
-
-    console.log(`✅ [ACTIVITY MEDIA] Successfully uploaded ${uploadedMediaIds.length} media files`)
 
     return NextResponse.json(
       { 

@@ -700,13 +700,6 @@ const ChildrenTable = () => {
 
     try {
       const beneficiaryIds = Array.from(selectedItems)
-      console.log(
-        "Updating status for IDs:",
-        beneficiaryIds,
-        "to status:",
-        status
-      )
-
       const res = await fetch("/api/admin/beneficiaries/bulk-update-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

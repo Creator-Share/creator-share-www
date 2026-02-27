@@ -16,9 +16,6 @@ export interface SponsorInfo {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const beneficiaryId = searchParams.get("beneficiary_id")
-
-  console.log("🔍 [SPONSORS API] Fetching sponsors for beneficiary_id:", beneficiaryId)
-
   if (!beneficiaryId) {
     return NextResponse.json(
       { error: "beneficiary_id is required" },
@@ -38,11 +35,6 @@ export async function GET(req: NextRequest) {
     .eq("status", "complete")
     .order("created_at", { ascending: false })
 
-  console.log("📊 [SPONSORS API] Subscriptions query result:", {
-    error: subsError?.message || null,
-    subscriptionCount: subscriptions?.length || 0,
-  })
-
   if (subsError) {
     console.error("❌ [SPONSORS API] Error fetching subscriptions:", subsError)
     return NextResponse.json(
@@ -52,7 +44,6 @@ export async function GET(req: NextRequest) {
   }
 
   if (!subscriptions || subscriptions.length === 0) {
-    console.log("ℹ️ [SPONSORS API] No active subscriptions found")
     return NextResponse.json({ sponsors: [] }, { status: 200 })
   }
 
@@ -130,15 +121,8 @@ export async function GET(req: NextRequest) {
         interval: sub.interval,
         emailNotification: sub.email_notification,
       })
-    } else {
-      console.log(`⚠️ [SPONSORS API] No email found for subscription ${sub.id}`)
     }
   }
-
-  console.log("✅ [SPONSORS API] Successfully fetched sponsors:", {
-    totalSponsors: sponsors.length,
-    sponsors: sponsors.map(s => ({ emailRedacted: s.emailRedacted, name: s.name }))
-  })
 
   return NextResponse.json({ sponsors }, { status: 200 })
 }

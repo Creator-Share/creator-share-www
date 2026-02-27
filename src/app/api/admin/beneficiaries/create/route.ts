@@ -10,11 +10,9 @@ export async function POST(req: Request) {
   const auth = await requireSuperAdmin(supabase)
   if (!auth.ok) return auth.response
   try {
-    // Parse JSON request body with error handling
     let body;
     try {
       body = await req.json();
-      console.log('Received request body:', body);
     } catch (parseError) {
       console.error('JSON parse error:', parseError);
       return NextResponse.json(
@@ -57,11 +55,8 @@ export async function POST(req: Request) {
         birth_date_is_estimate: birthDateIsEstimate,
       },
       beneficiary_type: 'CHILD' as BeneficiaryType,
-      introduction: String(body.biography).trim() // Use biography for introduction
+      introduction: String(body.biography).trim()
     }
-
-    console.log('Processed data:', data);
-
     const insertData = { ...data }
     if (!insertData.status) insertData.status = "New"
     if (!insertData.country) insertData.country = "Unknown Country"
