@@ -25,7 +25,7 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
     const fetchImages = async () => {
       try {
         const response = await fetch(
-          `/api/admin/beneficiaries/images/${beneficiary.id}`,
+          `/api/beneficiaries/images/${beneficiary.id}`,
         )
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`)
@@ -41,7 +41,7 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
         setImages(
           data.sort(
             (a: BeneficiaryMedia, b: BeneficiaryMedia) =>
-              a.order_index - b.order_index,
+              (a.weight ?? 0) - (b.weight ?? 0),
           ),
         )
       } catch (error) {

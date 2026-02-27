@@ -46,11 +46,11 @@ export interface Beneficiaries {
 
 export interface BeneficiaryMedia {
   id: string
-  beneficiary_id: string
-  image_url: string
-  order_index: number
-  created_at: string
-  activity_id?: string // Fixed typo in property name
+  parent_id: string
+  extension: string
+  type: "IMAGE" | "VIDEO"
+  weight: number | null
+  created_at: string | null
 }
 
 export interface Subscription {

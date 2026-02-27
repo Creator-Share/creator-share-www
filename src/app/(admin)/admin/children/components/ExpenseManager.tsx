@@ -215,10 +215,8 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   }
 
   const removeAssignment = async (assignmentId: string) => {
-    console.log("Removing assignment with ID:", assignmentId)
 
     try {
-      // First, get the assignment to find the expense_id
       const assignment = assignments.find((a) => a.id === assignmentId)
       if (!assignment) {
         toaster.create({
@@ -228,20 +226,13 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({
         })
         return
       }
-
-      console.log("Found assignment:", assignment)
-      console.log("Will delete expense with ID:", assignment.expense_id)
-
-      // Delete the expense from the expenses table (this will cascade to assignments)
+      
       const response = await fetch(
         `/api/admin/expenses/delete/${assignment.expense_id}`,
         {
           method: "DELETE",
         },
       )
-
-      console.log("Delete response status:", response.status)
-      console.log("Delete response ok:", response.ok)
 
       if (response.ok) {
         // Update local state - remove the assignment
@@ -258,7 +249,6 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({
         // Notify parent component with updated assignments
         onExpensesChange?.(updatedAssignments)
 
-        console.log("Expense and assignment removed successfully")
 
         toaster.create({
           title: "Success",

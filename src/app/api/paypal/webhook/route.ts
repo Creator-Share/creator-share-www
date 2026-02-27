@@ -335,36 +335,20 @@ export async function POST(req: Request) {
         else if (status === "SUSPENDED") mappedStatus = "suspended"
         else if (status === "CANCELLED") mappedStatus = "cancelled"
         else if (status === "EXPIRED") mappedStatus = "expired"
-        // Add more mappings as needed
-
-        console.log("Mapped PayPal status:", status, "->", mappedStatus)
-
-        console.log("PayPal subscription insert payload:", {
-          user_id: userId,
-          sponsorship_id: paypalSubscriptionId,
-          status: mappedStatus,
-          amount: amount,
-          interval: interval,
-          current_period_start: startTime,
-          current_period_end: null,
-          canceled_at: null,
-          customer_id: customerId,
-          created_at: new Date(),
-          beneficiary_id: beneficiaryId,
-        })
 
         const { error: insertError } = await supabase
           .from("subscriptions")
           .insert({
             user_id: userId,
-            stripe_subscription_id: paypalSubscriptionId, // Changed from sponsorship_id
+            stripe_subscription_id: paypalSubscriptionId,
             status: "incomplete",
             amount: amount ?? 0,
             interval: interval ?? undefined,
-            current_period_end: null, // PayPal does not provide end time on creation
+            current_period_start: startTime,
+            current_period_end: null,
             canceled_at: null,
             customer_id: customerId,
-            created_at: new Date(),
+            created_at: startTime,
             beneficiary_id: beneficiaryId,
             sponsorship_method: "PAYPAL",
           })
@@ -494,7 +478,6 @@ export async function POST(req: Request) {
       }
 
       default:
-        console.log(`Unhandled event type: ${event.event_type}`)
     }
 
     return NextResponse.json({ received: true })

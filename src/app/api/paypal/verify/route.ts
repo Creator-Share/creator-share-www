@@ -41,8 +41,6 @@ export async function GET(req: Request) {
   const sponsorshipId = searchParams.get("sponsorship_id")
   const token = searchParams.get("token")
 
-  console.log("PayPal verify params:", { sponsorshipId, token })
-
   if (!sponsorshipId && !token) {
     return NextResponse.json(
       { error: "Missing sponsorship_id or token" },
@@ -78,14 +76,10 @@ export async function GET(req: Request) {
         .single()
 
       if (subscription && !subscriptionError) {
-        console.log("Found subscription in database:", subscription)
         return NextResponse.json({
           subscription: subscription,
         })
       }
-
-      // If not found in database, fetch from PayPal API (subscription might be pending approval)
-      console.log("Subscription not found in database, fetching from PayPal API...")
       try {
         const res = await fetch(`${PAYPAL_API_URL}/v1/billing/subscriptions/${sponsorshipId}`, {
           method: "GET",
@@ -97,9 +91,6 @@ export async function GET(req: Request) {
 
         const paypalData = await res.json()
         if (res.ok) {
-          console.log("Found subscription in PayPal API:", paypalData)
-          
-          // Try to get beneficiary info from custom_id
           let beneficiaryData = null
           if (paypalData.custom_id) {
             const { data: beneficiary } = await supabase
@@ -136,7 +127,6 @@ export async function GET(req: Request) {
             if (createError) {
               console.error("Failed to create subscription record:", createError)
             } else {
-              console.log("Created subscription record:", newSubscription)
               return NextResponse.json({
                 subscription: {
                   ...newSubscription,

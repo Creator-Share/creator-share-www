@@ -4,8 +4,6 @@ import { MediaRow, uploadFile } from "@/utils/supabase/media"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 export async function PUT(req: NextRequest) {
-  console.log("🔄 [UPDATE ACTIVITY] Starting activity update")
-  
   const formData = await req.formData()
   const id = formData.get("id") as string | null
   const title = formData.get("title") as string | null
@@ -13,23 +11,10 @@ export async function PUT(req: NextRequest) {
   const activity_type = formData.get("activity_type") as string | null
   const is_public = formData.get("is_public") === "true"
   const beneficiary_id = formData.get("beneficiary_id") as string | null
-  
-  // Get existing media that should be kept
   const existingImagesStr = formData.get("existing_images") as string | null
   const existingVideosStr = formData.get("existing_videos") as string | null
   const existingImages: string[] = existingImagesStr ? JSON.parse(existingImagesStr) : []
   const existingVideos: string[] = existingVideosStr ? JSON.parse(existingVideosStr) : []
-
-  console.log("📝 [UPDATE ACTIVITY] Form data:", {
-    id,
-    title,
-    description: description?.substring(0, 50) + "...",
-    activity_type,
-    is_public,
-    beneficiary_id,
-    existingImages: existingImages.length,
-    existingVideos: existingVideos.length,
-  })
 
   if (!id || !description || !beneficiary_id) {
     console.error("❌ [UPDATE ACTIVITY] Missing required fields")
@@ -67,8 +52,6 @@ export async function PUT(req: NextRequest) {
   if (activity_type) updateData.activity_type = activity_type
   if (is_public !== undefined) updateData.is_public = is_public
 
-  console.log("💾 [UPDATE ACTIVITY] Updating activity in database")
-
   const { data: updated, error } = await supabase
     .from("activities")
     .update(updateData)
@@ -80,8 +63,6 @@ export async function PUT(req: NextRequest) {
     console.error("❌ [UPDATE ACTIVITY] Failed to update activity:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
-  console.log("✅ [UPDATE ACTIVITY] Activity updated successfully")
 
   // Handle media updates
   // Step 1: Fetch all existing media for this activity
@@ -117,9 +98,7 @@ export async function PUT(req: NextRequest) {
         (isImage && existingImages.includes(publicUrl)) ||
         (isVideo && existingVideos.includes(publicUrl))
 
-      if (!shouldKeep) {
-        console.log("🗑️ [UPDATE ACTIVITY] Removing media:", mediaRecord.id)
-        
+      if (!shouldKeep) {  
         // Delete from storage
         const { error: storageError } = await supabase.storage
           .from(STORAGE_BUCKET)
@@ -207,12 +186,5 @@ export async function PUT(req: NextRequest) {
 
     videoMediaIds.push(mediaRow.id)
   }
-
-  console.log("📸 [UPDATE ACTIVITY] Media uploaded:", {
-    images: imageMediaIds.length,
-    videos: videoMediaIds.length
-  })
-
-  console.log("🎉 [UPDATE ACTIVITY] Activity updated successfully")
   return NextResponse.json({ activity: updated })
 }

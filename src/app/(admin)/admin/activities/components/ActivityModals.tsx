@@ -50,11 +50,6 @@ interface CreateModalProps {
   onTitleChange: (v: string) => void
   onDescriptionChange: (v: string) => void
   onActivityTypeChange: (v: string) => void
-  /**
-   * Called after the activity (and any media / notifications) have been
-   * successfully created. Use this to close the modal, refresh data, or
-   * navigate. No FormData is passed – the modal owns the API workflow.
-   */
   onComplete?: () => void
 }
 
@@ -73,6 +68,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
 }) => {
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [videoFiles, setVideoFiles] = useState<File[]>([])
+  const [documentFiles, setDocumentFiles] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [videoPreviews, setVideoPreviews] = useState<string[]>([])
   
@@ -83,6 +79,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   const [selectedSponsorIds, setSelectedSponsorIds] = useState<Set<string>>(new Set())
   const [loadingSponsors, setLoadingSponsors] = useState(false)
   const [compressing, setCompressing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
   const supabase = createClient()
 
@@ -90,12 +87,14 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
     if (!open) {
       setImageFiles([])
       setVideoFiles([])
+      setDocumentFiles([])
       setImagePreviews([])
       setVideoPreviews([])
       setIsPublic(false)
       setSendToSponsors(true)
       setSponsors([])
       setSelectedSponsorIds(new Set())
+      setError(null)
       return
     }
   }, [open])
@@ -200,9 +199,14 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   }
 
   const handleCreate = async () => {
+    setError(null)
     setCompressing(true)
     
     try {
+      // Track whether any media upload fails so we can abort the whole flow
+      let mediaUploadFailed = false
+      let mediaErrorMessage: string | null = null
+
       // Step 1: Create activity with JSON only (no files)
       // Build JSON payload
       const activityData = {
@@ -256,42 +260,189 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             videoFiles.forEach((file) => formDataMedia.append("videos", file))
           }
 
-          const uploadMediaRes = await fetch(
-            "/api/admin/activities/media/create",
-            {
-              method: "POST",
-              body: formDataMedia,
-            },
-          )
-
-          if (!uploadMediaRes.ok) {
-            console.error(
-              "Failed to upload media:",
-              await uploadMediaRes.text(),
-            )
-            toaster.create({
-              title: "Warning",
-              description:
-                "Activity created but media upload failed. Please try again from the activity editor.",
-              type: "warning",
-              duration: 5000,
-            })
+          if (!uploadImagesRes.ok) {
+            const errorText = await uploadImagesRes.text()
+            console.error('Failed to upload images:', errorText)
+            mediaUploadFailed = true
+            if (!mediaErrorMessage) {
+              mediaErrorMessage =
+                errorText?.trim()
+                  ? `Image upload failed: ${errorText.trim()}`
+                  : "Image upload failed. Your images may be too large or invalid."
+            }
           }
         } catch (error) {
-          console.error("Media upload error:", error)
-          toaster.create({
-            title: "Warning",
-            description:
-              "Activity created but media upload failed. Please try again from the activity editor.",
-            type: "warning",
-            duration: 5000,
-          })
+          console.error('Image upload error:', error)
+          mediaUploadFailed = true
+          if (!mediaErrorMessage) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Image upload failed. Your images may be too large or invalid."
+            mediaErrorMessage = `Image upload failed: ${message}`
+          }
+        }
+      }
+
+      // Upload videos directly to Supabase Storage (bypassing Next.js 10MB limit)
+      if (videoFiles.length > 0) {
+        try {
+          const supabase = createClient()
+          const { STORAGE_BUCKET } = await import('@/utils/supabase/buckets')
+          
+          for (const file of videoFiles) {
+            try {
+              // 1. Create media record in database
+              const ext = (file.name.split('.').pop() || '').toLowerCase()
+              const { data: mediaRecord, error: mediaInsertErr } = await supabase
+                .from('media')
+                .insert([{ parent_id: activityId, extension: ext, type: 'VIDEO' }])
+                .select()
+                .single()
+              
+              if (mediaInsertErr || !mediaRecord) {
+                console.error('Failed to create media record:', mediaInsertErr)
+                continue
+              }
+              
+              // 2. Upload file directly to Supabase Storage
+              const { getStorageKey } = await import('@/utils/supabase/media')
+              const storageKey = getStorageKey(mediaRecord as unknown as import('@/utils/supabase/media').MediaRow)
+              
+              const { error: uploadErr } = await supabase.storage
+                .from(STORAGE_BUCKET)
+                .upload(storageKey, file, {
+                  contentType: file.type,
+                  upsert: false,
+                })
+              
+              if (uploadErr) {
+                console.error('Failed to upload video to storage:', uploadErr)
+                mediaUploadFailed = true
+                if (!mediaErrorMessage) {
+                  const uploadMsg =
+                    uploadErr.message ||
+                    "Video upload failed. The file may be too large or in an unsupported format."
+                  mediaErrorMessage = `Video upload failed: ${uploadMsg}`
+                }
+                // Best-effort cleanup for failed uploads – don't throw if this fails
+                try {
+                  await supabase.from('media').delete().eq('id', mediaRecord.id)
+                } catch (deleteErr) {
+                  console.error('Failed to clean up failed media record:', deleteErr)
+                }
+              }
+            } catch (error) {
+              console.error('Error uploading individual video:', error)
+            }
+          }
+        } catch (error) {
+          console.error('Video upload error:', error)
+          mediaUploadFailed = true
+          if (!mediaErrorMessage) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Video upload failed. The file may be too large or in an unsupported format."
+            mediaErrorMessage = `Video upload failed: ${message}`
+          }
+        }
+      }
+
+      // Upload documents (PDFs, etc.) directly to Supabase Storage
+      if (documentFiles.length > 0) { 
+        try {
+          const supabase = createClient()
+          const { STORAGE_BUCKET } = await import('@/utils/supabase/buckets')
+          for (const file of documentFiles) {
+            try {
+              // 1. Create media record in database
+              const ext = (file.name.split('.').pop() || '').toLowerCase()
+              const { data: mediaRecord, error: mediaInsertErr } = await supabase
+                .from('media')
+                .insert([{ parent_id: activityId, extension: ext, type: 'DOCUMENT' }])
+                .select()
+                .single()
+              
+              if (mediaInsertErr || !mediaRecord) {
+                console.error('❌ [DOCUMENT UPLOAD] Failed to create document media record:', mediaInsertErr)
+                continue
+              }
+              
+              // 2. Upload file directly to Supabase Storage
+              const { getStorageKey } = await import('@/utils/supabase/media')
+              const storageKey = getStorageKey(mediaRecord as unknown as import('@/utils/supabase/media').MediaRow)
+              
+              const { error: uploadErr } = await supabase.storage
+                .from(STORAGE_BUCKET)
+                .upload(storageKey, file, {
+                  contentType: file.type || 'application/pdf',
+                  upsert: false,
+                })
+              
+              if (uploadErr) {
+                console.error('❌ [DOCUMENT UPLOAD] Failed to upload document to storage:', uploadErr)
+                // Delete the media record if upload fails
+                await supabase.from('media').delete().eq('id', mediaRecord.id)
+                mediaUploadFailed = true
+                if (!mediaErrorMessage) {
+                  const uploadMsg =
+                    uploadErr.message ||
+                    "Document upload failed. The file may be too large or in an unsupported format."
+                  mediaErrorMessage = `Document upload failed: ${uploadMsg}`
+                }
+              }
+            } catch (error) {
+              console.error('❌ [DOCUMENT UPLOAD] Error uploading individual document:', error)
+            }
+          }
+        } catch (error) {
+          console.error('❌ [DOCUMENT UPLOAD] Fatal document upload error:', error)
+          mediaUploadFailed = true
+          if (!mediaErrorMessage) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Document upload failed. The file may be too large or in an unsupported format."
+            mediaErrorMessage = `Document upload failed: ${message}`
+          }
         }
       }
       
+      // If any media upload failed, roll back the created activity and abort
+      if (mediaUploadFailed) {
+        try {
+          await fetch('/api/admin/activities/delete', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ id: activityId }),
+          })
+        } catch (rollbackError) {
+          console.error('Failed to rollback activity after media upload failure:', rollbackError)
+        }
+
+        const message =
+          mediaErrorMessage ||
+          "One or more media uploads failed (likely due to file size limits), so this activity was not created. Please adjust the files and try again."
+
+        setError(message)
+        toaster.create({
+          title: "Error",
+          description: message,
+          type: "error",
+          duration: 8000,
+        })
+        return
+      }
+      
       // Step 3: Send email notifications AFTER media is uploaded
-      // This ensures emails include the uploaded images/videos
-      if (sendToSponsors && selectedSponsorIds.size > 0) {
+      // Only send emails if media uploads succeeded so attachments/links match
+      const shouldSendEmails =
+        !mediaUploadFailed && sendToSponsors && selectedSponsorIds.size > 0
+
+      if (shouldSendEmails) {
         try {
           await fetch('/api/admin/activities/notify', {
             method: 'POST',
@@ -307,6 +458,12 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           // Don't fail if notifications fail - activity was still created
         } catch (error) {
           console.error('Failed to send email notifications:', error)
+          toaster.create({
+            title: "Warning",
+            description: "Activity created but email notifications failed to send.",
+            type: "warning",
+            duration: 5000,
+          })
         }
       }
       
@@ -321,11 +478,13 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       // Let the parent know we're done so it can close the modal,
       // refresh data, or navigate as needed.
       onComplete?.()
-    } catch (error) {
-      console.error("Error creating activity:", error)
+    } catch (err) {
+      console.error("Error creating activity:", err)
+      const message = err instanceof Error ? err.message : "Failed to create activity"
+      setError(message)
       toaster.create({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create activity",
+        description: message,
         type: "error",
         duration: 5000,
       })
@@ -704,6 +863,91 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             </div>
           )}
         </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontWeight: 500 }}>Upload Documents (PDFs, etc.)</label>
+          <FileUploadRoot
+            onFileChange={(fileDetails) => {
+              setDocumentFiles(fileDetails.acceptedFiles)
+            }}
+            accept={["application/pdf", ".pdf"]}
+            maxFiles={5}
+          >
+            <FileUploadTrigger asChild>
+              <Button variant="outline" size="sm" className="border" px={4}>
+                <HiUpload /> Upload Documents
+              </Button>
+            </FileUploadTrigger>
+            <FileUploadList showSize clearable files={documentFiles} />
+          </FileUploadRoot>
+          {documentFiles.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              {documentFiles.map((file, index) => (
+                <div
+                  key={file.name}
+                  style={{
+                    padding: 12,
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 8,
+                    backgroundColor: "#f9fafb",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <svg
+                    className="w-8 h-8 text-red-500"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <div style={{ flex: 1 }}>
+                    <Text fontSize="sm" fontWeight="medium">
+                      {file.name}
+                    </Text>
+                    <Text fontSize="xs" color="gray.500">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB
+                    </Text>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setDocumentFiles((prev) => prev.filter((_, i) => i !== index))
+                    }}
+                    className="text-red-500 hover:text-red-600"
+                    type="button"
+                    aria-label="Remove document"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
         <div
           style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}
         >

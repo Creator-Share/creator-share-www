@@ -165,7 +165,6 @@ export function useBeneficiaryPagination(
 
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
-          console.log("[useBeneficiaryPagination] Previous request aborted")
           return
         }
 
@@ -229,25 +228,18 @@ export function useBeneficiaryPagination(
 
   const handleFilterChange = useCallback(
     (newFilters: Partial<FiltersState>) => {
-      console.log("[useBeneficiaryPagination] Filter change:", newFilters)
       setFilters((prev) => ({ ...prev, ...newFilters }))
     },
     []
   )
 
-  // Fetch initial data and when filters change
   useEffect(() => {
-    console.log("[useBeneficiaryPagination] Filters changed, fetching new results")
-    // Don't clear beneficiaries immediately - keep showing old results until new ones arrive
-    // This prevents scroll position from jumping when filters change
     setCursor(null)
     fetchPage(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters])
 
-  // === Supabase Realtime subscription for instant updates ===
   useEffect(() => {
-    // Avoid SSR: only subscribe in browser
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
     if (!supabaseUrl || !supabaseAnonKey) {
@@ -262,9 +254,7 @@ export function useBeneficiaryPagination(
       .on(
         "postgres_changes",
         { schema: "public", table: "subscriptions", event: "*" },
-        payload => {
-          // Any row insert/update/delete, refetch the list
-          console.log("[useBeneficiaryPagination] Supabase realtime: subscriptions event received, reloading list...", payload)
+        () => {
           fetchPage(null)
         }
       )

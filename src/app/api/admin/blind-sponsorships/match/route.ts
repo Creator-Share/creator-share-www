@@ -3,6 +3,8 @@ import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { sendBlindSponsorshipMatchedEmail } from "@/utils/email"
 
+export const runtime = "nodejs"
+
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>
 
 /**

@@ -7,9 +7,6 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function POST(req: NextRequest) {
-  console.log("🎬 [CREATE ACTIVITY] Starting activity creation")
-  
-  // Check content type to provide helpful error message
   const contentType = req.headers.get("content-type") || ""
   
   if (contentType.includes("multipart/form-data")) {
@@ -41,15 +38,6 @@ export async function POST(req: NextRequest) {
       is_public,
     } = body
 
-    console.log("📝 [CREATE ACTIVITY] Request data:", {
-      title,
-      description: description?.substring(0, 50) + "...",
-      activity_type,
-      activity_source,
-      beneficiary_id,
-      is_public,
-    })
-
     if (!description || !beneficiary_id || !activity_type || !activity_source) {
       console.error("❌ [CREATE ACTIVITY] Missing required fields")
       return NextResponse.json(
@@ -58,11 +46,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Selected sponsor IDs are handled by the frontend in the notify endpoint
-
-    console.log("💾 [CREATE ACTIVITY] Inserting activity into database")
-
-    // Insert activity record (no media yet - will be uploaded separately)
     const { data: activityInserted, error: insertErr } = await supabase
       .from("activities")
       .insert([
@@ -84,16 +67,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: insertErr.message }, { status: 500 })
     }
 
-    console.log("✅ [CREATE ACTIVITY] Activity inserted successfully, ID:", activityInserted?.id)
-
     const activityId = activityInserted?.id
     const inserted = activityInserted
 
-    // NOTE: Email notifications are now sent via /api/admin/activities/notify
-    // This is called by the frontend AFTER media uploads are complete
-    // so that emails include the uploaded images/videos
-
-    console.log("🎉 [CREATE ACTIVITY] Activity created successfully, ID:", activityId)
     return NextResponse.json({ activity: inserted, activityId }, { status: 201 })
   } catch (error) {
     console.error("❌ [CREATE ACTIVITY] Fatal error:", error)

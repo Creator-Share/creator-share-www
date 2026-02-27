@@ -7,7 +7,6 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function POST(req: NextRequest) {
-  console.log("📧 [NOTIFY ACTIVITY] Starting email notification")
   
   try {
     const body = await req.json()
@@ -51,9 +50,6 @@ export async function POST(req: NextRequest) {
     if (subError) {
       console.error("❌ Error fetching activity subscribers:", subError)
     }
-
-    // Fetch sponsors
-    console.log("📧 [NOTIFY ACTIVITY] Fetching sponsor information")
     
     let sponsorQuery = supabase
       .from("subscriptions")
@@ -63,15 +59,12 @@ export async function POST(req: NextRequest) {
     
     if (sponsorIds.length > 0) {
       sponsorQuery = sponsorQuery.in("id", sponsorIds)
-      console.log("📧 [NOTIFY ACTIVITY] Filtering to selected sponsors:", sponsorIds)
     }
     
     const { data: sponsorRows, error: sponsorError } = await sponsorQuery
 
     if (sponsorError) {
       console.error("❌ [NOTIFY ACTIVITY] Error fetching sponsor subscriptions:", sponsorError)
-    } else {
-      console.log("✅ [NOTIFY ACTIVITY] Found sponsor subscriptions:", sponsorRows?.length || 0)
     }
     
     type SponsorInfo = {
@@ -137,8 +130,6 @@ export async function POST(req: NextRequest) {
         }
       }
     }
-    
-    console.log("✅ [NOTIFY ACTIVITY] Compiled sponsor info list:", sponsorInfoList.length)
 
     // Fetch beneficiary name
     const { data: beneficiaryData } = await supabase
@@ -166,10 +157,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (!sponsorError && sponsorIds.length > 0) {
-      console.log("📧 [NOTIFY ACTIVITY] Adding sponsors to audience:", sponsorInfoList.length)
       for (const sponsor of sponsorInfoList) {
         if (sponsor.emailNotification === false) {
-          console.log("⏭️ [NOTIFY ACTIVITY] Skipping sponsor (notifications disabled):", sponsor.email)
           continue
         }
         
@@ -181,12 +170,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (beneficiaryData && beneficiaryData.name && audienceMap.size > 0) {
-      const subject = `New update on ${beneficiaryData.name}`
       type EmailResult = { success: boolean; error?: unknown; messageId?: string }
       
       // Fetch media URLs (now they should exist!)
       const imageUrls: string[] = []
       const videoUrls: string[] = []
+      const documentUrls: string[] = []
 
       const { data: mediaRecords } = await supabase
         .from("media")
@@ -214,6 +203,8 @@ export async function POST(req: NextRequest) {
                 imageUrls.push(publicUrl)
               } else if (mediaRecord.type === "VIDEO") {
                 videoUrls.push(publicUrl)
+              } else if (mediaRecord.type === "DOCUMENT") {
+                documentUrls.push(publicUrl)
               }
             } catch (urlError) {
               console.error("❌ Error generating URL for media:", urlError)
@@ -221,11 +212,6 @@ export async function POST(req: NextRequest) {
           }
         }
       }
-      
-      console.log("🖼️ [NOTIFY ACTIVITY] Generated media URLs:", {
-        images: imageUrls.length,
-        videos: videoUrls.length
-      })
 
       await Promise.allSettled(
         Array.from(audienceMap.values()).map(async (member) => {
@@ -238,49 +224,19 @@ export async function POST(req: NextRequest) {
                 description: activity?.description || "",
                 imageUrls,
                 videoUrls,
+                documentUrls,
               },
               member.name,
               beneficiaryId,
             )
-            
-            try {
-              await supabase.from("email_logs").insert({
-                email: member.email,
-                subject,
-                status: emailResult.success ? "sent" : "failed",
-                error: emailResult.error
-                  ? JSON.stringify(emailResult.error)
-                  : null,
-                message_id: emailResult.messageId,
-                created_at: new Date(),
-              })
-            } catch (logErr) {
-              console.error("❌ Error logging email attempt:", logErr)
-            }
-            
+
             return emailResult
           } catch (emailErr) {
             console.error("❌ Error sending activity notification email to", member.email, ":", emailErr)
-            try {
-              await supabase.from("email_logs").insert({
-                email: member.email,
-                subject,
-                status: "failed",
-                error:
-                  emailErr instanceof Error
-                    ? emailErr.message
-                    : String(emailErr),
-                created_at: new Date(),
-              })
-            } catch (logErr) {
-              console.error("❌ Error logging failed email attempt:", logErr)
-            }
             return { success: false, error: emailErr }
           }
         }),
       )
-      
-      console.log("✅ [NOTIFY ACTIVITY] Emails sent successfully")
       return NextResponse.json({ success: true, emailsSent: audienceMap.size }, { status: 200 })
     }
 

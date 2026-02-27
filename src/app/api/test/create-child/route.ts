@@ -71,7 +71,7 @@ export async function POST(req: Request) {
       const testImageUrl = `https://picsum.photos/400/400?random=${Date.now()}`;
       
       // Insert a media record for the test image
-      const { data: mediaInserted, error: mediaError } = await supabase
+      const { error: mediaError } = await supabase
         .from("media")
         .insert([{
           parent_id: inserted.id,
@@ -84,8 +84,6 @@ export async function POST(req: Request) {
 
       if (mediaError) {
         console.warn('Failed to add test image:', mediaError);
-      } else {
-        console.log('Test image added:', mediaInserted);
       }
     } catch (imageError) {
       console.warn('Error adding test image:', imageError);
