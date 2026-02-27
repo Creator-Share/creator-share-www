@@ -220,10 +220,10 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       }
 
       // Make the actual API calls here instead of passing work to the parent
-      const createResponse = await fetch('/api/admin/activities/create', {
-        method: 'POST',
+      const createResponse = await fetch("/api/admin/activities/create", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(activityData),
       })
@@ -235,24 +235,30 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       
       const { activityId } = await createResponse.json()
       
-      // Step 2: Upload media if any files exist
-      // Follow the same pattern as beneficiary uploads
-      if (imageFiles.length > 0) {
+      // Step 2: Upload media (images and/or videos) via server-side endpoint
+      // This routes all storage writes through /api/admin/activities/media/create,
+      // which applies server-side validation and SuperAdmin auth.
+      if (imageFiles.length > 0 || videoFiles.length > 0) {
         try {
-          // Compress all images together (following beneficiary pattern)
-          const { compressImages } = await import('@/utils/imageCompression')
-          const compressedFiles = await compressImages(imageFiles, {
-            maxSizeMB: 3.5,
-          })
+          const formDataMedia = new FormData()
+          formDataMedia.append("activityId", activityId)
 
-          const formDataImages = new FormData()
-          formDataImages.append('activityId', activityId)
-          compressedFiles.forEach((file) => formDataImages.append('images', file))
+          // Compress and append images (following beneficiary pattern)
+          if (imageFiles.length > 0) {
+            const { compressImages } = await import("@/utils/imageCompression")
+            const compressedFiles = await compressImages(imageFiles, {
+              maxSizeMB: 3.5,
+            })
 
-          const uploadImagesRes = await fetch('/api/admin/activities/media/create', {
-            method: 'POST',
-            body: formDataImages,
-          })
+            compressedFiles.forEach((file) =>
+              formDataMedia.append("images", file),
+            )
+          }
+
+          // Append videos directly; size/type validation is enforced server-side
+          if (videoFiles.length > 0) {
+            videoFiles.forEach((file) => formDataMedia.append("videos", file))
+          }
 
           if (!uploadImagesRes.ok) {
             const errorText = await uploadImagesRes.text()
