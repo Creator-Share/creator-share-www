@@ -201,7 +201,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   const handleCreate = async () => {
     setError(null)
     setCompressing(true)
-    
+
     try {
       // Track whether any media upload fails so we can abort the whole flow
       let mediaUploadFailed = false
@@ -240,6 +240,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       // which applies server-side validation and SuperAdmin auth.
       if (imageFiles.length > 0 || videoFiles.length > 0) {
         try {
+          const MAX_MEDIA_BYTES = 9 * 1024 * 1024 // 9MB buffer under 10MB Next.js limit
           const formDataMedia = new FormData()
           formDataMedia.append("activityId", activityId)
 
@@ -253,6 +254,32 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             compressedFiles.forEach((file) =>
               formDataMedia.append("images", file),
             )
+
+            // Re-evaluate size AFTER compression
+            const compressedImagesBytes = compressedFiles.reduce(
+              (sum, f) => sum + f.size,
+              0,
+            )
+            const videosBytes = videoFiles.reduce(
+              (sum, f) => sum + f.size,
+              0,
+            )
+            const documentsBytes = documentFiles.reduce(
+              (sum, f) => sum + f.size,
+              0,
+            )
+            const totalMediaBytes =
+              compressedImagesBytes + videosBytes + documentsBytes
+
+            if (totalMediaBytes > MAX_MEDIA_BYTES) {
+              const totalMB = (
+                totalMediaBytes /
+                (1024 * 1024)
+              ).toFixed(2)
+              const message = `Total upload size after compression (${totalMB} MB) exceeds the 9 MB server limit. Please upload smaller or fewer files.`
+              mediaUploadFailed = true
+              mediaErrorMessage = message
+            }
           }
 
           // Append videos directly; size/type validation is enforced server-side
@@ -260,91 +287,57 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             videoFiles.forEach((file) => formDataMedia.append("videos", file))
           }
 
-          if (!uploadImagesRes.ok) {
-            const errorText = await uploadImagesRes.text()
-            console.error('Failed to upload images:', errorText)
+          const uploadMediaRes = await fetch(
+            "/api/admin/activities/media/create",
+            {
+              method: "POST",
+              body: formDataMedia,
+            },
+          )
+
+          if (!uploadMediaRes.ok) {
+            const errorText = await uploadMediaRes.text()
+            console.error("Failed to upload activity media:", errorText)
             mediaUploadFailed = true
             if (!mediaErrorMessage) {
-              mediaErrorMessage =
-                errorText?.trim()
-                  ? `Image upload failed: ${errorText.trim()}`
-                  : "Image upload failed. Your images may be too large or invalid."
-            }
-          }
-        } catch (error) {
-          console.error('Image upload error:', error)
-          mediaUploadFailed = true
-          if (!mediaErrorMessage) {
-            const message =
-              error instanceof Error
-                ? error.message
-                : "Image upload failed. Your images may be too large or invalid."
-            mediaErrorMessage = `Image upload failed: ${message}`
-          }
-        }
-      }
+              const trimmed = errorText?.trim()
+              let friendly = trimmed || ""
 
-      // Upload videos directly to Supabase Storage (bypassing Next.js 10MB limit)
-      if (videoFiles.length > 0) {
-        try {
-          const supabase = createClient()
-          const { STORAGE_BUCKET } = await import('@/utils/supabase/buckets')
-          
-          for (const file of videoFiles) {
-            try {
-              // 1. Create media record in database
-              const ext = (file.name.split('.').pop() || '').toLowerCase()
-              const { data: mediaRecord, error: mediaInsertErr } = await supabase
-                .from('media')
-                .insert([{ parent_id: activityId, extension: ext, type: 'VIDEO' }])
-                .select()
-                .single()
-              
-              if (mediaInsertErr || !mediaRecord) {
-                console.error('Failed to create media record:', mediaInsertErr)
-                continue
-              }
-              
-              // 2. Upload file directly to Supabase Storage
-              const { getStorageKey } = await import('@/utils/supabase/media')
-              const storageKey = getStorageKey(mediaRecord as unknown as import('@/utils/supabase/media').MediaRow)
-              
-              const { error: uploadErr } = await supabase.storage
-                .from(STORAGE_BUCKET)
-                .upload(storageKey, file, {
-                  contentType: file.type,
-                  upsert: false,
-                })
-              
-              if (uploadErr) {
-                console.error('Failed to upload video to storage:', uploadErr)
-                mediaUploadFailed = true
-                if (!mediaErrorMessage) {
-                  const uploadMsg =
-                    uploadErr.message ||
-                    "Video upload failed. The file may be too large or in an unsupported format."
-                  mediaErrorMessage = `Video upload failed: ${uploadMsg}`
-                }
-                // Best-effort cleanup for failed uploads – don't throw if this fails
+              // Try to parse JSON error shape: { error: "..." }
+              if (friendly.startsWith("{")) {
                 try {
-                  await supabase.from('media').delete().eq('id', mediaRecord.id)
-                } catch (deleteErr) {
-                  console.error('Failed to clean up failed media record:', deleteErr)
+                  const parsed = JSON.parse(friendly) as { error?: string }
+                  if (parsed?.error) {
+                    friendly = parsed.error
+                  }
+                } catch {
+                  // ignore JSON parse errors, fall back to raw text
                 }
               }
-            } catch (error) {
-              console.error('Error uploading individual video:', error)
+
+              // Map low-level FormData parse error to a clearer size message
+              if (
+                friendly.includes("Failed to parse body as FormData") ||
+                friendly.includes("Request body exceeded 10MB")
+              ) {
+                friendly =
+                  "Your upload was too large for our server (over 10MB). Please upload smaller or fewer files."
+              }
+
+              mediaErrorMessage = friendly
+                ? `Media upload failed: ${friendly}`
+                : "Media upload failed. Your files may be too large or invalid."
             }
           }
         } catch (error) {
-          console.error('Video upload error:', error)
+          console.error("Activity media upload error:", error)
           mediaUploadFailed = true
           if (!mediaErrorMessage) {
             const message =
               error instanceof Error
                 ? error.message
-                : "Video upload failed. The file may be too large or in an unsupported format."
-            mediaErrorMessage = `Video upload failed: ${message}`
+                : "Media upload failed. Your files may be too large or invalid."
+            mediaErrorMessage = `Media upload failed: ${message}`
           }
         }
       }
