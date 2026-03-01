@@ -37,8 +37,6 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
   // Edit Activity Modal State
   const [editOpen, setEditOpen] = useState(false)
   const [editActivity, setEditActivity] = useState<Activity | null>(null)
-  const [editError, setEditError] = useState<string | null>(null)
-  const [editSaving, setEditSaving] = useState(false)
 
   // Delete Activity State
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -108,7 +106,6 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
           {
             onEdit: (activity: Activity) => {
               setEditActivity(activity)
-              setEditError(null)
               setEditOpen(true)
             },
             onDelete: (activity: Activity) => {
@@ -139,33 +136,10 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
         open={editOpen}
         onClose={() => setEditOpen(false)}
         activity={editActivity}
-        onSave={async (formData: FormData) => {
-          setEditSaving(true)
-          setEditError(null)
-          try {
-            if (!editActivity) return
-            const res = await fetch("/api/admin/activities/update", {
-              method: "PUT",
-              body: formData,
-            })
-            if (!res.ok) throw new Error("Failed to update activity")
-            const data = await res.json()
-            setActivities((prev) =>
-              prev.map((a) =>
-                a.id === editActivity.id ? { ...a, ...data.activity } : a,
-              ),
-            )
-            setEditOpen(false)
-          } catch (e: Error | unknown) {
-            setEditError(
-              e instanceof Error ? e.message : "Failed to update activity",
-            )
-          } finally {
-            setEditSaving(false)
-          }
+        onComplete={() => {
+          fetchActivities()
+          setEditOpen(false)
         }}
-        saving={editSaving}
-        error={editError}
       />
       <DeleteActivityModal
         open={deleteOpen}
