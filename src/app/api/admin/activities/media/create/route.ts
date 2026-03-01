@@ -1,24 +1,52 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { uploadFile } from "@/utils/supabase/media"
+import { getStorageKey } from "@/utils/supabase/media"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import type { Database } from "@/lib/types/db.types"
 
 type MediaRow = Database["public"]["Tables"]["media"]["Row"]
+
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+export const maxDuration = 30
 
-export const maxDuration = 300
+interface MediaInput {
+  type: "IMAGE" | "VIDEO" | "DOCUMENT"
+  extension: string
+  contentType: string
+}
 
+/**
+ * POST /api/admin/activities/media/create
+ *
+ * Accepts a JSON body (NOT FormData) so that no binary file bytes pass
+ * through the Next.js server – completely bypassing Vercel's 4.5 MB body
+ * limit.  The client uploads the actual files directly to Supabase Storage
+ * using the storage keys returned here.
+ *
+ * Request body:
+ *   { activityId: string, media: Array<{ type, extension, contentType }> }
+ *
+ * Response:
+ *   { media: Array<{ id, storageKey, type, contentType }> }
+ */
 export async function POST(req: Request) {
-  
   try {
-    const formData = await req.formData()
-    const activityId = formData.get("activityId") as string | null
+    const body = (await req.json()) as {
+      activityId: string
+      media: MediaInput[]
+    }
+    const { activityId, media } = body
 
     if (!activityId) {
       return NextResponse.json(
         { error: "Missing activityId" },
+        { status: 400 },
+      )
+    }
+    if (!Array.isArray(media) || media.length === 0) {
+      return NextResponse.json(
+        { error: "Missing or empty media array" },
         { status: 400 },
       )
     }
@@ -27,96 +55,43 @@ export async function POST(req: Request) {
     const auth = await requireSuperAdmin(supabase)
     if (!auth.ok) return auth.response
 
-    // Collect all uploaded media IDs
-    const uploadedMediaIds: string[] = []
+    const results: Array<{
+      id: string
+      storageKey: string
+      type: string
+      contentType: string
+    }> = []
 
-    // Process images
-    const imageFiles: File[] = []
-    for (const [key, value] of formData.entries()) {
-      if (key === "images" && value instanceof File && value.size > 0) {
-        imageFiles.push(value)
-      }
-    }
+    for (const item of media) {
+      const { type, extension, contentType } = item
+      const normalizedExt = extension.replace(/^\./, "").toLowerCase()
 
-    for (const file of imageFiles) {
-      const ext = (file.name.split(".").pop() || "").toLowerCase()
-
-      // Insert media row for this image
       const { data: mediaInserted, error: mediaInsertErr } = await supabase
         .from("media")
-        .insert([{ parent_id: activityId, extension: ext, type: "IMAGE" }])
+        .insert([{ parent_id: activityId, extension: normalizedExt, type }])
         .select()
         .single()
 
-      if (mediaInsertErr) {
-        console.error("❌ [ACTIVITY MEDIA] Image insert failed:", mediaInsertErr)
+      if (mediaInsertErr || !mediaInserted) {
+        console.error(
+          "❌ [ACTIVITY MEDIA] DB insert failed:",
+          mediaInsertErr,
+        )
         continue
       }
 
       const mediaRow = mediaInserted as MediaRow
+      const storageKey = getStorageKey(mediaRow)
 
-      // Upload using centralized helper
-      try {
-        const { error: uploadErr } = await uploadFile(supabase, mediaRow, file, {
-          contentType: file.type,
-        })
-        if (uploadErr) {
-          console.error("❌ [ACTIVITY MEDIA] Image upload error:", uploadErr)
-        } else {
-          uploadedMediaIds.push(mediaRow.id)
-        }
-      } catch (e) {
-        console.error("❌ [ACTIVITY MEDIA] Unexpected error uploading image:", e)
-      }
+      results.push({
+        id: mediaRow.id,
+        storageKey,
+        type: mediaRow.type as string,
+        contentType,
+      })
     }
 
-    // Process videos
-    const videoFiles: File[] = []
-    for (const [key, value] of formData.entries()) {
-      if (key === "videos" && value instanceof File && value.size > 0) {
-        videoFiles.push(value)
-      }
-    }
-
-    for (const file of videoFiles) {
-      const ext = (file.name.split(".").pop() || "").toLowerCase()
-
-      // Insert media row for this video
-      const { data: mediaInserted, error: mediaInsertErr } = await supabase
-        .from("media")
-        .insert([{ parent_id: activityId, extension: ext, type: "VIDEO" }])
-        .select()
-        .single()
-
-      if (mediaInsertErr) {
-        console.error("❌ [ACTIVITY MEDIA] Video insert failed:", mediaInsertErr)
-        continue
-      }
-
-      const mediaRow = mediaInserted as MediaRow
-
-      try {
-        const { error: uploadErr } = await uploadFile(supabase, mediaRow, file, {
-          contentType: file.type,
-        })
-        if (uploadErr) {
-          console.error("❌ [ACTIVITY MEDIA] Video upload error:", uploadErr)
-        } else {
-          uploadedMediaIds.push(mediaRow.id)
-        }
-      } catch (e) {
-        console.error("❌ [ACTIVITY MEDIA] Unexpected error uploading video:", e)
-      }
-    }
-
-    return NextResponse.json(
-      { 
-        success: true, 
-        uploadedCount: uploadedMediaIds.length,
-        mediaIds: uploadedMediaIds 
-      },
-      { status: 200 },
-    )
+    return NextResponse.json({ media: results }, { status: 200 })
   } catch (err: unknown) {
     console.error("❌ [ACTIVITY MEDIA] Fatal error:", err)
     const message = err instanceof Error ? err.message : "Unknown error"
