@@ -85,7 +85,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [videoPreviews, setVideoPreviews] = useState<string[]>([])
 
-  const [isPublic, setIsPublic] = useState(false)
+  const [isPublic, setIsPublic] = useState(true)
   const [sendToSponsors, setSendToSponsors] = useState(true)
   const [sponsors, setSponsors] = useState<SponsorInfo[]>([])
   const [selectedSponsorIds, setSelectedSponsorIds] = useState<Set<string>>(new Set())
@@ -102,7 +102,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       setDocumentFiles([])
       setImagePreviews([])
       setVideoPreviews([])
-      setIsPublic(false)
+      setIsPublic(true)
       setSendToSponsors(true)
       setSponsors([])
       setSelectedSponsorIds(new Set())
@@ -512,7 +512,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
           )}
         </div>
 
-        <SelectRoot
+        {/* <SelectRoot
           collection={activityTypeCollection}
           className="border border-stone-600"
           style={{ marginBottom: 12 }}
@@ -525,14 +525,14 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
               <SelectItem key={option.value} item={option}>{option.label}</SelectItem>
             ))}
           </SelectContent>
-        </SelectRoot>
+        </SelectRoot> */}
 
-        <div style={{ marginBottom: 12 }}>
+        {/* <div style={{ marginBottom: 12 }}>
           <Input placeholder="Title" value={title} onChange={(e) => onTitleChange(e.target.value)} p={2} className="border border-stone-600" />
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
             <ProofreadButton text={title} onAccept={onTitleChange} fieldLabel="Title" size="sm" type="activity" />
           </div>
-        </div>
+        </div> */}
 
         <div style={{ marginBottom: 12 }}>
           <Textarea placeholder="Description" value={description} onChange={(e) => onDescriptionChange(e.target.value)} p={2} className="border border-stone-600" />
@@ -647,7 +647,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
           <Button onClick={onClose} style={{ marginRight: 12 }} disabled={busy}>Cancel</Button>
-          <Button colorScheme="blue" onClick={handleCreate} disabled={!title || !description || busy}>
+          <Button colorScheme="blue" onClick={handleCreate} disabled={!description || busy}>
             {status === "compressing"
               ? "Compressing..."
               : status === "creating"

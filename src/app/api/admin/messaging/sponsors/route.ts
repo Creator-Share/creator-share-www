@@ -86,7 +86,10 @@ export async function GET(req: NextRequest) {
 
     if (matchedTransaction) {
       email = matchedTransaction.customer_email
+      // Only show first name for privacy
       name = matchedTransaction.customer_name
+        ? matchedTransaction.customer_name.split(" ")[0]
+        : null
     }
 
     // Fallback: Try to get from users table if user_id exists
@@ -103,10 +106,7 @@ export async function GET(req: NextRequest) {
 
       if (userData) {
         email = userData.email
-        name =
-          userData.first_name && userData.last_name
-            ? `${userData.first_name} ${userData.last_name}`
-            : userData.first_name || userData.last_name || null
+        name = userData.first_name || null
       }
     }
 
