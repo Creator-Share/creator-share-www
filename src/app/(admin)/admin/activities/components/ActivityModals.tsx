@@ -74,9 +74,9 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   activityType,
   beneficiaryId,
   beneficiaryName,
-  onTitleChange,
+  // onTitleChange,
   onDescriptionChange,
-  onActivityTypeChange,
+  // onActivityTypeChange,
   onComplete,
 }) => {
   const [imageFiles, setImageFiles] = useState<File[]>([])
