@@ -262,7 +262,7 @@ const BeneficiaryDetailPage = () => {
 
   const fundingPercentage =
     beneficiary.budget_goal > 0
-      ? (beneficiary.budget_raised / beneficiary.budget_goal) * 100
+      ? Math.min(100, (beneficiary.budget_raised / beneficiary.budget_goal) * 100)
       : 0
 
   const displayData = editMode ? formData : beneficiary
