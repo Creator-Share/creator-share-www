@@ -15,6 +15,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { GiHamburgerMenu } from "react-icons/gi"
 import { IoClose } from "react-icons/io5"
 import { AboutUsModal } from "./AboutUsModal"
+import { FAQModal } from "./FAQModal"
 import { SignInModal } from "./SignInModal"
 
 // const Links = [
@@ -41,6 +42,7 @@ export function PageNavbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [aboutUsOpen, setAboutUsOpen] = useState(false)
   const [aboutUsDefaultTab, setAboutUsDefaultTab] = useState<AboutTabAnchor>("about")
+  const [faqOpen, setFaqOpen] = useState(false)
   const [signInOpen, setSignInOpen] = useState(false)
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
@@ -64,6 +66,8 @@ export function PageNavbar() {
     if (ABOUT_TAB_ANCHORS.includes(hash as AboutTabAnchor)) {
       setAboutUsDefaultTab(hash as AboutTabAnchor)
       setAboutUsOpen(true)
+    } else if (hash === "faq") {
+      setFaqOpen(true)
     } else if (hash === "signin" || isLoginPage) {
       setSignInOpen(true)
     }
@@ -126,6 +130,10 @@ export function PageNavbar() {
         open={aboutUsOpen} 
         onClose={() => setAboutUsOpen(false)} 
         defaultTab={aboutUsDefaultTab}
+      />
+      <FAQModal
+        open={faqOpen}
+        onClose={() => setFaqOpen(false)}
       />
       <SignInModal
         open={signInOpen}
@@ -203,6 +211,16 @@ export function PageNavbar() {
           display={{ base: "none", md: "flex" }}
           alignItems="center"
         >
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              window.history.replaceState(null, "", "#faq")
+              setFaqOpen(true)
+            }}
+          >
+            FAQ
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -301,6 +319,21 @@ export function PageNavbar() {
           pointerEvents="auto"
         >
           <VStack gap={4} py={6}>
+            {/* FAQ - always visible */}
+            <Button
+              size="sm"
+              variant="ghost"
+              color="white"
+              _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
+              onClick={() => {
+                setIsOpen(false)
+                window.history.replaceState(null, "", "#faq")
+                setFaqOpen(true)
+              }}
+              className="w-full"
+            >
+              FAQ
+            </Button>
             {/* About Us - always visible */}
             <Button
               size="sm"

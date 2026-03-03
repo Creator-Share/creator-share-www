@@ -84,6 +84,11 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
   const [documentFiles, setDocumentFiles] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [videoPreviews, setVideoPreviews] = useState<string[]>([])
+  // Keys used to force-remount FileUploadRoot after each selection, clearing
+  // Chakra's internal accumulated file list so re-selections start fresh.
+  const [imageUploadKey, setImageUploadKey] = useState(0)
+  const [videoUploadKey, setVideoUploadKey] = useState(0)
+  const [documentUploadKey, setDocumentUploadKey] = useState(0)
 
   const [isPublic, setIsPublic] = useState(true)
   const [sendToSponsors, setSendToSponsors] = useState(true)
@@ -102,6 +107,9 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       setDocumentFiles([])
       setImagePreviews([])
       setVideoPreviews([])
+      setImageUploadKey((k) => k + 1)
+      setVideoUploadKey((k) => k + 1)
+      setDocumentUploadKey((k) => k + 1)
       setIsPublic(true)
       setSendToSponsors(true)
       setSponsors([])
@@ -146,6 +154,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
     }
   }, [open])
 
+  // useEffect manages all preview URL lifecycle — creation and cleanup
   useEffect(() => {
     const urls = imageFiles.map((f) => URL.createObjectURL(f))
     setImagePreviews(urls)
@@ -158,16 +167,13 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
     return () => urls.forEach((u) => URL.revokeObjectURL(u))
   }, [videoFiles])
 
+  // Only update the file array — the useEffect above handles previews
   const handleRemoveImage = (index: number) => {
-    if (imagePreviews[index]) URL.revokeObjectURL(imagePreviews[index])
     setImageFiles((prev) => prev.filter((_, i) => i !== index))
-    setImagePreviews((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleRemoveVideo = (index: number) => {
-    if (videoPreviews[index]) URL.revokeObjectURL(videoPreviews[index])
     setVideoFiles((prev) => prev.filter((_, i) => i !== index))
-    setVideoPreviews((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleToggleSponsor = (subscriptionId: string) => {
@@ -456,7 +462,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             <Checkbox checked={isPublic} onCheckedChange={(checked) => setIsPublic(!!checked)} />
             <Box flex={1}>
               <Text fontWeight="semibold" fontSize="sm">Make this activity public</Text>
-              <Text fontSize="xs" color="gray.600">Public activities appear on the beneficiary's profile page</Text>
+              <Text fontSize="xs" color="gray.600">Public activities appear on the beneficiary&apos;s profile page</Text>
             </Box>
             <Box px={2} py={1} borderRadius={4} fontWeight="semibold" fontSize="xs"
               bg={isPublic ? "green.100" : "gray.200"} color={isPublic ? "green.800" : "gray.600"}>
@@ -545,12 +551,21 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload Images</label>
           <FileUploadRoot
+            key={imageUploadKey}
             onFileChange={(fileDetails) => {
-              const newFiles = fileDetails.acceptedFiles
-              imagePreviews.forEach((url) => URL.revokeObjectURL(url))
-              const newUrls = newFiles.map((file) => URL.createObjectURL(file))
-              setImageFiles(newFiles)
-              setImagePreviews(newUrls)
+              // Ignore the remount-init call that fires with no files
+              if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
+              if (fileDetails.rejectedFiles.length > 0) {
+                toaster.create({
+                  title: "Too many images",
+                  description: "Maximum of 5 images, 2 videos, and 5 PDF files allowed.",
+                  type: "error",
+                  duration: 5000,
+                })
+              }
+              setImageFiles(fileDetails.acceptedFiles)
+              // Force-remount so next selection starts fresh (no accumulation)
+              setImageUploadKey((k) => k + 1)
             }}
             accept={["image/*"]}
             maxFiles={5}
@@ -580,15 +595,22 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload Videos</label>
           <FileUploadRoot
+            key={videoUploadKey}
             onFileChange={(fileDetails) => {
-              const newFiles = fileDetails.acceptedFiles
-              videoPreviews.forEach((url) => URL.revokeObjectURL(url))
-              const newUrls = newFiles.map((file) => URL.createObjectURL(file))
-              setVideoFiles(newFiles)
-              setVideoPreviews(newUrls)
+              if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
+              if (fileDetails.rejectedFiles.length > 0) {
+                toaster.create({
+                  title: "Too many videos",
+                  description: "Maximum of 5 images, 2 videos, and 5 PDF files allowed.",
+                  type: "error",
+                  duration: 5000,
+                })
+              }
+              setVideoFiles(fileDetails.acceptedFiles)
+              setVideoUploadKey((k) => k + 1)
             }}
             accept={["video/*"]}
-            maxFiles={5}
+            maxFiles={2}
           >
             <FileUploadTrigger asChild>
               <Button variant="outline" size="sm" className="border" px={4}><HiUpload /> Upload Videos</Button>
@@ -615,7 +637,20 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload Documents (PDFs, etc.)</label>
           <FileUploadRoot
-            onFileChange={(fileDetails) => setDocumentFiles(fileDetails.acceptedFiles)}
+            key={documentUploadKey}
+            onFileChange={(fileDetails) => {
+              if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
+              if (fileDetails.rejectedFiles.length > 0) {
+                toaster.create({
+                  title: "Too many documents",
+                  description: "Maximum of 5 images, 2 videos, and 5 PDF files allowed.",
+                  type: "error",
+                  duration: 5000,
+                })
+              }
+              setDocumentFiles(fileDetails.acceptedFiles)
+              setDocumentUploadKey((k) => k + 1)
+            }}
             accept={["application/pdf", ".pdf"]}
             maxFiles={5}
           >
@@ -695,6 +730,8 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
   const [compressing, setCompressing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [imageUploadKey, setImageUploadKey] = useState(0)
+  const [videoUploadKey, setVideoUploadKey] = useState(0)
 
   const supabase = createClient()
 
@@ -715,6 +752,8 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
       setVideoFiles([])
       setImagePreviews([])
       setVideoPreviews([])
+      setImageUploadKey((k) => k + 1)
+      setVideoUploadKey((k) => k + 1)
       setSaving(false)
       setError(null)
     }
@@ -730,6 +769,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
     }
   }, [open])
 
+  // useEffect manages all preview URL lifecycle — creation and cleanup
   useEffect(() => {
     const urls = imageFiles.map((f) => URL.createObjectURL(f))
     setImagePreviews(urls)
@@ -742,16 +782,13 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
     return () => urls.forEach((u) => URL.revokeObjectURL(u))
   }, [videoFiles])
 
+  // Only update the file array — the useEffect above handles previews
   const handleRemoveImage = (index: number) => {
-    if (imagePreviews[index]) URL.revokeObjectURL(imagePreviews[index])
     setImageFiles((prev) => prev.filter((_, i) => i !== index))
-    setImagePreviews((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleRemoveVideo = (index: number) => {
-    if (videoPreviews[index]) URL.revokeObjectURL(videoPreviews[index])
     setVideoFiles((prev) => prev.filter((_, i) => i !== index))
-    setVideoPreviews((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleRemoveExistingImage = (index: number) =>
@@ -931,7 +968,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             <Checkbox checked={isPublic} onCheckedChange={(checked) => setIsPublic(!!checked)} />
             <Box flex={1}>
               <Text fontWeight="semibold" fontSize="sm">Make this activity public</Text>
-              <Text fontSize="xs" color="gray.600">Public activities appear on the beneficiary's profile page</Text>
+              <Text fontSize="xs" color="gray.600">Public activities appear on the beneficiary&apos;s profile page</Text>
             </Box>
             <Box px={2} py={1} borderRadius={4} fontWeight="semibold" fontSize="xs"
               bg={isPublic ? "green.100" : "gray.200"} color={isPublic ? "green.800" : "gray.600"}>
@@ -997,12 +1034,19 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload New Images</label>
           <FileUploadRoot
+            key={imageUploadKey}
             onFileChange={(fileDetails) => {
-              const newFiles = fileDetails.acceptedFiles
-              imagePreviews.forEach((url) => URL.revokeObjectURL(url))
-              const newUrls = newFiles.map((file) => URL.createObjectURL(file))
-              setImageFiles(newFiles)
-              setImagePreviews(newUrls)
+              if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
+              if (fileDetails.rejectedFiles.length > 0) {
+                toaster.create({
+                  title: "Too many images",
+                  description: "Maximum of 5 images, 2 videos, and 5 PDF files allowed.",
+                  type: "error",
+                  duration: 5000,
+                })
+              }
+              setImageFiles(fileDetails.acceptedFiles)
+              setImageUploadKey((k) => k + 1)
             }}
             accept={["image/*"]}
             maxFiles={5}
@@ -1051,15 +1095,22 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 500 }}>Upload New Videos</label>
           <FileUploadRoot
+            key={videoUploadKey}
             onFileChange={(fileDetails) => {
-              const newFiles = fileDetails.acceptedFiles
-              videoPreviews.forEach((url) => URL.revokeObjectURL(url))
-              const newUrls = newFiles.map((file) => URL.createObjectURL(file))
-              setVideoFiles(newFiles)
-              setVideoPreviews(newUrls)
+              if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
+              if (fileDetails.rejectedFiles.length > 0) {
+                toaster.create({
+                  title: "Too many videos",
+                  description: "Maximum of 5 images, 2 videos, and 5 PDF files allowed.",
+                  type: "error",
+                  duration: 5000,
+                })
+              }
+              setVideoFiles(fileDetails.acceptedFiles)
+              setVideoUploadKey((k) => k + 1)
             }}
             accept={["video/*"]}
-            maxFiles={5}
+            maxFiles={2}
           >
             <FileUploadTrigger asChild>
               <Button variant="outline" size="sm" className="border" px={4}><HiUpload /> Upload Videos</Button>
