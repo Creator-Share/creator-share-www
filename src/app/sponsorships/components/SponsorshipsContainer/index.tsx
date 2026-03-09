@@ -3,22 +3,23 @@ import React, { useState, useEffect, useCallback, useRef } from "react"
 import { Box } from "@chakra-ui/react"
 import { Beneficiaries, Activity } from "@/types"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
-import { fetchActivitiesByBeneficiaryId } from "@/actions"
+import {
+  fetchActivitiesByBeneficiaryId,
+  fetchSponsoredWithRecentActivity,
+  SponsoredWithActivity,
+} from "@/actions"
 import SponsorshipFilters from "../SponsorshipFilters"
-import SponsorshipListings from "../SponsorshipListings"
 import BeneficiaryModal from "../SponsorshipModal"
-import SponsoredStoriesStrip from "../SponsoredStoriesStrip"
+import HorizontalSponsorshipRow from "../HorizontalSponsorshipRow"
 
 /**
- * Owns all state that was previously split between page.tsx and SponsorshipListings:
- *   - Beneficiary pagination
+ * Owns all shared state for the sponsorships section:
+ *   - Sponsored children with recent activity (for story circles)
+ *   - Beneficiary pagination (for portrait cards)
  *   - Sticky filter scroll detection
  *   - Active beneficiary + modal open/close (by object, not by index)
  *   - URL pushState/popState for deep-linkable modal URLs
  *   - Activities fetch (single fetch, passed as prop to modal)
- *
- * Exposes a simple onOpenModal(beneficiary) callback to both
- * SponsoredStoriesStrip and SponsorshipListings.
  */
 const SponsorshipsContainer: React.FC = () => {
   const filtersRef = useRef<HTMLDivElement>(null)
@@ -29,6 +30,7 @@ const SponsorshipsContainer: React.FC = () => {
   const [activeBeneficiary, setActiveBeneficiary] = useState<Beneficiaries | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [activities, setActivities] = useState<Activity[]>([])
+  const [sponsored, setSponsored] = useState<SponsoredWithActivity[]>([])
 
   const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore } =
     useBeneficiaryPagination({
@@ -37,6 +39,11 @@ const SponsorshipsContainer: React.FC = () => {
       autoRetry: true,
       initialStatus: ["New", "Partially Funded", "Sponsorship Cancelled"],
     })
+
+  // Fetch sponsored children with recent activity for the story circles
+  useEffect(() => {
+    fetchSponsoredWithRecentActivity().then(setSponsored)
+  }, [])
 
   // Sticky filter detection
   const handleScroll = useCallback(() => {
@@ -50,9 +57,8 @@ const SponsorshipsContainer: React.FC = () => {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [handleScroll])
 
-  // Fetch activities whenever the active beneficiary changes.
-  // This replaces the double-fetch that previously happened in BeneficiaryModal
-  // (to derive hasActivities) and again inside BeneficiaryActivity (to render).
+  // Fetch activities whenever the active beneficiary changes (single fetch,
+  // shared between BeneficiaryModal and BeneficiaryActivity to avoid duplicate calls).
   useEffect(() => {
     if (!activeBeneficiary?.id) {
       setActivities([])
@@ -61,23 +67,20 @@ const SponsorshipsContainer: React.FC = () => {
     fetchActivitiesByBeneficiaryId(activeBeneficiary.id).then(setActivities)
   }, [activeBeneficiary?.id])
 
-  const openModal = useCallback(
-    (beneficiary: Beneficiaries) => {
-      setActiveBeneficiary(beneficiary)
-      setIsModalOpen(true)
+  const openModal = useCallback((beneficiary: Beneficiaries) => {
+    setActiveBeneficiary(beneficiary)
+    setIsModalOpen(true)
 
-      if (typeof window !== "undefined" && beneficiary.username) {
-        previousUrlRef.current =
-          window.location.pathname + window.location.search
-        window.history.pushState(
-          { modal: true, username: beneficiary.username },
-          "",
-          `/sponsorships/${beneficiary.username}`
-        )
-      }
-    },
-    []
-  )
+    if (typeof window !== "undefined" && beneficiary.username) {
+      previousUrlRef.current =
+        window.location.pathname + window.location.search
+      window.history.pushState(
+        { modal: true, username: beneficiary.username },
+        "",
+        `/sponsorships/${beneficiary.username}`
+      )
+    }
+  }, [])
 
   const closeModal = useCallback(() => {
     setIsModalOpen(false)
@@ -88,11 +91,7 @@ const SponsorshipsContainer: React.FC = () => {
         currentPath.startsWith("/sponsorships/") &&
         currentPath !== "/sponsorships/checkout"
       ) {
-        window.history.replaceState(
-          {},
-          "",
-          previousUrlRef.current || "/"
-        )
+        window.history.replaceState({}, "", previousUrlRef.current || "/")
       }
       previousUrlRef.current = null
     }
@@ -108,7 +107,10 @@ const SponsorshipsContainer: React.FC = () => {
       ) {
         const username = path.split("/sponsorships/")[1]
         if (username) {
-          const match = beneficiaries.find((b) => b.username === username)
+          // Check both sponsored and regular beneficiaries
+          const match =
+            beneficiaries.find((b) => b.username === username) ||
+            sponsored.find((b) => b.username === username)
           if (match) {
             setActiveBeneficiary(match)
             setIsModalOpen(true)
@@ -121,7 +123,7 @@ const SponsorshipsContainer: React.FC = () => {
 
     window.addEventListener("popstate", handlePopState)
     return () => window.removeEventListener("popstate", handlePopState)
-  }, [beneficiaries])
+  }, [beneficiaries, sponsored])
 
   // Open the modal on initial load when the URL already points at a child page
   useEffect(() => {
@@ -134,7 +136,9 @@ const SponsorshipsContainer: React.FC = () => {
     ) {
       const username = path.split("/sponsorships/")[1]
       if (username) {
-        const match = beneficiaries.find((b) => b.username === username)
+        const match =
+          beneficiaries.find((b) => b.username === username) ||
+          sponsored.find((b) => b.username === username)
         if (match) {
           setActiveBeneficiary(match)
           setIsModalOpen(true)
@@ -142,13 +146,10 @@ const SponsorshipsContainer: React.FC = () => {
         }
       }
     }
-  }, [beneficiaries])
+  }, [beneficiaries, sponsored])
 
   return (
     <Box>
-      {/* Social proof story strip -- sponsored children with recent updates */}
-      <SponsoredStoriesStrip onOpenModal={openModal} />
-
       {/* Sticky filter bar */}
       <Box
         ref={filtersRef}
@@ -162,14 +163,14 @@ const SponsorshipsContainer: React.FC = () => {
         />
       </Box>
 
-      {/* Listings grid */}
-      <SponsorshipListings
-        beneficiaryData={beneficiaries}
+      {/* Unified horizontal scroll: story circles on the left, portrait cards to the right */}
+      <HorizontalSponsorshipRow
+        sponsored={sponsored}
+        beneficiaries={beneficiaries}
         selectedBeneficiaryId={null}
-        selectedCountry={null}
-        onLoadMore={loadMore}
         hasMore={hasMore}
         isLoading={isLoading}
+        onLoadMore={loadMore}
         onOpenModal={openModal}
       />
 
