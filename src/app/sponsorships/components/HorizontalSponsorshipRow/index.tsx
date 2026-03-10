@@ -47,30 +47,24 @@ const StatsCard: React.FC = () => {
         <Spinner size="lg" color="gray.300" />
       ) : (
         <>
-          <Flex align="center" gap={3}>
-            <Text fontSize="2xl" lineHeight={1} flexShrink={0}>💛</Text>
-            <Flex direction="column">
-              <Text fontSize="4xl" fontWeight="bold" color="gray.800" lineHeight={1}>
-                {stats?.childrenInNeed.toLocaleString() ?? "—"}
-              </Text>
-              <Text fontSize="xs" color="gray.500" fontWeight="medium" mt={1}>
-                Children In Need
-              </Text>
-            </Flex>
+          <Flex direction="column" align="center">
+            <Text fontSize="4xl" fontWeight="bold" color="gray.800" lineHeight={1}>
+              {stats?.childrenInNeed.toLocaleString() ?? "—"}
+            </Text>
+            <Text fontSize="xs" color="gray.500" fontWeight="medium" mt={1} textAlign="center">
+              Children In Need
+            </Text>
           </Flex>
 
           <Box w="40px" h="1px" bg="gray.200" />
 
-          <Flex align="center" gap={3}>
-            <Text fontSize="2xl" lineHeight={1} flexShrink={0}>💚</Text>
-            <Flex direction="column">
-              <Text fontSize="4xl" fontWeight="bold" color="gray.800" lineHeight={1}>
-                {stats?.childrenSupported.toLocaleString() ?? "—"}
-              </Text>
-              <Text fontSize="xs" color="gray.500" fontWeight="medium" mt={1}>
-                Children Supported
-              </Text>
-            </Flex>
+          <Flex direction="column" align="center">
+            <Text fontSize="4xl" fontWeight="bold" color="gray.800" lineHeight={1}>
+              {stats?.childrenSupported.toLocaleString() ?? "—"}
+            </Text>
+            <Text fontSize="xs" color="gray.500" fontWeight="medium" mt={1} textAlign="center">
+              Children Supported
+            </Text>
           </Flex>
         </>
       )}

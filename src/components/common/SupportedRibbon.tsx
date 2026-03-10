@@ -2,48 +2,59 @@
 import React from "react"
 import { Box } from "@chakra-ui/react"
 
+interface SupportedRibbonProps {
+  /** "sm" = story-strip thumbnail (default), "lg" = child details modal image */
+  size?: "sm" | "lg"
+}
+
 /**
- * Diagonal corner ribbon for the bottom-right of a child's image.
- * Renders inside a `position: relative` container with `overflow: hidden`.
+ * Diagonal "✓ Sponsored" banner for the bottom-right corner of a child's image.
+ *
+ * Parent MUST have `position: relative` AND `overflow: hidden`.
+ *
+ * This component positions the ribbon band directly — no inner overflow wrapper —
+ * so the parent's single clip boundary produces clean straight edges.
+ * With a centered double-overflow wrapper the ribbon would be clipped by two
+ * perpendicular edges simultaneously, creating the notched "weird edges."
+ *
+ * Geometry guarantee: for both sizes the ribbon is wide enough that each end
+ * exits through exactly one edge of the parent (right or bottom), never a corner.
  */
-const SupportedRibbon: React.FC = () => {
-  // Container size controls how far the ribbon intrudes into the image.
-  // Smaller = more tucked into the corner.
-  const size = 96
-  const thickness = 30
+const SupportedRibbon: React.FC<SupportedRibbonProps> = ({ size = "sm" }) => {
+  const isLarge = size === "lg"
+
+  // Band dimensions — wide enough that both ends sit outside the parent clip area.
+  const width = isLarge ? 260 : 160
+  const height = isLarge ? 42 : 26
+
+  // Negative right tucks the ribbon into the bottom-right corner while keeping
+  // enough of the band visible so the text is fully readable.
+  const right = isLarge ? -70 : -40
+  const bottom = isLarge ? 38 : 24
 
   return (
     <Box
       position="absolute"
-      bottom={0}
-      right={0}
-      w={`${size}px`}
-      h={`${size}px`}
-      overflow="hidden"
-      zIndex={1}
       pointerEvents="none"
+      zIndex={10}
+      style={{
+        right: `${right}px`,
+        bottom: `${bottom}px`,
+        width: `${width}px`,
+        height: `${height}px`,
+        lineHeight: `${height}px`,
+        transform: "rotate(-45deg)",
+        background: "linear-gradient(135deg, #1C3C8C 0%, #0654C6 100%)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
+        color: "#fff",
+        fontSize: isLarge ? "13px" : "9px",
+        fontWeight: 700,
+        textAlign: "center",
+        letterSpacing: "0.06em",
+        userSelect: "none",
+      }}
     >
-      <Box
-        position="absolute"
-        style={{
-          left: "50%",
-          top: "50%",
-          width: `${size * 1.6}px`,
-          height: `${thickness}px`,
-          lineHeight: `${thickness}px`,
-          transform: "translate(-50%, -50%) rotate(-45deg)",
-          background: "linear-gradient(135deg, #1C3C8C 0%, #0654C6 100%)",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
-          color: "#fff",
-          fontSize: "9px",
-          fontWeight: 700,
-          textAlign: "center",
-          letterSpacing: "0.06em",
-          userSelect: "none",
-        }}
-      >
-        ✓ Sponsored
-      </Box>
+      ✓ Sponsored
     </Box>
   )
 }

@@ -69,7 +69,7 @@ const PortraitBeneficiaryCard: React.FC<PortraitBeneficiaryCardProps> = ({
       transform="translateZ(0)"
     >
       {/* Portrait image -- 2:3 card, cropped from the top to frame faces */}
-      <Box position="relative" w="180px" h="210px" flexShrink={0}>
+      <Box position="relative" w="180px" h="210px" flexShrink={0} overflow="hidden">
         <Image
           src={imageSrc}
           alt={displayName}

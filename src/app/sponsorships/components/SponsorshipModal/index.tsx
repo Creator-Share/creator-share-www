@@ -34,7 +34,7 @@ import { ImageCarousel } from "@/components/common/ImageCarousel"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
-import BeneficiaryActivity from "../SponsorshipActivity"
+import BeneficiaryActivity, { SHOW_MORE_CLASS } from "../SponsorshipActivity"
 
 // PayPal components are optional and loaded only when the env var is set.
 // Using next/dynamic avoids the broken module-level let + fire-and-forget import()
@@ -630,7 +630,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     className="rounded-2xl aspect-[4/5] object-cover"
                     showArrowsOnHover={true}
                   />
-                  {alreadyFulfilled && <SupportedRibbon />}
+                  {alreadyFulfilled && <SupportedRibbon size="lg" />}
                 </Box>
               </Box>
 
@@ -684,12 +684,42 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   </Box>
                 </Box>
               )}
+
+              {/* Sponsored banner — left column, under image & details */}
+              {alreadyFulfilled && (
+                <Box
+                  className="rounded-xl p-5 text-center space-y-3 mt-4"
+                  style={{
+                    background: "linear-gradient(135deg, #EEF6FF 0%, #F3EEFF 100%)",
+                    border: "1.5px solid #CDE1FE",
+                  }}
+                >
+                  <Flex justify="center" mb={1}>
+                    <FaCircleCheck size={28} color="#0654C6" />
+                  </Flex>
+                  <Text className="text-base font-bold text-gray-900">
+                    This child is fully sponsored
+                  </Text>
+                  <Text className="text-sm text-gray-500">
+                    {firstName} is already receiving support. You can still share
+                    their story or find another child to sponsor.
+                  </Text>
+                  <Button
+                    onClick={onClose}
+                    className="mt-2 w-full h-11 text-sm font-semibold bg-[#0654C6] text-white hover:bg-[#0545A5] rounded-xl transition-all shadow-md hover:shadow-lg"
+                  >
+                    <FaArrowDown className="mr-2" />
+                    Sponsor a child like {firstName}
+                  </Button>
+                </Box>
+              )}
             </Box>
 
             {/* RIGHT COLUMN */}
             <Box
               flex={{ base: "1", md: "0 0 60%" }}
               className="flex flex-col"
+              pr={{ base: 0, md: 4 }}
             >
               {/* Progress bar -- only when goal tracking is enabled */}
               {publicHardcodedCents == null && (
@@ -765,9 +795,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 {alreadyFulfilled && (
                   <button
                     onClick={() => setBioExpanded((v) => !v)}
-                    className="text-xs text-[#0654C6] font-medium mt-1 hover:underline focus:outline-none"
+                    className={SHOW_MORE_CLASS}
                   >
                     {bioExpanded ? "Show less" : "Show more"}
+                    <span aria-hidden>{bioExpanded ? "▲" : "▼"}</span>
                   </button>
                 )}
               </Box>
@@ -784,35 +815,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             </Box>
           </Flex>
 
-          {/* SPONSORED banner OR payment form -- full width below the two-column layout */}
-          {alreadyFulfilled ? (
-            <Box
-              className="rounded-xl p-6 text-center space-y-3 mt-4"
-              style={{
-                background: "linear-gradient(135deg, #EEF6FF 0%, #F3EEFF 100%)",
-                border: "1.5px solid #CDE1FE",
-              }}
-            >
-              <Flex justify="center" mb={1}>
-                <FaCircleCheck size={32} color="#0654C6" />
-              </Flex>
-              <Text className="text-lg font-bold text-gray-900">
-                This child is fully sponsored
-              </Text>
-              <Text className="text-sm text-gray-500">
-                {firstName} is already receiving support. You can still share
-                their story or find another child to sponsor.
-              </Text>
-              <Button
-                onClick={onClose}
-                className="mt-2 w-full h-12 text-sm font-semibold bg-[#0654C6] text-white hover:bg-[#0545A5] rounded-xl transition-all shadow-md hover:shadow-lg"
-              >
-                <FaArrowDown className="mr-2" />
-                Sponsor a child like {firstName}
-              </Button>
-            </Box>
-          ) : (
-            <Box className="space-y-4 mt-4">
+          {/* Payment form — full width below the two-column layout (non-sponsored only) */}
+          {!alreadyFulfilled && (
+            <Box className="space-y-4 mt-8">
               <Text className="font-medium text-sm mb-2 text-gray-500">
                 Monthly Sponsorship Amount
               </Text>

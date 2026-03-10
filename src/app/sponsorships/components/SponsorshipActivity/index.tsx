@@ -5,25 +5,35 @@ import { Box, Text, Flex } from "@chakra-ui/react"
 import { Activity } from "@/types"
 
 // ---------------------------------------------------------------------------
+// Shared "Show more / Show less" button — exported so the modal's About
+// section can use an identical style.
+// ---------------------------------------------------------------------------
+
+// Block-level, auto-width ghost pill. flex + w-fit keeps it as wide as its
+// content and forces it flush to the left edge of its container.
+export const SHOW_MORE_CLASS =
+  "mt-2 flex w-fit items-center gap-1.5 text-sm font-semibold text-[#0654C6] px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+
+// ---------------------------------------------------------------------------
 // Time formatting
 // ---------------------------------------------------------------------------
 
-/** Returns a short, bold-friendly label like "4d" or "2mo" and a subtitle like "ago". */
 function formatRelativeTimeParts(dateStr: string): { main: string; sub: string } {
   const diff = Date.now() - new Date(dateStr).getTime()
   const minutes = Math.floor(diff / 60_000)
-  if (minutes < 2) return { main: "now", sub: "" }
-  if (minutes < 60) return { main: `${minutes}m`, sub: "ago" }
+  if (minutes < 2) return { main: "just now", sub: "" }
+  if (minutes < 60) return { main: `${minutes} min`, sub: "ago" }
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return { main: `${hours}h`, sub: "ago" }
+  if (hours < 24) return { main: `${hours} ${hours === 1 ? "hour" : "hours"}`, sub: "ago" }
   const days = Math.floor(hours / 24)
-  if (days < 30) return { main: `${days}d`, sub: "ago" }
+  if (days < 30) return { main: `${days} ${days === 1 ? "day" : "days"}`, sub: "ago" }
   const months = Math.floor(days / 30)
-  return { main: `${months}mo`, sub: "ago" }
+  return { main: `${months} ${months === 1 ? "month" : "months"}`, sub: "ago" }
 }
 
 function formatAbsoluteTime(dateStr: string): string {
   return new Date(dateStr).toLocaleString("en-GB", {
+    weekday: "short",
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -34,69 +44,83 @@ function formatAbsoluteTime(dateStr: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// MediaColumn -- stacked thumbnails shown in the third column
+// DateTooltip — relative date with absolute tooltip on hover
 // ---------------------------------------------------------------------------
 
-interface MediaColumnProps {
-  images: string[]
-  videos: string[]
-  onLightbox: (src: string) => void
-}
-
-const MediaColumn: React.FC<MediaColumnProps> = ({ images, videos, onLightbox }) => {
-  if (images.length === 0 && videos.length === 0) return null
+const DateTooltip: React.FC<{ dateStr: string }> = ({ dateStr }) => {
+  const [visible, setVisible] = useState(false)
+  const { main, sub } = formatRelativeTimeParts(dateStr)
+  const absolute = formatAbsoluteTime(dateStr)
 
   return (
-    <Flex direction="column" gap={1.5} flexShrink={0} w="84px" pt="2px">
-      {images.map((url, i) => (
+    <Box
+      position="relative"
+      display="inline-block"
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={() => setVisible(false)}
+      style={{ cursor: "default" }}
+    >
+      <Box textAlign="center">
+        <Text fontSize="15px" fontWeight="800" color="gray.700" lineHeight={1.1}>
+          {main}
+        </Text>
+        {sub && (
+          <Text fontSize="9px" fontWeight="600" color="gray.400" lineHeight={1} mt="2px">
+            {sub}
+          </Text>
+        )}
+      </Box>
+
+      {visible && (
         <Box
-          key={`img-${i}`}
-          position="relative"
-          w="84px"
-          h="64px"
-          borderRadius="md"
-          overflow="hidden"
-          cursor="zoom-in"
-          flexShrink={0}
-          onClick={() => onLightbox(url)}
+          position="absolute"
+          bottom="calc(100% + 8px)"
+          left="50%"
+          style={{ transform: "translateX(-50%)" }}
+          px={3}
+          py={1.5}
+          bg="gray.800"
+          color="white"
+          borderRadius="lg"
+          fontSize="11px"
+          fontWeight="500"
+          whiteSpace="nowrap"
+          zIndex={50}
+          pointerEvents="none"
+          boxShadow="md"
         >
-          <Image
-            src={url}
-            alt={`Update image ${i + 1}`}
-            fill
-            sizes="84px"
-            className="object-cover"
-            unoptimized
+          {absolute}
+          <Box
+            position="absolute"
+            top="100%"
+            left="50%"
+            style={{
+              transform: "translateX(-50%)",
+              width: 0,
+              height: 0,
+              borderLeft: "6px solid transparent",
+              borderRight: "6px solid transparent",
+              borderTop: "6px solid #1a202c",
+            }}
           />
         </Box>
-      ))}
-      {videos.map((url, i) => (
-        <Box
-          key={`vid-${i}`}
-          w="84px"
-          borderRadius="md"
-          overflow="hidden"
-          flexShrink={0}
-        >
-          <video
-            src={url}
-            controls
-            preload="metadata"
-            className="w-full rounded-md"
-            style={{ maxHeight: "64px", objectFit: "cover" }}
-            onError={(e) => { e.currentTarget.style.display = "none" }}
-          />
-        </Box>
-      ))}
-    </Flex>
+      )}
+    </Box>
   )
 }
 
 // ---------------------------------------------------------------------------
-// ActivityRow -- a single timeline entry
+// ActivityRow — two-column layout:
+//   Left  (120px): date label → circle node → spine → media thumbnails
+//   Right (flex):  title → description → show more
 // ---------------------------------------------------------------------------
 
+const LEFT_COL_W = "120px"
+const LEFT_COL_PX = 120  // numeric mirror for arithmetic — must stay in sync with LEFT_COL_W
+const RIGHT_COL_PL = 12  // pl={3} in Chakra = 3 × 4px = 12px
 const DESCRIPTION_CLAMP = 180
+const THUMB_W = "100px"
+const THUMB_H = "80px"
 
 interface ActivityRowProps {
   activity: Activity
@@ -111,40 +135,22 @@ const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isLast, onLightbox 
   const videos = activity.videos_url ?? []
   const hasMedia = images.length > 0 || videos.length > 0
   const longDesc = (activity.description?.length ?? 0) > DESCRIPTION_CLAMP
-  const { main, sub } = formatRelativeTimeParts(activity.created_at)
 
   return (
-    <Flex gap={0} align="flex-start">
-      {/* Column 1: date label + timeline spine */}
+    // align="stretch" so both columns fill the same height; spacing between
+    // entries is the left column's bottom padding via the spine area.
+    <Flex gap={0} align="stretch" pb={isLast ? 0 : 0}>
+      {/* ── Left column ── */}
       <Box
-        w="56px"
+        w={LEFT_COL_W}
         flexShrink={0}
         display="flex"
         flexDirection="column"
         alignItems="center"
         pt="2px"
       >
-        {/* Bold relative date */}
-        <Box
-          textAlign="center"
-          mb={2}
-          title={formatAbsoluteTime(activity.created_at)}
-          style={{ cursor: "default" }}
-        >
-          <Text
-            fontSize="16px"
-            fontWeight="800"
-            color="gray.700"
-            lineHeight={1}
-          >
-            {main}
-          </Text>
-          {sub && (
-            <Text fontSize="9px" fontWeight="600" color="gray.400" lineHeight={1} mt="2px">
-              {sub}
-            </Text>
-          )}
-        </Box>
+        {/* Date label */}
+        <DateTooltip dateStr={activity.created_at} />
 
         {/* Circle node */}
         <Box
@@ -154,17 +160,88 @@ const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isLast, onLightbox 
           bg="blue.400"
           border="2px solid white"
           flexShrink={0}
+          mt={2}
           style={{ boxShadow: "0 0 0 2px #93c5fd" }}
         />
 
-        {/* Spine line down to next entry */}
-        {!isLast && (
-          <Box flex={1} w="2px" bg="gray.200" mt={1} minH="20px" />
-        )}
+        {/* Area below circle: spine + media thumbnails */}
+        <Box
+          flex={1}
+          w="full"
+          position="relative"
+          pt={hasMedia ? 2 : 0}
+          pb={isLast ? 0 : 5}
+          minH={isLast && !hasMedia ? 0 : "20px"}
+        >
+          {/* Spine line running the full height of this area */}
+          {!isLast && (
+            <Box
+              position="absolute"
+              left="50%"
+              top={0}
+              bottom={0}
+              w="2px"
+              bg="gray.200"
+              style={{ transform: "translateX(-50%)" }}
+            />
+          )}
+
+          {/* Thumbnails sit above the spine */}
+          {hasMedia && (
+            <Flex
+              direction="column"
+              gap={1.5}
+              align="center"
+              position="relative"
+              zIndex={1}
+            >
+              {images.map((url, i) => (
+                <Box
+                  key={`img-${i}`}
+                  position="relative"
+                  w={THUMB_W}
+                  h={THUMB_H}
+                  borderRadius="md"
+                  overflow="hidden"
+                  cursor="zoom-in"
+                  flexShrink={0}
+                  onClick={() => onLightbox(url)}
+                >
+                  <Image
+                    src={url}
+                    alt={`Update image ${i + 1}`}
+                    fill
+                    sizes={THUMB_W}
+                    className="object-cover"
+                    unoptimized
+                  />
+                </Box>
+              ))}
+              {videos.map((url, i) => (
+                <Box
+                  key={`vid-${i}`}
+                  w={THUMB_W}
+                  borderRadius="md"
+                  overflow="hidden"
+                  flexShrink={0}
+                >
+                  <video
+                    src={url}
+                    controls
+                    preload="metadata"
+                    className="w-full rounded-md"
+                    style={{ maxHeight: THUMB_H, objectFit: "cover" }}
+                    onError={(e) => { e.currentTarget.style.display = "none" }}
+                  />
+                </Box>
+              ))}
+            </Flex>
+          )}
+        </Box>
       </Box>
 
-      {/* Column 2: title + description */}
-      <Box flex={1} minW={0} px={3} pb={isLast ? 0 : 5}>
+      {/* ── Right column ── */}
+      <Box flex={1} minW={0} pl={3} pb={isLast ? 0 : 5} display="flex" flexDirection="column" alignItems="flex-start">
         {activity.title && (
           <Text className="text-gray-700 text-sm font-semibold mb-1 leading-snug">
             {activity.title}
@@ -179,7 +256,7 @@ const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isLast, onLightbox 
                 !descExpanded && longDesc
                   ? {
                       display: "-webkit-box",
-                      WebkitLineClamp: 3,
+                      WebkitLineClamp: 6,
                       WebkitBoxOrient: "vertical",
                       overflow: "hidden",
                     }
@@ -191,25 +268,21 @@ const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isLast, onLightbox 
             {longDesc && (
               <button
                 onClick={() => setDescExpanded((v) => !v)}
-                className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-[#0654C6] bg-blue-50 hover:bg-blue-100 transition-colors focus:outline-none"
+                className={SHOW_MORE_CLASS}
               >
                 {descExpanded ? "Show less" : "Show more"}
+                <span aria-hidden>{descExpanded ? "▲" : "▼"}</span>
               </button>
             )}
           </>
         )}
       </Box>
-
-      {/* Column 3: media thumbnails */}
-      {hasMedia && (
-        <MediaColumn images={images} videos={videos} onLightbox={onLightbox} />
-      )}
     </Flex>
   )
 }
 
 // ---------------------------------------------------------------------------
-// BeneficiaryActivity -- exported component; manages list expansion + lightbox
+// BeneficiaryActivity — manages list expansion + lightbox
 // ---------------------------------------------------------------------------
 
 const COLLAPSED_COUNT = 2
@@ -219,7 +292,7 @@ interface BeneficiaryActivityProps {
 }
 
 const BeneficiaryActivity: React.FC<BeneficiaryActivityProps> = ({ activities }) => {
-  const [listExpanded, setListExpanded] = useState(false)
+  const [listExpanded, setListExpanded] = useState(true)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 
   if (activities.length === 0) return null
@@ -256,7 +329,6 @@ const BeneficiaryActivity: React.FC<BeneficiaryActivityProps> = ({ activities })
         </Box>
       )}
 
-      {/* Timeline entries */}
       <Box>
         {visible.map((activity, i) => (
           <ActivityRow
@@ -268,19 +340,19 @@ const BeneficiaryActivity: React.FC<BeneficiaryActivityProps> = ({ activities })
         ))}
       </Box>
 
-      {/* List-level show more / show less */}
+      {/* Indent to align with the right-column text */}
       {hasMore && (
-        <button
-          onClick={() => setListExpanded((v) => !v)}
-          className="mt-3 w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold text-[#0654C6] bg-blue-50 hover:bg-blue-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-        >
-          <span>
+        <Box pl={`${LEFT_COL_PX + RIGHT_COL_PL}px`}>
+          <button
+            onClick={() => setListExpanded((v) => !v)}
+            className={SHOW_MORE_CLASS}
+          >
             {listExpanded
               ? "Show less"
               : `Show ${hiddenCount} more update${hiddenCount === 1 ? "" : "s"}`}
-          </span>
-          <span style={{ fontSize: "10px" }}>{listExpanded ? "▲" : "▼"}</span>
-        </button>
+            <span aria-hidden>{listExpanded ? "▲" : "▼"}</span>
+          </button>
+        </Box>
       )}
     </>
   )
