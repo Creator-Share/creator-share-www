@@ -4,6 +4,7 @@ import { Box, Flex, Spinner, Text } from "@chakra-ui/react"
 import { Beneficiaries } from "@/types"
 import { SponsoredBeneficiary } from "@/actions"
 import PortraitBeneficiaryCard from "../SponsorshipCard/PortraitCard"
+import SupportedRibbon from "@/components/common/SupportedRibbon"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,7 +45,7 @@ const StatsCard: React.FC = () => {
 
   return (
     <Box
-      w="240px"
+      w="180px"
       h="270px"
       flexShrink={0}
       borderRadius="20px"
@@ -94,27 +95,8 @@ const StatsCard: React.FC = () => {
 }
 
 // ---------------------------------------------------------------------------
-// Image overlays for portrait cards
+// Image overlays
 // ---------------------------------------------------------------------------
-
-const SupportedBadge: React.FC = () => (
-  <Flex
-    position="absolute"
-    bottom={2}
-    left={2}
-    align="center"
-    bg="green.500"
-    borderRadius="full"
-    px="7px"
-    py="3px"
-    zIndex={1}
-    pointerEvents="none"
-  >
-    <Text fontSize="10px" fontWeight="bold" color="white" lineHeight={1}>
-      Supported
-    </Text>
-  </Flex>
-)
 
 const UpdatedIndicator: React.FC<{ relativeTime: string }> = ({ relativeTime }) => (
   <Box
@@ -126,7 +108,7 @@ const UpdatedIndicator: React.FC<{ relativeTime: string }> = ({ relativeTime }) 
     borderRadius="full"
     bg="blue.500"
     border="2px solid white"
-    zIndex={1}
+    zIndex={2}
     title={`Updated ${relativeTime}`}
     className="animate-pulse"
     pointerEvents="none"
@@ -153,7 +135,7 @@ const InNeedBadge: React.FC = () => (
 )
 
 // ---------------------------------------------------------------------------
-// Section divider between the two groups
+// Section divider between groups
 // ---------------------------------------------------------------------------
 
 const SectionDivider: React.FC<{ label: string }> = ({ label }) => (
@@ -249,7 +231,7 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
         {/* Stats card -- always first */}
         <StatsCard />
 
-        {/* Children Supported -- portrait cards with Supported badge */}
+        {/* Children Supported */}
         {sponsored.length > 0 && (
           <>
             <SectionDivider label="Children Supported" />
@@ -261,7 +243,7 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
                 isSelected={selectedBeneficiaryId === b.id}
                 imageOverlay={
                   <>
-                    <SupportedBadge />
+                    <SupportedRibbon />
                     {b.last_activity_at && (
                       <UpdatedIndicator relativeTime={formatRelativeTime(b.last_activity_at)} />
                     )}
@@ -272,7 +254,7 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
           </>
         )}
 
-        {/* Children In Need -- portrait cards with In Need badge */}
+        {/* Children In Need */}
         {beneficiaries.length > 0 && (
           <>
             <SectionDivider label="Children In Need" />
@@ -290,7 +272,7 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
           </>
         )}
 
-        {/* Loading indicator at the right edge */}
+        {/* Loading indicator */}
         {isLoading && (
           <Flex align="center" justify="center" w="80px" h="270px" flexShrink={0}>
             <Spinner size="lg" color="gray.300" />

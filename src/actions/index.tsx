@@ -37,23 +37,26 @@ export async function fetchSponsorshipDetailsByBeneficiaryId(
   return data || []
 }
 
+/**
+ * Fetch public activities for a beneficiary with media URLs pre-resolved.
+ * Uses the server-side API route to avoid client-side RLS limitations on
+ * the media table.
+ */
 export async function fetchActivitiesByBeneficiaryId(beneficiaryId: string) {
   if (!beneficiaryId) return []
 
-  const supabase = createClient()
-  const { data, error } = await supabase
-    .from("activities")
-    .select("*")
-    .eq("beneficiary_id", beneficiaryId)
-    .eq("is_public", true)
-    .order("created_at", { ascending: false })
-
-  if (error) {
-    console.error("Error fetching activities:", error)
+  try {
+    const res = await fetch(`/api/beneficiaries/${beneficiaryId}/activities`)
+    if (!res.ok) {
+      console.error("Error fetching activities:", res.statusText)
+      return []
+    }
+    const data = await res.json()
+    return data.activities ?? []
+  } catch (err) {
+    console.error("Error fetching activities:", err)
     return []
   }
-
-  return data || []
 }
 
 /**

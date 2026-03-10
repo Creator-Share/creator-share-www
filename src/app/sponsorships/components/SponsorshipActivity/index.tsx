@@ -1,13 +1,10 @@
 "use client"
-import React, { useState, useCallback } from "react"
+import React, { useState } from "react"
 import Image from "next/image"
-import { Box, Text, Flex, Spinner } from "@chakra-ui/react"
+import { Box, Text, Flex } from "@chakra-ui/react"
 import { Activity } from "@/types"
-import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
-import { createClient } from "@/utils/supabase/client"
-import { FaChevronDown, FaChevronUp } from "react-icons/fa6"
 
-/** Format as relative time with absolute fallback on hover. */
+/** Relative time label, absolute time on hover via title attribute. */
 function formatRelativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const minutes = Math.floor(diff / 60_000)
@@ -32,74 +29,28 @@ function formatAbsoluteTime(dateStr: string): string {
   })
 }
 
-interface MediaItem {
-  id: string
-  url: string
-  type: "image" | "video"
-}
+// ---------------------------------------------------------------------------
+// ActivityItem -- a single flat update, no card chrome
+// ---------------------------------------------------------------------------
 
-interface ActivityCardProps {
+interface ActivityItemProps {
   activity: Activity
 }
 
-const ActivityCard: React.FC<ActivityCardProps> = ({ activity }) => {
+const ActivityItem: React.FC<ActivityItemProps> = ({ activity }) => {
   const [expanded, setExpanded] = useState(false)
-  const [media, setMedia] = useState<MediaItem[]>([])
-  const [mediaLoading, setMediaLoading] = useState(false)
-  const [mediaLoaded, setMediaLoaded] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 
-  const imageIds = activity.metadata?.media?.images || []
-  const videoIds = activity.metadata?.media?.videos || []
-  const hasMedia = imageIds.length > 0 || videoIds.length > 0
+  const images = activity.images_url ?? []
+  const videos = activity.videos_url ?? []
+  const hasMedia = images.length > 0 || videos.length > 0
 
-  const loadMedia = useCallback(async () => {
-    if (mediaLoaded || (!imageIds.length && !videoIds.length)) return
-    setMediaLoading(true)
-    try {
-      const supabase = createClient()
-      const allIds = [...imageIds, ...videoIds]
-      const { data, error } = await supabase
-        .from("media")
-        .select("*")
-        .in("id", allIds)
-
-      if (error || !data) return
-
-      const items: MediaItem[] = []
-      for (const row of data) {
-        try {
-          const url = generatePublicUrl(row as MediaRow)
-          items.push({
-            id: row.id,
-            url,
-            type: row.type === "VIDEO" ? "video" : "image",
-          })
-        } catch {
-          // skip unresolvable media
-        }
-      }
-      setMedia(items)
-      setMediaLoaded(true)
-    } finally {
-      setMediaLoading(false)
-    }
-  }, [imageIds, videoIds, mediaLoaded])
-
-  const toggle = () => {
-    if (!expanded && !mediaLoaded) loadMedia()
-    setExpanded((v) => !v)
-  }
-
-  const images = media.filter((m) => m.type === "image")
-  const videos = media.filter((m) => m.type === "video")
-
-  // For the collapsed state, show a video thumbnail if there are videos but no images
-  const firstVideoId = !imageIds.length && videoIds.length ? videoIds[0] : null
+  // Description is long enough to warrant clamping when collapsed
+  const longDescription = (activity.description?.length ?? 0) > 200
 
   return (
     <>
-      {/* Lightbox overlay */}
+      {/* Lightbox */}
       {lightboxSrc && (
         <Box
           position="fixed"
@@ -109,6 +60,7 @@ const ActivityCard: React.FC<ActivityCardProps> = ({ activity }) => {
           display="flex"
           alignItems="center"
           justifyContent="center"
+          cursor="zoom-out"
           onClick={() => setLightboxSrc(null)}
         >
           <Box position="relative" maxW="90vw" maxH="90vh">
@@ -124,135 +76,103 @@ const ActivityCard: React.FC<ActivityCardProps> = ({ activity }) => {
         </Box>
       )}
 
-      <Box
-        borderWidth="1px"
-        borderRadius="xl"
-        overflow="hidden"
-        mb={3}
-        bg="white"
-        className="transition-shadow duration-200 hover:shadow-md"
-      >
-        {/* Collapsed header -- always visible */}
-        <Flex
-          align="center"
-          justify="space-between"
-          p={4}
-          cursor="pointer"
-          onClick={toggle}
-          _hover={{ bg: "gray.50" }}
-        >
-          <Box flex="1" pr={4} minW={0}>
-            {activity.title && (
-              <Text fontWeight="semibold" fontSize="sm" color="gray.800" mb={0.5}>
-                {activity.title}
-              </Text>
-            )}
-            <Text
-              fontSize="sm"
-              color="gray.600"
-              style={
-                expanded
-                  ? undefined
-                  : {
-                      display: "-webkit-box",
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                    }
-              }
-            >
-              {activity.description}
-            </Text>
-
-            {/* Collapsed video thumbnail when no images */}
-            {!expanded && firstVideoId && !mediaLoaded && (
-              <Box mt={2} borderRadius="md" overflow="hidden" maxW="120px" h="68px" bg="gray.100" position="relative">
-                <Text fontSize="xs" color="gray.400" position="absolute" inset={0} display="flex" alignItems="center" justifyContent="center">
-                  ▶ Video
-                </Text>
-              </Box>
-            )}
-
-            <Text
-              fontSize="xs"
-              color="gray.400"
-              mt={1}
-              title={formatAbsoluteTime(activity.created_at)}
-              style={{ cursor: "default" }}
-            >
-              {formatRelativeTime(activity.created_at)}
-            </Text>
-          </Box>
-
-          <Box color="gray.400" flexShrink={0}>
-            {expanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
-          </Box>
-        </Flex>
-
-        {/* Expanded content */}
-        {expanded && (
-          <Box px={4} pb={4} borderTopWidth="1px" borderColor="gray.100">
-            {mediaLoading && (
-              <Flex justify="center" py={4}>
-                <Spinner size="sm" color="gray.400" />
-              </Flex>
-            )}
-
-            {!mediaLoading && images.length > 0 && (
-              <Flex gap={2} flexWrap="wrap" mt={3}>
-                {images.map((img) => (
-                  <Box
-                    key={img.id}
-                    position="relative"
-                    w="120px"
-                    h="90px"
-                    borderRadius="md"
-                    overflow="hidden"
-                    cursor="zoom-in"
-                    flexShrink={0}
-                    onClick={() => setLightboxSrc(img.url)}
-                  >
-                    <Image
-                      src={img.url}
-                      alt="Activity image"
-                      fill
-                      sizes="120px"
-                      className="object-cover"
-                      unoptimized
-                    />
-                  </Box>
-                ))}
-              </Flex>
-            )}
-
-            {!mediaLoading && videos.length > 0 && (
-              <Flex direction="column" gap={2} mt={3}>
-                {videos.map((vid) => (
-                  <video
-                    key={vid.id}
-                    src={vid.url}
-                    controls
-                    preload="metadata"
-                    className="rounded-lg max-w-full max-h-64 object-contain"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none"
-                    }}
-                  />
-                ))}
-              </Flex>
-            )}
-
-            {!mediaLoading && hasMedia && media.length === 0 && (
-              <Text fontSize="xs" color="gray.400" mt={3}>
-                Media unavailable
-              </Text>
-            )}
-          </Box>
+      <Box>
+        {/* Optional title */}
+        {activity.title && (
+          <Text className="text-gray-700 leading-relaxed text-sm font-semibold mb-1">
+            {activity.title}
+          </Text>
         )}
+
+        {/* Description -- clamp to 3 lines when collapsed */}
+        <Text
+          className="text-gray-700 leading-relaxed text-sm md:text-base"
+          style={
+            !expanded && longDescription
+              ? {
+                  display: "-webkit-box",
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }
+              : undefined
+          }
+        >
+          {activity.description}
+        </Text>
+
+        {/* Show more / Show less toggle */}
+        {longDescription && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-xs text-[#0654C6] font-medium mt-1 hover:underline focus:outline-none"
+          >
+            {expanded ? "Show less" : "Show more"}
+          </button>
+        )}
+
+        {/* Media tiles -- images */}
+        {images.length > 0 && (
+          <Flex gap={2} flexWrap="wrap" mt={3}>
+            {images.map((url, i) => (
+              <Box
+                key={i}
+                position="relative"
+                w="90px"
+                h="68px"
+                borderRadius="md"
+                overflow="hidden"
+                cursor="zoom-in"
+                flexShrink={0}
+                onClick={() => setLightboxSrc(url)}
+              >
+                <Image
+                  src={url}
+                  alt={`Update image ${i + 1}`}
+                  fill
+                  sizes="90px"
+                  className="object-cover"
+                  unoptimized
+                />
+              </Box>
+            ))}
+          </Flex>
+        )}
+
+        {/* Media tiles -- videos */}
+        {videos.length > 0 && (
+          <Flex direction="column" gap={2} mt={3}>
+            {videos.map((url, i) => (
+              <video
+                key={i}
+                src={url}
+                controls
+                preload="metadata"
+                className="rounded-lg max-w-full max-h-48 object-contain"
+                onError={(e) => { e.currentTarget.style.display = "none" }}
+              />
+            ))}
+          </Flex>
+        )}
+
+        {/* Timestamp */}
+        <Text
+          fontSize="xs"
+          color="gray.400"
+          mt={hasMedia ? 2 : 1}
+          title={formatAbsoluteTime(activity.created_at)}
+          style={{ cursor: "default" }}
+        >
+          {formatRelativeTime(activity.created_at)}
+        </Text>
       </Box>
     </>
   )
 }
+
+// ---------------------------------------------------------------------------
+// BeneficiaryActivity -- the section exported to the modal
+// ---------------------------------------------------------------------------
 
 interface BeneficiaryActivityProps {
   activities: Activity[]
@@ -263,8 +183,13 @@ const BeneficiaryActivity: React.FC<BeneficiaryActivityProps> = ({ activities })
 
   return (
     <Box>
-      {activities.map((activity) => (
-        <ActivityCard key={activity.id} activity={activity} />
+      {activities.map((activity, i) => (
+        <React.Fragment key={activity.id}>
+          <ActivityItem activity={activity} />
+          {i < activities.length - 1 && (
+            <Box h="1px" bg="gray.200" my={4} />
+          )}
+        </React.Fragment>
       ))}
     </Box>
   )

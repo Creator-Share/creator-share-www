@@ -24,8 +24,14 @@ import { useAuthStore } from "@/store/authStore"
 import { paymentOptionsCollection } from "../Payments/config"
 import { Button } from "@/components/ui/button"
 import { BeneficiaryMedia } from "@/types/admin.types"
-import { generatePublicUrl, getImageSrc, getThumbnailSrc, MediaRow } from "@/utils/supabase/media"
+import {
+  generatePublicUrl,
+  getImageSrc,
+  getThumbnailSrc,
+  MediaRow,
+} from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
+import SupportedRibbon from "@/components/common/SupportedRibbon"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
 import BeneficiaryActivity from "../SponsorshipActivity"
@@ -42,7 +48,7 @@ const PayPalScriptProvider = isPayPalEnabled
         import("@paypal/react-paypal-js").then((m) => ({
           default: m.PayPalScriptProvider,
         })),
-      { ssr: false }
+      { ssr: false },
     )
   : null
 
@@ -52,7 +58,7 @@ const PayPalButtons = isPayPalEnabled
         import("@paypal/react-paypal-js").then((m) => ({
           default: m.PayPalButtons,
         })),
-      { ssr: false }
+      { ssr: false },
     )
   : null
 
@@ -86,7 +92,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     (effectiveGoalCents - (beneficiary.budget_raised || 0)) / 100
   const birthDateIsEstimate = Boolean(
     (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
-      ?.birth_date_is_estimate
+      ?.birth_date_is_estimate,
   )
 
   const minimumAmount = 10
@@ -100,10 +106,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const publicHardcodedDollars =
     publicHardcodedCents !== null ? publicHardcodedCents / 100 : null
   const [amount, setAmount] = useState<number>(
-    publicHardcodedDollars ?? remainingAmount
+    publicHardcodedDollars ?? remainingAmount,
   )
   const [selectedOption, setSelectedOption] = useState<string>(
-    paymentOptionsCollection.items[0].value
+    paymentOptionsCollection.items[0].value,
   )
   const [loading, setLoading] = useState<boolean>(false)
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
@@ -154,7 +160,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         setImageLoading(false)
       }
     },
-    [beneficiary]
+    [beneficiary],
   )
 
   useEffect(() => {
@@ -252,7 +258,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (publicHardcodedDollars !== null) return
     const inputValue = e.target.value
-    if (inputValue === "") { setAmount(0); return }
+    if (inputValue === "") {
+      setAmount(0)
+      return
+    }
     const newValue = Math.min(parseInt(inputValue) || 0, remainingAmount)
     setAmount(newValue)
   }
@@ -263,8 +272,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       (publicHardcodedDollars !== null
         ? amount === publicHardcodedDollars
         : remainingAmount < minimumAmount
-        ? amount > 0
-        : amount >= minimumAmount))
+          ? amount > 0
+          : amount >= minimumAmount))
 
   const handleStripePayment = async () => {
     if (!canPay) {
@@ -291,7 +300,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       let primaryImageUrl = beneficiary.image_url || ""
       if (primaryImage) {
         try {
-          primaryImageUrl = generatePublicUrl(primaryImage as unknown as MediaRow)
+          primaryImageUrl = generatePublicUrl(
+            primaryImage as unknown as MediaRow,
+          )
         } catch {
           primaryImageUrl = beneficiary.image_url || ""
         }
@@ -301,7 +312,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         beneficiaryId: beneficiary.id,
         beneficiaryName: beneficiary.name,
         beneficiaryImage: primaryImageUrl || PERSON_PLACEHOLDER_PATH,
-        amount: publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
+        amount:
+          publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
         paymentType: selectedOption,
         location: beneficiary.country,
         userId: user?.id,
@@ -342,7 +354,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       window.dispatchEvent(
         new CustomEvent("payment-success", {
           detail: { beneficiaryId: beneficiary.id },
-        })
+        }),
       )
 
       if (window.self !== window.top) {
@@ -384,7 +396,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           }>
         }) => Promise<string>
       }
-    }
+    },
   ) => {
     if (!canPay) {
       toaster.create({
@@ -396,7 +408,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       })
       throw new Error("Invalid amount")
     }
-    const paymentAmount = remainingAmount < minimumAmount ? remainingAmount : amount
+    const paymentAmount =
+      remainingAmount < minimumAmount ? remainingAmount : amount
     return actions.order.create({
       purchase_units: [
         {
@@ -426,7 +439,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           }),
         })
         const planData = await planRes.json()
-        if (!planRes.ok) throw new Error(planData.error?.message || "Failed to create/get PayPal plan")
+        if (!planRes.ok)
+          throw new Error(
+            planData.error?.message || "Failed to create/get PayPal plan",
+          )
 
         const subRes = await fetch("/api/paypal", {
           method: "POST",
@@ -439,15 +455,20 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           }),
         })
         const subData = await subRes.json()
-        if (!subRes.ok) throw new Error(subData.error?.message || "Failed to create PayPal subscription")
+        if (!subRes.ok)
+          throw new Error(
+            subData.error?.message || "Failed to create PayPal subscription",
+          )
 
         type PayPalLink = { rel?: string; href?: string }
         const approvalUrl = subData.subscription?.links?.find(
-          (l: PayPalLink) => l.rel === "approve"
+          (l: PayPalLink) => l.rel === "approve",
         )?.href
         if (approvalUrl) {
           window.dispatchEvent(
-            new CustomEvent("payment-success", { detail: { beneficiaryId: beneficiary.id } })
+            new CustomEvent("payment-success", {
+              detail: { beneficiaryId: beneficiary.id },
+            }),
           )
           window.location.href = approvalUrl
           return
@@ -470,9 +491,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         }),
       })
       const responseData = await response.json()
-      if (!response.ok) throw new Error(responseData.error || "Failed to process payment")
+      if (!response.ok)
+        throw new Error(responseData.error || "Failed to process payment")
 
-      toaster.create({ title: "Success", description: "Your payment has been processed successfully!" })
+      toaster.create({
+        title: "Success",
+        description: "Your payment has been processed successfully!",
+      })
       window.location.href = `/payments/success?order_id=${data.orderID}`
     } catch (error) {
       const err = error as Error
@@ -495,31 +520,50 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const renderDisclaimer = () => {
     const monthlyAmount =
       selectedOption === "payment" ? (amount / 12).toFixed(2) : amount
-    if (beneficiary.budget_goal - beneficiary.budget_raised - amount * 100 > 0) {
+    if (
+      beneficiary.budget_goal - beneficiary.budget_raised - amount * 100 >
+      0
+    ) {
       return (
         <>
-          This child has a monthly budget goal that must be met for enrollment in school.
+          This child has a monthly budget goal that must be met for enrollment
+          in school.
           {selectedOption === "payment" && (
-            <><br />Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.</>
+            <>
+              <br />
+              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+              monthly for this child.
+            </>
           )}
-          <br />Additional sponsors are required to meet this goal.
+          <br />
+          Additional sponsors are required to meet this goal.
         </>
       )
     } else if (beneficiary.budget_raised > 0) {
       return (
         <>
-          This child is partially sponsored. Your contribution will help reach their monthly budget goal!
+          This child is partially sponsored. Your contribution will help reach
+          their monthly budget goal!
           {selectedOption === "payment" && (
-            <><br />Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.</>
+            <>
+              <br />
+              Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+              monthly for this child.
+            </>
           )}
         </>
       )
     }
     return (
       <>
-        Your sponsorship will be applied towards the child&apos;s monthly budget goals.
+        Your sponsorship will be applied towards the child&apos;s monthly budget
+        goals.
         {selectedOption === "payment" && (
-          <><br />Your yearly contribution of ${amount} provides ${monthlyAmount} monthly for this child.</>
+          <>
+            <br />
+            Your yearly contribution of ${amount} provides ${monthlyAmount}{" "}
+            monthly for this child.
+          </>
         )}
       </>
     )
@@ -544,7 +588,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       >
         <DialogHeader className="bg-[#1C3C8C] text-white px-10 py-6">
           <Text fontSize="xl" fontWeight="bold">
-            {alreadyFulfilled ? `${firstName}'s Story` : "Sponsor a Child"}
+            {beneficiary.name || "Sponsor a Child"}
           </Text>
           <DialogCloseTrigger className="text-white hover:bg-white/20" />
         </DialogHeader>
@@ -565,7 +609,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     {getStatusText(beneficiary.status)}
                   </Text>
                 </Box>
-                <Box position="relative" className="rounded-2xl overflow-hidden">
+                <Box
+                  position="relative"
+                  className="rounded-2xl overflow-hidden"
+                >
                   {imageLoading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
                       <Spinner size="lg" color="#0654C6" />
@@ -580,13 +627,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     className="rounded-2xl aspect-[4/5] object-cover"
                     showArrowsOnHover={true}
                   />
+                  {alreadyFulfilled && <SupportedRibbon />}
                 </Box>
               </Box>
 
               <Box className="text-center space-y-3 mt-4">
-                <Text className="text-3xl md:text-4xl font-bold text-gray-900">
-                  {beneficiary.name || "Full Name"}
-                </Text>
                 <Flex
                   align="center"
                   gap={{ base: 2, md: 3 }}
@@ -602,7 +647,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                         ? `${Math.floor(
                             (Date.now() -
                               new Date(beneficiary.birth_date).getTime()) /
-                              (365.25 * 24 * 60 * 60 * 1000)
+                              (365.25 * 24 * 60 * 60 * 1000),
                           )} years old${birthDateIsEstimate ? " (estimated)" : ""}`
                         : "Age unknown"}
                     </Text>
@@ -654,7 +699,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     <Text className="text-lg font-bold text-[#0654C6]">
                       {beneficiary.budget_goal > 0
                         ? Math.round(
-                            (beneficiary.budget_raised / beneficiary.budget_goal) * 100
+                            (beneficiary.budget_raised /
+                              beneficiary.budget_goal) *
+                              100,
                           )
                         : 0}
                       %
@@ -667,8 +714,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                         width: `${
                           beneficiary.budget_goal > 0
                             ? Math.min(
-                                (beneficiary.budget_raised / beneficiary.budget_goal) * 100,
-                                100
+                                (beneficiary.budget_raised /
+                                  beneficiary.budget_goal) *
+                                  100,
+                                100,
                               )
                             : 0
                         }%`,
@@ -676,14 +725,23 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     />
                   </Box>
                   <Text className="text-sm text-gray-500">
-                    ${((beneficiary.budget_raised || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}{" "}
-                    raised of ${((beneficiary.budget_goal || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })} goal
+                    $
+                    {((beneficiary.budget_raised || 0) / 100).toLocaleString(
+                      undefined,
+                      { maximumFractionDigits: 0 },
+                    )}{" "}
+                    raised of $
+                    {((beneficiary.budget_goal || 0) / 100).toLocaleString(
+                      undefined,
+                      { maximumFractionDigits: 0 },
+                    )}{" "}
+                    goal
                   </Text>
                 </Box>
               )}
 
               {/* Bio */}
-              <Box className="bg-gray-100 rounded-xl p-5 space-y-2 mb-8">
+              <Box className="bg-gray-100 rounded-xl p-5 space-y-2 mb-4">
                 <Text className="text-lg font-semibold text-gray-900">
                   About {firstName}
                 </Text>
@@ -712,139 +770,157 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 )}
               </Box>
 
-              {/* SPONSORED: Fully Sponsored banner in place of the payment form */}
-              {alreadyFulfilled ? (
-                <Box
-                  className="rounded-xl p-6 text-center space-y-3"
-                  style={{
-                    background: "linear-gradient(135deg, #EEF6FF 0%, #F3EEFF 100%)",
-                    border: "1.5px solid #CDE1FE",
-                  }}
-                >
-                  <Flex justify="center" mb={1}>
-                    <FaCircleCheck size={32} color="#0654C6" />
-                  </Flex>
-                  <Text className="text-lg font-bold text-gray-900">
-                    This child is fully sponsored
+              {/* Latest Updates -- styled identically to About card, fully expanded by default */}
+              {hasActivities && (
+                <Box className="bg-gray-100 rounded-xl p-5 space-y-2">
+                  <Text className="text-lg font-semibold text-gray-900">
+                    Latest Updates
                   </Text>
-                  <Text className="text-sm text-gray-500">
-                    {firstName} is already receiving support. You can still share
-                    their story or find another child to sponsor.
-                  </Text>
-                  <Button
-                    onClick={onClose}
-                    className="mt-2 w-full h-12 text-sm font-semibold bg-[#0654C6] text-white hover:bg-[#0545A5] rounded-xl transition-all shadow-md hover:shadow-lg"
-                  >
-                    <FaArrowDown className="mr-2" />
-                    Sponsor a child like {firstName}
-                  </Button>
-                </Box>
-              ) : (
-                /* AVAILABLE: Payment form */
-                <Box className="space-y-4">
-                  <Text className="font-medium text-sm mb-2 text-gray-500">
-                    Monthly Sponsorship Amount
-                  </Text>
-                  <Flex gap={3} align="start" direction={{ base: "column", md: "row" }}>
-                    <Box flex={{ base: "1", md: "0 0 50%" }} width={{ base: "100%", md: "auto" }}>
-                      {remainingAmount < minimumAmount ? (
-                        <Flex
-                          className="border border-gray-300 rounded-xl bg-white overflow-hidden"
-                          align="center"
-                          h="56px"
-                        >
-                          <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
-                            $
-                          </Box>
-                          <Input
-                            type="number"
-                            value={publicHardcodedDollars !== null ? publicHardcodedDollars : remainingAmount}
-                            readOnly={publicHardcodedDollars !== null}
-                            disabled={publicHardcodedDollars !== null}
-                            className="px-4 h-full bg-gray-100 border-0 outline-none focus:ring-0 text-lg text-gray-700"
-                            placeholder="Enter Amount"
-                          />
-                        </Flex>
-                      ) : (
-                        <Flex
-                          className="border border-gray-300 rounded-xl bg-white focus-within:border-[#0654C6] transition-colors overflow-hidden"
-                          align="center"
-                          h="56px"
-                        >
-                          <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
-                            $
-                          </Box>
-                          <Input
-                            type="number"
-                            min="1"
-                            max={maxSelectableAmount}
-                            value={amount || ""}
-                            onChange={handleAmountChange}
-                            readOnly={publicHardcodedDollars !== null}
-                            className="px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700"
-                            placeholder="Enter Amount"
-                          />
-                        </Flex>
-                      )}
-                      <Text className="text-xs text-gray-500 mt-2">
-                        Fixed monthly contribution
-                      </Text>
-                    </Box>
-                    <Box flex={{ base: "1", md: "0 0 calc(50% - 12px)" }} width={{ base: "100%", md: "auto" }}>
-                      <Button
-                        onClick={handleStripePayment}
-                        loading={loading}
-                        loadingText="Processing..."
-                        disabled={loading || !canPay}
-                        className={`w-full h-14 text-lg font-semibold bg-[#0654C6] text-white hover:bg-[#0545A5] rounded-xl transition-all shadow-md hover:shadow-lg${
-                          !canPay ? " opacity-50 cursor-not-allowed" : ""
-                        }`}
-                      >
-                        Sponsor {firstName} 🪽
-                      </Button>
-                    </Box>
-                  </Flex>
-
-                  {isPayPalEnabled && PayPalScriptProvider && PayPalButtons && (
-                    <Box>
-                      <PayPalScriptProvider
-                        options={{
-                          "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
-                          currency: "USD",
-                          intent: "capture",
-                        }}
-                      >
-                        {canPay ? (
-                          <PayPalButtons
-                            style={{ layout: "horizontal", tagline: false, height: 48 }}
-                            createOrder={handleCreateOrder}
-                            onApprove={handlePayPalApproval}
-                            onError={handlePayPalError}
-                          />
-                        ) : (
-                          <Box className="h-12 bg-gray-200 rounded-xl flex items-center justify-center">
-                            <Text color="gray.500" fontSize="sm">
-                              {remainingAmount < minimumAmount
-                                ? "Enter amount greater than $0"
-                                : `Minimum amount is $${minimumAmount}`}
-                            </Text>
-                          </Box>
-                        )}
-                      </PayPalScriptProvider>
-                    </Box>
-                  )}
+                  <BeneficiaryActivity activities={activities} />
                 </Box>
               )}
             </Box>
           </Flex>
 
-          {/* Latest Updates -- auto-expanded for sponsored children, hidden when empty */}
-          {hasActivities && (
-            <Box className="mt-8 border-t pt-6">
-              <Text className="text-base font-semibold text-gray-700 mb-4">
-                ⚡ Latest Updates
+          {/* SPONSORED banner OR payment form -- full width below the two-column layout */}
+          {alreadyFulfilled ? (
+            <Box
+              className="rounded-xl p-6 text-center space-y-3 mt-8"
+              style={{
+                background: "linear-gradient(135deg, #EEF6FF 0%, #F3EEFF 100%)",
+                border: "1.5px solid #CDE1FE",
+              }}
+            >
+              <Flex justify="center" mb={1}>
+                <FaCircleCheck size={32} color="#0654C6" />
+              </Flex>
+              <Text className="text-lg font-bold text-gray-900">
+                This child is fully sponsored
               </Text>
-              <BeneficiaryActivity activities={activities} />
+              <Text className="text-sm text-gray-500">
+                {firstName} is already receiving support. You can still share
+                their story or find another child to sponsor.
+              </Text>
+              <Button
+                onClick={onClose}
+                className="mt-2 w-full h-12 text-sm font-semibold bg-[#0654C6] text-white hover:bg-[#0545A5] rounded-xl transition-all shadow-md hover:shadow-lg"
+              >
+                <FaArrowDown className="mr-2" />
+                Sponsor a child like {firstName}
+              </Button>
+            </Box>
+          ) : (
+            <Box className="space-y-4 mt-8">
+              <Text className="font-medium text-sm mb-2 text-gray-500">
+                Monthly Sponsorship Amount
+              </Text>
+              <Flex
+                gap={3}
+                align="start"
+                direction={{ base: "column", md: "row" }}
+              >
+                <Box
+                  flex={{ base: "1", md: "0 0 50%" }}
+                  width={{ base: "100%", md: "auto" }}
+                >
+                  {remainingAmount < minimumAmount ? (
+                    <Flex
+                      className="border border-gray-300 rounded-xl bg-white overflow-hidden"
+                      align="center"
+                      h="56px"
+                    >
+                      <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
+                        $
+                      </Box>
+                      <Input
+                        type="number"
+                        value={
+                          publicHardcodedDollars !== null
+                            ? publicHardcodedDollars
+                            : remainingAmount
+                        }
+                        readOnly={publicHardcodedDollars !== null}
+                        disabled={publicHardcodedDollars !== null}
+                        className="px-4 h-full bg-gray-100 border-0 outline-none focus:ring-0 text-lg text-gray-700"
+                        placeholder="Enter Amount"
+                      />
+                    </Flex>
+                  ) : (
+                    <Flex
+                      className="border border-gray-300 rounded-xl bg-white focus-within:border-[#0654C6] transition-colors overflow-hidden"
+                      align="center"
+                      h="56px"
+                    >
+                      <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
+                        $
+                      </Box>
+                      <Input
+                        type="number"
+                        min="1"
+                        max={maxSelectableAmount}
+                        value={amount || ""}
+                        onChange={handleAmountChange}
+                        readOnly={publicHardcodedDollars !== null}
+                        className="px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700"
+                        placeholder="Enter Amount"
+                      />
+                    </Flex>
+                  )}
+                  <Text className="text-xs text-gray-500 mt-2">
+                    Fixed monthly contribution
+                  </Text>
+                </Box>
+                <Box
+                  flex={{ base: "1", md: "0 0 calc(50% - 12px)" }}
+                  width={{ base: "100%", md: "auto" }}
+                >
+                  <Button
+                    onClick={handleStripePayment}
+                    loading={loading}
+                    loadingText="Processing..."
+                    disabled={loading || !canPay}
+                    className={`w-full h-14 text-lg font-semibold bg-[#0654C6] text-white hover:bg-[#0545A5] rounded-xl transition-all shadow-md hover:shadow-lg${
+                      !canPay ? " opacity-50 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    Sponsor {firstName} 🪽
+                  </Button>
+                </Box>
+              </Flex>
+
+              {isPayPalEnabled && PayPalScriptProvider && PayPalButtons && (
+                <Box>
+                  <PayPalScriptProvider
+                    options={{
+                      "client-id": process.env
+                        .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
+                      currency: "USD",
+                      intent: "capture",
+                    }}
+                  >
+                    {canPay ? (
+                      <PayPalButtons
+                        style={{
+                          layout: "horizontal",
+                          tagline: false,
+                          height: 48,
+                        }}
+                        createOrder={handleCreateOrder}
+                        onApprove={handlePayPalApproval}
+                        onError={handlePayPalError}
+                      />
+                    ) : (
+                      <Box className="h-12 bg-gray-200 rounded-xl flex items-center justify-center">
+                        <Text color="gray.500" fontSize="sm">
+                          {remainingAmount < minimumAmount
+                            ? "Enter amount greater than $0"
+                            : `Minimum amount is $${minimumAmount}`}
+                        </Text>
+                      </Box>
+                    )}
+                  </PayPalScriptProvider>
+                </Box>
+              )}
             </Box>
           )}
 

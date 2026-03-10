@@ -53,7 +53,7 @@ const PortraitBeneficiaryCard: React.FC<PortraitBeneficiaryCardProps> = ({
 
   return (
     <Box
-      w="240px"
+      w="180px"
       h="270px"
       flexShrink={0}
       borderRadius="20px"
@@ -68,13 +68,13 @@ const PortraitBeneficiaryCard: React.FC<PortraitBeneficiaryCardProps> = ({
       className="transition-all duration-300 hover:scale-[1.02]"
       transform="translateZ(0)"
     >
-      {/* Portrait image -- 210px tall, cropped from the top to frame faces */}
-      <Box position="relative" w="240px" h="210px" flexShrink={0}>
+      {/* Portrait image -- 2:3 card, cropped from the top to frame faces */}
+      <Box position="relative" w="180px" h="210px" flexShrink={0}>
         <Image
           src={imageSrc}
           alt={displayName}
           fill
-          sizes="240px"
+          sizes="180px"
           className="object-cover object-top"
           unoptimized
         />
