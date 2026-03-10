@@ -1,31 +1,24 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useRef } from "react"
 import { Box, Text } from "@chakra-ui/react"
 import dynamic from "next/dynamic"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
-import {
-  fetchSponsoredWithRecentActivity,
-  SponsoredWithActivity,
-} from "@/actions"
-import HorizontalSponsorshipRow from "../sponsorships/components/HorizontalSponsorshipRow"
-import BeneficiaryModal from "../sponsorships/components/SponsorshipModal"
-import { Beneficiaries, Activity } from "@/types"
-import { fetchActivitiesByBeneficiaryId } from "@/actions"
 
 const SponsorshipFilters = dynamic(
   () => import("../sponsorships/components/SponsorshipFilters")
 )
+const ChildListings = dynamic(
+  () => import("../sponsorships/components/SponsorshipListings")
+)
 
 /**
- * Embed page -- optimised for iframe embedding in external sites.
- * Uses the same horizontal sponsorship row as the main homepage.
+ * Embed page - Optimized for iframe embedding in external sites
+ * This page is designed to be embedded via iframe with ?embedded=true parameter
+ * For the main site experience, users should visit the homepage (/)
  */
 const EmbedPage = () => {
-  const [sponsored, setSponsored] = useState<SponsoredWithActivity[]>([])
-  const [activeBeneficiary, setActiveBeneficiary] = useState<Beneficiaries | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [activities, setActivities] = useState<Activity[]>([])
+  const childListingsRef = useRef<HTMLDivElement>(null)
 
   const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore } =
     useBeneficiaryPagination({
@@ -34,32 +27,27 @@ const EmbedPage = () => {
       autoRetry: true,
     })
 
-  useEffect(() => {
-    fetchSponsoredWithRecentActivity().then(setSponsored)
-  }, [])
-
-  useEffect(() => {
-    if (!activeBeneficiary?.id) { setActivities([]); return }
-    fetchActivitiesByBeneficiaryId(activeBeneficiary.id).then(setActivities)
-  }, [activeBeneficiary?.id])
-
-  const openModal = (beneficiary: Beneficiaries) => {
-    setActiveBeneficiary(beneficiary)
-    setIsModalOpen(true)
-  }
-
   // iframe height communication for embedding
   const sendHeight = React.useCallback(() => {
     if (window.self === window.top) return
+
     try {
       requestAnimationFrame(() => {
         const height = Math.max(
           document.documentElement.offsetHeight,
           document.documentElement.scrollHeight
         )
-        const parentOrigin =
-          new URLSearchParams(window.location.search).get("parentOrigin") || "*"
-        window.parent.postMessage({ type: "resize", height }, parentOrigin)
+
+        const urlParams = new URLSearchParams(window.location.search)
+        const parentOrigin = urlParams.get("parentOrigin") || "*"
+
+        window.parent.postMessage(
+          {
+            type: "resize",
+            height: height,
+          },
+          parentOrigin
+        )
       })
     } catch (error) {
       console.error("[Embed Frame] Error sending height:", error)
@@ -74,11 +62,17 @@ const EmbedPage = () => {
 
     try {
       const handleMessage = (event: MessageEvent) => {
+        // TODO: Respect .env instead of hardcode
         if (
           !event.origin.includes("share-tanzania.webflow.io") &&
           !event.origin.includes("localhost:3000")
-        ) return
-        if (event.data?.type === "requestHeight") sendHeight()
+        ) {
+          return
+        }
+
+        if (event.data?.type === "requestHeight") {
+          sendHeight()
+        }
       }
 
       window.addEventListener("message", handleMessage)
@@ -88,8 +82,10 @@ const EmbedPage = () => {
         resizeTimeout = setTimeout(sendHeight, 100)
       }
 
-      resizeObserver = new ResizeObserver(debouncedSendHeight)
-      resizeObserver.observe(document.documentElement)
+      const observer = new ResizeObserver(debouncedSendHeight)
+      resizeObserver = observer
+
+      observer.observe(document.documentElement)
 
       window.addEventListener("load", sendHeight)
       setTimeout(sendHeight, 100)
@@ -99,7 +95,7 @@ const EmbedPage = () => {
       return () => {
         window.removeEventListener("message", handleMessage)
         window.removeEventListener("load", sendHeight)
-        resizeObserver?.disconnect()
+        if (resizeObserver) resizeObserver.disconnect()
         if (resizeTimeout) clearTimeout(resizeTimeout)
       }
     } catch (error) {
@@ -120,30 +116,25 @@ const EmbedPage = () => {
         </Text>
       </Box>
 
+      {/* Filters */}
       <Box className="w-full">
         <Box className="w-full max-w-7xl mx-auto">
           <SponsorshipFilters onFilterChange={handleFilterChange} />
         </Box>
       </Box>
 
-      <HorizontalSponsorshipRow
-        sponsored={sponsored}
-        beneficiaries={beneficiaries}
+      {/* Listings */}
+      <ChildListings
+        ref={childListingsRef}
+        beneficiaryData={beneficiaries}
         selectedBeneficiaryId={null}
+        selectedCountry={null}
+        mapBounds={undefined}
+        setSelectedBeneficiaryId={() => {}}
+        onLoadMore={loadMore}
         hasMore={hasMore}
         isLoading={isLoading}
-        onLoadMore={loadMore}
-        onOpenModal={openModal}
       />
-
-      {activeBeneficiary && (
-        <BeneficiaryModal
-          open={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          beneficiary={activeBeneficiary}
-          activities={activities}
-        />
-      )}
     </Box>
   )
 }

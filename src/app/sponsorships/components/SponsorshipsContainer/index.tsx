@@ -9,6 +9,7 @@ import {
   SponsoredWithActivity,
 } from "@/actions"
 import SponsorshipFilters from "../SponsorshipFilters"
+import SponsorshipListings from "../SponsorshipListings"
 import BeneficiaryModal from "../SponsorshipModal"
 import HorizontalSponsorshipRow from "../HorizontalSponsorshipRow"
 
@@ -150,6 +151,19 @@ const SponsorshipsContainer: React.FC = () => {
 
   return (
     <Box>
+      {/* Horizontal story row -- above the filters and primary grid.
+          Story circles (sponsored children with recent activity) on the left,
+          portrait preview cards (children in need) on the right. */}
+      <HorizontalSponsorshipRow
+        sponsored={sponsored}
+        beneficiaries={beneficiaries}
+        selectedBeneficiaryId={null}
+        hasMore={false}
+        isLoading={false}
+        onLoadMore={() => {}}
+        onOpenModal={openModal}
+      />
+
       {/* Sticky filter bar */}
       <Box
         ref={filtersRef}
@@ -163,14 +177,14 @@ const SponsorshipsContainer: React.FC = () => {
         />
       </Box>
 
-      {/* Unified horizontal scroll: story circles on the left, portrait cards to the right */}
-      <HorizontalSponsorshipRow
-        sponsored={sponsored}
-        beneficiaries={beneficiaries}
+      {/* Primary card grid -- the main browsing experience, untouched */}
+      <SponsorshipListings
+        beneficiaryData={beneficiaries}
         selectedBeneficiaryId={null}
+        selectedCountry={null}
+        onLoadMore={loadMore}
         hasMore={hasMore}
         isLoading={isLoading}
-        onLoadMore={loadMore}
         onOpenModal={openModal}
       />
 
