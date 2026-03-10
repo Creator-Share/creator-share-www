@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react"
 import {
   Button,
-  Input,
   Textarea,
-  createListCollection,
   Box,
   Flex,
   Text,
@@ -17,26 +15,12 @@ import {
   FileUploadTrigger,
   FileUploadList,
 } from "@/components/ui/file-upload"
-import {
-  SelectRoot,
-  SelectTrigger,
-  SelectValueText,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { HiUpload } from "react-icons/hi"
 import { createClient } from "@/utils/supabase/client"
 import { compressImage } from "@/utils/imageCompression"
 import { toaster } from "@/components/ui/toaster"
 
-const activityTypeCollection = createListCollection({
-  items: [
-    { value: "INFO", label: "INFO" },
-    { value: "UPDATE", label: "UPDATE" },
-    { value: "SUBSCRIPTION", label: "SUBSCRIPTION" },
-  ],
-})
 
 interface SponsorInfo {
   subscriptionId: string
@@ -977,7 +961,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
           </Flex>
         </div>
 
-        <SelectRoot
+        {/* <SelectRoot
           collection={activityTypeCollection}
           className="border border-stone-600"
           style={{ marginBottom: 12 }}
@@ -995,14 +979,14 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
               <SelectItem key={option.value} item={option}>{option.label}</SelectItem>
             ))}
           </SelectContent>
-        </SelectRoot>
+        </SelectRoot> */}
 
-        <div style={{ marginBottom: 12 }}>
+        {/* <div style={{ marginBottom: 12 }}>
           <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} p={2} className="border border-stone-600" />
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
             <ProofreadButton text={title} onAccept={setTitle} fieldLabel="Title" size="sm" type="activity" />
           </div>
-        </div>
+        </div> */}
 
         <div style={{ marginBottom: 12 }}>
           <Textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} p={2} className="border border-stone-600" />
@@ -1136,7 +1120,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
         {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
           <Button onClick={onClose} style={{ marginRight: 12 }} disabled={saving || compressing}>Cancel</Button>
-          <Button colorScheme="blue" onClick={handleSave} disabled={!title || !description || saving || compressing}>
+          <Button colorScheme="blue" onClick={handleSave} disabled={!description || saving || compressing}>
             {compressing ? "Compressing..." : saving ? "Saving..." : "Save"}
           </Button>
         </div>
