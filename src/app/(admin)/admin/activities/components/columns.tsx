@@ -18,14 +18,17 @@ export function getActivityColumns(
 ): ColumnDef<unknown, unknown>[] {
   return [
     {
-      accessorKey: "title",
-      header: () => <span>Title</span>,
-      cell: ({ row }) => (row.original as Activity).title,
-    },
-    {
       accessorKey: "description",
       header: () => <span>Description</span>,
-      cell: ({ row }) => (row.original as Activity).description,
+      cell: ({ row }) => {
+        const desc = (row.original as Activity).description || ""
+        const truncated = desc.length > 60 ? desc.slice(0, 60) + "…" : desc
+        return (
+          <span title={desc} style={{ cursor: "default" }}>
+            {truncated}
+          </span>
+        )
+      },
     },
     {
       accessorKey: "is_public",
