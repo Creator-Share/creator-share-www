@@ -1,7 +1,14 @@
 import { createClient } from "@/utils/supabase/client"
 import { Beneficiaries, Subscription } from "@/types"
 
+/** @deprecated Use SponsoredBeneficiary instead */
 export type SponsoredWithActivity = Beneficiaries & { last_activity_at: string }
+
+/**
+ * A Budget Fulfilled beneficiary with an optional last public-activity timestamp.
+ * `last_activity_at` is null when no public activity has been recorded.
+ */
+export type SponsoredBeneficiary = Beneficiaries & { last_activity_at: string | null }
 
 export async function fetchSponsorshipDetailsByBeneficiaryId(
   beneficiaryId: string,
@@ -50,9 +57,56 @@ export async function fetchActivitiesByBeneficiaryId(beneficiaryId: string) {
 }
 
 /**
- * Fetch sponsored beneficiaries (status = "Budget Fulfilled") who have at least
- * one public activity, ordered by their most recent activity date descending.
- * Used to populate the social-proof story strip on the homepage.
+ * Fetch ALL Budget Fulfilled beneficiaries, annotated with the timestamp of
+ * their most recent public activity (null if none exists).
+ *
+ * Ordering: children with activity appear first (most recent first),
+ * then children without activity sorted alphabetically by name.
+ */
+export async function fetchAllSponsored(): Promise<SponsoredBeneficiary[]> {
+  const supabase = createClient()
+
+  const { data: beneficiaries, error } = await supabase
+    .from("beneficiaries")
+    .select("*")
+    .eq("status", "Budget Fulfilled")
+    .order("name", { ascending: true })
+
+  if (error || !beneficiaries || beneficiaries.length === 0) {
+    if (error) console.error("Error fetching sponsored beneficiaries:", error)
+    return []
+  }
+
+  const ids = beneficiaries.map((b) => b.id).filter(Boolean)
+
+  const { data: activities } = await supabase
+    .from("activities")
+    .select("beneficiary_id, created_at")
+    .eq("is_public", true)
+    .in("beneficiary_id", ids)
+    .order("created_at", { ascending: false })
+
+  const latestActivityAt = new Map<string, string>()
+  for (const { beneficiary_id, created_at } of activities ?? []) {
+    if (beneficiary_id && !latestActivityAt.has(beneficiary_id)) {
+      latestActivityAt.set(beneficiary_id, created_at)
+    }
+  }
+
+  return beneficiaries
+    .map((b) => ({ ...b, last_activity_at: latestActivityAt.get(b.id) ?? null }))
+    .sort((a, b) => {
+      if (a.last_activity_at && b.last_activity_at) {
+        return new Date(b.last_activity_at).getTime() - new Date(a.last_activity_at).getTime()
+      }
+      if (a.last_activity_at) return -1
+      if (b.last_activity_at) return 1
+      return (a.name ?? "").localeCompare(b.name ?? "")
+    })
+}
+
+/**
+ * @deprecated Use fetchAllSponsored instead; this only returns children WITH activity.
  */
 export async function fetchSponsoredWithRecentActivity(): Promise<SponsoredWithActivity[]> {
   const supabase = createClient()

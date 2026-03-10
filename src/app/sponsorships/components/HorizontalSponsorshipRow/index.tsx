@@ -1,14 +1,14 @@
 "use client"
 import React, { useEffect, useRef, useCallback, useState } from "react"
-import Image from "next/image"
 import { Box, Flex, Spinner, Text } from "@chakra-ui/react"
 import { Beneficiaries } from "@/types"
-import { SponsoredWithActivity } from "@/actions"
-import { getImageSrc } from "@/utils/supabase/media"
-import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
+import { SponsoredBeneficiary } from "@/actions"
 import PortraitBeneficiaryCard from "../SponsorshipCard/PortraitCard"
 
-/** Relative time label used on story circles. */
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function formatRelativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60_000)
@@ -22,97 +22,173 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// StoryCircle -- sponsored child with gradient ring and activity timestamp
+// StatsCard -- first item in the row; replaces the StatsSection above the fold
 // ---------------------------------------------------------------------------
 
-interface StoryCircleProps {
-  beneficiary: SponsoredWithActivity
-  onOpenModal: (b: Beneficiaries) => void
+interface StatsData {
+  childrenInNeed: number
+  childrenSupported: number
 }
 
-const StoryCircle: React.FC<StoryCircleProps> = ({ beneficiary, onOpenModal }) => {
-  const [avatarSrc, setAvatarSrc] = useState(PERSON_PLACEHOLDER_PATH)
-  const firstName = beneficiary.name?.split(" ")[0] ?? "Child"
+const StatsCard: React.FC = () => {
+  const [stats, setStats] = useState<StatsData | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`/api/beneficiaries/images/${beneficiary.id}`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => {
-        const first = data?.find((m: { type: string }) => m.type === "IMAGE")
-        if (first) setAvatarSrc(getImageSrc(first))
-      })
+    fetch("/api/stats")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setStats(d) })
       .catch(() => {})
-  }, [beneficiary.id])
+      .finally(() => setLoading(false))
+  }, [])
 
   return (
-    <Flex
-      direction="column"
-      align="center"
-      gap={1.5}
+    <Box
+      w="240px"
+      h="270px"
       flexShrink={0}
-      cursor="pointer"
-      onClick={() => onOpenModal(beneficiary)}
-      role="button"
-      aria-label={`View ${firstName}'s latest update`}
-      className="group"
-      pt={1}
+      borderRadius="20px"
+      bg="white"
+      borderWidth="1px"
+      borderColor="gray.200"
+      display="flex"
+      flexDirection="column"
+      alignItems="center"
+      justifyContent="center"
+      gap={4}
+      px={6}
     >
-      {/* Gradient ring */}
-      <Box
-        w="76px"
-        h="76px"
-        borderRadius="full"
-        p="2.5px"
-        style={{
-          background: "linear-gradient(135deg, #0654C6 0%, #7C3AED 100%)",
-        }}
-        className="transition-transform duration-200 group-hover:scale-105"
-      >
-        <Box
-          w="full"
-          h="full"
-          borderRadius="full"
-          overflow="hidden"
-          border="2.5px solid white"
-          position="relative"
-        >
-          <Image
-            src={avatarSrc}
-            alt={firstName}
-            fill
-            sizes="72px"
-            className="object-cover"
-            unoptimized
-          />
-        </Box>
-      </Box>
+      {loading ? (
+        <Spinner size="lg" color="gray.300" />
+      ) : (
+        <>
+          <Flex align="center" gap={3}>
+            <Text fontSize="2xl" lineHeight={1} flexShrink={0}>💛</Text>
+            <Flex direction="column">
+              <Text fontSize="4xl" fontWeight="bold" color="gray.800" lineHeight={1}>
+                {stats?.childrenInNeed.toLocaleString() ?? "—"}
+              </Text>
+              <Text fontSize="xs" color="gray.500" fontWeight="medium" mt={1}>
+                Children In Need
+              </Text>
+            </Flex>
+          </Flex>
 
-      <Text
-        fontSize="xs"
-        fontWeight="semibold"
-        color="gray.800"
-        textAlign="center"
-        maxW="76px"
-        overflow="hidden"
-        textOverflow="ellipsis"
-        whiteSpace="nowrap"
-      >
-        {firstName}
-      </Text>
+          <Box w="40px" h="1px" bg="gray.200" />
 
-      <Text fontSize="10px" color="gray.400" textAlign="center" mt="-4px">
-        {formatRelativeTime(beneficiary.last_activity_at)}
-      </Text>
-    </Flex>
+          <Flex align="center" gap={3}>
+            <Text fontSize="2xl" lineHeight={1} flexShrink={0}>💚</Text>
+            <Flex direction="column">
+              <Text fontSize="4xl" fontWeight="bold" color="gray.800" lineHeight={1}>
+                {stats?.childrenSupported.toLocaleString() ?? "—"}
+              </Text>
+              <Text fontSize="xs" color="gray.500" fontWeight="medium" mt={1}>
+                Children Supported
+              </Text>
+            </Flex>
+          </Flex>
+        </>
+      )}
+    </Box>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Image overlays for portrait cards
+// ---------------------------------------------------------------------------
+
+const SupportedBadge: React.FC = () => (
+  <Flex
+    position="absolute"
+    bottom={2}
+    left={2}
+    align="center"
+    bg="green.500"
+    borderRadius="full"
+    px="7px"
+    py="3px"
+    zIndex={1}
+    pointerEvents="none"
+  >
+    <Text fontSize="10px" fontWeight="bold" color="white" lineHeight={1}>
+      Supported
+    </Text>
+  </Flex>
+)
+
+const UpdatedIndicator: React.FC<{ relativeTime: string }> = ({ relativeTime }) => (
+  <Box
+    position="absolute"
+    top={2}
+    right={2}
+    w="10px"
+    h="10px"
+    borderRadius="full"
+    bg="blue.500"
+    border="2px solid white"
+    zIndex={1}
+    title={`Updated ${relativeTime}`}
+    className="animate-pulse"
+    pointerEvents="none"
+  />
+)
+
+const InNeedBadge: React.FC = () => (
+  <Flex
+    position="absolute"
+    bottom={2}
+    left={2}
+    align="center"
+    bg="orange.500"
+    borderRadius="full"
+    px="7px"
+    py="3px"
+    zIndex={1}
+    pointerEvents="none"
+  >
+    <Text fontSize="10px" fontWeight="bold" color="white" lineHeight={1}>
+      In Need
+    </Text>
+  </Flex>
+)
+
+// ---------------------------------------------------------------------------
+// Section divider between the two groups
+// ---------------------------------------------------------------------------
+
+const SectionDivider: React.FC<{ label: string }> = ({ label }) => (
+  <Flex
+    flexShrink={0}
+    direction="column"
+    align="center"
+    justify="center"
+    gap={3}
+    w="32px"
+    h="270px"
+    mx={2}
+  >
+    <Box flex={1} w="1px" bg="gray.200" />
+    <Text
+      fontSize="9px"
+      fontWeight="bold"
+      color="gray.400"
+      textTransform="uppercase"
+      letterSpacing="0.12em"
+      whiteSpace="nowrap"
+      style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+    >
+      {label}
+    </Text>
+    <Box flex={1} w="1px" bg="gray.200" />
+  </Flex>
+)
 
 // ---------------------------------------------------------------------------
 // HorizontalSponsorshipRow
 // ---------------------------------------------------------------------------
 
 interface HorizontalSponsorshipRowProps {
-  sponsored: SponsoredWithActivity[]
+  sponsored: SponsoredBeneficiary[]
   beneficiaries: Beneficiaries[]
   selectedBeneficiaryId: string | null
   hasMore: boolean
@@ -159,86 +235,77 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
     return () => el.removeEventListener("scroll", handleScroll)
   }, [handleScroll])
 
-  const isEmpty = sponsored.length === 0 && beneficiaries.length === 0
-
-  if (isEmpty && !isLoading) return null
-
   return (
     <Box
-      className="bg-white border rounded-2xl"
+      ref={scrollRef}
       mt={4}
-      overflow="hidden"
+      py={4}
+      overflowX="auto"
+      overflowY="hidden"
+      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      className="[&::-webkit-scrollbar]:hidden"
     >
-      {/* Scrollable row */}
-      <Box
-        ref={scrollRef}
-        overflowX="auto"
-        overflowY="hidden"
-        px={{ base: 4, lg: 6 }}
-        py={5}
-        style={{
-          scrollbarWidth: "none",
-          msOverflowStyle: "none",
-        }}
-        className="[&::-webkit-scrollbar]:hidden"
-      >
-        <Flex
-          gap={4}
-          align="flex-start"
-          w="max-content"
-          minH="420px"
-        >
-          {/* Story circles -- sponsored children with recent activity */}
-          {sponsored.map((b) => (
-            <StoryCircle key={b.id} beneficiary={b} onOpenModal={onOpenModal} />
-          ))}
+      <Flex gap={4} align="flex-start" w="max-content" minH="270px">
+        {/* Stats card -- always first */}
+        <StatsCard />
 
-          {/* Portrait child cards -- available children */}
-          {beneficiaries.map((b) =>
-            b.id ? (
+        {/* Children Supported -- portrait cards with Supported badge */}
+        {sponsored.length > 0 && (
+          <>
+            <SectionDivider label="Children Supported" />
+            {sponsored.map((b) => (
               <PortraitBeneficiaryCard
                 key={b.id}
                 beneficiary={b}
                 onOpenDialog={() => onOpenModal(b)}
                 isSelected={selectedBeneficiaryId === b.id}
+                imageOverlay={
+                  <>
+                    <SupportedBadge />
+                    {b.last_activity_at && (
+                      <UpdatedIndicator relativeTime={formatRelativeTime(b.last_activity_at)} />
+                    )}
+                  </>
+                }
               />
-            ) : null
-          )}
+            ))}
+          </>
+        )}
 
-          {/* Loading indicator at the right edge */}
-          {isLoading && (
-            <Flex
-              align="center"
-              justify="center"
-              w="80px"
-              h="320px"
-              flexShrink={0}
-            >
-              <Spinner size="lg" color="gray.300" />
-            </Flex>
-          )}
+        {/* Children In Need -- portrait cards with In Need badge */}
+        {beneficiaries.length > 0 && (
+          <>
+            <SectionDivider label="Children In Need" />
+            {beneficiaries.map((b) =>
+              b.id ? (
+                <PortraitBeneficiaryCard
+                  key={b.id}
+                  beneficiary={b}
+                  onOpenDialog={() => onOpenModal(b)}
+                  isSelected={selectedBeneficiaryId === b.id}
+                  imageOverlay={<InNeedBadge />}
+                />
+              ) : null
+            )}
+          </>
+        )}
 
-          {/* End-of-results ghost -- keeps the row from collapsing */}
-          {!isLoading && !hasMore && beneficiaries.length > 0 && (
-            <Flex
-              align="center"
-              justify="center"
-              w="120px"
-              h="320px"
-              flexShrink={0}
-            >
-              <Text
-                fontSize="xs"
-                color="gray.400"
-                textAlign="center"
-                lineHeight="short"
-              >
-                {"That's\neveryone"}
-              </Text>
-            </Flex>
-          )}
-        </Flex>
-      </Box>
+        {/* Loading indicator at the right edge */}
+        {isLoading && (
+          <Flex align="center" justify="center" w="80px" h="270px" flexShrink={0}>
+            <Spinner size="lg" color="gray.300" />
+          </Flex>
+        )}
+
+        {/* End-of-results cap */}
+        {!isLoading && !hasMore && beneficiaries.length > 0 && (
+          <Flex align="center" justify="center" w="100px" h="270px" flexShrink={0}>
+            <Text fontSize="xs" color="gray.400" textAlign="center" lineHeight="short">
+              {"That's\neveryone"}
+            </Text>
+          </Flex>
+        )}
+      </Flex>
     </Box>
   )
 }

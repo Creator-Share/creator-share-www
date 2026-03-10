@@ -5,8 +5,8 @@ import { Beneficiaries, Activity } from "@/types"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
 import {
   fetchActivitiesByBeneficiaryId,
-  fetchSponsoredWithRecentActivity,
-  SponsoredWithActivity,
+  fetchAllSponsored,
+  SponsoredBeneficiary,
 } from "@/actions"
 import SponsorshipFilters from "../SponsorshipFilters"
 import SponsorshipListings from "../SponsorshipListings"
@@ -31,7 +31,7 @@ const SponsorshipsContainer: React.FC = () => {
   const [activeBeneficiary, setActiveBeneficiary] = useState<Beneficiaries | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [activities, setActivities] = useState<Activity[]>([])
-  const [sponsored, setSponsored] = useState<SponsoredWithActivity[]>([])
+  const [sponsored, setSponsored] = useState<SponsoredBeneficiary[]>([])
 
   const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore } =
     useBeneficiaryPagination({
@@ -41,9 +41,9 @@ const SponsorshipsContainer: React.FC = () => {
       initialStatus: ["New", "Partially Funded", "Sponsorship Cancelled"],
     })
 
-  // Fetch sponsored children with recent activity for the story circles
+  // Fetch all Budget Fulfilled children, ordered by most recent activity first.
   useEffect(() => {
-    fetchSponsoredWithRecentActivity().then(setSponsored)
+    fetchAllSponsored().then(setSponsored)
   }, [])
 
   // Sticky filter detection
@@ -151,16 +151,16 @@ const SponsorshipsContainer: React.FC = () => {
 
   return (
     <Box>
-      {/* Horizontal story row -- above the filters and primary grid.
-          Story circles (sponsored children with recent activity) on the left,
-          portrait preview cards (children in need) on the right. */}
+      {/* Horizontal row: "Children Supported" cards on the left,
+          "Children In Need" cards on the right, all identical portrait format.
+          Infinite scroll is wired to the same pagination hook as the grid below. */}
       <HorizontalSponsorshipRow
         sponsored={sponsored}
         beneficiaries={beneficiaries}
         selectedBeneficiaryId={null}
-        hasMore={false}
-        isLoading={false}
-        onLoadMore={() => {}}
+        hasMore={hasMore}
+        isLoading={isLoading}
+        onLoadMore={loadMore}
         onOpenModal={openModal}
       />
 

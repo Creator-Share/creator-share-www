@@ -1,6 +1,7 @@
 "use client"
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
+import { useRouter } from "next/navigation"
 import { Box, Flex, Button, Spinner, Text } from "@chakra-ui/react"
 import { toaster } from "@/components/ui/toaster"
 import DeleteDialog from "./components/DeleteDialog"
@@ -86,6 +87,7 @@ const ChildrenTable = () => {
   >([])
   const fetchedImagesRef = useRef<Set<string>>(new Set())
   const containerRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   // Status stats
   const [stats, setStats] = useState<{
@@ -226,6 +228,26 @@ const ChildrenTable = () => {
       setIsEditDrawerOpen(true)
     }
   }, [selectedBeneficiary])
+
+  // Deep-link support: if the URL contains ?edit=<id> on mount, fetch that
+  // beneficiary and open the edit modal. This lets team members bookmark
+  // edit pages directly (e.g. /admin/children?edit=<uuid>).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const editId = params.get("edit")
+    if (!editId) return
+
+    fetch(`/api/admin/beneficiaries/retrieve?id=${editId}&beneficiary_type=CHILD`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const beneficiary = data?.beneficiaries?.[0]
+        if (beneficiary) {
+          setSelectedBeneficiary(beneficiary)
+          setIsEditDrawerOpen(true)
+        }
+      })
+      .catch(() => {})
+  }, []) // Intentionally runs once on mount only
 
   // Add this useEffect to ensure selection state is properly managed
   useEffect(() => {
@@ -673,6 +695,9 @@ const ChildrenTable = () => {
   const handleEditBeneficiary = (beneficiary: Beneficiaries) => {
     setSelectedBeneficiary(beneficiary)
     setIsEditDrawerOpen(true)
+    if (beneficiary.id) {
+      router.replace(`/admin/children?edit=${beneficiary.id}`, { scroll: false })
+    }
   }
 
   const handleStatusBadgeClick = (status: string) => {
@@ -965,7 +990,10 @@ const ChildrenTable = () => {
         <BeneficiaryModal
           mode="edit"
           isOpen={isEditDrawerOpen}
-          onClose={() => setIsEditDrawerOpen(false)}
+          onClose={() => {
+            setIsEditDrawerOpen(false)
+            router.replace("/admin/children", { scroll: false })
+          }}
           selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
           onSave={handleSave}
           onDelete={handleDelete}
