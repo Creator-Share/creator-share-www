@@ -60,12 +60,12 @@ const DateTooltip: React.FC<{ dateStr: string }> = ({ dateStr }) => {
       onMouseLeave={() => setVisible(false)}
       style={{ cursor: "default" }}
     >
-      <Box textAlign="center">
-        <Text fontSize="15px" fontWeight="800" color="gray.700" lineHeight={1.1}>
+      <Box textAlign="left">
+        <Text fontSize="15px" fontWeight="800" color="gray.700" lineHeight={1.1} display="inline">
           {main}
         </Text>
         {sub && (
-          <Text fontSize="9px" fontWeight="600" color="gray.400" lineHeight={1} mt="2px">
+          <Text fontSize="13px" fontWeight="600" color="gray.400" lineHeight={1} display="inline" ml="4px">
             {sub}
           </Text>
         )}
@@ -75,8 +75,7 @@ const DateTooltip: React.FC<{ dateStr: string }> = ({ dateStr }) => {
         <Box
           position="absolute"
           bottom="calc(100% + 8px)"
-          left="50%"
-          style={{ transform: "translateX(-50%)" }}
+          left="0"
           px={3}
           py={1.5}
           bg="gray.800"
@@ -93,9 +92,8 @@ const DateTooltip: React.FC<{ dateStr: string }> = ({ dateStr }) => {
           <Box
             position="absolute"
             top="100%"
-            left="50%"
+            left="12px"
             style={{
-              transform: "translateX(-50%)",
               width: 0,
               height: 0,
               borderLeft: "6px solid transparent",
@@ -110,26 +108,29 @@ const DateTooltip: React.FC<{ dateStr: string }> = ({ dateStr }) => {
 }
 
 // ---------------------------------------------------------------------------
-// ActivityRow — two-column layout:
-//   Left  (120px): date label → circle node → spine → media thumbnails
-//   Right (flex):  title → description → show more
+// ActivityRow — timeline layout:
+//   Spine (24px): dashed blue line + dot on far left edge
+//   Content (flex): date inline with dot → title → description → thumbnails
 // ---------------------------------------------------------------------------
 
-const LEFT_COL_W = "120px"
-const LEFT_COL_PX = 120  // numeric mirror for arithmetic — must stay in sync with LEFT_COL_W
-const RIGHT_COL_PL = 12  // pl={3} in Chakra = 3 × 4px = 12px
+const SPINE_W = "24px"
 const DESCRIPTION_CLAMP = 180
-const THUMB_W = "100px"
-const THUMB_H = "80px"
+const THUMB_W = "140px"
+const THUMB_H = "110px"
+
+// Height of the "incoming" line segment above the dot — matches one line of
+// date text so the dot vertically aligns with the label beside it.
+const DOT_OFFSET_H = "14px"
 
 interface ActivityRowProps {
   activity: Activity
+  isFirst: boolean
   isLast: boolean
   onLightbox: (src: string) => void
 }
 
-const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isLast, onLightbox }) => {
-  const [descExpanded, setDescExpanded] = useState(false)
+const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isFirst, isLast, onLightbox }) => {
+  const [descExpanded, setDescExpanded] = useState(true)
 
   const images = activity.images_url ?? []
   const videos = activity.videos_url ?? []
@@ -137,64 +138,91 @@ const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isLast, onLightbox 
   const longDesc = (activity.description?.length ?? 0) > DESCRIPTION_CLAMP
 
   return (
-    // align="stretch" so both columns fill the same height; spacing between
-    // entries is the left column's bottom padding via the spine area.
-    <Flex gap={0} align="stretch" pb={isLast ? 0 : 0}>
-      {/* ── Left column ── */}
-      <Box
-        w={LEFT_COL_W}
-        flexShrink={0}
-        display="flex"
-        flexDirection="column"
-        alignItems="center"
-        pt="2px"
-      >
-        {/* Date label */}
-        <DateTooltip dateStr={activity.created_at} />
-
-        {/* Circle node */}
+    // Fragment wraps the timeline row + the flush-left show more/less button.
+    <>
+      <Flex gap={0} align="stretch">
+        {/* ── Spine column — dot + dashed blue vertical line ── */}
         <Box
-          w="10px"
-          h="10px"
-          borderRadius="full"
-          bg="blue.400"
-          border="2px solid white"
+          w={SPINE_W}
           flexShrink={0}
-          mt={2}
-          style={{ boxShadow: "0 0 0 2px #93c5fd" }}
-        />
+          display="flex"
+          flexDirection="column"
+          alignItems="center"
+        >
+          {/* Incoming segment: connects from previous entry's dot to this dot */}
+          <Box
+            w="2px"
+            h={DOT_OFFSET_H}
+            flexShrink={0}
+            style={{
+              borderLeft: isFirst ? "none" : "2px dashed #93c5fd",
+            }}
+          />
 
-        {/* Area below circle: spine + media thumbnails */}
+          {/* Dot */}
+          <Box
+            w="12px"
+            h="12px"
+            borderRadius="full"
+            bg="blue.400"
+            border="2px solid white"
+            flexShrink={0}
+            style={{ boxShadow: "0 0 0 2px #93c5fd" }}
+          />
+
+          {/* Outgoing segment: fills remaining height, connects down to next entry */}
+          <Box
+            flex={1}
+            w="2px"
+            mt="2px"
+            style={{
+              borderLeft: isLast ? "none" : "2px dashed #93c5fd",
+            }}
+          />
+        </Box>
+
+        {/* ── Content column ── */}
         <Box
           flex={1}
-          w="full"
-          position="relative"
-          pt={hasMedia ? 2 : 0}
-          pb={isLast ? 0 : 5}
-          minH={isLast && !hasMedia ? 0 : "20px"}
+          minW={0}
+          pl={3}
+          pb={isLast ? 0 : 6}
+          display="flex"
+          flexDirection="column"
+          alignItems="flex-start"
         >
-          {/* Spine line running the full height of this area */}
-          {!isLast && (
-            <Box
-              position="absolute"
-              left="50%"
-              top={0}
-              bottom={0}
-              w="2px"
-              bg="gray.200"
-              style={{ transform: "translateX(-50%)" }}
-            />
+          {/* Date label — inline with the dot (same vertical band as DOT_OFFSET_H) */}
+          <Box h={DOT_OFFSET_H} display="flex" alignItems="center" mb={1}>
+            <DateTooltip dateStr={activity.created_at} />
+          </Box>
+
+          {activity.title && (
+            <Text className="text-gray-700 text-sm font-semibold mb-1 leading-snug">
+              {activity.title}
+            </Text>
           )}
 
-          {/* Thumbnails sit above the spine */}
-          {hasMedia && (
-            <Flex
-              direction="column"
-              gap={1.5}
-              align="center"
-              position="relative"
-              zIndex={1}
+          {activity.description && (
+            <Text
+              className="text-gray-700 text-sm leading-relaxed"
+              style={
+                !descExpanded && longDesc
+                  ? {
+                      display: "-webkit-box",
+                      WebkitLineClamp: 6,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }
+                  : undefined
+              }
             >
+              {activity.description}
+            </Text>
+          )}
+
+          {/* Media thumbnails — horizontal row below the description */}
+          {hasMedia && (
+            <Flex gap={2} mt={3} flexWrap="wrap">
               {images.map((url, i) => (
                 <Box
                   key={`img-${i}`}
@@ -238,46 +266,19 @@ const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isLast, onLightbox 
             </Flex>
           )}
         </Box>
-      </Box>
+      </Flex>
 
-      {/* ── Right column ── */}
-      <Box flex={1} minW={0} pl={3} pb={isLast ? 0 : 5} display="flex" flexDirection="column" alignItems="flex-start">
-        {activity.title && (
-          <Text className="text-gray-700 text-sm font-semibold mb-1 leading-snug">
-            {activity.title}
-          </Text>
-        )}
-
-        {activity.description && (
-          <>
-            <Text
-              className="text-gray-700 text-sm leading-relaxed"
-              style={
-                !descExpanded && longDesc
-                  ? {
-                      display: "-webkit-box",
-                      WebkitLineClamp: 6,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                    }
-                  : undefined
-              }
-            >
-              {activity.description}
-            </Text>
-            {longDesc && (
-              <button
-                onClick={() => setDescExpanded((v) => !v)}
-                className={SHOW_MORE_CLASS}
-              >
-                {descExpanded ? "Show less" : "Show more"}
-                <span aria-hidden>{descExpanded ? "▲" : "▼"}</span>
-              </button>
-            )}
-          </>
-        )}
-      </Box>
-    </Flex>
+      {/* Show more/less sits BELOW the timeline row, flush with the card's left edge */}
+      {longDesc && (
+        <button
+          onClick={() => setDescExpanded((v) => !v)}
+          className={SHOW_MORE_CLASS}
+        >
+          {descExpanded ? "Show less" : "Show more"}
+          <span aria-hidden>{descExpanded ? "▲" : "▼"}</span>
+        </button>
+      )}
+    </>
   )
 }
 
@@ -334,25 +335,23 @@ const BeneficiaryActivity: React.FC<BeneficiaryActivityProps> = ({ activities })
           <ActivityRow
             key={activity.id}
             activity={activity}
+            isFirst={i === 0}
             isLast={i === visible.length - 1}
             onLightbox={setLightboxSrc}
           />
         ))}
       </Box>
 
-      {/* Indent to align with the right-column text */}
       {hasMore && (
-        <Box pl={`${LEFT_COL_PX + RIGHT_COL_PL}px`}>
-          <button
-            onClick={() => setListExpanded((v) => !v)}
-            className={SHOW_MORE_CLASS}
-          >
-            {listExpanded
-              ? "Show less"
-              : `Show ${hiddenCount} more update${hiddenCount === 1 ? "" : "s"}`}
-            <span aria-hidden>{listExpanded ? "▲" : "▼"}</span>
-          </button>
-        </Box>
+        <button
+          onClick={() => setListExpanded((v) => !v)}
+          className={SHOW_MORE_CLASS}
+        >
+          {listExpanded
+            ? "Show less"
+            : `Show ${hiddenCount} more update${hiddenCount === 1 ? "" : "s"}`}
+          <span aria-hidden>{listExpanded ? "▲" : "▼"}</span>
+        </button>
       )}
     </>
   )

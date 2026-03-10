@@ -10,6 +10,7 @@ import { centsToDollars } from "@/utils/currency"
 import { getImageSrc, getThumbnailSrc } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
+import SupportedRibbon from "@/components/common/SupportedRibbon"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -100,6 +101,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           className="w-full h-full rounded-t-[20px]"
           showArrowsOnHover={true}
         />
+
+        {beneficiary.status === "Budget Fulfilled" && <SupportedRibbon />}
 
         {/* Goal Badge */}
         {!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && (

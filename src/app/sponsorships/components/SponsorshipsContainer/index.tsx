@@ -152,7 +152,7 @@ const SponsorshipsContainer: React.FC = () => {
   return (
     <Box>
       {/* Horizontal row: "Children Supported" cards on the left,
-          "Children In Need" cards on the right, all identical portrait format.
+          "Children Waiting" cards on the right, all identical portrait format.
           Infinite scroll is wired to the same pagination hook as the grid below. */}
       <HorizontalSponsorshipRow
         sponsored={sponsored}

@@ -26,7 +26,7 @@ const BeneficiaryListings = React.forwardRef<
       isLoading = false,
       onOpenModal,
     },
-    ref
+    ref,
   ) => {
     const SCROLL_THRESHOLD_PX = 300
     const containerRef = useRef<HTMLDivElement | null>(null)
@@ -58,7 +58,10 @@ const BeneficiaryListings = React.forwardRef<
       const current = filteredBeneficiaries.length
       if (current > prev) {
         const newIds = new Set(
-          filteredBeneficiaries.slice(prev, current).map((b) => b.id).filter(Boolean)
+          filteredBeneficiaries
+            .slice(prev, current)
+            .map((b) => b.id)
+            .filter(Boolean),
         )
         setAnimatingItems(newIds)
         setTimeout(() => setAnimatingItems(new Set()), 500)
@@ -71,8 +74,11 @@ const BeneficiaryListings = React.forwardRef<
       if (!isInIframe) return
       setTimeout(() => {
         window.parent.postMessage(
-          { type: "resize", height: document.documentElement.scrollHeight + 200 },
-          "*"
+          {
+            type: "resize",
+            height: document.documentElement.scrollHeight + 200,
+          },
+          "*",
         )
       }, 100)
     }, [isInIframe, filteredBeneficiaries.length])
@@ -123,7 +129,7 @@ const BeneficiaryListings = React.forwardRef<
       (beneficiary: Beneficiaries) => {
         onOpenModal?.(beneficiary)
       },
-      [onOpenModal]
+      [onOpenModal],
     )
 
     return (
@@ -136,6 +142,7 @@ const BeneficiaryListings = React.forwardRef<
         width="100%"
         className="border bg-white rounded-2xl"
         mt={4}
+        py={3}
         suppressHydrationWarning={true}
       >
         <BlindSponsorshipModal
@@ -151,7 +158,9 @@ const BeneficiaryListings = React.forwardRef<
                   <Box
                     key={beneficiary.id}
                     className={
-                      animatingItems.has(beneficiary.id) ? "fade-in-new-item" : ""
+                      animatingItems.has(beneficiary.id)
+                        ? "fade-in-new-item"
+                        : ""
                     }
                   >
                     <BeneficiaryCard
@@ -162,7 +171,7 @@ const BeneficiaryListings = React.forwardRef<
                       beneficiaryType={beneficiaryType}
                     />
                   </Box>
-                ) : null
+                ) : null,
               )}
             </SimpleGrid>
           </Box>
@@ -192,12 +201,7 @@ const BeneficiaryListings = React.forwardRef<
                 >
                   No matching children
                 </Text>
-                <Text
-                  fontSize="sm"
-                  color="gray.400"
-                  textAlign="center"
-                  mt={1}
-                >
+                <Text fontSize="sm" color="gray.400" textAlign="center" mt={1}>
                   Try adjusting your search or filters to find more results
                 </Text>
                 <Button
@@ -213,7 +217,7 @@ const BeneficiaryListings = React.forwardRef<
               </Flex>
             )}
 
-            {filteredBeneficiaries.length > 0 && !hasMore && (
+            {/* {filteredBeneficiaries.length > 0 && !hasMore && (
               <Flex
                 justify="center"
                 py={20}
@@ -240,12 +244,12 @@ const BeneficiaryListings = React.forwardRef<
                     : `No further matching children found (${filteredBeneficiaries.length} total)`}
                 </Text>
               </Flex>
-            )}
+            )} */}
           </>
         )}
       </Box>
     )
-  }
+  },
 )
 
 BeneficiaryListings.displayName = "BeneficiaryListings"

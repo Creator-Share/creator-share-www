@@ -344,13 +344,13 @@ const SponsorshipFilters: React.FC<
                 </Box>
               </Tooltip>
             ) : (
-              /* Public: simple In Need / Sponsored segmented toggle */
+              /* Public: simple Waiting / Sponsored segmented toggle */
               <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
                 <Flex bg="gray.100" borderRadius="16px" p="3px" gap={0}>
                   {(
                     [
                       {
-                        label: "In Need",
+                        label: "Waiting",
                         statuses: ["New", "Partially Funded", "Sponsorship Cancelled"],
                       },
                       {

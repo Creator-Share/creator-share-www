@@ -52,7 +52,7 @@ const StatsCard: React.FC = () => {
               {stats?.childrenInNeed.toLocaleString() ?? "—"}
             </Text>
             <Text fontSize="xs" color="gray.500" fontWeight="medium" mt={1} textAlign="center">
-              Children In Need
+              Children Waiting
             </Text>
           </Flex>
 
@@ -91,7 +91,7 @@ const InNeedBadge: React.FC = () => (
     pointerEvents="none"
   >
     <Text fontSize="10px" fontWeight="bold" color="white" lineHeight={1}>
-      In Need
+      Waiting
     </Text>
   </Flex>
 )
@@ -209,10 +209,10 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
           </>
         )}
 
-        {/* Children In Need */}
+        {/* Children Waiting */}
         {beneficiaries.length > 0 && (
           <>
-            <SectionDivider label="Children In Need" />
+            <SectionDivider label="Children Waiting" />
             {beneficiaries.map((b) =>
               b.id ? (
                 <PortraitBeneficiaryCard
