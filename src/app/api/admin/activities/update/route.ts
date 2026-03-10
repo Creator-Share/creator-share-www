@@ -117,7 +117,6 @@ export async function PUT(req: NextRequest) {
 
     for (const mediaRecord of allExistingMedia) {
       const key = getStorageKey(mediaRecord as unknown as MediaRow)
-      const publicUrl = `${normalizedBase}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
 
       const isImage = mediaRecord.type === "IMAGE"
       const isVideo = mediaRecord.type === "VIDEO"
@@ -125,6 +124,25 @@ export async function PUT(req: NextRequest) {
       // Only auto-delete IMAGE and VIDEO records that were explicitly removed.
       // DOCUMENT records are not managed here.
       if (!isImage && !isVideo) continue
+
+      // Build the public URL the same way generatePublicUrl() does so the
+      // comparison against the URLs sent from the frontend matches exactly.
+      let publicUrl: string
+      if (isImage) {
+        const { data } = supabase.storage
+          .from(STORAGE_BUCKET)
+          .getPublicUrl(key, {
+            transform: {
+              width: 800,
+              height: 800,
+              quality: 85,
+              resize: "cover",
+            },
+          })
+        publicUrl = data.publicUrl
+      } else {
+        publicUrl = `${normalizedBase}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
+      }
 
       const shouldKeep =
         (isImage && existing_images.includes(publicUrl)) ||
