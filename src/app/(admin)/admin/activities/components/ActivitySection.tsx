@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Box, Text, Button, Flex, Badge } from "@chakra-ui/react"
 import { FaChevronDown, FaChevronUp } from "react-icons/fa"
 import type { BeneficiaryWithActivity } from "@/types/admin.types"
@@ -13,6 +13,8 @@ interface ActivitySectionProps {
   beneficiaryImages: Record<string, string>
   loadingImages: Record<string, boolean>
   defaultCollapsed?: boolean
+  /** When true, force the section open regardless of its collapsed state (e.g. during search) */
+  forceExpanded?: boolean
 }
 
 export function ActivitySection({
@@ -22,8 +24,19 @@ export function ActivitySection({
   beneficiaryImages,
   loadingImages,
   defaultCollapsed = false,
+  forceExpanded = false,
 }: ActivitySectionProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
+
+  // When a search becomes active, expand the section so results are visible.
+  // When the search is cleared, revert to defaultCollapsed.
+  useEffect(() => {
+    if (forceExpanded) {
+      setCollapsed(false)
+    } else {
+      setCollapsed(defaultCollapsed)
+    }
+  }, [forceExpanded, defaultCollapsed])
 
   // Don't render empty sections
   if (beneficiaries.length === 0) {
