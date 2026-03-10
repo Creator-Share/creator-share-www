@@ -55,6 +55,7 @@ export interface Activity {
   title: string
   images_url?: string[]
   videos_url?: string[]
+  documents_url?: string[]
   activity_type: "INFO" | "UPDATE" | "SUBSCRIPTION"
   created_by: string
   is_public?: boolean
