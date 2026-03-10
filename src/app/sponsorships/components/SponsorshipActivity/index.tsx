@@ -4,18 +4,22 @@ import Image from "next/image"
 import { Box, Text, Flex } from "@chakra-ui/react"
 import { Activity } from "@/types"
 
-/** Relative time label, absolute time on hover via title attribute. */
-function formatRelativeTime(dateStr: string): string {
+// ---------------------------------------------------------------------------
+// Time formatting
+// ---------------------------------------------------------------------------
+
+/** Returns a short, bold-friendly label like "4d" or "2mo" and a subtitle like "ago". */
+function formatRelativeTimeParts(dateStr: string): { main: string; sub: string } {
   const diff = Date.now() - new Date(dateStr).getTime()
   const minutes = Math.floor(diff / 60_000)
-  if (minutes < 2) return "just now"
-  if (minutes < 60) return `${minutes} minutes ago`
+  if (minutes < 2) return { main: "now", sub: "" }
+  if (minutes < 60) return { main: `${minutes}m`, sub: "ago" }
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`
+  if (hours < 24) return { main: `${hours}h`, sub: "ago" }
   const days = Math.floor(hours / 24)
-  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`
+  if (days < 30) return { main: `${days}d`, sub: "ago" }
   const months = Math.floor(days / 30)
-  return `${months} month${months === 1 ? "" : "s"} ago`
+  return { main: `${months}mo`, sub: "ago" }
 }
 
 function formatAbsoluteTime(dateStr: string): string {
@@ -30,23 +34,199 @@ function formatAbsoluteTime(dateStr: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// ActivityItem -- a single flat update, no card chrome
+// MediaColumn -- stacked thumbnails shown in the third column
 // ---------------------------------------------------------------------------
 
-interface ActivityItemProps {
-  activity: Activity
+interface MediaColumnProps {
+  images: string[]
+  videos: string[]
+  onLightbox: (src: string) => void
 }
 
-const ActivityItem: React.FC<ActivityItemProps> = ({ activity }) => {
-  const [expanded, setExpanded] = useState(false)
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+const MediaColumn: React.FC<MediaColumnProps> = ({ images, videos, onLightbox }) => {
+  if (images.length === 0 && videos.length === 0) return null
+
+  return (
+    <Flex direction="column" gap={1.5} flexShrink={0} w="84px" pt="2px">
+      {images.map((url, i) => (
+        <Box
+          key={`img-${i}`}
+          position="relative"
+          w="84px"
+          h="64px"
+          borderRadius="md"
+          overflow="hidden"
+          cursor="zoom-in"
+          flexShrink={0}
+          onClick={() => onLightbox(url)}
+        >
+          <Image
+            src={url}
+            alt={`Update image ${i + 1}`}
+            fill
+            sizes="84px"
+            className="object-cover"
+            unoptimized
+          />
+        </Box>
+      ))}
+      {videos.map((url, i) => (
+        <Box
+          key={`vid-${i}`}
+          w="84px"
+          borderRadius="md"
+          overflow="hidden"
+          flexShrink={0}
+        >
+          <video
+            src={url}
+            controls
+            preload="metadata"
+            className="w-full rounded-md"
+            style={{ maxHeight: "64px", objectFit: "cover" }}
+            onError={(e) => { e.currentTarget.style.display = "none" }}
+          />
+        </Box>
+      ))}
+    </Flex>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ActivityRow -- a single timeline entry
+// ---------------------------------------------------------------------------
+
+const DESCRIPTION_CLAMP = 180
+
+interface ActivityRowProps {
+  activity: Activity
+  isLast: boolean
+  onLightbox: (src: string) => void
+}
+
+const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isLast, onLightbox }) => {
+  const [descExpanded, setDescExpanded] = useState(false)
 
   const images = activity.images_url ?? []
   const videos = activity.videos_url ?? []
   const hasMedia = images.length > 0 || videos.length > 0
+  const longDesc = (activity.description?.length ?? 0) > DESCRIPTION_CLAMP
+  const { main, sub } = formatRelativeTimeParts(activity.created_at)
 
-  // Description is long enough to warrant clamping when collapsed
-  const longDescription = (activity.description?.length ?? 0) > 200
+  return (
+    <Flex gap={0} align="flex-start">
+      {/* Column 1: date label + timeline spine */}
+      <Box
+        w="56px"
+        flexShrink={0}
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        pt="2px"
+      >
+        {/* Bold relative date */}
+        <Box
+          textAlign="center"
+          mb={2}
+          title={formatAbsoluteTime(activity.created_at)}
+          style={{ cursor: "default" }}
+        >
+          <Text
+            fontSize="16px"
+            fontWeight="800"
+            color="gray.700"
+            lineHeight={1}
+          >
+            {main}
+          </Text>
+          {sub && (
+            <Text fontSize="9px" fontWeight="600" color="gray.400" lineHeight={1} mt="2px">
+              {sub}
+            </Text>
+          )}
+        </Box>
+
+        {/* Circle node */}
+        <Box
+          w="10px"
+          h="10px"
+          borderRadius="full"
+          bg="blue.400"
+          border="2px solid white"
+          flexShrink={0}
+          style={{ boxShadow: "0 0 0 2px #93c5fd" }}
+        />
+
+        {/* Spine line down to next entry */}
+        {!isLast && (
+          <Box flex={1} w="2px" bg="gray.200" mt={1} minH="20px" />
+        )}
+      </Box>
+
+      {/* Column 2: title + description */}
+      <Box flex={1} minW={0} px={3} pb={isLast ? 0 : 5}>
+        {activity.title && (
+          <Text className="text-gray-700 text-sm font-semibold mb-1 leading-snug">
+            {activity.title}
+          </Text>
+        )}
+
+        {activity.description && (
+          <>
+            <Text
+              className="text-gray-700 text-sm leading-relaxed"
+              style={
+                !descExpanded && longDesc
+                  ? {
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }
+                  : undefined
+              }
+            >
+              {activity.description}
+            </Text>
+            {longDesc && (
+              <button
+                onClick={() => setDescExpanded((v) => !v)}
+                className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-[#0654C6] bg-blue-50 hover:bg-blue-100 transition-colors focus:outline-none"
+              >
+                {descExpanded ? "Show less" : "Show more"}
+              </button>
+            )}
+          </>
+        )}
+      </Box>
+
+      {/* Column 3: media thumbnails */}
+      {hasMedia && (
+        <MediaColumn images={images} videos={videos} onLightbox={onLightbox} />
+      )}
+    </Flex>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// BeneficiaryActivity -- exported component; manages list expansion + lightbox
+// ---------------------------------------------------------------------------
+
+const COLLAPSED_COUNT = 2
+
+interface BeneficiaryActivityProps {
+  activities: Activity[]
+}
+
+const BeneficiaryActivity: React.FC<BeneficiaryActivityProps> = ({ activities }) => {
+  const [listExpanded, setListExpanded] = useState(false)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+
+  if (activities.length === 0) return null
+
+  const visible = listExpanded ? activities : activities.slice(0, COLLAPSED_COUNT)
+  const hasMore = activities.length > COLLAPSED_COUNT
+  const hiddenCount = activities.length - COLLAPSED_COUNT
 
   return (
     <>
@@ -76,122 +256,33 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ activity }) => {
         </Box>
       )}
 
+      {/* Timeline entries */}
       <Box>
-        {/* Optional title */}
-        {activity.title && (
-          <Text className="text-gray-700 leading-relaxed text-sm font-semibold mb-1">
-            {activity.title}
-          </Text>
-        )}
-
-        {/* Description -- clamp to 3 lines when collapsed */}
-        <Text
-          className="text-gray-700 leading-relaxed text-sm md:text-base"
-          style={
-            !expanded && longDescription
-              ? {
-                  display: "-webkit-box",
-                  WebkitLineClamp: 3,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                }
-              : undefined
-          }
-        >
-          {activity.description}
-        </Text>
-
-        {/* Show more / Show less toggle */}
-        {longDescription && (
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            className="text-xs text-[#0654C6] font-medium mt-1 hover:underline focus:outline-none"
-          >
-            {expanded ? "Show less" : "Show more"}
-          </button>
-        )}
-
-        {/* Media tiles -- images */}
-        {images.length > 0 && (
-          <Flex gap={2} flexWrap="wrap" mt={3}>
-            {images.map((url, i) => (
-              <Box
-                key={i}
-                position="relative"
-                w="90px"
-                h="68px"
-                borderRadius="md"
-                overflow="hidden"
-                cursor="zoom-in"
-                flexShrink={0}
-                onClick={() => setLightboxSrc(url)}
-              >
-                <Image
-                  src={url}
-                  alt={`Update image ${i + 1}`}
-                  fill
-                  sizes="90px"
-                  className="object-cover"
-                  unoptimized
-                />
-              </Box>
-            ))}
-          </Flex>
-        )}
-
-        {/* Media tiles -- videos */}
-        {videos.length > 0 && (
-          <Flex direction="column" gap={2} mt={3}>
-            {videos.map((url, i) => (
-              <video
-                key={i}
-                src={url}
-                controls
-                preload="metadata"
-                className="rounded-lg max-w-full max-h-48 object-contain"
-                onError={(e) => { e.currentTarget.style.display = "none" }}
-              />
-            ))}
-          </Flex>
-        )}
-
-        {/* Timestamp */}
-        <Text
-          fontSize="xs"
-          color="gray.400"
-          mt={hasMedia ? 2 : 1}
-          title={formatAbsoluteTime(activity.created_at)}
-          style={{ cursor: "default" }}
-        >
-          {formatRelativeTime(activity.created_at)}
-        </Text>
+        {visible.map((activity, i) => (
+          <ActivityRow
+            key={activity.id}
+            activity={activity}
+            isLast={i === visible.length - 1}
+            onLightbox={setLightboxSrc}
+          />
+        ))}
       </Box>
+
+      {/* List-level show more / show less */}
+      {hasMore && (
+        <button
+          onClick={() => setListExpanded((v) => !v)}
+          className="mt-3 w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold text-[#0654C6] bg-blue-50 hover:bg-blue-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+        >
+          <span>
+            {listExpanded
+              ? "Show less"
+              : `Show ${hiddenCount} more update${hiddenCount === 1 ? "" : "s"}`}
+          </span>
+          <span style={{ fontSize: "10px" }}>{listExpanded ? "▲" : "▼"}</span>
+        </button>
+      )}
     </>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// BeneficiaryActivity -- the section exported to the modal
-// ---------------------------------------------------------------------------
-
-interface BeneficiaryActivityProps {
-  activities: Activity[]
-}
-
-const BeneficiaryActivity: React.FC<BeneficiaryActivityProps> = ({ activities }) => {
-  if (activities.length === 0) return null
-
-  return (
-    <Box>
-      {activities.map((activity, i) => (
-        <React.Fragment key={activity.id}>
-          <ActivityItem activity={activity} />
-          {i < activities.length - 1 && (
-            <Box h="1px" bg="gray.200" my={4} />
-          )}
-        </React.Fragment>
-      ))}
-    </Box>
   )
 }
 

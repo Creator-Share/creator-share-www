@@ -586,7 +586,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           borderRadius: "24px",
         }}
       >
-        <DialogHeader className="bg-[#1C3C8C] text-white px-10 py-6">
+        <DialogHeader className="bg-[#1C3C8C] text-white px-8 py-6">
           <Text fontSize="xl" fontWeight="bold">
             {beneficiary.name || "Sponsor a Child"}
           </Text>
@@ -597,18 +597,21 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           {/* Main Content - Two Column Layout */}
           <Flex
             direction={{ base: "column", md: "row" }}
-            gap={{ base: 6, md: 8 }}
-            mb={6}
+            gap={{ base: 5, md: 6 }}
+            mb={4}
           >
             {/* LEFT COLUMN - Image & Basic Info */}
             <Box flex={{ base: "1", md: "0 0 40%" }} className="flex flex-col">
               <Box className="relative">
-                <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#0654C6] rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
-                  <FaCircleInfo />
-                  <Text className="text-xs font-semibold">
-                    {getStatusText(beneficiary.status)}
-                  </Text>
-                </Box>
+                {/* Status pill: only shown for non-sponsored children; sponsored state is conveyed by the ribbon */}
+                {!alreadyFulfilled && (
+                  <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#0654C6] rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
+                    <FaCircleInfo />
+                    <Text className="text-xs font-semibold">
+                      {getStatusText(beneficiary.status)}
+                    </Text>
+                  </Box>
+                )}
                 <Box
                   position="relative"
                   className="rounded-2xl overflow-hidden"
@@ -687,11 +690,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             <Box
               flex={{ base: "1", md: "0 0 60%" }}
               className="flex flex-col"
-              px={{ base: 0, md: 6 }}
             >
               {/* Progress bar -- only when goal tracking is enabled */}
               {publicHardcodedCents == null && (
-                <Box className="space-y-2 mb-8">
+                <Box className="space-y-2 mb-4">
                   <Flex justify="space-between" align="center">
                     <Text className="text-sm font-medium text-gray-600">
                       Sponsorship Progress
@@ -785,7 +787,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           {/* SPONSORED banner OR payment form -- full width below the two-column layout */}
           {alreadyFulfilled ? (
             <Box
-              className="rounded-xl p-6 text-center space-y-3 mt-8"
+              className="rounded-xl p-6 text-center space-y-3 mt-4"
               style={{
                 background: "linear-gradient(135deg, #EEF6FF 0%, #F3EEFF 100%)",
                 border: "1.5px solid #CDE1FE",
@@ -810,7 +812,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               </Button>
             </Box>
           ) : (
-            <Box className="space-y-4 mt-8">
+            <Box className="space-y-4 mt-4">
               <Text className="font-medium text-sm mb-2 text-gray-500">
                 Monthly Sponsorship Amount
               </Text>

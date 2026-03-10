@@ -7,22 +7,6 @@ import PortraitBeneficiaryCard from "../SponsorshipCard/PortraitCard"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatRelativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 2) return "just now"
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  if (days < 30) return `${days}d ago`
-  return `${Math.floor(days / 30)}mo ago`
-}
-
-// ---------------------------------------------------------------------------
 // StatsCard -- first item in the row; replaces the StatsSection above the fold
 // ---------------------------------------------------------------------------
 
@@ -98,22 +82,6 @@ const StatsCard: React.FC = () => {
 // Image overlays
 // ---------------------------------------------------------------------------
 
-const UpdatedIndicator: React.FC<{ relativeTime: string }> = ({ relativeTime }) => (
-  <Box
-    position="absolute"
-    top={2}
-    right={2}
-    w="10px"
-    h="10px"
-    borderRadius="full"
-    bg="blue.500"
-    border="2px solid white"
-    zIndex={2}
-    title={`Updated ${relativeTime}`}
-    className="animate-pulse"
-    pointerEvents="none"
-  />
-)
 
 const InNeedBadge: React.FC = () => (
   <Flex
@@ -241,14 +209,7 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
                 beneficiary={b}
                 onOpenDialog={() => onOpenModal(b)}
                 isSelected={selectedBeneficiaryId === b.id}
-                imageOverlay={
-                  <>
-                    <SupportedRibbon />
-                    {b.last_activity_at && (
-                      <UpdatedIndicator relativeTime={formatRelativeTime(b.last_activity_at)} />
-                    )}
-                  </>
-                }
+                imageOverlay={<SupportedRibbon />}
               />
             ))}
           </>
