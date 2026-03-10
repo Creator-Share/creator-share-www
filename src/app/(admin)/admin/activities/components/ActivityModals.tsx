@@ -539,16 +539,21 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             onFileChange={(fileDetails) => {
               // Ignore the remount-init call that fires with no files
               if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
-              if (fileDetails.rejectedFiles.length > 0) {
-                toaster.create({
-                  title: "Too many images",
-                  description: "Maximum of 5 images, 2 videos, and 5 PDF files allowed.",
-                  type: "error",
-                  duration: 5000,
-                })
-              }
-              setImageFiles(fileDetails.acceptedFiles)
-              // Force-remount so next selection starts fresh (no accumulation)
+              // Accumulate new files into existing selection (supports multi-session picks)
+              setImageFiles((prev) => {
+                const combined = [...prev, ...fileDetails.acceptedFiles]
+                if (combined.length > 5) {
+                  toaster.create({
+                    title: "Image limit reached",
+                    description: "Maximum of 5 images allowed. Extra files were ignored.",
+                    type: "warning",
+                    duration: 5000,
+                  })
+                  return combined.slice(0, 5)
+                }
+                return combined
+              })
+              // Force-remount so next selection starts fresh in the file picker
               setImageUploadKey((k) => k + 1)
             }}
             accept={["image/*"]}
@@ -582,15 +587,19 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             key={videoUploadKey}
             onFileChange={(fileDetails) => {
               if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
-              if (fileDetails.rejectedFiles.length > 0) {
-                toaster.create({
-                  title: "Too many videos",
-                  description: "Maximum of 5 images, 2 videos, and 5 PDF files allowed.",
-                  type: "error",
-                  duration: 5000,
-                })
-              }
-              setVideoFiles(fileDetails.acceptedFiles)
+              setVideoFiles((prev) => {
+                const combined = [...prev, ...fileDetails.acceptedFiles]
+                if (combined.length > 2) {
+                  toaster.create({
+                    title: "Video limit reached",
+                    description: "Maximum of 2 videos allowed. Extra files were ignored.",
+                    type: "warning",
+                    duration: 5000,
+                  })
+                  return combined.slice(0, 2)
+                }
+                return combined
+              })
               setVideoUploadKey((k) => k + 1)
             }}
             accept={["video/*"]}
@@ -624,15 +633,20 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             key={documentUploadKey}
             onFileChange={(fileDetails) => {
               if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
-              if (fileDetails.rejectedFiles.length > 0) {
-                toaster.create({
-                  title: "Too many documents",
-                  description: "Maximum of 5 images, 2 videos, and 5 PDF files allowed.",
-                  type: "error",
-                  duration: 5000,
-                })
-              }
-              setDocumentFiles(fileDetails.acceptedFiles)
+              // Accumulate files across multiple picks
+              setDocumentFiles((prev) => {
+                const combined = [...prev, ...fileDetails.acceptedFiles]
+                if (combined.length > 5) {
+                  toaster.create({
+                    title: "Document limit reached",
+                    description: "Maximum of 5 documents allowed. Extra files were ignored.",
+                    type: "warning",
+                    duration: 5000,
+                  })
+                  return combined.slice(0, 5)
+                }
+                return combined
+              })
               setDocumentUploadKey((k) => k + 1)
             }}
             accept={["application/pdf", ".pdf"]}
@@ -706,16 +720,19 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
   )
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [videoFiles, setVideoFiles] = useState<File[]>([])
+  const [documentFiles, setDocumentFiles] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [videoPreviews, setVideoPreviews] = useState<string[]>([])
   const [existingImages, setExistingImages] = useState<string[]>(activity?.images_url || [])
   const [existingVideos, setExistingVideos] = useState<string[]>(activity?.videos_url || [])
+  const [existingDocuments, setExistingDocuments] = useState<string[]>(activity?.documents_url || [])
   const [isPublic, setIsPublic] = useState(activity?.is_public || false)
   const [compressing, setCompressing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [imageUploadKey, setImageUploadKey] = useState(0)
   const [videoUploadKey, setVideoUploadKey] = useState(0)
+  const [documentUploadKey, setDocumentUploadKey] = useState(0)
 
   const supabase = createClient()
 
@@ -726,6 +743,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
       setActivityType(activity.activity_type || "UPDATE")
       setExistingImages(activity.images_url || [])
       setExistingVideos(activity.videos_url || [])
+      setExistingDocuments(activity.documents_url || [])
       setIsPublic(activity.is_public || false)
     }
   }, [activity])
@@ -734,10 +752,12 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
     if (!open) {
       setImageFiles([])
       setVideoFiles([])
+      setDocumentFiles([])
       setImagePreviews([])
       setVideoPreviews([])
       setImageUploadKey((k) => k + 1)
       setVideoUploadKey((k) => k + 1)
+      setDocumentUploadKey((k) => k + 1)
       setSaving(false)
       setError(null)
     }
@@ -781,6 +801,9 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
   const handleRemoveExistingVideo = (index: number) =>
     setExistingVideos((prev) => prev.filter((_, i) => i !== index))
 
+  const handleRemoveExistingDocument = (index: number) =>
+    setExistingDocuments((prev) => prev.filter((_, i) => i !== index))
+
   const handleSave = async () => {
     if (!activity) return
 
@@ -802,6 +825,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
           beneficiary_id: activity.beneficiary_id,
           existing_images: existingImages,
           existing_videos: existingVideos,
+          existing_documents: existingDocuments,
         }),
       })
 
@@ -810,7 +834,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
         throw new Error(errData.error || "Failed to update activity")
       }
 
-      // ── Step 2: Upload new media directly to Supabase (no Vercel limit) ────
+      // ── Step 2: Upload new images + videos directly to Supabase ─────────────
       if (imageFiles.length > 0 || videoFiles.length > 0) {
         const allFiles: File[] = []
         const allMetadata: Array<{
@@ -895,6 +919,44 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
         }
       }
 
+      // ── Step 3: Upload new documents directly to Supabase ───────────────────
+      if (documentFiles.length > 0) {
+        const { STORAGE_BUCKET } = await import("@/utils/supabase/buckets")
+        for (const file of documentFiles) {
+          const ext = (file.name.split(".").pop() || "pdf").toLowerCase()
+          const { data: mediaRecord, error: mediaInsertErr } = await supabase
+            .from("media")
+            .insert([{ parent_id: activity.id, extension: ext, type: "DOCUMENT" }])
+            .select()
+            .single()
+
+          if (mediaInsertErr || !mediaRecord) {
+            console.error("❌ [DOCUMENT UPLOAD] DB insert failed:", mediaInsertErr)
+            throw new Error(`Failed to register document: ${mediaInsertErr?.message || "Unknown error"}`)
+          }
+
+          const { getStorageKey } = await import("@/utils/supabase/media")
+          const storageKey = getStorageKey(
+            mediaRecord as unknown as import("@/utils/supabase/media").MediaRow,
+          )
+
+          const { error: uploadErr } = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .upload(storageKey, file, {
+              contentType: file.type || "application/pdf",
+              upsert: false,
+            })
+
+          if (uploadErr) {
+            // Clean up the orphaned DB record before throwing
+            await supabase.from("media").delete().eq("id", mediaRecord.id)
+            throw new Error(`Document upload failed: ${uploadErr.message}`)
+          }
+        }
+      }
+
+      setCompressing(false)
+
       toaster.create({
         title: "Success",
         description: "Activity updated successfully",
@@ -961,32 +1023,8 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
           </Flex>
         </div>
 
-        {/* <SelectRoot
-          collection={activityTypeCollection}
-          className="border border-stone-600"
-          style={{ marginBottom: 12 }}
-          value={[activityType]}
-          onValueChange={(details) => {
-            const newType = details.value[0]
-            if (newType === "INFO" || newType === "UPDATE" || newType === "SUBSCRIPTION") {
-              setActivityType(newType)
-            }
-          }}
-        >
-          <SelectTrigger className="w-full"><SelectValueText placeholder="Select Activity Type" /></SelectTrigger>
-          <SelectContent>
-            {activityTypeCollection.items.map((option) => (
-              <SelectItem key={option.value} item={option}>{option.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </SelectRoot> */}
-
-        {/* <div style={{ marginBottom: 12 }}>
-          <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} p={2} className="border border-stone-600" />
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-            <ProofreadButton text={title} onAccept={setTitle} fieldLabel="Title" size="sm" type="activity" />
-          </div>
-        </div> */}
+        {/* <SelectRoot ... /> */}
+        {/* <Input for title ... /> */}
 
         <div style={{ marginBottom: 12 }}>
           <Textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} p={2} className="border border-stone-600" />
@@ -1021,15 +1059,20 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             key={imageUploadKey}
             onFileChange={(fileDetails) => {
               if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
-              if (fileDetails.rejectedFiles.length > 0) {
-                toaster.create({
-                  title: "Too many images",
-                  description: "Maximum of 5 images, 2 videos, and 5 PDF files allowed.",
-                  type: "error",
-                  duration: 5000,
-                })
-              }
-              setImageFiles(fileDetails.acceptedFiles)
+              // Accumulate files across multiple picks
+              setImageFiles((prev) => {
+                const combined = [...prev, ...fileDetails.acceptedFiles]
+                if (combined.length > 5) {
+                  toaster.create({
+                    title: "Image limit reached",
+                    description: "Maximum of 5 new images allowed. Extra files were ignored.",
+                    type: "warning",
+                    duration: 5000,
+                  })
+                  return combined.slice(0, 5)
+                }
+                return combined
+              })
               setImageUploadKey((k) => k + 1)
             }}
             accept={["image/*"]}
@@ -1082,15 +1125,20 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             key={videoUploadKey}
             onFileChange={(fileDetails) => {
               if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
-              if (fileDetails.rejectedFiles.length > 0) {
-                toaster.create({
-                  title: "Too many videos",
-                  description: "Maximum of 5 images, 2 videos, and 5 PDF files allowed.",
-                  type: "error",
-                  duration: 5000,
-                })
-              }
-              setVideoFiles(fileDetails.acceptedFiles)
+              // Accumulate files across multiple picks
+              setVideoFiles((prev) => {
+                const combined = [...prev, ...fileDetails.acceptedFiles]
+                if (combined.length > 2) {
+                  toaster.create({
+                    title: "Video limit reached",
+                    description: "Maximum of 2 new videos allowed. Extra files were ignored.",
+                    type: "warning",
+                    duration: 5000,
+                  })
+                  return combined.slice(0, 2)
+                }
+                return combined
+              })
               setVideoUploadKey((k) => k + 1)
             }}
             accept={["video/*"]}
@@ -1110,6 +1158,83 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
                   </div>
                   <button onClick={() => handleRemoveVideo(index)} className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10" type="button" aria-label="Remove video">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Existing Documents */}
+        {existingDocuments.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontWeight: 500 }}>Current Documents</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+              {existingDocuments.map((url, index) => {
+                const fileName = decodeURIComponent(url.split("/").pop() || `Document ${index + 1}`)
+                return (
+                  <div key={url} style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 8, backgroundColor: "#f9fafb", display: "flex", alignItems: "center", gap: 8 }}>
+                    <svg className="w-8 h-8 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                    </svg>
+                    <div style={{ flex: 1 }}>
+                      <Text fontSize="sm" fontWeight="medium">{fileName}</Text>
+                      <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.75rem", color: "#3b82f6", textDecoration: "underline" }}>View</a>
+                    </div>
+                    <button onClick={() => handleRemoveExistingDocument(index)} className="text-red-500 hover:text-red-600" type="button" aria-label="Remove document">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Upload New Documents */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontWeight: 500 }}>Upload New Documents (PDFs)</label>
+          <FileUploadRoot
+            key={documentUploadKey}
+            onFileChange={(fileDetails) => {
+              if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
+              // Accumulate files across multiple picks
+              setDocumentFiles((prev) => {
+                const combined = [...prev, ...fileDetails.acceptedFiles]
+                if (combined.length > 5) {
+                  toaster.create({
+                    title: "Document limit reached",
+                    description: "Maximum of 5 new documents allowed. Extra files were ignored.",
+                    type: "warning",
+                    duration: 5000,
+                  })
+                  return combined.slice(0, 5)
+                }
+                return combined
+              })
+              setDocumentUploadKey((k) => k + 1)
+            }}
+            accept={["application/pdf", ".pdf"]}
+            maxFiles={5}
+          >
+            <FileUploadTrigger asChild>
+              <Button variant="outline" size="sm" className="border" px={4}><HiUpload /> Upload Documents</Button>
+            </FileUploadTrigger>
+            <FileUploadList showSize clearable files={documentFiles} />
+          </FileUploadRoot>
+          {documentFiles.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+              {documentFiles.map((file, index) => (
+                <div key={`${file.name}-${index}`} style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 8, backgroundColor: "#f9fafb", display: "flex", alignItems: "center", gap: 8 }}>
+                  <svg className="w-8 h-8 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                  </svg>
+                  <div style={{ flex: 1 }}>
+                    <Text fontSize="sm" fontWeight="medium">{file.name}</Text>
+                    <Text fontSize="xs" color="gray.500">{(file.size / 1024 / 1024).toFixed(2)} MB</Text>
+                  </div>
+                  <button onClick={() => setDocumentFiles((prev) => prev.filter((_, i) => i !== index))} className="text-red-500 hover:text-red-600" type="button" aria-label="Remove document">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
               ))}
