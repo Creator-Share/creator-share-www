@@ -37,6 +37,7 @@ export async function PUT(req: NextRequest) {
     beneficiary_id?: string
     existing_images?: string[]
     existing_videos?: string[]
+    existing_documents?: string[]
   }
 
   const {
@@ -48,6 +49,7 @@ export async function PUT(req: NextRequest) {
     beneficiary_id,
     existing_images = [],
     existing_videos = [],
+    existing_documents = [],
   } = body
 
   if (!id || !description || !beneficiary_id) {
@@ -120,10 +122,10 @@ export async function PUT(req: NextRequest) {
 
       const isImage = mediaRecord.type === "IMAGE"
       const isVideo = mediaRecord.type === "VIDEO"
+      const isDocument = mediaRecord.type === "DOCUMENT"
 
-      // Only auto-delete IMAGE and VIDEO records that were explicitly removed.
-      // DOCUMENT records are not managed here.
-      if (!isImage && !isVideo) continue
+      // Skip unknown media types
+      if (!isImage && !isVideo && !isDocument) continue
 
       // Build the public URL the same way generatePublicUrl() does so the
       // comparison against the URLs sent from the frontend matches exactly.
@@ -146,7 +148,8 @@ export async function PUT(req: NextRequest) {
 
       const shouldKeep =
         (isImage && existing_images.includes(publicUrl)) ||
-        (isVideo && existing_videos.includes(publicUrl))
+        (isVideo && existing_videos.includes(publicUrl)) ||
+        (isDocument && existing_documents.includes(publicUrl))
 
       if (!shouldKeep) {
         const { error: storageError } = await supabase.storage
