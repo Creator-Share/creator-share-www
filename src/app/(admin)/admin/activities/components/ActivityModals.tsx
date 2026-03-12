@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import {
   Button,
   Textarea,
@@ -84,6 +84,20 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
 
   const supabase = createClient()
 
+  const imageFilesRef = useRef<File[]>([])
+  const videoFilesRef = useRef<File[]>([])
+  const documentFilesRef = useRef<File[]>([])
+
+  useEffect(() => {
+    imageFilesRef.current = imageFiles
+  }, [imageFiles])
+  useEffect(() => {
+    videoFilesRef.current = videoFiles
+  }, [videoFiles])
+  useEffect(() => {
+    documentFilesRef.current = documentFiles
+  }, [documentFiles])
+
   useEffect(() => {
     if (!open) {
       setImageFiles([])
@@ -158,6 +172,42 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
 
   const handleRemoveVideo = (index: number) => {
     setVideoFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const removeFileFromArray = (file: File, list: File[]) => {
+    const idx = list.findIndex(
+      (f) =>
+        f === file ||
+        (f.name === file.name &&
+          f.size === file.size &&
+          f.lastModified === file.lastModified &&
+          f.type === file.type),
+    )
+    if (idx === -1) return list
+    return [...list.slice(0, idx), ...list.slice(idx + 1)]
+  }
+
+  const mergeFilesRejectDuplicateNames = (
+    prev: File[],
+    incoming: File[],
+    opts: { label: string; max: number },
+  ) => {
+    const existingNames = new Set(prev.map((f) => f.name.toLowerCase()))
+    const next: File[] = [...prev]
+    const duplicates: string[] = []
+
+    for (const f of incoming) {
+      const nameKey = f.name.toLowerCase()
+      if (existingNames.has(nameKey)) {
+        duplicates.push(f.name)
+        continue
+      }
+      existingNames.add(nameKey)
+      next.push(f)
+      if (next.length >= opts.max) break
+    }
+
+    return { next, duplicates }
   }
 
   const handleToggleSponsor = (subscriptionId: string) => {
@@ -540,19 +590,36 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
               // Ignore the remount-init call that fires with no files
               if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
               // Accumulate new files into existing selection (supports multi-session picks)
-              setImageFiles((prev) => {
-                const combined = [...prev, ...fileDetails.acceptedFiles]
-                if (combined.length > 5) {
+              const prev = imageFilesRef.current
+              const { next, duplicates } = mergeFilesRejectDuplicateNames(
+                prev,
+                fileDetails.acceptedFiles,
+                { label: "Images", max: 5 },
+              )
+              const limited = next.slice(0, 5)
+              imageFilesRef.current = limited
+              setImageFiles(limited)
+
+              if (duplicates.length > 0) {
+                setTimeout(() => {
+                  toaster.create({
+                    title: "Duplicate file name",
+                    description: `Images: ${duplicates.join(", ")} already selected. Please rename the file or remove the existing one first.`,
+                    type: "error",
+                    duration: 6000,
+                  })
+                }, 0)
+              }
+              if (next.length > 5) {
+                setTimeout(() => {
                   toaster.create({
                     title: "Image limit reached",
                     description: "Maximum of 5 images allowed. Extra files were ignored.",
                     type: "warning",
                     duration: 5000,
                   })
-                  return combined.slice(0, 5)
-                }
-                return combined
-              })
+                }, 0)
+              }
               // Force-remount so next selection starts fresh in the file picker
               setImageUploadKey((k) => k + 1)
             }}
@@ -562,7 +629,12 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             <FileUploadTrigger asChild>
               <Button variant="outline" size="sm" className="border" px={4}><HiUpload /> Upload Images</Button>
             </FileUploadTrigger>
-            <FileUploadList showSize clearable files={imageFiles} />
+            <FileUploadList
+              showSize
+              clearable
+              files={imageFiles}
+              onRemove={(file) => setImageFiles((prev) => removeFileFromArray(file, prev))}
+            />
           </FileUploadRoot>
           {imagePreviews.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -587,19 +659,36 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             key={videoUploadKey}
             onFileChange={(fileDetails) => {
               if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
-              setVideoFiles((prev) => {
-                const combined = [...prev, ...fileDetails.acceptedFiles]
-                if (combined.length > 2) {
+              const prev = videoFilesRef.current
+              const { next, duplicates } = mergeFilesRejectDuplicateNames(
+                prev,
+                fileDetails.acceptedFiles,
+                { label: "Videos", max: 2 },
+              )
+              const limited = next.slice(0, 2)
+              videoFilesRef.current = limited
+              setVideoFiles(limited)
+
+              if (duplicates.length > 0) {
+                setTimeout(() => {
+                  toaster.create({
+                    title: "Duplicate file name",
+                    description: `Videos: ${duplicates.join(", ")} already selected. Please rename the file or remove the existing one first.`,
+                    type: "error",
+                    duration: 6000,
+                  })
+                }, 0)
+              }
+              if (next.length > 2) {
+                setTimeout(() => {
                   toaster.create({
                     title: "Video limit reached",
                     description: "Maximum of 2 videos allowed. Extra files were ignored.",
                     type: "warning",
                     duration: 5000,
                   })
-                  return combined.slice(0, 2)
-                }
-                return combined
-              })
+                }, 0)
+              }
               setVideoUploadKey((k) => k + 1)
             }}
             accept={["video/*"]}
@@ -608,7 +697,12 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             <FileUploadTrigger asChild>
               <Button variant="outline" size="sm" className="border" px={4}><HiUpload /> Upload Videos</Button>
             </FileUploadTrigger>
-            <FileUploadList showSize clearable files={videoFiles} />
+            <FileUploadList
+              showSize
+              clearable
+              files={videoFiles}
+              onRemove={(file) => setVideoFiles((prev) => removeFileFromArray(file, prev))}
+            />
           </FileUploadRoot>
           {videoPreviews.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -634,19 +728,36 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             onFileChange={(fileDetails) => {
               if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
               // Accumulate files across multiple picks
-              setDocumentFiles((prev) => {
-                const combined = [...prev, ...fileDetails.acceptedFiles]
-                if (combined.length > 5) {
+              const prev = documentFilesRef.current
+              const { next, duplicates } = mergeFilesRejectDuplicateNames(
+                prev,
+                fileDetails.acceptedFiles,
+                { label: "Documents", max: 5 },
+              )
+              const limited = next.slice(0, 5)
+              documentFilesRef.current = limited
+              setDocumentFiles(limited)
+
+              if (duplicates.length > 0) {
+                setTimeout(() => {
+                  toaster.create({
+                    title: "Duplicate file name",
+                    description: `Documents: ${duplicates.join(", ")} already selected. Please rename the file or remove the existing one first.`,
+                    type: "error",
+                    duration: 6000,
+                  })
+                }, 0)
+              }
+              if (next.length > 5) {
+                setTimeout(() => {
                   toaster.create({
                     title: "Document limit reached",
                     description: "Maximum of 5 documents allowed. Extra files were ignored.",
                     type: "warning",
                     duration: 5000,
                   })
-                  return combined.slice(0, 5)
-                }
-                return combined
-              })
+                }, 0)
+              }
               setDocumentUploadKey((k) => k + 1)
             }}
             accept={["application/pdf", ".pdf"]}
@@ -655,7 +766,14 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             <FileUploadTrigger asChild>
               <Button variant="outline" size="sm" className="border" px={4}><HiUpload /> Upload Documents</Button>
             </FileUploadTrigger>
-            <FileUploadList showSize clearable files={documentFiles} />
+            <FileUploadList
+              showSize
+              clearable
+              files={documentFiles}
+              onRemove={(file) =>
+                setDocumentFiles((prev) => removeFileFromArray(file, prev))
+              }
+            />
           </FileUploadRoot>
           {documentFiles.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -803,6 +921,56 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
 
   const handleRemoveExistingDocument = (index: number) =>
     setExistingDocuments((prev) => prev.filter((_, i) => i !== index))
+
+  const removeFileFromArray = (file: File, list: File[]) => {
+    const idx = list.findIndex(
+      (f) =>
+        f === file ||
+        (f.name === file.name &&
+          f.size === file.size &&
+          f.lastModified === file.lastModified &&
+          f.type === file.type),
+    )
+    if (idx === -1) return list
+    return [...list.slice(0, idx), ...list.slice(idx + 1)]
+  }
+
+  const mergeFilesRejectDuplicateNames = (
+    prev: File[],
+    incoming: File[],
+    opts: { label: string; max: number },
+  ) => {
+    const existingNames = new Set(prev.map((f) => f.name.toLowerCase()))
+    const next: File[] = [...prev]
+    const duplicates: string[] = []
+
+    for (const f of incoming) {
+      const nameKey = f.name.toLowerCase()
+      if (existingNames.has(nameKey)) {
+        duplicates.push(f.name)
+        continue
+      }
+      existingNames.add(nameKey)
+      next.push(f)
+      if (next.length >= opts.max) break
+    }
+
+    return { next, duplicates }
+  }
+
+  const imageFilesRef = useRef<File[]>([])
+  const videoFilesRef = useRef<File[]>([])
+  const documentFilesRef = useRef<File[]>([])
+
+  useEffect(() => {
+    imageFilesRef.current = imageFiles
+  }, [imageFiles])
+  useEffect(() => {
+    videoFilesRef.current = videoFiles
+  }, [videoFiles])
+  useEffect(() => {
+    documentFilesRef.current = documentFiles
+  }, [documentFiles])
 
   const handleSave = async () => {
     if (!activity) return
@@ -1060,19 +1228,36 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             onFileChange={(fileDetails) => {
               if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
               // Accumulate files across multiple picks
-              setImageFiles((prev) => {
-                const combined = [...prev, ...fileDetails.acceptedFiles]
-                if (combined.length > 5) {
+              const prev = imageFilesRef.current
+              const { next, duplicates } = mergeFilesRejectDuplicateNames(
+                prev,
+                fileDetails.acceptedFiles,
+                { label: "Images", max: 5 },
+              )
+              const limited = next.slice(0, 5)
+              imageFilesRef.current = limited
+              setImageFiles(limited)
+
+              if (duplicates.length > 0) {
+                setTimeout(() => {
+                  toaster.create({
+                    title: "Duplicate file name",
+                    description: `Images: ${duplicates.join(", ")} already selected. Please rename the file or remove the existing one first.`,
+                    type: "error",
+                    duration: 6000,
+                  })
+                }, 0)
+              }
+              if (next.length > 5) {
+                setTimeout(() => {
                   toaster.create({
                     title: "Image limit reached",
                     description: "Maximum of 5 new images allowed. Extra files were ignored.",
                     type: "warning",
                     duration: 5000,
                   })
-                  return combined.slice(0, 5)
-                }
-                return combined
-              })
+                }, 0)
+              }
               setImageUploadKey((k) => k + 1)
             }}
             accept={["image/*"]}
@@ -1081,7 +1266,12 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             <FileUploadTrigger asChild>
               <Button variant="outline" size="sm" className="border" px={4}><HiUpload /> Upload Images</Button>
             </FileUploadTrigger>
-            <FileUploadList showSize clearable files={imageFiles} />
+            <FileUploadList
+              showSize
+              clearable
+              files={imageFiles}
+              onRemove={(file) => setImageFiles((prev) => removeFileFromArray(file, prev))}
+            />
           </FileUploadRoot>
           {imagePreviews.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -1126,19 +1316,36 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             onFileChange={(fileDetails) => {
               if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
               // Accumulate files across multiple picks
-              setVideoFiles((prev) => {
-                const combined = [...prev, ...fileDetails.acceptedFiles]
-                if (combined.length > 2) {
+              const prev = videoFilesRef.current
+              const { next, duplicates } = mergeFilesRejectDuplicateNames(
+                prev,
+                fileDetails.acceptedFiles,
+                { label: "Videos", max: 2 },
+              )
+              const limited = next.slice(0, 2)
+              videoFilesRef.current = limited
+              setVideoFiles(limited)
+
+              if (duplicates.length > 0) {
+                setTimeout(() => {
+                  toaster.create({
+                    title: "Duplicate file name",
+                    description: `Videos: ${duplicates.join(", ")} already selected. Please rename the file or remove the existing one first.`,
+                    type: "error",
+                    duration: 6000,
+                  })
+                }, 0)
+              }
+              if (next.length > 2) {
+                setTimeout(() => {
                   toaster.create({
                     title: "Video limit reached",
                     description: "Maximum of 2 new videos allowed. Extra files were ignored.",
                     type: "warning",
                     duration: 5000,
                   })
-                  return combined.slice(0, 2)
-                }
-                return combined
-              })
+                }, 0)
+              }
               setVideoUploadKey((k) => k + 1)
             }}
             accept={["video/*"]}
@@ -1147,7 +1354,12 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             <FileUploadTrigger asChild>
               <Button variant="outline" size="sm" className="border" px={4}><HiUpload /> Upload Videos</Button>
             </FileUploadTrigger>
-            <FileUploadList showSize clearable files={videoFiles} />
+            <FileUploadList
+              showSize
+              clearable
+              files={videoFiles}
+              onRemove={(file) => setVideoFiles((prev) => removeFileFromArray(file, prev))}
+            />
           </FileUploadRoot>
           {videoPreviews.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -1199,19 +1411,36 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             onFileChange={(fileDetails) => {
               if (fileDetails.acceptedFiles.length === 0 && fileDetails.rejectedFiles.length === 0) return
               // Accumulate files across multiple picks
-              setDocumentFiles((prev) => {
-                const combined = [...prev, ...fileDetails.acceptedFiles]
-                if (combined.length > 5) {
+              const prev = documentFilesRef.current
+              const { next, duplicates } = mergeFilesRejectDuplicateNames(
+                prev,
+                fileDetails.acceptedFiles,
+                { label: "Documents", max: 5 },
+              )
+              const limited = next.slice(0, 5)
+              documentFilesRef.current = limited
+              setDocumentFiles(limited)
+
+              if (duplicates.length > 0) {
+                setTimeout(() => {
+                  toaster.create({
+                    title: "Duplicate file name",
+                    description: `Documents: ${duplicates.join(", ")} already selected. Please rename the file or remove the existing one first.`,
+                    type: "error",
+                    duration: 6000,
+                  })
+                }, 0)
+              }
+              if (next.length > 5) {
+                setTimeout(() => {
                   toaster.create({
                     title: "Document limit reached",
                     description: "Maximum of 5 new documents allowed. Extra files were ignored.",
                     type: "warning",
                     duration: 5000,
                   })
-                  return combined.slice(0, 5)
-                }
-                return combined
-              })
+                }, 0)
+              }
               setDocumentUploadKey((k) => k + 1)
             }}
             accept={["application/pdf", ".pdf"]}
@@ -1220,7 +1449,14 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             <FileUploadTrigger asChild>
               <Button variant="outline" size="sm" className="border" px={4}><HiUpload /> Upload Documents</Button>
             </FileUploadTrigger>
-            <FileUploadList showSize clearable files={documentFiles} />
+            <FileUploadList
+              showSize
+              clearable
+              files={documentFiles}
+              onRemove={(file) =>
+                setDocumentFiles((prev) => removeFileFromArray(file, prev))
+              }
+            />
           </FileUploadRoot>
           {documentFiles.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
