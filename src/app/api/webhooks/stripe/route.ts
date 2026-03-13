@@ -10,6 +10,7 @@ import {
   sendManagerSponsorshipNotificationEmail,
 } from "@/utils/email"
 import { notifySponsorshipReceived } from "@/services/telegram"
+import { notifyClickUpSponsorshipReceived } from "@/services/clickup"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY! as string)
 
@@ -588,6 +589,23 @@ export async function POST(req: Request) {
         } catch (telegramError) {
           console.error('Telegram sponsorship notification failed:', telegramError);
           // Don't fail the webhook if Telegram notification fails
+        }
+
+        // Send ClickUp Chat notification for sponsorship (#Live Updates)
+        try {
+          await notifyClickUpSponsorshipReceived({
+            sponsorName: session.customer_details?.name || customerEmail?.split('@')[0] || "Anonymous Sponsor",
+            sponsorEmail: customerEmail || "No email provided",
+            amount: amount,
+            beneficiaryId: beneficiaryId,
+            beneficiaryName: beneficiaryName,
+            paymentMethod: "Stripe",
+            paymentReference: session.id,
+            interval: interval,
+          });
+        } catch (clickUpError) {
+          console.error('ClickUp sponsorship notification failed:', clickUpError);
+          // Don't fail the webhook if ClickUp notification fails
         }
 
         // Step 6: Auto-match blind sponsorships
