@@ -16,6 +16,7 @@ import {
 } from "@/types/clickup.types"
 import { SponsorshipNotificationData } from "@/types/telegram.types"
 import { Beneficiaries } from "@/types"
+import { getBeneficiaryImageUrl } from "@/utils/getBeneficiaryImageUrl"
 
 const CLICKUP_API_BASE = "https://api.clickup.com/api/v3"
 
@@ -131,64 +132,74 @@ export class ClickUpChatService implements ClickUpNotificationService {
   }
 
   /**
+   * Post a message to the channel and return the created message ID.
+   * Returns null on failure.
+   */
+  private async postMessage(message: string): Promise<string | null> {
+    if (!message || message.trim().length === 0) {
+      console.error("ClickUp: Empty message provided");
+      return null;
+    }
+
+    const channelId = await this.resolveChannelId();
+    if (!channelId) {
+      console.error("ClickUp: Could not resolve channel ID — message not sent");
+      return null;
+    }
+
+    // Correct endpoint per https://developer.clickup.com/reference/createchatmessage:
+    // POST /api/v3/workspaces/{workspace_id}/chat/channels/{channel_id}/messages
+    const response = await fetch(
+      `${CLICKUP_API_BASE}/workspaces/${this.workspaceId}/chat/channels/${channelId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: this.apiToken,
+        },
+        body: JSON.stringify({
+          type: "message",         // required field per API reference
+          content: message,
+          content_format: "text/md",
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      // Safely parse the error body — ClickUp may return HTML on auth/404 errors
+      const rawBody = await response.text();
+      let errorData: ClickUpApiResponse | string;
+      try {
+        errorData = JSON.parse(rawBody) as ClickUpApiResponse;
+      } catch {
+        errorData = rawBody;
+      }
+      console.error("ClickUp Chat API error:", {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData,
+        channelId,
+      });
+      // Reset cache on 404 so we re-resolve next time
+      if (response.status === 404) {
+        this.resolvedChannelId = null;
+      }
+      return null;
+    }
+
+    const data = (await response.json()) as ClickUpApiResponse;
+    return data.id ?? null;
+  }
+
+  /**
    * Post a message to the configured ClickUp Chat channel (#Live Updates)
    * @param message - Markdown-formatted message content
    * @returns Promise<boolean> - Success status
    */
   async sendMessage(message: string): Promise<boolean> {
     try {
-      if (!message || message.trim().length === 0) {
-        console.error("ClickUp: Empty message provided");
-        return false;
-      }
-
-      const channelId = await this.resolveChannelId();
-      if (!channelId) {
-        console.error("ClickUp: Could not resolve channel ID — message not sent");
-        return false;
-      }
-
-      // Correct endpoint per https://developer.clickup.com/reference/createchatmessage:
-      // POST /api/v3/workspaces/{workspace_id}/chat/channels/{channel_id}/messages
-      const response = await fetch(
-        `${CLICKUP_API_BASE}/workspaces/${this.workspaceId}/chat/channels/${channelId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: this.apiToken,
-          },
-          body: JSON.stringify({
-            type: "message",         // required field per API reference
-            content: message,
-            content_format: "text/md",
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        // Safely parse the error body — ClickUp may return HTML on auth/404 errors
-        const rawBody = await response.text();
-        let errorData: ClickUpApiResponse | string;
-        try {
-          errorData = JSON.parse(rawBody) as ClickUpApiResponse;
-        } catch {
-          errorData = rawBody;
-        }
-        console.error("ClickUp Chat API error:", {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData,
-          channelId,
-        });
-        // Reset cache on 404 so we re-resolve next time
-        if (response.status === 404) {
-          this.resolvedChannelId = null;
-        }
-        return false;
-      }
-
-      return true;
+      const messageId = await this.postMessage(message);
+      return messageId !== null;
     } catch (error) {
       console.error("ClickUp sendMessage error:", {
         error: error instanceof Error ? error.message : error,
@@ -215,14 +226,26 @@ export class ClickUpChatService implements ClickUpNotificationService {
   }
 
   /**
-   * Send a notification about a new sponsorship to the #Live Updates channel
+   * Send a notification about a new sponsorship to the #Live Updates channel.
+   *
+   * ClickUp Chat's text/md format does not render inline Markdown images (![alt](url))
+   * and the v3 API does not expose a message-attachment upload endpoint.
+   * As the best available alternative, a clickable "View Photo" link is appended to
+   * the message when a beneficiary image is available.
+   *
    * @param sponsorshipData - The sponsorship data
    */
   async sendSponsorshipNotification(
     sponsorshipData: SponsorshipNotificationData,
   ): Promise<boolean> {
     try {
-      const message = this.formatSponsorshipMessage(sponsorshipData);
+      // Fetch the beneficiary photo directly from Supabase (service-role, no auth needed)
+      let imageUrl: string | null = null;
+      if (sponsorshipData.beneficiaryId) {
+        imageUrl = await getBeneficiaryImageUrl(sponsorshipData.beneficiaryId);
+      }
+
+      const message = this.formatSponsorshipMessage(sponsorshipData, imageUrl ?? undefined);
       return await this.sendMessage(message);
     } catch (error) {
       console.error("Error sending ClickUp sponsorship notification:", {
@@ -235,6 +258,7 @@ export class ClickUpChatService implements ClickUpNotificationService {
       return false;
     }
   }
+
 
   /**
    * Format the child created message in Markdown
@@ -269,11 +293,16 @@ export class ClickUpChatService implements ClickUpNotificationService {
   }
 
   /**
-   * Format the sponsorship received message in Markdown
+   * Format the sponsorship received message in Markdown.
+   * ClickUp Chat does not render inline Markdown images (![alt](url)) and the v3 API
+   * has no message-attachment upload endpoint, so a clickable "View Photo" link is
+   * appended at the bottom when an image URL is available.
    * @param sponsorshipData - The sponsorship data
+   * @param imageUrl - Optional public URL for the beneficiary's photo
    */
   private formatSponsorshipMessage(
     sponsorshipData: SponsorshipNotificationData,
+    imageUrl?: string,
   ): string {
     const {
       beneficiaryName,
@@ -289,7 +318,7 @@ export class ClickUpChatService implements ClickUpNotificationService {
     const sponsorDisplayName =
       sponsorName || sponsorEmail?.split("@")[0] || "Anonymous";
 
-    return [
+    const lines = [
       "🎉 **New Sponsorship Received!**",
       "",
       `👤 **Beneficiary:** ${beneficiaryName}`,
@@ -300,7 +329,15 @@ export class ClickUpChatService implements ClickUpNotificationService {
       `📧 **Email:** ${sponsorEmail ?? "Not provided"}`,
       "",
       "#NewSponsorship #CreatorShare #ThankYou",
-    ].join("\n");
+    ];
+
+    // ClickUp Chat does not render inline Markdown images (![alt](url)).
+    // Append a clickable hyperlink as the best available alternative.
+    if (imageUrl) {
+      lines.push("", `📷 [View Photo](${imageUrl})`);
+    }
+
+    return lines.join("\n");
   }
 }
 
