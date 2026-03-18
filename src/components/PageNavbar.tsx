@@ -214,6 +214,15 @@ export function PageNavbar() {
           <Button
             size="sm"
             variant="ghost"
+            asChild
+          >
+            <a href="https://tanzania.creatorshare.com/" target="_blank" rel="noopener noreferrer">
+              Organization
+            </a>
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
             onClick={() => {
               window.history.replaceState(null, "", "#faq")
               setFaqOpen(true)
@@ -319,6 +328,19 @@ export function PageNavbar() {
           pointerEvents="auto"
         >
           <VStack gap={4} py={6}>
+            {/* Organization - always visible */}
+            <Button
+              size="sm"
+              variant="ghost"
+              color="white"
+              _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
+              className="w-full"
+              asChild
+            >
+              <a href="https://tanzania.creatorshare.com/" target="_blank" rel="noopener noreferrer">
+                Organization
+              </a>
+            </Button>
             {/* FAQ - always visible */}
             <Button
               size="sm"
