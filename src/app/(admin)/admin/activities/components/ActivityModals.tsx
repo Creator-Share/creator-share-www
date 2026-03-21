@@ -854,6 +854,10 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
   const [existingVideos, setExistingVideos] = useState<string[]>(activity?.videos_url || [])
   const [existingDocuments, setExistingDocuments] = useState<string[]>(activity?.documents_url || [])
   const [isPublic, setIsPublic] = useState(activity?.is_public || false)
+  // Tracks which existing-media URL is showing the inline "confirm delete?" UI
+  const [confirmingDeleteUrl, setConfirmingDeleteUrl] = useState<string | null>(null)
+  // Tracks URLs with an in-flight delete request (shows spinner on that tile)
+  const [deletingUrls, setDeletingUrls] = useState<Set<string>>(new Set())
   const [compressing, setCompressing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -887,6 +891,8 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
       setDocumentUploadKey((k) => k + 1)
       setSaving(false)
       setError(null)
+      setConfirmingDeleteUrl(null)
+      setDeletingUrls(new Set())
     }
   }, [open])
 
@@ -922,14 +928,55 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
     setVideoFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const handleRemoveExistingImage = (index: number) =>
-    setExistingImages((prev) => prev.filter((_, i) => i !== index))
+  /**
+   * Fires an immediate async DELETE for an existing media item.
+   * Deletion is fully decoupled from Save — each call is atomic.
+   */
+  const handleDeleteExistingMedia = async (url: string) => {
+    if (!activity) return
 
-  const handleRemoveExistingVideo = (index: number) =>
-    setExistingVideos((prev) => prev.filter((_, i) => i !== index))
+    setConfirmingDeleteUrl(null)
+    setDeletingUrls((prev) => new Set(prev).add(url))
 
-  const handleRemoveExistingDocument = (index: number) =>
-    setExistingDocuments((prev) => prev.filter((_, i) => i !== index))
+    try {
+      const res = await fetch("/api/admin/activities/media/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaUrl: url, activityId: activity.id }),
+      })
+
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string }
+        throw new Error(data.error || "Failed to delete media")
+      }
+
+      // Optimistically remove from all three lists (only one will match)
+      setExistingImages((prev) => prev.filter((u) => u !== url))
+      setExistingVideos((prev) => prev.filter((u) => u !== url))
+      setExistingDocuments((prev) => prev.filter((u) => u !== url))
+
+      toaster.create({
+        title: "Deleted",
+        description: "Media removed successfully",
+        type: "success",
+        duration: 3000,
+      })
+    } catch (err) {
+      console.error("Error deleting media:", err)
+      toaster.create({
+        title: "Delete failed",
+        description: err instanceof Error ? err.message : "Failed to delete media",
+        type: "error",
+        duration: 5000,
+      })
+    } finally {
+      setDeletingUrls((prev) => {
+        const next = new Set(prev)
+        next.delete(url)
+        return next
+      })
+    }
+  }
 
   const removeFileFromArray = (file: File, list: File[]) => {
     const idx = list.findIndex(
@@ -989,7 +1036,9 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
     setCompressing(true)
 
     try {
-      // ── Step 1: Update activity record + delete removed media (JSON, no files) ─
+      // ── Step 1: Update activity text fields ────────────────────────────────
+      // Media deletion is handled independently (per-item, async) via
+      // DELETE /api/admin/activities/media/delete — not tied to Save.
       const updateRes = await fetch("/api/admin/activities/update", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1000,9 +1049,6 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
           activity_type: activityType,
           is_public: isPublic,
           beneficiary_id: activity.beneficiary_id,
-          existing_images: existingImages,
-          existing_videos: existingVideos,
-          existing_documents: existingDocuments,
         }),
       })
 
@@ -1226,12 +1272,35 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               {existingImages.map((src, index) => (
                 <div key={src} className="relative group" style={{ width: 150, height: 150 }}>
+                  {/* Thumbnail */}
                   <div style={{ width: "100%", height: "100%", borderRadius: 8, overflow: "hidden", border: "1px solid #e5e7eb", backgroundColor: "#f9fafb", position: "relative" }}>
                     <Image src={src} alt={`Existing ${index + 1}`} fill className="object-cover" unoptimized />
                   </div>
-                  <button onClick={() => handleRemoveExistingImage(index)} className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" type="button" aria-label="Remove image">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
+
+                  {/* State: deleting — spinner overlay */}
+                  {deletingUrls.has(src) && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg" style={{ background: "rgba(0,0,0,0.55)" }}>
+                      <Spinner size="sm" color="white" />
+                    </div>
+                  )}
+
+                  {/* State: confirming — inline "Delete?" overlay */}
+                  {!deletingUrls.has(src) && confirmingDeleteUrl === src && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg" style={{ background: "rgba(0,0,0,0.68)" }}>
+                      <Text fontSize="xs" fontWeight="bold" color="white">Delete?</Text>
+                      <Flex gap={2}>
+                        <button onClick={() => handleDeleteExistingMedia(src)} className="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1 rounded" type="button">Yes</button>
+                        <button onClick={() => setConfirmingDeleteUrl(null)} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-semibold px-3 py-1 rounded" type="button">No</button>
+                      </Flex>
+                    </div>
+                  )}
+
+                  {/* State: idle — trash icon on hover */}
+                  {!deletingUrls.has(src) && confirmingDeleteUrl !== src && (
+                    <button onClick={() => setConfirmingDeleteUrl(src)} className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" type="button" aria-label="Delete image">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -1314,12 +1383,35 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               {existingVideos.map((src, index) => (
                 <div key={src} className="relative group" style={{ width: 240, height: 150 }}>
+                  {/* Video player */}
                   <div style={{ width: "100%", height: "100%", borderRadius: 8, overflow: "hidden", border: "1px solid #e5e7eb", backgroundColor: "#000" }}>
                     <video src={src} controls style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}>Your browser does not support the video tag.</video>
                   </div>
-                  <button onClick={() => handleRemoveExistingVideo(index)} className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10" type="button" aria-label="Remove video">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
+
+                  {/* State: deleting — spinner overlay */}
+                  {deletingUrls.has(src) && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg z-10" style={{ background: "rgba(0,0,0,0.55)" }}>
+                      <Spinner size="sm" color="white" />
+                    </div>
+                  )}
+
+                  {/* State: confirming — inline "Delete?" overlay */}
+                  {!deletingUrls.has(src) && confirmingDeleteUrl === src && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg z-10" style={{ background: "rgba(0,0,0,0.68)" }}>
+                      <Text fontSize="xs" fontWeight="bold" color="white">Delete?</Text>
+                      <Flex gap={2}>
+                        <button onClick={() => handleDeleteExistingMedia(src)} className="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1 rounded" type="button">Yes</button>
+                        <button onClick={() => setConfirmingDeleteUrl(null)} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-semibold px-3 py-1 rounded" type="button">No</button>
+                      </Flex>
+                    </div>
+                  )}
+
+                  {/* State: idle — trash icon on hover */}
+                  {!deletingUrls.has(src) && confirmingDeleteUrl !== src && (
+                    <button onClick={() => setConfirmingDeleteUrl(src)} className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10" type="button" aria-label="Delete video">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -1402,18 +1494,59 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               {existingDocuments.map((url, index) => {
                 const fileName = decodeURIComponent(url.split("/").pop() || `Document ${index + 1}`)
+                const isConfirming = confirmingDeleteUrl === url
+                const isDeleting = deletingUrls.has(url)
                 return (
-                  <div key={url} style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 8, backgroundColor: "#f9fafb", display: "flex", alignItems: "center", gap: 8 }}>
-                    <svg className="w-8 h-8 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                  <div
+                    key={url}
+                    style={{
+                      padding: 12,
+                      border: `1px solid ${isConfirming ? "#fca5a5" : "#e5e7eb"}`,
+                      borderRadius: 8,
+                      backgroundColor: isConfirming ? "#fef2f2" : "#f9fafb",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      transition: "border-color 0.15s, background-color 0.15s",
+                    }}
+                  >
+                    {/* PDF icon */}
+                    <svg className={`w-8 h-8 flex-shrink-0 ${isDeleting ? "text-gray-400" : "text-red-500"}`} fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                     </svg>
-                    <div style={{ flex: 1 }}>
-                      <Text fontSize="sm" fontWeight="medium">{fileName}</Text>
-                      <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.75rem", color: "#3b82f6", textDecoration: "underline" }}>View</a>
+
+                    {/* File info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Text fontSize="sm" fontWeight="medium" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {fileName}
+                      </Text>
+                      {!isConfirming && !isDeleting && (
+                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.75rem", color: "#3b82f6", textDecoration: "underline" }}>
+                          View
+                        </a>
+                      )}
+                      {isConfirming && (
+                        <Text fontSize="xs" color="red.600" fontWeight="medium">Permanently delete this file?</Text>
+                      )}
                     </div>
-                    <button onClick={() => handleRemoveExistingDocument(index)} className="text-red-500 hover:text-red-600" type="button" aria-label="Remove document">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
+
+                    {/* Action area */}
+                    {isDeleting ? (
+                      <Spinner size="sm" />
+                    ) : isConfirming ? (
+                      <Flex gap={2} flexShrink={0}>
+                        <button onClick={() => handleDeleteExistingMedia(url)} className="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1 rounded" type="button">
+                          Delete
+                        </button>
+                        <button onClick={() => setConfirmingDeleteUrl(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold px-3 py-1 rounded" type="button">
+                          Cancel
+                        </button>
+                      </Flex>
+                    ) : (
+                      <button onClick={() => setConfirmingDeleteUrl(url)} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0" type="button" aria-label="Delete document">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    )}
                   </div>
                 )
               })}

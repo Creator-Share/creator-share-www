@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { MediaRow } from "@/utils/supabase/media"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 export const runtime = "nodejs"
@@ -9,11 +8,9 @@ export const dynamic = "force-dynamic"
 /**
  * PUT /api/admin/activities/update
  *
- * Accepts a JSON body (NOT FormData).  File uploads are now handled
- * client-side via direct Supabase Storage uploads, so this route only needs
- * to:
- *   1. Update the activity DB record.
- *   2. Delete media records (and storage objects) that were removed.
+ * Updates the text fields of an activity. Media deletion is handled
+ * independently via DELETE /api/admin/activities/media/delete, so this
+ * route no longer needs to diff or delete any media records.
  *
  * Request body:
  *  {
@@ -23,8 +20,6 @@ export const dynamic = "force-dynamic"
  *    activity_type?: string
  *    is_public?: boolean
  *    beneficiary_id: string
- *    existing_images: string[]   // public URLs of images to KEEP
- *    existing_videos: string[]   // public URLs of videos to KEEP
  *  }
  */
 export async function PUT(req: NextRequest) {
@@ -35,46 +30,27 @@ export async function PUT(req: NextRequest) {
     activity_type?: string
     is_public?: boolean
     beneficiary_id?: string
-    existing_images?: string[]
-    existing_videos?: string[]
-    existing_documents?: string[]
   }
 
-  const {
-    id,
-    title,
-    description,
-    activity_type,
-    is_public,
-    beneficiary_id,
-    existing_images = [],
-    existing_videos = [],
-    existing_documents = [],
-  } = body
+  const { id, title, description, activity_type, is_public, beneficiary_id } = body
 
   if (!id || !description || !beneficiary_id) {
-    console.error("❌ [UPDATE ACTIVITY] Missing required fields")
-    return NextResponse.json(
-      { error: "Missing required fields" },
-      { status: 400 },
-    )
+    return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
   }
 
   const supabase = await createClient()
   const auth = await requireSuperAdmin(supabase)
   if (!auth.ok) return auth.response
 
-  // ─── 1. Update activity record ────────────────────────────────────────────
-
   const updateData: {
-    title?: string
     description: string
+    title?: string
     activity_type?: string
     is_public?: boolean
   } = { description }
 
-  if (title) updateData.title = title
-  if (activity_type) updateData.activity_type = activity_type
+  if (title !== undefined) updateData.title = title
+  if (activity_type !== undefined) updateData.activity_type = activity_type
   if (is_public !== undefined) updateData.is_public = is_public
 
   const { data: updated, error } = await supabase
@@ -87,95 +63,6 @@ export async function PUT(req: NextRequest) {
   if (error) {
     console.error("❌ [UPDATE ACTIVITY] Failed to update activity:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  // ─── 2. Delete removed media ───────────────────────────────────────────────
-
-  const { data: allExistingMedia, error: mediaFetchError } = await supabase
-    .from("media")
-    .select("*")
-    .eq("parent_id", id)
-
-  if (mediaFetchError) {
-    console.error(
-      "❌ [UPDATE ACTIVITY] Error fetching existing media:",
-      mediaFetchError,
-    )
-  }
-
-  if (allExistingMedia && allExistingMedia.length > 0) {
-    const { getStorageKey } = await import("@/utils/supabase/media")
-    const { STORAGE_BUCKET } = await import("@/utils/supabase/buckets")
-
-    const base = process.env.NEXT_PUBLIC_SUPABASE_URL
-    if (!base) {
-      console.error("❌ NEXT_PUBLIC_SUPABASE_URL not set")
-      return NextResponse.json(
-        { error: "Server configuration error" },
-        { status: 500 },
-      )
-    }
-    const normalizedBase = base.replace(/\/$/, "")
-
-    for (const mediaRecord of allExistingMedia) {
-      const key = getStorageKey(mediaRecord as unknown as MediaRow)
-
-      const isImage = mediaRecord.type === "IMAGE"
-      const isVideo = mediaRecord.type === "VIDEO"
-      const isDocument = mediaRecord.type === "DOCUMENT"
-
-      // Skip unknown media types
-      if (!isImage && !isVideo && !isDocument) continue
-
-      // Build the public URL the same way generatePublicUrl() does so the
-      // comparison against the URLs sent from the frontend matches exactly.
-      let publicUrl: string
-      if (isImage) {
-        const { data } = supabase.storage
-          .from(STORAGE_BUCKET)
-          .getPublicUrl(key, {
-            transform: {
-              width: 800,
-              height: 800,
-              quality: 85,
-              resize: "cover",
-            },
-          })
-        publicUrl = data.publicUrl
-      } else {
-        publicUrl = `${normalizedBase}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
-      }
-
-      const shouldKeep =
-        (isImage && existing_images.includes(publicUrl)) ||
-        (isVideo && existing_videos.includes(publicUrl)) ||
-        (isDocument && existing_documents.includes(publicUrl))
-
-      if (!shouldKeep) {
-        const { error: storageError } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .remove([key])
-
-        if (storageError) {
-          console.error(
-            "❌ [UPDATE ACTIVITY] Error deleting from storage:",
-            storageError,
-          )
-        }
-
-        const { error: dbError } = await supabase
-          .from("media")
-          .delete()
-          .eq("id", mediaRecord.id)
-
-        if (dbError) {
-          console.error(
-            "❌ [UPDATE ACTIVITY] Error deleting media record:",
-            dbError,
-          )
-        }
-      }
-    }
   }
 
   return NextResponse.json({ activity: updated })

@@ -24,7 +24,7 @@ export default function RootLayout({
 }) {
   return (
     <html className={redditSans.variable}>
-      <body className="bg-[#F5F5F5] flex flex-col min-h-screen overflow-x-hidden">
+      <body className="bg-[#F5F5F5] flex flex-col min-h-screen overflow-x-hidden" suppressHydrationWarning>
         <Providers>
           <main className="flex-1">
             <PageWrapper>{children}</PageWrapper>
