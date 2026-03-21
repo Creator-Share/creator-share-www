@@ -23,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html suppressHydrationWarning className={redditSans.variable}>
+    <html className={redditSans.variable}>
       <body className="bg-[#F5F5F5] flex flex-col min-h-screen overflow-x-hidden">
         <Providers>
           <main className="flex-1">
