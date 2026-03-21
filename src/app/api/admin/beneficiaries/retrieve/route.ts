@@ -8,8 +8,13 @@ export async function GET(req: Request) {
   if (!auth.ok) return auth.response
   const { searchParams } = new URL(req.url)
   const beneficiary_type = searchParams.get("beneficiary_type")
+  const id = searchParams.get("id")
 
   let query = supabase.from("beneficiaries").select("*")
+
+  if (id) {
+    query = query.eq("id", id)
+  }
 
   if (beneficiary_type) {
     query = query.eq("beneficiary_type", beneficiary_type)

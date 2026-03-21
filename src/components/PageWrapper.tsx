@@ -23,7 +23,7 @@ export function PageWrapper({ children }: { children: React.ReactNode }) {
   return (
     <>
       {shouldShowNavbar && <PageNavbar />}
-      <div className="w-full max-w-[1200px] mx-auto p-4">
+      <div className="w-full max-w-[1200px] mx-auto px-4 pb-4">
         {children}
       </div>
       {/* Floating scroll-to-top button - shown on all pages except embedded */}

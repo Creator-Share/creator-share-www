@@ -77,7 +77,7 @@ export function StatsSection() {
                     color="gray.700"
                     fontWeight="medium"
                   >
-                    Children In Need
+                    Children Waiting
                   </Text>
                 </Flex>
               </>
@@ -116,7 +116,7 @@ export function StatsSection() {
                     color="gray.700"
                     fontWeight="medium"
                   >
-                    Children Supported
+                    Children Sponsored
                   </Text>
                 </Flex>
               </>

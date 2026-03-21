@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { cn } from "@/utils/cn"
 import { DataTablePagination } from "./DataTablePagination"
 import { DataTableViewOptions } from "./column-toggle"
 // import { Input } from "@chakra-ui/react";
@@ -30,6 +31,10 @@ import { DataTableViewOptions } from "./column-toggle"
 declare module "@tanstack/table-core" {
   interface ColumnMeta<TData, TValue> {
     excludeFromClick?: boolean
+    /** Merged into header `th` via `cn()` with default header styles */
+    thClassName?: string
+    /** Merged into body `td` via `cn()` with default cell styles */
+    tdClassName?: string
   }
 }
 /* eslint-enable @typescript-eslint/no-unused-vars */
@@ -42,6 +47,8 @@ interface DataTableProps<TData, TValue> {
   onRowClick?: (data: TData, column: ColumnDef<TData, TValue>) => void
   tableHeight?: string
   className?: string
+  /** Extra classes on the inner `<table>` (e.g. `table-fixed` for column width caps) */
+  tableClassName?: string
   getRowProps?: (row: Row<TData>) => React.HTMLAttributes<HTMLTableRowElement>
   initialColumnVisibility?: VisibilityState
   onRowSelectionChange?: (rowSelection: Record<string, unknown>) => void
@@ -57,6 +64,7 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
     onRowClick,
     controls,
     tableHeight = DEFAULT_TABLE_HEIGHT,
+    tableClassName,
     getRowProps,
     initialColumnVisibility = {},
     onRowSelectionChange,
@@ -116,14 +124,17 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
       <div
         className={`rounded-xl border mt-3 h-full overflow-auto ${tableHeight}`}
       >
-        <Table>
+        <Table className={tableClassName}>
           <TableHeader className="bg-[#E5EEFB]">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className="text-center text-[#727D79] px-6 py-3"
+                    className={cn(
+                      "text-center text-[#727D79] px-6 py-3",
+                      header.column.columnDef.meta?.thClassName,
+                    )}
                   >
                     {header.isPlaceholder
                       ? null
@@ -162,6 +173,7 @@ export const DataTable = React.forwardRef(function DataTable<TData, TValue>(
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
+                      className={cell.column.columnDef.meta?.tdClassName}
                       onClick={() => {
                         const columnDef = cell.column.columnDef
                         if (columnDef.meta?.excludeFromClick && onRowClick) {

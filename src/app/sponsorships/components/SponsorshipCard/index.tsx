@@ -7,9 +7,10 @@ import { calculateAge } from "@/utils/ageCalculator"
 import { BeneficiaryCardProps } from "@/types/propTypes"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
-import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
+import { getImageSrc, getThumbnailSrc } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
+import SupportedRibbon from "@/components/common/SupportedRibbon"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -48,32 +49,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
     fetchImages()
   }, [beneficiary.id, beneficiaryType])
-
-  // Helper function for ImageCarousel
-  const getImageSrc = (image: { id?: string; image_url?: string }) => {
-    if (image.id) {
-      try {
-        return generatePublicUrl(image as unknown as MediaRow)
-      } catch {
-        return image.image_url || ""
-      }
-    }
-    return image.image_url || ""
-  }
-
-  // Helper function for generating thumbnail URLs for progressive loading
-  // Returns undefined if thumbnail generation fails, which will skip progressive loading
-  const getThumbnailSrc = (image: { id?: string; image_url?: string }) => {
-    if (image.id) {
-      try {
-        return generateThumbnailUrl(image as unknown as MediaRow)
-      } catch {
-        // Silently fail and skip thumbnail - component will use full image
-        return undefined
-      }
-    }
-    return undefined
-  }
 
   // Primary content - only calculate age if birth_date exists
   const age = beneficiary.birth_date 
@@ -126,6 +101,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           className="w-full h-full rounded-t-[20px]"
           showArrowsOnHover={true}
         />
+
+        {beneficiary.status === "Budget Fulfilled" && <SupportedRibbon />}
 
         {/* Goal Badge */}
         {!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && (

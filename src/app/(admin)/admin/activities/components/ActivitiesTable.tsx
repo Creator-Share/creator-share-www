@@ -130,6 +130,7 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
         </Button>
       </div>
       <DataTable
+        tableClassName="table-fixed"
         columns={getActivityColumns(
           {
             onEdit: (activity: Activity) => {

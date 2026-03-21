@@ -575,7 +575,16 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
         </div> */}
 
         <div style={{ marginBottom: 12 }}>
-          <Textarea placeholder="Description" value={description} onChange={(e) => onDescriptionChange(e.target.value)} p={2} className="border border-stone-600" />
+          <Textarea
+            placeholder="Description"
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            p={2}
+            className="border border-stone-600"
+            rows={14}
+            minH="min(45vh, 420px)"
+            resize="vertical"
+          />
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
             <ProofreadButton text={description} onAccept={onDescriptionChange} fieldLabel="Description" size="sm" type="activity" />
           </div>
@@ -1195,7 +1204,16 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
         {/* <Input for title ... /> */}
 
         <div style={{ marginBottom: 12 }}>
-          <Textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} p={2} className="border border-stone-600" />
+          <Textarea
+            placeholder="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            p={2}
+            className="border border-stone-600"
+            rows={14}
+            minH="min(45vh, 420px)"
+            resize="vertical"
+          />
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
             <ProofreadButton text={description} onAccept={setDescription} fieldLabel="Description" size="sm" type="activity" />
           </div>

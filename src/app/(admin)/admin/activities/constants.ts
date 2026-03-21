@@ -36,6 +36,15 @@ export const ACTIVITY_STATUS_CONFIG = {
     bgColor: "gray.50",
     description: "No activities recorded yet",
   },
+  noPublicMedia: {
+    label: "No public photos or videos",
+    emoji: "📷",
+    color: "purple.600",
+    borderColor: "purple.300",
+    bgColor: "purple.50",
+    description:
+      "No sponsor-visible activity includes an image or video yet (may also appear above)",
+  },
 } as const
 
 export type ActivityStatus = keyof typeof ACTIVITY_STATUS_CONFIG

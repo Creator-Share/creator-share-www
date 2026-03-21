@@ -31,9 +31,11 @@ export interface BeneficiaryListingsProps {
   selectedBeneficiaryId: string | null
   selectedCountry: string | null
   isLoading?: boolean
-  setSelectedBeneficiaryId: (id: string | null) => void
+  setSelectedBeneficiaryId?: (id: string | null) => void
   mapBounds?: LatLngBounds
   beneficiaryType?: "CHILD" | "ANIMAL"
+  /** Called when a card is clicked; container owns the modal. */
+  onOpenModal?: (beneficiary: Beneficiaries) => void
 }
 
 export interface BeneficiaryCardProps {

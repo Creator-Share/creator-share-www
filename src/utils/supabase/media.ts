@@ -122,6 +122,38 @@ export const generateThumbnailUrl = (media: MediaRow): string | undefined => {
 }
 
 /**
+ * Derive a displayable URL from a media object that may carry either a storage
+ * id (preferred) or a legacy image_url string. Used uniformly across card and
+ * modal components so the logic is never duplicated.
+ */
+export const getImageSrc = (image: { id?: string; image_url?: string }): string => {
+  if (image.id) {
+    try {
+      return generatePublicUrl(image as unknown as MediaRow)
+    } catch {
+      return image.image_url || ""
+    }
+  }
+  return image.image_url || ""
+}
+
+/**
+ * Derive a thumbnail URL for progressive blur-up loading. Returns undefined
+ * when thumbnail generation is not possible -- callers should skip progressive
+ * loading in that case and render the full image directly.
+ */
+export const getThumbnailSrc = (image: { id?: string; image_url?: string }): string | undefined => {
+  if (image.id) {
+    try {
+      return generateThumbnailUrl(image as unknown as MediaRow)
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
+}
+
+/**
  * Generate a public URL directly from a storage key (no bucket name).
  */
 export const getPublicUrlFromKey = (key: string): string => {

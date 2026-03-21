@@ -4,7 +4,7 @@ import { FilterState } from "@/types/index"
 const DEFAULTS = {
   selectedGender: "",
   selectedAgeRange: [0, 14] as [number, number],
-  selectedStatus: ["New", "Partially Funded"] as string[],
+  selectedStatus: ["New", "Partially Funded", "Sponsorship Cancelled"] as string[],
 }
 
 export const useFilterStore = create<FilterState>((set, get) => ({

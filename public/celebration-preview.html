@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Celebration Variants</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #f0f2f7;
+    padding: 32px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: 28px;
+    color: #1a1a2e;
+    margin-bottom: 6px;
+  }
+  p.subtitle {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    max-width: 920px;
+  }
+
+  .variant-wrapper {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,.07);
+  }
+
+  .variant-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #888;
+    padding: 12px 16px 0;
+  }
+
+  .variant-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a2e;
+    padding: 2px 16px 12px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .banner {
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+    min-height: 230px;
+    justify-content: center;
+  }
+
+  .banner .check { font-size: 38px; }
+  .banner .headline { font-size: 17px; font-weight: 700; color: #111; }
+  .banner .sub { font-size: 13px; color: #666; line-height: 1.6; max-width: 280px; }
+  .banner .cta {
+    margin-top: 6px;
+    padding: 10px 22px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: transform .15s, box-shadow .15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .banner .cta:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.15); }
+
+  /* ------------------------------------------------------------------ */
+  /* Variant A: Shimmer Sweep                                            */
+  /* ------------------------------------------------------------------ */
+  .varA {
+    background: linear-gradient(135deg, #EEF6FF 0%, #F3EEFF 100%);
+    border: 1.5px solid #CDE1FE;
+  }
+  .varA::before {
+    content: '';
+    position: absolute;
+    top: -60%;
+    left: -60%;
+    width: 55%;
+    height: 240%;
+    background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.6) 50%, transparent 80%);
+    animation: shimmer 2.6s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes shimmer {
+    0%   { left: -60%; }
+    100% { left: 140%; }
+  }
+  .varA .check { color: #0654C6; }
+  .varA .cta { background: #0654C6; color: white; }
+
+  /* ------------------------------------------------------------------ */
+  /* Variant B: Confetti Burst                                           */
+  /* ------------------------------------------------------------------ */
+  .varB {
+    background: linear-gradient(160deg, #fff9f0 0%, #fff0fd 100%);
+    border: 1.5px solid #fde3b7;
+  }
+  .varB .check { color: #f59e0b; }
+  .varB .headline { color: #111; }
+  .varB .cta { background: #f59e0b; color: white; }
+
+  .confetti-piece {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    animation: confettiFall linear infinite;
+    opacity: 0;
+  }
+  @keyframes confettiFall {
+    0%   { transform: translateY(-10px) rotate(0deg);   opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translateY(250px) rotate(720deg); opacity: 0; }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Variant C: Pulse Ring                                               */
+  /* ------------------------------------------------------------------ */
+  .varC {
+    background: radial-gradient(ellipse at center, #eef7ff 0%, #f8faff 70%);
+    border: 1.5px solid #b3d4fc;
+  }
+  .varC .check { color: #0654C6; position: relative; z-index: 2; }
+  .varC .headline, .varC .sub { position: relative; z-index: 2; }
+  .varC .cta { background: #0654C6; color: white; position: relative; z-index: 2; }
+
+  .pulse-ring {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 2px solid #0654C6;
+    opacity: 0;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: pulseRing 2.2s ease-out infinite;
+  }
+  .pulse-ring:nth-child(2) { animation-delay: .74s; }
+  .pulse-ring:nth-child(3) { animation-delay: 1.48s; }
+  @keyframes pulseRing {
+    0%   { transform: translate(-50%, -50%) scale(0.5); opacity: .55; }
+    100% { transform: translate(-50%, -50%) scale(3);   opacity: 0;   }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Variant D: Star Scatter (dark mode)                                 */
+  /* ------------------------------------------------------------------ */
+  .varD {
+    background: linear-gradient(135deg, #0d1b3e 0%, #1C3C8C 100%);
+    border: none;
+  }
+  .varD .check    { color: #fbbf24; }
+  .varD .headline { color: #fff; }
+  .varD .sub      { color: rgba(255,255,255,.65); }
+  .varD .cta      { background: #fbbf24; color: #0d1b3e; font-weight: 700; }
+
+  .star {
+    position: absolute;
+    background: #fbbf24;
+    border-radius: 50%;
+    animation: starBurst ease-out infinite;
+    opacity: 0;
+  }
+  @keyframes starBurst {
+    0%   { transform: translate(0, 0) scale(0); opacity: 0; }
+    15%  { opacity: 1; }
+    85%  { opacity: .7; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Fully Sponsored &mdash; Celebration Variants</h1>
+<p class="subtitle">Four animation styles for the sponsored-child banner. Tell me which one you want wired into the modal.</p>
+
+<div class="grid">
+
+  <!-- A: Shimmer Sweep -->
+  <div class="variant-wrapper">
+    <div class="variant-label">Variant A</div>
+    <div class="variant-name">Shimmer Sweep</div>
+    <div class="banner varA" id="varA">
+      <div class="check">&#10003;</div>
+      <div class="headline">This child is fully sponsored</div>
+      <div class="sub">Emma is already receiving support. You can still share her story or find another child to sponsor.</div>
+      <button class="cta">&#8595; Sponsor a child like Emma</button>
+    </div>
+  </div>
+
+  <!-- B: Confetti Burst -->
+  <div class="variant-wrapper">
+    <div class="variant-label">Variant B</div>
+    <div class="variant-name">Confetti Burst</div>
+    <div class="banner varB" id="varB">
+      <div class="check">&#127881;</div>
+      <div class="headline">This child is fully sponsored</div>
+      <div class="sub">Emma is already receiving support. You can still share her story or find another child to sponsor.</div>
+      <button class="cta">&#8595; Sponsor a child like Emma</button>
+    </div>
+  </div>
+
+  <!-- C: Pulse Ring -->
+  <div class="variant-wrapper">
+    <div class="variant-label">Variant C</div>
+    <div class="variant-name">Pulse Ring</div>
+    <div class="banner varC" id="varC">
+      <div class="pulse-ring"></div>
+      <div class="pulse-ring"></div>
+      <div class="pulse-ring"></div>
+      <div class="check">&#10003;</div>
+      <div class="headline">This child is fully sponsored</div>
+      <div class="sub">Emma is already receiving support. You can still share her story or find another child to sponsor.</div>
+      <button class="cta">&#8595; Sponsor a child like Emma</button>
+    </div>
+  </div>
+
+  <!-- D: Star Scatter (dark) -->
+  <div class="variant-wrapper">
+    <div class="variant-label">Variant D</div>
+    <div class="variant-name">Star Scatter (Dark)</div>
+    <div class="banner varD" id="varD">
+      <div class="check">&#9733;</div>
+      <div class="headline">This child is fully sponsored</div>
+      <div class="sub">Emma is already receiving support. You can still share her story or find another child to sponsor.</div>
+      <button class="cta">&#8595; Sponsor a child like Emma</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Inject confetti into Variant B
+  const varB = document.getElementById('varB');
+  const colors = ['#f59e0b','#3b82f6','#10b981','#ef4444','#8b5cf6','#ec4899','#06b6d4'];
+  for (let i = 0; i < 26; i++) {
+    const p = document.createElement('div');
+    p.className = 'confetti-piece';
+    p.style.cssText = `
+      left: ${Math.random() * 100}%;
+      top: 0;
+      background: ${colors[i % colors.length]};
+      animation-duration: ${1.8 + Math.random() * 1.6}s;
+      animation-delay: ${Math.random() * 1.8}s;
+      transform: rotate(${Math.random() * 360}deg);
+      width: ${6 + Math.random() * 6}px;
+      height: ${6 + Math.random() * 6}px;
+    `;
+    varB.insertBefore(p, varB.firstChild);
+  }
+
+  // Inject star particles into Variant D
+  const varD = document.getElementById('varD');
+  const count = 20;
+  for (let i = 0; i < count; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.4;
+    const dist  = 55 + Math.random() * 65;
+    const size  = 3 + Math.random() * 5;
+    s.style.cssText = `
+      left: calc(50% - ${size/2}px);
+      top: calc(42% - ${size/2}px);
+      --dx: ${Math.cos(angle) * dist}px;
+      --dy: ${Math.sin(angle) * dist}px;
+      animation-duration: ${1.5 + Math.random() * 1.2}s;
+      animation-delay: ${Math.random() * 1.0}s;
+      width: ${size}px;
+      height: ${size}px;
+    `;
+    varD.insertBefore(s, varD.firstChild);
+  }
+</script>
+</body>
+</html>
