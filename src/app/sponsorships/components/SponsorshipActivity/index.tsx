@@ -115,8 +115,10 @@ const DateTooltip: React.FC<{ dateStr: string }> = ({ dateStr }) => {
 
 const SPINE_W = "24px"
 const DESCRIPTION_CLAMP = 180
-const THUMB_W = "140px"
-const THUMB_H = "110px"
+/** Width/height for image thumbnails; cells use `repeat(3, 1fr)` so three fill the row. */
+const THUMB_ASPECT = 140 / 110
+/** Full-width video rows below the image grid (typical wide video framing). */
+const VIDEO_ROW_ASPECT = 16 / 9
 
 // Height of the "incoming" line segment above the dot — matches one line of
 // date text so the dot vertically aligns with the label beside it.
@@ -130,12 +132,14 @@ interface ActivityRowProps {
 }
 
 const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isFirst, isLast, onLightbox }) => {
-  const [descExpanded, setDescExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(true)
 
   const images = activity.images_url ?? []
   const videos = activity.videos_url ?? []
   const hasMedia = images.length > 0 || videos.length > 0
   const longDesc = (activity.description?.length ?? 0) > DESCRIPTION_CLAMP
+  /** Collapsed state hides media and may clamp text; toggle when either applies. */
+  const needsToggle = longDesc || hasMedia
 
   return (
     // Fragment wraps the timeline row + the flush-left show more/less button.
@@ -206,7 +210,7 @@ const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isFirst, isLast, on
             <Text
               className="text-gray-700 text-sm leading-relaxed"
               style={
-                !descExpanded && longDesc
+                !expanded && longDesc
                   ? {
                       display: "-webkit-box",
                       WebkitLineClamp: 6,
@@ -220,62 +224,82 @@ const ActivityRow: React.FC<ActivityRowProps> = ({ activity, isFirst, isLast, on
             </Text>
           )}
 
-          {/* Media thumbnails — horizontal row below the description */}
-          {hasMedia && (
-            <Flex gap={2} mt={3} flexWrap="wrap">
-              {images.map((url, i) => (
+          {/* Images: 3-column grid. Videos: full-width rows below. Hidden while collapsed. */}
+          {hasMedia && expanded && (
+            <Box w="100%" mt={3}>
+              {images.length > 0 && (
                 <Box
-                  key={`img-${i}`}
-                  position="relative"
-                  w={THUMB_W}
-                  h={THUMB_H}
-                  borderRadius="md"
-                  overflow="hidden"
-                  cursor="zoom-in"
-                  flexShrink={0}
-                  onClick={() => onLightbox(url)}
+                  display="grid"
+                  gridTemplateColumns="repeat(3, minmax(0, 1fr))"
+                  gap={2}
+                  w="100%"
                 >
-                  <Image
-                    src={url}
-                    alt={`Update image ${i + 1}`}
-                    fill
-                    sizes={THUMB_W}
-                    className="object-cover"
-                    unoptimized
-                  />
+                  {images.map((url, i) => (
+                    <Box
+                      key={`img-${i}`}
+                      position="relative"
+                      w="100%"
+                      minW={0}
+                      aspectRatio={THUMB_ASPECT}
+                      borderRadius="md"
+                      overflow="hidden"
+                      cursor="zoom-in"
+                      onClick={() => onLightbox(url)}
+                    >
+                      <Image
+                        src={url}
+                        alt={`Update image ${i + 1}`}
+                        fill
+                        sizes="(max-width: 768px) 33vw, 200px"
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </Box>
+                  ))}
                 </Box>
-              ))}
-              {videos.map((url, i) => (
-                <Box
-                  key={`vid-${i}`}
-                  w={THUMB_W}
-                  borderRadius="md"
-                  overflow="hidden"
-                  flexShrink={0}
+              )}
+              {videos.length > 0 && (
+                <Flex
+                  direction="column"
+                  gap={2}
+                  w="100%"
+                  mt={images.length > 0 ? 2 : 0}
                 >
-                  <video
-                    src={url}
-                    controls
-                    preload="metadata"
-                    className="w-full rounded-md"
-                    style={{ maxHeight: THUMB_H, objectFit: "cover" }}
-                    onError={(e) => { e.currentTarget.style.display = "none" }}
-                  />
-                </Box>
-              ))}
-            </Flex>
+                  {videos.map((url, i) => (
+                    <Box
+                      key={`vid-${i}`}
+                      w="100%"
+                      minW={0}
+                      aspectRatio={VIDEO_ROW_ASPECT}
+                      borderRadius="md"
+                      overflow="hidden"
+                      bg="blackAlpha.100"
+                    >
+                      <video
+                        src={url}
+                        controls
+                        preload="metadata"
+                        className="h-full w-full rounded-md object-contain"
+                        onError={(e) => { e.currentTarget.style.display = "none" }}
+                      />
+                    </Box>
+                  ))}
+                </Flex>
+              )}
+            </Box>
           )}
         </Box>
       </Flex>
 
       {/* Show more/less sits BELOW the timeline row, flush with the card's left edge */}
-      {longDesc && (
+      {needsToggle && (
         <button
-          onClick={() => setDescExpanded((v) => !v)}
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
           className={SHOW_MORE_CLASS}
         >
-          {descExpanded ? "Show less" : "Show more"}
-          <span aria-hidden>{descExpanded ? "▲" : "▼"}</span>
+          {expanded ? "Show less" : "Show more"}
+          <span aria-hidden>{expanded ? "▲" : "▼"}</span>
         </button>
       )}
     </>
