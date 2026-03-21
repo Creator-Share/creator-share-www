@@ -1,3 +1,4 @@
+"use client"
 import React, { useEffect, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
 import {
@@ -119,6 +120,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false)
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
   const [imageLoading, setImageLoading] = useState<boolean>(false)
+  const [videoUrl, setVideoUrl] = useState<string>(beneficiary.video_url?.trim() || "")
   const [bioExpanded, setBioExpanded] = useState(false)
   const [faqOpen, setFaqOpen] = useState(false)
 
@@ -167,7 +169,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               ? generatePublicUrl(video as unknown as MediaRow)
               : ""
             if (videoSrc?.trim() && !signal?.aborted) {
-              beneficiary.video_url = videoSrc
+              setVideoUrl(videoSrc)
             }
           }
         }
@@ -181,7 +183,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         if (!signal?.aborted) setImageLoading(false)
       }
     },
-    [beneficiary],
+    [],
   )
 
   useEffect(() => {
@@ -200,8 +202,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       setLoading(false)
       setBioExpanded(false)
       setFaqOpen(false)
+      setVideoUrl(beneficiary.video_url?.trim() || "")
     }
-  }, [open, remainingAmount])
+  }, [open, remainingAmount, beneficiary.video_url])
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -713,7 +716,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 </Flex>
               </Box>
 
-              {beneficiary.video_url?.trim() && (
+              {videoUrl && (
                 <Box className="mt-4">
                   <Box
                     bg="white"
@@ -725,7 +728,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   >
                     <video
                       className="w-full"
-                      src={beneficiary.video_url.trim()}
+                      src={videoUrl}
                       controls
                     />
                   </Box>

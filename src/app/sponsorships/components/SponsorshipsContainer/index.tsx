@@ -222,7 +222,7 @@ const SponsorshipsContainer: React.FC = () => {
       <HorizontalSponsorshipRow
         sponsored={sponsored}
         beneficiaries={beneficiaries}
-        selectedBeneficiaryId={null}
+        selectedBeneficiaryId={activeBeneficiary?.id ?? null}
         hasMore={hasMore}
         isLoading={isLoading}
         onLoadMore={loadMore}
@@ -247,7 +247,7 @@ const SponsorshipsContainer: React.FC = () => {
       <Box mx={{ base: 0, lg: 5 }}>
         <SponsorshipListings
           beneficiaryData={beneficiaries}
-          selectedBeneficiaryId={null}
+          selectedBeneficiaryId={activeBeneficiary?.id ?? null}
           selectedCountry={null}
           onLoadMore={loadMore}
           hasMore={hasMore}

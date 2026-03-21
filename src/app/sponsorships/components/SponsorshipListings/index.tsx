@@ -217,34 +217,6 @@ const BeneficiaryListings = React.forwardRef<
               </Flex>
             )}
 
-            {/* {filteredBeneficiaries.length > 0 && !hasMore && (
-              <Flex
-                justify="center"
-                py={20}
-                align="center"
-                direction="column"
-                mx={8}
-              >
-                <Text
-                  fontSize="lg"
-                  fontWeight="medium"
-                  color="gray.500"
-                  textAlign="center"
-                >
-                  {"That's all for now."}
-                </Text>
-                <Text
-                  fontSize="sm"
-                  color="gray.400"
-                  textAlign="center"
-                  mt={1}
-                >
-                  {filteredBeneficiaries.length === 1
-                    ? "No further matching children found"
-                    : `No further matching children found (${filteredBeneficiaries.length} total)`}
-                </Text>
-              </Flex>
-            )} */}
           </>
         )}
       </Box>
