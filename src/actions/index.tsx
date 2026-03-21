@@ -80,6 +80,7 @@ export async function fetchAllSponsored(): Promise<SponsoredBeneficiary[]> {
   const { data: beneficiaries, error } = await supabase
     .from("beneficiaries")
     .select("*")
+    .eq("beneficiary_type", "CHILD")
     .eq("status", "Budget Fulfilled")
     .order("name", { ascending: true })
 
