@@ -1,5 +1,6 @@
 "use client"
 import React, { useState, useEffect, useCallback, useRef } from "react"
+import { usePathname } from "next/navigation"
 import { Box } from "@chakra-ui/react"
 import { Beneficiaries, Activity } from "@/types"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
@@ -13,6 +14,15 @@ import SponsorshipListings from "../SponsorshipListings"
 import BeneficiaryModal from "../SponsorshipModal"
 import HorizontalSponsorshipRow from "../HorizontalSponsorshipRow"
 
+/** First segment after `/sponsorships/`, or null when not on a profile URL. */
+function getSponsorshipUsernameFromPath(path: string): string | null {
+  if (!path.startsWith("/sponsorships/") || path === "/sponsorships/checkout") {
+    return null
+  }
+  const rest = path.slice("/sponsorships/".length).split("/")[0]
+  return rest ? decodeURIComponent(rest) : null
+}
+
 /**
  * Owns all shared state for the sponsorships section:
  *   - Sponsored children with recent activity (for story circles)
@@ -23,15 +33,19 @@ import HorizontalSponsorshipRow from "../HorizontalSponsorshipRow"
  *   - Activities fetch (single fetch, passed as prop to modal)
  */
 const SponsorshipsContainer: React.FC = () => {
+  const pathname = usePathname()
   const filtersRef = useRef<HTMLDivElement>(null)
   const previousUrlRef = useRef<string | null>(null)
-  const isInitialOpenHandledRef = useRef(false)
 
   const [isFiltersSticky, setIsFiltersSticky] = useState(false)
-  const [activeBeneficiary, setActiveBeneficiary] = useState<Beneficiaries | null>(null)
+  const [activeBeneficiary, setActiveBeneficiary] =
+    useState<Beneficiaries | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [activities, setActivities] = useState<Activity[]>([])
+  const [activitiesLoading, setActivitiesLoading] = useState(false)
   const [sponsored, setSponsored] = useState<SponsoredBeneficiary[]>([])
+  /** Bumps when history or our pushState/replaceState changes the meaningful URL so we re-sync modal to pathname. */
+  const [urlSyncGeneration, setUrlSyncGeneration] = useState(0)
 
   const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore } =
     useBeneficiaryPagination({
@@ -63,25 +77,50 @@ const SponsorshipsContainer: React.FC = () => {
   useEffect(() => {
     if (!activeBeneficiary?.id) {
       setActivities([])
+      setActivitiesLoading(false)
       return
     }
-    fetchActivitiesByBeneficiaryId(activeBeneficiary.id).then(setActivities)
+    const id = activeBeneficiary.id
+    setActivities([])
+    setActivitiesLoading(true)
+    const controller = new AbortController()
+    let cancelled = false
+
+    fetchActivitiesByBeneficiaryId(id, controller.signal)
+      .then((data) => {
+        if (!cancelled) setActivities(data)
+      })
+      .finally(() => {
+        if (!cancelled) setActivitiesLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [activeBeneficiary?.id])
 
-  const openModal = useCallback((beneficiary: Beneficiaries) => {
-    setActiveBeneficiary(beneficiary)
-    setIsModalOpen(true)
-
-    if (typeof window !== "undefined" && beneficiary.username) {
-      previousUrlRef.current =
-        window.location.pathname + window.location.search
-      window.history.pushState(
-        { modal: true, username: beneficiary.username },
-        "",
-        `/sponsorships/${beneficiary.username}`
-      )
-    }
+  const bumpUrlSync = useCallback(() => {
+    setUrlSyncGeneration((k) => k + 1)
   }, [])
+
+  const openModal = useCallback(
+    (beneficiary: Beneficiaries) => {
+      setActiveBeneficiary(beneficiary)
+      setIsModalOpen(true)
+
+      if (typeof window !== "undefined" && beneficiary.username) {
+        previousUrlRef.current = window.location.pathname + window.location.search
+        window.history.pushState(
+          { modal: true, username: beneficiary.username },
+          "",
+          `/sponsorships/${beneficiary.username}`,
+        )
+        bumpUrlSync()
+      }
+    },
+    [bumpUrlSync],
+  )
 
   const closeModal = useCallback(() => {
     setIsModalOpen(false)
@@ -95,63 +134,89 @@ const SponsorshipsContainer: React.FC = () => {
         window.history.replaceState({}, "", previousUrlRef.current || "/")
       }
       previousUrlRef.current = null
+      bumpUrlSync()
     }
-  }, [])
+  }, [bumpUrlSync])
 
-  // Handle browser back/forward navigation
+  // Reconcile modal + active beneficiary with the current URL (deep links, client nav, back/forward).
   useEffect(() => {
-    const handlePopState = () => {
-      const path = window.location.pathname
-      if (
-        path.startsWith("/sponsorships/") &&
-        path !== "/sponsorships/checkout"
-      ) {
-        const username = path.split("/sponsorships/")[1]
-        if (username) {
-          // Check both sponsored and regular beneficiaries
-          const match =
-            beneficiaries.find((b) => b.username === username) ||
-            sponsored.find((b) => b.username === username)
-          if (match) {
-            setActiveBeneficiary(match)
-            setIsModalOpen(true)
-            return
-          }
-        }
-      }
+    const path =
+      typeof window !== "undefined" &&
+      pathname === "/" &&
+      window.location.pathname.startsWith("/sponsorships/")
+        ? window.location.pathname
+        : pathname
+
+    const username = getSponsorshipUsernameFromPath(path)
+
+    if (!username) {
       setIsModalOpen(false)
+      return
     }
 
-    window.addEventListener("popstate", handlePopState)
-    return () => window.removeEventListener("popstate", handlePopState)
-  }, [beneficiaries, sponsored])
+    const controller = new AbortController()
+    let cancelled = false
 
-  // Open the modal on initial load when the URL already points at a child page
-  useEffect(() => {
-    if (isInitialOpenHandledRef.current || beneficiaries.length === 0) return
+    const match =
+      beneficiaries.find((b) => b.username === username) ||
+      sponsored.find((b) => b.username === username)
 
-    const path = window.location.pathname
-    if (
-      path.startsWith("/sponsorships/") &&
-      path !== "/sponsorships/checkout"
-    ) {
-      const username = path.split("/sponsorships/")[1]
-      if (username) {
-        const match =
-          beneficiaries.find((b) => b.username === username) ||
-          sponsored.find((b) => b.username === username)
-        if (match) {
-          setActiveBeneficiary(match)
-          setIsModalOpen(true)
-          isInitialOpenHandledRef.current = true
-        }
+    if (match) {
+      setActiveBeneficiary(match)
+      setIsModalOpen(true)
+      return () => {
+        cancelled = true
+        controller.abort()
       }
     }
-  }, [beneficiaries, sponsored])
+
+    ;(async () => {
+      try {
+        const res = await fetch(
+          `/api/beneficiaries/get/username/${encodeURIComponent(username)}`,
+          { signal: controller.signal },
+        )
+        if (cancelled) return
+        if (!res.ok) {
+          setActiveBeneficiary(null)
+          setIsModalOpen(false)
+          return
+        }
+        const data = (await res.json()) as { child?: Beneficiaries }
+        if (cancelled || !data?.child) {
+          if (!cancelled) {
+            setActiveBeneficiary(null)
+            setIsModalOpen(false)
+          }
+          return
+        }
+        setActiveBeneficiary(data.child)
+        setIsModalOpen(true)
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return
+        console.error("Failed to load beneficiary by username:", e)
+        if (!cancelled) {
+          setActiveBeneficiary(null)
+          setIsModalOpen(false)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [beneficiaries, sponsored, urlSyncGeneration, pathname])
+
+  useEffect(() => {
+    const onPopState = () => bumpUrlSync()
+    window.addEventListener("popstate", onPopState)
+    return () => window.removeEventListener("popstate", onPopState)
+  }, [bumpUrlSync])
 
   return (
     <Box>
-      {/* Horizontal row: "Children Supported" cards on the left,
+      {/* Horizontal row: "Children Sponsored" cards on the left,
           "Children Waiting" cards on the right, all identical portrait format.
           Infinite scroll is wired to the same pagination hook as the grid below. */}
       <HorizontalSponsorshipRow
@@ -177,24 +242,29 @@ const SponsorshipsContainer: React.FC = () => {
         />
       </Box>
 
-      {/* Primary card grid -- the main browsing experience, untouched */}
-      <SponsorshipListings
-        beneficiaryData={beneficiaries}
-        selectedBeneficiaryId={null}
-        selectedCountry={null}
-        onLoadMore={loadMore}
-        hasMore={hasMore}
-        isLoading={isLoading}
-        onOpenModal={openModal}
-      />
+      {/* Primary card grid -- narrower than the row/filters so the sticky
+         filter's bottom border-radius is visible outside the card edges */}
+      <Box mx={{ base: 0, lg: 5 }}>
+        <SponsorshipListings
+          beneficiaryData={beneficiaries}
+          selectedBeneficiaryId={null}
+          selectedCountry={null}
+          onLoadMore={loadMore}
+          hasMore={hasMore}
+          isLoading={isLoading}
+          onOpenModal={openModal}
+        />
+      </Box>
 
-      {/* Single modal instance -- identified by beneficiary object, not array index */}
+      {/* Single modal instance -- key resets local state when switching children */}
       {activeBeneficiary && (
         <BeneficiaryModal
+          key={activeBeneficiary.id}
           open={isModalOpen}
           onClose={closeModal}
           beneficiary={activeBeneficiary}
           activities={activities}
+          activitiesLoading={activitiesLoading}
         />
       )}
     </Box>

@@ -42,11 +42,16 @@ export async function fetchSponsorshipDetailsByBeneficiaryId(
  * Uses the server-side API route to avoid client-side RLS limitations on
  * the media table.
  */
-export async function fetchActivitiesByBeneficiaryId(beneficiaryId: string) {
+export async function fetchActivitiesByBeneficiaryId(
+  beneficiaryId: string,
+  signal?: AbortSignal,
+) {
   if (!beneficiaryId) return []
 
   try {
-    const res = await fetch(`/api/beneficiaries/${beneficiaryId}/activities`)
+    const res = await fetch(`/api/beneficiaries/${beneficiaryId}/activities`, {
+      signal,
+    })
     if (!res.ok) {
       console.error("Error fetching activities:", res.statusText)
       return []
@@ -54,6 +59,9 @@ export async function fetchActivitiesByBeneficiaryId(beneficiaryId: string) {
     const data = await res.json()
     return data.activities ?? []
   } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return []
+    }
     console.error("Error fetching activities:", err)
     return []
   }

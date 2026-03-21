@@ -68,6 +68,8 @@ interface BeneficiaryModalProps {
   beneficiary: Beneficiaries
   /** Activities pre-fetched by SponsorshipsContainer -- avoids a double fetch. */
   activities?: Activity[]
+  /** True while activities are being fetched for the active beneficiary. */
+  activitiesLoading?: boolean
 }
 
 const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
@@ -75,6 +77,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   onClose,
   beneficiary,
   activities = [],
+  activitiesLoading = false,
 }) => {
   const [toastCount, setToastCount] = useState(0)
   const [lastToastTime, setLastToastTime] = useState(0)
@@ -118,6 +121,14 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   const hasActivities = activities.length > 0
 
+  // About card: collapsed by default when there are updates (room for Latest Updates);
+  // expanded by default when there are none (full bio visible, button reads "Show less").
+  // Wait until activities have loaded so an empty in-flight list is not treated as "no updates".
+  useEffect(() => {
+    if (!open || !beneficiary.id || activitiesLoading) return
+    setBioExpanded(!hasActivities)
+  }, [open, beneficiary.id, hasActivities, activitiesLoading])
+
   const alreadyFulfilled =
     beneficiary.status === "Budget Fulfilled" ||
     effectiveGoalCents <= (beneficiary.budget_raised || 0)
@@ -129,16 +140,20 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }, [open, beneficiary.id, setSponsorshipInProgress])
 
   const loadImages = useCallback(
-    async (beneficiaryId: string) => {
+    async (beneficiaryId: string, signal?: AbortSignal) => {
+      setImages([])
       setImageLoading(true)
       try {
-        const res = await fetch(`/api/beneficiaries/images/${beneficiaryId}`)
+        const res = await fetch(`/api/beneficiaries/images/${beneficiaryId}`, {
+          signal,
+        })
         if (res.ok) {
           const data: BeneficiaryMedia[] = await res.json()
           const sortedImages =
             data
               ?.filter((m: BeneficiaryMedia) => m.type === "IMAGE")
               ?.sort((a, b) => (a.weight ?? 0) - (b.weight ?? 0)) || []
+          if (signal?.aborted) return
           setImages(sortedImages)
 
           const videoMedia =
@@ -148,16 +163,19 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             const videoSrc = video?.id
               ? generatePublicUrl(video as unknown as MediaRow)
               : ""
-            if (videoSrc?.trim()) {
+            if (videoSrc?.trim() && !signal?.aborted) {
               beneficiary.video_url = videoSrc
             }
           }
         }
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return
+        }
         console.error("Failed to load images:", error)
-        setImages([])
+        if (!signal?.aborted) setImages([])
       } finally {
-        setImageLoading(false)
+        if (!signal?.aborted) setImageLoading(false)
       }
     },
     [beneficiary],
@@ -165,7 +183,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   useEffect(() => {
     if (!open || !beneficiary.id) return
-    loadImages(beneficiary.id)
+    const controller = new AbortController()
+    loadImages(beneficiary.id, controller.signal)
+    return () => controller.abort()
   }, [open, beneficiary.id, loadImages])
 
   useEffect(() => {
@@ -803,7 +823,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 )}
               </Box>
 
-              {/* Latest Updates -- styled identically to About card, fully expanded by default */}
+              {/* Latest Updates -- styled identically to About card */}
               {hasActivities && (
                 <Box className="bg-gray-100 rounded-xl p-5 space-y-2">
                   <Text className="text-lg font-semibold text-gray-900">
