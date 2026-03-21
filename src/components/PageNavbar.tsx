@@ -36,6 +36,15 @@ import { SignInModal } from "./SignInModal"
 const ABOUT_TAB_ANCHORS = ["about", "centers", "contact"] as const
 type AboutTabAnchor = typeof ABOUT_TAB_ANCHORS[number]
 
+/** Hysteresis avoids layout feedback: shrinking the bar changes scrollY and would flip a single threshold forever. */
+const NAV_SCROLL_COLLAPSE_PX = 32
+const NAV_SCROLL_EXPAND_PX = 6
+
+const NAV_ROW_HEIGHT_COLLAPSED_PX = 64
+const NAV_ROW_HEIGHT_EXPANDED_PX = 88
+const NAV_ROW_TRANSITION_MS = 300
+const navRowTransition = `height ${NAV_ROW_TRANSITION_MS}ms ease-out`
+
 export function PageNavbar() {
   const [isOpen, setIsOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -51,10 +60,18 @@ export function PageNavbar() {
   const pathname = usePathname()
   const [isAdmin, setIsAdmin] = useState(false)
 
-  // Scroll detection for navbar shadow/blur effect
+  const isHome = pathname === "/"
+  const isHomeLogoExpanded = isHome && !isScrolled
+
+  // Scroll detection for navbar shadow and home logo size (hysteresis prevents bounce near top)
   const handleScroll = useCallback(() => {
     const scrollTop = window.scrollY || document.documentElement.scrollTop
-    setIsScrolled(scrollTop > 10)
+    setIsScrolled((wasScrolled) => {
+      if (wasScrolled) {
+        return scrollTop > NAV_SCROLL_EXPAND_PX
+      }
+      return scrollTop > NAV_SCROLL_COLLAPSE_PX
+    })
   }, [])
 
   // Check URL hash or path for modals (About tabs and Sign In)
@@ -140,9 +157,9 @@ export function PageNavbar() {
         onClose={() => setSignInOpen(false)}
       />
       <Box 
-        className={`w-full z-[1000] sticky top-0 transition-all duration-300 border-b border-gray-200 ${
+        className={`w-full z-[1000] sticky top-0 transition-all duration-300 ${
           isScrolled 
-            ? "bg-white/95 backdrop-blur-md" 
+            ? "bg-white border-b border-gray-200" 
             : "bg-white"
         }`}
         style={{
@@ -151,15 +168,26 @@ export function PageNavbar() {
             : "none"
         }}
       >
-        <Flex className="w-full max-w-[1200px] mx-auto px-6 md:px-8 h-16 flex justify-between items-center relative">
-        {/* Logo Centered */}
-        <Box className="flex items-center flex-shrink-0">
+        <Flex
+          className="w-full max-w-[1200px] mx-auto px-6 md:px-8 flex justify-between items-center relative overflow-visible"
+          style={{
+            height: isHomeLogoExpanded
+              ? NAV_ROW_HEIGHT_EXPANDED_PX
+              : NAV_ROW_HEIGHT_COLLAPSED_PX,
+            transition: navRowTransition,
+          }}
+        >
+        {/* Logo: larger at top on homepage only; other routes stay compact */}
+        <Box className="flex items-center flex-shrink-0 overflow-visible">
           <NextLink href="/" passHref>
             <Image
               src="/logo_text.svg"
               alt="Creator Share"
-              height="48px"
+              height={isHomeLogoExpanded ? "72px" : "48px"}
               objectFit="contain"
+              style={{
+                transition: `height ${NAV_ROW_TRANSITION_MS}ms ease-out`,
+              }}
             />
           </NextLink>
         </Box>
@@ -288,26 +316,29 @@ export function PageNavbar() {
           )}
         </Flex>
 
-        {/* Mobile Menu Button */}
-        <Button
+        {/* Mobile menu: wrapper stays vertically centered while row height animates */}
+        <Box
           display={{ base: "block", md: "none" }}
-          onClick={() => setIsOpen(!isOpen)}
-          aria-label="Toggle Menu"
-          variant="ghost"
-          color={isOpen ? "white" : "inherit"}
-          className="absolute right-4 z-[1101]"
-          _hover={{
-            transform: isOpen ? "scale(1.15)" : undefined,
-            bg: isOpen ? "transparent" : undefined,
-          }}
-          transition="transform 0.2s ease"
+          className="absolute right-4 top-1/2 z-[1101] -translate-y-1/2"
         >
-          {isOpen ? (
-            <IoClose className="w-6 h-6" />
-          ) : (
-            <GiHamburgerMenu className="w-6 h-6" />
-          )}
-        </Button>
+          <Button
+            onClick={() => setIsOpen(!isOpen)}
+            aria-label="Toggle Menu"
+            variant="ghost"
+            color={isOpen ? "white" : "inherit"}
+            _hover={{
+              transform: isOpen ? "scale(1.15)" : undefined,
+              bg: isOpen ? "transparent" : undefined,
+            }}
+            transition="transform 0.2s ease"
+          >
+            {isOpen ? (
+              <IoClose className="w-6 h-6" />
+            ) : (
+              <GiHamburgerMenu className="w-6 h-6" />
+            )}
+          </Button>
+        </Box>
       </Flex>
 
       {/* Mobile Menu (Dropdown) */}
