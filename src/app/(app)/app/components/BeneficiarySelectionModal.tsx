@@ -200,11 +200,7 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <Text className="text-xl font-semibold">Choose a Child to Sponsor</Text>
-          <DialogCloseTrigger disabled={assigning}>
-            <Box className="text-xl cursor-pointer hover:bg-gray-100 rounded-full w-6 h-6 flex items-center justify-center">
-              ×
-            </Box>
-          </DialogCloseTrigger>
+          <DialogCloseTrigger disabled={assigning} />
         </DialogHeader>
         <DialogBody>
           {loading ? (

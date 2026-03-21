@@ -4,12 +4,13 @@ import {
   DialogRoot,
   DialogBackdrop,
   DialogContent,
+  DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogCloseTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Text, Box } from "@chakra-ui/react"
+import { Box, Text } from "@chakra-ui/react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { UserRole, Role } from "@/types/admin.types"
 import { toaster } from "@/components/ui/toaster"
@@ -95,10 +96,13 @@ export const EditRoleDialog: React.FC<EditRoleDialogProps> = ({
     <DialogRoot open={isOpen} onOpenChange={onClose}>
       <DialogBackdrop />
       <DialogContent className="max-w-md p-8">
-          <DialogTitle>Edit User Roles</DialogTitle>
-          <DialogDescription>
-            Assign multiple roles to {user.user?.email}
-          </DialogDescription>
+          <DialogHeader>
+            <DialogTitle>Edit User Roles</DialogTitle>
+            <DialogDescription>
+              Assign multiple roles to {user.user?.email}
+            </DialogDescription>
+            <DialogCloseTrigger onClick={onClose} />
+          </DialogHeader>
 
           <div className="space-y-4 mt-4">
             <div>
@@ -173,8 +177,6 @@ export const EditRoleDialog: React.FC<EditRoleDialogProps> = ({
               </Button>
             </div>
           </div>
-
-          <DialogCloseTrigger />
         </DialogContent>
     </DialogRoot>
   )

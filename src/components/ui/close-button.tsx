@@ -8,16 +8,17 @@ export type CloseButtonProps = ButtonProps
 export const CloseButton = React.forwardRef<
   HTMLButtonElement,
   CloseButtonProps
->(function CloseButton(props, ref) {
+>(function CloseButton({ children, ...props }, ref) {
   return (
-    <ChakraIconButton 
-      variant="ghost" 
-      aria-label="Close" 
-      ref={ref} 
+    <ChakraIconButton
+      variant="ghost"
+      aria-label="Close"
+      ref={ref}
       borderRadius="full"
+      lineHeight={0}
       {...props}
     >
-      {props.children ?? <LuX />}
+      {children ?? <LuX style={{ display: "block" }} />}
     </ChakraIconButton>
   )
 })

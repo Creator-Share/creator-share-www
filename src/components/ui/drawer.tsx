@@ -1,5 +1,5 @@
 import { Drawer as ChakraDrawer, Portal } from "@chakra-ui/react"
-import { CloseButton } from "./close-button"
+import { RxCross2 } from "react-icons/rx"
 import * as React from "react"
 
 interface DrawerContentProps extends ChakraDrawer.ContentProps {
@@ -28,15 +28,44 @@ export const DrawerCloseTrigger = React.forwardRef<
   HTMLButtonElement,
   ChakraDrawer.CloseTriggerProps
 >(function DrawerCloseTrigger(props, ref) {
+  const { children, ...rest } = props
   return (
     <ChakraDrawer.CloseTrigger
       position="absolute"
-      top="2"
+      top="50%"
       insetEnd="2"
-      {...props}
+      transform="translateY(-50%)"
+      {...rest}
       asChild
     >
-      <CloseButton size="sm" ref={ref} />
+      <button
+        ref={ref}
+        aria-label="Close"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 56,
+          height: 56,
+          borderRadius: "50%",
+          border: "none",
+          background: "transparent",
+          cursor: "pointer",
+          padding: 0,
+          flexShrink: 0,
+          color: "inherit",
+        }}
+        onMouseEnter={(e) =>
+          ((e.currentTarget as HTMLButtonElement).style.background =
+            "rgba(255,255,255,0.15)")
+        }
+        onMouseLeave={(e) =>
+          ((e.currentTarget as HTMLButtonElement).style.background =
+            "transparent")
+        }
+      >
+        {children ?? <RxCross2 size={24} style={{ display: "block" }} />}
+      </button>
     </ChakraDrawer.CloseTrigger>
   )
 })
@@ -44,7 +73,13 @@ export const DrawerCloseTrigger = React.forwardRef<
 export const DrawerTrigger = ChakraDrawer.Trigger
 export const DrawerRoot = ChakraDrawer.Root
 export const DrawerFooter = ChakraDrawer.Footer
-export const DrawerHeader = ChakraDrawer.Header
+
+export const DrawerHeader = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentProps<typeof ChakraDrawer.Header>
+>(function DrawerHeader({ position = "relative", ...props }, ref) {
+  return <ChakraDrawer.Header ref={ref} position={position} {...props} />
+})
 export const DrawerBody = ChakraDrawer.Body
 export const DrawerBackdrop = ChakraDrawer.Backdrop
 export const DrawerDescription = ChakraDrawer.Description
