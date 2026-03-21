@@ -1,6 +1,7 @@
 "use client"
 import React, { useCallback } from "react"
 import { Accordion, Box, Text } from "@chakra-ui/react"
+import { FaExternalLinkAlt } from "react-icons/fa"
 import {
   DialogRoot,
   DialogContent,
@@ -98,34 +99,63 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
         </DialogHeader>
 
         <DialogBody className="p-6 md:p-10">
-          <Accordion.Root defaultValue={[]} className="space-y-3">
-            {FAQ_ITEMS.map((item, index) => (
-              <Accordion.Item
-                key={index}
-                value={String(index)}
-                className="border border-gray-200 rounded-xl overflow-hidden"
-              >
-                <Accordion.ItemTrigger className="w-full text-left px-6 py-5 bg-gray-50 hover:bg-gray-100 transition-colors flex justify-between items-start gap-4 cursor-pointer">
-                  <Text
-                    fontWeight="semibold"
-                    color="gray.800"
-                    fontSize="sm"
-                    lineHeight="1.5"
-                  >
-                    {item.question}
-                  </Text>
-                  <Accordion.ItemIndicator className="text-[#1C3C8C] flex-shrink-0 mt-0.5" />
-                </Accordion.ItemTrigger>
-                <Accordion.ItemContent>
-                  <Box className="px-6 py-5 border-t border-gray-100">
-                    <Text color="gray.700" fontSize="sm" lineHeight="1.8">
-                      {item.answer}
+          <section aria-label="Sponsorship questions">
+            <Accordion.Root defaultValue={[]} className="space-y-3">
+              {FAQ_ITEMS.map((item, index) => (
+                <Accordion.Item
+                  key={index}
+                  value={String(index)}
+                  className="border border-gray-200 rounded-xl overflow-hidden"
+                >
+                  <Accordion.ItemTrigger className="w-full text-left px-6 py-5 bg-gray-50 hover:bg-gray-100 transition-colors flex justify-between items-start gap-4 cursor-pointer">
+                    <Text
+                      fontWeight="semibold"
+                      color="gray.800"
+                      fontSize="sm"
+                      lineHeight="1.5"
+                    >
+                      {item.question}
                     </Text>
-                  </Box>
-                </Accordion.ItemContent>
-              </Accordion.Item>
-            ))}
-          </Accordion.Root>
+                    <Accordion.ItemIndicator className="text-[#1C3C8C] flex-shrink-0 mt-0.5" />
+                  </Accordion.ItemTrigger>
+                  <Accordion.ItemContent>
+                    <Box className="px-6 py-5 border-t border-gray-100">
+                      <Text color="gray.700" fontSize="sm" lineHeight="1.8">
+                        {item.answer}
+                      </Text>
+                    </Box>
+                  </Accordion.ItemContent>
+                </Accordion.Item>
+              ))}
+            </Accordion.Root>
+          </section>
+
+          <section
+            aria-labelledby="faq-manage-sponsorship-heading"
+            className="mt-10 pt-8 border-t border-gray-200"
+          >
+            <Text
+              as="h2"
+              id="faq-manage-sponsorship-heading"
+              fontSize="lg"
+              fontWeight="bold"
+              color="gray.800"
+              mb={4}
+            >
+              Existing Sponsor?
+            </Text>
+            <Box className="bg-gray-50 rounded-lg p-5 border border-gray-200">
+              <a
+                href="https://stripe.creatorshare.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-[#1C3C8C] hover:underline text-sm"
+              >
+                <FaExternalLinkAlt className="w-3 h-3" />
+                Manage Subscriptions via Stripe
+              </a>
+            </Box>
+          </section>
         </DialogBody>
       </DialogContent>
     </DialogRoot>

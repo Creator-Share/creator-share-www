@@ -72,6 +72,8 @@ export interface BeneficiaryWithActivity extends Beneficiaries {
   last_activity_date: string | null
   days_since_last_activity: number | null
   has_activity: boolean
+  /** True if this beneficiary has at least one public activity with an image or video attachment */
+  has_public_activity_media: boolean
 }
 
 export interface BeneficiaryMedia {

@@ -15,7 +15,6 @@ import { Tooltip } from "@/components/ui/tooltip"
 import { useFilterStore } from "@/store/filterStore"
 import { FiltersProps } from "@/types/propTypes"
 import { genders, status as statusOptions } from "./config"
-import { useAuthStore } from "@/store/authStore"
 import { IoClose } from "react-icons/io5"
 
 const SponsorshipFilters: React.FC<
@@ -43,26 +42,11 @@ const SponsorshipFilters: React.FC<
 
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [mounted, setMounted] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const user = useAuthStore((state) => state.user)
-  
+
   const isInternalUpdateRef = useRef(false)
   const ageRangeUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const previousAgeRangeRef = useRef<[number, number]>([minAge, maxAge])
   const sliderDebounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  useEffect(() => {
-    const checkAdminStatus = async () => {
-      if (user?.id) {
-        const response = await fetch("/api/auth/check-admin")
-        const { isAdmin } = await response.json()
-        setIsAdmin(isAdmin)
-      } else {
-        setIsAdmin(false)
-      }
-    }
-    checkAdminStatus()
-  }, [user])
 
   // Initialize admin status filter when in admin mode (only on mount)
   const hasInitializedRef = useRef(false)
@@ -167,7 +151,7 @@ const SponsorshipFilters: React.FC<
 
     const defaultStatus = isAdminMode
       ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
-      : ["New", "Partially Funded"]
+      : ["New", "Partially Funded", "Sponsorship Cancelled"]
 
     isInternalUpdateRef.current = true
     
@@ -191,7 +175,7 @@ const SponsorshipFilters: React.FC<
 
   const modeDefaultStatus = isAdminMode
     ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
-    : ["New", "Partially Funded"]
+    : ["New", "Partially Funded", "Sponsorship Cancelled"]
 
   const isGenderDefault = (selectedGender ?? "") === ""
   const isAgeDefault =
@@ -321,16 +305,16 @@ const SponsorshipFilters: React.FC<
               </SelectRoot>
             </Box>
 
-            {user && isAdmin && (
+            {isAdminMode ? (
+              /* Admin: full multi-select status dropdown */
               <Tooltip content="Filter by funding status (Admin Only)">
                 <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
                   <SelectRoot
                     collection={statusOptions}
                     value={selectedStatus}
                     onValueChange={(details) => {
-                      // When multiple is true, details.value is an array of selected values
-                      const values = Array.isArray(details.value) 
-                        ? details.value 
+                      const values = Array.isArray(details.value)
+                        ? details.value
                         : details.items.map((item) => item.value)
                       handleFilterChange({ status: values })
                     }}
@@ -338,17 +322,11 @@ const SponsorshipFilters: React.FC<
                     className="rounded-2xl w-full"
                     multiple
                   >
-                    <SelectTrigger
-                      css={{
-                        borderRadius: "16px !important",
-                      }}
-                    >
+                    <SelectTrigger css={{ borderRadius: "16px !important" }}>
                       <SelectValueText placeholder="Select Status">
                         {() => {
                           const selected = statusOptions.items
-                            .filter((item) =>
-                              selectedStatus.includes(item.value)
-                            )
+                            .filter((item) => selectedStatus.includes(item.value))
                             .map((item) => item.label)
                             .join(", ")
                           return selected || "Select Status"
@@ -365,6 +343,45 @@ const SponsorshipFilters: React.FC<
                   </SelectRoot>
                 </Box>
               </Tooltip>
+            ) : (
+              /* Public: simple Waiting / Sponsored segmented toggle */
+              <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+                <Flex bg="gray.100" borderRadius="16px" p="3px" gap={0}>
+                  {(
+                    [
+                      {
+                        label: "Waiting",
+                        statuses: ["New", "Partially Funded", "Sponsorship Cancelled"],
+                      },
+                      {
+                        label: "Sponsored",
+                        statuses: ["Budget Fulfilled"],
+                      },
+                    ] as const
+                  ).map(({ label, statuses }) => {
+                    const isActive =
+                      statuses.length === selectedStatus.length &&
+                      statuses.every((s) => selectedStatus.includes(s))
+                    return (
+                      <Button
+                        key={label}
+                        flex={1}
+                        size="sm"
+                        borderRadius="13px"
+                        bg={isActive ? "white" : "transparent"}
+                        color={isActive ? "#0654C6" : "gray.500"}
+                        fontWeight={isActive ? "semibold" : "medium"}
+                        boxShadow={isActive ? "sm" : "none"}
+                        onClick={() => handleFilterChange({ status: [...statuses] })}
+                        _hover={{ bg: isActive ? "white" : "gray.200" }}
+                        transition="all 0.15s"
+                      >
+                        {label}
+                      </Button>
+                    )
+                  })}
+                </Flex>
+              </Box>
             )}
 
             <Box

@@ -14,7 +14,7 @@ import {
 // Valid tab anchors that can open the modal
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const TAB_ANCHORS = ["about", "centers", "contact"] as const
-type TabAnchor = typeof TAB_ANCHORS[number]
+type TabAnchor = (typeof TAB_ANCHORS)[number]
 
 interface AboutUsModalProps {
   open: boolean
@@ -22,7 +22,11 @@ interface AboutUsModalProps {
   defaultTab?: TabAnchor
 }
 
-export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defaultTab = "about" }) => {
+export const AboutUsModal: React.FC<AboutUsModalProps> = ({
+  open,
+  onClose,
+  defaultTab = "about",
+}) => {
   const [activeTab, setActiveTab] = useState<TabAnchor>(defaultTab)
 
   // Handle tab changes - update URL hash
@@ -37,7 +41,11 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
   // Clear hash when modal closes
   const handleClose = useCallback(() => {
     if (typeof window !== "undefined" && window.location.hash) {
-      window.history.replaceState(null, "", window.location.pathname + window.location.search)
+      window.history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search,
+      )
     }
     onClose()
   }, [onClose])
@@ -73,17 +81,18 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
   ]
 
   return (
-    <DialogRoot 
-      open={open} 
+    <DialogRoot
+      open={open}
       onOpenChange={(e) => !e.open && handleClose()}
       size="xl"
       scrollBehavior="outside"
     >
-      <DialogContent 
+      <DialogContent
         className="max-w-4xl mx-4 rounded-3xl overflow-hidden"
         style={{
-          boxShadow: "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)",
-          borderRadius: "24px"
+          boxShadow:
+            "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)",
+          borderRadius: "24px",
         }}
       >
         <DialogHeader className="bg-[#1C3C8C] text-white px-10 py-6">
@@ -92,27 +101,27 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
           </DialogTitle>
           <DialogCloseTrigger className="text-white hover:bg-white/20" />
         </DialogHeader>
-        
+
         <DialogBody p={0}>
-          <Tabs.Root 
-            value={activeTab} 
+          <Tabs.Root
+            value={activeTab}
             onValueChange={(e) => handleTabChange(e.value)}
             variant="line"
           >
             <Tabs.List className="bg-gray-50 px-0 md:px-12 border-b justify-center md:justify-start">
-              <Tabs.Trigger 
+              <Tabs.Trigger
                 value="about"
                 className="px-6 py-6 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
               >
                 About
               </Tabs.Trigger>
-              <Tabs.Trigger 
+              <Tabs.Trigger
                 value="centers"
                 className="px-6 py-6 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
               >
                 Our Centers
               </Tabs.Trigger>
-              <Tabs.Trigger 
+              <Tabs.Trigger
                 value="contact"
                 className="px-6 py-6 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
               >
@@ -130,9 +139,10 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
                   UK Registered Charity 1169474
                 </Text>
                 <Text color="gray.700" lineHeight="1.8" mb={8}>
-                  Creator Share connects sponsors with children in need, providing education, 
-                  medical care, adequate nutrition, and the opportunity to pursue their hopes 
-                  and dreams. One child at a time, love is changing thousands of lives.
+                  Creator Share connects sponsors with children in need,
+                  providing education, medical care, adequate nutrition, and the
+                  opportunity to pursue their hopes and dreams. One child at a
+                  time, love is changing thousands of lives.
                 </Text>
 
                 {/* Social Links */}
@@ -163,11 +173,9 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
                 </Box>
 
                 {/* Manage Subscriptions Link */}
-                <Box
-                  className="bg-gray-50 rounded-lg p-5 border border-gray-200"
-                >
+                <Box className="bg-gray-50 rounded-lg p-5 border border-gray-200">
                   <Text fontWeight="semibold" color="gray.800" mb={2}>
-                    Manage Your Sponsorship
+                    Existing Sponsor?
                   </Text>
                   <a
                     href="https://stripe.creatorshare.com"
@@ -188,8 +196,8 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
                 Our Centers
               </Text>
               <Text color="gray.600" mb={8}>
-                We operate multiple centers in Tanzania, each dedicated to supporting 
-                vulnerable populations in different ways.
+                We operate multiple centers in Tanzania, each dedicated to
+                supporting vulnerable populations in different ways.
               </Text>
               <Box className="space-y-4">
                 {centers.map((center, index) => (
@@ -201,7 +209,11 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
                     className="flex items-center gap-3 p-5 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 group"
                   >
                     <Box className="flex-1">
-                      <Text fontWeight="medium" color="gray.800" className="group-hover:text-[#1C3C8C]">
+                      <Text
+                        fontWeight="medium"
+                        color="gray.800"
+                        className="group-hover:text-[#1C3C8C]"
+                      >
                         {center.name}
                       </Text>
                     </Box>
@@ -216,7 +228,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
               <Text fontSize="xl" fontWeight="bold" color="gray.800" mb={6}>
                 Contact Us
               </Text>
-              
+
               <Box className="grid md:grid-cols-2 gap-6">
                 {/* Email */}
                 <Box className="bg-gray-50 rounded-lg p-6 border border-gray-200">
@@ -237,10 +249,14 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
                     Our Address
                   </Text>
                   <address className="not-italic text-gray-600 text-sm leading-relaxed">
-                    The Creator Share Foundation<br />
-                    86-90 Paul Street<br />
-                    London<br />
-                    EC2A 4NE<br />
+                    The Creator Share Foundation
+                    <br />
+                    86-90 Paul Street
+                    <br />
+                    London
+                    <br />
+                    EC2A 4NE
+                    <br />
                     United Kingdom
                   </address>
                 </Box>
@@ -249,8 +265,8 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({ open, onClose, defau
               {/* Map placeholder or additional contact info could go here */}
               <Box className="text-center text-gray-500 text-sm mt-8">
                 <Text>
-                  We&apos;d love to hear from you. Reach out with any questions about 
-                  sponsorships, donations, or volunteering opportunities.
+                  We&apos;d love to hear from you. Reach out with any questions
+                  about sponsorships, donations, or volunteering opportunities.
                 </Text>
               </Box>
             </Tabs.Content>

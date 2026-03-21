@@ -35,6 +35,14 @@ interface UseBeneficiaryPaginationReturn {
   retryCount: number
 }
 
+/** In-place Fisher-Yates shuffle — O(n), unbiased. */
+function shuffle<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+}
+
 /**
  * Custom hook for managing beneficiary pagination with cursor-based loading
  * Includes Fibonacci-based auto-retry logic for failed requests
@@ -133,6 +141,7 @@ export function useBeneficiaryPagination(
         if (!res.ok) throw new Error("Failed to load beneficiaries")
         const data = await res.json()
         const people = (data?.people || []) as Beneficiaries[]
+        shuffle(people)
 
         setBeneficiaries((prev) => {
           if (!nextCursor) {
