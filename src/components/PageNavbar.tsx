@@ -358,12 +358,13 @@ export function PageNavbar() {
           zIndex="1100"
           pointerEvents="auto"
         >
-          <VStack gap={4} py={6}>
+          <VStack gap={6} py={6}>
             {/* Foundation - always visible */}
             <Button
-              size="sm"
+              size="lg"
               variant="ghost"
               color="white"
+              fontSize="xl"
               _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
               className="w-full"
               asChild
@@ -374,9 +375,10 @@ export function PageNavbar() {
             </Button>
             {/* FAQ - always visible */}
             <Button
-              size="sm"
+              size="lg"
               variant="ghost"
               color="white"
+              fontSize="xl"
               _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
               onClick={() => {
                 setIsOpen(false)
@@ -389,9 +391,10 @@ export function PageNavbar() {
             </Button>
             {/* About Us - always visible */}
             <Button
-              size="sm"
+              size="lg"
               variant="ghost"
               color="white"
+              fontSize="xl"
               _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
               onClick={() => {
                 setIsOpen(false)
@@ -441,15 +444,16 @@ export function PageNavbar() {
               <>
                 {isAdmin && (
                   <NextLink href="/admin" passHref>
-                    <Button size="sm" variant="ghost" color="white" _hover={{ bg: "rgba(255, 255, 255, 0.1)" }} className="w-full">
+                    <Button size="lg" variant="ghost" color="white" fontSize="xl" _hover={{ bg: "rgba(255, 255, 255, 0.1)" }} className="w-full">
                       Admin
                     </Button>
                   </NextLink>
                 )}
                 <Button
-                  size="sm"
+                  size="lg"
                   variant="ghost"
                   color="white"
+                  fontSize="xl"
                   _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
                   onClick={handleLogout}
                   className="w-full"
@@ -459,9 +463,10 @@ export function PageNavbar() {
               </>
             ) : (
               <Button
-                size="sm"
+                size="lg"
                 variant="ghost"
                 color="white"
+                fontSize="xl"
                 _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
                 className="w-full"
                 onClick={() => {
