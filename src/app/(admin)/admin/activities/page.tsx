@@ -155,6 +155,13 @@ const ActivitiesAdminPage: React.FC = () => {
   // Categorize beneficiaries
   const categorized = categorizeBeneficiaries(filteredBeneficiaries)
 
+  const showNoPublicMediaSection = beneficiaries.some(
+    (b) => !b.has_public_activity_media
+  )
+  const noPublicMediaBeneficiaries = filteredBeneficiaries.filter(
+    (b) => !b.has_public_activity_media
+  )
+
   // Handle create activity
   const handleCreateActivity = (beneficiaryId: string, beneficiaryName: string) => {
     setSelectedBeneficiary({ id: beneficiaryId, name: beneficiaryName })
@@ -220,14 +227,13 @@ const ActivitiesAdminPage: React.FC = () => {
             loadingImages={loadingImages}
           />
 
-          {/* Up to Date Section (collapsed by default) */}
+          {/* Up to Date Section */}
           <ActivitySection
             status="upToDate"
             beneficiaries={categorized.upToDate}
             onCreateActivity={handleCreateActivity}
             beneficiaryImages={beneficiaryImages}
             loadingImages={loadingImages}
-            defaultCollapsed={true}
           />
 
           {/* No Activities Section */}
@@ -238,6 +244,16 @@ const ActivitiesAdminPage: React.FC = () => {
             beneficiaryImages={beneficiaryImages}
             loadingImages={loadingImages}
           />
+
+          {showNoPublicMediaSection && (
+            <ActivitySection
+              status="noPublicMedia"
+              beneficiaries={noPublicMediaBeneficiaries}
+              onCreateActivity={handleCreateActivity}
+              beneficiaryImages={beneficiaryImages}
+              loadingImages={loadingImages}
+            />
+          )}
         </Box>
       )}
 
