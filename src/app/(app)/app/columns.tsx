@@ -10,7 +10,7 @@ import {
   DialogBody,
   DialogCloseTrigger,
 } from "@/components/ui/dialog"
-import { Spinner, Text, Flex, Box } from "@chakra-ui/react"
+import { Spinner, Text, Flex } from "@chakra-ui/react"
 
 // Cancel Subscription Button Component with Modal
 const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
@@ -75,11 +75,7 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <Text className="text-lg font-semibold">Cancel Subscription</Text>
-            <DialogCloseTrigger disabled={isLoading}>
-              <Box className="text-xl cursor-pointer hover:bg-gray-100 rounded-full w-6 h-6 flex items-center justify-center">
-                ×
-              </Box>
-            </DialogCloseTrigger>
+            <DialogCloseTrigger disabled={isLoading} />
           </DialogHeader>
           <DialogBody>
             {isLoading ? (
