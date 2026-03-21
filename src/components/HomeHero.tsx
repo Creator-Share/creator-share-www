@@ -62,7 +62,9 @@ export const HomeHero = () => {
               <br />
               love is{" "}
               <Box as="span" display="inline-block" position="relative">
-                <Box as="span" style={{ position: "relative", zIndex: 1 }}>changing</Box>
+                <Box as="span" style={{ position: "relative", zIndex: 1 }}>
+                  changing
+                </Box>
                 <BrushstrokeUnderline />
               </Box>{" "}
               thousands
@@ -75,7 +77,7 @@ export const HomeHero = () => {
               lineHeight="1.7"
               maxW={{ base: "none", md: "xl", lg: "2xl" }}
             >
-              The{" "}
+              For over a decade, the{" "}
               <a
                 href="https://tanzania.creatorshare.com"
                 target="_blank"
@@ -88,10 +90,11 @@ export const HomeHero = () => {
               >
                 Creator Share Foundation
               </a>{" "}
-              has been serving children in Tanzania for over a decade. This
-              platform connects you directly with a child in the communities we
-              serve. Your abundance can provide education, medical care, and the
-              hope to pursue their dreams.
+              has built children&apos;s villages across Tanzania, creating home
+              and family for hundreds of the most vulnerable children on earth.
+              Through this platform, you can walk with a specific child -
+              providing the education, medical care, and belief in their
+              potential that changes everything.
             </Text>
           </Box>
 
