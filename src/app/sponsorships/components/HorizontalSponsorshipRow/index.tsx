@@ -22,7 +22,9 @@ const StatsCard: React.FC = () => {
   useEffect(() => {
     fetch("/api/stats")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d) setStats(d) })
+      .then((d) => {
+        if (d) setStats(d)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
@@ -48,10 +50,21 @@ const StatsCard: React.FC = () => {
       ) : (
         <>
           <Flex direction="column" align="center">
-            <Text fontSize="4xl" fontWeight="bold" color="gray.800" lineHeight={1}>
+            <Text
+              fontSize="4xl"
+              fontWeight="bold"
+              color="gray.800"
+              lineHeight={1}
+            >
               {stats?.childrenInNeed.toLocaleString() ?? "—"}
             </Text>
-            <Text fontSize="xs" color="gray.500" fontWeight="medium" mt={1} textAlign="center">
+            <Text
+              fontSize="xs"
+              color="gray.500"
+              fontWeight="medium"
+              mt={1}
+              textAlign="center"
+            >
               Children Waiting
             </Text>
           </Flex>
@@ -59,11 +72,22 @@ const StatsCard: React.FC = () => {
           <Box w="40px" h="1px" bg="gray.200" />
 
           <Flex direction="column" align="center">
-            <Text fontSize="4xl" fontWeight="bold" color="gray.800" lineHeight={1}>
+            <Text
+              fontSize="4xl"
+              fontWeight="bold"
+              color="gray.800"
+              lineHeight={1}
+            >
               {stats?.childrenSupported.toLocaleString() ?? "—"}
             </Text>
-            <Text fontSize="xs" color="gray.500" fontWeight="medium" mt={1} textAlign="center">
-              Children Supported
+            <Text
+              fontSize="xs"
+              color="gray.500"
+              fontWeight="medium"
+              mt={1}
+              textAlign="center"
+            >
+              Children Sponsored
             </Text>
           </Flex>
         </>
@@ -75,7 +99,6 @@ const StatsCard: React.FC = () => {
 // ---------------------------------------------------------------------------
 // Image overlays
 // ---------------------------------------------------------------------------
-
 
 const InNeedBadge: React.FC = () => (
   <Flex
@@ -193,10 +216,10 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
         {/* Stats card -- always first */}
         <StatsCard />
 
-        {/* Children Supported */}
+        {/* Children Sponsored */}
         {sponsored.length > 0 && (
           <>
-            <SectionDivider label="Children Supported" />
+            <SectionDivider label="Children Sponsored" />
             {sponsored.map((b) => (
               <PortraitBeneficiaryCard
                 key={b.id}
@@ -222,22 +245,39 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
                   isSelected={selectedBeneficiaryId === b.id}
                   imageOverlay={<InNeedBadge />}
                 />
-              ) : null
+              ) : null,
             )}
           </>
         )}
 
         {/* Loading indicator */}
         {isLoading && (
-          <Flex align="center" justify="center" w="80px" h="270px" flexShrink={0}>
+          <Flex
+            align="center"
+            justify="center"
+            w="80px"
+            h="270px"
+            flexShrink={0}
+          >
             <Spinner size="lg" color="gray.300" />
           </Flex>
         )}
 
         {/* End-of-results cap */}
         {!isLoading && !hasMore && beneficiaries.length > 0 && (
-          <Flex align="center" justify="center" w="100px" h="270px" flexShrink={0}>
-            <Text fontSize="xs" color="gray.400" textAlign="center" lineHeight="short">
+          <Flex
+            align="center"
+            justify="center"
+            w="100px"
+            h="270px"
+            flexShrink={0}
+          >
+            <Text
+              fontSize="xs"
+              color="gray.400"
+              textAlign="center"
+              lineHeight="short"
+            >
               {"That's\neveryone"}
             </Text>
           </Flex>
