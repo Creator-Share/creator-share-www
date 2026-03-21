@@ -245,7 +245,7 @@ export function PageNavbar() {
             asChild
           >
             <a href="https://tanzania.creatorshare.com/" target="_blank" rel="noopener noreferrer">
-              Organization
+              Foundation
             </a>
           </Button>
           <Button
@@ -359,7 +359,7 @@ export function PageNavbar() {
           pointerEvents="auto"
         >
           <VStack gap={4} py={6}>
-            {/* Organization - always visible */}
+            {/* Foundation - always visible */}
             <Button
               size="sm"
               variant="ghost"
@@ -369,7 +369,7 @@ export function PageNavbar() {
               asChild
             >
               <a href="https://tanzania.creatorshare.com/" target="_blank" rel="noopener noreferrer">
-                Organization
+                Foundation
               </a>
             </Button>
             {/* FAQ - always visible */}
