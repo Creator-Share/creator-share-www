@@ -142,7 +142,7 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
               color="gray.800"
               mb={4}
             >
-              Manage your sponsorship
+              Existing Sponsor?
             </Text>
             <Box className="bg-gray-50 rounded-lg p-5 border border-gray-200">
               <a

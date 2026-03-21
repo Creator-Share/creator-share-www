@@ -90,7 +90,7 @@ export const HomeHero = () => {
               >
                 Creator Share Foundation
               </a>{" "}
-              has built children&apos;s villages across Tanzania, creating home
+              has built children&apos;s centers across Tanzania, creating home
               and family for hundreds of the most vulnerable children on earth.
               Through this platform, you can walk with a specific child -
               providing the education, medical care, and belief in their
