@@ -81,6 +81,34 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
     onClose()
   }
 
+  const handleTogglePublic = async (activity: Activity) => {
+    const newIsPublic = !(activity.is_public ?? false)
+    // Optimistic update
+    setActivities((prev) =>
+      prev.map((a) => (a.id === activity.id ? { ...a, is_public: newIsPublic } : a)),
+    )
+    try {
+      const res = await fetch("/api/admin/activities/update", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: activity.id,
+          title: activity.title,
+          description: activity.description,
+          activity_type: activity.activity_type,
+          is_public: newIsPublic,
+          beneficiary_id: activity.beneficiary_id,
+        }),
+      })
+      if (!res.ok) throw new Error("Failed to update visibility")
+    } catch {
+      // Revert optimistic update on failure
+      setActivities((prev) =>
+        prev.map((a) => (a.id === activity.id ? { ...a, is_public: activity.is_public } : a)),
+      )
+    }
+  }
+
   if (!beneficiaryId) {
     return (
       <div className="container mx-auto h-[calc(100vh-200px)] mt-12 flex items-center justify-center">
@@ -113,6 +141,7 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
               setDeleteActivity(activity)
               setDeleteOpen(true)
             },
+            onTogglePublic: handleTogglePublic,
           },
           userRole === "SUPER_ADMIN",
         )}

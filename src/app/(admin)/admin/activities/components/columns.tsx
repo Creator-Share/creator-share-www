@@ -6,7 +6,6 @@ import { Activity } from "@/types/admin.types"
 
 import React from "react"
 import { Button } from "@chakra-ui/react"
-import { HiCheck, HiX } from "react-icons/hi"
 
 const PHOTO_THUMB_PX = 24
 const MAX_VISIBLE_PHOTOS = 4
@@ -63,6 +62,7 @@ function ActivityMediaCell({ activity }: { activity: Activity }) {
 export type ActivityActionHandlers = {
   onEdit: (activity: Activity) => void
   onDelete: (activity: Activity) => void
+  onTogglePublic?: (activity: Activity) => void
 }
 
 export function getActivityColumns(
@@ -72,26 +72,36 @@ export function getActivityColumns(
   return [
     {
       accessorKey: "is_public",
-      header: () => <span>Public</span>,
+      header: () => <span>Visibility</span>,
       cell: ({ row }) => {
         const activity = row.original as Activity
-        const isPublic = activity.is_public === true
+        const isPublic = activity.is_public ?? false
         return (
-          <div
-            className="flex w-full items-center justify-center"
-            title={isPublic ? "Visible to sponsors" : "Not visible to sponsors"}
+          <button
+            type="button"
+            onClick={() => handlers.onTogglePublic?.(activity)}
+            title="Click to toggle visibility"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "2px 8px",
+              borderRadius: 4,
+              fontSize: "0.7rem",
+              fontWeight: 600,
+              cursor: handlers.onTogglePublic ? "pointer" : "default",
+              border: "none",
+              background: isPublic ? "#dcfce7" : "#f3f4f6",
+              color: isPublic ? "#166534" : "#6b7280",
+              transition: "opacity 0.15s",
+            }}
           >
-            {isPublic ? (
-              <HiCheck className="text-green-600" size={18} aria-hidden />
-            ) : (
-              <HiX className="text-gray-400" size={18} aria-hidden />
-            )}
-            <span className="sr-only">
-              {isPublic ? "Public" : "Not public"}
-            </span>
-          </div>
+            <span style={{ fontSize: "0.6rem" }}>{isPublic ? "🟢" : "🔒"}</span>
+            {isPublic ? "PUBLIC" : "PRIVATE"}
+          </button>
         )
       },
+      meta: { excludeFromClick: true },
     },
     {
       id: "photos",

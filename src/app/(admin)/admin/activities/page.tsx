@@ -216,6 +216,7 @@ const ActivitiesAdminPage: React.FC = () => {
             onCreateActivity={handleCreateActivity}
             beneficiaryImages={beneficiaryImages}
             loadingImages={loadingImages}
+            forceExpanded={!!search.trim()}
           />
 
           {/* Due Soon Section */}
@@ -225,6 +226,7 @@ const ActivitiesAdminPage: React.FC = () => {
             onCreateActivity={handleCreateActivity}
             beneficiaryImages={beneficiaryImages}
             loadingImages={loadingImages}
+            forceExpanded={!!search.trim()}
           />
 
           {/* Up to Date Section */}
@@ -234,6 +236,8 @@ const ActivitiesAdminPage: React.FC = () => {
             onCreateActivity={handleCreateActivity}
             beneficiaryImages={beneficiaryImages}
             loadingImages={loadingImages}
+            defaultCollapsed={true}
+            forceExpanded={!!search.trim()}
           />
 
           {/* No Activities Section */}
@@ -243,6 +247,7 @@ const ActivitiesAdminPage: React.FC = () => {
             onCreateActivity={handleCreateActivity}
             beneficiaryImages={beneficiaryImages}
             loadingImages={loadingImages}
+            forceExpanded={!!search.trim()}
           />
 
           {showNoPublicMediaSection && (

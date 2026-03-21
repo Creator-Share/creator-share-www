@@ -63,11 +63,12 @@ interface VisibilityProps {
 
 interface FileUploadItemProps extends VisibilityProps {
   file: File
+  onRemove?: (file: File) => void
 }
 
 const FileUploadItem = React.forwardRef<HTMLLIElement, FileUploadItemProps>(
   function FileUploadItem(props, ref) {
-    const { file, showSize, clearable } = props
+    const { file, showSize, clearable, onRemove } = props
     return (
       <ChakraFileUpload.Item file={file} ref={ref}>
         <ChakraFileUpload.ItemPreview asChild>
@@ -85,13 +86,25 @@ const FileUploadItem = React.forwardRef<HTMLLIElement, FileUploadItemProps>(
           <ChakraFileUpload.ItemName flex="1" />
         )}
 
-        {clearable && (
-          <ChakraFileUpload.ItemDeleteTrigger asChild>
-            <IconButton variant="ghost" color="fg.muted" size="xs">
+        {clearable &&
+          (onRemove ? (
+            <IconButton
+              variant="ghost"
+              color="fg.muted"
+              size="xs"
+              onClick={() => onRemove(file)}
+              aria-label={`Remove ${file.name}`}
+              type="button"
+            >
               <LuX />
             </IconButton>
-          </ChakraFileUpload.ItemDeleteTrigger>
-        )}
+          ) : (
+            <ChakraFileUpload.ItemDeleteTrigger asChild>
+              <IconButton variant="ghost" color="fg.muted" size="xs" type="button">
+                <LuX />
+              </IconButton>
+            </ChakraFileUpload.ItemDeleteTrigger>
+          ))}
       </ChakraFileUpload.Item>
     )
   },
@@ -101,13 +114,14 @@ interface FileUploadListProps
   extends VisibilityProps,
     ChakraFileUpload.ItemGroupProps {
   files?: File[]
+  onRemove?: (file: File) => void
 }
 
 export const FileUploadList = React.forwardRef<
   HTMLUListElement,
   FileUploadListProps
 >(function FileUploadList(props, ref) {
-  const { showSize, clearable, files, ...rest } = props
+  const { showSize, clearable, files, onRemove, ...rest } = props
 
   const fileUpload = useFileUploadContext()
   const acceptedFiles = files ?? fileUpload.acceptedFiles
@@ -116,12 +130,13 @@ export const FileUploadList = React.forwardRef<
 
   return (
     <ChakraFileUpload.ItemGroup ref={ref} {...rest}>
-      {acceptedFiles.map((file) => (
+      {acceptedFiles.map((file, index) => (
         <FileUploadItem
-          key={file.name}
+          key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
           file={file}
           showSize={showSize}
           clearable={clearable}
+          onRemove={files ? onRemove : undefined}
         />
       ))}
     </ChakraFileUpload.ItemGroup>

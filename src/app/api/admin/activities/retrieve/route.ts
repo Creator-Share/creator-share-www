@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
   const activitiesWithMedia = safeActivities.map((activity) => {
     const images_url: string[] = []
     const videos_url: string[] = []
+    const documents_url: string[] = []
 
     const mediaRecords = mediaByParent[String(activity.id)] || []
 
@@ -78,6 +79,8 @@ export async function GET(req: NextRequest) {
           images_url.push(url)
         } else if (media.type === "VIDEO") {
           videos_url.push(url)
+        } else if (media.type === "DOCUMENT") {
+          documents_url.push(url)
         }
       } catch (err) {
         console.error(`Failed to generate URL for media ${media.id}:`, err)
@@ -88,6 +91,7 @@ export async function GET(req: NextRequest) {
       ...activity,
       images_url,
       videos_url,
+      documents_url,
     }
   })
 
