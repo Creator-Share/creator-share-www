@@ -46,8 +46,14 @@ export async function GET(req: Request) {
     // STEP 1: Start with base query
     let query = supabase.from("beneficiaries").select("*");
 
-    if (beneficiaryType) {
-      query = query.eq("beneficiary_type", beneficiaryType)
+    if (beneficiaryType && beneficiaryType !== "null" && beneficiaryType !== "undefined") {
+      // Support comma-separated types (e.g. "CHILD,CHILD_LABORER")
+      const types = beneficiaryType.split(",").map((t) => t.trim()).filter(Boolean)
+      if (types.length === 1) {
+        query = query.eq("beneficiary_type", types[0])
+      } else if (types.length > 1) {
+        query = query.in("beneficiary_type", types)
+      }
     }
     if (gender) {
       query = query.eq("gender", gender)

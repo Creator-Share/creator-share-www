@@ -8,12 +8,12 @@ type FiltersState = {
   ageRange: [number, number]
   status: string[]
   search?: string
-  beneficiary_type?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED"
+  beneficiary_type?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED" | "CHILD_LABORER" | "SPECIAL_NEEDS"
 }
 
 interface UseBeneficiaryPaginationOptions {
   recordsPerPage?: number
-  beneficiaryType?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED"
+  beneficiaryType?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED" | "CHILD_LABORER" | "SPECIAL_NEEDS"
   autoRetry?: boolean
   initialStatus?: string[] // Optional initial status filter (for admin mode)
   isAdminMode?: boolean // Flag to indicate admin mode (affects ageRange filtering with Draft)
@@ -52,7 +52,7 @@ export function useBeneficiaryPagination(
 ): UseBeneficiaryPaginationReturn {
   const {
     recordsPerPage = 3,
-    beneficiaryType = "CHILD",
+    beneficiaryType,
     autoRetry = true,
     initialStatus,
     isAdminMode = false,
@@ -92,10 +92,10 @@ export function useBeneficiaryPagination(
   const buildQuery = useCallback(
     (nextCursor: string | null) => {
       const params = new URLSearchParams()
-      params.set(
-        "beneficiary_type",
-        filters.beneficiary_type || beneficiaryType
-      )
+      const type = (filters.beneficiary_type || beneficiaryType) as string | undefined;
+      if (type && type !== "null" && type !== "undefined") {
+        params.set("beneficiary_type", type);
+      }
       if (filters.gender) params.set("gender", filters.gender)
       if (filters.status?.length) params.set("status", filters.status.join(","))
       

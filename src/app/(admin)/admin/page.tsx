@@ -13,7 +13,7 @@ const Dashboard = () => {
 
   const navigationItems = [
     { label: "Manage Users", path: "/admin/users" },
-    { label: "Manage Children", path: "/admin/children" },
+    { label: "Manage Beneficiaries", path: "/admin/beneficiaries" },
     { label: "Manage Subscriptions", path: "/admin/subscriptions" },
     { label: "Manage Activities", path: "/admin/activities" },
     // { label: 'Manage Child Laborers', path: '/admin/child-laborer' },

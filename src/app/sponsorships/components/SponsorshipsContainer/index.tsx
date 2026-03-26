@@ -13,6 +13,7 @@ import SponsorshipFilters from "../SponsorshipFilters"
 import SponsorshipListings from "../SponsorshipListings"
 import BeneficiaryModal from "../SponsorshipModal"
 import HorizontalSponsorshipRow from "../HorizontalSponsorshipRow"
+import BeneficiaryTypeNav, { BeneficiaryTabType, ALL_BENEFICIARY_TABS } from "@/components/BeneficiaryTypeNav"
 
 /** First segment after `/sponsorships/`, or null when not on a profile URL. */
 function getSponsorshipUsernameFromPath(path: string): string | null {
@@ -47,13 +48,23 @@ const SponsorshipsContainer: React.FC = () => {
   /** Bumps when history or our pushState/replaceState changes the meaningful URL so we re-sync modal to pathname. */
   const [urlSyncGeneration, setUrlSyncGeneration] = useState(0)
 
+  const [activeType, setActiveType] = useState<BeneficiaryTabType | null>(null)
+
   const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore } =
     useBeneficiaryPagination({
       recordsPerPage: 9,
-      beneficiaryType: "CHILD",
+      beneficiaryType: activeType ?? undefined,
       autoRetry: true,
       initialStatus: ["New", "Partially Funded", "Sponsorship Cancelled"],
     })
+
+  const handleTypeChange = useCallback((type: BeneficiaryTabType | null) => {
+    setActiveType(type)
+    const apiType = type === "CHILD_LABORER"
+      ? ("CHILD,CHILD_LABORER" as unknown as "CHILD_LABORER")
+      : type === null ? undefined : type
+    handleFilterChange({ beneficiary_type: apiType })
+  }, [handleFilterChange])
 
   // Fetch all Budget Fulfilled children, ordered by most recent activity first.
   useEffect(() => {
@@ -229,6 +240,15 @@ const SponsorshipsContainer: React.FC = () => {
         onOpenModal={openModal}
       />
 
+      {/* Beneficiary type nav */}
+      <Box px={{ base: 4, lg: 8 }} pt={4}>
+        <BeneficiaryTypeNav
+          tabs={ALL_BENEFICIARY_TABS}
+          activeType={activeType}
+          onChange={handleTypeChange}
+        />
+      </Box>
+
       {/* Sticky filter bar */}
       <Box
         ref={filtersRef}
@@ -239,6 +259,7 @@ const SponsorshipsContainer: React.FC = () => {
         <SponsorshipFilters
           onFilterChange={handleFilterChange}
           isSticky={isFiltersSticky}
+          beneficiaryType={activeType === "ANIMAL" ? "ANIMAL" : "CHILD"}
         />
       </Box>
 
