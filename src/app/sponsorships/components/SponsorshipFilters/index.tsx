@@ -391,7 +391,7 @@ const SponsorshipFilters: React.FC<
               position="relative"
             >
               <Input
-                placeholder={`Search for a ${beneficiaryType === "ANIMAL" ? "Animal" : "Beneficiary"}`}
+                placeholder="Search for a Child"
                 value={mounted ? searchQuery : ""}
                 onChange={(e) => {
                   if (!mounted) return
@@ -455,7 +455,7 @@ const SponsorshipFilters: React.FC<
                 >
                   {!isDefaultFilters
                     ? "Clear Search & Filters"
-                    : `Showing All ${beneficiaryType === "ANIMAL" ? "Animals" : "Beneficiaries"}`}
+                    : "Showing All Children"}
                 </Button>
               </Tooltip>
             </Box>
