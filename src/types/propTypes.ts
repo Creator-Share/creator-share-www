@@ -8,7 +8,8 @@ export interface FiltersProps {
     status: string[]
     search?: string
   }) => void
-  beneficiaryType?: "CHILD" | "ANIMAL"
+  /** Accepts any beneficiary type string (e.g. "CHILD", "ANIMAL", "SPECIAL_NEEDS", "CHILD_LABORER") */
+  beneficiaryType?: string
 }
 
 export interface BeneficiaryMapProps {
@@ -33,7 +34,8 @@ export interface BeneficiaryListingsProps {
   isLoading?: boolean
   setSelectedBeneficiaryId?: (id: string | null) => void
   mapBounds?: LatLngBounds
-  beneficiaryType?: "CHILD" | "ANIMAL"
+  /** Accepts any beneficiary type string */
+  beneficiaryType?: string
   /** Called when a card is clicked; container owns the modal. */
   onOpenModal?: (beneficiary: Beneficiaries) => void
 }
@@ -47,7 +49,8 @@ export interface BeneficiaryCardProps {
   hasNext?: boolean
   hasPrevious?: boolean
   onOpenDialog?: () => void
-  beneficiaryType?: "CHILD" | "ANIMAL"
+  /** Accepts any beneficiary type string */
+  beneficiaryType?: string
 }
 
 export interface SponsorshipDetailsProps {

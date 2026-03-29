@@ -8,12 +8,14 @@ type FiltersState = {
   ageRange: [number, number]
   status: string[]
   search?: string
-  beneficiary_type?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED" | "CHILD_LABORER" | "SPECIAL_NEEDS"
+  /** Accepts single type or comma-separated types (e.g. "CHILD,CHILD_LABORER") */
+  beneficiary_type?: string
 }
 
 interface UseBeneficiaryPaginationOptions {
   recordsPerPage?: number
-  beneficiaryType?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED" | "CHILD_LABORER" | "SPECIAL_NEEDS"
+  /** Accepts single type or comma-separated types (e.g. "CHILD,CHILD_LABORER") */
+  beneficiaryType?: string
   autoRetry?: boolean
   initialStatus?: string[] // Optional initial status filter (for admin mode)
   isAdminMode?: boolean // Flag to indicate admin mode (affects ageRange filtering with Draft)

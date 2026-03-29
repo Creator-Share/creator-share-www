@@ -60,8 +60,9 @@ const SponsorshipsContainer: React.FC = () => {
 
   const handleTypeChange = useCallback((type: BeneficiaryTabType | null) => {
     setActiveType(type)
+    // When CHILD_LABORER is selected, also include legacy CHILD records
     const apiType = type === "CHILD_LABORER"
-      ? ("CHILD,CHILD_LABORER" as unknown as "CHILD_LABORER")
+      ? "CHILD,CHILD_LABORER"
       : type === null ? undefined : type
     handleFilterChange({ beneficiary_type: apiType })
   }, [handleFilterChange])

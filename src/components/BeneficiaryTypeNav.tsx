@@ -54,8 +54,6 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeTab[] = [
 
 export function getDefaultSponsorshipAmount(
   type: BeneficiaryTabType | string | null | undefined,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _fallback?: number
 ): number | null {
   const tab = ALL_BENEFICIARY_TABS.find((t) => t.type === type)
   return tab ? tab.defaultSponsorshipAmountCents : null

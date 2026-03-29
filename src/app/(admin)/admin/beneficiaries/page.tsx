@@ -26,7 +26,8 @@ type FiltersState = {
   ageRange: [number, number]
   status: string[]
   search?: string
-  beneficiary_type?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED" | "CHILD_LABORER" | "SPECIAL_NEEDS"
+  /** Accepts single type or comma-separated types (e.g. "CHILD,CHILD_LABORER") */
+  beneficiary_type?: string
 }
 
 const BeneficiaryModal = dynamic(() => import("./components/BeneficiaryModal"), {
@@ -76,7 +77,7 @@ const ChildrenTable = () => {
       setActiveType(type)
       // When CHILD_LABORER is selected, also include legacy CHILD records
       const apiType = type === "CHILD_LABORER"
-        ? ("CHILD,CHILD_LABORER" as unknown as "CHILD_LABORER")
+        ? "CHILD,CHILD_LABORER"
         : type === null ? undefined : type
       handleFilterChange({
         beneficiary_type: apiType,
@@ -117,7 +118,7 @@ const ChildrenTable = () => {
     },
   })
 
-  // Fetch stats scoped to active type
+  // Fetch stats scoped to active type — only re-run when activeType changes, not on every page load
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -127,7 +128,7 @@ const ChildrenTable = () => {
             : activeType
           : undefined
         const url = typeParam
-          ? `/api/admin/beneficiaries/stats?beneficiary_type=${typeParam}`
+          ? `/api/admin/beneficiaries/stats?beneficiary_type=${encodeURIComponent(typeParam)}`
           : `/api/admin/beneficiaries/stats`
         const res = await fetch(url)
         if (res.ok) {
@@ -139,7 +140,7 @@ const ChildrenTable = () => {
       }
     }
     fetchStats()
-  }, [beneficiaries, activeType])
+  }, [activeType])
 
   useEffect(() => {
     if (!formData.status) {
@@ -362,9 +363,11 @@ const ChildrenTable = () => {
 
       setIsEditDrawerOpen(false)
       toaster.create({ title: "Success", description: "Beneficiary updated successfully.", duration: 5000 })
+      // Use type-aware age range max (Animal = 20, others = 14)
+      const defaultMaxAge = activeType === "ANIMAL" ? 20 : 14
       const currentFilters: FiltersState = {
-        gender: "", ageRange: [0, 14] as [number, number],
-        status: updated.status ? [updated.status] : ["New"], search: "",
+        gender: "", ageRange: [0, defaultMaxAge] as [number, number],
+        status: allStatuses, search: "",
       }
       setFilterStatus(currentFilters.status)
       handleFilterChange(currentFilters)
@@ -409,8 +412,10 @@ const ChildrenTable = () => {
       const res = await fetch(`/api/admin/beneficiaries/delete/${beneficiaryId}`, { method: "DELETE" })
       if (!res.ok) throw new Error("Failed to delete beneficiary")
       setIsEditDrawerOpen(false)
+      setSelectedBeneficiary(null)
       toaster.create({ title: "Success", description: "Beneficiary deleted successfully.", duration: 5000 })
-      window.location.reload()
+      setFilterStatus(allStatuses)
+      handleFilterChange({ gender: "", ageRange: [0, activeType === "ANIMAL" ? 20 : 14], status: allStatuses, search: "" })
     } catch {
       toaster.create({ title: "Error", description: "Failed to delete beneficiary", duration: 5000 })
     }

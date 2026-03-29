@@ -7,7 +7,9 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 STRIPE_SECRET_KEY=
 NEXT_PUBLIC_BASE_URL=https://localhost:3000/
 
-# Public frontend exposure (dollars in cents integer string) to allow UI to honor/lock the amount
+# DEPRECATED — Global sponsorship amount override (dollars in cents integer string).
+# Superseded by per-type vars below (NEXT_PUBLIC_SPONSORSHIP_AMOUNT_*).
+# Leave empty unless you need a single hardcoded amount for all types.
 NEXT_PUBLIC_SPONSORSHIP_GOAL=
 
 # Sponsorship amounts per beneficiary type (in cents, e.g. 3333 = $33.33)

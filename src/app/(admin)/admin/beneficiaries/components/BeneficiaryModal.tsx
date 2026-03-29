@@ -155,10 +155,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     : null
 
   // Per-type default amount in cents (e.g. $33.33 for CHILD_LABORER, $50 for SPECIAL_NEEDS, $25 for ANIMAL)
-  const typeDefaultCents = getDefaultSponsorshipAmount(
-    formData.beneficiary_type,
-    0 // pass 0 so the helper returns the per-type default (not the budget_goal itself)
-  )
+  const typeDefaultCents = getDefaultSponsorshipAmount(formData.beneficiary_type)
 
   // Effective display/save amount: per-type default > env fallback > 0
   // Per-type default takes priority so each category shows its own amount.
@@ -331,7 +328,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           }))
         } else if (publicHardcodedCents === null) {
           // No env override — auto-fill budget_goal with per-type default alongside type
-          const newTypeDefault = getDefaultSponsorshipAmount(value, 0)
+          const newTypeDefault = getDefaultSponsorshipAmount(value)
           setExternalFormData((prev: Partial<Beneficiaries>) => ({
             ...prev,
             beneficiary_type: value as Beneficiaries["beneficiary_type"],
