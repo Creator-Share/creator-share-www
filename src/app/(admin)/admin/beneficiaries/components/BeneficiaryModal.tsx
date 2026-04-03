@@ -107,6 +107,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isUnsavedChangesOpen, setIsUnsavedChangesOpen] = useState(false)
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([])
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
   const [processedImages, setProcessedImages] = useState<File[]>([])
@@ -237,16 +238,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     onClose()
   }
 
-  // Handle explicit cancel - clears data and resets
-  const handleCancel = () => {
-    if (hasUnsavedChanges) {
-      const confirmClose = window.confirm(
-        "You have unsaved changes. Clicking OK will discard all changes."
-      )
-      if (!confirmClose) return
-    }
-
-    // Clear all form data and reset state
+  // Discard changes and close — called when user confirms the unsaved-changes dialog
+  const handleDiscardChanges = () => {
+    setIsUnsavedChangesOpen(false)
     setHasUnsavedChanges(false)
     setImagePreviewUrls([])
     resetVideoUploadInput()
@@ -256,6 +250,29 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     if (isEditMode) {
       setLocalFormData(selectedChild || {})
       // Restore any images that were marked for deletion but not saved
+      setImagesToDelete([])
+      fetchImages()
+    }
+
+    onClose()
+  }
+
+  // Handle explicit cancel - clears data and resets
+  const handleCancel = () => {
+    if (hasUnsavedChanges) {
+      setIsUnsavedChangesOpen(true)
+      return
+    }
+
+    // No unsaved changes — clear state and close immediately
+    setHasUnsavedChanges(false)
+    setImagePreviewUrls([])
+    resetVideoUploadInput()
+    setImageFiles([])
+    resetImageUploadInput()
+
+    if (isEditMode) {
+      setLocalFormData(selectedChild || {})
       setImagesToDelete([])
       fetchImages()
     }
@@ -1581,6 +1598,40 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           itemCount={1}
         />
       )}
+
+      {/* Unsaved Changes Dialog */}
+      <DialogRoot
+        open={isUnsavedChangesOpen}
+        onOpenChange={({ open }) => {
+          if (!open) setIsUnsavedChangesOpen(false)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+            <DialogCloseTrigger onClick={() => setIsUnsavedChangesOpen(false)} />
+          </DialogHeader>
+          <DialogBody>
+            <Text>
+              You have unsaved changes. Are you sure you want to discard them?
+            </Text>
+            <div className="flex gap-3 mt-4">
+              <Button
+                className="bg-gray-500 text-white p-4"
+                onClick={() => setIsUnsavedChangesOpen(false)}
+              >
+                Keep Editing
+              </Button>
+              <Button
+                className="bg-red-500 text-white p-4"
+                onClick={handleDiscardChanges}
+              >
+                Discard Changes
+              </Button>
+            </div>
+          </DialogBody>
+        </DialogContent>
+      </DialogRoot>
     </DialogRoot>
     </>
   )

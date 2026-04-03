@@ -5,6 +5,7 @@ import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Beneficiaries } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
+import { getDefaultSponsorshipAmount } from "@/components/BeneficiaryTypeNav"
 
 interface BeneficiaryCardProps {
   beneficiary: Beneficiaries
@@ -23,10 +24,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiaryImages,
   loadingImages,
 }) => {
-  const publicHardcoded = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
-  const goal = Number(
-    publicHardcoded !== null ? publicHardcoded : beneficiary.budget_goal || 0
-  )
+  const goal =
+    getDefaultSponsorshipAmount(beneficiary.beneficiary_type) ??
+    beneficiary.budget_goal ??
+    0
   const raised = Number(beneficiary.budget_raised || 0)
   const progress =
     goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0
