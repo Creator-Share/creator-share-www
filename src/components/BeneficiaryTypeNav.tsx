@@ -1,4 +1,3 @@
-// Feature branch version: BeneficiaryTypeNav.tsx
 
 "use client"
 
