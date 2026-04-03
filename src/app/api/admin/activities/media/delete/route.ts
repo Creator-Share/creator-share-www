@@ -21,9 +21,11 @@ export const dynamic = "force-dynamic"
  *  }
  */
 export async function DELETE(req: NextRequest) {
-  const body = (await req.json()) as {
-    mediaUrl?: string
-    activityId?: string
+  let body: { mediaUrl?: string; activityId?: string }
+  try {
+    body = (await req.json()) as { mediaUrl?: string; activityId?: string }
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
   const { mediaUrl, activityId } = body
@@ -39,10 +41,10 @@ export async function DELETE(req: NextRequest) {
   const auth = await requireSuperAdmin(supabase)
   if (!auth.ok) return auth.response
 
-  // ── Fetch all media for the activity so we can match by public URL ────────
+  // ── Fetch only the columns needed to find and delete the record ───────────
   const { data: allMedia, error: fetchError } = await supabase
     .from("media")
-    .select("*")
+    .select("id, storage_path, type")
     .eq("parent_id", activityId)
 
   if (fetchError) {
@@ -63,6 +65,9 @@ export async function DELETE(req: NextRequest) {
   let targetRecord: MediaRow | null = null
 
   for (const record of allMedia) {
+    // We select only the subset of columns needed (id, storage_path, type).
+    // The cast to MediaRow is safe because getStorageKey only reads those fields.
+    // TODO: align MediaRow with the supabase-generated type so this cast is unnecessary.
     const mediaRecord = record as unknown as MediaRow
     const key = getStorageKey(mediaRecord)
 
@@ -75,7 +80,8 @@ export async function DELETE(req: NextRequest) {
         })
       candidateUrl = data.publicUrl
     } else {
-      candidateUrl = `${base}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
+      // encodeURIComponent per segment encodes +, #, ?, & which encodeURI misses
+      candidateUrl = `${base}/storage/v1/object/public/${STORAGE_BUCKET}/${key.split("/").map(encodeURIComponent).join("/")}`
     }
 
     if (candidateUrl === mediaUrl) {
@@ -111,12 +117,21 @@ export async function DELETE(req: NextRequest) {
 
   if (dbError) {
     console.error("❌ [MEDIA DELETE] DB deletion failed:", dbError)
-    // Storage is already gone — log and still return success to avoid
-    // leaving the UI in a broken state; the orphaned DB row is harmless.
-    return NextResponse.json(
-      { warning: "File deleted from storage but DB record removal failed", error: dbError.message },
-      { status: 207 },
-    )
+    // Retry once before giving up
+    const { error: retryError } = await supabase
+      .from("media")
+      .delete()
+      .eq("id", targetRecord.id)
+
+    if (retryError) {
+      console.error("❌ [MEDIA DELETE] DB deletion failed after retry:", retryError)
+      // Storage is already gone. The orphaned row will cause 404s on reload.
+      // Return 500 so the client knows the operation did not fully succeed.
+      return NextResponse.json(
+        { error: "File removed from storage but database cleanup failed. Please contact support." },
+        { status: 500 },
+      )
+    }
   }
 
   return NextResponse.json({ success: true })

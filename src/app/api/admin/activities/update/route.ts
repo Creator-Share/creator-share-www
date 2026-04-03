@@ -49,7 +49,9 @@ export async function PUT(req: NextRequest) {
     is_public?: boolean
   } = { description }
 
-  if (title !== undefined) updateData.title = title
+  if (title !== undefined && title !== null) {
+    updateData.title = title.trim() || undefined // discard empty-string titles
+  }
   if (activity_type !== undefined) updateData.activity_type = activity_type
   if (is_public !== undefined) updateData.is_public = is_public
 

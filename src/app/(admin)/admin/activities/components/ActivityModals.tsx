@@ -934,6 +934,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
    */
   const handleDeleteExistingMedia = async (url: string) => {
     if (!activity) return
+    if (deletingUrls.has(url)) return // already in-flight, ignore
 
     setConfirmingDeleteUrl(null)
     setDeletingUrls((prev) => new Set(prev).add(url))
@@ -1284,10 +1285,11 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
                     </div>
                   )}
 
-                  {/* State: confirming — inline "Delete?" overlay */}
+                  {/* State: confirming — inline "Delete now?" overlay */}
                   {!deletingUrls.has(src) && confirmingDeleteUrl === src && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg" style={{ background: "rgba(0,0,0,0.68)" }}>
-                      <Text fontSize="xs" fontWeight="bold" color="white">Delete?</Text>
+                      <Text fontSize="xs" fontWeight="bold" color="white">Delete now?</Text>
+                      <Text fontSize="xs" color="whiteAlpha.800">Cannot be undone</Text>
                       <Flex gap={2}>
                         <button onClick={() => handleDeleteExistingMedia(src)} className="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1 rounded" type="button">Yes</button>
                         <button onClick={() => setConfirmingDeleteUrl(null)} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-semibold px-3 py-1 rounded" type="button">No</button>
@@ -1395,10 +1397,11 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
                     </div>
                   )}
 
-                  {/* State: confirming — inline "Delete?" overlay */}
+                  {/* State: confirming — inline "Delete now?" overlay */}
                   {!deletingUrls.has(src) && confirmingDeleteUrl === src && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg z-10" style={{ background: "rgba(0,0,0,0.68)" }}>
-                      <Text fontSize="xs" fontWeight="bold" color="white">Delete?</Text>
+                      <Text fontSize="xs" fontWeight="bold" color="white">Delete now?</Text>
+                      <Text fontSize="xs" color="whiteAlpha.800">Cannot be undone</Text>
                       <Flex gap={2}>
                         <button onClick={() => handleDeleteExistingMedia(src)} className="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1 rounded" type="button">Yes</button>
                         <button onClick={() => setConfirmingDeleteUrl(null)} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-semibold px-3 py-1 rounded" type="button">No</button>
@@ -1526,7 +1529,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
                         </a>
                       )}
                       {isConfirming && (
-                        <Text fontSize="xs" color="red.600" fontWeight="medium">Permanently delete this file?</Text>
+                        <Text fontSize="xs" color="red.600" fontWeight="medium">Delete now? Cannot be undone.</Text>
                       )}
                     </div>
 
