@@ -1383,7 +1383,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontWeight: 500 }}>Current Videos</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-              {existingVideos.map((src, index) => (
+              {existingVideos.map((src) => (
                 <div key={src} className="relative group" style={{ width: 240, height: 150 }}>
                   {/* Video player */}
                   <div style={{ width: "100%", height: "100%", borderRadius: 8, overflow: "hidden", border: "1px solid #e5e7eb", backgroundColor: "#000" }}>

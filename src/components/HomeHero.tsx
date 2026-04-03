@@ -1,5 +1,5 @@
 import React from "react"
-import { Box, Heading, Text } from "@chakra-ui/react"
+import { Box, Heading, Image, Text } from "@chakra-ui/react"
 
 const BrushstrokeUnderline = () => (
   <svg
@@ -105,7 +105,7 @@ export const HomeHero = () => {
               width={{ base: "280px", md: "340px", lg: "400px" }}
               height={{ base: "320px", md: "380px", lg: "450px" }}
             >
-              <img
+              <Image
                 src="/hero-child-tanzania.png"
                 alt="A child smiling in a photo shaped like the map of Tanzania"
                 style={{
