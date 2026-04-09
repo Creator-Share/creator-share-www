@@ -178,8 +178,10 @@ const SponsorshipFilters: React.FC<
     : ["New", "Partially Funded", "Sponsorship Cancelled"]
 
   const isGenderDefault = (selectedGender ?? "") === ""
+  // When in ANIMAL mode the slider is hidden so age range is always default.
   const isAgeDefault =
-    selectedAgeRange[0] === 0 && selectedAgeRange[1] === defaultMaxAge
+    beneficiaryType === "ANIMAL" ||
+    (selectedAgeRange[0] === 0 && selectedAgeRange[1] === defaultMaxAge)
   const isStatusDefault =
     selectedStatus.length === modeDefaultStatus.length &&
     modeDefaultStatus.every((s) => selectedStatus.includes(s))
@@ -219,56 +221,58 @@ const SponsorshipFilters: React.FC<
             alignItems="center"
             width="100%"
           >
-            <Box
-              flex={{ base: "1 1 100%", md: "1 1 0" }}
-              w="100%"
-              minW={0}
-              px={2}
-            >
-              <Text
-                mb={2}
-                fontSize="sm"
-                fontWeight="semibold"
-                textAlign="center"
+            {/* Age range is not applicable for animals — hide it for that type */}
+            {beneficiaryType !== "ANIMAL" && (
+              <Box
+                flex={{ base: "1 1 100%", md: "1 1 0" }}
+                w="100%"
+                minW={0}
+                px={2}
               >
-                Age Range: {minAge} - {maxAge} years
-              </Text>
-              <Box>
-                <Slider
-                  size={"sm"}
-                  value={[minAge, maxAge]}
-                  min={0}
-                  max={defaultMaxAge}
-                  step={1}
-                  variant={"solid"}
-                  onValueChange={(details) => {
-                    if (details.value && details.value.length >= 2) {
-                      const [newMin, origMax] = details.value
-                      let newMax = origMax
+                <Text
+                  mb={2}
+                  fontSize="sm"
+                  fontWeight="semibold"
+                  textAlign="center"
+                >
+                  Age Range: {minAge} - {maxAge} years
+                </Text>
+                <Box>
+                  <Slider
+                    size={"sm"}
+                    value={[minAge, maxAge]}
+                    min={0}
+                    max={defaultMaxAge}
+                    step={1}
+                    variant={"solid"}
+                    onValueChange={(details) => {
+                      if (details.value && details.value.length >= 2) {
+                        const [newMin, origMax] = details.value
+                        let newMax = origMax
 
-                      const minDistance = 1
-                      if (newMax - newMin < minDistance) {
-                        newMax = Math.max(newMin + minDistance, maxAge)
-                      }
+                        const minDistance = 1
+                        if (newMax - newMin < minDistance) {
+                          newMax = Math.max(newMin + minDistance, maxAge)
+                        }
 
-                      setMinAge(newMin)
-                      setMaxAge(newMax)
-                      
-                      if (sliderDebounceTimeoutRef.current) {
-                        clearTimeout(sliderDebounceTimeoutRef.current)
-                      }
-                      
+                        setMinAge(newMin)
+                        setMaxAge(newMax)
+
+                        if (sliderDebounceTimeoutRef.current) {
+                          clearTimeout(sliderDebounceTimeoutRef.current)
+                        }
+
                         sliderDebounceTimeoutRef.current = setTimeout(() => {
-                        isInternalUpdateRef.current = true
-                        
-                        handleFilterChange({ ageRange: [newMin, newMax] })
-                      }, 300)
-                    }
-                  }}
-                  showValue
-                />
+                          isInternalUpdateRef.current = true
+                          handleFilterChange({ ageRange: [newMin, newMax] })
+                        }, 300)
+                      }
+                    }}
+                    showValue
+                  />
+                </Box>
               </Box>
-            </Box>
+            )}
 
             <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
               <SelectRoot

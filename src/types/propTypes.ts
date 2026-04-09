@@ -1,5 +1,6 @@
 import { LatLngBounds } from "leaflet"
 import { Beneficiaries } from "./index"
+import type { BeneficiaryTabType } from "@/components/BeneficiaryTypeNav"
 
 export interface FiltersProps {
   onFilterChange: (filters: {
@@ -8,8 +9,7 @@ export interface FiltersProps {
     status: string[]
     search?: string
   }) => void
-  /** Accepts any beneficiary type string (e.g. "CHILD", "ANIMAL", "SPECIAL_NEEDS", "CHILD_LABORER") */
-  beneficiaryType?: string
+  beneficiaryType?: BeneficiaryTabType
 }
 
 export interface BeneficiaryMapProps {
@@ -34,8 +34,7 @@ export interface BeneficiaryListingsProps {
   isLoading?: boolean
   setSelectedBeneficiaryId?: (id: string | null) => void
   mapBounds?: LatLngBounds
-  /** Accepts any beneficiary type string */
-  beneficiaryType?: string
+  beneficiaryType?: BeneficiaryTabType
   /** Called when a card is clicked; container owns the modal. */
   onOpenModal?: (beneficiary: Beneficiaries) => void
 }
@@ -49,8 +48,7 @@ export interface BeneficiaryCardProps {
   hasNext?: boolean
   hasPrevious?: boolean
   onOpenDialog?: () => void
-  /** Accepts any beneficiary type string */
-  beneficiaryType?: string
+  beneficiaryType?: BeneficiaryTabType
 }
 
 export interface SponsorshipDetailsProps {

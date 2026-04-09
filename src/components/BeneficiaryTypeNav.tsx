@@ -15,6 +15,31 @@ export interface BeneficiaryTypeTab {
    * null = free-form (user chooses any amount)
    */
   defaultSponsorshipAmountCents: number | null
+  /**
+   * When true this entry is a legacy DB alias and should not appear as a
+   * visible tab in the public-facing navigation (it is still used by admin
+   * tooling and `getDefaultSponsorshipAmount` lookups).
+   */
+  isLegacyAlias?: boolean
+}
+
+/** Maps a BeneficiaryTabType to its sharable public URL path. */
+export const TYPE_TO_ROUTE: Record<BeneficiaryTabType, string> = {
+  CHILD: "/street",          // legacy alias — same route as CHILD_LABORER
+  CHILD_LABORER: "/street",
+  SPECIAL_NEEDS: "/care",
+  ANIMAL: "/dogs",
+}
+
+/**
+ * Maps a sharable public URL path back to its BeneficiaryTabType.
+ * "/" resolves to null (= "All").
+ */
+export const ROUTE_TO_TYPE: Record<string, BeneficiaryTabType | null> = {
+  "/": null,
+  "/street": "CHILD_LABORER",
+  "/care": "SPECIAL_NEEDS",
+  "/dogs": "ANIMAL",
 }
 
 /**
@@ -30,12 +55,20 @@ function envAmount(envKey: string, fallbackCents: number): number {
 
 export const ALL_BENEFICIARY_TABS: BeneficiaryTypeTab[] = [
   {
-    label: "All",
+    label: "All Opportunities",
     type: null,
     defaultSponsorshipAmountCents: null,
   },
   {
-    label: "Child Laborer",
+    // Legacy alias — treated the same as CHILD_LABORER.
+    // Hidden from the public nav; kept so getDefaultSponsorshipAmount("CHILD") resolves.
+    label: "Child Labourers",
+    type: "CHILD",
+    isLegacyAlias: true,
+    defaultSponsorshipAmountCents: envAmount("NEXT_PUBLIC_SPONSORSHIP_AMOUNT_CHILD_LABORER", 3333),
+  },
+  {
+    label: "Child Labourers",
     type: "CHILD_LABORER",
     defaultSponsorshipAmountCents: envAmount("NEXT_PUBLIC_SPONSORSHIP_AMOUNT_CHILD_LABORER", 3333),
   },
@@ -45,7 +78,7 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeTab[] = [
     defaultSponsorshipAmountCents: envAmount("NEXT_PUBLIC_SPONSORSHIP_AMOUNT_SPECIAL_NEEDS", 5000),
   },
   {
-    label: "Animal",
+    label: "Rescue Dogs",
     type: "ANIMAL",
     defaultSponsorshipAmountCents: envAmount("NEXT_PUBLIC_SPONSORSHIP_AMOUNT_ANIMAL", 2500),
   },
@@ -74,11 +107,11 @@ const BeneficiaryTypeNav: React.FC<BeneficiaryTypeNavProps> = ({
   isAdminMode = false,
   className,
 }) => {
-  // In admin mode: show all tabs including "All"
-  // In public mode: hide the "All" tab — users are encouraged to filter by type
+  // In admin mode: show every tab (including legacy aliases, for completeness).
+  // In public mode: show all except legacy aliases — "All Opportunities" IS included.
   const visibleTabs = isAdminMode
     ? tabs
-    : tabs.filter((tab) => tab.type !== null)
+    : tabs.filter((tab) => !tab.isLegacyAlias)
 
   return (
     <Flex

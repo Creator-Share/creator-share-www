@@ -101,14 +101,16 @@ export function useBeneficiaryPagination(
       if (filters.gender) params.set("gender", filters.gender)
       if (filters.status?.length) params.set("status", filters.status.join(","))
       
-      // Skip age range filtering for statuses that may include beneficiaries of any age
-      // or with incomplete data (Draft, Archived, Budget Fulfilled)
+      // Skip age range filtering when:
+      //  • the type is ANIMAL (dogs don't have human-comparable ages), or
+      //  • status includes a value that may cover beneficiaries of any age
+      //    (Draft, Archived, Budget Fulfilled)
       const skipAgeRangeStatuses = ["Draft", "Archived", "Budget Fulfilled"]
-      const shouldSkipAgeRange = (filters.status || []).some(status => 
-        skipAgeRangeStatuses.includes(status)
-      )
-      
-      
+      const isAnimalType = (type ?? "").split(",").includes("ANIMAL")
+      const shouldSkipAgeRange =
+        isAnimalType ||
+        (filters.status || []).some((status) => skipAgeRangeStatuses.includes(status))
+
       if (filters.ageRange && !shouldSkipAgeRange) {
         params.set("ageRange", filters.ageRange.join(","))
       }
@@ -127,9 +129,13 @@ export function useBeneficiaryPagination(
     async (nextCursor: string | null) => {
       const queryString = buildQuery(nextCursor)
 
-      // Abort any in-flight request when starting a fresh query (filters changed)
-      if (nextCursor === null && abortControllerRef.current) {
-        abortControllerRef.current.abort()
+      // Abort any in-flight request and clear stale results immediately so the
+      // UI shows a loading state rather than the previous type's cards.
+      if (nextCursor === null) {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort()
+        }
+        setBeneficiaries([])
       }
 
       const controller = new AbortController()

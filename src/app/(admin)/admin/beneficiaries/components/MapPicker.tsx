@@ -96,7 +96,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
       if (!location) {
         try {
           const photonResponse = await fetch(
-            `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&limit=1`,
+            `/api/proxy/photon?q=${encodeURIComponent(searchQuery)}&limit=1`,
           )
           const photonData = await photonResponse.json()
 

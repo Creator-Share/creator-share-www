@@ -54,21 +54,15 @@ export const columns: ColumnDef<Beneficiaries>[] = [
   {
     accessorKey: "id",
     meta: { excludeFromClick: true },
-    header: ({ column }) => {
-      const meta = column.columnDef.meta as { excludeFromClick?: boolean }
-      if (meta?.excludeFromClick) {
-        return null
-      }
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          ID
-          <LuArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      )
-    },
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      >
+        ID
+        <LuArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
     cell: ({ row }) => {
       const person = row.original
       return (

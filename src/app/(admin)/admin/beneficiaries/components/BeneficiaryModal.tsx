@@ -39,7 +39,7 @@ import ProofreadButton from "@/components/ai/ProofreadButton"
 import { toaster } from "@/components/ui/toaster"
 import { dollarsToCents } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
-import { compressImage, compressImages } from "@/utils/imageCompression"
+import { compressImage } from "@/utils/imageCompression"
 import { getDefaultSponsorshipAmount } from "@/components/BeneficiaryTypeNav"
 
 type BeneficiaryModalMode = "create" | "edit"
@@ -110,8 +110,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [isUnsavedChangesOpen, setIsUnsavedChangesOpen] = useState(false)
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([])
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
-  const [processedImages, setProcessedImages] = useState<File[]>([])
-  const [, setUploadedImagePaths] = useState<string[]>([])
   const [isProcessingImages, setIsProcessingImages] = useState(false)
   const [compressionProgress, setCompressionProgress] = useState<{
     current: number
@@ -149,13 +147,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     (formData.metadata as BeneficiaryMetadata | undefined)?.birth_date_is_estimate
   )
 
-  // Environment variable for sponsorship amount
+
   const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
   const publicHardcodedCents = publicHardcodedRaw
     ? parseInt(publicHardcodedRaw, 10)
     : null
 
-  // Per-type default amount in cents (e.g. $33.33 for CHILD_LABORER, $50 for SPECIAL_NEEDS, $25 for ANIMAL)
   const typeDefaultCents = getDefaultSponsorshipAmount(formData.beneficiary_type)
 
   // Effective display/save amount: per-type default > env fallback > 0
@@ -163,14 +160,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   // The env var acts as a last-resort fallback for any type without a configured default.
   const effectiveAmountCents = typeDefaultCents ?? publicHardcodedCents ?? 0
 
-  // Generate a short URL-style string
+  // Generate a short URL-style string using cryptographically secure randomness
   const generateShortUrl = useCallback(() => {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-    let result = ''
-    for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-    return result
+    return crypto.randomUUID().replace(/-/g, "").slice(0, 8)
   }, [])
 
   // Prepopulate username in create mode when modal opens
@@ -380,20 +372,75 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }
 
-  // Compression is now handled by the utility function imported above
+  // Shared image processing helper — validates, compresses, and returns ready-to-use files.
+  // Both create-mode and edit-mode branches use this single implementation.
+  const processImageFiles = useCallback(async (accepted: File[]) => {
+    const imageFilesFiltered = accepted.filter((f) => f.type.startsWith("image/"))
+    const totalImages = imageFilesFiltered.length
+
+    setCompressionProgress({ current: 0, total: totalImages, percent: 0 })
+
+    const validFiles: File[] = []
+    const invalidFiles: string[] = []
+    const largeFiles: string[] = []
+
+    for (let i = 0; i < accepted.length; i++) {
+      const file = accepted[i]
+      const isImage = file.type.startsWith("image/")
+      const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
+
+      if (file.size > 50 * 1024 * 1024) {
+        invalidFiles.push(`${file.name} (${fileSizeMB}MB - too large, max 50MB)`)
+        continue
+      }
+
+      if (isImage) {
+        try {
+          const imageIndex = imageFilesFiltered.indexOf(file)
+          const compressed = await compressImage(file, {
+            maxSizeMB: 3.5,
+            onProgress: (progress) => {
+              const overallProgress = ((imageIndex + progress / 100) / totalImages) * 100
+              setCompressionProgress({
+                current: imageIndex + 1,
+                total: totalImages,
+                percent: Math.round(overallProgress),
+                currentFileName: file.name,
+              })
+            },
+          })
+          if (compressed.size < file.size) {
+            const sizeReduction = ((1 - compressed.size / file.size) * 100).toFixed(0)
+            largeFiles.push(`${file.name} (${sizeReduction}% smaller)`)
+          }
+          validFiles.push(compressed)
+        } catch (error) {
+          console.error(`Failed to compress ${file.name}:`, error)
+          validFiles.push(file)
+        }
+      } else {
+        invalidFiles.push(file.name)
+      }
+    }
+
+    setCompressionProgress(null)
+    return { validFiles, invalidFiles, largeFiles }
+  }, [])
 
   // Image upload handler
   const handleImageChange = async (fileDetails: {
     acceptedFiles: File[]
-    rejectedFiles?: Array<{ file: File, errors: Array<string | { code?: string, message?: string }> }>
+    rejectedFiles?: Array<{ file: File; errors: Array<string | { code?: string; message?: string }> }>
   }) => {
-    // Show helpful error messages for rejected files
     if (fileDetails.rejectedFiles && fileDetails.rejectedFiles.length > 0) {
-      const rejectedNames = fileDetails.rejectedFiles.map(r => r.file.name).join(', ')
-      const errorMessages = fileDetails.rejectedFiles.map(r =>
-        r.errors.map(e => typeof e === 'string' ? e : (e.message || e.code || 'Unknown error')).join(', ')
-      ).join('; ')
-
+      const rejectedNames = fileDetails.rejectedFiles.map((r) => r.file.name).join(", ")
+      const errorMessages = fileDetails.rejectedFiles
+        .map((r) =>
+          r.errors
+            .map((e) => (typeof e === "string" ? e : e.message || e.code || "Unknown error"))
+            .join(", ")
+        )
+        .join("; ")
       toaster.create({
         title: "Some Files Were Rejected",
         description: `Files: ${rejectedNames}. Reason: ${errorMessages}. Accepted formats: All image formats. If you're having issues, try re-saving the file or converting to a different format.`,
@@ -402,233 +449,59 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       })
     }
 
-    if (isCreateMode) {
-      // In create mode, just store files locally - don't upload to Supabase yet
-      if (fileDetails.acceptedFiles.length === 0) {
-        resetImageUploadInput()
-        return
-      }
+    if (fileDetails.acceptedFiles.length === 0) {
+      resetImageUploadInput()
+      return
+    }
 
-      // Show instant loading spinner
-      setIsProcessingImages(true)
+    setIsProcessingImages(true)
+    try {
+      const { validFiles, invalidFiles, largeFiles } = await processImageFiles(fileDetails.acceptedFiles)
 
-      try {
-        // Additional validation: check file extensions and sizes
-        const validFiles: File[] = []
-        const invalidFiles: string[] = []
-        const largeFiles: string[] = []
-        const imageFiles = fileDetails.acceptedFiles.filter(f => f.type.startsWith('image/'))
-        const totalImages = imageFiles.length
-
-        // Initialize compression progress
-        setCompressionProgress({
-          current: 0,
-          total: totalImages,
-          percent: 0,
-        })
-
-        for (let i = 0; i < fileDetails.acceptedFiles.length; i++) {
-          const file = fileDetails.acceptedFiles[i]
-          const isImage = file.type.startsWith('image/')
-          const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
-
-          // Check file size
-          if (file.size > 50 * 1024 * 1024) { // 50MB hard limit
-            invalidFiles.push(`${file.name} (${fileSizeMB}MB - too large, max 50MB)`)
-            continue
-          }
-
-          // Accept all image files
-          if (isImage) {
-            // Always compress to ensure files are under 4MB for Vercel
-            try {
-              const imageIndex = imageFiles.indexOf(file)
-              const compressed = await compressImage(file, {
-                maxSizeMB: 3.5, // Target 3.5MB to leave buffer
-                onProgress: (progress) => {
-                  // Update progress for current file
-                  const overallProgress = ((imageIndex + progress / 100) / totalImages) * 100
-                  setCompressionProgress({
-                    current: imageIndex + 1,
-                    total: totalImages,
-                    percent: Math.round(overallProgress),
-                    currentFileName: file.name,
-                  })
-                }
-              })
-              
-              if (compressed.size < file.size) {
-                const sizeReduction = ((1 - compressed.size / file.size) * 100).toFixed(0)
-                largeFiles.push(`${file.name} (${sizeReduction}% smaller)`)
-              }
-              
-              validFiles.push(compressed)
-            } catch (error) {
-              console.error(`Failed to compress ${file.name}:`, error)
-              // If compression fails, try original file (API will validate size)
-              validFiles.push(file)
-            }
-          } else {
-            invalidFiles.push(file.name)
-          }
-        }
-
-        // Clear compression progress when done
-        setCompressionProgress(null)
-
-        if (invalidFiles.length > 0) {
-          toaster.create({
-            title: "Invalid Files",
-            description: `These files were skipped: ${invalidFiles.join(', ')}. Please use PNG, JPG, JPEG, or HEIC formats under 50MB.`,
-            type: "warning",
-            duration: 6000,
-          })
-        }
-
-        if (largeFiles.length > 0) {
-          toaster.create({
-            title: "Large Files Compressed",
-            description: `These files were over 10MB and have been automatically compressed: ${largeFiles.join(', ')}`,
-            type: "info",
-            duration: 6000,
-          })
-        }
-
-        if (validFiles.length === 0) {
-          setIsProcessingImages(false)
-          return
-        }
-
-        const previewUrls = validFiles.map((file) =>
-          URL.createObjectURL(file)
-        )
-
-        setImageFiles(validFiles)
-        setImagePreviewUrls(previewUrls)
-
+      if (invalidFiles.length > 0) {
         toaster.create({
-          title: "Images Ready",
-          description: `${validFiles.length} image${validFiles.length > 1 ? 's' : ''} ready to upload. ${invalidFiles.length > 0 ? `${invalidFiles.length} file${invalidFiles.length > 1 ? 's' : ''} skipped.` : ''} Images will be uploaded when you save.`,
-          type: "success",
-          duration: 4000,
+          title: "Invalid Files",
+          description: `These files were skipped: ${invalidFiles.join(", ")}. Please use image files under 50MB.`,
+          type: "warning",
+          duration: 6000,
         })
-      } catch (error) {
-        console.error('Error processing images:', error)
-        toaster.create({
-          title: "Processing Error",
-          description: "Failed to process some images. Please try again.",
-          type: "error",
-          duration: 5000,
-        })
-      } finally {
-        setIsProcessingImages(false)
-        setCompressionProgress(null)
       }
-    } else {
-      // In edit mode, defer upload until save (same as create mode)
-      if (fileDetails.acceptedFiles.length === 0) {
-        resetImageUploadInput()
-        return
-      }
-
-      setIsProcessingImages(true)
-
-      try {
-        const validFiles: File[] = []
-        const invalidFiles: string[] = []
-        const largeFiles: string[] = []
-        const imageFiles = fileDetails.acceptedFiles.filter(f => f.type.startsWith('image/'))
-        const totalImages = imageFiles.length
-
-        setCompressionProgress({ current: 0, total: totalImages, percent: 0 })
-
-        for (let i = 0; i < fileDetails.acceptedFiles.length; i++) {
-          const file = fileDetails.acceptedFiles[i]
-          const isImage = file.type.startsWith('image/')
-          const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
-
-          if (file.size > 50 * 1024 * 1024) {
-            invalidFiles.push(`${file.name} (${fileSizeMB}MB - too large, max 50MB)`)
-            continue
-          }
-
-          if (isImage) {
-            try {
-              const imageIndex = imageFiles.indexOf(file)
-              const compressed = await compressImage(file, {
-                maxSizeMB: 3.5,
-                onProgress: (progress) => {
-                  const overallProgress = ((imageIndex + progress / 100) / totalImages) * 100
-                  setCompressionProgress({
-                    current: imageIndex + 1,
-                    total: totalImages,
-                    percent: Math.round(overallProgress),
-                    currentFileName: file.name,
-                  })
-                }
-              })
-              if (compressed.size < file.size) {
-                const sizeReduction = ((1 - compressed.size / file.size) * 100).toFixed(0)
-                largeFiles.push(`${file.name} (${sizeReduction}% smaller)`)
-              }
-              validFiles.push(compressed)
-            } catch (error) {
-              console.error(`Failed to compress ${file.name}:`, error)
-              validFiles.push(file)
-            }
-          } else {
-            invalidFiles.push(file.name)
-          }
-        }
-
-        setCompressionProgress(null)
-
-        if (invalidFiles.length > 0) {
-          toaster.create({
-            title: "Invalid Files",
-            description: `These files were skipped: ${invalidFiles.join(', ')}. Please use image files under 50MB.`,
-            type: "warning",
-            duration: 6000,
-          })
-        }
-
-        if (largeFiles.length > 0) {
-          toaster.create({
-            title: "Large Files Compressed",
-            description: `These files were over 10MB and have been automatically compressed: ${largeFiles.join(', ')}`,
-            type: "info",
-            duration: 6000,
-          })
-        }
-
-        if (validFiles.length === 0) {
-          setIsProcessingImages(false)
-          return
-        }
-
-        const previewUrls = validFiles.map((file) => URL.createObjectURL(file))
-        setImageFiles(validFiles)
-        setImagePreviewUrls(previewUrls)
-        setHasUnsavedChanges(true)
-
+      if (largeFiles.length > 0) {
         toaster.create({
-          title: "Images Ready",
-          description: `${validFiles.length} image${validFiles.length > 1 ? 's' : ''} ready to upload. ${invalidFiles.length > 0 ? `${invalidFiles.length} file${invalidFiles.length > 1 ? 's' : ''} skipped.` : ''} Images will be uploaded when you save.`,
-          type: "success",
-          duration: 4000,
+          title: "Large Files Compressed",
+          description: `These files were over 10MB and have been automatically compressed: ${largeFiles.join(", ")}`,
+          type: "info",
+          duration: 6000,
         })
-      } catch (error) {
-        console.error('Error processing images:', error)
-        toaster.create({
-          title: "Processing Error",
-          description: "Failed to process some images. Please try again.",
-          type: "error",
-          duration: 5000,
-        })
-      } finally {
-        setIsProcessingImages(false)
-        setCompressionProgress(null)
       }
+      if (validFiles.length === 0) return
+
+      const previewUrls = validFiles.map((file) => URL.createObjectURL(file))
+      setImageFiles(validFiles)
+      setImagePreviewUrls(previewUrls)
+      if (isEditMode) setHasUnsavedChanges(true)
+
+      toaster.create({
+        title: "Images Ready",
+        description: `${validFiles.length} image${validFiles.length > 1 ? "s" : ""} ready to upload.${
+          invalidFiles.length > 0
+            ? ` ${invalidFiles.length} file${invalidFiles.length > 1 ? "s" : ""} skipped.`
+            : ""
+        } Images will be uploaded when you save.`,
+        type: "success",
+        duration: 4000,
+      })
+    } catch (error) {
+      console.error("Error processing images:", error)
+      toaster.create({
+        title: "Processing Error",
+        description: "Failed to process some images. Please try again.",
+        type: "error",
+        duration: 5000,
+      })
+    } finally {
+      setIsProcessingImages(false)
+      setCompressionProgress(null)
     }
   }
 
@@ -733,8 +606,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         }
         resetImageUploadInput()
         resetVideoUploadInput()
-        setProcessedImages([])
-        setUploadedImagePaths([])
         setHasUnsavedChanges(false)
 
         // Reset the parent's form data
@@ -777,21 +648,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           setImagesToDelete([])
         }
 
-        // Handle image uploads - upload directly to Supabase (bypasses Vercel's 4.5MB limit)
-        if (imageFiles.length > 0 || processedImages.length > 0) {
+        // Handle image uploads — imageFiles are already compressed by handleImageChange
+        if (imageFiles.length > 0) {
           try {
-            // Use processed/optimized images if available, otherwise use original files
-            const filesToUpload = processedImages.length > 0 ? processedImages : imageFiles
-
-            // Compress images before upload to ensure they're under 4MB
-            const compressedFiles = await compressImages(filesToUpload, {
-              maxSizeMB: 3.5,
-            })
-
-            // Upload compressed images via API
             const formData = new FormData()
             formData.append("beneficiaryId", selectedChild?.id || "")
-            compressedFiles.forEach((f) => formData.append("images", f))
+            imageFiles.forEach((f) => formData.append("images", f))
 
             const response = await fetch(
               "/api/admin/beneficiaries/images/create",
@@ -802,15 +664,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               throw new Error(`Image upload failed: ${errorText}`)
             }
 
-            // Reset file states
             resetImageUploadInput()
-            setProcessedImages([])
-            setUploadedImagePaths([])
-
-            // Refresh images list
             await fetchImages()
           } catch (error) {
-            console.error('Image upload error:', error)
+            console.error("Image upload error:", error)
             toaster.create({
               title: "Error",
               description: "Failed to upload images",
