@@ -2,60 +2,79 @@
 
 ## Background and Motivation
 
-Vercel has recently updated its deployment policy to enforce strict validation of the Git commit author for branches that trigger deployments. Specifically, Vercel requires that the commit author of any pushed commit must be a recognized user with access to the Vercel project (typically the Vercel owner or team members). This means that commits authored by unknown or unauthorized users will cause deployment failures.
+Vercel enforces strict validation of the Git commit author for branches that
+trigger deployments. The commit author must be a recognised Vercel team member.
+This means commits authored by external contributors (volunteers, open-source
+contributors) cause deployment failures when pushed directly to a deploy branch.
 
-Previously, it was possible to push code from any user and then trigger a deployment via a deploy hook. However, with the new policy, deployments will fail unless the commit author matches the Vercel user.
+Our development workflow involves multiple contributors committing to `dev` or
+feature branches. Because volunteer contributors are not Vercel team members,
+we cannot point Vercel directly at `dev` without risking failed builds.
 
-Our development workflow involves multiple branches:
+## Solution: Author Rewriting via GitHub Actions
 
-- Development work is done on the `dev` branch or feature branches.
-- Pull requests are used to merge from `dev` to `staging` or `main`.
-- We want continuous integration (CI) based deployments triggered by commits to the `dev` branch.
+We maintain a dedicated deployment branch (`deploy-dev`) that Vercel watches.
+A GitHub Actions workflow automatically keeps `deploy-dev` in sync with `dev`
+on every push, rewriting the latest commit's author to the `CreatorShare`
+identity that Vercel recognises before force-pushing.
 
-## Problem
+**This is fully automatic. No manual steps are required.**
 
-Since developers may commit with different Git user configurations, the commit author on the `dev` branch may not match the Vercel user authorized to deploy. This causes Vercel to reject deployments triggered by these commits.
+### How It Works
 
-## Solution: Author Rewriting Script
+1. A contributor's PR is merged into `dev`.
+2. The push to `dev` triggers `.github/workflows/sync-deploy-dev.yml`.
+3. The workflow runs `scripts/rewrite_authors.sh --force`, which:
+   - Creates a temporary branch from `dev`.
+   - Amends the latest commit's author to `CreatorShare <creatorshare@thegeeky.ninja>`.
+   - Resets `deploy-dev` to this amended commit and force-pushes.
+4. Vercel detects the push to `deploy-dev`, recognises the author, and builds.
+5. `dev.creatorshare.com` is updated within a few minutes of the merge.
 
-To comply with Vercel's policy while maintaining our workflow, we created a script that:
+### Relevant Files
 
-1. Monitors the `dev` branch for new commits.
-2. Creates or updates a dedicated deployment branch (e.g., `deploy-dev`).
-3. Copies the latest commits from `dev` to `deploy-dev`.
-4. Rewrites the author and committer information of the latest commit on `deploy-dev` to match the Vercel owner's identity.
-5. Pushes the updated `deploy-dev` branch to the remote repository, triggering a Vercel deployment with the correct author.
+| File | Purpose |
+|---|---|
+| `.github/workflows/sync-deploy-dev.yml` | GitHub Action that runs on every push to `dev` |
+| `scripts/rewrite_authors.sh` | Rewrite script (also supports `--force` one-shot and daemon modes) |
 
-This approach ensures that all commits on the deployment branch have the correct author identity, satisfying Vercel's requirements and enabling successful CI deployments.
+## Important Rules
 
-## How the Script Works
+- **Never commit directly to `deploy-dev`.** It is managed exclusively by the
+  GitHub Action. Manual commits will be overwritten on the next `dev` push.
+- **Never point Vercel at `dev` directly.** Contributors' commit authors will
+  not match the Vercel team member list and builds will fail.
+- The `staging` and `main` branches follow the same principle but use PRs
+  created by the CreatorShare GitHub account rather than author rewriting.
+  See `docs/branches.md` for the full branching strategy.
 
-- The script runs in a loop, periodically fetching the latest changes from the remote repository.
-- It compares the commit history of the `dev` branch and the deployment branch.
-- If new commits are detected on `dev`, it checks if the latest commit on the deployment branch already has the correct author.
-- If not, it creates a temporary branch from `dev`, amends the latest commit to rewrite the author information, resets the deployment branch to this temporary branch, and force pushes the changes.
-- The script includes safeguards to avoid rewriting commits unnecessarily and cleans up temporary branches after use.
+## Troubleshooting
 
-## Benefits
+### dev.creatorshare.com is not updating after a merge
 
-- Maintains a clean and consistent commit history on the deployment branch.
-- Complies with Vercel's strict commit author policy.
-- Automates deployment branch updates without manual intervention.
-- Avoids deployment failures due to unauthorized commit authors.
+1. Go to the [Actions tab](https://github.com/Creator-Share/creator-share-www/actions)
+   and check whether the **"Sync dev → deploy-dev"** workflow ran and passed.
+2. If the workflow failed, inspect the logs. Common causes:
+   - `deploy-dev` branch was deleted — recreate it from `dev` and re-run.
+   - `GITHUB_TOKEN` lost write permission — check repository Settings → Actions → General → Workflow permissions (must be "Read and write").
+3. If the workflow succeeded but Vercel did not build, check the Vercel dashboard
+   for the `deploy-dev` branch deployment and inspect the build logs there.
 
-## Usage
+### Manual one-shot sync (emergency use only)
 
-The script is located at `scripts/rewrite_authors.sh`. It can be run as a background service or integrated into CI pipelines.
+If the GitHub Action is unavailable and you need to sync immediately, run this
+from the repo root on a machine that has push access:
 
-Ensure the deployment branch (e.g., `deploy-dev`) exists on the remote repository before running the script.
+```bash
+git fetch origin
+git checkout -b deploy-dev origin/deploy-dev 2>/dev/null || git checkout deploy-dev
+git checkout dev
+bash scripts/rewrite_authors.sh --force
+```
 
-## Future Improvements
+### Running as a local daemon (legacy, not recommended)
 
-- Add detailed logging and error handling.
-- Support configurable branch names and author information via command-line arguments.
-- Implement dry-run mode for testing.
-- Replace `git filter-branch` with more efficient tools if needed.
-
----
-
-This document and the accompanying script provide a practical workaround for Vercel's commit author restrictions, enabling smooth CI deployments in our multi-branch development workflow.
+The original approach ran the script in a continuous polling loop on a
+contributor's local machine. This is no longer needed or recommended — the
+GitHub Action is the canonical mechanism. The daemon mode is documented in the
+script itself (`scripts/rewrite_authors.sh`) for reference only.
