@@ -42,9 +42,10 @@ export async function DELETE(req: NextRequest) {
   if (!auth.ok) return auth.response
 
   // ── Fetch only the columns needed to find and delete the record ───────────
+  // getStorageKey requires: id, parent_id, type, extension
   const { data: allMedia, error: fetchError } = await supabase
     .from("media")
-    .select("id, storage_path, type")
+    .select("id, parent_id, type, extension")
     .eq("parent_id", activityId)
 
   if (fetchError) {
@@ -65,8 +66,8 @@ export async function DELETE(req: NextRequest) {
   let targetRecord: MediaRow | null = null
 
   for (const record of allMedia) {
-    // We select only the subset of columns needed (id, storage_path, type).
-    // The cast to MediaRow is safe because getStorageKey only reads those fields.
+    // We select only the subset of columns needed by getStorageKey (id, parent_id, type, extension).
+    // The cast to MediaRow is safe because those are the only fields getStorageKey reads.
     // TODO: align MediaRow with the supabase-generated type so this cast is unnecessary.
     const mediaRecord = record as unknown as MediaRow
     const key = getStorageKey(mediaRecord)
