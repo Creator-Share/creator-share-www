@@ -100,8 +100,8 @@ const BlindSponsorshipModal: React.FC<BlindSponsorshipModalProps> = ({
           <Text fontSize="xl" fontWeight="bold">
             We&apos;ll match you with a child
           </Text>
+          <DialogCloseTrigger />
         </DialogHeader>
-        <DialogCloseTrigger />
         <DialogBody>
           <Text mb={4} color="gray.700">
             Choose your monthly sponsorship amount and we&apos;ll pair you with

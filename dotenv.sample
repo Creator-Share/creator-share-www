@@ -3,12 +3,20 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET=
 NEXT_PUBLIC_MAPBOX_TOKEN=
+NEXT_PUBLIC_MAPTILER_KEY=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 STRIPE_SECRET_KEY=
 NEXT_PUBLIC_BASE_URL=https://localhost:3000/
 
-# Public frontend exposure (dollars in cents integer string) to allow UI to honor/lock the amount
+# DEPRECATED — Global sponsorship amount override (dollars in cents integer string).
+# Superseded by per-type vars below (NEXT_PUBLIC_SPONSORSHIP_AMOUNT_*).
+# Leave empty unless you need a single hardcoded amount for all types.
 NEXT_PUBLIC_SPONSORSHIP_GOAL=
+
+# Sponsorship amounts per beneficiary type (in cents, e.g. 3333 = $33.33)
+NEXT_PUBLIC_SPONSORSHIP_AMOUNT_CHILD_LABORER=3333
+NEXT_PUBLIC_SPONSORSHIP_AMOUNT_SPECIAL_NEEDS=5000
+NEXT_PUBLIC_SPONSORSHIP_AMOUNT_ANIMAL=2500
 
 # Reservation timeout in minutes (how long a child stays reserved when someone starts sponsoring)
 RESERVATION_TIMEOUT_MINUTES=

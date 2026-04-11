@@ -38,11 +38,13 @@ export const HomeHero = () => {
   return (
     <Box
       className="relative"
+      background={{
+        base: "linear-gradient(to bottom, white 0%, #ebebeb 60%, #F5F5F5 100%)",
+        md: "linear-gradient(to bottom, white 0%, #f5f9ff 25%, #e8eefb 55%, #dce6f7 75%, #F5F5F5 100%)",
+      }}
       style={{
         width: "100vw",
         marginLeft: "calc(-50vw + 50%)",
-        background:
-          "linear-gradient(to bottom, white 0%, #f5f9ff 25%, #e8eefb 55%, #dce6f7 75%, #F5F5F5 100%)",
       }}
     >
       <Box className="max-w-[1200px] mx-auto px-6 md:px-8">

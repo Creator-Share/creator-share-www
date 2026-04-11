@@ -207,12 +207,13 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
       ref={scrollRef}
       mt={4}
       py={4}
+      mx={{ base: -4, md: 0 }}
       overflowX="auto"
       overflowY="hidden"
       style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       className="[&::-webkit-scrollbar]:hidden"
     >
-      <Flex gap={4} align="flex-start" w="max-content" minH="270px">
+      <Flex gap={4} align="flex-start" w="max-content" minH="270px" px={{ base: 4, md: 0 }}>
         {/* Stats card -- always first */}
         <StatsCard />
 

@@ -57,7 +57,7 @@ const BeneficiaryDetailPage = () => {
             type: "error",
             duration: 5000,
           })
-          router.push("/admin/children")
+          router.push("/admin/beneficiaries")
           return
         }
 
@@ -248,7 +248,7 @@ const BeneficiaryDetailPage = () => {
       <AdminPageLayout
         title="Not Found"
         breadcrumb={[
-          { label: "Beneficiaries", href: "/admin/children" },
+          { label: "Beneficiaries", href: "/admin/beneficiaries" },
           { label: "Not Found" },
         ]}
         hideSearchSection
@@ -272,7 +272,7 @@ const BeneficiaryDetailPage = () => {
       title={beneficiary.name}
       description={`Viewing details for ${beneficiary.name}`}
       breadcrumb={[
-        { label: "Beneficiaries", href: "/admin/children" },
+        { label: "Beneficiaries", href: "/admin/beneficiaries" },
         { label: beneficiary.name },
       ]}
       hideSearchSection

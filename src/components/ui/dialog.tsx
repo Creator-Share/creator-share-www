@@ -1,5 +1,5 @@
 import { Dialog as ChakraDialog, Portal } from "@chakra-ui/react"
-import { CloseButton } from "./close-button"
+import { RxCross2 } from "react-icons/rx"
 import * as React from "react"
 
 interface DialogContentProps extends ChakraDialog.ContentProps {
@@ -36,24 +36,57 @@ export const DialogCloseTrigger = React.forwardRef<
   HTMLButtonElement,
   ChakraDialog.CloseTriggerProps
 >(function DialogCloseTrigger(props, ref) {
+  const { children, ...rest } = props
   return (
     <ChakraDialog.CloseTrigger
       position="absolute"
-      top="2"
+      top="50%"
       insetEnd="2"
-      {...props}
+      transform="translateY(-50%)"
+      {...rest}
       asChild
     >
-      <CloseButton size="sm" ref={ref}>
-        {props.children}
-      </CloseButton>
+      <button
+        ref={ref}
+        aria-label="Close"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 56,
+          height: 56,
+          borderRadius: "50%",
+          border: "none",
+          background: "transparent",
+          cursor: "pointer",
+          padding: 0,
+          flexShrink: 0,
+          color: "inherit",
+        }}
+        onMouseEnter={(e) =>
+          ((e.currentTarget as HTMLButtonElement).style.background =
+            "rgba(255,255,255,0.15)")
+        }
+        onMouseLeave={(e) =>
+          ((e.currentTarget as HTMLButtonElement).style.background =
+            "transparent")
+        }
+      >
+        {children ?? <RxCross2 size={24} style={{ display: "block" }} />}
+      </button>
     </ChakraDialog.CloseTrigger>
   )
 })
 
 export const DialogRoot = ChakraDialog.Root
 export const DialogFooter = ChakraDialog.Footer
-export const DialogHeader = ChakraDialog.Header
+
+export const DialogHeader = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentProps<typeof ChakraDialog.Header>
+>(function DialogHeader({ position = "relative", ...props }, ref) {
+  return <ChakraDialog.Header ref={ref} position={position} {...props} />
+})
 export const DialogBody = ChakraDialog.Body
 export const DialogBackdrop = ChakraDialog.Backdrop
 export const DialogTitle = ChakraDialog.Title

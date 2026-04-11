@@ -1,5 +1,14 @@
 import { defineConfig, devices } from "@playwright/test"
 
+/**
+ * When port 3000 is already taken, `next dev` binds to another port but this
+ * config still waits on :3000 and times out. Set PW_NO_WEBSERVER=1 to reuse an
+ * app you already started (e.g. `npm run dev` on 3000), or set PLAYWRIGHT_DEV_PORT
+ * so the spawned dev server and baseURL stay in sync (default 3000).
+ */
+const devPort = process.env.PLAYWRIGHT_DEV_PORT ?? "3000"
+const devOrigin = `http://localhost:${devPort}`
+
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: true,
@@ -8,7 +17,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: devOrigin,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
@@ -18,10 +27,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: true,
-    timeout: 120000,
-  },
+  webServer: process.env.PW_NO_WEBSERVER
+    ? undefined
+    : {
+        command: `npm run dev -- --port ${devPort}`,
+        url: devOrigin,
+        reuseExistingServer: true,
+        timeout: 120000,
+      },
 })

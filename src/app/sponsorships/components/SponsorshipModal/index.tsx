@@ -38,6 +38,7 @@ import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
 import BeneficiaryActivity, { SHOW_MORE_CLASS } from "../SponsorshipActivity"
 import { FAQModal } from "@/components/FAQModal"
+import { getDefaultSponsorshipAmount } from "@/components/BeneficiaryTypeNav"
 
 // PayPal components are optional and loaded only when the env var is set.
 // Using next/dynamic avoids the broken module-level let + fire-and-forget import()
@@ -90,8 +91,18 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const publicHardcodedCents = publicHardcodedRaw
     ? parseInt(publicHardcodedRaw, 10)
     : null
+
+  // Per-type default amount (NEXT_PUBLIC_SPONSORSHIP_AMOUNT_*) takes priority over the global goal
+  const typeDefaultCents = getDefaultSponsorshipAmount(beneficiary.beneficiary_type)
+  const typeDefaultDollars = typeDefaultCents !== null ? typeDefaultCents / 100 : null
+  const isSpecialNeeds = (beneficiary.beneficiary_type as string) === "SPECIAL_NEEDS"
+
+  // Effective goal for progress bar / remaining calculation
+  // For SPECIAL_NEEDS there is no budget goal — progress bar is hidden anyway
   const effectiveGoalCents =
-    publicHardcodedCents !== null
+    typeDefaultCents !== null
+      ? typeDefaultCents
+      : publicHardcodedCents !== null
       ? publicHardcodedCents
       : beneficiary.budget_goal || 0
   const remainingAmount =
@@ -112,7 +123,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const publicHardcodedDollars =
     publicHardcodedCents !== null ? publicHardcodedCents / 100 : null
   const [amount, setAmount] = useState<number>(
-    publicHardcodedDollars ?? remainingAmount,
+    typeDefaultDollars ?? publicHardcodedDollars ?? remainingAmount,
   )
   const [selectedOption, setSelectedOption] = useState<string>(
     paymentOptionsCollection.items[0].value,
@@ -134,9 +145,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     setBioExpanded(!hasActivities)
   }, [open, beneficiary.id, hasActivities, activitiesLoading])
 
+  // SPECIAL_NEEDS beneficiaries receive continuous sponsorship —
+  // never treat them as "fully sponsored" regardless of status or budget.
   const alreadyFulfilled =
-    beneficiary.status === "Budget Fulfilled" ||
-    effectiveGoalCents <= (beneficiary.budget_raised || 0)
+    !isSpecialNeeds &&
+    (beneficiary.status === "Budget Fulfilled" ||
+      effectiveGoalCents <= (beneficiary.budget_raised || 0))
 
   useEffect(() => {
     if (!open) {
@@ -295,14 +309,15 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     setAmount(newValue)
   }
 
+  // Per-type default (or SPECIAL_NEEDS) always enables payment regardless of remaining amount
+  const hasFixedAmount = typeDefaultCents !== null || publicHardcodedCents !== null
   const canPay =
-    process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL ||
+    isSpecialNeeds ||
+    hasFixedAmount ||
     (!alreadyFulfilled &&
-      (publicHardcodedDollars !== null
-        ? amount === publicHardcodedDollars
-        : remainingAmount < minimumAmount
-          ? amount > 0
-          : amount >= minimumAmount))
+      (remainingAmount < minimumAmount
+        ? amount > 0
+        : amount >= minimumAmount))
 
   const handleStripePayment = async () => {
     if (!canPay) {
@@ -315,7 +330,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       })
       return
     }
-    if (!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && amount > remainingAmount) {
+    if (!hasFixedAmount && !isSpecialNeeds && amount > remainingAmount) {
       toaster.create({
         title: "Invalid Amount",
         description: "Amount exceeds the remaining budget needed.",
@@ -341,8 +356,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         beneficiaryId: beneficiary.id,
         beneficiaryName: beneficiary.name,
         beneficiaryImage: primaryImageUrl || PERSON_PLACEHOLDER_PATH,
-        amount:
-          publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
+        // Priority: per-type default → global goal override → user-entered amount
+        amount: typeDefaultCents !== null
+          ? typeDefaultCents
+          : publicHardcodedCents !== null
+          ? publicHardcodedCents
+          : amount * 100,
         paymentType: selectedOption,
         location: beneficiary.country,
         userId: user?.id,
@@ -742,8 +761,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               className="flex flex-col"
               pr={{ base: 0, md: 4 }}
             >
-              {/* Progress bar -- only when goal tracking is enabled */}
-              {publicHardcodedCents == null && (
+              {/* Progress bar -- only when goal tracking is enabled (hidden for SPECIAL_NEEDS) */}
+              {publicHardcodedCents == null && !isSpecialNeeds && (
                 <Box className="space-y-2 mb-4">
                   <Flex justify="space-between" align="center">
                     <Text className="text-sm font-medium text-gray-600">
@@ -892,12 +911,14 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           <Input
                             type="number"
                             value={
-                              publicHardcodedDollars !== null
+                              typeDefaultDollars !== null
+                                ? typeDefaultDollars
+                                : publicHardcodedDollars !== null
                                 ? publicHardcodedDollars
                                 : remainingAmount
                             }
-                            readOnly={publicHardcodedDollars !== null}
-                            disabled={publicHardcodedDollars !== null}
+                            readOnly={typeDefaultDollars !== null || publicHardcodedDollars !== null}
+                            disabled={typeDefaultDollars !== null || publicHardcodedDollars !== null}
                             className="px-4 h-full bg-gray-100 border-0 outline-none focus:ring-0 text-lg text-gray-700"
                             placeholder="Enter Amount"
                           />
@@ -917,7 +938,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                             max={maxSelectableAmount}
                             value={amount || ""}
                             onChange={handleAmountChange}
-                            readOnly={publicHardcodedDollars !== null}
+                            readOnly={typeDefaultDollars !== null || publicHardcodedDollars !== null}
                             className="px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700"
                             placeholder="Enter Amount"
                           />
