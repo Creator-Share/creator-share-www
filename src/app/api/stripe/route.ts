@@ -40,23 +40,16 @@ export async function POST(req: Request) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
     const fallbackImage = `${baseUrl}${PERSON_PLACEHOLDER_PATH}`
 
-    // For blind sponsorships, always use $33.33 (3333 cents) regardless of env var
-    // For regular sponsorships, check if a hardcoded server-side price is configured
-    const hardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
-    const hardcoded = hardcodedRaw ? parseInt(hardcodedRaw, 10) : null
-    if (hardcoded !== null && (isNaN(hardcoded) || hardcoded <= 0)) {
-      console.warn(
-        "NEXT_PUBLIC_SPONSORSHIP_GOAL is set but invalid:",
-        hardcodedRaw,
-      )
-    }
-
+    // For blind sponsorships, always use $33.33 (3333 cents).
+    // For regular sponsorships, the client already sends the correct per-type amount
+    // (set by NEXT_PUBLIC_SPONSORSHIP_AMOUNT_* env vars in BeneficiaryTypeNav).
+    // NEXT_PUBLIC_SPONSORSHIP_GOAL is intentionally NOT used here anymore so that
+    // per-type defaults are respected end-to-end.
     let enforcedAmount: number
     if (isBlindSponsorship) {
       enforcedAmount = 3333 // Fixed $33.33 for blind sponsorships
     } else {
-      // Use the hardcoded value if present, otherwise use the client-provided amount.
-      enforcedAmount = hardcoded !== null ? hardcoded : amount
+      enforcedAmount = amount // Use the per-type amount sent from the client
     }
 
     // Validate enforced amount (keep existing minimum unless overriden intentionally)
@@ -96,7 +89,6 @@ export async function POST(req: Request) {
       images: productImages,
     })
 
-    // Create price using the enforced amount (either hardcoded server var or client-provided)
     const price = await stripe.prices.create({
       unit_amount: enforcedAmount,
       currency: "usd",
@@ -108,13 +100,11 @@ export async function POST(req: Request) {
               type: "partnership",
               project,
               amount: enforcedAmount.toString(),
-              hardcoded_override: hardcoded !== null ? "true" : "false",
             }
           : {
               beneficiaryId: beneficiaryId || null,
               userId: userId || null,
               amount: enforcedAmount.toString(),
-              hardcoded_override: hardcoded !== null ? "true" : "false",
               sponsorshipMode: resolvedSponsorshipMode,
               blindLabel: resolvedBlindLabel,
               beneficiaryName: resolvedBeneficiaryName,
@@ -139,7 +129,6 @@ export async function POST(req: Request) {
               project,
               email,
               paymentType,
-              hardcoded_override: hardcoded !== null ? "true" : "false",
             }
           : {
               beneficiaryId: beneficiaryId || undefined,
@@ -149,7 +138,6 @@ export async function POST(req: Request) {
               childLocation: location,
               userId: userId || null,
               paymentType,
-              hardcoded_override: hardcoded !== null ? "true" : "false",
               sponsorshipMode: resolvedSponsorshipMode,
               blindLabel: resolvedBlindLabel,
             },
@@ -161,13 +149,11 @@ export async function POST(req: Request) {
                 project,
                 amount: enforcedAmount.toString(),
                 email,
-                hardcoded_override: hardcoded !== null ? "true" : "false",
               }
             : {
                 beneficiaryId: beneficiaryId || undefined,
                 userId: userId || null,
                 amount: enforcedAmount.toString(),
-                hardcoded_override: hardcoded !== null ? "true" : "false",
                 sponsorshipMode: resolvedSponsorshipMode,
                 blindLabel: resolvedBlindLabel,
                 beneficiaryName: resolvedBeneficiaryName,

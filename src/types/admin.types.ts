@@ -12,6 +12,7 @@ export type BeneficiaryType =
   | "FAMILY"
   | "STREET_INVOLVED"
   | "CHILD_LABORER"
+  | "SPECIAL_NEEDS"
 
 export interface Geography {
   coordinates: [number, number]

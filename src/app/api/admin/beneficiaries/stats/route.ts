@@ -8,21 +8,24 @@ export async function GET(req: Request) {
   const auth = await requireSuperAdmin(supabase)
   if (!auth.ok) return auth.response
   const { searchParams } = new URL(req.url)
-  const beneficiaryType = searchParams.get("beneficiary_type") as BeneficiaryType | null
+  const beneficiaryTypeParam = searchParams.get("beneficiary_type")
 
-  if (!beneficiaryType) {
-    return NextResponse.json(
-      { error: "beneficiary_type is required" },
-      { status: 400 }
-    )
-  }
+  // Support comma-separated list of types (e.g. "CHILD,CHILD_LABORER")
+  // If no type is provided, return stats for ALL beneficiary types
+  const beneficiaryTypes = beneficiaryTypeParam
+    ? (beneficiaryTypeParam.split(",").map((t) => t.trim()) as BeneficiaryType[])
+    : []
 
   try {
-    // Get all beneficiaries of this type
-    const { data, error } = await supabase
-      .from("beneficiaries")
-      .select("status")
-      .eq("beneficiary_type", beneficiaryType)
+    // Get all beneficiaries of this type (or types); no filter = all types
+    let query = supabase.from("beneficiaries").select("status")
+    if (beneficiaryTypes.length === 1) {
+      query = query.eq("beneficiary_type", beneficiaryTypes[0])
+    } else if (beneficiaryTypes.length > 1) {
+      query = query.in("beneficiary_type", beneficiaryTypes)
+    }
+    // beneficiaryTypes.length === 0 → no filter → all types
+    const { data, error } = await query
 
     if (error) {
       console.error("Supabase error:", error)

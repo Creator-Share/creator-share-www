@@ -8,12 +8,14 @@ type FiltersState = {
   ageRange: [number, number]
   status: string[]
   search?: string
-  beneficiary_type?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED"
+  /** Accepts single type or comma-separated types (e.g. "CHILD,CHILD_LABORER") */
+  beneficiary_type?: string
 }
 
 interface UseBeneficiaryPaginationOptions {
   recordsPerPage?: number
-  beneficiaryType?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED"
+  /** Accepts single type or comma-separated types (e.g. "CHILD,CHILD_LABORER") */
+  beneficiaryType?: string
   autoRetry?: boolean
   initialStatus?: string[] // Optional initial status filter (for admin mode)
   isAdminMode?: boolean // Flag to indicate admin mode (affects ageRange filtering with Draft)
@@ -52,7 +54,7 @@ export function useBeneficiaryPagination(
 ): UseBeneficiaryPaginationReturn {
   const {
     recordsPerPage = 3,
-    beneficiaryType = "CHILD",
+    beneficiaryType,
     autoRetry = true,
     initialStatus,
     isAdminMode = false,
@@ -92,21 +94,23 @@ export function useBeneficiaryPagination(
   const buildQuery = useCallback(
     (nextCursor: string | null) => {
       const params = new URLSearchParams()
-      params.set(
-        "beneficiary_type",
-        filters.beneficiary_type || beneficiaryType
-      )
+      const type = (filters.beneficiary_type || beneficiaryType) as string | undefined;
+      if (type && type !== "null" && type !== "undefined") {
+        params.set("beneficiary_type", type);
+      }
       if (filters.gender) params.set("gender", filters.gender)
       if (filters.status?.length) params.set("status", filters.status.join(","))
       
-      // Skip age range filtering for statuses that may include beneficiaries of any age
-      // or with incomplete data (Draft, Archived, Budget Fulfilled)
+      // Skip age range filtering when:
+      //  • the type is ANIMAL (dogs don't have human-comparable ages), or
+      //  • status includes a value that may cover beneficiaries of any age
+      //    (Draft, Archived, Budget Fulfilled)
       const skipAgeRangeStatuses = ["Draft", "Archived", "Budget Fulfilled"]
-      const shouldSkipAgeRange = (filters.status || []).some(status => 
-        skipAgeRangeStatuses.includes(status)
-      )
-      
-      
+      const isAnimalType = (type ?? "").split(",").includes("ANIMAL")
+      const shouldSkipAgeRange =
+        isAnimalType ||
+        (filters.status || []).some((status) => skipAgeRangeStatuses.includes(status))
+
       if (filters.ageRange && !shouldSkipAgeRange) {
         params.set("ageRange", filters.ageRange.join(","))
       }
@@ -125,9 +129,13 @@ export function useBeneficiaryPagination(
     async (nextCursor: string | null) => {
       const queryString = buildQuery(nextCursor)
 
-      // Abort any in-flight request when starting a fresh query (filters changed)
-      if (nextCursor === null && abortControllerRef.current) {
-        abortControllerRef.current.abort()
+      // Abort any in-flight request and clear stale results immediately so the
+      // UI shows a loading state rather than the previous type's cards.
+      if (nextCursor === null) {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort()
+        }
+        setBeneficiaries([])
       }
 
       const controller = new AbortController()

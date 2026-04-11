@@ -96,7 +96,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
       if (!location) {
         try {
           const photonResponse = await fetch(
-            `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&limit=1`,
+            `/api/proxy/photon?q=${encodeURIComponent(searchQuery)}&limit=1`,
           )
           const photonData = await photonResponse.json()
 
@@ -118,7 +118,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
           const countryPart = parts[parts.length - 1].trim()
           try {
             const countryResponse = await fetch(
-              `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(countryPart)}&format=json&limit=1`,
+              `/api/proxy/nominatim?q=${encodeURIComponent(countryPart)}&limit=1`,
             )
             const countryData = await countryResponse.json()
 
@@ -230,7 +230,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
           >
             <TileLayer
               attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
-              url={`https://api.maptiler.com/maps/bright-v2/{z}/{x}/{y}.png?key=Wm5rwQ7T3kAi2Z07eCBa&lang=en`}
+              url={`https://api.maptiler.com/maps/bright-v2/{z}/{x}/{y}.png?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY}&lang=en`}
             />
             {selectedLocation && (
               <Marker position={selectedLocation} icon={customIcon} />

@@ -5,6 +5,7 @@ import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Beneficiaries } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
+import { getDefaultSponsorshipAmount } from "@/components/BeneficiaryTypeNav"
 
 interface BeneficiaryCardProps {
   beneficiary: Beneficiaries
@@ -23,10 +24,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiaryImages,
   loadingImages,
 }) => {
-  const publicHardcoded = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
-  const goal = Number(
-    publicHardcoded !== null ? publicHardcoded : beneficiary.budget_goal || 0
-  )
+  const goal =
+    getDefaultSponsorshipAmount(beneficiary.beneficiary_type) ??
+    beneficiary.budget_goal ??
+    0
   const raised = Number(beneficiary.budget_raised || 0)
   const progress =
     goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0
@@ -148,20 +149,23 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         </Text>
       </Box>
 
-      <Box className="space-y-1 mt-3">
-        <Box className="flex justify-between text-sm">
-          <Text>Raised</Text>
-          <Text>
-            ${centsToDollars(beneficiary.budget_raised)} / $
-            {centsToDollars(goal || beneficiary.budget_goal)}
-          </Text>
+      {/* Hide budget goal progress for SPECIAL_NEEDS beneficiaries */}
+      {beneficiary.beneficiary_type !== "SPECIAL_NEEDS" && (
+        <Box className="space-y-1 mt-3">
+          <Box className="flex justify-between text-sm">
+            <Text>Raised</Text>
+            <Text>
+              ${centsToDollars(beneficiary.budget_raised)} / $
+              {centsToDollars(goal || beneficiary.budget_goal)}
+            </Text>
+          </Box>
+          <Progress.Root value={progress}>
+            <Progress.Track className="rounded-xl h-2">
+              <Progress.Range className="bg-[#1C3C8C]" />
+            </Progress.Track>
+          </Progress.Root>
         </Box>
-        <Progress.Root value={progress}>
-          <Progress.Track className="rounded-xl h-2">
-            <Progress.Range className="bg-[#1C3C8C]" />
-          </Progress.Track>
-        </Progress.Root>
-      </Box>
+      )}
 
       {/* Spacer to push button to bottom */}
       <Box className="flex-grow" />
