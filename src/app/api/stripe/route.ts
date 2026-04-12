@@ -61,15 +61,17 @@ export async function POST(req: Request) {
     }
 
     const isMonthly = paymentType === "subscription"
-    const interval = isMonthly ? "month" : "year"
+    const isOneTime = paymentType === "one_time"
+    // Recurring interval for non-one-time payments (month for subscription, year otherwise)
+    const interval: "month" | "year" = isMonthly ? "month" : "year"
 
     let productName: string
     let productImages: string[]
     if (type === "partnership") {
-      productName = `${isMonthly ? "Monthly" : "Yearly"} Partnership - ${project}`
+      productName = `${isOneTime ? "One-time" : isMonthly ? "Monthly" : "Yearly"} Partnership - ${project}`
       productImages = []
     } else if (isBlindSponsorship) {
-      productName = `${isMonthly ? "Monthly" : "Yearly"} Blind Sponsorship`
+      productName = `${isOneTime ? "One-time" : isMonthly ? "Monthly" : "Yearly"} Blind Sponsorship`
       productImages = [fallbackImage]
     } else {
       const safeImage = beneficiaryImage
@@ -80,7 +82,7 @@ export async function POST(req: Request) {
         : isLocalBase
           ? `${baseUrl}${PERSON_PLACEHOLDER_PATH}` // Use path constant, construct full URL for Stripe
           : `${baseUrl}${safeImage}`
-      productName = `${isMonthly ? "Monthly" : "Yearly"} Sponsorship for ${resolvedBeneficiaryName}`
+      productName = `${isOneTime ? "One-time" : isMonthly ? "Monthly" : "Yearly"} Sponsorship for ${resolvedBeneficiaryName}`
       productImages = [fullImageUrl]
     }
 
@@ -89,76 +91,81 @@ export async function POST(req: Request) {
       images: productImages,
     })
 
+    // Stripe MetadataParam requires all values to be string | number | null — cast explicitly.
+    const priceMetadata: Record<string, string | null> =
+      type === "partnership"
+        ? { type: "partnership", project, amount: enforcedAmount.toString() }
+        : {
+            beneficiaryId: beneficiaryId || null,
+            userId: userId || null,
+            amount: enforcedAmount.toString(),
+            sponsorshipMode: resolvedSponsorshipMode,
+            blindLabel: resolvedBlindLabel,
+            beneficiaryName: resolvedBeneficiaryName,
+          }
+
+    // One-time payments must NOT have a `recurring` property on the price
     const price = await stripe.prices.create({
       unit_amount: enforcedAmount,
       currency: "usd",
-      recurring: { interval },
+      ...(isOneTime ? {} : { recurring: { interval } }),
       product: product.id,
-      metadata:
-        type === "partnership"
-          ? {
-              type: "partnership",
-              project,
-              amount: enforcedAmount.toString(),
-            }
-          : {
-              beneficiaryId: beneficiaryId || null,
-              userId: userId || null,
-              amount: enforcedAmount.toString(),
-              sponsorshipMode: resolvedSponsorshipMode,
-              blindLabel: resolvedBlindLabel,
-              beneficiaryName: resolvedBeneficiaryName,
-            },
+      metadata: priceMetadata,
     })
 
-    // Common session configuration
+    const sessionMetadata: Record<string, string | null> =
+      type === "partnership"
+        ? {
+            type: "partnership",
+            amount: enforcedAmount.toString(),
+            project,
+            email,
+            paymentType,
+          }
+        : {
+            beneficiaryId: beneficiaryId || null,
+            beneficiaryName: resolvedBeneficiaryName,
+            childName: resolvedBeneficiaryName,
+            amount: enforcedAmount.toString(),
+            childLocation: location,
+            userId: userId || null,
+            paymentType,
+            sponsorshipMode: resolvedSponsorshipMode,
+            blindLabel: resolvedBlindLabel,
+          }
+
+    // One-time: mode="payment", no subscription_data.
+    // Recurring: mode="subscription" with subscription_data metadata.
     const sessionConfig: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
-      mode: "subscription",
+      mode: isOneTime ? "payment" : "subscription",
       line_items: [{ price: price.id, quantity: 1 }],
       billing_address_collection: "required",
       payment_method_options: {
         card: { request_three_d_secure: "automatic" },
       },
       customer_email: email,
-      metadata:
-        type === "partnership"
-          ? {
-              type: "partnership",
-              amount: enforcedAmount.toString(),
-              project,
-              email,
-              paymentType,
-            }
-          : {
-              beneficiaryId: beneficiaryId || undefined,
-              beneficiaryName: resolvedBeneficiaryName,
-              childName: resolvedBeneficiaryName,
-              amount: enforcedAmount.toString(),
-              childLocation: location,
-              userId: userId || null,
-              paymentType,
-              sponsorshipMode: resolvedSponsorshipMode,
-              blindLabel: resolvedBlindLabel,
-            },
-      subscription_data: {
-        metadata:
-          type === "partnership"
-            ? {
-                type: "partnership",
-                project,
-                amount: enforcedAmount.toString(),
-                email,
-              }
-            : {
-                beneficiaryId: beneficiaryId || undefined,
-                userId: userId || null,
-                amount: enforcedAmount.toString(),
-                sponsorshipMode: resolvedSponsorshipMode,
-                blindLabel: resolvedBlindLabel,
-                beneficiaryName: resolvedBeneficiaryName,
-              },
-      },
+      metadata: sessionMetadata,
+      ...(!isOneTime && {
+        subscription_data: {
+          metadata:
+            type === "partnership"
+              ? {
+                  type: "partnership",
+                  project,
+                  amount: enforcedAmount.toString(),
+                  email,
+                }
+              : {
+                  beneficiaryId: beneficiaryId || undefined,
+                  userId: userId || null,
+                  amount: enforcedAmount.toString(),
+                  sponsorshipMode: resolvedSponsorshipMode,
+                  blindLabel: resolvedBlindLabel,
+                  beneficiaryName: resolvedBeneficiaryName,
+                },
+        },
+      }),
     }
 
     if (isEmbedded) {
