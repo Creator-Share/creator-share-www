@@ -218,19 +218,55 @@ const SponsorshipFilters: React.FC<
     <>
       <Global
         styles={css`
+          /* ── Select triggers ── */
           [data-scope="select"][data-part="trigger"] {
             border-radius: 16px !important;
+            background-color: #f3f4f6 !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
+          }
+          [data-scope="select"][data-part="trigger"]:hover {
+            background-color: #e9eaec !important;
+          }
+          [data-scope="select"][data-part="trigger"]:focus-within,
+          [data-scope="select"][data-part="trigger"][data-state="open"] {
+            background-color: #ffffff !important;
+            border-color: #2b7ff9 !important;
+            box-shadow: 0 0 0 1px #2b7ff9 !important;
+          }
+
+          /* ── Age slider ── */
+          [data-scope="slider"][data-part="control"] {
+            padding-top: 4px !important;
+          }
+          [data-scope="slider"][data-part="track"] {
+            background-color: #e5e7eb !important;
+            border-radius: 999px !important;
+            transform: translateY(-4px) !important;
+          }
+          [data-scope="slider"][data-part="range"] {
+            background-color: #2b7ff9 !important;
+            border-radius: 999px !important;
+          }
+          [data-scope="slider"][data-part="thumb"] {
+            background-color: #ffffff !important;
+            border: none !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.18), 0 0 0 2px rgba(43,127,249,0.22) !important;
+            width: 16px !important;
+            height: 16px !important;
+          }
+          [data-scope="slider"][data-part="thumb"]:focus-visible {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.18), 0 0 0 3px rgba(43,127,249,0.38) !important;
+            outline: none !important;
           }
         `}
       />
       <Box
         className={`bg-white border ${isSticky ? "rounded-b-3xl rounded-t-none" : "rounded-3xl"}`}
-        p={{ base: 4, md: 5 }}
+        p={{ base: 3, md: 4 }}
         transition="box-shadow 0.3s ease, border-radius 0.3s ease"
         style={{
-          boxShadow: isSticky
-            ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)"
-            : "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+          boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)",
         }}
       >
         <Box
@@ -239,11 +275,11 @@ const SponsorshipFilters: React.FC<
             base: "1fr",
             sm: "repeat(2, 1fr)",
             md: "repeat(3, 1fr)",
-            lg: "repeat(auto-fit, minmax(140px, 1fr))",
+            lg: "repeat(auto-fit, minmax(130px, 1fr))",
           }}
-          gap={{ base: 3, md: 3, lg: 4 }}
-          px={{ base: 2, md: 4 }}
-          py={2}
+          gap={{ base: 2, md: 2, lg: 3 }}
+          px={0}
+          py={0}
           width="100%"
           alignItems="center"
         >
@@ -300,7 +336,7 @@ const SponsorshipFilters: React.FC<
                       : details.items.map((item) => item.value)
                     handleFilterChange({ status: values })
                   }}
-                  size="sm"
+                  size="xs"
                   className="rounded-2xl w-full"
                   multiple
                 >
@@ -327,7 +363,7 @@ const SponsorshipFilters: React.FC<
             </Tooltip>
           ) : (
             <Box minW={0}>
-              <Box bg="gray.100" borderRadius="16px" p="3px" display="flex" gap={0}>
+              <Box bg="gray.100" borderRadius="16px" p="2px" display="flex" gap={0}>
                 {(
                   [
                     {
@@ -347,10 +383,11 @@ const SponsorshipFilters: React.FC<
                     <Button
                       key={label}
                       flex={1}
-                      size="sm"
-                      borderRadius="13px"
+                      size="xs"
+                      borderRadius="14px"
+                      fontSize="xs"
                       bg={isActive ? "white" : "transparent"}
-                      color={isActive ? "#0654C6" : "gray.500"}
+                      color={isActive ? "#2b7ff9" : "gray.500"}
                       fontWeight={isActive ? "semibold" : "medium"}
                       boxShadow={isActive ? "sm" : "none"}
                       onClick={() => handleFilterChange({ status: [...statuses] })}
@@ -369,12 +406,13 @@ const SponsorshipFilters: React.FC<
           {!isAnimal && (
             <Box minW={0} px={2}>
               <Text
-                mb={2}
-                fontSize="sm"
+                mb={0}
+                fontSize="xs"
                 fontWeight="semibold"
                 textAlign="center"
+                color="gray.600"
               >
-                Age Range: {minAge} - {maxAge} years
+                Age: {minAge}–{maxAge} yrs
               </Text>
               <Slider
                 size="sm"
@@ -420,7 +458,7 @@ const SponsorshipFilters: React.FC<
                 const value = details.items[0]
                 handleFilterChange({ gender: value?.value || "" })
               }}
-              size="sm"
+              size="xs"
               className="rounded-2xl w-full"
             >
               <SelectTrigger css={{ borderRadius: "16px !important" }}>
@@ -466,14 +504,17 @@ const SponsorshipFilters: React.FC<
                 setSearchQuery(value)
                 handleFilterChange({ search: value })
               }}
-              size="sm"
-              className="rounded-2xl"
+              size="xs"
               borderRadius="16px"
               paddingLeft="2rem"
               paddingRight="2.5rem"
+              bg="gray.100"
+              borderColor="transparent"
+              _hover={{ bg: "gray.200", borderColor: "transparent" }}
               _focus={{
-                borderColor: "#1C3C8C",
-                boxShadow: "0 0 0 1px #1C3C8C",
+                bg: "white",
+                borderColor: "#2b7ff9",
+                boxShadow: "0 0 0 1px #2b7ff9",
               }}
               suppressHydrationWarning={true}
             />
@@ -508,9 +549,9 @@ const SponsorshipFilters: React.FC<
             opacity: resultCount !== undefined || !isDefaultFilters ? 1 : 0,
             transition: "max-height 0.25s ease, opacity 0.2s ease",
           }}
-          px={{ base: 4, md: 6 }}
-          pt={3}
-          pb={2}
+          px={0}
+          pt={1.5}
+          pb={0}
           display="flex"
           justifyContent="space-between"
           alignItems="center"
@@ -532,11 +573,11 @@ const SponsorshipFilters: React.FC<
                   as="button"
                   onClick={handleClearFilters}
                   display="inline"
-                  color="#1C3C8C"
+                  color="#2b7ff9"
                   fontWeight="semibold"
                   textDecoration="underline"
                   textUnderlineOffset="2px"
-                  _hover={{ color: "#1C2B7A" }}
+                  _hover={{ color: "#1a6fe0" }}
                   cursor="pointer"
                   background="none"
                   border="none"
