@@ -80,8 +80,8 @@ const HERO_CONTENT: Record<HeroType, HeroContent> = {
   ALL: {
     heading: (
       <>
-        One child at a time,
-        <br />
+        One child at a time,{" "}
+        <Box as="br" display={{ base: "none", md: "initial" }} />
         love is{" "}
         <Box as="span" display="inline-block" position="relative">
           <Box as="span" style={{ position: "relative", zIndex: 1 }}>
@@ -116,7 +116,13 @@ const HERO_CONTENT: Record<HeroType, HeroContent> = {
   },
 
   CHILD_LABORER: {
-    heading: <>Give a child laborer the chance to be a child again</>,
+    heading: (
+      <>
+        Give a child laborer{" "}
+        <Box as="br" display={{ base: "none", md: "initial" }} />
+        the chance to be a child again
+      </>
+    ),
     description: (
       <>
         Across Tanzania, thousands of children spend their days working instead
@@ -129,7 +135,13 @@ const HERO_CONTENT: Record<HeroType, HeroContent> = {
   },
 
   SPECIAL_NEEDS: {
-    heading: <>Every child deserves to be seen, known, and loved</>,
+    heading: (
+      <>
+        Every child deserves{" "}
+        <Box as="br" display={{ base: "none", md: "initial" }} />
+        to be seen, known, and loved
+      </>
+    ),
     description: (
       <>
         Children with special needs are too often the most invisible,
@@ -175,23 +187,6 @@ const HERO_LINKS: { type: HeroType; label: string }[] =
 
 const EXIT_DURATION_MS = 200
 const ENTER_DURATION_MS = 300
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// Hero background — Meridian (locked)
-// ---------------------------------------------------------------------------
-
-const HERO_BG =
-  "linear-gradient(to right, #f2faff 0%, #faf8ff 50%, #fdf4ff 100%)"
-
-const HERO_GLOW_STYLE: React.CSSProperties = {
-  inset: 0,
-  background: [
-    "radial-gradient(ellipse 55% 85% at -2% 40%, rgba(155,215,248,0.30) 0%, transparent 68%)",
-    "radial-gradient(ellipse 55% 85% at 102% 40%, rgba(192,148,248,0.26) 0%, transparent 68%)",
-    "radial-gradient(ellipse 50% 55% at 50% 18%, rgba(255,255,255,1.0) 0%, transparent 75%)",
-  ].join(", "),
-}
 
 // ---------------------------------------------------------------------------
 // Shared button reset style
@@ -287,24 +282,9 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
           marginLeft: "calc(-50vw + 50%)",
           marginTop: "-88px",
           paddingTop: "88px",
-          paddingBottom: "36px",
-          background: HERO_BG,
-          WebkitMaskImage:
-            "linear-gradient(to bottom, black 0%, black 72%, transparent 100%)",
-          maskImage:
-            "linear-gradient(to bottom, black 0%, black 72%, transparent 100%)",
+          paddingBottom: "16px",
         }}
       >
-        {/* Glow layer */}
-        <Box
-          aria-hidden
-          style={{
-            position: "absolute",
-            pointerEvents: "none",
-            zIndex: 0,
-            ...HERO_GLOW_STYLE,
-          }}
-        />
 
         {/* ----------------------------------------------------------------
             Mobile: full-bleed horizontally scrollable tab strip.
@@ -323,6 +303,7 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
             borderBottom: "1px solid #e5e7eb",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
+            animation: "pageContentFadeUp 0.45s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both",
           }}
           className="[&::-webkit-scrollbar]:hidden"
         >
@@ -331,8 +312,8 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
             aria-label="Beneficiary type"
             display="flex"
             style={{
-              paddingLeft: "max(1.5rem, calc((100vw - 1200px) / 2 + 1.5rem))",
-              paddingRight: "1.5rem",
+              paddingLeft: "0.5rem",
+              paddingRight: "0.5rem",
               width: "max-content",
               minWidth: "100%",
             }}
@@ -346,20 +327,33 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                   aria-current={isActive ? "true" : undefined}
                   style={{
                     ...BTN_RESET,
+                    position: "relative",
                     cursor: isActive ? "default" : "pointer",
-                    padding: "0.75rem 1.125rem",
+                    paddingTop: "0.75rem",
+                    paddingBottom: "0.875rem",
+                    paddingLeft: "0.875rem",
+                    paddingRight: "0.875rem",
                     fontSize: "0.875rem",
-                    fontWeight: isActive ? 700 : 500,
+                    fontWeight: isActive ? 800 : 700,
                     color: isActive ? "#2b7ff9" : "#6b7280",
                     whiteSpace: "nowrap",
-                    borderBottom: isActive
-                      ? "2px solid #2b7ff9"
-                      : "2px solid transparent",
                     marginBottom: "-1px",
-                    transition: "color 0.18s ease, border-color 0.18s ease",
+                    transition: "color 0.18s ease",
                   }}
                 >
                   {label}
+                  <span
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: "0.5rem",
+                      right: "0.5rem",
+                      height: "3px",
+                      borderRadius: "99px",
+                      background: isActive ? "#2b7ff9" : "transparent",
+                      transition: "background 0.18s ease",
+                    }}
+                  />
                 </button>
               )
             })}
@@ -378,9 +372,9 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
             flexDirection="row"
             alignItems={{ base: "flex-start", md: "center" }}
             gap={{ base: 0, md: 10 }}
-            pt={{ base: 4, md: 6 }}
-            pb={{ base: 4, md: 6 }}
-            minHeight={{ base: "230px", md: "260px" }}
+            pt={{ base: 8, md: 12 }}
+            pb={{ base: 2, md: 2 }}
+            minHeight={{ base: "180px", md: "0px" }}
           >
             {/* Desktop-only left nav — fixed width so font/bar animations
                 never reflow the adjacent content column. */}
@@ -391,7 +385,10 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
               flexDirection="column"
               gap={1}
               flexShrink={0}
-              style={{ width: "220px" }}
+              style={{
+                width: "220px",
+                animation: "pageContentFadeUp 0.5s 0.15s cubic-bezier(0.22, 1, 0.36, 1) both",
+              }}
             >
               {HERO_LINKS.map(({ type, label }) => {
                 const isActive = heroType === type
@@ -442,15 +439,15 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                           borderRadius: "2px",
                           transition: `height ${EXIT_DURATION_MS}ms ease, background ${EXIT_DURATION_MS}ms ease, opacity ${EXIT_DURATION_MS}ms ease`,
                           height: isActive ? "2.25rem" : isHovered ? "1.375rem" : "0.875rem",
-                          background: isActive ? "#2b7ff9" : isHovered ? "#93b8fc" : "#d1d5db",
-                          opacity: isActive ? 1 : isHovered ? 0.75 : 0.4,
+                          background: isActive ? "#2b7ff9" : isHovered ? "#5a84c1" : "#999",
+                          opacity: isActive ? 1 : isHovered ? 0.85 : 0.55,
                         }}
                       />
                       <span
                         style={{
                           fontSize: "1.2rem",
-                          fontWeight: 700,
-                          color: isActive ? "#2b7ff9" : isHovered ? "#888" : "#c4c4c4",
+                          fontWeight: 800,
+                          color: isActive ? "#2b7ff9" : isHovered ? "#5a84c1" : "#888",
                           transition: `color ${EXIT_DURATION_MS}ms ease`,
                           display: "block",
                           whiteSpace: "nowrap",
@@ -468,6 +465,7 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
             <Box
               flex={1}
               minW={0}
+              maxW={{ base: "100%", md: "75%" }}
               style={{
                 opacity: phase === "exit" ? 0 : 1,
                 transform:
@@ -476,6 +474,11 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                   phase === "exit"
                     ? `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`
                     : "none",
+                // One-time page-load entrance. fill-mode: backwards keeps the
+                // element at opacity-0 during the delay, then hands opacity back
+                // to the inline style above once the animation completes so that
+                // the phase-transition logic (exit → opacity:0) still works.
+                animation: "pageContentFadeUp 0.5s 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards",
               }}
             >
               <Box
@@ -501,7 +504,7 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                 </Heading>
                 <Text
                   fontSize={{ base: "sm", md: "md" }}
-                  color="#18181b"
+                  color="#666666"
                   lineHeight="1.7"
                 >
                   {content.description}
