@@ -172,7 +172,7 @@ export default function PaymentSuccessClient() {
     return null
   }
 
-  const getChildName = () => {
+  const getBeneficiaryName = () => {
     if (
       isPayPalEnabled &&
       status?.provider === "paypal" &&
@@ -298,7 +298,7 @@ export default function PaymentSuccessClient() {
             Your generous sponsorship payment has been successfully processed.
             <br />
             Because of you,{" "}
-            <span style={{ fontWeight: 600 }}>{getChildName()}</span> is one
+            <span style={{ fontWeight: 600 }}>{getBeneficiaryName()}</span> is one
             step closer to a brighter future.
           </p>
           <hr style={{ margin: "1.5rem 0" }} />
@@ -319,8 +319,8 @@ export default function PaymentSuccessClient() {
                 marginBottom: "0.25rem",
               }}
             >
-              <span style={{ fontWeight: 500 }}>Child's Name</span>
-              <span>{getChildName()}</span>
+              <span style={{ fontWeight: 500 }}>Name</span>
+              <span>{getBeneficiaryName()}</span>
             </div>
             <div
               style={{
@@ -350,7 +350,7 @@ export default function PaymentSuccessClient() {
               marginBottom: "1.5rem",
             }}
           >
-            You'll receive updates about {getChildName()}'s progress and how
+            You'll receive updates about {getBeneficiaryName()}'s progress and how
             your support is making a difference.
           </div>
           <button

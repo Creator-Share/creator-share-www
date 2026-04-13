@@ -34,7 +34,7 @@ const ReturnContent = () => {
         if (isEmbedded && isInIframe) {
           setStatus("complete")
           setChildDetails({
-            name: "your sponsored child",
+            name: "your sponsored beneficiary",
             location: "",
             email: "",
           })
@@ -43,7 +43,7 @@ const ReturnContent = () => {
           window.parent.postMessage(
             {
               type: "sponsorship_complete",
-              childName: "your sponsored child",
+              childName: "your sponsored beneficiary",
             },
             "*",
           )
@@ -65,7 +65,7 @@ const ReturnContent = () => {
           if (data.code === "SESSION_NOT_FOUND") {
             setStatus("complete")
             setChildDetails({
-              name: "your sponsored child",
+              name: "your sponsored beneficiary",
               location: "",
               email: "",
             })
@@ -80,7 +80,7 @@ const ReturnContent = () => {
 
         setStatus(sessionStatus || session.status)
         setChildDetails({
-          name: session.metadata?.childName || "your sponsored child",
+          name: session.metadata?.childName || "your sponsored beneficiary",
           location: session.metadata?.childLocation || "",
           email: session.customer_details?.email || "",
         })
@@ -104,7 +104,7 @@ const ReturnContent = () => {
         // This is a fallback for when there are API issues but the payment went through
         setStatus("complete")
         setChildDetails({
-          name: "your sponsored child",
+          name: "your sponsored beneficiary",
           location: "",
           email: "",
         })
