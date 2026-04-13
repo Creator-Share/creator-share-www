@@ -1,13 +1,8 @@
 "use client"
 
-import dynamic from "next/dynamic"
 import { useEffect, useState } from "react"
+import { PageNavbar } from "./PageNavbar"
 import { ScrollToTop } from "./ScrollToTop"
-
-const PageNavbar = dynamic(
-  () => import("./PageNavbar").then((mod) => mod.PageNavbar),
-  { ssr: false }
-)
 
 export function PageWrapper({ children }: { children: React.ReactNode }) {
   const [isEmbedded, setIsEmbedded] = useState(false)
@@ -17,16 +12,18 @@ export function PageWrapper({ children }: { children: React.ReactNode }) {
     setIsEmbedded(params.get("embedded") === "true")
   }, [])
 
-  // Show navbar on all pages except embedded mode
+  // Show navbar on all pages except embedded mode.
+  // isEmbedded starts false so the server always renders the navbar,
+  // which means the hero's -88px margin compensation is satisfied from
+  // the very first paint and there is no content layout shift.
   const shouldShowNavbar = !isEmbedded
 
   return (
     <>
       {shouldShowNavbar && <PageNavbar />}
-      <div className="w-full max-w-[1200px] mx-auto px-4 pb-4">
+      <div className="w-full max-w-[1200px] mx-auto px-4 max-lg:pb-0 pb-4 max-lg:bg-white">
         {children}
       </div>
-      {/* Floating scroll-to-top button - shown on all pages except embedded */}
       {!isEmbedded && <ScrollToTop />}
     </>
   )
