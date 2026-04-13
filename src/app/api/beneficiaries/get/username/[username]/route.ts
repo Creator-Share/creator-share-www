@@ -22,7 +22,7 @@ export async function GET(req: Request) {
       )
     }
 
-    return NextResponse.json({ child: data as Beneficiaries })
+    return NextResponse.json({ beneficiary: data as Beneficiaries })
   } catch (err) {
     console.error("Unexpected error:", err)
     return NextResponse.json(

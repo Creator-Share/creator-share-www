@@ -5,7 +5,7 @@ import { Beneficiaries } from "@/types"
 import { SponsoredBeneficiary } from "@/actions"
 import PortraitBeneficiaryCard from "../SponsorshipCard/PortraitCard"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
-import type { BeneficiaryTabType } from "@/components/BeneficiaryTypeNav"
+import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
 
 // ---------------------------------------------------------------------------
 // StatsCard -- first item in the row; replaces the StatsSection above the fold

@@ -1,15 +1,12 @@
 "use client"
 import React, { useState, useRef, useCallback, useEffect } from "react"
 import { Box, Heading, Text } from "@chakra-ui/react"
-import { Global, css } from "@emotion/react"
 import { ALL_BENEFICIARY_TABS } from "@/config/beneficiaryTypes"
 import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type HeroType = "ALL" | "CHILD_LABORER" | "SPECIAL_NEEDS" | "ANIMAL"
 
 interface HeroContent {
   heading: React.ReactNode
@@ -21,17 +18,11 @@ interface HomeHeroProps {
   onTypeChange: (type: BeneficiaryTabType | null) => void
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// "ALL" is the display key used when activeType is null or the legacy "CHILD" alias.
+type DisplayKey = "ALL" | BeneficiaryTabType
 
-function tabTypeToHeroType(type: BeneficiaryTabType | null): HeroType {
+function toDisplayKey(type: BeneficiaryTabType | null): DisplayKey {
   if (!type || type === "CHILD") return "ALL"
-  return type as HeroType
-}
-
-function heroTypeToTabType(type: HeroType): BeneficiaryTabType | null {
-  if (type === "ALL") return null
   return type
 }
 
@@ -73,11 +64,49 @@ const BrushstrokeUnderline = () => (
 )
 
 // ---------------------------------------------------------------------------
-// Hero content per type
+// Hero content per display key
 // ---------------------------------------------------------------------------
 
-const HERO_CONTENT: Record<HeroType, HeroContent> = {
+const HERO_CONTENT: Record<DisplayKey, HeroContent> = {
   ALL: {
+    heading: (
+      <>
+        One child at a time,{" "}
+        <Box as="br" display={{ base: "none", md: "initial" }} />
+        love is{" "}
+        <Box as="span" display="inline-block" position="relative">
+          <Box as="span" style={{ position: "relative", zIndex: 1 }}>
+            changing
+          </Box>
+          <BrushstrokeUnderline />
+        </Box>{" "}
+        thousands of lives
+      </>
+    ),
+    description: (
+      <>
+        For over a decade, the{" "}
+        <a
+          href="https://tanzania.creatorshare.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: "#2b7ff9",
+            textDecoration: "underline",
+            textUnderlineOffset: "2px",
+          }}
+        >
+          Creator Share Foundation
+        </a>{" "}
+        has stewarded children&apos;s centers across Tanzania, creating home and
+        family for hundreds of the most vulnerable children on earth. Here you
+        can walk with a specific child, providing education, medical care, and
+        the belief in their potential that changes everything.
+      </>
+    ),
+  },
+
+  CHILD: {
     heading: (
       <>
         One child at a time,{" "}
@@ -177,11 +206,11 @@ const HERO_CONTENT: Record<HeroType, HeroContent> = {
 // Nav links — derived from central config
 // ---------------------------------------------------------------------------
 
-const HERO_LINKS: { type: HeroType; label: string }[] =
+const HERO_LINKS: { type: BeneficiaryTabType | null; label: string }[] =
   ALL_BENEFICIARY_TABS.filter(
     (tab) => !tab.isLegacyAlias && tab.isPubliclyVisible,
   ).map((tab) => ({
-    type: (tab.type ?? "ALL") as HeroType,
+    type: tab.type,
     label: tab.label,
   }))
 
@@ -209,16 +238,16 @@ const BTN_RESET: React.CSSProperties = {
 // ---------------------------------------------------------------------------
 
 export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
-  const heroType = tabTypeToHeroType(activeType)
+  const displayKey = toDisplayKey(activeType)
 
-  const [displayedType, setDisplayedType] = useState<HeroType>(heroType)
+  const [displayedKey, setDisplayedKey] = useState<DisplayKey>(displayKey)
   const [phase, setPhase] = useState<"exit" | "idle">("idle")
-  const [hoveredType, setHoveredType] = useState<HeroType | null>(null)
+  const [hoveredType, setHoveredType] = useState<BeneficiaryTabType | null>(null)
 
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const raf1Ref = useRef<number | null>(null)
   const raf2Ref = useRef<number | null>(null)
-  const prevHeroTypeRef = useRef<HeroType>(heroType)
+  const prevDisplayKeyRef = useRef<DisplayKey>(displayKey)
 
   useEffect(() => {
     return () => {
@@ -229,8 +258,8 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
   }, [])
 
   useEffect(() => {
-    if (heroType === prevHeroTypeRef.current) return
-    prevHeroTypeRef.current = heroType
+    if (displayKey === prevDisplayKeyRef.current) return
+    prevDisplayKeyRef.current = displayKey
 
     if (exitTimerRef.current) clearTimeout(exitTimerRef.current)
     if (raf1Ref.current) cancelAnimationFrame(raf1Ref.current)
@@ -239,281 +268,260 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
     setPhase("exit")
 
     exitTimerRef.current = setTimeout(() => {
-      setDisplayedType(heroType)
+      setDisplayedKey(displayKey)
       raf1Ref.current = requestAnimationFrame(() => {
         raf2Ref.current = requestAnimationFrame(() => {
           setPhase("idle")
         })
       })
     }, EXIT_DURATION_MS)
-  }, [heroType])
+  }, [displayKey])
 
   const handleTypeClick = useCallback(
-    (type: HeroType) => {
-      if (type === heroType) return
-      onTypeChange(heroTypeToTabType(type))
+    (type: BeneficiaryTabType | null) => {
+      if (toDisplayKey(type) === displayKey) return
+      onTypeChange(type)
     },
-    [heroType, onTypeChange],
+    [displayKey, onTypeChange],
   )
 
-  const content = HERO_CONTENT[displayedType]
+  const content = HERO_CONTENT[displayedKey]
 
   return (
-    <>
-      <Global
-        styles={css`
-          @keyframes heroFadeInUp {
-            from {
-              opacity: 0;
-              transform: translateY(16px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-        `}
-      />
+    <Box
+      className="relative"
+      style={{
+        width: "100vw",
+        marginLeft: "calc(-50vw + 50%)",
+        marginTop: "-88px",
+        paddingTop: "88px",
+        paddingBottom: "16px",
+      }}
+    >
 
+      {/* ----------------------------------------------------------------
+          Mobile: full-bleed horizontally scrollable tab strip.
+          Uses the same 100vw + negative-margin escape as the hero
+          background itself so the strip always touches both screen edges.
+      ---------------------------------------------------------------- */}
       <Box
-        className="relative"
+        display={{ base: "block", md: "none" }}
+        overflowX="auto"
+        overflowY="hidden"
         style={{
+          position: "relative",
+          zIndex: 1,
           width: "100vw",
           marginLeft: "calc(-50vw + 50%)",
-          marginTop: "-88px",
-          paddingTop: "88px",
-          paddingBottom: "16px",
+          borderBottom: "1px solid #e5e7eb",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+          animation: "pageContentFadeUp 0.45s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both",
         }}
+        className="[&::-webkit-scrollbar]:hidden"
       >
-
-        {/* ----------------------------------------------------------------
-            Mobile: full-bleed horizontally scrollable tab strip.
-            Uses the same 100vw + negative-margin escape as the hero
-            background itself so the strip always touches both screen edges.
-        ---------------------------------------------------------------- */}
         <Box
-          display={{ base: "block", md: "none" }}
-          overflowX="auto"
-          overflowY="hidden"
+          as="nav"
+          aria-label="Beneficiary type"
+          display="flex"
           style={{
-            position: "relative",
-            zIndex: 1,
-            width: "100vw",
-            marginLeft: "calc(-50vw + 50%)",
-            borderBottom: "1px solid #e5e7eb",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-            animation: "pageContentFadeUp 0.45s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both",
+            paddingLeft: "0.5rem",
+            paddingRight: "0.5rem",
+            width: "max-content",
+            minWidth: "100%",
           }}
-          className="[&::-webkit-scrollbar]:hidden"
         >
+          {HERO_LINKS.map(({ type, label }) => {
+            const isActive = toDisplayKey(type) === displayKey
+            return (
+              <button
+                key={type ?? "all"}
+                onClick={() => handleTypeClick(type)}
+                aria-current={isActive ? "true" : undefined}
+                style={{
+                  ...BTN_RESET,
+                  position: "relative",
+                  cursor: isActive ? "default" : "pointer",
+                  paddingTop: "0.75rem",
+                  paddingBottom: "0.875rem",
+                  paddingLeft: "0.875rem",
+                  paddingRight: "0.875rem",
+                  fontSize: "0.875rem",
+                  fontWeight: isActive ? 800 : 700,
+                  color: isActive ? "#2b7ff9" : "#6b7280",
+                  whiteSpace: "nowrap",
+                  marginBottom: "-1px",
+                  transition: "color 0.18s ease",
+                }}
+              >
+                {label}
+                <span
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: "0.5rem",
+                    right: "0.5rem",
+                    height: "3px",
+                    borderRadius: "99px",
+                    background: isActive ? "#2b7ff9" : "transparent",
+                    transition: "background 0.18s ease",
+                  }}
+                />
+              </button>
+            )
+          })}
+        </Box>
+      </Box>
+
+      {/* ----------------------------------------------------------------
+          Content row: desktop nav (left) + heading/description (right)
+      ---------------------------------------------------------------- */}
+      <Box
+        className="max-w-[1200px] mx-auto px-6 md:px-8"
+        style={{ position: "relative", zIndex: 1 }}
+      >
+        <Box
+          display="flex"
+          flexDirection="row"
+          alignItems={{ base: "flex-start", md: "center" }}
+          gap={{ base: 0, md: 10 }}
+          pt={{ base: 8, md: 12 }}
+          pb={{ base: 2, md: 2 }}
+          minHeight={{ base: "180px", md: "0px" }}
+        >
+          {/* Desktop-only left nav — fixed width so font/bar animations
+              never reflow the adjacent content column. */}
           <Box
             as="nav"
             aria-label="Beneficiary type"
-            display="flex"
+            display={{ base: "none", md: "flex" }}
+            flexDirection="column"
+            gap={1}
+            flexShrink={0}
             style={{
-              paddingLeft: "0.5rem",
-              paddingRight: "0.5rem",
-              width: "max-content",
-              minWidth: "100%",
+              width: "220px",
+              animation: "pageContentFadeUp 0.5s 0.15s cubic-bezier(0.22, 1, 0.36, 1) both",
             }}
           >
             {HERO_LINKS.map(({ type, label }) => {
-              const isActive = heroType === type
+              const isActive = toDisplayKey(type) === displayKey
+              const isHovered = hoveredType === type && !isActive
               return (
                 <button
-                  key={type}
+                  key={type ?? "all"}
                   onClick={() => handleTypeClick(type)}
+                  onMouseEnter={() => setHoveredType(type)}
+                  onMouseLeave={() => setHoveredType(null)}
                   aria-current={isActive ? "true" : undefined}
                   style={{
                     ...BTN_RESET,
-                    position: "relative",
                     cursor: isActive ? "default" : "pointer",
-                    paddingTop: "0.75rem",
-                    paddingBottom: "0.875rem",
-                    paddingLeft: "0.875rem",
-                    paddingRight: "0.875rem",
-                    fontSize: "0.875rem",
-                    fontWeight: isActive ? 800 : 700,
-                    color: isActive ? "#2b7ff9" : "#6b7280",
-                    whiteSpace: "nowrap",
-                    marginBottom: "-1px",
-                    transition: "color 0.18s ease",
+                    textAlign: "left",
                   }}
                 >
-                  {label}
-                  <span
-                    style={{
-                      position: "absolute",
-                      bottom: 0,
-                      left: "0.5rem",
-                      right: "0.5rem",
-                      height: "3px",
-                      borderRadius: "99px",
-                      background: isActive ? "#2b7ff9" : "transparent",
-                      transition: "background 0.18s ease",
-                    }}
-                  />
+                  {/* Fixed height prevents the nav column from shifting
+                      vertically as the active bar animates between heights. */}
+                  <Box
+                    display="flex"
+                    alignItems="center"
+                    gap={2}
+                    style={{ height: "2.75rem" }}
+                  >
+                    {/* Circled check — visible only when active */}
+                    <Box
+                      flexShrink={0}
+                      style={{
+                        width: "18px",
+                        height: "18px",
+                        opacity: isActive ? 1 : 0,
+                        transform: isActive ? "scale(1)" : "scale(0.6)",
+                        transition: `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`,
+                      }}
+                    >
+                      <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
+                        <circle cx="9" cy="9" r="9" fill="#2b7ff9" />
+                        <path d="M5 9.5L7.5 12L13 6.5" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </Box>
+
+                    {/* Animated left bar */}
+                    <Box
+                      style={{
+                        width: "3px",
+                        flexShrink: 0,
+                        borderRadius: "2px",
+                        transition: `height ${EXIT_DURATION_MS}ms ease, background ${EXIT_DURATION_MS}ms ease, opacity ${EXIT_DURATION_MS}ms ease`,
+                        height: isActive ? "2.25rem" : isHovered ? "1.375rem" : "0.875rem",
+                        background: isActive ? "#2b7ff9" : isHovered ? "#5a84c1" : "#999",
+                        opacity: isActive ? 1 : isHovered ? 0.85 : 0.55,
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: "1.2rem",
+                        fontWeight: 800,
+                        color: isActive ? "#2b7ff9" : isHovered ? "#5a84c1" : "#888",
+                        transition: `color ${EXIT_DURATION_MS}ms ease`,
+                        display: "block",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {label}
+                    </span>
+                  </Box>
                 </button>
               )
             })}
           </Box>
-        </Box>
 
-        {/* ----------------------------------------------------------------
-            Content row: desktop nav (left) + heading/description (right)
-        ---------------------------------------------------------------- */}
-        <Box
-          className="max-w-[1200px] mx-auto px-6 md:px-8"
-          style={{ position: "relative", zIndex: 1 }}
-        >
+          {/* Animated heading + description */}
           <Box
-            display="flex"
-            flexDirection="row"
-            alignItems={{ base: "flex-start", md: "center" }}
-            gap={{ base: 0, md: 10 }}
-            pt={{ base: 8, md: 12 }}
-            pb={{ base: 2, md: 2 }}
-            minHeight={{ base: "180px", md: "0px" }}
+            flex={1}
+            minW={0}
+            maxW={{ base: "100%", md: "75%" }}
+            style={{
+              opacity: phase === "exit" ? 0 : 1,
+              transform:
+                phase === "exit" ? "translateY(-12px)" : "translateY(0)",
+              transition:
+                phase === "exit"
+                  ? `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`
+                  : "none",
+              animation: "pageContentFadeUp 0.5s 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards",
+            }}
           >
-            {/* Desktop-only left nav — fixed width so font/bar animations
-                never reflow the adjacent content column. */}
             <Box
-              as="nav"
-              aria-label="Beneficiary type"
-              display={{ base: "none", md: "flex" }}
-              flexDirection="column"
-              gap={1}
-              flexShrink={0}
+              key={displayedKey}
+              width="100%"
               style={{
-                width: "220px",
-                animation: "pageContentFadeUp 0.5s 0.15s cubic-bezier(0.22, 1, 0.36, 1) both",
-              }}
-            >
-              {HERO_LINKS.map(({ type, label }) => {
-                const isActive = heroType === type
-                const isHovered = hoveredType === type && !isActive
-                return (
-                  <button
-                    key={type}
-                    onClick={() => handleTypeClick(type)}
-                    onMouseEnter={() => setHoveredType(type)}
-                    onMouseLeave={() => setHoveredType(null)}
-                    aria-current={isActive ? "true" : undefined}
-                    style={{
-                      ...BTN_RESET,
-                      cursor: isActive ? "default" : "pointer",
-                      textAlign: "left",
-                    }}
-                  >
-                    {/* Fixed height prevents the nav column from shifting
-                        vertically as the active bar animates between heights. */}
-                    <Box
-                      display="flex"
-                      alignItems="center"
-                      gap={2}
-                      style={{ height: "2.75rem" }}
-                    >
-                      {/* Circled check — visible only when active */}
-                      <Box
-                        flexShrink={0}
-                        style={{
-                          width: "18px",
-                          height: "18px",
-                          opacity: isActive ? 1 : 0,
-                          transform: isActive ? "scale(1)" : "scale(0.6)",
-                          transition: `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`,
-                        }}
-                      >
-                        <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
-                          <circle cx="9" cy="9" r="9" fill="#2b7ff9" />
-                          <path d="M5 9.5L7.5 12L13 6.5" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </Box>
-
-                      {/* Animated left bar */}
-                      <Box
-                        style={{
-                          width: "3px",
-                          flexShrink: 0,
-                          borderRadius: "2px",
-                          transition: `height ${EXIT_DURATION_MS}ms ease, background ${EXIT_DURATION_MS}ms ease, opacity ${EXIT_DURATION_MS}ms ease`,
-                          height: isActive ? "2.25rem" : isHovered ? "1.375rem" : "0.875rem",
-                          background: isActive ? "#2b7ff9" : isHovered ? "#5a84c1" : "#999",
-                          opacity: isActive ? 1 : isHovered ? 0.85 : 0.55,
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: "1.2rem",
-                          fontWeight: 800,
-                          color: isActive ? "#2b7ff9" : isHovered ? "#5a84c1" : "#888",
-                          transition: `color ${EXIT_DURATION_MS}ms ease`,
-                          display: "block",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {label}
-                      </span>
-                    </Box>
-                  </button>
-                )
-              })}
-            </Box>
-
-            {/* Animated heading + description */}
-            <Box
-              flex={1}
-              minW={0}
-              maxW={{ base: "100%", md: "75%" }}
-              style={{
-                opacity: phase === "exit" ? 0 : 1,
-                transform:
-                  phase === "exit" ? "translateY(-12px)" : "translateY(0)",
-                transition:
-                  phase === "exit"
-                    ? `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`
+                animation:
+                  phase !== "exit"
+                    ? `heroFadeInUp ${ENTER_DURATION_MS}ms ease forwards`
                     : "none",
-                // One-time page-load entrance. fill-mode: backwards keeps the
-                // element at opacity-0 during the delay, then hands opacity back
-                // to the inline style above once the animation completes so that
-                // the phase-transition logic (exit → opacity:0) still works.
-                animation: "pageContentFadeUp 0.5s 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards",
               }}
             >
-              <Box
-                key={displayedType}
-                width="100%"
-                style={{
-                  animation:
-                    phase !== "exit"
-                      ? `heroFadeInUp ${ENTER_DURATION_MS}ms ease forwards`
-                      : "none",
-                }}
+              <Heading
+                as="h1"
+                fontSize={{ base: "2xl", md: "3xl", lg: "4xl" }}
+                fontWeight="800"
+                color="#2b7ff9"
+                lineHeight="1.15"
+                mb={5}
+                style={{ fontFamily: "var(--font-reddit-sans), sans-serif" }}
               >
-                <Heading
-                  as="h1"
-                  fontSize={{ base: "2xl", md: "3xl", lg: "4xl" }}
-                  fontWeight="800"
-                  color="#2b7ff9"
-                  lineHeight="1.15"
-                  mb={5}
-                  style={{ fontFamily: "var(--font-reddit-sans), sans-serif" }}
-                >
-                  {content.heading}
-                </Heading>
-                <Text
-                  fontSize={{ base: "sm", md: "md" }}
-                  color="#666666"
-                  lineHeight="1.7"
-                >
-                  {content.description}
-                </Text>
-              </Box>
+                {content.heading}
+              </Heading>
+              <Text
+                fontSize={{ base: "sm", md: "md" }}
+                color="#666666"
+                lineHeight="1.7"
+              >
+                {content.description}
+              </Text>
             </Box>
           </Box>
         </Box>
       </Box>
-    </>
+    </Box>
   )
 }

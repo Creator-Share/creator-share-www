@@ -15,7 +15,7 @@ import { useFilterStore } from "@/store/filterStore"
 import { FiltersProps } from "@/types/propTypes"
 import { beneficiaryTypes, genders, status as statusOptions } from "./config"
 import { IoClose, IoSearchOutline } from "react-icons/io5"
-import type { BeneficiaryTabType } from "@/components/BeneficiaryTypeNav"
+import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
 
 const SponsorshipFilters: React.FC<
   FiltersProps & {

@@ -5,7 +5,7 @@ import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Beneficiaries } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
-import { getDefaultSponsorshipAmount } from "@/components/BeneficiaryTypeNav"
+import { getDefaultSponsorshipAmount } from "@/config/beneficiaryTypes"
 
 interface BeneficiaryCardProps {
   beneficiary: Beneficiaries

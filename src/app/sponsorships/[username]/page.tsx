@@ -36,11 +36,11 @@ export default function BeneficiaryProfilePage() {
           setNotFound(true)
           return null
         }
-        return res.json() as Promise<{ child?: Beneficiaries }>
+        return res.json() as Promise<{ beneficiary?: Beneficiaries }>
       })
       .then((data) => {
-        if (data?.child) {
-          setBeneficiary(data.child)
+        if (data?.beneficiary) {
+          setBeneficiary(data.beneficiary)
         } else if (data !== null) {
           setNotFound(true)
         }

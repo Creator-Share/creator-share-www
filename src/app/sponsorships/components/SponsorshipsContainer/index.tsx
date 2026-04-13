@@ -310,15 +310,15 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
           setIsModalOpen(false)
           return
         }
-        const data = (await res.json()) as { child?: Beneficiaries }
-        if (cancelled || !data?.child) {
+        const data = (await res.json()) as { beneficiary?: Beneficiaries }
+        if (cancelled || !data?.beneficiary) {
           if (!cancelled) {
             setActiveBeneficiary(null)
             setIsModalOpen(false)
           }
           return
         }
-        setActiveBeneficiary(data.child)
+        setActiveBeneficiary(data.beneficiary)
         setIsModalOpen(true)
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return

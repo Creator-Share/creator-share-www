@@ -38,7 +38,7 @@ import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
 import BeneficiaryActivity, { SHOW_MORE_CLASS } from "../SponsorshipActivity"
 import { FAQModal } from "@/components/FAQModal"
-import { getDefaultSponsorshipAmount } from "@/components/BeneficiaryTypeNav"
+import { getDefaultSponsorshipAmount } from "@/config/beneficiaryTypes"
 
 // PayPal components are optional and loaded only when the env var is set.
 // Using next/dynamic avoids the broken module-level let + fire-and-forget import()
