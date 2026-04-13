@@ -279,7 +279,7 @@ export default function PaymentSuccessClient() {
           </div>
           <h2
             style={{
-              color: "#1C3C8C",
+              color: "#2b7ff9",
               fontWeight: 700,
               fontSize: "1.5rem",
               textAlign: "center",
@@ -336,7 +336,7 @@ export default function PaymentSuccessClient() {
               <span style={{ fontWeight: 500 }}>Confirmation Email</span>
               <span>
                 Sent to{" "}
-                <span style={{ color: "#1C3C8C", textDecoration: "underline" }}>
+                <span style={{ color: "#2b7ff9", textDecoration: "underline" }}>
                   {getEmail()}
                 </span>
               </span>
@@ -357,7 +357,7 @@ export default function PaymentSuccessClient() {
             style={{
               width: "100%",
               padding: "0.9rem 0",
-              background: "#1C3C8C",
+              background: "#2b7ff9",
               color: "#fff",
               border: "none",
               borderRadius: "8px",

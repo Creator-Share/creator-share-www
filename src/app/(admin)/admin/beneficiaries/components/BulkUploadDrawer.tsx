@@ -175,7 +175,7 @@ const BulkUploadDrawer = ({
           </DrawerActionTrigger>
           <Button
             onClick={handleUpload}
-            className="bg-[#1C3C8C] w-1/2 text-white"
+            className="bg-[#2b7ff9] w-1/2 text-white"
             disabled={isUploading || !csvFile}
             loading={isUploading}
             loadingText="Uploading..."

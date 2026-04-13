@@ -44,7 +44,7 @@ const SupportedRibbon: React.FC<SupportedRibbonProps> = ({ size = "sm" }) => {
         height: `${height}px`,
         lineHeight: `${height}px`,
         transform: "rotate(-45deg)",
-        background: "linear-gradient(135deg, #1C3C8C 0%, #0654C6 100%)",
+        background: "linear-gradient(135deg, #1a6fe0 0%, #2b7ff9 100%)",
         boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
         color: "#fff",
         fontSize: isLarge ? "13px" : "9px",

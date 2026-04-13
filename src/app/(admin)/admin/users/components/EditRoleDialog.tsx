@@ -171,7 +171,7 @@ export const EditRoleDialog: React.FC<EditRoleDialogProps> = ({
               <Button
                 onClick={handleSubmit}
                 disabled={loading || selectedRoleIds.size === 0}
-                className="bg-[#1C3C8C] text-white hover:bg-[#1C3C8C] px-2 py-4"
+                className="bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] px-2 py-4"
               >
                 {loading ? "Updating..." : "Update Roles"}
               </Button>

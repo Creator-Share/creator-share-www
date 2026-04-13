@@ -22,10 +22,10 @@ const Verified = () => {
           </Text>
         </Box>
         <Stack>
-          <Button className="border bg-[#1C3C8C] text-[#FFFFFF] font-semibold text-base">
+          <Button className="border bg-[#2b7ff9] text-[#FFFFFF] font-semibold text-base">
             Proceed to Dashboard
           </Button>
-          <Button className="border border-[#1C3C8C] text-[#1C3C8C] text-base font-semibold">
+          <Button className="border border-[#2b7ff9] text-[#2b7ff9] text-base font-semibold">
             Start a Campaign
           </Button>
         </Stack>

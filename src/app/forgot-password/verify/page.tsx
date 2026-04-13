@@ -80,7 +80,7 @@ function VerifyOtpComponent() {
           />
           <Button
             onClick={handleVerifyOtp}
-            className="bg-[#1C3C8C] text-white mt-4"
+            className="bg-[#2b7ff9] text-white mt-4"
             disabled={!otp || loading}
           >
             {loading ? "Verifying..." : "Continue"}

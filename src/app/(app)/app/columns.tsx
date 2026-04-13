@@ -80,7 +80,7 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
           <DialogBody>
             {isLoading ? (
               <Flex direction="column" align="center" gap={4} py={6}>
-                <Spinner size="lg" color="#0654C6" />
+                <Spinner size="lg" color="#2b7ff9" />
                 <Text>Cancelling subscription...</Text>
                 <Text fontSize="sm" color="gray.500" textAlign="center">
                   Please wait while we process your cancellation request.

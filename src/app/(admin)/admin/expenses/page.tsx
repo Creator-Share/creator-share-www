@@ -221,7 +221,7 @@ const ExpensesPage = () => {
           <Text className="text-3xl font-semibold">Manage Expenses</Text>
           <Button
             onClick={() => setShowCreateForm(!showCreateForm)}
-            className="bg-[#1C3C8C] text-white"
+            className="bg-[#2b7ff9] text-white"
           >
             <HiPlus className="mr-2" />
             {showCreateForm ? "Cancel" : "Create New Expense"}
@@ -318,7 +318,7 @@ const ExpensesPage = () => {
             <Box className="flex gap-3 mt-4">
               <Button
                 onClick={editingExpense ? updateExpense : createExpense}
-                className="bg-[#1C3C8C] text-white"
+                className="bg-[#2b7ff9] text-white"
               >
                 {editingExpense ? "Update Expense" : "Create Expense"}
               </Button>

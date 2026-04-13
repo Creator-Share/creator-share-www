@@ -251,7 +251,7 @@ const Register = () => {
           </Box>
           <Button
             type="submit"
-            className="bg-[#1C3C8C] text-white"
+            className="bg-[#2b7ff9] text-white"
             width="full"
             disabled={isDisabled || isLoading}
             mt={4}
@@ -268,7 +268,7 @@ const Register = () => {
           <Box className="mt-6 text-center">
             <Text fontSize="sm" color="gray.600">
               Already have an account?{" "}
-              <Link href="/login" className="text-[#1C3C8C] hover:underline">
+              <Link href="/login" className="text-[#2b7ff9] hover:underline">
                 Sign in here →
               </Link>
             </Text>

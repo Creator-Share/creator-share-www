@@ -287,7 +287,7 @@ const BeneficiaryDetailPage = () => {
             <Button
               colorScheme="blue"
               onClick={handleEdit}
-              className="border-[2px] border-[#E0E0E0] rounded-md h-[40px] px-6 bg-[#1C3C8C] text-white hover:bg-[#1C3C8C]"
+              className="border-[2px] border-[#E0E0E0] rounded-md h-[40px] px-6 bg-[#2b7ff9] text-white hover:bg-[#2b7ff9]"
             >
               Edit Profile
             </Button>
@@ -305,7 +305,7 @@ const BeneficiaryDetailPage = () => {
                 colorScheme="blue"
                 onClick={handleSave}
                 disabled={saving}
-                className="border-[2px] border-[#E0E0E0] rounded-md h-[40px] px-6 bg-[#1C3C8C] text-white hover:bg-[#1C3C8C]"
+                className="border-[2px] border-[#E0E0E0] rounded-md h-[40px] px-6 bg-[#2b7ff9] text-white hover:bg-[#2b7ff9]"
               >
                 {saving ? "Saving..." : "Save"}
               </Button>
@@ -480,7 +480,7 @@ const BeneficiaryDetailPage = () => {
           </Flex>
           <Progress.Root value={fundingPercentage}>
             <Progress.Track className="rounded-xl h-3">
-              <Progress.Range className="bg-[#1C3C8C]" />
+              <Progress.Range className="bg-[#2b7ff9]" />
             </Progress.Track>
           </Progress.Root>
           <Text fontSize="xs" color="gray.500" mt={1}>

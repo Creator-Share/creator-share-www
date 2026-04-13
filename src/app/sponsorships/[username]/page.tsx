@@ -82,7 +82,7 @@ export default function ChildProfilePage() {
         alignItems="center"
         justifyContent="center"
       >
-        <Spinner size="xl" color="#0654C6" />
+        <Spinner size="xl" color="#2b7ff9" />
       </Box>
     )
   }
@@ -102,7 +102,7 @@ export default function ChildProfilePage() {
         </Text>
         <Text
           as="button"
-          color="#0654C6"
+          color="#2b7ff9"
           textDecor="underline"
           onClick={() => router.push("/")}
         >

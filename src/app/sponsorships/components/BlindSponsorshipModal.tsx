@@ -146,7 +146,7 @@ const BlindSponsorshipModal: React.FC<BlindSponsorshipModalProps> = ({
                   onClick={() => setSelectedOption(item.value)}
                   className={
                     selectedOption === item.value
-                      ? "bg-[#0654C6] text-white"
+                      ? "bg-[#2b7ff9] text-white"
                       : ""
                   }
                 >
@@ -165,7 +165,7 @@ const BlindSponsorshipModal: React.FC<BlindSponsorshipModalProps> = ({
             onClick={handleSubmit}
             loading={loading}
             loadingText="Redirecting"
-            className="bg-[#0654C6] text-white hover:bg-[#0545A5]"
+            className="bg-[#2b7ff9] text-white hover:bg-[#1a6fe0]"
           >
             Start blind sponsorship
           </Button>

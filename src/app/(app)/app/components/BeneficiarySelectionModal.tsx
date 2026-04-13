@@ -205,7 +205,7 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
         <DialogBody>
           {loading ? (
             <Flex direction="column" align="center" gap={4} py={8}>
-              <Spinner size="lg" color="#0654C6" />
+              <Spinner size="lg" color="#2b7ff9" />
               <Text>Loading available children...</Text>
             </Flex>
           ) : beneficiaries.length === 0 ? (
