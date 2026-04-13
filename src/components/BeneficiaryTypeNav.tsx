@@ -107,11 +107,7 @@ const BeneficiaryTypeNav: React.FC<BeneficiaryTypeNavProps> = ({
   isAdminMode = false,
   className,
 }) => {
-  // In admin mode: show every tab (including legacy aliases, for completeness).
-  // In public mode: show all except legacy aliases — "All Opportunities" IS included.
-  const visibleTabs = isAdminMode
-    ? tabs
-    : tabs.filter((tab) => !tab.isLegacyAlias)
+  const visibleTabs = tabs.filter((tab) => !tab.isLegacyAlias)
 
   return (
     <Flex
