@@ -1,6 +1,6 @@
 import { LatLngBounds } from "leaflet"
 import { Beneficiaries } from "./index"
-import type { BeneficiaryTabType } from "@/components/BeneficiaryTypeNav"
+import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
 
 export interface FiltersProps {
   onFilterChange: (filters: {

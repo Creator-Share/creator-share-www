@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation"
 import { Box } from "@chakra-ui/react"
 import { Beneficiaries, Activity } from "@/types"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
+import { ACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 import {
   fetchActivitiesByBeneficiaryId,
   fetchAllSponsored,
@@ -17,26 +18,19 @@ import {
   BeneficiaryTabType,
   TYPE_TO_ROUTE,
   ROUTE_TO_TYPE,
-} from "@/components/BeneficiaryTypeNav"
+  getApiTypes,
+} from "@/config/beneficiaryTypes"
 
 /** Set of pathname values that are "type landing pages" (the modal push uses pushState, not router). */
 const TYPE_ROUTE_PATHS = new Set(["/", "/street", "/care", "/dogs"])
-
-/** Returns the API beneficiary_type string for the pagination hook. */
-function getApiBeneficiaryType(type: BeneficiaryTabType | null): string | undefined {
-  if (!type) return undefined
-  if (type === "CHILD_LABORER") return "CHILD,CHILD_LABORER"
-  return type
-}
 
 /**
  * Maps a UI tab type to the DB beneficiary_type values used by fetchAllSponsored.
  * Null (All) returns undefined so no type filter is applied.
  */
 function getSponsoredBeneficiaryTypes(type: BeneficiaryTabType | null): string[] | undefined {
-  if (!type) return undefined
-  if (type === "CHILD_LABORER") return ["CHILD", "CHILD_LABORER"]
-  return [type]
+  const types = getApiTypes(type)
+  return types ? types.split(",") : undefined
 }
 
 /** First segment after `/sponsorships/`, or null when not on a profile URL. */
@@ -48,22 +42,31 @@ function getSponsorshipUsernameFromPath(path: string): string | null {
   return rest ? decodeURIComponent(rest) : null
 }
 
+interface SponsorshipsContainerProps {
+  /** Controlled active type — drives filter, social row, and URL. */
+  activeType: BeneficiaryTabType | null
+  /** Called whenever the container wants to change the active type (URL nav, popstate). */
+  onTypeChange: (type: BeneficiaryTabType | null) => void
+}
+
 /**
- * Owns all shared state for the sponsorships section:
- *   - Sponsored children with recent activity (for story circles)
+ * Owns the sponsorships section state:
  *   - Beneficiary pagination (for portrait cards)
  *   - Sticky filter scroll detection
  *   - Active beneficiary + modal open/close (by object, not by index)
  *   - URL pushState/popState for deep-linkable modal URLs
  *   - Activities fetch (single fetch, passed as prop to modal)
  *
- * There is only one instance of this container (in src/app/page.tsx).
- * The named routes /street, /care and /dogs are served via Next.js rewrites so
- * the browser URL reflects the selected type while a single page.tsx is used.
- * On mount this component reads window.location.pathname and applies the
- * matching type filter automatically.
+ * `activeType` is a controlled prop — page.tsx owns it so HomeHero and this
+ * container stay in sync.  The named routes /street, /care and /dogs are served
+ * via Next.js rewrites so the browser URL reflects the selected type.
+ * On mount this component reads window.location.pathname and notifies the parent
+ * via `onTypeChange` so the shared state is corrected.
  */
-const SponsorshipsContainer: React.FC = () => {
+const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
+  activeType,
+  onTypeChange,
+}) => {
   const pathname = usePathname()
   const filtersRef = useRef<HTMLDivElement>(null)
   const previousUrlRef = useRef<string | null>(null)
@@ -78,8 +81,6 @@ const SponsorshipsContainer: React.FC = () => {
   /** Bumps when history or our pushState/replaceState changes the meaningful URL so we re-sync modal to pathname. */
   const [urlSyncGeneration, setUrlSyncGeneration] = useState(0)
 
-  // Always start as null (All) — the mount effect below corrects to the URL type.
-  const [activeType, setActiveType] = useState<BeneficiaryTabType | null>(null)
   // Ref mirror so the popstate handler can read the current type without being
   // recreated every render (avoids re-attaching the listener on every type change).
   const activeTypeRef = useRef<BeneficiaryTabType | null>(null)
@@ -89,43 +90,48 @@ const SponsorshipsContainer: React.FC = () => {
     useBeneficiaryPagination({
       recordsPerPage: 9,
       autoRetry: true,
-      initialStatus: ["New", "Partially Funded", "Sponsorship Cancelled"],
+      initialStatus: ACTIVE_STATUSES as string[],
     })
 
-  // On mount: read the real browser URL (window.location.pathname) and apply
-  // the matching type filter.  This handles /street, /care, /dogs served via
-  // Next.js rewrites — usePathname() always returns "/" for those paths, but
-  // window.location reflects the actual URL the user requested.
+  // Stable ref so the filter-sync effect never needs handleFilterChange as a dep.
+  const handleFilterChangeRef = useRef(handleFilterChange)
+  handleFilterChangeRef.current = handleFilterChange
+
+  // Sync the pagination filter whenever activeType changes (from hero, URL nav, or popstate).
   useEffect(() => {
-    if (typeof window === "undefined") return
-    const typeFromUrl = ROUTE_TO_TYPE[window.location.pathname] ?? null
-    if (typeFromUrl !== null) {
-      setActiveType(typeFromUrl)
-      handleFilterChange({ beneficiary_type: getApiBeneficiaryType(typeFromUrl) })
-    }
-    // Only run once on mount — subsequent changes go through handleTypeChange.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    handleFilterChangeRef.current({ beneficiary_type: getApiTypes(activeType) })
+  }, [activeType])
 
-  const handleTypeChange = useCallback((type: BeneficiaryTabType | null) => {
-    // 1. Immediately switch the highlighted tab + re-fetch the list in-place.
-    setActiveType(type)
-    handleFilterChange({ beneficiary_type: getApiBeneficiaryType(type) })
-
-    // 2. Update the URL so the link is shareable / bookmarkable, without
-    //    triggering a full Next.js page navigation (same pushState pattern
-    //    as the modal deep-link).
-    const route = type === null ? "/" : (TYPE_TO_ROUTE[type] ?? "/")
-    if (typeof window !== "undefined") {
-      window.history.pushState({ beneficiaryType: type }, "", route)
-    }
-  }, [handleFilterChange])
-
-  // Re-fetch Budget Fulfilled beneficiaries whenever the active type changes.
+  // Re-fetch sponsored beneficiaries whenever the active type changes.
   useEffect(() => {
     const types = getSponsoredBeneficiaryTypes(activeType)
     fetchAllSponsored(types).then(setSponsored)
   }, [activeType])
+
+  // On mount: read the real browser URL (window.location.pathname) and notify
+  // the parent if a specific type route is active.  This handles /street, /care,
+  // /dogs served via Next.js rewrites — usePathname() always returns "/" for those
+  // paths, but window.location reflects the actual URL the user requested.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const typeFromUrl = ROUTE_TO_TYPE[window.location.pathname] ?? null
+    if (typeFromUrl !== null) {
+      onTypeChange(typeFromUrl)
+    }
+    // Only run once on mount — subsequent type changes come through onTypeChange.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleTypeChange = useCallback((type: BeneficiaryTabType | null) => {
+    onTypeChange(type)
+
+    // Update the URL so the link is shareable / bookmarkable, without
+    // triggering a full Next.js page navigation.
+    const route = type === null ? "/" : (TYPE_TO_ROUTE[type] ?? "/")
+    if (typeof window !== "undefined") {
+      window.history.pushState({ beneficiaryType: type }, "", route)
+    }
+  }, [onTypeChange])
 
   // Sticky filter detection
   const handleScroll = useCallback(() => {
@@ -283,26 +289,21 @@ const SponsorshipsContainer: React.FC = () => {
       bumpUrlSync()
       // Re-sync the active tab and list filter when the user navigates
       // back/forward through type-route history entries.
-      // Guard: skip the handleFilterChange call if the type hasn't actually
-      // changed — calling it unconditionally would create a new filters object
-      // reference and trigger an unnecessary list re-fetch in the hook.
+      // Guard: skip the onTypeChange call if the type hasn't actually changed.
       if (typeof window !== "undefined") {
         const restoredType = ROUTE_TO_TYPE[window.location.pathname] ?? null
         if (restoredType !== activeTypeRef.current) {
-          setActiveType(restoredType)
-          handleFilterChange({ beneficiary_type: getApiBeneficiaryType(restoredType) })
+          onTypeChange(restoredType)
         }
       }
     }
     window.addEventListener("popstate", onPopState)
     return () => window.removeEventListener("popstate", onPopState)
-  }, [bumpUrlSync, handleFilterChange])
+  }, [bumpUrlSync, onTypeChange])
 
   return (
     <Box>
-      {/* Horizontal row: "Children Sponsored" cards on the left,
-          "Children Waiting" cards on the right, all identical portrait format.
-          Infinite scroll is wired to the same pagination hook as the grid below. */}
+      {/* Horizontal row: sponsored + waiting cards, both filtered by activeType. */}
       <HorizontalSponsorshipRow
         sponsored={sponsored}
         beneficiaries={beneficiaries}
@@ -314,7 +315,7 @@ const SponsorshipsContainer: React.FC = () => {
         activeType={activeType}
       />
 
-      {/* Sticky filter bar (includes beneficiary type as first dropdown) */}
+      {/* Sticky filter bar */}
       <Box
         ref={filtersRef}
         position={{ base: "relative", lg: "sticky" }}

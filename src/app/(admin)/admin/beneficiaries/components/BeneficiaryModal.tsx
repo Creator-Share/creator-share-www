@@ -40,7 +40,7 @@ import { toaster } from "@/components/ui/toaster"
 import { dollarsToCents } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { compressImage } from "@/utils/imageCompression"
-import { getDefaultSponsorshipAmount } from "@/components/BeneficiaryTypeNav"
+import { ALL_BENEFICIARY_TABS, getDefaultSponsorshipAmount } from "@/config/beneficiaryTypes"
 
 type BeneficiaryModalMode = "create" | "edit"
 
@@ -756,8 +756,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         {shouldShowOverlay && (
           <div className="absolute inset-0 z-50 flex h-full w-full items-center justify-center bg-white/90 backdrop-blur-md">
             <div className="flex flex-col items-center gap-3 text-center">
-              <Spinner size="xl" color="#1C3C8C" />
-              <p className="text-lg font-medium text-[#1C3C8C]">
+              <Spinner size="xl" color="#2b7ff9" />
+              <p className="text-lg font-medium text-[#2b7ff9]">
                 {isProcessingImages
                   ? compressionProgress
                     ? `Compressing Images... ${compressionProgress.percent}%`
@@ -768,7 +768,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 <div className="w-64 mt-2">
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
-                      className="bg-[#1C3C8C] h-2 rounded-full transition-all duration-300"
+                      className="bg-[#2b7ff9] h-2 rounded-full transition-all duration-300"
                       style={{ width: `${compressionProgress.percent}%` }}
                     />
                   </div>
@@ -859,9 +859,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     value={formData.beneficiary_type || "CHILD_LABORER"}
                     _disabled={undefined}
                   >
-                    <option value="CHILD_LABORER">Child Laborer</option>
-                    <option value="SPECIAL_NEEDS">Special Needs</option>
-                    <option value="ANIMAL">Animal</option>
+                    {ALL_BENEFICIARY_TABS.filter(
+                      (tab) => !tab.isLegacyAlias && tab.type !== null,
+                    ).map((tab) => (
+                      <option key={tab.type} value={tab.type as string}>
+                        {tab.label}
+                      </option>
+                    ))}
                   </NativeSelectField>
                 </NativeSelectRoot>
               </Field>
@@ -1430,7 +1434,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           <Button
             type="button"
             onClick={handleFormSubmit}
-            className="bg-[#1C3C8C] text-white disabled:opacity-50"
+            className="bg-[#2b7ff9] text-white disabled:opacity-50"
             disabled={isSaving || disabled}
             loading={isSaving}
             loadingText={isCreateMode ? "Adding..." : "Saving..."}
