@@ -5,6 +5,7 @@ import { Box } from "@chakra-ui/react"
 import { Beneficiaries, Activity } from "@/types"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
 import { ACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
+import { useFilterStore } from "@/store/filterStore"
 import {
   fetchActivitiesByBeneficiaryId,
   fetchAllSponsored,
@@ -94,6 +95,8 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
       initialStatus: ACTIVE_STATUSES as string[],
     })
 
+  const resetToDefaults = useFilterStore((s) => s.resetToDefaults)
+
   // Stable ref so the filter-sync effect never needs handleFilterChange as a dep.
   const handleFilterChangeRef = useRef(handleFilterChange)
   handleFilterChangeRef.current = handleFilterChange
@@ -110,6 +113,23 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
       window.scrollTo({ top: target, behavior: "smooth" })
     }
   }, [])
+
+  // Resets all active filters and scrolls to the top of the card.
+  // Passed to SponsorshipListings so the empty-state "Show all" button works.
+  const handleShowAll = useCallback(() => {
+    resetToDefaults()
+    handleFilterChange({
+      gender: "",
+      ageRange: [0, 14],
+      status: ACTIVE_STATUSES as string[],
+      search: "",
+    })
+    onTypeChange(null)
+    if (typeof window !== "undefined") {
+      window.history.pushState({ beneficiaryType: null }, "", "/")
+    }
+    scrollToCard()
+  }, [resetToDefaults, handleFilterChange, onTypeChange, scrollToCard])
 
   // Exposed to SponsorshipFilters — wraps the pagination handler with a
   // smooth scroll back to the top of the unified card.
@@ -394,11 +414,12 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
           isLoading={isLoading}
           isRefreshing={isRefreshing}
           onOpenModal={openModal}
+          onClearFilters={handleShowAll}
           noCard
         />
       </Box>
 
-      {/* Single modal instance -- key resets local state when switching children */}
+      {/* Single modal instance -- key resets local state when switching beneficiaries */}
       {activeBeneficiary && (
         <BeneficiaryModal
           key={activeBeneficiary.id}

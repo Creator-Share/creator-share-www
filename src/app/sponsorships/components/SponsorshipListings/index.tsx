@@ -3,7 +3,6 @@ import { Box, Button, Flex, SimpleGrid, Spinner, Text } from "@chakra-ui/react"
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import BeneficiaryCard from "../SponsorshipCard"
 import { BeneficiaryListingsProps } from "@/types/propTypes"
-import BlindSponsorshipModal from "../BlindSponsorshipModal"
 import { Beneficiaries } from "@/types"
 
 const BeneficiaryListings = React.forwardRef<
@@ -27,13 +26,13 @@ const BeneficiaryListings = React.forwardRef<
       isLoading = false,
       isRefreshing = false,
       onOpenModal,
+      onClearFilters,
       noCard = false,
     },
     ref,
   ) => {
     const SCROLL_THRESHOLD_PX = 300
     const containerRef = useRef<HTMLDivElement | null>(null)
-    const [blindModalOpen, setBlindModalOpen] = useState<boolean>(false)
     const [animatingItems, setAnimatingItems] = useState<Set<string>>(new Set())
     const prevCountRef = useRef(0)
 
@@ -148,10 +147,6 @@ const BeneficiaryListings = React.forwardRef<
         style={noCard ? undefined : { boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)" }}
         suppressHydrationWarning={true}
       >
-        <BlindSponsorshipModal
-          open={blindModalOpen}
-          onClose={() => setBlindModalOpen(false)}
-        />
 
         {/* Card grid -- shown with stale data dimmed while a fresh fetch is in
             flight, preserving page height so scroll position doesn't jump. */}
@@ -227,21 +222,23 @@ const BeneficiaryListings = React.forwardRef<
                   color="gray.500"
                   textAlign="center"
                 >
-                  No matching children
+                  No matches
                 </Text>
                 <Text fontSize="sm" color="gray.400" textAlign="center" mt={1}>
                   Try adjusting your search or filters to find more results
                 </Text>
-                <Button
-                  mt={6}
-                  bg="#2b7ff9"
-                  color="white"
-                  borderRadius="16px"
-                  _hover={{ bg: "#1a6fe0" }}
-                  onClick={() => setBlindModalOpen(true)}
-                >
-                  Start a blind sponsorship instead
-                </Button>
+                {onClearFilters && (
+                  <Button
+                    mt={6}
+                    bg="#2b7ff9"
+                    color="white"
+                    borderRadius="16px"
+                    _hover={{ bg: "#1a6fe0" }}
+                    onClick={onClearFilters}
+                  >
+                    Show all
+                  </Button>
+                )}
               </Flex>
             )}
 

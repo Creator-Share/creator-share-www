@@ -39,6 +39,8 @@ export interface BeneficiaryListingsProps {
   beneficiaryType?: BeneficiaryTabType
   /** Called when a card is clicked; container owns the modal. */
   onOpenModal?: (beneficiary: Beneficiaries) => void
+  /** Called when the user clicks "Show all" in the empty state; should reset all active filters. */
+  onClearFilters?: () => void
   /** When true, suppresses the component's own card border/shadow/radius so a parent can provide the card frame. */
   noCard?: boolean
 }
