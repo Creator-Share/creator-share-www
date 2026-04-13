@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react"
 import { Beneficiaries } from "@/types"
 import { toaster } from "@/components/ui/toaster"
 import { createClient } from '@supabase/supabase-js'
+import { INACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 
 type FiltersState = {
   gender: string
@@ -105,13 +106,11 @@ export function useBeneficiaryPagination(
       
       // Skip age range filtering when:
       //  • the type is ANIMAL (dogs don't have human-comparable ages), or
-      //  • status includes a value that may cover beneficiaries of any age
-      //    (Draft, Archived, Budget Fulfilled)
-      const skipAgeRangeStatuses = ["Draft", "Archived", "Budget Fulfilled"]
+      //  • status includes an inactive value that may cover beneficiaries of any age
       const isAnimalType = (type ?? "").split(",").includes("ANIMAL")
       const shouldSkipAgeRange =
         isAnimalType ||
-        (filters.status || []).some((status) => skipAgeRangeStatuses.includes(status))
+        (filters.status || []).some((status) => (INACTIVE_STATUSES as string[]).includes(status))
 
       if (filters.ageRange && !shouldSkipAgeRange) {
         params.set("ageRange", filters.ageRange.join(","))

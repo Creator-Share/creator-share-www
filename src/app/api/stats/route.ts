@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
+import { ACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 
 export async function GET() {
   const supabase = await createClient()
@@ -11,7 +12,7 @@ export async function GET() {
       .from("beneficiaries")
       .select("*", { count: "exact", head: true })
       .eq("beneficiary_type", "CHILD")
-      .in("status", ["New", "Partially Funded", "Sponsorship Cancelled"])
+      .in("status", ACTIVE_STATUSES)
       .or("active_subscriptions.eq.0,active_subscriptions.is.null")
 
     if (inNeedError) {

@@ -3,6 +3,7 @@ import React from "react"
 import { Box, Flex, Button, Text } from "@chakra-ui/react"
 import { MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu"
 import { FiChevronDown } from "react-icons/fi"
+import { BULK_ASSIGNABLE_STATUSES } from "@/config/beneficiaryStatuses"
 
 interface FloatingActionBarProps {
   selectedCount: number
@@ -44,14 +45,13 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
             Deselect All
           </Button>
 
-          {/* Delete */}
           <Button
             onClick={onDelete}
             className="border-[2px] border-transparent rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ff0000] text-white hover:bg-[#cc0000]"
           >
             Delete ({selectedCount})
           </Button>
-          {/* Reinstate button - only show if there are cancelled children selected */}
+
           {onReinstate && hasCancelledSelected && (
             <Button
               onClick={onReinstate}
@@ -60,6 +60,7 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
               Reinstate to New
             </Button>
           )}
+
           <MenuRoot>
             <MenuTrigger asChild>
               <Button
@@ -70,26 +71,14 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
               </Button>
             </MenuTrigger>
             <MenuContent>
-              <MenuItem value="New" onClick={() => onSetStatus("New")}>
-                New
-              </MenuItem>
-              <MenuItem value="Draft" onClick={() => onSetStatus("Draft")}>
-                Draft
-              </MenuItem>
-              <MenuItem value="Partially Funded" onClick={() => onSetStatus("Partially Funded")}>
-                Partially Funded
-              </MenuItem>
-              <MenuItem value="Budget Fulfilled" onClick={() => onSetStatus("Budget Fulfilled")}>
-                Budget Fulfilled
-              </MenuItem>
-              <MenuItem value="Archived" onClick={() => onSetStatus("Archived")}>
-                Archived
-              </MenuItem>
-              <MenuItem value="Sponsorship Cancelled" onClick={() => onSetStatus("Sponsorship Cancelled")}>
-                Sponsorship Cancelled
-              </MenuItem>
+              {BULK_ASSIGNABLE_STATUSES.map((status) => (
+                <MenuItem key={status} value={status} onClick={() => onSetStatus(status)}>
+                  {status}
+                </MenuItem>
+              ))}
             </MenuContent>
           </MenuRoot>
+
           <Text className="text-sm text-gray-500">Selected {selectedCount} items</Text>
         </Flex>
       </Box>

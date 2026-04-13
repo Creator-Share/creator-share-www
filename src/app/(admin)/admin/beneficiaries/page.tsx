@@ -16,10 +16,18 @@ import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
 import SponsorshipFilters from "@/app/sponsorships/components/SponsorshipFilters"
 import FloatingActionBar from "@/components/admin-ui/FloatingActionBar"
-import BeneficiaryTypeNav, {
+import BeneficiaryTypeNav from "@/components/BeneficiaryTypeNav"
+import {
   ALL_BENEFICIARY_TABS,
   BeneficiaryTabType,
-} from "@/components/BeneficiaryTypeNav"
+  getApiTypes,
+  getMaxAgeYears,
+} from "@/config/beneficiaryTypes"
+import {
+  ALL_STATUSES,
+  ACTIVE_STATUSES,
+  STATUS_DISPLAY_CONFIG,
+} from "@/config/beneficiaryStatuses"
 
 type FiltersState = {
   gender: string
@@ -44,14 +52,7 @@ const ChildrenTable = () => {
     setVideoFiles,
   } = useFormStore()
 
-  const allStatuses = [
-    "New",
-    "Partially Funded",
-    "Budget Fulfilled",
-    "Draft",
-    "Archived",
-    "Sponsorship Cancelled",
-  ]
+  const allStatuses = ALL_STATUSES as unknown as string[]
 
   const { setStatus: setFilterStatus } = useFilterStore()
 
@@ -75,14 +76,10 @@ const ChildrenTable = () => {
   const handleTypeChange = useCallback(
     (type: BeneficiaryTabType | null) => {
       setActiveType(type)
-      // When CHILD_LABORER is selected, also include legacy CHILD records
-      const apiType = type === "CHILD_LABORER"
-        ? "CHILD,CHILD_LABORER"
-        : type === null ? undefined : type
       handleFilterChange({
-        beneficiary_type: apiType,
+        beneficiary_type: getApiTypes(type),
         gender: "",
-        ageRange: [0, type === "ANIMAL" ? 20 : 14],
+        ageRange: [0, getMaxAgeYears(type)],
         status: allStatuses,
         search: "",
       })
@@ -108,25 +105,14 @@ const ChildrenTable = () => {
     statusCounts: Record<string, number>
   }>({
     total: 0,
-    statusCounts: {
-      New: 0,
-      "Partially Funded": 0,
-      "Budget Fulfilled": 0,
-      Draft: 0,
-      Archived: 0,
-      "Sponsorship Cancelled": 0,
-    },
+    statusCounts: Object.fromEntries(ALL_STATUSES.map((s) => [s, 0])),
   })
 
   // Fetch stats scoped to active type — only re-run when activeType changes, not on every page load
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const typeParam = activeType
-          ? activeType === "CHILD_LABORER"
-            ? "CHILD,CHILD_LABORER"
-            : activeType
-          : undefined
+        const typeParam = getApiTypes(activeType)
         const url = typeParam
           ? `/api/admin/beneficiaries/stats?beneficiary_type=${encodeURIComponent(typeParam)}`
           : `/api/admin/beneficiaries/stats`
@@ -327,7 +313,7 @@ const ChildrenTable = () => {
       setIsCreateDrawerOpen(false)
       toaster.create({ title: "Success", description: "Beneficiary created successfully.", duration: 5000 })
       setFilterStatus(allStatuses)
-      handleFilterChange({ gender: "", ageRange: [0, 14] as [number, number], status: allStatuses, search: "" })
+      handleFilterChange({ gender: "", ageRange: [0, getMaxAgeYears(activeType)], status: allStatuses, search: "" })
       return true
     } catch {
       toaster.create({ title: "Error", description: "Failed to create beneficiary", duration: 5000 })
@@ -363,10 +349,8 @@ const ChildrenTable = () => {
 
       setIsEditDrawerOpen(false)
       toaster.create({ title: "Success", description: "Beneficiary updated successfully.", duration: 5000 })
-      // Use type-aware age range max (Animal = 20, others = 14)
-      const defaultMaxAge = activeType === "ANIMAL" ? 20 : 14
       const currentFilters: FiltersState = {
-        gender: "", ageRange: [0, defaultMaxAge] as [number, number],
+        gender: "", ageRange: [0, getMaxAgeYears(activeType)],
         status: allStatuses, search: "",
       }
       setFilterStatus(currentFilters.status)
@@ -398,7 +382,7 @@ const ChildrenTable = () => {
       setSelectedRowsForDeletion([])
       setIsDeleteDialogOpen(false)
       toaster.create({ title: "Success", description: "Selected beneficiaries deleted successfully.", duration: 5000 })
-      const filters: FiltersState = { gender: "", ageRange: [0, 14] as [number, number], status: allStatuses, search: "" }
+      const filters: FiltersState = { gender: "", ageRange: [0, getMaxAgeYears(activeType)], status: allStatuses, search: "" }
       setFilterStatus(filters.status)
       handleFilterChange(filters)
     } catch (error) {
@@ -460,7 +444,7 @@ const ChildrenTable = () => {
       setSelectedRowsForDeletion([])
       toaster.create({ title: "Success", description: `Moved to ${status.toLowerCase()} successfully.`, duration: 5000 })
       setFilterStatus(allStatuses)
-      handleFilterChange({ gender: "", ageRange: [0, 14] as [number, number], status: allStatuses, search: "" })
+      handleFilterChange({ gender: "", ageRange: [0, getMaxAgeYears(activeType)], status: allStatuses, search: "" })
     } catch (error) {
       console.error("Bulk status update error:", error)
       toaster.create({ title: "Error", description: `Failed: ${error instanceof Error ? error.message : "Unknown error"}`, duration: 5000 })
@@ -485,7 +469,7 @@ const ChildrenTable = () => {
       setSelectedRowsForDeletion([])
       toaster.create({ title: "Success", description: `${cancelled.length} reinstated to "New" successfully.`, duration: 5000 })
       setFilterStatus(allStatuses)
-      handleFilterChange({ gender: "", ageRange: [0, 14] as [number, number], status: allStatuses, search: "" })
+      handleFilterChange({ gender: "", ageRange: [0, getMaxAgeYears(activeType)], status: allStatuses, search: "" })
     } catch (error) {
       console.error("Reinstate error:", error)
       toaster.create({ title: "Error", description: `Failed: ${error instanceof Error ? error.message : "Unknown error"}`, duration: 5000 })
@@ -495,17 +479,8 @@ const ChildrenTable = () => {
   const isAllSelected = beneficiaries.length > 0 && selectedItems.size === beneficiaries.filter((b) => b.id).length
   const isSomeSelected = selectedItems.size > 0 && selectedItems.size < beneficiaries.filter((b) => b.id).length
 
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case "New": return "blue"
-      case "Partially Funded": return "orange"
-      case "Budget Fulfilled": return "green"
-      case "Draft": return "purple"
-      case "Archived": return "red"
-      case "Sponsorship Cancelled": return "yellow"
-      default: return "gray"
-    }
-  }
+  const getStatusBadgeColor = (status: string) =>
+    STATUS_DISPLAY_CONFIG[status as keyof typeof STATUS_DISPLAY_CONFIG]?.color ?? "gray"
 
   return (
     <AdminPageLayout
@@ -525,7 +500,7 @@ const ChildrenTable = () => {
             setIsCreateDrawerOpen(true)
             if (!formData.status) setFormData({ ...formData, status: "New" })
           }}
-          className="border-[2px] border-[#E0E0E0] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#1C3C8C] text-white"
+          className="border-[2px] border-[#E0E0E0] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#2b7ff9] text-white"
         >
           <GoPlusCircle className="mr-2" />
           Add New
