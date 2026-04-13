@@ -4,6 +4,7 @@ import { Box } from "@chakra-ui/react"
 import { HomeHero } from "@/components/HomeHero"
 import SponsorshipsContainer from "./sponsorships/components/SponsorshipsContainer"
 import type { BeneficiaryTabType } from "@/components/BeneficiaryTypeNav"
+import { HomeBgPicker } from "@/components/debug/HomeBgPicker"
 
 export default function Home() {
   const [activeType, setActiveType] = useState<BeneficiaryTabType | null>(null)
@@ -13,9 +14,12 @@ export default function Home() {
   }, [])
 
   return (
-    <Box minH={{ base: "auto", lg: "130vh" }} pb={{ base: 0, lg: 40 }}>
-      <HomeHero activeType={activeType} onTypeChange={handleTypeChange} />
-      <SponsorshipsContainer activeType={activeType} onTypeChange={handleTypeChange} />
+    <Box position="relative" minH={{ base: "auto", lg: "130vh" }} pb={{ base: 0, lg: 40 }}>
+      <HomeBgPicker />
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <HomeHero activeType={activeType} onTypeChange={handleTypeChange} />
+        <SponsorshipsContainer activeType={activeType} onTypeChange={handleTypeChange} />
+      </div>
     </Box>
   )
 }
