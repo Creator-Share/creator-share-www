@@ -2,7 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Paper Marble — full-page background: subtle diagonal gradient + coarse grain */
+/* Force light color scheme globally — prevents Chakra's defaultSystem from
+   applying dark-mode body background on devices with prefers-color-scheme:dark. */
+html {
+  color-scheme: light;
+}
+
+/* Paper Marble — full-page background: subtle diagonal gradient + coarse grain. */
 body {
   background-color: #f4f6fa;
   background-image:
@@ -11,6 +17,16 @@ body {
   background-repeat: repeat, no-repeat;
   background-size: 200px 200px, cover;
   background-attachment: fixed, fixed;
+}
+
+/* On narrow screens the white cards fill the viewport, so override the body
+   background to pure white — this prevents gray bleed-through at any scroll
+   position. Must come AFTER the base body rule to win the cascade. */
+@media (max-width: 62em) {
+  html, body {
+    background-color: white !important;
+    background-image: none !important;
+  }
 }
 
 /* Kill browser focus rings on click-only card divs */
@@ -31,6 +47,47 @@ body {
     transform: translateY(20px);
   }
   100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Card grid: 2 columns down to 420px, single column below that */
+@media (max-width: 419px) {
+  .child-card-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Page load entrance animations */
+@keyframes pageLogoSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pageNavRightIn {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pageContentFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
     opacity: 1;
     transform: translateY(0);
   }
