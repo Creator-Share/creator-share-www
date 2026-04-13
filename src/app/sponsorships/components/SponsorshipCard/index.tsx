@@ -11,11 +11,7 @@ import { getImageSrc, getThumbnailSrc } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
-// Rim glass shine: tight white highlight at the very top of the photo only.
-const RIM_OVERLAY =
-  "linear-gradient(to bottom, rgba(255,255,255,0.62) 0px, rgba(255,255,255,0.28) 2px, rgba(255,255,255,0.06) 14px, transparent 32px)"
-const CARD_SHADOW = "0 2px 8px rgba(0,0,0,0.07), 0 6px 24px rgba(0,0,0,0.05)"
-const CARD_SHADOW_SELECTED = "0 0 0 2px rgba(43,127,249,0.18), 0 2px 8px rgba(0,0,0,0.07), 0 6px 24px rgba(0,0,0,0.05)"
+import { RIM_OVERLAY, CARD_SHADOW, CARD_SHADOW_SELECTED } from "./cardStyles"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,

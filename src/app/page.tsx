@@ -3,8 +3,8 @@ import { useState, useCallback } from "react"
 import { Box } from "@chakra-ui/react"
 import { HomeHero } from "@/components/HomeHero"
 import SponsorshipsContainer from "./sponsorships/components/SponsorshipsContainer"
-import type { BeneficiaryTabType } from "@/components/BeneficiaryTypeNav"
-import { HomeBgPicker } from "@/components/debug/HomeBgPicker"
+import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
+import { HomeBgPicker } from "@/components/HomeBg"
 
 export default function Home() {
   const [activeType, setActiveType] = useState<BeneficiaryTabType | null>(null)
