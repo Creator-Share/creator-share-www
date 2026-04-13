@@ -251,22 +251,36 @@ export function PageNavbar() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => {
-              window.history.replaceState(null, "", "#faq")
-              setFaqOpen(true)
-            }}
+            asChild
           >
-            FAQ
+            <a
+              href="/#faq"
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                e.preventDefault()
+                window.history.replaceState(null, "", "#faq")
+                setFaqOpen(true)
+              }}
+            >
+              FAQ
+            </a>
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => {
-              window.history.replaceState(null, "", "#about")
-              setAboutUsOpen(true)
-            }}
+            asChild
           >
-            About Us
+            <a
+              href="/#about"
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                e.preventDefault()
+                window.history.replaceState(null, "", "#about")
+                setAboutUsOpen(true)
+              }}
+            >
+              About Us
+            </a>
           </Button>
           {user ? (
             <>
@@ -274,9 +288,18 @@ export function PageNavbar() {
                 <Button
                   size="sm"
                   variant={pathname?.startsWith("/admin") ? "solid" : "ghost"}
-                  onClick={() => router.push("/admin")}
+                  asChild
                 >
-                  Admin Dashboard
+                  <a
+                    href="/admin"
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                      e.preventDefault()
+                      router.push("/admin")
+                    }}
+                  >
+                    Admin Dashboard
+                  </a>
                 </Button>
               )}
               {/* Temporarily hidden
@@ -315,12 +338,19 @@ export function PageNavbar() {
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => {
-                window.history.pushState({ modal: true }, "", "/login")
-                setSignInOpen(true)
-              }}
+              asChild
             >
-              Sign In
+              <a
+                href="/login"
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                  e.preventDefault()
+                  window.history.pushState({ modal: true }, "", "/login")
+                  setSignInOpen(true)
+                }}
+              >
+                Sign In
+              </a>
             </Button>
           )}
         </Flex>

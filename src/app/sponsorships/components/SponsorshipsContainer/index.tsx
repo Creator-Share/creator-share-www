@@ -13,9 +13,8 @@ import SponsorshipFilters from "../SponsorshipFilters"
 import SponsorshipListings from "../SponsorshipListings"
 import BeneficiaryModal from "../SponsorshipModal"
 import HorizontalSponsorshipRow from "../HorizontalSponsorshipRow"
-import BeneficiaryTypeNav, {
+import {
   BeneficiaryTabType,
-  ALL_BENEFICIARY_TABS,
   TYPE_TO_ROUTE,
   ROUTE_TO_TYPE,
 } from "@/components/BeneficiaryTypeNav"
@@ -28,6 +27,16 @@ function getApiBeneficiaryType(type: BeneficiaryTabType | null): string | undefi
   if (!type) return undefined
   if (type === "CHILD_LABORER") return "CHILD,CHILD_LABORER"
   return type
+}
+
+/**
+ * Maps a UI tab type to the DB beneficiary_type values used by fetchAllSponsored.
+ * Null (All) returns undefined so no type filter is applied.
+ */
+function getSponsoredBeneficiaryTypes(type: BeneficiaryTabType | null): string[] | undefined {
+  if (!type) return undefined
+  if (type === "CHILD_LABORER") return ["CHILD", "CHILD_LABORER"]
+  return [type]
 }
 
 /** First segment after `/sponsorships/`, or null when not on a profile URL. */
@@ -76,7 +85,7 @@ const SponsorshipsContainer: React.FC = () => {
   const activeTypeRef = useRef<BeneficiaryTabType | null>(null)
   activeTypeRef.current = activeType
 
-  const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore } =
+  const { beneficiaries, totalCount, hasMore, isLoading, handleFilterChange, loadMore } =
     useBeneficiaryPagination({
       recordsPerPage: 9,
       autoRetry: true,
@@ -112,10 +121,11 @@ const SponsorshipsContainer: React.FC = () => {
     }
   }, [handleFilterChange])
 
-  // Fetch all Budget Fulfilled children, ordered by most recent activity first.
+  // Re-fetch Budget Fulfilled beneficiaries whenever the active type changes.
   useEffect(() => {
-    fetchAllSponsored().then(setSponsored)
-  }, [])
+    const types = getSponsoredBeneficiaryTypes(activeType)
+    fetchAllSponsored(types).then(setSponsored)
+  }, [activeType])
 
   // Sticky filter detection
   const handleScroll = useCallback(() => {
@@ -301,18 +311,10 @@ const SponsorshipsContainer: React.FC = () => {
         isLoading={isLoading}
         onLoadMore={loadMore}
         onOpenModal={openModal}
+        activeType={activeType}
       />
 
-      {/* Beneficiary type nav */}
-      <Box px={{ base: 4, lg: 8 }} pt={4}>
-        <BeneficiaryTypeNav
-          tabs={ALL_BENEFICIARY_TABS}
-          activeType={activeType}
-          onChange={handleTypeChange}
-        />
-      </Box>
-
-      {/* Sticky filter bar */}
+      {/* Sticky filter bar (includes beneficiary type as first dropdown) */}
       <Box
         ref={filtersRef}
         position={{ base: "relative", lg: "sticky" }}
@@ -323,6 +325,10 @@ const SponsorshipsContainer: React.FC = () => {
           onFilterChange={handleFilterChange}
           isSticky={isFiltersSticky}
           beneficiaryType={activeType === "ANIMAL" ? "ANIMAL" : "CHILD"}
+          activeType={activeType}
+          onTypeChange={handleTypeChange}
+          resultCount={totalCount ?? beneficiaries.length}
+          hasMoreResults={totalCount === null && hasMore}
         />
       </Box>
 

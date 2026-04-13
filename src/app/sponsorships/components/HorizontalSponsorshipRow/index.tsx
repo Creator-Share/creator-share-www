@@ -5,6 +5,7 @@ import { Beneficiaries } from "@/types"
 import { SponsoredBeneficiary } from "@/actions"
 import PortraitBeneficiaryCard from "../SponsorshipCard/PortraitCard"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
+import type { BeneficiaryTabType } from "@/components/BeneficiaryTypeNav"
 
 // ---------------------------------------------------------------------------
 // StatsCard -- first item in the row; replaces the StatsSection above the fold
@@ -162,6 +163,17 @@ interface HorizontalSponsorshipRowProps {
   isLoading: boolean
   onLoadMore: () => void
   onOpenModal: (beneficiary: Beneficiaries) => void
+  activeType?: BeneficiaryTabType | null
+}
+
+function getSectionLabels(activeType: BeneficiaryTabType | null | undefined): {
+  sponsored: string
+  waiting: string
+} {
+  if (activeType === "ANIMAL") {
+    return { sponsored: "Dogs Sponsored", waiting: "Dogs Waiting" }
+  }
+  return { sponsored: "Children Sponsored", waiting: "Children Waiting" }
 }
 
 const SCROLL_THRESHOLD_PX = 400
@@ -175,7 +187,9 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
   isLoading,
   onLoadMore,
   onOpenModal,
+  activeType,
 }) => {
+  const sectionLabels = getSectionLabels(activeType)
   const scrollRef = useRef<HTMLDivElement>(null)
   const lastLoadTimeRef = useRef(0)
 
@@ -207,20 +221,31 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
       ref={scrollRef}
       mt={4}
       py={4}
-      mx={{ base: -4, md: 0 }}
       overflowX="auto"
       overflowY="hidden"
-      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      style={{
+        width: "100vw",
+        marginLeft: "calc(-50vw + 50%)",
+        scrollbarWidth: "none",
+        msOverflowStyle: "none",
+      }}
       className="[&::-webkit-scrollbar]:hidden"
     >
-      <Flex gap={4} align="flex-start" w="max-content" minH="270px" px={{ base: 4, md: 0 }}>
+      <Flex
+        gap={4}
+        align="flex-start"
+        w="max-content"
+        minH="270px"
+        paddingLeft={{ base: "16px", lg: "max(36px, calc((100vw - 1200px) / 2 + 36px))" }}
+        paddingRight="16px"
+      >
         {/* Stats card -- always first */}
         <StatsCard />
 
-        {/* Children Sponsored */}
+        {/* Sponsored */}
         {sponsored.length > 0 && (
           <>
-            <SectionDivider label="Children Sponsored" />
+            <SectionDivider label={sectionLabels.sponsored} />
             {sponsored.map((b) => (
               <PortraitBeneficiaryCard
                 key={b.id}
@@ -233,10 +258,10 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
           </>
         )}
 
-        {/* Children Waiting */}
+        {/* Waiting */}
         {beneficiaries.length > 0 && (
           <>
-            <SectionDivider label="Children Waiting" />
+            <SectionDivider label={sectionLabels.waiting} />
             {beneficiaries.map((b) =>
               b.id ? (
                 <PortraitBeneficiaryCard

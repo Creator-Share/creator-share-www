@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
-import { Box, Flex, Button, Text, Input, IconButton } from "@chakra-ui/react"
+import { Box, Button, Text, Input, IconButton } from "@chakra-ui/react"
 import { Global, css } from "@emotion/react"
 import { Slider } from "@/components/ui/slider"
 import {
@@ -14,17 +14,30 @@ import {
 import { Tooltip } from "@/components/ui/tooltip"
 import { useFilterStore } from "@/store/filterStore"
 import { FiltersProps } from "@/types/propTypes"
-import { genders, status as statusOptions } from "./config"
-import { IoClose } from "react-icons/io5"
+import { beneficiaryTypes, genders, status as statusOptions } from "./config"
+import { IoClose, IoSearchOutline } from "react-icons/io5"
+import type { BeneficiaryTabType } from "@/components/BeneficiaryTypeNav"
 
 const SponsorshipFilters: React.FC<
-  FiltersProps & { variant?: "default" | "sidebar"; isAdminMode?: boolean; isSticky?: boolean }
+  FiltersProps & {
+    variant?: "default" | "sidebar"
+    isAdminMode?: boolean
+    isSticky?: boolean
+    activeType?: BeneficiaryTabType | null
+    onTypeChange?: (type: BeneficiaryTabType | null) => void
+    resultCount?: number
+    hasMoreResults?: boolean
+  }
 > = ({
   onFilterChange,
   variant = "default",
   beneficiaryType = "CHILD",
   isAdminMode = false,
   isSticky = false,
+  activeType,
+  onTypeChange,
+  resultCount,
+  hasMoreResults = false,
 }) => {
   const {
     selectedGender,
@@ -34,7 +47,13 @@ const SponsorshipFilters: React.FC<
     setAgeRange,
     setStatus,
   } = useFilterStore()
-  const defaultMaxAge = beneficiaryType === "ANIMAL" ? 20 : 14
+
+  // When activeType prop is provided (main page), derive animal mode from it.
+  // Otherwise fall back to the beneficiaryType prop (admin/embed).
+  const isAnimal =
+    activeType !== undefined ? activeType === "ANIMAL" : beneficiaryType === "ANIMAL"
+
+  const defaultMaxAge = isAnimal ? 20 : 14
   const [minAge, setMinAge] = useState<number>(selectedAgeRange[0] || 0)
   const [maxAge, setMaxAge] = useState<number>(
     selectedAgeRange[1] || defaultMaxAge
@@ -53,7 +72,6 @@ const SponsorshipFilters: React.FC<
   useEffect(() => {
     if (isAdminMode && mounted && !hasInitializedRef.current) {
       const allStatuses = ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
-      // Only initialize if status is empty or doesn't match admin defaults
       const hasAllStatuses = allStatuses.every(status => selectedStatus.includes(status))
       if (!hasAllStatuses && selectedStatus.length === 0) {
         hasInitializedRef.current = true
@@ -72,7 +90,6 @@ const SponsorshipFilters: React.FC<
   }, [isAdminMode, mounted])
 
   useEffect(() => {
-    
     if (isInternalUpdateRef.current) {
       if (ageRangeUpdateTimeoutRef.current) {
         clearTimeout(ageRangeUpdateTimeoutRef.current)
@@ -86,10 +103,10 @@ const SponsorshipFilters: React.FC<
     const newMin = selectedAgeRange[0] || 0
     const newMax = selectedAgeRange[1] || defaultMaxAge
     const newAgeRange: [number, number] = [newMin, newMax]
-    
+
     const prevMin = previousAgeRangeRef.current[0]
     const prevMax = previousAgeRangeRef.current[1]
-    
+
     if (newMin !== prevMin || newMax !== prevMax) {
       setMinAge(newMin)
       setMaxAge(newMax)
@@ -97,7 +114,7 @@ const SponsorshipFilters: React.FC<
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAgeRange, defaultMaxAge])
-  
+
   useEffect(() => {
     return () => {
       if (ageRangeUpdateTimeoutRef.current) {
@@ -108,7 +125,7 @@ const SponsorshipFilters: React.FC<
       }
     }
   }, [])
-  
+
   useEffect(() => {
     previousAgeRangeRef.current = [minAge, maxAge]
   }, [minAge, maxAge])
@@ -154,7 +171,7 @@ const SponsorshipFilters: React.FC<
       : ["New", "Partially Funded", "Sponsorship Cancelled"]
 
     isInternalUpdateRef.current = true
-    
+
     setGender("")
     setAgeRange([0, defaultMaxAge])
     setStatus(defaultStatus)
@@ -177,10 +194,9 @@ const SponsorshipFilters: React.FC<
     ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
     : ["New", "Partially Funded", "Sponsorship Cancelled"]
 
-  const isGenderDefault = (selectedGender ?? "") === ""
-  // When in ANIMAL mode the slider is hidden so age range is always default.
+  const isGenderDefault = isAnimal || (selectedGender ?? "") === ""
   const isAgeDefault =
-    beneficiaryType === "ANIMAL" ||
+    isAnimal ||
     (selectedAgeRange[0] === 0 && selectedAgeRange[1] === defaultMaxAge)
   const isStatusDefault =
     selectedStatus.length === modeDefaultStatus.length &&
@@ -188,6 +204,15 @@ const SponsorshipFilters: React.FC<
 
   const isDefaultFilters =
     isGenderDefault && isAgeDefault && isStatusDefault && !hasSearchQuery
+
+  const activeFilterCount = [
+    !isGenderDefault,
+    !isAgeDefault,
+    !isStatusDefault,
+    hasSearchQuery,
+  ].filter(Boolean).length
+
+  const showTypeDropdown = onTypeChange !== undefined
 
   return (
     <>
@@ -199,271 +224,330 @@ const SponsorshipFilters: React.FC<
         `}
       />
       <Box
-        className={`bg-white border ${isSticky ? 'rounded-b-3xl rounded-t-none' : 'rounded-3xl'}`}
+        className={`bg-white border ${isSticky ? "rounded-b-3xl rounded-t-none" : "rounded-3xl"}`}
         p={{ base: 4, md: 5 }}
         transition="box-shadow 0.3s ease, border-radius 0.3s ease"
         style={{
-          boxShadow: isSticky 
-            ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)" 
-            : "0 1px 2px 0 rgb(0 0 0 / 0.05)"
+          boxShadow: isSticky
+            ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)"
+            : "0 1px 2px 0 rgb(0 0 0 / 0.05)",
         }}
       >
-        <Box className="bg-transparent rounded-2xl" width="100%">
-          <Flex
-            align="center"
-            className={
-              variant === "sidebar" ? "flex-col" : "flex-col lg:flex-row"
-            }
-            gap={{ base: 4, lg: 8 }}
-            px={{ base: 2, md: 4 }}
-            py={2}
-            position="relative"
-            alignItems="center"
-            width="100%"
-          >
-            {/* Age range is not applicable for animals — hide it for that type */}
-            {beneficiaryType !== "ANIMAL" && (
-              <Box
-                flex={{ base: "1 1 100%", md: "1 1 0" }}
-                w="100%"
-                minW={0}
-                px={2}
-              >
-                <Text
-                  mb={2}
-                  fontSize="sm"
-                  fontWeight="semibold"
-                  textAlign="center"
-                >
-                  Age Range: {minAge} - {maxAge} years
-                </Text>
-                <Box>
-                  <Slider
-                    size={"sm"}
-                    value={[minAge, maxAge]}
-                    min={0}
-                    max={defaultMaxAge}
-                    step={1}
-                    variant={"solid"}
-                    onValueChange={(details) => {
-                      if (details.value && details.value.length >= 2) {
-                        const [newMin, origMax] = details.value
-                        let newMax = origMax
+        <Box
+          display="grid"
+          gridTemplateColumns={{
+            base: "1fr",
+            sm: "repeat(2, 1fr)",
+            md: "repeat(3, 1fr)",
+            lg: "repeat(auto-fit, minmax(140px, 1fr))",
+          }}
+          gap={{ base: 3, md: 3, lg: 4 }}
+          px={{ base: 2, md: 4 }}
+          py={2}
+          width="100%"
+          alignItems="center"
+        >
+          {/* Beneficiary Type dropdown — temporarily hidden.
+              The hero selector at the top of the home view handles this for now
+              (HomeHero.tsx type nav + SponsorshipsContainer activeType/onTypeChange).
+              Re-enable by uncommenting when/if we want it back in the filter bar.
 
-                        const minDistance = 1
-                        if (newMax - newMin < minDistance) {
-                          newMax = Math.max(newMin + minDistance, maxAge)
-                        }
-
-                        setMinAge(newMin)
-                        setMaxAge(newMax)
-
-                        if (sliderDebounceTimeoutRef.current) {
-                          clearTimeout(sliderDebounceTimeoutRef.current)
-                        }
-
-                        sliderDebounceTimeoutRef.current = setTimeout(() => {
-                          isInternalUpdateRef.current = true
-                          handleFilterChange({ ageRange: [newMin, newMax] })
-                        }, 300)
-                      }
-                    }}
-                    showValue
-                  />
-                </Box>
-              </Box>
-            )}
-
-            <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
+          {showTypeDropdown && (
+            <Box minW={0}>
               <SelectRoot
-                collection={genders}
-                value={selectedGender ? [selectedGender] : [""]}
+                collection={beneficiaryTypes}
+                value={activeType ? [activeType] : [""]}
                 onValueChange={(details) => {
-                  const value = details.items[0]
-                  handleFilterChange({ gender: value?.value || "" })
+                  const raw = details.items[0]?.value ?? ""
+                  const type = raw === "" ? null : (raw as BeneficiaryTabType)
+                  onTypeChange(type)
                 }}
                 size="sm"
                 className="rounded-2xl w-full"
               >
-                <SelectTrigger
-                  css={{
-                    borderRadius: "16px !important",
-                  }}
-                >
-                  <SelectValueText placeholder="All Genders">
+                <SelectTrigger css={{ borderRadius: "16px !important" }}>
+                  <SelectValueText placeholder="All Opportunities">
                     {() => {
-                      const selected = genders.items.find(
-                        (item) => item.value === selectedGender
+                      const selected = beneficiaryTypes.items.find(
+                        (item) => item.value === (activeType ?? "")
                       )
-                      return selected ? selected.label : "All Genders"
+                      return selected ? selected.label : "All Opportunities"
                     }}
                   </SelectValueText>
                 </SelectTrigger>
                 <SelectContent>
-                  {genders.items.map((gender) => (
-                    <SelectItem item={gender} key={gender.value || "all"}>
-                      {gender.label}
+                  {beneficiaryTypes.items.map((item) => (
+                    <SelectItem item={item} key={item.value || "all"}>
+                      {item.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </SelectRoot>
             </Box>
+          )}
+          */}
 
-            {isAdminMode ? (
-              /* Admin: full multi-select status dropdown */
-              <Tooltip content="Filter by funding status (Admin Only)">
-                <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-                  <SelectRoot
-                    collection={statusOptions}
-                    value={selectedStatus}
-                    onValueChange={(details) => {
-                      const values = Array.isArray(details.value)
-                        ? details.value
-                        : details.items.map((item) => item.value)
-                      handleFilterChange({ status: values })
-                    }}
-                    size="sm"
-                    className="rounded-2xl w-full"
-                    multiple
-                  >
-                    <SelectTrigger css={{ borderRadius: "16px !important" }}>
-                      <SelectValueText placeholder="Select Status">
-                        {() => {
-                          const selected = statusOptions.items
-                            .filter((item) => selectedStatus.includes(item.value))
-                            .map((item) => item.label)
-                            .join(", ")
-                          return selected || "Select Status"
-                        }}
-                      </SelectValueText>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statusOptions.items.map((option) => (
-                        <SelectItem item={option} key={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </SelectRoot>
-                </Box>
-              </Tooltip>
-            ) : (
-              /* Public: simple Waiting / Sponsored segmented toggle */
-              <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-                <Flex bg="gray.100" borderRadius="16px" p="3px" gap={0}>
-                  {(
-                    [
-                      {
-                        label: "Waiting",
-                        statuses: ["New", "Partially Funded", "Sponsorship Cancelled"],
-                      },
-                      {
-                        label: "Sponsored",
-                        statuses: ["Budget Fulfilled"],
-                      },
-                    ] as const
-                  ).map(({ label, statuses }) => {
-                    const isActive =
-                      statuses.length === selectedStatus.length &&
-                      statuses.every((s) => selectedStatus.includes(s))
-                    return (
-                      <Button
-                        key={label}
-                        flex={1}
-                        size="sm"
-                        borderRadius="13px"
-                        bg={isActive ? "white" : "transparent"}
-                        color={isActive ? "#0654C6" : "gray.500"}
-                        fontWeight={isActive ? "semibold" : "medium"}
-                        boxShadow={isActive ? "sm" : "none"}
-                        onClick={() => handleFilterChange({ status: [...statuses] })}
-                        _hover={{ bg: isActive ? "white" : "gray.200" }}
-                        transition="all 0.15s"
-                      >
-                        {label}
-                      </Button>
-                    )
-                  })}
-                </Flex>
+          {/* Status — first position */}
+          {isAdminMode ? (
+            <Tooltip content="Filter by funding status (Admin Only)">
+              <Box minW={0}>
+                <SelectRoot
+                  collection={statusOptions}
+                  value={selectedStatus}
+                  onValueChange={(details) => {
+                    const values = Array.isArray(details.value)
+                      ? details.value
+                      : details.items.map((item) => item.value)
+                    handleFilterChange({ status: values })
+                  }}
+                  size="sm"
+                  className="rounded-2xl w-full"
+                  multiple
+                >
+                  <SelectTrigger css={{ borderRadius: "16px !important" }}>
+                    <SelectValueText placeholder="Select Status">
+                      {() => {
+                        const selected = statusOptions.items
+                          .filter((item) => selectedStatus.includes(item.value))
+                          .map((item) => item.label)
+                          .join(", ")
+                        return selected || "Select Status"
+                      }}
+                    </SelectValueText>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusOptions.items.map((option) => (
+                      <SelectItem item={option} key={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </SelectRoot>
               </Box>
-            )}
-
-            <Box
-              flex={{ base: "1 1 100%", md: "1 1 0" }}
-              w="100%"
-              minW={0}
-              position="relative"
-            >
-              <Input
-                placeholder={beneficiaryType === "ANIMAL" ? "Search for an Animal" : "Search for a Beneficiary"}
-                value={mounted ? searchQuery : ""}
-                onChange={(e) => {
-                  if (!mounted) return
-                  const value = e.target.value
-                  setSearchQuery(value)
-                  handleFilterChange({ search: value })
-                }}
-                size="sm"
-                className="rounded-2xl"
-                borderRadius="16px"
-                paddingRight="2.5rem"
-                _focus={{
-                  borderColor: "#1C3C8C",
-                  boxShadow: "0 0 0 1px #1C3C8C",
-                }}
-                suppressHydrationWarning={true}
-              />
-              {mounted && searchQuery && (
-                <IconButton
-                  aria-label="Clear search"
-                  size="xs"
-                  position="absolute"
-                  right="2px"
-                  top="50%"
-                  transform="translateY(-50%)"
-                  onClick={() => {
-                    setSearchQuery("")
-                    handleFilterChange({ search: "" })
-                  }}
-                  variant="ghost"
-                  borderRadius="full"
-                  _hover={{ bg: "gray.200" }}
-                >
-                  <IoClose />
-                </IconButton>
-              )}
+            </Tooltip>
+          ) : (
+            <Box minW={0}>
+              <Box bg="gray.100" borderRadius="16px" p="3px" display="flex" gap={0}>
+                {(
+                  [
+                    {
+                      label: "Waiting",
+                      statuses: ["New", "Partially Funded", "Sponsorship Cancelled"],
+                    },
+                    {
+                      label: "Sponsored",
+                      statuses: ["Budget Fulfilled"],
+                    },
+                  ] as const
+                ).map(({ label, statuses }) => {
+                  const isActive =
+                    statuses.length === selectedStatus.length &&
+                    statuses.every((s) => selectedStatus.includes(s))
+                  return (
+                    <Button
+                      key={label}
+                      flex={1}
+                      size="sm"
+                      borderRadius="13px"
+                      bg={isActive ? "white" : "transparent"}
+                      color={isActive ? "#0654C6" : "gray.500"}
+                      fontWeight={isActive ? "semibold" : "medium"}
+                      boxShadow={isActive ? "sm" : "none"}
+                      onClick={() => handleFilterChange({ status: [...statuses] })}
+                      _hover={{ bg: isActive ? "white" : "gray.200" }}
+                      transition="all 0.15s"
+                    >
+                      {label}
+                    </Button>
+                  )
+                })}
+              </Box>
             </Box>
+          )}
 
-            <Box flex={{ base: "1 1 100%", md: "1 1 0" }} w="100%" minW={0}>
-              <Tooltip
-                content="This button will clear search filters to show all children if you have search filters applied"
-                disabled={!isDefaultFilters}
+          {/* Age range — hidden for animals */}
+          {!isAnimal && (
+            <Box minW={0} px={2}>
+              <Text
+                mb={2}
+                fontSize="sm"
+                fontWeight="semibold"
+                textAlign="center"
               >
-                <Button
-                  onClick={handleClearFilters}
-                  size="md"
-                  fontWeight="semibold"
-                  width={{ base: "100%", md: "100%" }}
-                  bg="#1C3C8C"
-                  color="white"
-                  borderRadius="16px"
-                  _hover={{ bg: "#1C2B7A" }}
-                  _active={{ bg: "#182765" }}
-                  disabled={isDefaultFilters}
-                  _disabled={{
-                    bg: "gray.300",
-                    color: "white",
-                    cursor: "not-allowed",
-                    _dark: { bg: "gray.600", color: "gray.200" },
-                  }}
-                >
-                  {!isDefaultFilters
-                    ? "Clear Search & Filters"
-                    : "Showing All"}
-                </Button>
-              </Tooltip>
+                Age Range: {minAge} - {maxAge} years
+              </Text>
+              <Slider
+                size="sm"
+                value={[minAge, maxAge]}
+                min={0}
+                max={defaultMaxAge}
+                step={1}
+                variant="solid"
+                onValueChange={(details) => {
+                  if (details.value && details.value.length >= 2) {
+                    const [newMin, origMax] = details.value
+                    let newMax = origMax
+
+                    const minDistance = 1
+                    if (newMax - newMin < minDistance) {
+                      newMax = Math.max(newMin + minDistance, maxAge)
+                    }
+
+                    setMinAge(newMin)
+                    setMaxAge(newMax)
+
+                    if (sliderDebounceTimeoutRef.current) {
+                      clearTimeout(sliderDebounceTimeoutRef.current)
+                    }
+
+                    sliderDebounceTimeoutRef.current = setTimeout(() => {
+                      isInternalUpdateRef.current = true
+                      handleFilterChange({ ageRange: [newMin, newMax] })
+                    }, 300)
+                  }
+                }}
+                showValue
+              />
             </Box>
-          </Flex>
+          )}
+
+          {/* Gender — not applicable for animals */}
+          {!isAnimal && <Box minW={0}>
+            <SelectRoot
+              collection={genders}
+              value={selectedGender ? [selectedGender] : [""]}
+              onValueChange={(details) => {
+                const value = details.items[0]
+                handleFilterChange({ gender: value?.value || "" })
+              }}
+              size="sm"
+              className="rounded-2xl w-full"
+            >
+              <SelectTrigger css={{ borderRadius: "16px !important" }}>
+                <SelectValueText placeholder="All Genders">
+                  {() => {
+                    const selected = genders.items.find(
+                      (item) => item.value === selectedGender
+                    )
+                    return selected ? selected.label : "All Genders"
+                  }}
+                </SelectValueText>
+              </SelectTrigger>
+              <SelectContent>
+                {genders.items.map((gender) => (
+                  <SelectItem item={gender} key={gender.value || "all"}>
+                    {gender.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </SelectRoot>
+          </Box>}
+
+          {/* Search */}
+          <Box minW={0} position="relative">
+            {/* Search icon — left adornment */}
+            <Box
+              position="absolute"
+              left="0.6rem"
+              top="50%"
+              transform="translateY(-50%)"
+              pointerEvents="none"
+              color="gray.400"
+              zIndex={1}
+            >
+              <IoSearchOutline size={15} />
+            </Box>
+            <Input
+              placeholder="Search"
+              value={mounted ? searchQuery : ""}
+              onChange={(e) => {
+                if (!mounted) return
+                const value = e.target.value
+                setSearchQuery(value)
+                handleFilterChange({ search: value })
+              }}
+              size="sm"
+              className="rounded-2xl"
+              borderRadius="16px"
+              paddingLeft="2rem"
+              paddingRight="2.5rem"
+              _focus={{
+                borderColor: "#1C3C8C",
+                boxShadow: "0 0 0 1px #1C3C8C",
+              }}
+              suppressHydrationWarning={true}
+            />
+            {mounted && searchQuery && (
+              <IconButton
+                aria-label="Clear search"
+                size="xs"
+                position="absolute"
+                right="2px"
+                top="50%"
+                transform="translateY(-50%)"
+                onClick={() => {
+                  setSearchQuery("")
+                  handleFilterChange({ search: "" })
+                }}
+                variant="ghost"
+                borderRadius="full"
+                _hover={{ bg: "gray.200" }}
+              >
+                <IoClose />
+              </IconButton>
+            )}
+          </Box>
+
+        </Box>
+
+        {/* Info strip — always shown when result count is available, collapses otherwise */}
+        <Box
+          overflow="hidden"
+          style={{
+            maxHeight: resultCount !== undefined || !isDefaultFilters ? "3.5rem" : 0,
+            opacity: resultCount !== undefined || !isDefaultFilters ? 1 : 0,
+            transition: "max-height 0.25s ease, opacity 0.2s ease",
+          }}
+          px={{ base: 4, md: 6 }}
+          pt={3}
+          pb={2}
+          display="flex"
+          justifyContent="space-between"
+          alignItems="center"
+        >
+          {/* Left: result count */}
+          <Text fontSize="xs" color="gray.400" lineHeight="1">
+            {resultCount !== undefined
+              ? `${resultCount}${hasMoreResults ? "+" : ""} shown`
+              : null}
+          </Text>
+
+          {/* Right: active filter count + clear link */}
+          <Text fontSize="xs" color="gray.500" lineHeight="1">
+            {!isDefaultFilters && (
+              <>
+                {activeFilterCount === 1 ? "1 active filter" : `${activeFilterCount} active filters`}
+                {" — "}
+                <Box
+                  as="button"
+                  onClick={handleClearFilters}
+                  display="inline"
+                  color="#1C3C8C"
+                  fontWeight="semibold"
+                  textDecoration="underline"
+                  textUnderlineOffset="2px"
+                  _hover={{ color: "#1C2B7A" }}
+                  cursor="pointer"
+                  background="none"
+                  border="none"
+                  p={0}
+                  fontSize="xs"
+                >
+                  show all
+                </Box>
+              </>
+            )}
+          </Text>
         </Box>
       </Box>
     </>

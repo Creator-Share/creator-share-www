@@ -1,4 +1,14 @@
 import { createListCollection } from "@chakra-ui/react"
+
+export const beneficiaryTypes = createListCollection({
+  items: [
+    { label: "All Opportunities", value: "" },
+    { label: "Child Labourers", value: "CHILD_LABORER" },
+    { label: "Special Needs", value: "SPECIAL_NEEDS" },
+    { label: "Rescue Dogs", value: "ANIMAL" },
+  ],
+})
+
 export const genders = createListCollection({
   items: [
     { label: "All Genders", value: "" },

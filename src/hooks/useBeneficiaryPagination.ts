@@ -23,6 +23,7 @@ interface UseBeneficiaryPaginationOptions {
 
 interface UseBeneficiaryPaginationReturn {
   beneficiaries: Beneficiaries[]
+  totalCount: number | null
   cursor: string | null
   hasMore: boolean
   isLoading: boolean
@@ -69,6 +70,7 @@ export function useBeneficiaryPagination(
   })
 
   const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([])
+  const [totalCount, setTotalCount] = useState<number | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState<boolean>(true)
   const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -148,6 +150,7 @@ export function useBeneficiaryPagination(
         )
         if (!res.ok) throw new Error("Failed to load beneficiaries")
         const data = await res.json()
+        if (data?.totalCount != null) setTotalCount(data.totalCount)
         const people = (data?.people || []) as Beneficiaries[]
         shuffle(people)
 
@@ -293,6 +296,7 @@ export function useBeneficiaryPagination(
 
   return {
     beneficiaries,
+    totalCount,
     cursor,
     hasMore,
     isLoading,

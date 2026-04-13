@@ -68,21 +68,31 @@ export async function fetchActivitiesByBeneficiaryId(
 }
 
 /**
- * Fetch ALL Budget Fulfilled beneficiaries, annotated with the timestamp of
+ * Fetch Budget Fulfilled beneficiaries, annotated with the timestamp of
  * their most recent public activity (null if none exists).
  *
- * Ordering: children with activity appear first (most recent first),
- * then children without activity sorted alphabetically by name.
+ * Pass `beneficiaryTypes` to restrict to specific DB beneficiary_type values.
+ * When omitted, all types are included.
+ *
+ * Ordering: beneficiaries with activity appear first (most recent first),
+ * then those without activity sorted alphabetically by name.
  */
-export async function fetchAllSponsored(): Promise<SponsoredBeneficiary[]> {
+export async function fetchAllSponsored(
+  beneficiaryTypes?: string[],
+): Promise<SponsoredBeneficiary[]> {
   const supabase = createClient()
 
-  const { data: beneficiaries, error } = await supabase
+  let query = supabase
     .from("beneficiaries")
     .select("*")
-    .eq("beneficiary_type", "CHILD")
     .eq("status", "Budget Fulfilled")
     .order("name", { ascending: true })
+
+  if (beneficiaryTypes && beneficiaryTypes.length > 0) {
+    query = query.in("beneficiary_type", beneficiaryTypes)
+  }
+
+  const { data: beneficiaries, error } = await query
 
   if (error || !beneficiaries || beneficiaries.length === 0) {
     if (error) console.error("Error fetching sponsored beneficiaries:", error)
