@@ -16,9 +16,7 @@ import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
 import SponsorshipFilters from "@/app/sponsorships/components/SponsorshipFilters"
 import FloatingActionBar from "@/components/admin-ui/FloatingActionBar"
-import BeneficiaryTypeNav from "@/components/BeneficiaryTypeNav"
 import {
-  ALL_BENEFICIARY_TABS,
   BeneficiaryTabType,
   getApiTypes,
   getMaxAgeYears,
@@ -509,39 +507,32 @@ const ChildrenTable = () => {
       showResults={true}
       noResultsMessage="No beneficiaries found matching your search."
     >
-      {/* Beneficiary Type Sub-Nav — reusable component */}
-      <BeneficiaryTypeNav
-        tabs={ALL_BENEFICIARY_TABS}
-        activeType={activeType}
-        onChange={handleTypeChange}
-        isAdminMode={true}
-        className="mb-6"
-      />
-
       {/* Filters */}
       <Box mb={6}>
         <SponsorshipFilters
           onFilterChange={handleFilterChange}
-          beneficiaryType={
-            activeType === "ANIMAL" ? "ANIMAL" : "CHILD"
-          }
+          beneficiaryType={activeType === "ANIMAL" ? "ANIMAL" : "CHILD"}
           isAdminMode={true}
+          activeType={activeType}
+          onTypeChange={handleTypeChange}
         />
       </Box>
 
       {/* Status Badges */}
-      <Flex gap={3} mb={6} flexWrap="wrap">
-        <Button colorPalette="gray" size="lg" px={4} py={2} onClick={handleTotalBadgeClick} variant="subtle" style={{ cursor: "pointer", fontWeight: "normal" }}>
+      <Flex gap={2} mb={6} flexWrap="wrap">
+        <Button colorPalette="gray" size="sm" px={3} borderRadius="full" onClick={handleTotalBadgeClick} variant="subtle" style={{ cursor: "pointer", fontWeight: "normal", fontSize: "0.75rem" }}>
           Total: {stats.total}
         </Button>
         {Object.entries(stats.statusCounts).map(([status, count]) => (
           <Button
             key={status}
             colorPalette={getStatusBadgeColor(status)}
-            size="lg" px={4} py={2}
+            size="sm"
+            px={3}
+            borderRadius="full"
             onClick={() => handleStatusBadgeClick(status)}
             variant="subtle"
-            style={{ cursor: "pointer", fontWeight: "normal" }}
+            style={{ cursor: "pointer", fontWeight: "normal", fontSize: "0.75rem" }}
           >
             {status}: {count}
           </Button>
