@@ -382,10 +382,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       if (!res.ok) {
         if (data?.error === "DUPLICATE_SPONSORSHIP") {
           toaster.create({
-            title: "Child Already Sponsored",
+            title: "Already Sponsored",
             description:
               data?.message ||
-              "This child already has an active sponsorship. Please choose a different child to sponsor.",
+              "This beneficiary already has an active sponsorship. Please choose a different one.",
             duration: 8000,
           })
           setTimeout(() => onClose(), 2000)
@@ -654,7 +654,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       >
         <DialogHeader className="bg-[#2b7ff9] text-white px-8 py-6">
           <Text fontSize="xl" fontWeight="bold">
-            {beneficiary.name || "Sponsor a Child"}
+            {beneficiary.name || "Sponsor"}
           </Text>
           <DialogCloseTrigger className="text-white hover:bg-white/20" />
         </DialogHeader>
@@ -669,7 +669,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             {/* LEFT COLUMN - Image & Basic Info */}
             <Box flex={{ base: "1", md: "0 0 40%" }} className="flex flex-col">
               <Box className="relative">
-                {/* Status pill: only shown for non-sponsored children; sponsored state is conveyed by the ribbon */}
+                {/* Status pill: only shown for non-sponsored beneficiaries; sponsored state is conveyed by the ribbon */}
                 {!alreadyFulfilled && (
                   <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#2b7ff9] rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
                     <FaCircleInfo />
@@ -692,7 +692,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     getImageSrc={getImageSrc}
                     getThumbnailSrc={getThumbnailSrc}
                     fallbackSrc={PERSON_PLACEHOLDER_PATH}
-                    alt={beneficiary.name || "Child"}
+                    alt={beneficiary.name || "Beneficiary"}
                     className="rounded-2xl aspect-[4/5] object-cover"
                     showArrowsOnHover={true}
                   />
@@ -870,18 +870,18 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     <FaCircleCheck size={28} color="#2b7ff9" />
                   </Flex>
                   <Text className="text-lg font-semibold text-gray-900">
-                    This child is fully sponsored
+                    This beneficiary is fully sponsored
                   </Text>
                   <Text className="text-gray-700 leading-relaxed text-sm md:text-base">
                     {firstName} is already receiving support. You can still
-                    share their story, or find another child to sponsor.
+                    share their story, or find another to sponsor.
                   </Text>
                   <Button
                     onClick={onClose}
                     className="w-full h-11 text-sm font-semibold bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] rounded-xl transition-all shadow-md hover:shadow-lg"
                   >
                     <FaArrowDown className="mr-2" />
-                    Sponsor a child like {firstName}
+                    Sponsor someone like {firstName}
                   </Button>
                 </>
               ) : (
