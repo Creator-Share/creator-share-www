@@ -69,6 +69,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
 }) => {
   const pathname = usePathname()
   const filtersRef = useRef<HTMLDivElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
   const previousUrlRef = useRef<string | null>(null)
 
   const [isFiltersSticky, setIsFiltersSticky] = useState(false)
@@ -86,7 +87,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
   const activeTypeRef = useRef<BeneficiaryTabType | null>(null)
   activeTypeRef.current = activeType
 
-  const { beneficiaries, totalCount, hasMore, isLoading, handleFilterChange, loadMore } =
+  const { beneficiaries, totalCount, hasMore, isLoading, isRefreshing, handleFilterChange, loadMore } =
     useBeneficiaryPagination({
       recordsPerPage: 9,
       autoRetry: true,
@@ -96,6 +97,29 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
   // Stable ref so the filter-sync effect never needs handleFilterChange as a dep.
   const handleFilterChangeRef = useRef(handleFilterChange)
   handleFilterChangeRef.current = handleFilterChange
+
+  // Scroll the viewport up so the unified card's top edge sits just below
+  // the sticky navbar. Only fires when the user is already scrolled past that
+  // point so interacting with filters while at the top of the page is a no-op.
+  const scrollToCard = useCallback(() => {
+    if (!cardRef.current) return
+    const NAVBAR_HEIGHT = 72
+    const cardTop = cardRef.current.getBoundingClientRect().top + window.scrollY
+    const target = Math.max(0, cardTop - NAVBAR_HEIGHT)
+    if (window.scrollY > target) {
+      window.scrollTo({ top: target, behavior: "smooth" })
+    }
+  }, [])
+
+  // Exposed to SponsorshipFilters — wraps the pagination handler with a
+  // smooth scroll back to the top of the unified card.
+  const handleFilterChangeAndScroll = useCallback(
+    (...args: Parameters<typeof handleFilterChange>) => {
+      handleFilterChange(...args)
+      scrollToCard()
+    },
+    [handleFilterChange, scrollToCard],
+  )
 
   // Sync the pagination filter whenever activeType changes (from hero, URL nav, or popstate).
   useEffect(() => {
@@ -124,6 +148,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
 
   const handleTypeChange = useCallback((type: BeneficiaryTabType | null) => {
     onTypeChange(type)
+    scrollToCard()
 
     // Update the URL so the link is shareable / bookmarkable, without
     // triggering a full Next.js page navigation.
@@ -131,18 +156,25 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
     if (typeof window !== "undefined") {
       window.history.pushState({ beneficiaryType: type }, "", route)
     }
-  }, [onTypeChange])
+  }, [onTypeChange, scrollToCard])
 
-  // Sticky filter detection
+  // Sticky filter detection — only meaningful at lg+ where position:sticky applies.
+  // Below that breakpoint the filter scrolls with the page so isFiltersSticky
+  // must stay false regardless of scroll position.
   const handleScroll = useCallback(() => {
     if (!filtersRef.current) return
-    setIsFiltersSticky(filtersRef.current.getBoundingClientRect().top <= 64)
+    const isLgViewport = window.innerWidth >= 992
+    setIsFiltersSticky(isLgViewport && filtersRef.current.getBoundingClientRect().top <= 64)
   }, [])
 
   useEffect(() => {
     window.addEventListener("scroll", handleScroll, { passive: true })
+    window.addEventListener("resize", handleScroll, { passive: true })
     handleScroll()
-    return () => window.removeEventListener("scroll", handleScroll)
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+      window.removeEventListener("resize", handleScroll)
+    }
   }, [handleScroll])
 
   // Fetch activities whenever the active beneficiary changes (single fetch,
@@ -302,7 +334,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
   }, [bumpUrlSync, onTypeChange])
 
   return (
-    <Box>
+    <Box style={{ animation: "pageContentFadeUp 0.6s 0.32s cubic-bezier(0.22, 1, 0.36, 1) both" }}>
       {/* Horizontal row: sponsored + waiting cards, both filtered by activeType. */}
       <HorizontalSponsorshipRow
         sponsored={sponsored}
@@ -315,27 +347,44 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
         activeType={activeType}
       />
 
-      {/* Sticky filter bar */}
+      {/* Unified card: filter header + primary content grid.
+          Mobile: full-bleed (negates PageWrapper's px-4), no radius, fills
+          remaining viewport height so the page background appears white.
+          Desktop (lg+): inset margins, rounded corners, natural height. */}
       <Box
-        ref={filtersRef}
-        position={{ base: "relative", lg: "sticky" }}
-        top={{ lg: "60px" }}
-        zIndex={100}
+        ref={cardRef}
+        mt={{ base: 4, lg: 8 }}
+        mx={{ base: -4, lg: 5 }}
+        minHeight={{ base: "100dvh", lg: "auto" }}
+        className="bg-white border border-gray-200 lg:rounded-2xl overflow-clip"
+        style={{ boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)" }}
       >
-        <SponsorshipFilters
-          onFilterChange={handleFilterChange}
-          isSticky={isFiltersSticky}
-          beneficiaryType={activeType === "ANIMAL" ? "ANIMAL" : "CHILD"}
-          activeType={activeType}
-          onTypeChange={handleTypeChange}
-          resultCount={totalCount ?? beneficiaries.length}
-          hasMoreResults={totalCount === null && hasMore}
-        />
-      </Box>
+        {/* Filter header — sticky on desktop; hard bottom border separates it from the grid */}
+        <Box
+          ref={filtersRef}
+          position={{ base: "relative", lg: "sticky" }}
+          top={{ lg: "60px" }}
+          zIndex={100}
+          className="bg-white lg:rounded-t-2xl border-b border-gray-200"
+          style={{
+            boxShadow: isFiltersSticky
+              ? "0 4px 16px -4px rgba(0,0,0,0.10)"
+              : undefined,
+          }}
+        >
+          <SponsorshipFilters
+            onFilterChange={handleFilterChangeAndScroll}
+            isSticky={isFiltersSticky}
+            beneficiaryType={activeType === "ANIMAL" ? "ANIMAL" : "CHILD"}
+            activeType={activeType}
+            onTypeChange={handleTypeChange}
+            resultCount={totalCount ?? beneficiaries.length}
+            hasMoreResults={totalCount === null && hasMore}
+            noCard
+          />
+        </Box>
 
-      {/* Primary card grid -- narrower than the row/filters so the sticky
-         filter's bottom border-radius is visible outside the card edges */}
-      <Box mx={{ base: 0, lg: 5 }}>
+        {/* Content grid — shares the unified card; no separate border/shadow */}
         <SponsorshipListings
           beneficiaryData={beneficiaries}
           selectedBeneficiaryId={activeBeneficiary?.id ?? null}
@@ -343,7 +392,9 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
           onLoadMore={loadMore}
           hasMore={hasMore}
           isLoading={isLoading}
+          isRefreshing={isRefreshing}
           onOpenModal={openModal}
+          noCard
         />
       </Box>
 

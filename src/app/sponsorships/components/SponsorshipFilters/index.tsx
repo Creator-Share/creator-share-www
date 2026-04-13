@@ -27,6 +27,8 @@ const SponsorshipFilters: React.FC<
     onTypeChange?: (type: BeneficiaryTabType | null) => void
     resultCount?: number
     hasMoreResults?: boolean
+    /** When true, suppresses own card border/shadow/radius; the parent provides the card frame. */
+    noCard?: boolean
   }
 > = ({
   onFilterChange,
@@ -38,6 +40,7 @@ const SponsorshipFilters: React.FC<
   onTypeChange,
   resultCount,
   hasMoreResults = false,
+  noCard = false,
 }) => {
   const {
     selectedGender,
@@ -51,12 +54,14 @@ const SponsorshipFilters: React.FC<
   // When activeType prop is provided (main page), derive animal mode from it.
   // Otherwise fall back to the beneficiaryType prop (admin/embed).
   const isAnimal =
-    activeType !== undefined ? activeType === "ANIMAL" : beneficiaryType === "ANIMAL"
+    activeType !== undefined
+      ? activeType === "ANIMAL"
+      : beneficiaryType === "ANIMAL"
 
   const defaultMaxAge = isAnimal ? 20 : 14
   const [minAge, setMinAge] = useState<number>(selectedAgeRange[0] || 0)
   const [maxAge, setMaxAge] = useState<number>(
-    selectedAgeRange[1] || defaultMaxAge
+    selectedAgeRange[1] || defaultMaxAge,
   )
 
   const [searchQuery, setSearchQuery] = useState<string>("")
@@ -71,8 +76,17 @@ const SponsorshipFilters: React.FC<
   const hasInitializedRef = useRef(false)
   useEffect(() => {
     if (isAdminMode && mounted && !hasInitializedRef.current) {
-      const allStatuses = ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
-      const hasAllStatuses = allStatuses.every(status => selectedStatus.includes(status))
+      const allStatuses = [
+        "New",
+        "Partially Funded",
+        "Budget Fulfilled",
+        "Draft",
+        "Archived",
+        "Sponsorship Cancelled",
+      ]
+      const hasAllStatuses = allStatuses.every((status) =>
+        selectedStatus.includes(status),
+      )
       if (!hasAllStatuses && selectedStatus.length === 0) {
         hasInitializedRef.current = true
         setStatus(allStatuses)
@@ -167,7 +181,7 @@ const SponsorshipFilters: React.FC<
     e.preventDefault()
 
     const defaultStatus = isAdminMode
-      ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
+      ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived", "Sponsorship Cancelled"]
       : ["New", "Partially Funded", "Sponsorship Cancelled"]
 
     isInternalUpdateRef.current = true
@@ -186,12 +200,16 @@ const SponsorshipFilters: React.FC<
       status: defaultStatus,
       search: "",
     })
+
+    if (onTypeChange) {
+      onTypeChange(null)
+    }
   }
 
   const hasSearchQuery = mounted && searchQuery.trim().length > 0
 
   const modeDefaultStatus = isAdminMode
-    ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived"]
+    ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived", "Sponsorship Cancelled"]
     : ["New", "Partially Funded", "Sponsorship Cancelled"]
 
   const isGenderDefault = isAnimal || (selectedGender ?? "") === ""
@@ -202,14 +220,17 @@ const SponsorshipFilters: React.FC<
     selectedStatus.length === modeDefaultStatus.length &&
     modeDefaultStatus.every((s) => selectedStatus.includes(s))
 
+  const isTypeFiltered = activeType != null
+
   const isDefaultFilters =
-    isGenderDefault && isAgeDefault && isStatusDefault && !hasSearchQuery
+    isGenderDefault && isAgeDefault && isStatusDefault && !hasSearchQuery && !isTypeFiltered
 
   const activeFilterCount = [
     !isGenderDefault,
     !isAgeDefault,
     !isStatusDefault,
     hasSearchQuery,
+    isTypeFiltered,
   ].filter(Boolean).length
 
   const showTypeDropdown = onTypeChange !== undefined
@@ -221,9 +242,10 @@ const SponsorshipFilters: React.FC<
           /* ── Select triggers ── */
           [data-scope="select"][data-part="trigger"] {
             border-radius: 16px !important;
-            background-color: #f3f4f6 !important;
+            background-color: #f9fafb !important;
             border-color: transparent !important;
             box-shadow: none !important;
+            padding-left: 0.44rem !important;
           }
           [data-scope="select"][data-part="trigger"]:hover {
             background-color: #e9eaec !important;
@@ -236,13 +258,9 @@ const SponsorshipFilters: React.FC<
           }
 
           /* ── Age slider ── */
-          [data-scope="slider"][data-part="control"] {
-            padding-top: 4px !important;
-          }
           [data-scope="slider"][data-part="track"] {
             background-color: #e5e7eb !important;
             border-radius: 999px !important;
-            transform: translateY(-4px) !important;
           }
           [data-scope="slider"][data-part="range"] {
             background-color: #2b7ff9 !important;
@@ -251,22 +269,29 @@ const SponsorshipFilters: React.FC<
           [data-scope="slider"][data-part="thumb"] {
             background-color: #ffffff !important;
             border: none !important;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.18), 0 0 0 2px rgba(43,127,249,0.22) !important;
+            box-shadow:
+              0 1px 3px rgba(0, 0, 0, 0.18),
+              0 0 0 2px rgba(43, 127, 249, 0.22) !important;
             width: 16px !important;
             height: 16px !important;
           }
           [data-scope="slider"][data-part="thumb"]:focus-visible {
-            box-shadow: 0 1px 3px rgba(0,0,0,0.18), 0 0 0 3px rgba(43,127,249,0.38) !important;
+            box-shadow:
+              0 1px 3px rgba(0, 0, 0, 0.18),
+              0 0 0 3px rgba(43, 127, 249, 0.38) !important;
             outline: none !important;
           }
         `}
       />
       <Box
-        className={`bg-white border ${isSticky ? "rounded-b-3xl rounded-t-none" : "rounded-3xl"}`}
-        p={{ base: 3, md: 4 }}
-        transition="box-shadow 0.3s ease, border-radius 0.3s ease"
-        style={{
-          boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)",
+        className={noCard ? undefined : `bg-white border ${isSticky ? "rounded-b-3xl rounded-t-none" : "rounded-3xl"}`}
+        pt={{ base: 6, lg: 4 }}
+        pb={{ base: 4, lg: 4 }}
+        px={{ base: 3, md: 4 }}
+        transition={noCard ? undefined : "box-shadow 0.3s ease, border-radius 0.3s ease"}
+        style={noCard ? undefined : {
+          boxShadow:
+            "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)",
         }}
       >
         <Box
@@ -283,12 +308,10 @@ const SponsorshipFilters: React.FC<
           width="100%"
           alignItems="center"
         >
-          {/* Beneficiary Type dropdown — temporarily hidden.
-              The hero selector at the top of the home view handles this for now
-              (HomeHero.tsx type nav + SponsorshipsContainer activeType/onTypeChange).
-              Re-enable by uncommenting when/if we want it back in the filter bar.
-
-          {showTypeDropdown && (
+          {/* Beneficiary Type dropdown — shown whenever onTypeChange is provided.
+              On the home page this stays in sync with the hero nav selector.
+              In admin mode it is the primary type filter. */}
+          {onTypeChange && (
             <Box minW={0}>
               <SelectRoot
                 collection={beneficiaryTypes}
@@ -298,14 +321,14 @@ const SponsorshipFilters: React.FC<
                   const type = raw === "" ? null : (raw as BeneficiaryTabType)
                   onTypeChange(type)
                 }}
-                size="sm"
+                size="xs"
                 className="rounded-2xl w-full"
               >
                 <SelectTrigger css={{ borderRadius: "16px !important" }}>
                   <SelectValueText placeholder="All Opportunities">
                     {() => {
                       const selected = beneficiaryTypes.items.find(
-                        (item) => item.value === (activeType ?? "")
+                        (item) => item.value === (activeType ?? ""),
                       )
                       return selected ? selected.label : "All Opportunities"
                     }}
@@ -321,9 +344,91 @@ const SponsorshipFilters: React.FC<
               </SelectRoot>
             </Box>
           )}
-          */}
 
-          {/* Status — first position */}
+          {/* Gender — not applicable for animals */}
+          {!isAnimal && (
+            <Box minW={0}>
+              <SelectRoot
+                collection={genders}
+                value={selectedGender ? [selectedGender] : [""]}
+                onValueChange={(details) => {
+                  const value = details.items[0]
+                  handleFilterChange({ gender: value?.value || "" })
+                }}
+                size="xs"
+                className="rounded-2xl w-full"
+              >
+                <SelectTrigger css={{ borderRadius: "16px !important" }}>
+                  <SelectValueText placeholder="All Genders">
+                    {() => {
+                      const selected = genders.items.find(
+                        (item) => item.value === selectedGender,
+                      )
+                      return selected ? selected.label : "All Genders"
+                    }}
+                  </SelectValueText>
+                </SelectTrigger>
+                <SelectContent>
+                  {genders.items.map((gender) => (
+                    <SelectItem item={gender} key={gender.value || "all"}>
+                      {gender.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </SelectRoot>
+            </Box>
+          )}
+
+          {/* Age range — hidden for animals */}
+          {!isAnimal && (
+            <Box minW={0} px={2}>
+              <Text
+                mb={0}
+                fontSize="xs"
+                fontWeight="semibold"
+                textAlign="center"
+                color="gray.600"
+              >
+                Age: {minAge}–{maxAge} yrs
+              </Text>
+              <Box mt="-2px">
+                <Slider
+                  size="sm"
+                  value={[minAge, maxAge]}
+                  min={0}
+                  max={defaultMaxAge}
+                  step={1}
+                  variant="solid"
+                  onValueChange={(details) => {
+                    if (details.value && details.value.length >= 2) {
+                      const [newMin, origMax] = details.value
+                      let newMax = origMax
+
+                      const minDistance = 1
+                      if (newMax - newMin < minDistance) {
+                        newMax = Math.max(newMin + minDistance, maxAge)
+                      }
+
+                      setMinAge(newMin)
+                      setMaxAge(newMax)
+
+                      if (sliderDebounceTimeoutRef.current) {
+                        clearTimeout(sliderDebounceTimeoutRef.current)
+                      }
+
+                      sliderDebounceTimeoutRef.current = setTimeout(() => {
+                        isInternalUpdateRef.current = true
+                        handleFilterChange({ ageRange: [newMin, newMax] })
+                      }, 300)
+                    }
+                  }}
+                  showValue
+                />
+              </Box>
+            </Box>
+          )}
+
+          {/* Status */}
           {isAdminMode ? (
             <Tooltip content="Filter by funding status (Admin Only)">
               <Box minW={0}>
@@ -343,6 +448,10 @@ const SponsorshipFilters: React.FC<
                   <SelectTrigger css={{ borderRadius: "16px !important" }}>
                     <SelectValueText placeholder="Select Status">
                       {() => {
+                        const allSelected = statusOptions.items.every((item) =>
+                          selectedStatus.includes(item.value),
+                        )
+                        if (allSelected) return "All States"
                         const selected = statusOptions.items
                           .filter((item) => selectedStatus.includes(item.value))
                           .map((item) => item.label)
@@ -363,12 +472,22 @@ const SponsorshipFilters: React.FC<
             </Tooltip>
           ) : (
             <Box minW={0}>
-              <Box bg="gray.100" borderRadius="16px" p="2px" display="flex" gap={0}>
+              <Box
+                bg="gray.100"
+                borderRadius="16px"
+                p="2px"
+                display="flex"
+                gap={0}
+              >
                 {(
                   [
                     {
                       label: "Waiting",
-                      statuses: ["New", "Partially Funded", "Sponsorship Cancelled"],
+                      statuses: [
+                        "New",
+                        "Partially Funded",
+                        "Sponsorship Cancelled",
+                      ],
                     },
                     {
                       label: "Sponsored",
@@ -390,7 +509,9 @@ const SponsorshipFilters: React.FC<
                       color={isActive ? "#2b7ff9" : "gray.500"}
                       fontWeight={isActive ? "semibold" : "medium"}
                       boxShadow={isActive ? "sm" : "none"}
-                      onClick={() => handleFilterChange({ status: [...statuses] })}
+                      onClick={() =>
+                        handleFilterChange({ status: [...statuses] })
+                      }
                       _hover={{ bg: isActive ? "white" : "gray.200" }}
                       transition="all 0.15s"
                     >
@@ -401,85 +522,6 @@ const SponsorshipFilters: React.FC<
               </Box>
             </Box>
           )}
-
-          {/* Age range — hidden for animals */}
-          {!isAnimal && (
-            <Box minW={0} px={2}>
-              <Text
-                mb={0}
-                fontSize="xs"
-                fontWeight="semibold"
-                textAlign="center"
-                color="gray.600"
-              >
-                Age: {minAge}–{maxAge} yrs
-              </Text>
-              <Slider
-                size="sm"
-                value={[minAge, maxAge]}
-                min={0}
-                max={defaultMaxAge}
-                step={1}
-                variant="solid"
-                onValueChange={(details) => {
-                  if (details.value && details.value.length >= 2) {
-                    const [newMin, origMax] = details.value
-                    let newMax = origMax
-
-                    const minDistance = 1
-                    if (newMax - newMin < minDistance) {
-                      newMax = Math.max(newMin + minDistance, maxAge)
-                    }
-
-                    setMinAge(newMin)
-                    setMaxAge(newMax)
-
-                    if (sliderDebounceTimeoutRef.current) {
-                      clearTimeout(sliderDebounceTimeoutRef.current)
-                    }
-
-                    sliderDebounceTimeoutRef.current = setTimeout(() => {
-                      isInternalUpdateRef.current = true
-                      handleFilterChange({ ageRange: [newMin, newMax] })
-                    }, 300)
-                  }
-                }}
-                showValue
-              />
-            </Box>
-          )}
-
-          {/* Gender — not applicable for animals */}
-          {!isAnimal && <Box minW={0}>
-            <SelectRoot
-              collection={genders}
-              value={selectedGender ? [selectedGender] : [""]}
-              onValueChange={(details) => {
-                const value = details.items[0]
-                handleFilterChange({ gender: value?.value || "" })
-              }}
-              size="xs"
-              className="rounded-2xl w-full"
-            >
-              <SelectTrigger css={{ borderRadius: "16px !important" }}>
-                <SelectValueText placeholder="All Genders">
-                  {() => {
-                    const selected = genders.items.find(
-                      (item) => item.value === selectedGender
-                    )
-                    return selected ? selected.label : "All Genders"
-                  }}
-                </SelectValueText>
-              </SelectTrigger>
-              <SelectContent>
-                {genders.items.map((gender) => (
-                  <SelectItem item={gender} key={gender.value || "all"}>
-                    {gender.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </SelectRoot>
-          </Box>}
 
           {/* Search */}
           <Box minW={0} position="relative">
@@ -538,36 +580,38 @@ const SponsorshipFilters: React.FC<
               </IconButton>
             )}
           </Box>
-
         </Box>
 
         {/* Info strip — always shown when result count is available, collapses otherwise */}
         <Box
           overflow="hidden"
           style={{
-            maxHeight: resultCount !== undefined || !isDefaultFilters ? "3.5rem" : 0,
+            maxHeight:
+              resultCount !== undefined || !isDefaultFilters ? "3.5rem" : 0,
             opacity: resultCount !== undefined || !isDefaultFilters ? 1 : 0,
             transition: "max-height 0.25s ease, opacity 0.2s ease",
           }}
           px={0}
           pt={1.5}
-          pb={0}
+          pb={{ base: 2, lg: 0 }}
           display="flex"
           justifyContent="space-between"
           alignItems="center"
         >
-          {/* Left: result count */}
-          <Text fontSize="xs" color="gray.400" lineHeight="1">
+          {/* Left: result count — extra left padding (double the card's own px) */}
+          <Text fontSize="xs" color="gray.400" lineHeight="1" pl={{ base: 3, md: 4 }}>
             {resultCount !== undefined
               ? `${resultCount}${hasMoreResults ? "+" : ""} shown`
               : null}
           </Text>
 
-          {/* Right: active filter count + clear link */}
-          <Text fontSize="xs" color="gray.500" lineHeight="1">
+          {/* Right: active filter count + clear link — extra right padding (double the card's own px) */}
+          <Text fontSize="xs" color="gray.500" lineHeight="1" pr={{ base: 3, md: 4 }}>
             {!isDefaultFilters && (
               <>
-                {activeFilterCount === 1 ? "1 active filter" : `${activeFilterCount} active filters`}
+                {activeFilterCount === 1
+                  ? "1 active filter"
+                  : `${activeFilterCount} active filters`}
                 {" — "}
                 <Box
                   as="button"

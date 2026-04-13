@@ -32,11 +32,15 @@ export interface BeneficiaryListingsProps {
   selectedBeneficiaryId: string | null
   selectedCountry: string | null
   isLoading?: boolean
+  /** When true, a fresh filter-change fetch is in progress; stale cards are shown dimmed to preserve page height and scroll position. */
+  isRefreshing?: boolean
   setSelectedBeneficiaryId?: (id: string | null) => void
   mapBounds?: LatLngBounds
   beneficiaryType?: BeneficiaryTabType
   /** Called when a card is clicked; container owns the modal. */
   onOpenModal?: (beneficiary: Beneficiaries) => void
+  /** When true, suppresses the component's own card border/shadow/radius so a parent can provide the card frame. */
+  noCard?: boolean
 }
 
 export interface BeneficiaryCardProps {

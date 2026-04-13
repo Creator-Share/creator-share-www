@@ -28,6 +28,8 @@ interface UseBeneficiaryPaginationReturn {
   cursor: string | null
   hasMore: boolean
   isLoading: boolean
+  /** True while a fresh (non-pagination) fetch is in flight. The previous page's data stays visible during this time. */
+  isRefreshing: boolean
   filters: FiltersState
   setFilters: (
     filters: FiltersState | ((prev: FiltersState) => FiltersState)
@@ -75,6 +77,7 @@ export function useBeneficiaryPagination(
   const [cursor, setCursor] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState<boolean>(true)
   const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
   const [retryCount, setRetryCount] = useState<number>(0)
 
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -130,13 +133,14 @@ export function useBeneficiaryPagination(
     async (nextCursor: string | null) => {
       const queryString = buildQuery(nextCursor)
 
-      // Abort any in-flight request and clear stale results immediately so the
-      // UI shows a loading state rather than the previous type's cards.
+      // Abort any in-flight request. Stale data is kept visible (dimmed) while
+      // the new page loads so the page height doesn't collapse and scroll
+      // position is preserved. isRefreshing signals the UI to apply the overlay.
       if (nextCursor === null) {
         if (abortControllerRef.current) {
           abortControllerRef.current.abort()
         }
-        setBeneficiaries([])
+        setIsRefreshing(true)
       }
 
       const controller = new AbortController()
@@ -225,6 +229,7 @@ export function useBeneficiaryPagination(
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null
           setIsLoading(false)
+          if (nextCursor === null) setIsRefreshing(false)
         }
       }
     },
@@ -299,6 +304,7 @@ export function useBeneficiaryPagination(
     cursor,
     hasMore,
     isLoading,
+    isRefreshing,
     filters,
     setFilters,
     handleFilterChange,

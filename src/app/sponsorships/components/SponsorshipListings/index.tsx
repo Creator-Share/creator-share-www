@@ -12,6 +12,7 @@ const BeneficiaryListings = React.forwardRef<
     onLoadMore?: () => void
     hasMore?: boolean
     isLoading?: boolean
+    isRefreshing?: boolean
   }
 >(
   (
@@ -24,7 +25,9 @@ const BeneficiaryListings = React.forwardRef<
       onLoadMore,
       hasMore = false,
       isLoading = false,
+      isRefreshing = false,
       onOpenModal,
+      noCard = false,
     },
     ref,
   ) => {
@@ -140,9 +143,9 @@ const BeneficiaryListings = React.forwardRef<
           else if (ref) ref.current = el
         }}
         width="100%"
-        className="border bg-white rounded-2xl"
-        mt={4}
-        style={{ boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)" }}
+        className={noCard ? undefined : "border bg-white rounded-2xl"}
+        mt={noCard ? 0 : 4}
+        style={noCard ? undefined : { boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)" }}
         suppressHydrationWarning={true}
       >
         <BlindSponsorshipModal
@@ -150,9 +153,19 @@ const BeneficiaryListings = React.forwardRef<
           onClose={() => setBlindModalOpen(false)}
         />
 
+        {/* Card grid -- shown with stale data dimmed while a fresh fetch is in
+            flight, preserving page height so scroll position doesn't jump. */}
         {filteredBeneficiaries.length > 0 && (
-          <Box p={{ base: 4, lg: 8 }}>
-            <SimpleGrid columns={{ base: 1, sm: 2, md: 3, xl: 4 }} gap="1rem">
+          <Box
+            position="relative"
+            pt={{ base: 6, lg: 8 }}
+            pb={{ base: 4, lg: 8 }}
+            px={{ base: 4, lg: 8 }}
+            opacity={isRefreshing ? 0.4 : 1}
+            pointerEvents={isRefreshing ? "none" : undefined}
+            style={{ transition: "opacity 0.15s" }}
+          >
+            <SimpleGrid columns={{ base: 2, md: 3, xl: 4 }} gap="1rem" className="child-card-grid">
               {filteredBeneficiaries.map((beneficiary) =>
                 beneficiary.id ? (
                   <Box
@@ -177,13 +190,28 @@ const BeneficiaryListings = React.forwardRef<
           </Box>
         )}
 
-        {isLoading && (
+        {/* Overlay spinner for filter-change refreshes (stale cards visible above) */}
+        {isRefreshing && filteredBeneficiaries.length > 0 && (
+          <Flex justify="center" py={8} align="center">
+            <Spinner size="xl" color="gray.400" />
+          </Flex>
+        )}
+
+        {/* Bottom spinner for "load more" pagination */}
+        {isLoading && !isRefreshing && (
           <Flex justify="center" py={12} align="center">
             <Spinner size="xl" color="gray.300" />
           </Flex>
         )}
 
-        {!isLoading && (
+        {/* Initial load spinner -- no stale cards to show yet */}
+        {isRefreshing && filteredBeneficiaries.length === 0 && (
+          <Flex justify="center" py={12} align="center">
+            <Spinner size="xl" color="gray.300" />
+          </Flex>
+        )}
+
+        {!isLoading && !isRefreshing && (
           <>
             {filteredBeneficiaries.length === 0 && (
               <Flex
