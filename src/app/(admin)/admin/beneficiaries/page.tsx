@@ -23,7 +23,6 @@ import {
 } from "@/config/beneficiaryTypes"
 import {
   ALL_STATUSES,
-  ACTIVE_STATUSES,
   STATUS_DISPLAY_CONFIG,
 } from "@/config/beneficiaryStatuses"
 

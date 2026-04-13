@@ -254,7 +254,7 @@ export function PageNavbar() {
             asChild
           >
             <a
-              href="/#faq"
+              href="#faq"
               onClick={(e) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()
@@ -272,7 +272,7 @@ export function PageNavbar() {
             asChild
           >
             <a
-              href="/#about"
+              href="#about"
               onClick={(e) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()

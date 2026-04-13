@@ -19,7 +19,6 @@ import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
 
 const SponsorshipFilters: React.FC<
   FiltersProps & {
-    variant?: "default" | "sidebar"
     isAdminMode?: boolean
     isSticky?: boolean
     activeType?: BeneficiaryTabType | null
@@ -31,7 +30,6 @@ const SponsorshipFilters: React.FC<
   }
 > = ({
   onFilterChange,
-  variant = "default",
   beneficiaryType = "CHILD",
   isAdminMode = false,
   isSticky = false,
@@ -231,8 +229,6 @@ const SponsorshipFilters: React.FC<
     hasSearchQuery,
     isTypeFiltered,
   ].filter(Boolean).length
-
-  const showTypeDropdown = onTypeChange !== undefined
 
   return (
     <>
