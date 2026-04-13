@@ -38,7 +38,7 @@ import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
 import BeneficiaryActivity, { SHOW_MORE_CLASS } from "../SponsorshipActivity"
 import { FAQModal } from "@/components/FAQModal"
-import { getDefaultSponsorshipAmount } from "@/components/BeneficiaryTypeNav"
+import { getDefaultSponsorshipAmount } from "@/config/beneficiaryTypes"
 
 // PayPal components are optional and loaded only when the env var is set.
 // Using next/dynamic avoids the broken module-level let + fire-and-forget import()
@@ -382,10 +382,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       if (!res.ok) {
         if (data?.error === "DUPLICATE_SPONSORSHIP") {
           toaster.create({
-            title: "Child Already Sponsored",
+            title: "Already Sponsored",
             description:
               data?.message ||
-              "This child already has an active sponsorship. Please choose a different child to sponsor.",
+              "This beneficiary already has an active sponsorship. Please choose a different one.",
             duration: 8000,
           })
           setTimeout(() => onClose(), 2000)
@@ -573,7 +573,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       <button
         type="button"
         onClick={() => setFaqOpen(true)}
-        className="group inline-flex cursor-pointer items-center gap-2 border-0 bg-transparent p-0 pb-0.5 text-sm md:text-base font-medium text-[#0654C6] border-b border-[#0654C6]/35 transition-colors hover:text-[#0545A5] hover:border-[#0545A5]/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0654C6]/40 focus-visible:ring-offset-2 rounded-sm"
+        className="group inline-flex cursor-pointer items-center gap-2 border-0 bg-transparent p-0 pb-0.5 text-sm md:text-base font-medium text-[#2b7ff9] border-b border-[#2b7ff9]/35 transition-colors hover:text-[#1a6fe0] hover:border-[#1a6fe0]/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2b7ff9]/40 focus-visible:ring-offset-2 rounded-sm"
       >
         <span>Common questions</span>
         <FaArrowRight
@@ -652,9 +652,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           borderRadius: "24px",
         }}
       >
-        <DialogHeader className="bg-[#1C3C8C] text-white px-8 py-6">
+        <DialogHeader className="bg-[#2b7ff9] text-white px-8 py-6">
           <Text fontSize="xl" fontWeight="bold">
-            {beneficiary.name || "Sponsor a Child"}
+            {beneficiary.name || "Sponsor"}
           </Text>
           <DialogCloseTrigger className="text-white hover:bg-white/20" />
         </DialogHeader>
@@ -669,9 +669,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             {/* LEFT COLUMN - Image & Basic Info */}
             <Box flex={{ base: "1", md: "0 0 40%" }} className="flex flex-col">
               <Box className="relative">
-                {/* Status pill: only shown for non-sponsored children; sponsored state is conveyed by the ribbon */}
+                {/* Status pill: only shown for non-sponsored beneficiaries; sponsored state is conveyed by the ribbon */}
                 {!alreadyFulfilled && (
-                  <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#0654C6] rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
+                  <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#2b7ff9] rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
                     <FaCircleInfo />
                     <Text className="text-xs font-semibold">
                       {getStatusText(beneficiary.status)}
@@ -684,7 +684,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 >
                   {imageLoading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
-                      <Spinner size="lg" color="#0654C6" />
+                      <Spinner size="lg" color="#2b7ff9" />
                     </div>
                   )}
                   <ImageCarousel
@@ -692,7 +692,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     getImageSrc={getImageSrc}
                     getThumbnailSrc={getThumbnailSrc}
                     fallbackSrc={PERSON_PLACEHOLDER_PATH}
-                    alt={beneficiary.name || "Child"}
+                    alt={beneficiary.name || "Beneficiary"}
                     className="rounded-2xl aspect-[4/5] object-cover"
                     showArrowsOnHover={true}
                   />
@@ -709,7 +709,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   className="text-gray-600 text-sm"
                 >
                   <Flex align="center" gap={1.5}>
-                    <FaCalendar className="text-[#0654C6]" />
+                    <FaCalendar className="text-[#2b7ff9]" />
                     <Text className="text-sm">
                       {beneficiary.birth_date
                         ? `${Math.floor(
@@ -721,13 +721,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     </Text>
                   </Flex>
                   <Flex align="center" gap={1.5}>
-                    <FaUser className="text-[#0654C6]" />
+                    <FaUser className="text-[#2b7ff9]" />
                     <Text className="text-sm">
                       {beneficiary.gender || "Gender"}
                     </Text>
                   </Flex>
                   <Flex align="center" gap={1.5}>
-                    <FaLocationDot className="text-[#0654C6]" />
+                    <FaLocationDot className="text-[#2b7ff9]" />
                     <Text className="text-sm">
                       {beneficiary.country || "Location"}
                     </Text>
@@ -768,7 +768,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     <Text className="text-sm font-medium text-gray-600">
                       Sponsorship Progress
                     </Text>
-                    <Text className="text-lg font-bold text-[#0654C6]">
+                    <Text className="text-lg font-bold text-[#2b7ff9]">
                       {beneficiary.budget_goal > 0
                         ? Math.round(
                             (beneficiary.budget_raised /
@@ -781,7 +781,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   </Flex>
                   <Box className="w-full bg-gray-200 h-3 rounded-full overflow-hidden">
                     <Box
-                      className="bg-[#0654C6] h-full rounded-full transition-all duration-300"
+                      className="bg-[#2b7ff9] h-full rounded-full transition-all duration-300"
                       style={{
                         width: `${
                           beneficiary.budget_goal > 0
@@ -867,26 +867,26 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               {alreadyFulfilled ? (
                 <>
                   <Flex justify="center">
-                    <FaCircleCheck size={28} color="#0654C6" />
+                    <FaCircleCheck size={28} color="#2b7ff9" />
                   </Flex>
                   <Text className="text-lg font-semibold text-gray-900">
-                    This child is fully sponsored
+                    This beneficiary is fully sponsored
                   </Text>
                   <Text className="text-gray-700 leading-relaxed text-sm md:text-base">
                     {firstName} is already receiving support. You can still
-                    share their story, or find another child to sponsor.
+                    share their story, or find another to sponsor.
                   </Text>
                   <Button
                     onClick={onClose}
-                    className="w-full h-11 text-sm font-semibold bg-[#0654C6] text-white hover:bg-[#0545A5] rounded-xl transition-all shadow-md hover:shadow-lg"
+                    className="w-full h-11 text-sm font-semibold bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] rounded-xl transition-all shadow-md hover:shadow-lg"
                   >
                     <FaArrowDown className="mr-2" />
-                    Sponsor a child like {firstName}
+                    Sponsor someone like {firstName}
                   </Button>
                 </>
               ) : (
                 <>
-                  {/*                   <Text className="text-xl font-normal text-[#0654C6]/75 mb-8">
+                  {/*                   <Text className="text-xl font-normal text-[#2b7ff9]/75 mb-8">
                     Monthly Sponsorship Amount
                   </Text> */}
                   <Flex
@@ -925,7 +925,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                         </Flex>
                       ) : (
                         <Flex
-                          className="border border-gray-300 rounded-xl bg-white focus-within:border-[#0654C6] transition-colors overflow-hidden"
+                          className="border border-gray-300 rounded-xl bg-white focus-within:border-[#2b7ff9] transition-colors overflow-hidden"
                           align="center"
                           h="56px"
                         >
@@ -954,7 +954,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                         loading={loading}
                         loadingText="Processing..."
                         disabled={loading || !canPay}
-                        className={`w-full h-[3.25rem] text-lg font-semibold bg-[#0654C6] text-white hover:bg-[#0545A5] rounded-xl transition-all shadow-md hover:shadow-lg${
+                        className={`w-full h-[3.25rem] text-lg font-semibold bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] rounded-xl transition-all shadow-md hover:shadow-lg${
                           !canPay ? " opacity-50 cursor-not-allowed" : ""
                         }`}
                       >

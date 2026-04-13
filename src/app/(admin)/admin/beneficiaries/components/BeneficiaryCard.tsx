@@ -5,7 +5,7 @@ import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Beneficiaries } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
-import { getDefaultSponsorshipAmount } from "@/components/BeneficiaryTypeNav"
+import { getDefaultSponsorshipAmount } from "@/config/beneficiaryTypes"
 
 interface BeneficiaryCardProps {
   beneficiary: Beneficiaries
@@ -161,7 +161,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           </Box>
           <Progress.Root value={progress}>
             <Progress.Track className="rounded-xl h-2">
-              <Progress.Range className="bg-[#1C3C8C]" />
+              <Progress.Range className="bg-[#2b7ff9]" />
             </Progress.Track>
           </Progress.Root>
         </Box>
@@ -173,7 +173,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       {/* Edit button - always at bottom */}
       <Box className="mt-3">
         <Button
-          className="w-full bg-[#1C3C8C] text-white"
+          className="w-full bg-[#2b7ff9] text-white"
           onClick={(e) => {
             e.stopPropagation()
             onEdit(beneficiary)

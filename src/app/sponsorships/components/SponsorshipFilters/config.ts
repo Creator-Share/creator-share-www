@@ -1,4 +1,16 @@
 import { createListCollection } from "@chakra-ui/react"
+import { ALL_BENEFICIARY_TABS } from "@/config/beneficiaryTypes"
+import { ALL_STATUSES } from "@/config/beneficiaryStatuses"
+
+export const beneficiaryTypes = createListCollection({
+  items: [
+    { label: "All Opportunities", value: "" },
+    ...ALL_BENEFICIARY_TABS.filter(
+      (tab) => !tab.isLegacyAlias && tab.isPubliclyVisible && tab.type !== null,
+    ).map((tab) => ({ label: tab.label, value: tab.type as string })),
+  ],
+})
+
 export const genders = createListCollection({
   items: [
     { label: "All Genders", value: "" },
@@ -8,14 +20,7 @@ export const genders = createListCollection({
 })
 
 export const status = createListCollection({
-  items: [
-    { label: "New", value: "New" },
-    { label: "Partially Funded", value: "Partially Funded" },
-    { label: "Budget Fulfilled", value: "Budget Fulfilled" },
-    { label: "Draft", value: "Draft" },
-    { label: "Archived", value: "Archived" },
-    { label: "Sponsorship Cancelled", value: "Sponsorship Cancelled" },
-  ],
+  items: ALL_STATUSES.map((s) => ({ label: s, value: s })),
 })
 
 export const ageOptions = createListCollection({

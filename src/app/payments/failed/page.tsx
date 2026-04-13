@@ -106,7 +106,7 @@ const FailedPageContent = () => {
           fontSize="2xl"
           fontWeight="bold"
           mb={4}
-          color="#1C3C8C"
+          color="#2b7ff9"
           className="text-center"
         >
           Sorry that didn't work out
@@ -129,7 +129,7 @@ const FailedPageContent = () => {
             size="md"
             width="full"
             borderRadius="md"
-            bg="#1C3C8C"
+            bg="#2b7ff9"
             _hover={{ bg: "#34495e" }}
             color={"#FFFFFF"}
             fontWeight={"semibold"}

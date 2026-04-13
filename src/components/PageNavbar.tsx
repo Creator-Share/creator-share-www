@@ -139,28 +139,28 @@ export function PageNavbar() {
     router.push("/")
   }
 
-  if (!mounted) return null
-
+  // Render the full navbar structure on every render (including SSR).
+  // Auth-dependent UI is guarded by {mounted && ...} to avoid hydration
+  // mismatches with client-side auth state while keeping the navbar height
+  // stable from the very first paint.
   return (
     <>
-      <AboutUsModal 
-        open={aboutUsOpen} 
-        onClose={() => setAboutUsOpen(false)} 
-        defaultTab={aboutUsDefaultTab}
-      />
-      <FAQModal
-        open={faqOpen}
-        onClose={() => setFaqOpen(false)}
-      />
-      <SignInModal
-        open={signInOpen}
-        onClose={() => setSignInOpen(false)}
-      />
+      {mounted && (
+        <>
+          <AboutUsModal
+            open={aboutUsOpen}
+            onClose={() => setAboutUsOpen(false)}
+            defaultTab={aboutUsDefaultTab}
+          />
+          <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} />
+          <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
+        </>
+      )}
       <Box 
-        className={`w-full z-[1000] sticky top-0 transition-all duration-300 ${
+        className={`w-full z-[1000] sticky top-0 transition-all duration-500 ${
           isScrolled 
             ? "bg-white border-b border-gray-200" 
-            : "bg-white"
+            : "bg-transparent border-b border-transparent"
         }`}
         style={{
           boxShadow: isScrolled 
@@ -178,7 +178,12 @@ export function PageNavbar() {
           }}
         >
         {/* Logo: larger at top on homepage only; other routes stay compact */}
-        <Box className="flex items-center flex-shrink-0 overflow-visible">
+        <Box
+          className="flex items-center flex-shrink-0 overflow-visible"
+          style={{
+            animation: "pageLogoSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
+          }}
+        >
           <NextLink href="/" passHref>
             <Image
               src="/logo_text.svg"
@@ -235,48 +240,73 @@ export function PageNavbar() {
 
         {/* Right Actions */}
         <Flex
-          gap={4}
+          gap={1}
           display={{ base: "none", md: "flex" }}
           alignItems="center"
+          style={{
+            animation: "pageNavRightIn 0.5s 0.07s cubic-bezier(0.22, 1, 0.36, 1) both",
+          }}
         >
           <Button
             size="sm"
             variant="ghost"
+            borderRadius="full"
             asChild
           >
-            <a href="https://tanzania.creatorshare.com/" target="_blank" rel="noopener noreferrer">
-              Foundation
+            <a
+              href="#faq"
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                e.preventDefault()
+                window.history.replaceState(null, "", "#faq")
+                setFaqOpen(true)
+              }}
+            >
+              FAQ
             </a>
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => {
-              window.history.replaceState(null, "", "#faq")
-              setFaqOpen(true)
-            }}
+            borderRadius="full"
+            asChild
           >
-            FAQ
+            <a
+              href="#about"
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                e.preventDefault()
+                window.history.replaceState(null, "", "#about")
+                setAboutUsOpen(true)
+              }}
+            >
+              About Us
+            </a>
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              window.history.replaceState(null, "", "#about")
-              setAboutUsOpen(true)
-            }}
-          >
-            About Us
-          </Button>
-          {user ? (
+          {mounted && user ? (
             <>
               {isAdmin && (
                 <Button
                   size="sm"
-                  variant={pathname?.startsWith("/admin") ? "solid" : "ghost"}
-                  onClick={() => router.push("/admin")}
+                  variant="ghost"
+                  borderRadius="full"
+                  asChild
+                  style={pathname?.startsWith("/admin") ? {
+                    textDecoration: "underline",
+                    textUnderlineOffset: "4px",
+                    fontWeight: 600,
+                  } : undefined}
                 >
-                  Admin Dashboard
+                  <a
+                    href="/admin"
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                      e.preventDefault()
+                      router.push("/admin")
+                    }}
+                  >
+                    Admin Dashboard
+                  </a>
                 </Button>
               )}
               {/* Temporarily hidden
@@ -290,7 +320,7 @@ export function PageNavbar() {
               */}
               <Menu.Root>
                 <Menu.Trigger asChild>
-                  <Button size="sm" variant="ghost">
+                  <Button size="sm" variant="ghost" borderRadius="full">
                     My Account ({user.email})
                   </Button>
                 </Menu.Trigger>
@@ -311,47 +341,57 @@ export function PageNavbar() {
                 </Portal>
               </Menu.Root>
             </>
-          ) : (
+          ) : mounted ? (
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => {
-                window.history.pushState({ modal: true }, "", "/login")
-                setSignInOpen(true)
-              }}
+              borderRadius="full"
+              asChild
             >
-              Sign In
+              <a
+                href="/login"
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                  e.preventDefault()
+                  window.history.pushState({ modal: true }, "", "/login")
+                  setSignInOpen(true)
+                }}
+              >
+                Sign In
+              </a>
             </Button>
-          )}
+          ) : null}
         </Flex>
 
-        {/* Mobile menu: wrapper stays vertically centered while row height animates */}
-        <Box
-          display={{ base: "block", md: "none" }}
-          className="absolute right-4 top-1/2 z-[1101] -translate-y-1/2"
-        >
-          <Button
-            onClick={() => setIsOpen(!isOpen)}
-            aria-label="Toggle Menu"
-            variant="ghost"
-            color={isOpen ? "white" : "inherit"}
-            _hover={{
-              transform: isOpen ? "scale(1.15)" : undefined,
-              bg: isOpen ? "transparent" : undefined,
-            }}
-            transition="transform 0.2s ease"
+        {/* Mobile menu: only rendered client-side (isOpen state is client-driven) */}
+        {mounted && (
+          <Box
+            display={{ base: "block", md: "none" }}
+            className="absolute right-4 top-1/2 z-[1101] -translate-y-1/2"
           >
-            {isOpen ? (
-              <IoClose className="w-6 h-6" />
-            ) : (
-              <GiHamburgerMenu className="w-6 h-6" />
-            )}
-          </Button>
-        </Box>
+            <Button
+              onClick={() => setIsOpen(!isOpen)}
+              aria-label="Toggle Menu"
+              variant="ghost"
+              color={isOpen ? "white" : "inherit"}
+              _hover={{
+                bg: "transparent",
+                transform: isOpen ? "scale(1.15)" : undefined,
+              }}
+              transition="transform 0.2s ease"
+            >
+              {isOpen ? (
+                <IoClose className="w-6 h-6" />
+              ) : (
+                <GiHamburgerMenu className="w-6 h-6" />
+              )}
+            </Button>
+          </Box>
+        )}
       </Flex>
 
       {/* Mobile Menu (Dropdown) */}
-      {isOpen && (
+      {mounted && isOpen && (
         <Box
           className="fixed top-0 left-0 right-0 bg-[#2B7FF9] shadow-lg md:hidden flex flex-col items-center justify-center"
           style={{ height: "100dvh" }}
@@ -359,20 +399,6 @@ export function PageNavbar() {
           pointerEvents="auto"
         >
           <VStack gap={6} py={6}>
-            {/* Foundation - always visible */}
-            <Button
-              size="lg"
-              variant="ghost"
-              color="white"
-              fontSize="xl"
-              _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
-              className="w-full"
-              asChild
-            >
-              <a href="https://tanzania.creatorshare.com/" target="_blank" rel="noopener noreferrer">
-                Foundation
-              </a>
-            </Button>
             {/* FAQ - always visible */}
             <Button
               size="lg"

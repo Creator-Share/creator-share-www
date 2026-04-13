@@ -1,11 +1,10 @@
+import type { Status } from "@/config/beneficiaryStatuses"
+
+// Re-export so consumers importing from "@/types/admin.types" continue to work
+export type { Status }
+
 export type Gender = "Boy" | "Girl"
-export type Status =
-  | "New"
-  | "Partially Funded"
-  | "Budget Fulfilled"
-  | "Archived"
-  | "Draft"
-  | "Sponsorship Cancelled"
+
 export type BeneficiaryType =
   | "CHILD"
   | "ANIMAL"

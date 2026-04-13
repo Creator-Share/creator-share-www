@@ -1,10 +1,11 @@
 import { create } from "zustand"
 import { FilterState } from "@/types/index"
+import { ACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 
 const DEFAULTS = {
   selectedGender: "",
   selectedAgeRange: [0, 14] as [number, number],
-  selectedStatus: ["New", "Partially Funded", "Sponsorship Cancelled"] as string[],
+  selectedStatus: ACTIVE_STATUSES as string[],
 }
 
 export const useFilterStore = create<FilterState>((set, get) => ({

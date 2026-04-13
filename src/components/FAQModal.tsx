@@ -44,7 +44,7 @@ const FAQ_ITEMS: FAQItem[] = [
         <a
           href="https://tanzania.creatorshare.com/partnership"
           target="_blank"
-          className="text-[#1C3C8C] hover:underline font-medium"
+          className="text-[#2b7ff9] hover:underline font-medium"
         >
           Tanzania.CreatorShare.com/partnership
         </a>
@@ -91,7 +91,7 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
           borderRadius: "24px",
         }}
       >
-        <DialogHeader className="bg-[#1C3C8C] text-white px-10 py-6">
+        <DialogHeader className="bg-[#2b7ff9] text-white px-10 py-6">
           <DialogTitle fontSize="xl" fontWeight="bold">
             Frequently Asked Questions
           </DialogTitle>
@@ -116,7 +116,7 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
                     >
                       {item.question}
                     </Text>
-                    <Accordion.ItemIndicator className="text-[#1C3C8C] flex-shrink-0 mt-0.5" />
+                    <Accordion.ItemIndicator className="text-[#2b7ff9] flex-shrink-0 mt-0.5" />
                   </Accordion.ItemTrigger>
                   <Accordion.ItemContent>
                     <Box className="px-6 py-5 border-t border-gray-100">
@@ -149,7 +149,7 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
                 href="https://stripe.creatorshare.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-[#1C3C8C] hover:underline text-sm"
+                className="flex items-center gap-2 text-[#2b7ff9] hover:underline text-sm"
               >
                 <FaExternalLinkAlt className="w-3 h-3" />
                 Manage Subscriptions via Stripe

@@ -7,13 +7,13 @@ import { fetchActivitiesByBeneficiaryId } from "@/actions"
 import BeneficiaryModal from "../components/SponsorshipModal"
 
 /**
- * Lightweight direct-link route for child profiles (e.g. /sponsorships/kfxg0n82).
+ * Lightweight direct-link route for beneficiary profiles (e.g. /sponsorships/kfxg0n82).
  *
  * Only the single beneficiary record is fetched — the full paginated list is
  * intentionally NOT loaded here.  When the modal is closed the user is sent
  * back to the home page (or the previous page if the browser history allows it).
  */
-export default function ChildProfilePage() {
+export default function BeneficiaryProfilePage() {
   const { username } = useParams<{ username: string }>()
   const router = useRouter()
 
@@ -36,11 +36,11 @@ export default function ChildProfilePage() {
           setNotFound(true)
           return null
         }
-        return res.json() as Promise<{ child?: Beneficiaries }>
+        return res.json() as Promise<{ beneficiary?: Beneficiaries }>
       })
       .then((data) => {
-        if (data?.child) {
-          setBeneficiary(data.child)
+        if (data?.beneficiary) {
+          setBeneficiary(data.beneficiary)
         } else if (data !== null) {
           setNotFound(true)
         }
@@ -82,7 +82,7 @@ export default function ChildProfilePage() {
         alignItems="center"
         justifyContent="center"
       >
-        <Spinner size="xl" color="#0654C6" />
+        <Spinner size="xl" color="#2b7ff9" />
       </Box>
     )
   }
@@ -102,7 +102,7 @@ export default function ChildProfilePage() {
         </Text>
         <Text
           as="button"
-          color="#0654C6"
+          color="#2b7ff9"
           textDecor="underline"
           onClick={() => router.push("/")}
         >

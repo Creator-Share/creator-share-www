@@ -206,7 +206,7 @@ export default function SetPasswordPage() {
                         </Alert.Root>
                         <Button
                             onClick={() => router.push("/login")}
-                            className="w-full bg-[#1C3C8C] text-white hover:bg-[#1C3C8C]"
+                            className="w-full bg-[#2b7ff9] text-white hover:bg-[#1a6fe0]"
                         >
                             Go to Login
                         </Button>
@@ -289,7 +289,7 @@ export default function SetPasswordPage() {
                     <Button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-[#1C3C8C] text-white hover:bg-[#1C3C8C] disabled:opacity-50"
+                        className="w-full bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] disabled:opacity-50"
                         py={3}
                     >
                         {loading ? "Setting Password..." : "Set Password"}

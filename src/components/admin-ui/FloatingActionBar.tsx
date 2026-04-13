@@ -1,23 +1,37 @@
 "use client"
 import React from "react"
-import { Box, Flex, Button, Text } from "@chakra-ui/react"
+import { Box, Flex, Button, Text, Spinner } from "@chakra-ui/react"
 import { MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu"
 import { FiChevronDown } from "react-icons/fi"
+import { BULK_ASSIGNABLE_STATUSES } from "@/config/beneficiaryStatuses"
+import { BULK_ASSIGNABLE_TYPES } from "@/config/beneficiaryTypes"
 
 interface FloatingActionBarProps {
   selectedCount: number
+  visibleCount: number
+  totalMatchingCount?: number
+  onSelectVisible: () => void
+  onSelectAllMatching: () => Promise<void>
+  isSelectingAll?: boolean
   onDeselectAll: () => void
   onDelete: () => void
   onSetStatus: (status: string) => void
+  onSetType: (type: string) => void
   onReinstate?: () => void
   hasCancelledSelected?: boolean
 }
 
 const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
   selectedCount,
+  visibleCount,
+  totalMatchingCount,
+  onSelectVisible,
+  onSelectAllMatching,
+  isSelectingAll = false,
   onDeselectAll,
   onDelete,
   onSetStatus,
+  onSetType,
   onReinstate,
   hasCancelledSelected = false,
 }) => {
@@ -26,32 +40,53 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
   return (
     <Box
       className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-gray-200 shadow-lg"
-      style={{
-        transform: "translateZ(0)"
-      }}
+      style={{ transform: "translateZ(0)" }}
     >
       <Box className="container mx-auto px-4 py-4">
-        <Flex
-          gap={3}
-          flexWrap="wrap"
-          justify="center"
-          align="center"
-        >
+        <Flex gap={3} flexWrap="wrap" justify="center" align="center">
+
+          {/* Select dropdown */}
+          <MenuRoot>
+            <MenuTrigger asChild>
+              <Button
+                className="border-[2px] border-[#2B7FF9] rounded-md w-full md:w-fit h-[40px] px-6 bg-white text-[#2B7FF9] hover:bg-[#f0f7ff] flex items-center gap-2"
+                disabled={isSelectingAll}
+              >
+                {isSelectingAll ? <Spinner size="xs" /> : null}
+                Select
+                <FiChevronDown className="w-4 h-4" />
+              </Button>
+            </MenuTrigger>
+            <MenuContent>
+              <MenuItem value="visible" onClick={onSelectVisible}>
+                All visible ({visibleCount} loaded)
+              </MenuItem>
+              <MenuItem
+                value="matching"
+                onClick={onSelectAllMatching}
+                disabled={isSelectingAll}
+              >
+                {isSelectingAll
+                  ? "Fetching..."
+                  : `All matching filters${totalMatchingCount != null ? ` (${totalMatchingCount} total)` : ""}`}
+              </MenuItem>
+            </MenuContent>
+          </MenuRoot>
+
           <Button
             onClick={onDeselectAll}
-            className="border-[2px] border-[#2B7FF9] rounded-md w-full md:w-fit h-[40px] px-10 bg-white text-[#2B7FF9] hover:bg-[#f0f7ff]"
+            className="border-[2px] border-gray-300 rounded-md w-full md:w-fit h-[40px] px-6 bg-white text-gray-600 hover:bg-gray-50"
           >
             Deselect All
           </Button>
 
-          {/* Delete */}
           <Button
             onClick={onDelete}
             className="border-[2px] border-transparent rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ff0000] text-white hover:bg-[#cc0000]"
           >
             Delete ({selectedCount})
           </Button>
-          {/* Reinstate button - only show if there are cancelled children selected */}
+
           {onReinstate && hasCancelledSelected && (
             <Button
               onClick={onReinstate}
@@ -60,6 +95,8 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
               Reinstate to New
             </Button>
           )}
+
+          {/* Set Status dropdown */}
           <MenuRoot>
             <MenuTrigger asChild>
               <Button
@@ -70,26 +107,33 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
               </Button>
             </MenuTrigger>
             <MenuContent>
-              <MenuItem value="New" onClick={() => onSetStatus("New")}>
-                New
-              </MenuItem>
-              <MenuItem value="Draft" onClick={() => onSetStatus("Draft")}>
-                Draft
-              </MenuItem>
-              <MenuItem value="Partially Funded" onClick={() => onSetStatus("Partially Funded")}>
-                Partially Funded
-              </MenuItem>
-              <MenuItem value="Budget Fulfilled" onClick={() => onSetStatus("Budget Fulfilled")}>
-                Budget Fulfilled
-              </MenuItem>
-              <MenuItem value="Archived" onClick={() => onSetStatus("Archived")}>
-                Archived
-              </MenuItem>
-              <MenuItem value="Sponsorship Cancelled" onClick={() => onSetStatus("Sponsorship Cancelled")}>
-                Sponsorship Cancelled
-              </MenuItem>
+              {BULK_ASSIGNABLE_STATUSES.map((status) => (
+                <MenuItem key={status} value={status} onClick={() => onSetStatus(status)}>
+                  {status}
+                </MenuItem>
+              ))}
             </MenuContent>
           </MenuRoot>
+
+          {/* Set Type dropdown */}
+          <MenuRoot>
+            <MenuTrigger asChild>
+              <Button
+                className="border-[2px] border-[#000000] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ffffff] text-black hover:bg-[#f0f0f0] flex items-center gap-2"
+              >
+                Set Type
+                <FiChevronDown className="w-4 h-4" />
+              </Button>
+            </MenuTrigger>
+            <MenuContent>
+              {BULK_ASSIGNABLE_TYPES.map(({ type, label }) => (
+                <MenuItem key={type} value={type} onClick={() => onSetType(type)}>
+                  {label}
+                </MenuItem>
+              ))}
+            </MenuContent>
+          </MenuRoot>
+
           <Text className="text-sm text-gray-500">Selected {selectedCount} items</Text>
         </Flex>
       </Box>

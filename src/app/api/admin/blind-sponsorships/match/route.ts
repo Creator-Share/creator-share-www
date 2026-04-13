@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { sendBlindSponsorshipMatchedEmail } from "@/utils/email"
+import { WAITING_STATUSES } from "@/config/beneficiaryStatuses"
 
 export const runtime = "nodejs"
 
@@ -291,7 +292,7 @@ async function matchBeneficiaryToOldestBlindSponsorship(
     .from("beneficiaries")
     .select("id, name, username, status, budget_goal, budget_raised")
     .eq("id", beneficiaryId)
-    .in("status", ["New", "Partially Funded"])
+    .in("status", WAITING_STATUSES)
     .single()
 
   if (benError || !beneficiary) {

@@ -109,7 +109,7 @@ const BulkUploadDrawer = ({
 
       toaster.create({
         title: "Success",
-        description: `Successfully uploaded ${newChildren.length} children`,
+        description: `Successfully uploaded ${newChildren.length} beneficiaries`,
         duration: 5000,
       })
     } catch (error) {
@@ -140,7 +140,7 @@ const BulkUploadDrawer = ({
       <DrawerContent>
         <DrawerHeader>
           <DrawerTitle>
-            <Text fontSize="5xl">Bulk Upload Children</Text>
+            <Text fontSize="5xl">Bulk Upload Beneficiaries</Text>
           </DrawerTitle>
         </DrawerHeader>
         <DrawerBody>
@@ -175,7 +175,7 @@ const BulkUploadDrawer = ({
           </DrawerActionTrigger>
           <Button
             onClick={handleUpload}
-            className="bg-[#1C3C8C] w-1/2 text-white"
+            className="bg-[#2b7ff9] w-1/2 text-white"
             disabled={isUploading || !csvFile}
             loading={isUploading}
             loadingText="Uploading..."

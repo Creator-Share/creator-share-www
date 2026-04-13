@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { sendBlindSponsorshipMatchedEmail } from "@/utils/email"
+import { WAITING_STATUSES } from "@/config/beneficiaryStatuses"
 
 export const runtime = "nodejs"
 
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
       .from("beneficiaries")
       .select("id, name, username, status, budget_goal, budget_raised")
       .eq("id", beneficiaryId)
-      .in("status", ["New", "Partially Funded"])
+      .in("status", WAITING_STATUSES)
       .is("goal_fulfilled_at", null)
       .single()
 
