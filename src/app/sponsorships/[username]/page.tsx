@@ -7,13 +7,13 @@ import { fetchActivitiesByBeneficiaryId } from "@/actions"
 import BeneficiaryModal from "../components/SponsorshipModal"
 
 /**
- * Lightweight direct-link route for child profiles (e.g. /sponsorships/kfxg0n82).
+ * Lightweight direct-link route for beneficiary profiles (e.g. /sponsorships/kfxg0n82).
  *
  * Only the single beneficiary record is fetched — the full paginated list is
  * intentionally NOT loaded here.  When the modal is closed the user is sent
  * back to the home page (or the previous page if the browser history allows it).
  */
-export default function ChildProfilePage() {
+export default function BeneficiaryProfilePage() {
   const { username } = useParams<{ username: string }>()
   const router = useRouter()
 

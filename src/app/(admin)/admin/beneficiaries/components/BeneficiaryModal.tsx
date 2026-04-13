@@ -918,7 +918,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 label="Biography"
                 required
                 errorText="This field is required"
-                helperText="Provide a detailed description about the child"
+                helperText="Provide a detailed description about the beneficiary"
               >
                 {!showBiographyComparison && (
                   <Textarea
