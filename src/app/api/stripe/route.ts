@@ -62,7 +62,17 @@ export async function POST(req: Request) {
 
     const isMonthly = paymentType === "subscription"
     const isOneTime = paymentType === "one_time"
-    // Recurring interval for non-one-time payments (month for subscription, year otherwise)
+
+    // one_time is only valid for regular (non-blind, non-partnership) sponsorships.
+    // Partnerships and blind sponsorships are always recurring.
+    if (isOneTime && (type === "partnership" || isBlindSponsorship)) {
+      return NextResponse.json(
+        { error: "One-time payment is not supported for this payment type." },
+        { status: 400 },
+      )
+    }
+
+    // Interval is only relevant for recurring payments; one_time prices omit it entirely.
     const interval: "month" | "year" = isMonthly ? "month" : "year"
 
     let productName: string

@@ -217,7 +217,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           ? (typeDefaultDollars ?? publicHardcodedDollars ?? minimumAmount)
           : remainingAmount,
       )
-      setSelectedOption(paymentOptionsCollection.items[0].value)
+      setSelectedOption(
+        isSpecialNeeds
+          ? specialNeedsFrequencyOptions[0].value
+          : paymentOptionsCollection.items[0].value,
+      )
       setLoading(false)
       setBioExpanded(false)
       setFaqOpen(false)
@@ -953,10 +957,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                               key={opt.value}
                               type="button"
                               onClick={() => setSelectedOption(opt.value)}
-                              style={{ outline: "none", boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}
-                              className={`rounded-xl px-6 py-2 text-sm font-semibold transition-all ${
+                              className={`rounded-xl px-6 py-2 text-sm font-semibold transition-all outline-none ${
                                 isActive
-                                  ? "bg-white text-[#0654C6]"
+                                  ? "bg-white text-[#0654C6] shadow-sm"
                                   : "bg-transparent text-gray-500 hover:bg-white/50"
                               }`}
                             >
