@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from "react"
 import { Box, Button, Text, Input, IconButton } from "@chakra-ui/react"
-import { Global, css } from "@emotion/react"
 import { Slider } from "@/components/ui/slider"
 import {
   SelectRoot,
@@ -237,52 +236,6 @@ const SponsorshipFilters: React.FC<
 
   return (
     <>
-      <Global
-        styles={css`
-          /* ── Select triggers ── */
-          [data-scope="select"][data-part="trigger"] {
-            border-radius: 16px !important;
-            background-color: #f9fafb !important;
-            border-color: transparent !important;
-            box-shadow: none !important;
-            padding-left: 0.44rem !important;
-          }
-          [data-scope="select"][data-part="trigger"]:hover {
-            background-color: #e9eaec !important;
-          }
-          [data-scope="select"][data-part="trigger"]:focus-within,
-          [data-scope="select"][data-part="trigger"][data-state="open"] {
-            background-color: #ffffff !important;
-            border-color: #2b7ff9 !important;
-            box-shadow: 0 0 0 1px #2b7ff9 !important;
-          }
-
-          /* ── Age slider ── */
-          [data-scope="slider"][data-part="track"] {
-            background-color: #e5e7eb !important;
-            border-radius: 999px !important;
-          }
-          [data-scope="slider"][data-part="range"] {
-            background-color: #2b7ff9 !important;
-            border-radius: 999px !important;
-          }
-          [data-scope="slider"][data-part="thumb"] {
-            background-color: #ffffff !important;
-            border: none !important;
-            box-shadow:
-              0 1px 3px rgba(0, 0, 0, 0.18),
-              0 0 0 2px rgba(43, 127, 249, 0.22) !important;
-            width: 16px !important;
-            height: 16px !important;
-          }
-          [data-scope="slider"][data-part="thumb"]:focus-visible {
-            box-shadow:
-              0 1px 3px rgba(0, 0, 0, 0.18),
-              0 0 0 3px rgba(43, 127, 249, 0.38) !important;
-            outline: none !important;
-          }
-        `}
-      />
       <Box
         className={noCard ? undefined : `bg-white border ${isSticky ? "rounded-b-3xl rounded-t-none" : "rounded-3xl"}`}
         pt={{ base: 6, lg: 4 }}
