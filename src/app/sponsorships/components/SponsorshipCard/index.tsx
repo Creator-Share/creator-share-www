@@ -11,6 +11,11 @@ import { getImageSrc, getThumbnailSrc } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
+// Rim glass shine: tight white highlight at the very top of the photo only.
+const RIM_OVERLAY =
+  "linear-gradient(to bottom, rgba(255,255,255,0.62) 0px, rgba(255,255,255,0.28) 2px, rgba(255,255,255,0.06) 14px, transparent 32px)"
+const CARD_SHADOW = "0 2px 8px rgba(0,0,0,0.07), 0 6px 24px rgba(0,0,0,0.05)"
+const CARD_SHADOW_SELECTED = "0 0 0 2px rgba(43,127,249,0.18), 0 2px 8px rgba(0,0,0,0.07), 0 6px 24px rgba(0,0,0,0.05)"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiary,
@@ -68,19 +73,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       suppressHydrationWarning={true}
       style={{
         overflow: "hidden",
-        border: isSelected ? "2px solid transparent" : "2px solid transparent",
-        background: isSelected
-          ? [
-              "linear-gradient(#fff,#fff) padding-box",
-              "linear-gradient(to bottom, rgba(255,255,255,0.95) 0%, rgba(43,127,249,0.80) 18%, rgba(110,175,255,0.55) 50%, rgba(43,127,249,0.65) 80%, rgba(43,127,249,0.75) 100%) border-box",
-            ].join(", ")
-          : [
-              "linear-gradient(#fff,#fff) padding-box",
-              "linear-gradient(to bottom, rgba(255,255,255,1.0) 0%, rgba(205,225,255,0.60) 18%, rgba(255,255,255,0.82) 48%, rgba(212,215,222,0.48) 78%, rgba(200,203,212,0.42) 100%) border-box",
-            ].join(", "),
-        boxShadow: isSelected
-          ? "0 0 0 3px rgba(43,127,249,0.12), 0 4px 20px rgba(43,127,249,0.14), inset 0 1px 0 rgba(255,255,255,0.95)"
-          : "0 2px 6px rgba(175,200,255,0.20), 0 4px 20px rgba(175,200,255,0.13), inset 0 1px 0 rgba(255,255,255,1)",
+        background: "#fff",
+        boxShadow: isSelected ? CARD_SHADOW_SELECTED : CARD_SHADOW,
       }}
       maxW="100%"
       mx="auto"
@@ -95,7 +89,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       data-card-no-focus
       _focus={{ outline: "none", boxShadow: "none" }}
       _focusVisible={{ outline: "none", boxShadow: "none" }}
-      _hover={{ borderColor: "transparent" }}
     >
       {/* Card Header: Image with Navigation using ImageCarousel */}
       <Box 
@@ -116,6 +109,17 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           alt={beneficiary.name?.split(" ")[0] ?? ""}
           className="w-full h-full rounded-t-[20px]"
           showArrowsOnHover={true}
+        />
+
+        {/* Glass shine overlay — sits above the photo, below interactive chrome */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 2,
+            pointerEvents: "none",
+            background: RIM_OVERLAY,
+          }}
         />
 
         {beneficiary.status === "Budget Fulfilled" && <SupportedRibbon />}

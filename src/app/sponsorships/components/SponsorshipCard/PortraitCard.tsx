@@ -6,6 +6,11 @@ import { Beneficiaries } from "@/types"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import { getImageSrc } from "@/utils/supabase/media"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
+// Rim glass shine: tight white highlight at the very top of the photo only.
+const RIM_OVERLAY =
+  "linear-gradient(to bottom, rgba(255,255,255,0.62) 0px, rgba(255,255,255,0.28) 2px, rgba(255,255,255,0.06) 14px, transparent 32px)"
+const CARD_SHADOW = "0 2px 8px rgba(0,0,0,0.07), 0 6px 24px rgba(0,0,0,0.05)"
+const CARD_SHADOW_SELECTED = "0 0 0 2px rgba(43,127,249,0.18), 0 2px 8px rgba(0,0,0,0.07), 0 6px 24px rgba(0,0,0,0.05)"
 
 interface PortraitBeneficiaryCardProps {
   beneficiary: Beneficiaries
@@ -93,19 +98,8 @@ const PortraitBeneficiaryCard: React.FC<PortraitBeneficiaryCardProps> = ({
       transform="translateZ(0)"
       style={{
         overflow: "hidden",
-        border: isSelected ? "2px solid transparent" : "2px solid transparent",
-        background: isSelected
-          ? [
-              "linear-gradient(#fff,#fff) padding-box",
-              "linear-gradient(to bottom, rgba(255,255,255,0.95) 0%, rgba(43,127,249,0.80) 18%, rgba(110,175,255,0.55) 50%, rgba(43,127,249,0.65) 80%, rgba(43,127,249,0.75) 100%) border-box",
-            ].join(", ")
-          : [
-              "linear-gradient(#fff,#fff) padding-box",
-              "linear-gradient(to bottom, rgba(255,255,255,1.0) 0%, rgba(205,225,255,0.60) 18%, rgba(255,255,255,0.82) 48%, rgba(212,215,222,0.48) 78%, rgba(200,203,212,0.42) 100%) border-box",
-            ].join(", "),
-        boxShadow: isSelected
-          ? "0 0 0 3px rgba(43,127,249,0.12), 0 4px 20px rgba(43,127,249,0.14), inset 0 1px 0 rgba(255,255,255,0.95)"
-          : "0 1px 3px rgba(175,200,255,0.22), 0 2px 14px rgba(175,200,255,0.13), inset 0 1px 0 rgba(255,255,255,1)",
+        background: "#fff",
+        boxShadow: isSelected ? CARD_SHADOW_SELECTED : CARD_SHADOW,
       }}
     >
       {/* Portrait image -- 2:3 card, cropped from the top to frame faces */}
@@ -118,11 +112,21 @@ const PortraitBeneficiaryCard: React.FC<PortraitBeneficiaryCardProps> = ({
           className="object-cover object-top"
           unoptimized
         />
+        {/* Glass shine overlay */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 2,
+            pointerEvents: "none",
+            background: RIM_OVERLAY,
+          }}
+        />
         {imageOverlay}
       </Box>
 
       {/* Info below image — two rows only */}
-      <Box px={2} pt={1.5} pb={2} flex={1} display="flex" flexDirection="column" justifyContent="flex-start">
+      <Box pl={3} pr={2} pt={1.5} pb={2} flex={1} display="flex" flexDirection="column" justifyContent="flex-start">
         <Text
           fontWeight="semibold"
           fontSize="xs"
