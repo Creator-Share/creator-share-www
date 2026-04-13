@@ -4,6 +4,7 @@ import dynamic from "next/dynamic"
 import { Box, Flex, Button, Spinner, Text } from "@chakra-ui/react"
 import { toaster } from "@/components/ui/toaster"
 import DeleteDialog from "./components/DeleteDialog"
+import BulkConfirmDialog from "./components/BulkConfirmDialog"
 import BeneficiaryCard from "./components/BeneficiaryCard"
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types"
 import { dollarsToCents } from "@/utils/currency"
@@ -18,6 +19,7 @@ import SponsorshipFilters from "@/app/sponsorships/components/SponsorshipFilters
 import FloatingActionBar from "@/components/admin-ui/FloatingActionBar"
 import {
   BeneficiaryTabType,
+  BULK_ASSIGNABLE_TYPES,
   getApiTypes,
   getMaxAgeYears,
 } from "@/config/beneficiaryTypes"
@@ -56,7 +58,7 @@ const ChildrenTable = () => {
   // Active type tab — null means "All"
   const [activeType, setActiveType] = useState<BeneficiaryTabType | null>(null)
 
-  const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore } =
+  const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore, filters } =
     useBeneficiaryPagination({
       recordsPerPage: 9,
       beneficiaryType: activeType ?? undefined,
@@ -94,6 +96,13 @@ const ChildrenTable = () => {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<Beneficiaries | null>(null)
   const [selectedRowsForDeletion, setSelectedRowsForDeletion] = useState<Beneficiaries[]>([])
+  const [pendingBulkAction, setPendingBulkAction] = useState<{
+    kind: "status" | "type" | "reinstate"
+    value: string
+    label: string
+    ids?: string[]
+  } | null>(null)
+  const [isSelectingAll, setIsSelectingAll] = useState(false)
   const fetchedImagesRef = useRef<Set<string>>(new Set())
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -406,6 +415,32 @@ const ChildrenTable = () => {
     setSelectedItems(checked ? new Set(beneficiaries.filter((b) => b.id).map((b) => b.id!)) : new Set())
   }
 
+  const handleSelectVisible = () => {
+    setSelectedItems(new Set(beneficiaries.filter((b) => b.id).map((b) => b.id!)))
+  }
+
+  const handleSelectAllMatching = async () => {
+    setIsSelectingAll(true)
+    try {
+      const params = new URLSearchParams()
+      if (filters.beneficiary_type) params.set("beneficiary_type", filters.beneficiary_type)
+      if (filters.gender) params.set("gender", filters.gender)
+      if (filters.status?.length) params.set("status", filters.status.join(","))
+      if (filters.ageRange) params.set("ageRange", filters.ageRange.join(","))
+      if (filters.search) params.set("search", filters.search)
+
+      const res = await fetch(`/api/admin/beneficiaries/ids?${params.toString()}`)
+      if (!res.ok) throw new Error("Failed to fetch matching IDs")
+      const data = await res.json()
+      setSelectedItems(new Set(data.ids as string[]))
+    } catch (error) {
+      console.error("Select all matching error:", error)
+      toaster.create({ title: "Error", description: "Failed to select all matching beneficiaries.", duration: 5000 })
+    } finally {
+      setIsSelectingAll(false)
+    }
+  }
+
   const handleSelectItem = (id: string, checked: boolean) => {
     const s = new Set(selectedItems)
     if (checked) s.add(id)
@@ -428,47 +463,56 @@ const ChildrenTable = () => {
     handleFilterChange({ status: allStatuses })
   }
 
-  const handleBulkStatusUpdate = async (status: string) => {
+  const handleBulkStatusUpdate = (status: string) => {
     if (selectedItems.size === 0) return
-    try {
-      const res = await fetch("/api/admin/beneficiaries/bulk-update-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: Array.from(selectedItems), status }),
-      })
-      if (!res.ok) throw new Error("Failed to update status")
-      setSelectedItems(new Set())
-      setSelectedRowsForDeletion([])
-      toaster.create({ title: "Success", description: `Moved to ${status.toLowerCase()} successfully.`, duration: 5000 })
-      setFilterStatus(allStatuses)
-      handleFilterChange({ gender: "", ageRange: [0, getMaxAgeYears(activeType)], status: allStatuses, search: "" })
-    } catch (error) {
-      console.error("Bulk status update error:", error)
-      toaster.create({ title: "Error", description: `Failed: ${error instanceof Error ? error.message : "Unknown error"}`, duration: 5000 })
-    }
+    setPendingBulkAction({ kind: "status", value: status, label: `set status to "${status}"` })
   }
 
-  const handleReinstate = async () => {
+  const handleBulkTypeUpdate = (type: string) => {
+    if (selectedItems.size === 0) return
+    const match = BULK_ASSIGNABLE_TYPES.find((t) => t.type === type)
+    setPendingBulkAction({ kind: "type", value: type, label: `change type to "${match?.label ?? type}"` })
+  }
+
+  const handleReinstate = () => {
     const cancelled = beneficiaries.filter((b) => b.id && selectedItems.has(b.id) && b.status === "Sponsorship Cancelled")
     if (cancelled.length === 0) {
       toaster.create({ title: "No Selection", description: "Please select beneficiaries with 'Sponsorship Cancelled' status.", duration: 5000 })
       return
     }
+    const ids = cancelled.map((b) => b.id!).filter((id): id is string => !!id)
+    setPendingBulkAction({ kind: "reinstate", value: "New", label: `reinstate ${ids.length} beneficiaries to "New"`, ids })
+  }
+
+  const executeBulkAction = async () => {
+    if (!pendingBulkAction) return
+    const { kind, value, ids: overrideIds } = pendingBulkAction
+    const ids = overrideIds ?? Array.from(selectedItems)
     try {
-      const ids = cancelled.map((b) => b.id!).filter((id): id is string => !!id)
-      const res = await fetch("/api/admin/beneficiaries/bulk-update-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids, status: "New" }),
-      })
-      if (!res.ok) throw new Error("Failed to reinstate beneficiaries")
+      if (kind === "status" || kind === "reinstate") {
+        const res = await fetch("/api/admin/beneficiaries/bulk-update-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids, status: value }),
+        })
+        if (!res.ok) throw new Error("Failed to update status")
+        toaster.create({ title: "Success", description: kind === "reinstate" ? `${ids.length} reinstated to "New" successfully.` : `Moved to ${value.toLowerCase()} successfully.`, duration: 5000 })
+      } else {
+        const res = await fetch("/api/admin/beneficiaries/bulk-update-type", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids, beneficiary_type: value }),
+        })
+        if (!res.ok) throw new Error("Failed to update type")
+        toaster.create({ title: "Success", description: `Updated type for ${ids.length} beneficiaries successfully.`, duration: 5000 })
+      }
       setSelectedItems(new Set())
       setSelectedRowsForDeletion([])
-      toaster.create({ title: "Success", description: `${cancelled.length} reinstated to "New" successfully.`, duration: 5000 })
+      setPendingBulkAction(null)
       setFilterStatus(allStatuses)
       handleFilterChange({ gender: "", ageRange: [0, getMaxAgeYears(activeType)], status: allStatuses, search: "" })
     } catch (error) {
-      console.error("Reinstate error:", error)
+      console.error("Bulk action error:", error)
       toaster.create({ title: "Error", description: `Failed: ${error instanceof Error ? error.message : "Unknown error"}`, duration: 5000 })
     }
   }
@@ -588,6 +632,15 @@ const ChildrenTable = () => {
       {/* Delete Dialog */}
       <DeleteDialog isOpen={isDeleteDialogOpen} onClose={() => setIsDeleteDialogOpen(false)} onConfirm={confirmDelete} itemCount={selectedRowsForDeletion.length} />
 
+      {/* Bulk Action Confirm Dialog */}
+      <BulkConfirmDialog
+        isOpen={pendingBulkAction !== null}
+        onClose={() => setPendingBulkAction(null)}
+        onConfirm={executeBulkAction}
+        itemCount={pendingBulkAction?.ids?.length ?? selectedItems.size}
+        actionLabel={pendingBulkAction?.label ?? ""}
+      />
+
       {/* Create Modal */}
       <BeneficiaryModal
         mode="create"
@@ -610,9 +663,15 @@ const ChildrenTable = () => {
       {/* Floating Action Bar */}
       <FloatingActionBar
         selectedCount={selectedItems.size}
+        visibleCount={beneficiaries.filter((b) => b.id).length}
+        totalMatchingCount={stats.total}
+        onSelectVisible={handleSelectVisible}
+        onSelectAllMatching={handleSelectAllMatching}
+        isSelectingAll={isSelectingAll}
         onDeselectAll={() => setSelectedItems(new Set())}
         onDelete={handleBulkDelete}
         onSetStatus={handleBulkStatusUpdate}
+        onSetType={handleBulkTypeUpdate}
         onReinstate={handleReinstate}
         hasCancelledSelected={beneficiaries.some((b) => b.id && selectedItems.has(b.id) && b.status === "Sponsorship Cancelled")}
       />

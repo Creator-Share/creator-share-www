@@ -116,6 +116,16 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
 ]
 
 // ---------------------------------------------------------------------------
+// Bulk-assignable types (excludes legacy CHILD alias and the "All" null entry)
+// ---------------------------------------------------------------------------
+
+export const BULK_ASSIGNABLE_TYPES: { type: BeneficiaryTabType; label: string }[] = [
+  { type: "CHILD_LABORER", label: "Child Labourers" },
+  { type: "SPECIAL_NEEDS", label: "Special Needs" },
+  { type: "ANIMAL", label: "Rescue Dogs" },
+]
+
+// ---------------------------------------------------------------------------
 // Route maps
 // ---------------------------------------------------------------------------
 
