@@ -62,33 +62,49 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   return (
     <Box
       id={id}
-      borderColor={isSelected ? "blue.500" : "gray.200"}
-      borderWidth={isSelected ? "4px" : "1px"}
-      className={`bg-white mb-6 rounded-[20px] shadow-md ${
+      className={`rounded-[20px] ${
         isSelected ? "highlight-child" : ""
-      } hover:shadow-xl hover:shadow-black/20 hover:scale-105 transition-all duration-300`}
+      } hover:scale-[1.025] transition-all duration-300`}
       suppressHydrationWarning={true}
-      style={{ overflow: "hidden" }}
-      maxW="sm"
+      style={{
+        overflow: "hidden",
+        border: isSelected ? "2px solid transparent" : "2px solid transparent",
+        background: isSelected
+          ? [
+              "linear-gradient(#fff,#fff) padding-box",
+              "linear-gradient(to bottom, rgba(255,255,255,0.95) 0%, rgba(43,127,249,0.80) 18%, rgba(110,175,255,0.55) 50%, rgba(43,127,249,0.65) 80%, rgba(43,127,249,0.75) 100%) border-box",
+            ].join(", ")
+          : [
+              "linear-gradient(#fff,#fff) padding-box",
+              "linear-gradient(to bottom, rgba(255,255,255,1.0) 0%, rgba(205,225,255,0.60) 18%, rgba(255,255,255,0.82) 48%, rgba(212,215,222,0.48) 78%, rgba(200,203,212,0.42) 100%) border-box",
+            ].join(", "),
+        boxShadow: isSelected
+          ? "0 0 0 3px rgba(43,127,249,0.12), 0 4px 20px rgba(43,127,249,0.14), inset 0 1px 0 rgba(255,255,255,0.95)"
+          : "0 2px 6px rgba(175,200,255,0.20), 0 4px 20px rgba(175,200,255,0.13), inset 0 1px 0 rgba(255,255,255,1)",
+      }}
+      maxW="100%"
       mx="auto"
       height="100%"
       display="flex"
       flexDirection="column"
       transform="translateZ(0)"
       cursor="pointer"
-      transition="border-color 200ms ease, border-width 200ms ease, box-shadow 200ms ease, transform 200ms ease"
-      _hover={{ borderColor: "#2B7FF9", borderWidth: "1px" }}
       onClick={onOpenDialog}
       position="relative"
+      tabIndex={-1}
+      data-card-no-focus
+      _focus={{ outline: "none", boxShadow: "none" }}
+      _focusVisible={{ outline: "none", boxShadow: "none" }}
+      _hover={{ borderColor: "transparent" }}
     >
       {/* Card Header: Image with Navigation using ImageCarousel */}
       <Box 
         position="relative" 
         flexShrink={0} 
         className="group" 
-        height="300px" 
-        minHeight="300px"
-        maxHeight="300px"
+        height="225px" 
+        minHeight="225px"
+        maxHeight="225px"
         width="100%" 
         overflow="hidden"
       >
@@ -124,17 +140,18 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         )}
       </Box>
 
-      {/* Card Content - Fixed Layout Structure */}
+      {/* Card Content */}
       <Box
-        p={6}
+        px={4}
+        pt={3}
+        pb={4}
         display="flex"
         flexDirection="column"
         className="items-center text-center"
-        minHeight="200px"
       >
-        {/* Full Name Heading - Fixed height to prevent layout shift */}
-        <Box minHeight="32px" mb={3} display="flex" alignItems="center" justifyContent="center">
-          <Text fontSize="xl" fontWeight="bold" className="text-gray-800" lineHeight="1.2">
+        {/* Name */}
+        <Box mb={1.5} display="flex" alignItems="center" justifyContent="center">
+          <Text fontSize="lg" fontWeight="bold" className="text-gray-800" lineHeight="1.2">
             {beneficiary.name ? 
               `${beneficiary.name.split(" ")[0]} ${beneficiary.name.split(" ")[2]?.[0] || ""}`.trim()
               : "Name"
@@ -142,30 +159,30 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           </Text>
         </Box>
 
-        {/* Information Row - Fixed minimum height */}
-        <Box minHeight="48px" mb={4} display="flex" alignItems="center" justifyContent="center">
-          <Flex gap={4} flexWrap="wrap" className="text-[#666666]" justifyContent="center">
+        {/* Info row */}
+        <Box mb={2.5} display="flex" alignItems="center" justifyContent="center">
+          <Flex gap={3} flexWrap="wrap" className="text-[#666666]" justifyContent="center">
             {age !== null && (
               <Flex align="center" gap={1}>
-                <FaCalendar />
-                <Text fontSize="sm">
-                  {age} years{birthDateIsEstimate ? " (estimated)" : ""}
+                <FaCalendar size={12} />
+                <Text fontSize="xs">
+                  {age} years{birthDateIsEstimate ? " (est.)" : ""}
                 </Text>
               </Flex>
             )}
             <Flex align="center" gap={1}>
-              <FaPerson />
-              <Text fontSize="sm">{beneficiary.gender || "Gender"}</Text>
+              <FaPerson size={12} />
+              <Text fontSize="xs">{beneficiary.gender || "Gender"}</Text>
             </Flex>
             <Flex align="center" gap={1}>
-              <FaLocationDot />
-              <Text fontSize="sm">{beneficiary.country || "Location"}</Text>
+              <FaLocationDot size={12} />
+              <Text fontSize="xs">{beneficiary.country || "Location"}</Text>
             </Flex>
           </Flex>
         </Box>
 
-        {/* Biography Section - Fixed minimum height to maintain consistency */}
-        <Box minHeight="84px" width="100%">
+        {/* Biography — hard-clamp to 3 lines, no forced min-height */}
+        <Box width="100%">
           <Text
             fontSize="sm"
             style={{
@@ -174,9 +191,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
               WebkitBoxOrient: "vertical",
               overflow: "hidden",
               textOverflow: "ellipsis",
-              lineHeight: "1.4",
+              lineHeight: "1.5",
               color: "#666666",
-              minHeight: "84px", // 3 lines × 1.4 line-height × 20px (approx)
             }}
           >
             {beneficiary?.biography || ""}

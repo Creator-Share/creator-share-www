@@ -142,7 +142,7 @@ const BeneficiaryListings = React.forwardRef<
         width="100%"
         className="border bg-white rounded-2xl"
         mt={4}
-        py={3}
+        style={{ boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)" }}
         suppressHydrationWarning={true}
       >
         <BlindSponsorshipModal
@@ -152,7 +152,7 @@ const BeneficiaryListings = React.forwardRef<
 
         {filteredBeneficiaries.length > 0 && (
           <Box p={{ base: 4, lg: 8 }}>
-            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap="1rem">
+            <SimpleGrid columns={{ base: 1, sm: 2, md: 3, xl: 4 }} gap="1rem">
               {filteredBeneficiaries.map((beneficiary) =>
                 beneficiary.id ? (
                   <Box
@@ -206,10 +206,10 @@ const BeneficiaryListings = React.forwardRef<
                 </Text>
                 <Button
                   mt={6}
-                  bg="#1C3C8C"
+                  bg="#2b7ff9"
                   color="white"
                   borderRadius="16px"
-                  _hover={{ bg: "#1C2B7A" }}
+                  _hover={{ bg: "#1a6fe0" }}
                   onClick={() => setBlindModalOpen(true)}
                 >
                   Start a blind sponsorship instead
