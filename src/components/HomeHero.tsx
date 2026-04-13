@@ -109,7 +109,7 @@ const HERO_CONTENT: Record<HeroType, HeroContent> = {
         </a>{" "}
         has stewarded children&apos;s centers across Tanzania, creating home and
         family for hundreds of the most vulnerable children on earth. Here you
-        can walk with a specific child - providing education, medical care, and
+        can walk with a specific child, providing education, medical care, and
         the belief in their potential that changes everything.
       </>
     ),
@@ -218,6 +218,7 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
 
   const [displayedType, setDisplayedType] = useState<HeroType>(heroType)
   const [phase, setPhase] = useState<"exit" | "idle">("idle")
+  const [hoveredType, setHoveredType] = useState<HeroType | null>(null)
 
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const raf1Ref = useRef<number | null>(null)
@@ -377,9 +378,9 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
             flexDirection="row"
             alignItems={{ base: "flex-start", md: "center" }}
             gap={{ base: 0, md: 10 }}
-            pt={{ base: 4, md: 8 }}
-            pb={{ base: 4, md: 8 }}
-            minHeight={{ base: "300px", md: "290px" }}
+            pt={{ base: 4, md: 6 }}
+            pb={{ base: 4, md: 6 }}
+            minHeight={{ base: "230px", md: "260px" }}
           >
             {/* Desktop-only left nav — fixed width so font/bar animations
                 never reflow the adjacent content column. */}
@@ -394,16 +395,18 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
             >
               {HERO_LINKS.map(({ type, label }) => {
                 const isActive = heroType === type
+                const isHovered = hoveredType === type && !isActive
                 return (
                   <button
                     key={type}
                     onClick={() => handleTypeClick(type)}
+                    onMouseEnter={() => setHoveredType(type)}
+                    onMouseLeave={() => setHoveredType(null)}
                     aria-current={isActive ? "true" : undefined}
                     style={{
                       ...BTN_RESET,
                       cursor: isActive ? "default" : "pointer",
                       textAlign: "left",
-                      transition: "color 0.18s ease, opacity 0.18s ease",
                     }}
                   >
                     {/* Fixed height prevents the nav column from shifting
@@ -411,9 +414,26 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                     <Box
                       display="flex"
                       alignItems="center"
-                      gap={3}
+                      gap={2}
                       style={{ height: "2.75rem" }}
                     >
+                      {/* Circled check — visible only when active */}
+                      <Box
+                        flexShrink={0}
+                        style={{
+                          width: "18px",
+                          height: "18px",
+                          opacity: isActive ? 1 : 0,
+                          transform: isActive ? "scale(1)" : "scale(0.6)",
+                          transition: `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`,
+                        }}
+                      >
+                        <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
+                          <circle cx="9" cy="9" r="9" fill="#2b7ff9" />
+                          <path d="M5 9.5L7.5 12L13 6.5" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </Box>
+
                       {/* Animated left bar */}
                       <Box
                         style={{
@@ -421,16 +441,16 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                           flexShrink: 0,
                           borderRadius: "2px",
                           transition: `height ${EXIT_DURATION_MS}ms ease, background ${EXIT_DURATION_MS}ms ease, opacity ${EXIT_DURATION_MS}ms ease`,
-                          height: isActive ? "2.25rem" : "0.875rem",
-                          background: isActive ? "#2b7ff9" : "#d1d5db",
-                          opacity: isActive ? 1 : 0.4,
+                          height: isActive ? "2.25rem" : isHovered ? "1.375rem" : "0.875rem",
+                          background: isActive ? "#2b7ff9" : isHovered ? "#93b8fc" : "#d1d5db",
+                          opacity: isActive ? 1 : isHovered ? 0.75 : 0.4,
                         }}
                       />
                       <span
                         style={{
                           fontSize: "1.2rem",
                           fontWeight: 700,
-                          color: isActive ? "#2b7ff9" : "#c4c4c4",
+                          color: isActive ? "#2b7ff9" : isHovered ? "#888" : "#c4c4c4",
                           transition: `color ${EXIT_DURATION_MS}ms ease`,
                           display: "block",
                           whiteSpace: "nowrap",

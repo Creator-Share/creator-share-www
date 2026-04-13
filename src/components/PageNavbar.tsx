@@ -157,10 +157,10 @@ export function PageNavbar() {
         onClose={() => setSignInOpen(false)}
       />
       <Box 
-        className={`w-full z-[1000] sticky top-0 transition-all duration-300 ${
+        className={`w-full z-[1000] sticky top-0 transition-all duration-500 ${
           isScrolled 
             ? "bg-white border-b border-gray-200" 
-            : "bg-white"
+            : "bg-transparent border-b border-transparent"
         }`}
         style={{
           boxShadow: isScrolled 
@@ -235,22 +235,14 @@ export function PageNavbar() {
 
         {/* Right Actions */}
         <Flex
-          gap={4}
+          gap={1}
           display={{ base: "none", md: "flex" }}
           alignItems="center"
         >
           <Button
             size="sm"
             variant="ghost"
-            asChild
-          >
-            <a href="https://tanzania.creatorshare.com/" target="_blank" rel="noopener noreferrer">
-              Foundation
-            </a>
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
+            borderRadius="full"
             asChild
           >
             <a
@@ -268,6 +260,7 @@ export function PageNavbar() {
           <Button
             size="sm"
             variant="ghost"
+            borderRadius="full"
             asChild
           >
             <a
@@ -287,8 +280,13 @@ export function PageNavbar() {
               {isAdmin && (
                 <Button
                   size="sm"
-                  variant={pathname?.startsWith("/admin") ? "solid" : "ghost"}
+                  variant="ghost"
+                  borderRadius="full"
                   asChild
+                  style={pathname?.startsWith("/admin") ? {
+                    boxShadow: "inset 0 -2px 0 0 currentColor",
+                    fontWeight: 600,
+                  } : undefined}
                 >
                   <a
                     href="/admin"
@@ -313,7 +311,7 @@ export function PageNavbar() {
               */}
               <Menu.Root>
                 <Menu.Trigger asChild>
-                  <Button size="sm" variant="ghost">
+                  <Button size="sm" variant="ghost" borderRadius="full">
                     My Account ({user.email})
                   </Button>
                 </Menu.Trigger>
@@ -338,6 +336,7 @@ export function PageNavbar() {
             <Button
               size="sm"
               variant="ghost"
+              borderRadius="full"
               asChild
             >
               <a
@@ -389,20 +388,6 @@ export function PageNavbar() {
           pointerEvents="auto"
         >
           <VStack gap={6} py={6}>
-            {/* Foundation - always visible */}
-            <Button
-              size="lg"
-              variant="ghost"
-              color="white"
-              fontSize="xl"
-              _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
-              className="w-full"
-              asChild
-            >
-              <a href="https://tanzania.creatorshare.com/" target="_blank" rel="noopener noreferrer">
-                Foundation
-              </a>
-            </Button>
             {/* FAQ - always visible */}
             <Button
               size="lg"
