@@ -14,9 +14,7 @@
       "Bash(yarn build:*)",
       "Bash(git add:*)",
       "Bash(ls:*)",
-      "Bash(claude mcp:*)",
-      "Read(//home/tgn/**)",
-      "Bash(python3 scripts/parse-schema.py dump_041426.sql --output prod-schema.txt)"
+      "Bash(claude mcp:*)"
     ]
   },
   "enabledMcpjsonServers": [

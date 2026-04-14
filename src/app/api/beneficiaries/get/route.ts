@@ -62,9 +62,8 @@ export async function GET(req: Request) {
     if (status.length > 0) {
       // Include open sponsorships (budget_goal = -1) regardless of status filter,
       // except Draft/Archived which are admin-controlled visibility states.
-      // Avoid .in.() inside .or() — use individual .eq. conditions instead.
       const statusConditions = status.map(s => `status.eq.${s}`)
-      const openCondition = 'and(budget_goal.eq.-1,status.neq.Draft,status.neq.Archived)'
+      const openCondition = 'and(budget_goal.eq.-1,status.not.in.(Draft,Archived))'
       query = query.or([...statusConditions, openCondition].join(','))
     }
 

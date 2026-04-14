@@ -25,7 +25,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   loadingImages,
 }) => {
   const isOpen = isOpenSponsorshipType(beneficiary.beneficiary_type)
-  const goal = beneficiary.budget_goal ?? 0
+  const goal = isOpen ? 0 : (beneficiary.budget_goal ?? 0)
   const raised = Number(beneficiary.budget_raised || 0)
 
   const getStatusBadgeColor = (status: string) => {

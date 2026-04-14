@@ -3,8 +3,6 @@ import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { sendBlindSponsorshipMatchedEmail } from "@/utils/email"
 import { WAITING_STATUSES } from "@/config/beneficiaryStatuses"
-import { isOpenSponsorshipType } from "@/config/beneficiaryTypes"
-
 export const runtime = "nodejs"
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>
@@ -394,10 +392,10 @@ async function findBestBeneficiaryMatch(
     return null
   }
 
-  // Find the first beneficiary that still needs funding
-  // Open sponsorship types (budget_goal = -1) are always available
+  // Find the first beneficiary that still needs funding.
+  // Note: the query above filters to CHILD/null types only, so open sponsorship
+  // types (SPECIAL_NEEDS) are intentionally excluded from blind matching.
   for (const beneficiary of beneficiaries) {
-    if (isOpenSponsorshipType(beneficiary.beneficiary_type)) return beneficiary.id
     const remaining = (beneficiary.budget_goal || 0) - (beneficiary.budget_raised || 0)
     if (remaining > 0) {
       return beneficiary.id
