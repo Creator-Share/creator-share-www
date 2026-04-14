@@ -199,12 +199,13 @@ const ChildrenTable = () => {
   }, [selectedBeneficiary])
 
   useEffect(() => {
-    if (selectedItems.size > 0) {
+    setSelectedItems(prev => {
+      if (prev.size === 0) return prev
       const existingIds = new Set(beneficiaries.filter((b) => b.id).map((b) => b.id!))
-      const valid = Array.from(selectedItems).filter((id) => existingIds.has(id))
-      if (valid.length !== selectedItems.size) setSelectedItems(new Set(valid))
-    }
-  }, [beneficiaries, selectedItems])
+      const valid = Array.from(prev).filter((id) => existingIds.has(id))
+      return valid.length !== prev.size ? new Set(valid) : prev
+    })
+  }, [beneficiaries])
 
   useEffect(() => {
     const container = containerRef.current

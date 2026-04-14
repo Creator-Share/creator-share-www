@@ -100,7 +100,7 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
 
         <DialogBody className="p-6 md:p-10">
           <section aria-label="Sponsorship questions">
-            <Accordion.Root defaultValue={[]} className="space-y-3">
+            <Accordion.Root defaultValue={[]} collapsible className="space-y-3">
               {FAQ_ITEMS.map((item, index) => (
                 <Accordion.Item
                   key={index}
