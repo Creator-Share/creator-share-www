@@ -8,7 +8,9 @@ import {
   BeneficiaryTypeConfig,
   TYPE_TO_ROUTE,
   ROUTE_TO_TYPE,
-  getDefaultSponsorshipAmount,
+  getDefaultBudgetGoal,
+  isOpenSponsorshipType,
+  MINIMUM_OPEN_SPONSORSHIP_CENTS,
   getApiTypes,
   getMaxAgeYears,
 } from "@/config/beneficiaryTypes"
@@ -19,7 +21,9 @@ export {
   ALL_BENEFICIARY_TABS,
   TYPE_TO_ROUTE,
   ROUTE_TO_TYPE,
-  getDefaultSponsorshipAmount,
+  getDefaultBudgetGoal,
+  isOpenSponsorshipType,
+  MINIMUM_OPEN_SPONSORSHIP_CENTS,
   getApiTypes,
   getMaxAgeYears,
 }

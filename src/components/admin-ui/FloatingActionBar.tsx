@@ -4,7 +4,7 @@ import { Box, Flex, Button, Text, Spinner } from "@chakra-ui/react"
 import { MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu"
 import { FiChevronDown } from "react-icons/fi"
 import { BULK_ASSIGNABLE_STATUSES } from "@/config/beneficiaryStatuses"
-import { BULK_ASSIGNABLE_TYPES } from "@/config/beneficiaryTypes"
+import { ALL_BENEFICIARY_TABS } from "@/config/beneficiaryTypes"
 
 interface FloatingActionBarProps {
   selectedCount: number
@@ -126,8 +126,8 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
               </Button>
             </MenuTrigger>
             <MenuContent>
-              {BULK_ASSIGNABLE_TYPES.map(({ type, label }) => (
-                <MenuItem key={type} value={type} onClick={() => onSetType(type)}>
+              {ALL_BENEFICIARY_TABS.filter(t => t.type != null && !t.isLegacyAlias).map(({ type, label }) => (
+                <MenuItem key={type!} value={type!} onClick={() => onSetType(type!)}>
                   {label}
                 </MenuItem>
               ))}

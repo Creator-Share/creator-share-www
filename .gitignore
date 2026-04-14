@@ -50,6 +50,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Claude Code local permission overrides (machine-specific)
+.claude/settings.local.json
+
 # Database schema comparison files (temporary)
 scripts/db/remote_schema.sql
 scripts/db/local_schema.sql

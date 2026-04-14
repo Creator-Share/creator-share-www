@@ -3,7 +3,6 @@ import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { sendBlindSponsorshipMatchedEmail } from "@/utils/email"
 import { WAITING_STATUSES } from "@/config/beneficiaryStatuses"
-
 export const runtime = "nodejs"
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>
@@ -290,9 +289,9 @@ async function matchBeneficiaryToOldestBlindSponsorship(
   // Verify beneficiary exists and is available
   const { data: beneficiary, error: benError } = await supabase
     .from("beneficiaries")
-    .select("id, name, username, status, budget_goal, budget_raised")
+    .select("id, name, username, status, budget_goal, budget_raised, beneficiary_type")
     .eq("id", beneficiaryId)
-    .in("status", WAITING_STATUSES)
+    .or(`status.in.(${WAITING_STATUSES.map(s => `"${s}"`).join(",")}),and(budget_goal.eq.-1,status.not.in.(Draft,Archived))`)
     .single()
 
   if (benError || !beneficiary) {
@@ -375,7 +374,7 @@ async function findBestBeneficiaryMatch(
   // Get beneficiaries with NO active subscriptions
   const { data: beneficiaries, error } = await supabase
     .from("beneficiaries")
-    .select("id, name, status, budget_goal, budget_raised, sort_weight")
+    .select("id, name, status, budget_goal, budget_raised, sort_weight, beneficiary_type")
     .or("beneficiary_type.eq.CHILD,beneficiary_type.is.null")
     .eq("status", "New") // Only "New" beneficiaries have no active subscriptions
     .is("goal_fulfilled_at", null)
@@ -393,7 +392,9 @@ async function findBestBeneficiaryMatch(
     return null
   }
 
-  // Find the first beneficiary that still needs funding
+  // Find the first beneficiary that still needs funding.
+  // Note: the query above filters to CHILD/null types only, so open sponsorship
+  // types (SPECIAL_NEEDS) are intentionally excluded from blind matching.
   for (const beneficiary of beneficiaries) {
     const remaining = (beneficiary.budget_goal || 0) - (beneficiary.budget_raised || 0)
     if (remaining > 0) {

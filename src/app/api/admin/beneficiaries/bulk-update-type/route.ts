@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
-import { BULK_ASSIGNABLE_TYPES } from "@/config/beneficiaryTypes"
+import { ALL_BENEFICIARY_TABS } from "@/config/beneficiaryTypes"
 
-const VALID_TYPES = BULK_ASSIGNABLE_TYPES.map((t) => t.type)
+const VALID_TYPES = ALL_BENEFICIARY_TABS.filter(t => t.type != null && !t.isLegacyAlias).map(t => t.type)
 
 export async function POST(req: Request) {
   const supabase = await createClient()

@@ -8,6 +8,7 @@ import BulkConfirmDialog from "./components/BulkConfirmDialog"
 import BeneficiaryCard from "./components/BeneficiaryCard"
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types"
 import { dollarsToCents } from "@/utils/currency"
+import { isOpenSponsorshipType } from "@/config/beneficiaryTypes"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { compressImages } from "@/utils/imageCompression"
 import { useFormStore } from "@/store/formStore"
@@ -19,7 +20,7 @@ import SponsorshipFilters from "@/app/sponsorships/components/SponsorshipFilters
 import FloatingActionBar from "@/components/admin-ui/FloatingActionBar"
 import {
   BeneficiaryTabType,
-  BULK_ASSIGNABLE_TYPES,
+  ALL_BENEFICIARY_TABS,
   getApiTypes,
   getMaxAgeYears,
 } from "@/config/beneficiaryTypes"
@@ -258,10 +259,9 @@ const ChildrenTable = () => {
       return false
     }
 
-    // SPECIAL_NEEDS beneficiaries have no budget goal
-    const isSpecialNeeds = formData.beneficiary_type === "SPECIAL_NEEDS"
-    const budgetGoalInCents = isSpecialNeeds
-      ? 0
+    const isOpen = isOpenSponsorshipType(formData.beneficiary_type)
+    const budgetGoalInCents = isOpen
+      ? -1
       : Math.max(0, parseInt(dollarsToCents(formData.budget_goal || 0)))
 
     try {
@@ -336,24 +336,14 @@ const ChildrenTable = () => {
       })
       if (!res.ok) throw new Error("Failed to update beneficiary")
 
+      // Clear cached image so the upcoming filter-change refetch will re-fetch it
       if (updated.id) {
         setBeneficiaryImages((prev) => { const s = { ...prev }; delete s[updated.id!]; return s })
         fetchedImagesRef.current.delete(updated.id!)
-        try {
-          const response = await fetch(`/api/admin/beneficiaries/images/${updated.id}`)
-          if (response.ok) {
-            const images = await response.json()
-            const imageMedia = images.filter((img: BeneficiaryMedia) => img.type === "IMAGE")
-            if (imageMedia.length > 0) {
-              const img = imageMedia[0]
-              const src = img?.id ? generatePublicUrl(img as unknown as MediaRow) : img?.image_url || ""
-              if (src?.trim()) setBeneficiaryImages((prev) => ({ ...prev, [updated.id!]: src }))
-            }
-          }
-        } catch (error) { console.error("Error re-fetching images:", error) }
       }
 
       setIsEditDrawerOpen(false)
+      setSelectedBeneficiary(null)
       toaster.create({ title: "Success", description: "Beneficiary updated successfully.", duration: 5000 })
       const currentFilters: FiltersState = {
         gender: "", ageRange: [0, getMaxAgeYears(activeType)],
@@ -470,7 +460,7 @@ const ChildrenTable = () => {
 
   const handleBulkTypeUpdate = (type: string) => {
     if (selectedItems.size === 0) return
-    const match = BULK_ASSIGNABLE_TYPES.find((t) => t.type === type)
+    const match = ALL_BENEFICIARY_TABS.find((t) => t.type === type && !t.isLegacyAlias)
     setPendingBulkAction({ kind: "type", value: type, label: `change type to "${match?.label ?? type}"` })
   }
 
@@ -613,21 +603,23 @@ const ChildrenTable = () => {
         )}
       </Box>
 
-      {/* Edit Modal */}
-      {isEditDrawerOpen && selectedBeneficiary && (
-        <BeneficiaryModal
-          mode="edit"
-          isOpen={isEditDrawerOpen}
-          onClose={() => setIsEditDrawerOpen(false)}
-          selectedChild={selectedBeneficiary as Partial<Beneficiaries>}
-          onSave={handleSave}
-          onDelete={handleDelete}
-          imageFiles={imageFiles}
-          setImageFiles={(value) => typeof value === "function" ? setImageFiles(value(imageFiles)) : setImageFiles(value)}
-          videoFiles={videoFiles}
-          setVideoFiles={(value) => typeof value === "function" ? setVideoFiles(value(videoFiles)) : setVideoFiles(value)}
-        />
-      )}
+      {/* Edit Modal — must stay mounted so the Dialog can run its close cleanup
+           (scroll lock, backdrop removal). Unmounting mid-close leaves an invisible overlay. */}
+      <BeneficiaryModal
+        mode="edit"
+        isOpen={isEditDrawerOpen && !!selectedBeneficiary}
+        onClose={() => {
+          setIsEditDrawerOpen(false)
+          setSelectedBeneficiary(null)
+        }}
+        selectedChild={(selectedBeneficiary || {}) as Partial<Beneficiaries>}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        imageFiles={imageFiles}
+        setImageFiles={(value) => typeof value === "function" ? setImageFiles(value(imageFiles)) : setImageFiles(value)}
+        videoFiles={videoFiles}
+        setVideoFiles={(value) => typeof value === "function" ? setVideoFiles(value(videoFiles)) : setVideoFiles(value)}
+      />
 
       {/* Delete Dialog */}
       <DeleteDialog isOpen={isDeleteDialogOpen} onClose={() => setIsDeleteDialogOpen(false)} onConfirm={confirmDelete} itemCount={selectedRowsForDeletion.length} />
@@ -641,7 +633,7 @@ const ChildrenTable = () => {
         actionLabel={pendingBulkAction?.label ?? ""}
       />
 
-      {/* Create Modal */}
+      {/* Create Modal — always mounted so Dialog cleanup runs on close */}
       <BeneficiaryModal
         mode="create"
         isOpen={isCreateDrawerOpen}

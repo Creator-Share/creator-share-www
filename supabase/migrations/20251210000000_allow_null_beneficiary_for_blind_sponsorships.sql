@@ -76,11 +76,20 @@ COMMENT ON FUNCTION trigger_update_beneficiary_from_subscription IS
 -- ============================================================================
 -- STEP 3: Drop the unique-subscription-per-beneficiary index
 -- ============================================================================
--- The old unique index enforced one active subscription per beneficiary.
--- This is incompatible with open sponsorship types (e.g. SPECIAL_NEEDS)
--- which allow multiple sponsors per beneficiary. The application layer
--- already prevents duplicate sponsorships for fixed types via status
--- checks and the reject_fulfilled_beneficiary_subscription trigger.
+-- The old unique index enforced one active subscription per beneficiary,
+-- which is incompatible with open sponsorship types (e.g. SPECIAL_NEEDS)
+-- that allow multiple sponsors per beneficiary.
+--
+-- Enforcement is now handled at the trigger layer via
+-- reject_fulfilled_beneficiary_subscription (updated in migration
+-- 20260414001000). For fixed types, the trigger blocks new subscriptions
+-- once status moves to Budget Fulfilled / Archived / Draft. For open types
+-- (budget_goal = -1), the trigger always allows new subscriptions.
+--
+-- NOTE: This means service_role inserts bypass the trigger and could create
+-- duplicate subscriptions for fixed-type beneficiaries. Any backend job or
+-- admin operation that inserts subscriptions directly via service_role must
+-- check beneficiary status and budget headroom at the application layer.
 
 DROP INDEX IF EXISTS uniq_active_subscription_per_beneficiary;
 

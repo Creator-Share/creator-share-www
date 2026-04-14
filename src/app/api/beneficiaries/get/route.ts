@@ -60,7 +60,11 @@ export async function GET(req: Request) {
       query = query.eq("gender", gender)
     }
     if (status.length > 0) {
-      query = query.in("status", status)
+      // Include open sponsorships (budget_goal = -1) regardless of status filter,
+      // except Draft/Archived which are admin-controlled visibility states.
+      const statusList = status.map(s => `"${s}"`).join(",")
+      const openCondition = 'and(budget_goal.eq.-1,status.not.in.(Draft,Archived))'
+      query = query.or(`status.in.(${statusList}),${openCondition}`)
     }
 
     if (ageRangeParam) {

@@ -2,8 +2,18 @@
  * Single source of truth for all beneficiary type configuration.
  *
  * Both the public-facing UI and the admin system derive their type lists,
- * route mappings, sponsorship amounts, age constraints, and display labels
+ * route mappings, budget goals, age constraints, and display labels
  * from this file. Add a new type here and it propagates everywhere.
+ *
+ * Two sponsorship models:
+ *
+ *   Fixed (isOpenSponsorship = false):
+ *     One sponsor, one payment, goal fulfilled. The budget goal IS the
+ *     sponsorship amount. E.g. child laborers at $33.33.
+ *
+ *   Open (isOpenSponsorship = true):
+ *     Multiple sponsors, user-chosen amount above MINIMUM_OPEN_SPONSORSHIP_CENTS.
+ *     Budget goal is -1 (infinite). Never "fully sponsored."
  */
 
 export type BeneficiaryTabType = "CHILD" | "CHILD_LABORER" | "SPECIAL_NEEDS" | "ANIMAL"
@@ -12,13 +22,20 @@ export interface BeneficiaryTypeConfig {
   label: string
   type: BeneficiaryTabType | null
   /**
-   * Default sponsorship amount in cents when this type has no fixed budget_goal.
-   * null = free-form (user chooses any amount).
+   * When true, this type accepts unlimited sponsors who each choose their
+   * own amount (above MINIMUM_OPEN_SPONSORSHIP_CENTS). Budget goal is -1.
+   * When false, one sponsor pays the full defaultBudgetGoalCents amount.
    */
-  defaultSponsorshipAmountCents: number | null
+  isOpenSponsorship: boolean
+  /**
+   * Default budget goal in cents, written to the beneficiary record on create.
+   * -1 for open sponsorship types (infinite — never fully funded).
+   * For fixed types this is also the sponsorship amount (one sponsor = fully funded).
+   */
+  defaultBudgetGoalCents: number
   /**
    * Legacy DB alias — hidden from all nav rendering. Kept so
-   * getDefaultSponsorshipAmount("CHILD") resolves for older records.
+   * getDefaultBudgetGoal("CHILD") resolves for older records.
    */
   isLegacyAlias?: boolean
   /**
@@ -39,19 +56,15 @@ export interface BeneficiaryTypeConfig {
   route: string | null
 }
 
-/** Read a per-type sponsorship amount from a NEXT_PUBLIC_ env variable. */
-function envAmount(envKey: string, fallbackCents: number): number {
-  const raw = process.env[envKey]
-  if (!raw) return fallbackCents
-  const parsed = parseInt(raw, 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackCents
-}
+/** Minimum sponsorship amount (cents) for open sponsorship types. */
+export const MINIMUM_OPEN_SPONSORSHIP_CENTS = 500
 
 export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
   {
     label: "All Opportunities",
     type: null,
-    defaultSponsorshipAmountCents: null,
+    isOpenSponsorship: false,
+    defaultBudgetGoalCents: 0,
     isPubliclyVisible: true,
     singularName: "being",
     pluralName: "beings",
@@ -64,65 +77,47 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
     label: "Child Labourers",
     type: "CHILD",
     isLegacyAlias: true,
+    isOpenSponsorship: false,
+    defaultBudgetGoalCents: 3333,
     isPubliclyVisible: true,
     singularName: "child",
     pluralName: "children",
     maxAgeYears: 14,
     route: "/street",
-    defaultSponsorshipAmountCents: envAmount(
-      "NEXT_PUBLIC_SPONSORSHIP_AMOUNT_CHILD_LABORER",
-      3333,
-    ),
   },
   {
     label: "Child Labourers",
     type: "CHILD_LABORER",
+    isOpenSponsorship: false,
+    defaultBudgetGoalCents: 3333,
     isPubliclyVisible: true,
     singularName: "child",
     pluralName: "children",
     maxAgeYears: 14,
     route: "/street",
-    defaultSponsorshipAmountCents: envAmount(
-      "NEXT_PUBLIC_SPONSORSHIP_AMOUNT_CHILD_LABORER",
-      3333,
-    ),
   },
   {
     label: "Special Needs",
     type: "SPECIAL_NEEDS",
+    isOpenSponsorship: true,
+    defaultBudgetGoalCents: -1,
     isPubliclyVisible: true,
     singularName: "child",
     pluralName: "children",
     maxAgeYears: 14,
     route: "/care",
-    defaultSponsorshipAmountCents: envAmount(
-      "NEXT_PUBLIC_SPONSORSHIP_AMOUNT_SPECIAL_NEEDS",
-      5000,
-    ),
   },
   {
     label: "Rescue Dogs",
     type: "ANIMAL",
-    isPubliclyVisible: false, // coming soon — rendering code is preserved
+    isOpenSponsorship: false,
+    defaultBudgetGoalCents: 2500,
+    isPubliclyVisible: false, // coming soon
     singularName: "dog",
     pluralName: "dogs",
     maxAgeYears: 20,
     route: "/dogs",
-    defaultSponsorshipAmountCents: envAmount(
-      "NEXT_PUBLIC_SPONSORSHIP_AMOUNT_ANIMAL",
-      2500,
-    ),
   },
-]
-
-// ---------------------------------------------------------------------------
-// Bulk-assignable types (excludes legacy CHILD alias and the "All" null entry)
-// ---------------------------------------------------------------------------
-
-export const BULK_ASSIGNABLE_TYPES: { type: BeneficiaryTabType; label: string }[] = [
-  { type: "CHILD_LABORER", label: "Child Labourers" },
-  { type: "SPECIAL_NEEDS", label: "Special Needs" },
-  { type: "ANIMAL", label: "Rescue Dogs" },
 ]
 
 // ---------------------------------------------------------------------------
@@ -152,15 +147,32 @@ export const ROUTE_TO_TYPE: Record<string, BeneficiaryTabType | null> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Returns the default sponsorship amount in cents for a given type.
- * Accepts the raw DB type string so legacy "CHILD" records resolve correctly.
- */
-export function getDefaultSponsorshipAmount(
+/** Look up the config entry for a given type string. */
+function findConfig(
   type: BeneficiaryTabType | string | null | undefined,
-): number | null {
-  const tab = ALL_BENEFICIARY_TABS.find((t) => t.type === type)
-  return tab ? tab.defaultSponsorshipAmountCents : null
+): BeneficiaryTypeConfig | undefined {
+  return ALL_BENEFICIARY_TABS.find((t) => t.type === type)
+}
+
+/**
+ * Returns the default budget goal in cents for a given type.
+ * Accepts the raw DB type string so legacy "CHILD" records resolve correctly.
+ * Returns 0 when the type is unknown.
+ */
+export function getDefaultBudgetGoal(
+  type: BeneficiaryTabType | string | null | undefined,
+): number {
+  return findConfig(type)?.defaultBudgetGoalCents ?? 0
+}
+
+/**
+ * Returns true if the given type uses open sponsorships (user-chosen amount,
+ * unlimited sponsors, no fixed goal).
+ */
+export function isOpenSponsorshipType(
+  type: BeneficiaryTabType | string | null | undefined,
+): boolean {
+  return findConfig(type)?.isOpenSponsorship ?? false
 }
 
 /**
@@ -178,6 +190,5 @@ export function getApiTypes(type: BeneficiaryTabType | null): string | undefined
  * Defaults to 14 when no type-specific value is defined.
  */
 export function getMaxAgeYears(type: BeneficiaryTabType | null): number {
-  const config = ALL_BENEFICIARY_TABS.find((t) => t.type === type)
-  return config?.maxAgeYears ?? 14
+  return findConfig(type)?.maxAgeYears ?? 14
 }

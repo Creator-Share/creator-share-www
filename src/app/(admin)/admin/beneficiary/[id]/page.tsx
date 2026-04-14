@@ -18,6 +18,7 @@ import AdminPageLayout from "@/components/admin-ui/AdminPageLayout"
 import ActivitiesTable from "@/app/(admin)/admin/activities/components/ActivitiesTable"
 import { Beneficiaries, Activity, BeneficiaryMedia } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
+import { isOpenSponsorshipType } from "@/config/beneficiaryTypes"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import ProofreadButton from "@/components/ai/ProofreadButton"
 import { LogoLoader } from "@/components/common/LogoLoader"
@@ -260,8 +261,8 @@ const BeneficiaryDetailPage = () => {
     )
   }
 
-  const fundingPercentage =
-    beneficiary.budget_goal > 0
+  const isOpen = isOpenSponsorshipType(beneficiary.beneficiary_type)
+  const fundingPercentage = !isOpen && beneficiary.budget_goal > 0
       ? Math.min(100, (beneficiary.budget_raised / beneficiary.budget_goal) * 100)
       : 0
 
@@ -466,27 +467,39 @@ const BeneficiaryDetailPage = () => {
         </Box>
 
         {/* Funding Progress - Full Width */}
-        <Box>
-          <Text fontSize="sm" fontWeight="semibold" mb={2} color="gray.700">
-            Funding Progress
-          </Text>
-          <Flex justify="space-between" mb={2}>
-            <Text fontSize="sm" color="gray.600">
-              ${centsToDollars(beneficiary.budget_raised)} raised
+        {!isOpen && (
+          <Box>
+            <Text fontSize="sm" fontWeight="semibold" mb={2} color="gray.700">
+              Funding Progress
+            </Text>
+            <Flex justify="space-between" mb={2}>
+              <Text fontSize="sm" color="gray.600">
+                ${centsToDollars(beneficiary.budget_raised)} raised
+              </Text>
+              <Text fontSize="sm" color="gray.600">
+                ${centsToDollars(beneficiary.budget_goal)} goal
+              </Text>
+            </Flex>
+            <Progress.Root value={fundingPercentage}>
+              <Progress.Track className="rounded-xl h-3">
+                <Progress.Range className="bg-[#2b7ff9]" />
+              </Progress.Track>
+            </Progress.Root>
+            <Text fontSize="xs" color="gray.500" mt={1}>
+              {fundingPercentage.toFixed(1)}% funded
+            </Text>
+          </Box>
+        )}
+        {isOpen && (
+          <Box>
+            <Text fontSize="sm" fontWeight="semibold" mb={2} color="gray.700">
+              Sponsorship Info
             </Text>
             <Text fontSize="sm" color="gray.600">
-              ${centsToDollars(beneficiary.budget_goal)} goal
+              Open sponsorship — ${centsToDollars(beneficiary.budget_raised)} raised
             </Text>
-          </Flex>
-          <Progress.Root value={fundingPercentage}>
-            <Progress.Track className="rounded-xl h-3">
-              <Progress.Range className="bg-[#2b7ff9]" />
-            </Progress.Track>
-          </Progress.Root>
-          <Text fontSize="xs" color="gray.500" mt={1}>
-            {fundingPercentage.toFixed(1)}% funded
-          </Text>
-        </Box>
+          </Box>
+        )}
       </Box>
 
       {/* Activities Section */}
