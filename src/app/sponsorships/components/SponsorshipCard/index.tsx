@@ -33,8 +33,8 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         if (response.ok) {
           const data = await response.json()
           // Filter for only IMAGE type media
-          const imageMedia = data.filter((item: BeneficiaryMedia) => 
-            item.type === "IMAGE"
+          const imageMedia = data.filter(
+            (item: BeneficiaryMedia) => item.type === "IMAGE",
           )
           setImages(
             imageMedia.sort(
@@ -52,14 +52,14 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   }, [beneficiary.id, beneficiaryType])
 
   // Primary content - only calculate age if birth_date exists
-  const age = beneficiary.birth_date 
+  const age = beneficiary.birth_date
     ? calculateAge(new Date(beneficiary.birth_date).toISOString())
     : null
   const birthDateIsEstimate = Boolean(
     (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
-      ?.birth_date_is_estimate
+      ?.birth_date_is_estimate,
   )
-  
+
   return (
     <Box
       id={id}
@@ -87,10 +87,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       _focusVisible={{ outline: "none", boxShadow: "none" }}
     >
       {/* Card Header: Image with Navigation using ImageCarousel */}
-      <Box 
-        position="relative" 
-        flexShrink={0} 
-        className="group" 
+      <Box
+        position="relative"
+        flexShrink={0}
+        className="group"
         height={{ base: "225px", md: "270px", xl: "300px" }}
         minHeight={{ base: "225px", md: "270px", xl: "300px" }}
         maxHeight={{ base: "225px", md: "270px", xl: "300px" }}
@@ -142,56 +142,78 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
       {/* Card Content */}
       <Box
-        px={4}
-        pt={3}
-        pb={4}
+        px={{ base: 2.5, md: 4 }}
+        pt={{ base: 2, md: 3 }}
+        pb={{ base: 2.5, md: 4 }}
         display="flex"
         flexDirection="column"
         className="items-center text-center"
       >
         {/* Name */}
-        <Box mb={1.5} display="flex" alignItems="center" justifyContent="center">
-          <Text fontSize="lg" fontWeight="bold" className="text-gray-800" lineHeight="1.2">
-            {beneficiary.name ? 
-              `${beneficiary.name.split(" ")[0]} ${beneficiary.name.split(" ")[2]?.[0] || ""}`.trim()
-              : "Name"
-            }
+        <Box
+          mb={{ base: 1, md: 1.5 }}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+        >
+          <Text
+            fontSize={{ base: "md", md: "lg" }}
+            fontWeight="bold"
+            className="text-gray-800"
+            lineHeight="1.2"
+          >
+            {beneficiary.name
+              ? `${beneficiary.name.split(" ")[0]} ${beneficiary.name.split(" ")[2]?.[0] || ""}`.trim()
+              : "Name"}
           </Text>
         </Box>
 
-        {/* Info row */}
-        <Box mb={2.5} display="flex" alignItems="center" justifyContent="center">
-          <Flex gap={3} flexWrap="wrap" className="text-[#666666]" justifyContent="center">
+        {/* Info row — capped at 2 lines on mobile */}
+        <Box
+          mb={{ base: 0.25, md: 2.5 }}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          overflow="hidden"
+          maxHeight={{ base: "2.6em", md: "none" }}
+        >
+          <Flex
+            columnGap={{ base: 1.5, md: 3 }}
+            rowGap={{ base: 0, md: 2 }}
+            flexWrap="wrap"
+            className="text-[#666666]"
+            justifyContent="center"
+          >
             {age !== null && (
               <Flex align="center" gap={1}>
-                <FaCalendar size={12} />
+                <FaCalendar size={11} />
                 <Text fontSize="xs">
                   {age} years{birthDateIsEstimate ? " (est.)" : ""}
                 </Text>
               </Flex>
             )}
             <Flex align="center" gap={1}>
-              <FaPerson size={12} />
+              <FaPerson size={11} />
               <Text fontSize="xs">{beneficiary.gender || "Gender"}</Text>
             </Flex>
             <Flex align="center" gap={1}>
-              <FaLocationDot size={12} />
+              <FaLocationDot size={11} />
               <Text fontSize="xs">{beneficiary.country || "Location"}</Text>
             </Flex>
           </Flex>
         </Box>
 
         {/* Biography — hard-clamp to 3 lines, no forced min-height */}
-        <Box width="100%">
+        <Box width="100%" pt={{ base: 1, md: 0 }}>
           <Text
-            fontSize="sm"
+            fontSize="xs"
             style={{
               display: "-webkit-box",
               WebkitLineClamp: 3,
               WebkitBoxOrient: "vertical",
               overflow: "hidden",
               textOverflow: "ellipsis",
-              lineHeight: "1.5",
+              lineHeight: "1.4",
               color: "#666666",
             }}
           >
@@ -199,7 +221,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           </Text>
         </Box>
       </Box>
-
     </Box>
   )
 }
