@@ -59,7 +59,7 @@ export async function POST(req: Request) {
         const amount = parseFloat(session.metadata?.amount || "0")
         const paymentType = session.metadata?.paymentType
         const customerEmail = session.customer_details?.email
-        const interval = paymentType === "subscription" ? "month" : "year"
+        const interval = paymentType === "subscription" ? "month" : paymentType === "one_time" ? "one_time" : "year"
 
         if (type === "partnership") {
           const email = session.metadata?.email
