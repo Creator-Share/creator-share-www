@@ -39,7 +39,7 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
 
   return (
     <Box
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-gray-200 shadow-lg"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200"
       style={{ transform: "translateZ(0)" }}
     >
       <Box className="container mx-auto px-4 py-4">

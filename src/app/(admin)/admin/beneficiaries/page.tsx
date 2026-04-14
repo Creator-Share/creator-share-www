@@ -104,6 +104,7 @@ const ChildrenTable = () => {
     ids?: string[]
   } | null>(null)
   const [isSelectingAll, setIsSelectingAll] = useState(false)
+  const selectAllMatchingActiveRef = useRef(false)
   const fetchedImagesRef = useRef<Set<string>>(new Set())
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -199,6 +200,7 @@ const ChildrenTable = () => {
   }, [selectedBeneficiary])
 
   useEffect(() => {
+    if (selectAllMatchingActiveRef.current) return
     setSelectedItems(prev => {
       if (prev.size === 0) return prev
       const existingIds = new Set(beneficiaries.filter((b) => b.id).map((b) => b.id!))
@@ -407,6 +409,7 @@ const ChildrenTable = () => {
   }
 
   const handleSelectVisible = () => {
+    selectAllMatchingActiveRef.current = false
     setSelectedItems(new Set(beneficiaries.filter((b) => b.id).map((b) => b.id!)))
   }
 
@@ -423,6 +426,7 @@ const ChildrenTable = () => {
       const res = await fetch(`/api/admin/beneficiaries/ids?${params.toString()}`)
       if (!res.ok) throw new Error("Failed to fetch matching IDs")
       const data = await res.json()
+      selectAllMatchingActiveRef.current = true
       setSelectedItems(new Set(data.ids as string[]))
     } catch (error) {
       console.error("Select all matching error:", error)
@@ -661,7 +665,7 @@ const ChildrenTable = () => {
         onSelectVisible={handleSelectVisible}
         onSelectAllMatching={handleSelectAllMatching}
         isSelectingAll={isSelectingAll}
-        onDeselectAll={() => setSelectedItems(new Set())}
+        onDeselectAll={() => { selectAllMatchingActiveRef.current = false; setSelectedItems(new Set()) }}
         onDelete={handleBulkDelete}
         onSetStatus={handleBulkStatusUpdate}
         onSetType={handleBulkTypeUpdate}
