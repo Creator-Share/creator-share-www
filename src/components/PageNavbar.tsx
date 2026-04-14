@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import {
   Box,
   Flex,
@@ -49,6 +49,8 @@ export function PageNavbar() {
   const [isOpen, setIsOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
+  const [skipTransition, setSkipTransition] = useState(false)
+  const prevScrollRef = useRef(0)
   const [aboutUsOpen, setAboutUsOpen] = useState(false)
   const [aboutUsDefaultTab, setAboutUsDefaultTab] = useState<AboutTabAnchor>("about")
   const [faqOpen, setFaqOpen] = useState(false)
@@ -63,13 +65,26 @@ export function PageNavbar() {
   const isHome = pathname === "/"
   const isHomeLogoExpanded = isHome && !isScrolled
 
-  // Scroll detection for navbar shadow and home logo size (hysteresis prevents bounce near top)
+  // Scroll detection for navbar shadow and home logo size (hysteresis prevents bounce near top).
+  // If the user jumps more than half a viewport in one scroll event, snap the navbar to its
+  // final state immediately (no transition) so the filter bar never docks under a semi-transparent bar.
   const handleScroll = useCallback(() => {
     const scrollTop = window.scrollY || document.documentElement.scrollTop
+    const delta = Math.abs(scrollTop - prevScrollRef.current)
+    prevScrollRef.current = scrollTop
+
+    if (delta > window.innerHeight / 2) {
+      setSkipTransition(true)
+      setIsScrolled(scrollTop > NAV_SCROLL_EXPAND_PX)
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => setSkipTransition(false))
+      )
+      return
+    }
+
+    setSkipTransition(false)
     setIsScrolled((wasScrolled) => {
-      if (wasScrolled) {
-        return scrollTop > NAV_SCROLL_EXPAND_PX
-      }
+      if (wasScrolled) return scrollTop > NAV_SCROLL_EXPAND_PX
       return scrollTop > NAV_SCROLL_COLLAPSE_PX
     })
   }, [])
@@ -156,16 +171,19 @@ export function PageNavbar() {
           <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
         </>
       )}
-      <Box 
-        className={`w-full z-[1000] sticky top-0 transition-all duration-500 ${
-          isScrolled 
-            ? "bg-white border-b border-gray-200" 
+      <Box
+        className={`w-full z-[1000] sticky top-0 ${
+          isScrolled
+            ? "bg-white border-b border-gray-200"
             : "bg-transparent border-b border-transparent"
         }`}
         style={{
-          boxShadow: isScrolled 
-            ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)" 
-            : "none"
+          transition: skipTransition
+            ? "none"
+            : "background-color 500ms ease, border-color 500ms ease, box-shadow 500ms ease",
+          boxShadow: isScrolled
+            ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)"
+            : "none",
         }}
       >
         <Flex
@@ -174,7 +192,7 @@ export function PageNavbar() {
             height: isHomeLogoExpanded
               ? NAV_ROW_HEIGHT_EXPANDED_PX
               : NAV_ROW_HEIGHT_COLLAPSED_PX,
-            transition: navRowTransition,
+            transition: skipTransition ? "none" : navRowTransition,
           }}
         >
         {/* Logo: larger at top on homepage only; other routes stay compact */}
@@ -191,7 +209,7 @@ export function PageNavbar() {
               height={isHomeLogoExpanded ? "72px" : "48px"}
               objectFit="contain"
               style={{
-                transition: `height ${NAV_ROW_TRANSITION_MS}ms ease-out`,
+                transition: skipTransition ? "none" : `height ${NAV_ROW_TRANSITION_MS}ms ease-out`,
               }}
             />
           </NextLink>
