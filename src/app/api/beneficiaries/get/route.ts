@@ -47,7 +47,6 @@ export async function GET(req: Request) {
     // so PostgREST returns a Content-Range total alongside the page data (no extra round trip).
     let query = supabase.from("beneficiaries").select("*", { count: "exact" });
 
-    console.log("[DEBUG get/route] beneficiaryType:", beneficiaryType, "status:", status)
     if (beneficiaryType && beneficiaryType !== "null" && beneficiaryType !== "undefined") {
       // Support comma-separated types (e.g. "CHILD,CHILD_LABORER")
       const types = beneficiaryType.split(",").map((t) => t.trim()).filter(Boolean)

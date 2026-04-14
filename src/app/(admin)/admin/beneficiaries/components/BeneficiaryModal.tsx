@@ -680,12 +680,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         }
 
         await onSave({ ...updatedData, budget_goal: budgetGoalInCents })
+        // onSave closes the modal and triggers a full list refresh in the parent,
+        // so we just clean up local state — no need for another fetchImages() call
+        // which would race against the unmount and cause redundant API requests.
         setHasUnsavedChanges(false)
         setImageFiles([])
         resetVideoUploadInput()
-
-        // Refresh images list after saving
-        await fetchImages()
       }
     } catch (error) {
       console.error("Error saving:", error)
