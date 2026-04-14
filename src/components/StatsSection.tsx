@@ -45,7 +45,7 @@ export function StatsSection() {
           justify="center"
           align="center"
         >
-          {/* Stat Card 1: Children Under Care */}
+          {/* Stat Card 1: Waiting for Support */}
           <Flex
             direction="row"
             align="center"
@@ -77,7 +77,7 @@ export function StatsSection() {
                     color="gray.700"
                     fontWeight="medium"
                   >
-                    Children Waiting
+                    Waiting for Support
                   </Text>
                 </Flex>
               </>
@@ -116,7 +116,7 @@ export function StatsSection() {
                     color="gray.700"
                     fontWeight="medium"
                   >
-                    Children Sponsored
+                    Now Supported
                   </Text>
                 </Flex>
               </>

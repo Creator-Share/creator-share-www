@@ -1,8 +1,17 @@
-alter table "public"."transaction_ledger" add column "customer_id" text;
+DO $$ BEGIN
+  ALTER TABLE "public"."transaction_ledger" ADD COLUMN "customer_id" text;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-alter table "public"."transaction_ledger" add column "payment_intent" text;
+DO $$ BEGIN
+  ALTER TABLE "public"."transaction_ledger" ADD COLUMN "payment_intent" text;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-alter table "public"."transaction_ledger" add column "payment_method_id" text;
+DO $$ BEGIN
+  ALTER TABLE "public"."transaction_ledger" ADD COLUMN "payment_method_id" text;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
 set check_function_bodies = off;
 

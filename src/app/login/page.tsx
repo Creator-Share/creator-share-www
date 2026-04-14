@@ -49,7 +49,7 @@ export default function LoginPage() {
   return (
     <Box minH="130vh" pb={40}>
       {/* Home Hero Section */}
-      <HomeHero />
+      <HomeHero activeType={null} onTypeChange={() => {}} />
 
       {/* Filters and Listings Container */}
       <Box>

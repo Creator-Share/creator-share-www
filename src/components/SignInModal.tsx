@@ -124,7 +124,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose }) => {
           borderRadius: "24px"
         }}
       >
-        <DialogHeader className="bg-[#1C3C8C] text-white px-10 py-6">
+        <DialogHeader className="bg-[#2b7ff9] text-white px-10 py-6">
           <DialogTitle fontSize="xl" fontWeight="bold">
             Sign In
           </DialogTitle>
@@ -168,7 +168,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose }) => {
                 >
                   <Text as="label" fontSize="sm">Password</Text>
                   <Link
-                    className="text-[#1C3C8C] text-xs hover:underline"
+                    className="text-[#2b7ff9] text-xs hover:underline"
                     href="/forgot-password"
                     onClick={handleClose}
                   >
@@ -202,10 +202,10 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose }) => {
               </Box>
               <Button
                 type="submit"
-                bg="#1C3C8C"
+                bg="#2b7ff9"
                 color="white"
                 borderRadius="16px"
-                _hover={{ bg: "#1C2B7A" }}
+                _hover={{ bg: "#1a6fe0" }}
                 width="full"
                 disabled={isDisabled || isLoading}
               >
@@ -223,7 +223,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose }) => {
                   New to Creator Share?{" "}
                   <Link
                     href="/register"
-                    className="text-[#1C3C8C] hover:underline"
+                    className="text-[#2b7ff9] hover:underline"
                     onClick={handleClose}
                   >
                     Sign up here →

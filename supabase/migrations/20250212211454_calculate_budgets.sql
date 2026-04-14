@@ -22,6 +22,7 @@ END;
 $function$
 ;
 
+DROP TRIGGER IF EXISTS update_budget_raised ON public.transaction_ledger;
 CREATE TRIGGER update_budget_raised AFTER INSERT OR DELETE OR UPDATE ON public.transaction_ledger FOR EACH ROW EXECUTE FUNCTION calc_budget_raised();
 
 

@@ -43,8 +43,9 @@ export async function GET(req: Request) {
 
   try {
 
-    // STEP 1: Start with base query
-    let query = supabase.from("beneficiaries").select("*");
+    // STEP 1: Start with base query — count=exact adds Prefer: count=exact header
+    // so PostgREST returns a Content-Range total alongside the page data (no extra round trip).
+    let query = supabase.from("beneficiaries").select("*", { count: "exact" });
 
     if (beneficiaryType && beneficiaryType !== "null" && beneficiaryType !== "undefined") {
       // Support comma-separated types (e.g. "CHILD,CHILD_LABORER")
@@ -98,7 +99,7 @@ export async function GET(req: Request) {
     const rangeEnd = offset + limit - 1
     query = query.range(rangeStart, rangeEnd)
 
-    const { data, error } = await query
+    const { data, error, count } = await query
     if (error) {
       console.error("Supabase error:", error)
       return NextResponse.json({ error: "Database error" }, { status: 500 })
@@ -121,6 +122,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       people: (data || []) as Beneficiaries[],
+      totalCount: count ?? null,
       pageInfo: {
         limit,
         nextCursor:

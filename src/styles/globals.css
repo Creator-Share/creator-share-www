@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Force light color scheme globally — prevents Chakra's defaultSystem from
+   applying dark-mode body background on devices with prefers-color-scheme:dark. */
+html {
+  color-scheme: light;
+}
+
+/* Paper Marble — full-page background: subtle diagonal gradient + coarse grain. */
+body {
+  background-color: #f4f6fa;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.35' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"),
+    linear-gradient(160deg, #ffffff 0%, #f8f9fb 30%, #eef2f8 60%, #f4f6fa 100%);
+  background-repeat: repeat, no-repeat;
+  background-size: 200px 200px, cover;
+  background-attachment: fixed, fixed;
+}
+
+/* On narrow screens the white cards fill the viewport, so override the body
+   background to pure white — this prevents gray bleed-through at any scroll
+   position. Must come AFTER the base body rule to win the cascade. */
+@media (max-width: 62em) {
+  html, body {
+    background-color: white !important;
+    background-image: none !important;
+  }
+}
+
+/* Kill browser focus rings on click-only card divs */
+[data-card-no-focus]:focus,
+[data-card-no-focus]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* Fade-in animation for new listing items */
 .fade-in-new-item {
   animation: fadeInUp 0.5s ease-out forwards;
@@ -13,6 +47,101 @@
     transform: translateY(20px);
   }
   100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Card grid: 2 columns down to 420px, single column below that */
+@media (max-width: 419px) {
+  .child-card-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Ark/Chakra Select triggers ── */
+[data-scope="select"][data-part="trigger"] {
+  border-radius: 16px !important;
+  background-color: #f3f4f6 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  padding-left: 0.75rem !important;
+}
+[data-scope="select"][data-part="trigger"]:hover {
+  background-color: #e9eaec !important;
+}
+[data-scope="select"][data-part="trigger"]:focus-within,
+[data-scope="select"][data-part="trigger"][data-state="open"] {
+  background-color: #ffffff !important;
+  border-color: #2b7ff9 !important;
+  box-shadow: 0 0 0 1px #2b7ff9 !important;
+}
+
+/* ── Ark/Chakra Slider ── */
+[data-scope="slider"][data-part="track"] {
+  background-color: #e5e7eb !important;
+  border-radius: 999px !important;
+}
+[data-scope="slider"][data-part="range"] {
+  background-color: #2b7ff9 !important;
+  border-radius: 999px !important;
+}
+[data-scope="slider"][data-part="thumb"] {
+  background-color: #ffffff !important;
+  border: none !important;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.18),
+    0 0 0 2px rgba(43, 127, 249, 0.22) !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+[data-scope="slider"][data-part="thumb"]:focus-visible {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.18),
+    0 0 0 3px rgba(43, 127, 249, 0.38) !important;
+  outline: none !important;
+}
+
+/* Page load entrance animations */
+@keyframes pageLogoSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pageNavRightIn {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pageContentFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
     opacity: 1;
     transform: translateY(0);
   }

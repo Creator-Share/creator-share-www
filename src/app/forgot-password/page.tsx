@@ -76,7 +76,7 @@ const ForgotPassword = () => {
           </Box>
           <Button
             onClick={handleSendOtp}
-            className="bg-[#1C3C8C] text-white mt-9 p-2.5"
+            className="bg-[#2b7ff9] text-white mt-9 p-2.5"
             disabled={!email || loading}
           >
             {loading ? "Sending..." : "Continue"}

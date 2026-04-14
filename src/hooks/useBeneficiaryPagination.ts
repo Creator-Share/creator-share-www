@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react"
 import { Beneficiaries } from "@/types"
 import { toaster } from "@/components/ui/toaster"
 import { createClient } from '@supabase/supabase-js'
+import { INACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 
 type FiltersState = {
   gender: string
@@ -23,9 +24,12 @@ interface UseBeneficiaryPaginationOptions {
 
 interface UseBeneficiaryPaginationReturn {
   beneficiaries: Beneficiaries[]
+  totalCount: number | null
   cursor: string | null
   hasMore: boolean
   isLoading: boolean
+  /** True while a fresh (non-pagination) fetch is in flight. The previous page's data stays visible during this time. */
+  isRefreshing: boolean
   filters: FiltersState
   setFilters: (
     filters: FiltersState | ((prev: FiltersState) => FiltersState)
@@ -69,9 +73,11 @@ export function useBeneficiaryPagination(
   })
 
   const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([])
+  const [totalCount, setTotalCount] = useState<number | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState<boolean>(true)
   const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
   const [retryCount, setRetryCount] = useState<number>(0)
 
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -103,13 +109,11 @@ export function useBeneficiaryPagination(
       
       // Skip age range filtering when:
       //  • the type is ANIMAL (dogs don't have human-comparable ages), or
-      //  • status includes a value that may cover beneficiaries of any age
-      //    (Draft, Archived, Budget Fulfilled)
-      const skipAgeRangeStatuses = ["Draft", "Archived", "Budget Fulfilled"]
+      //  • status includes an inactive value that may cover beneficiaries of any age
       const isAnimalType = (type ?? "").split(",").includes("ANIMAL")
       const shouldSkipAgeRange =
         isAnimalType ||
-        (filters.status || []).some((status) => skipAgeRangeStatuses.includes(status))
+        (filters.status || []).some((status) => (INACTIVE_STATUSES as string[]).includes(status))
 
       if (filters.ageRange && !shouldSkipAgeRange) {
         params.set("ageRange", filters.ageRange.join(","))
@@ -129,13 +133,14 @@ export function useBeneficiaryPagination(
     async (nextCursor: string | null) => {
       const queryString = buildQuery(nextCursor)
 
-      // Abort any in-flight request and clear stale results immediately so the
-      // UI shows a loading state rather than the previous type's cards.
+      // Abort any in-flight request. Stale data is kept visible (dimmed) while
+      // the new page loads so the page height doesn't collapse and scroll
+      // position is preserved. isRefreshing signals the UI to apply the overlay.
       if (nextCursor === null) {
         if (abortControllerRef.current) {
           abortControllerRef.current.abort()
         }
-        setBeneficiaries([])
+        setIsRefreshing(true)
       }
 
       const controller = new AbortController()
@@ -148,6 +153,7 @@ export function useBeneficiaryPagination(
         )
         if (!res.ok) throw new Error("Failed to load beneficiaries")
         const data = await res.json()
+        if (data?.totalCount != null) setTotalCount(data.totalCount)
         const people = (data?.people || []) as Beneficiaries[]
         shuffle(people)
 
@@ -223,6 +229,7 @@ export function useBeneficiaryPagination(
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null
           setIsLoading(false)
+          if (nextCursor === null) setIsRefreshing(false)
         }
       }
     },
@@ -293,9 +300,11 @@ export function useBeneficiaryPagination(
 
   return {
     beneficiaries,
+    totalCount,
     cursor,
     hasMore,
     isLoading,
+    isRefreshing,
     filters,
     setFilters,
     handleFilterChange,

@@ -1,14 +1,11 @@
 import { User } from "@supabase/supabase-js"
+import type { BeneficiaryType } from "@/types/admin.types"
+import type { Status } from "@/config/beneficiaryStatuses"
+
+// Re-export for consumers that import from "@/types"
+export type { BeneficiaryType, Status }
 
 export type Gender = "Boy" | "Girl"
-export type Status =
-  | "New"
-  | "Partially Funded"
-  | "Budget Fulfilled"
-  | "Archived"
-  | "Draft"
-  | "Sponsorship Cancelled"
-export type BeneficiaryType = "CHILD" | "ANIMAL" | "FAMILY"
 
 type Geography = {
   coordinates: [number, number]

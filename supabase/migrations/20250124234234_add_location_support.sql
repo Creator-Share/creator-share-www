@@ -1,8 +1,14 @@
 create extension if not exists "postgis" with schema "public" version '3.3.7';
 
-alter table "public"."people" add column "location_geo" geography;
+DO $$ BEGIN
+  ALTER TABLE "public"."people" ADD COLUMN "location_geo" geography;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-alter table "public"."people" add column "location_str" text;
+DO $$ BEGIN
+  ALTER TABLE "public"."people" ADD COLUMN "location_str" text;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
 DO $$
 BEGIN

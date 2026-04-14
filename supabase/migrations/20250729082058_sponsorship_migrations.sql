@@ -1,8 +1,17 @@
-create type "public"."activity_source" as enum ('admin', 'sponsorship', 'system');
+DO $$ BEGIN
+  CREATE TYPE "public"."activity_source" AS ENUM ('admin', 'sponsorship', 'system');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-create type "public"."partnership_frequency" as enum ('monthly', 'annually');
+DO $$ BEGIN
+  CREATE TYPE "public"."partnership_frequency" AS ENUM ('monthly', 'annually');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-create type "public"."project_type" as enum ('emergency', 'education', 'shelter', 'nutrition', 'general');
+DO $$ BEGIN
+  CREATE TYPE "public"."project_type" AS ENUM ('emergency', 'education', 'shelter', 'nutrition', 'general');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 revoke delete on table "public"."spatial_ref_sys" from "anon";
 
@@ -60,7 +69,7 @@ revoke truncate on table "public"."spatial_ref_sys" from "service_role";
 
 revoke update on table "public"."spatial_ref_sys" from "service_role";
 
-create table "public"."activity_subscriptions" (
+create table if not exists "public"."activity_subscriptions" (
     "id" uuid not null default gen_random_uuid(),
     "beneficiary_id" uuid not null,
     "email" text not null,
@@ -68,7 +77,7 @@ create table "public"."activity_subscriptions" (
 );
 
 
-create table "public"."partnerships" (
+create table if not exists "public"."partnerships" (
     "id" uuid not null default gen_random_uuid(),
     "email" text not null,
     "amount" integer not null,
@@ -86,41 +95,71 @@ create table "public"."partnerships" (
     "payment_intent" text
 );
 
-alter type "public"."beneficiary_types" rename to "beneficiary_types__old_version_to_be_dropped";
+DO $$ BEGIN
+  ALTER TYPE "public"."beneficiary_types" RENAME TO "beneficiary_types__old_version_to_be_dropped";
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
 
-create type "public"."beneficiary_types" as enum ('CHILD', 'ANIMAL', 'FAMILY', 'STREET_INVOLVED', 'CHILD_LABORER');
+DO $$ BEGIN
+  CREATE TYPE "public"."beneficiary_types" AS ENUM ('CHILD', 'ANIMAL', 'FAMILY', 'STREET_INVOLVED', 'CHILD_LABORER');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-alter table "public"."beneficiaries" alter column beneficiary_type type "public"."beneficiary_types" using beneficiary_type::text::"public"."beneficiary_types";
+DO $$ BEGIN
+  ALTER TABLE "public"."beneficiaries" ALTER COLUMN beneficiary_type TYPE "public"."beneficiary_types" USING beneficiary_type::text::"public"."beneficiary_types";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-drop type "public"."beneficiary_types__old_version_to_be_dropped";
+DROP TYPE IF EXISTS "public"."beneficiary_types__old_version_to_be_dropped";
 
-alter table "public"."activities" add column "created_by" activity_source;
+DO $$ BEGIN
+  ALTER TABLE "public"."activities" ADD COLUMN "created_by" activity_source;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-alter table "public"."activities" add column "images_url" jsonb default '[]'::jsonb;
+DO $$ BEGIN
+  ALTER TABLE "public"."activities" ADD COLUMN "images_url" jsonb DEFAULT '[]'::jsonb;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-alter table "public"."activities" add column "videos_url" jsonb default '[]'::jsonb;
+DO $$ BEGIN
+  ALTER TABLE "public"."activities" ADD COLUMN "videos_url" jsonb DEFAULT '[]'::jsonb;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-CREATE UNIQUE INDEX beneficiary_subscriptions_beneficiary_id_email_key ON public.activity_subscriptions USING btree (beneficiary_id, email);
+CREATE UNIQUE INDEX IF NOT EXISTS beneficiary_subscriptions_beneficiary_id_email_key ON public.activity_subscriptions USING btree (beneficiary_id, email);
 
-CREATE UNIQUE INDEX beneficiary_subscriptions_pkey ON public.activity_subscriptions USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS beneficiary_subscriptions_pkey ON public.activity_subscriptions USING btree (id);
 
-CREATE INDEX idx_beneficiary_subscriptions_beneficiary_id ON public.activity_subscriptions USING btree (beneficiary_id);
+CREATE INDEX IF NOT EXISTS idx_beneficiary_subscriptions_beneficiary_id ON public.activity_subscriptions USING btree (beneficiary_id);
 
-CREATE INDEX partnerships_created_at_idx ON public.partnerships USING btree (created_at);
+CREATE INDEX IF NOT EXISTS partnerships_created_at_idx ON public.partnerships USING btree (created_at);
 
-CREATE INDEX partnerships_email_idx ON public.partnerships USING btree (email);
+CREATE INDEX IF NOT EXISTS partnerships_email_idx ON public.partnerships USING btree (email);
 
-CREATE UNIQUE INDEX partnerships_pkey ON public.partnerships USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS partnerships_pkey ON public.partnerships USING btree (id);
 
-CREATE INDEX partnerships_status_idx ON public.partnerships USING btree (status);
+CREATE INDEX IF NOT EXISTS partnerships_status_idx ON public.partnerships USING btree (status);
 
-alter table "public"."activity_subscriptions" add constraint "beneficiary_subscriptions_pkey" PRIMARY KEY using index "beneficiary_subscriptions_pkey";
+DO $$ BEGIN
+  alter table "public"."activity_subscriptions" add constraint "beneficiary_subscriptions_pkey" PRIMARY KEY using index "beneficiary_subscriptions_pkey";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."partnerships" add constraint "partnerships_pkey" PRIMARY KEY using index "partnerships_pkey";
+DO $$ BEGIN
+  alter table "public"."partnerships" add constraint "partnerships_pkey" PRIMARY KEY using index "partnerships_pkey";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."activity_subscriptions" add constraint "beneficiary_subscriptions_beneficiary_id_email_key" UNIQUE using index "beneficiary_subscriptions_beneficiary_id_email_key";
+DO $$ BEGIN
+  alter table "public"."activity_subscriptions" add constraint "beneficiary_subscriptions_beneficiary_id_email_key" UNIQUE using index "beneficiary_subscriptions_beneficiary_id_email_key";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."activity_subscriptions" add constraint "beneficiary_subscriptions_beneficiary_id_fkey" FOREIGN KEY (beneficiary_id) REFERENCES beneficiaries(id) ON DELETE CASCADE not valid;
+DO $$ BEGIN
+  alter table "public"."activity_subscriptions" add constraint "beneficiary_subscriptions_beneficiary_id_fkey" FOREIGN KEY (beneficiary_id) REFERENCES beneficiaries(id) ON DELETE CASCADE not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."activity_subscriptions" validate constraint "beneficiary_subscriptions_beneficiary_id_fkey";
 
@@ -221,20 +260,27 @@ grant truncate on table "public"."partnerships" to "service_role";
 
 grant update on table "public"."partnerships" to "service_role";
 
-create policy "Allow public insert"
-on "public"."partnerships"
-as permissive
-for insert
-to public
-with check (true);
+DO $$ BEGIN
+  create policy "Allow public insert"
+  on "public"."partnerships"
+  as permissive
+  for insert
+  to public
+  with check (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-create policy "Allow users to view own partnerships"
-on "public"."partnerships"
-as permissive
-for select
-to authenticated
-using ((email = (auth.jwt() ->> 'email'::text)));
+DO $$ BEGIN
+  create policy "Allow users to view own partnerships"
+  on "public"."partnerships"
+  as permissive
+  for select
+  to authenticated
+  using ((email = (auth.jwt() ->> 'email'::text)));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
+DROP TRIGGER IF EXISTS update_partnerships_updated_at ON public.partnerships;
 CREATE TRIGGER update_partnerships_updated_at BEFORE UPDATE ON public.partnerships FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

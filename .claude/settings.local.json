@@ -5,7 +5,14 @@
       "mcp__plugin_playwright_playwright__browser_take_screenshot",
       "Bash(tree:*)",
       "Bash(find:*)",
-      "Bash(git rev-parse:*)"
+      "Bash(git rev-parse:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "mcp__muninn__muninn_recall",
+      "mcp__muninn__muninn_remember",
+      "Bash(yarn lint:*)",
+      "Bash(yarn build:*)",
+      "Bash(git add:*)"
     ]
   }
 }

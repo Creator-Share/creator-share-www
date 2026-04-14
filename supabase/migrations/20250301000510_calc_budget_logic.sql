@@ -37,4 +37,5 @@ END;
 $function$
 ;
 
+DROP TRIGGER IF EXISTS update_subscription_budget ON public.subscriptions;
 CREATE TRIGGER update_subscription_budget AFTER INSERT OR DELETE OR UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION calc_budget_raised();

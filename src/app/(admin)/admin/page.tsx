@@ -31,7 +31,9 @@ const Dashboard = () => {
         {navigationItems.map((item) => (
           <Link key={item.path} href={item.path}>
             <Button
-              className="bg-indigo-900 text-white hover:bg-indigo-800 w-full"
+              className="w-full text-white"
+              bg="#2b7ff9"
+              _hover={{ bg: "#1a6fe0" }}
               p={4}
               fontSize={16}
               h="auto"

@@ -344,7 +344,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({
           <Text className="font-medium">Expenses</Text>
           <Button
             onClick={() => setShowCreateForm(!showCreateForm)}
-            className="bg-[#1C3C8C] text-white"
+            className="bg-[#2b7ff9] text-white"
             size="sm"
             disabled={budgetGoal > 0 && remainingBudget <= 0}
             p={4}
@@ -455,7 +455,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({
                   totalAssignedExpenses + Number(newExpense.price || 0) * 100 >
                     budgetGoal)
               }
-              className="bg-[#1C3C8C] text-white disabled:opacity-50"
+              className="bg-[#2b7ff9] text-white disabled:opacity-50"
               p={4}
             >
               {loading ? "Creating..." : "Create Expense"}

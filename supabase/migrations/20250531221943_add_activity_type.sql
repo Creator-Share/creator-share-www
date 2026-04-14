@@ -1,10 +1,16 @@
 -- Create activity_type enum
-create type public.activity_type as enum (
-  'INFO',
-  'UPDATE',
-  'SUBSCRIPTION'
-);
+DO $$ BEGIN
+  CREATE TYPE public.activity_type AS ENUM (
+    'INFO',
+    'UPDATE',
+    'SUBSCRIPTION'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Add activity_type column to activities
-alter table public.activities
-  add column activity_type public.activity_type default 'INFO';
+DO $$ BEGIN
+  ALTER TABLE public.activities
+    ADD COLUMN activity_type public.activity_type DEFAULT 'INFO';
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;

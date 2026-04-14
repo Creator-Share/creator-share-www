@@ -1,6 +1,12 @@
-create type "public"."Gender" as enum ('Boy', 'Girl');
+DO $$ BEGIN
+  CREATE TYPE "public"."Gender" AS ENUM ('Boy', 'Girl');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-drop policy "Enable read access for all users" on "public"."people";
+DO $$ BEGIN
+  drop policy "Enable read access for all users" on "public"."people";
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
 
 revoke delete on table "public"."people" from "anon";
 
@@ -44,19 +50,32 @@ revoke truncate on table "public"."people" from "service_role";
 
 revoke update on table "public"."people" from "service_role";
 
-alter table "public"."role_assignments" drop constraint "role_assignments_user_id_fkey";
+DO $$ BEGIN
+  ALTER TABLE "public"."role_assignments" DROP CONSTRAINT "role_assignments_user_id_fkey";
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
 
-alter table "public"."people" drop constraint "people_pkey";
+DO $$ BEGIN
+  ALTER TABLE "public"."people" DROP CONSTRAINT "people_pkey";
+EXCEPTION WHEN undefined_table THEN NULL;
+       WHEN undefined_object THEN NULL;
+END $$;
 
 drop index if exists "public"."people_pkey";
 
-drop table "public"."people";
+drop table if exists "public"."people";
 
-alter type "public"."PersonStatus" rename to "PersonStatus__old_version_to_be_dropped";
+DO $$ BEGIN
+  ALTER TYPE "public"."PersonStatus" RENAME TO "PersonStatus__old_version_to_be_dropped";
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
 
-create type "public"."PersonStatus" as enum ('New', 'Partially Funded', 'Budget Fulfilled', 'Archived', 'Draft');
+DO $$ BEGIN
+  CREATE TYPE "public"."PersonStatus" AS ENUM ('New', 'Partially Funded', 'Budget Fulfilled', 'Archived', 'Draft');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-create table "public"."sponsor_people" (
+create table if not exists "public"."sponsor_people" (
     "id" uuid not null default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
     "name" text,
@@ -77,7 +96,7 @@ create table "public"."sponsor_people" (
 
 alter table "public"."sponsor_people" enable row level security;
 
-create table "public"."users" (
+create table if not exists "public"."users" (
     "id" uuid not null default gen_random_uuid(),
     "first_name" text,
     "last_name" text,
@@ -86,29 +105,47 @@ create table "public"."users" (
 );
 
 
-drop type "public"."PersonStatus__old_version_to_be_dropped";
+DROP TYPE IF EXISTS "public"."PersonStatus__old_version_to_be_dropped";
 
-alter table "public"."role_assignments" alter column "advocate_id" drop default;
+DO $$ BEGIN
+  ALTER TABLE "public"."role_assignments" ALTER COLUMN "advocate_id" DROP DEFAULT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."roles" add column "display_name" text;
+DO $$ BEGIN
+  ALTER TABLE "public"."roles" ADD COLUMN "display_name" text;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-CREATE INDEX idx_people_location ON public.sponsor_people USING gist (location_geo);
+CREATE INDEX IF NOT EXISTS idx_people_location ON public.sponsor_people USING gist (location_geo);
 
-CREATE INDEX idx_people_location_geo ON public.sponsor_people USING gist (location_geo);
+CREATE INDEX IF NOT EXISTS idx_people_location_geo ON public.sponsor_people USING gist (location_geo);
 
-CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email);
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON public.users USING btree (email);
 
-CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS users_pkey ON public.users USING btree (id);
 
-CREATE UNIQUE INDEX people_pkey ON public.sponsor_people USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS people_pkey ON public.sponsor_people USING btree (id);
 
-alter table "public"."sponsor_people" add constraint "people_pkey" PRIMARY KEY using index "people_pkey";
+DO $$ BEGIN
+  alter table "public"."sponsor_people" add constraint "people_pkey" PRIMARY KEY using index "people_pkey";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."users" add constraint "users_pkey" PRIMARY KEY using index "users_pkey";
+DO $$ BEGIN
+  alter table "public"."users" add constraint "users_pkey" PRIMARY KEY using index "users_pkey";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."users" add constraint "users_email_key" UNIQUE using index "users_email_key";
+DO $$ BEGIN
+  alter table "public"."users" add constraint "users_email_key" UNIQUE using index "users_email_key";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."role_assignments" add constraint "role_assignments_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE not valid;
+DO $$ BEGIN
+  alter table "public"."role_assignments" add constraint "role_assignments_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."role_assignments" validate constraint "role_assignments_user_id_fkey";
 
@@ -230,12 +267,15 @@ grant truncate on table "public"."users" to "service_role";
 
 grant update on table "public"."users" to "service_role";
 
-create policy "Enable read access for all users"
-on "public"."sponsor_people"
-as permissive
-for select
-to public
-using (true);
+DO $$ BEGIN
+  create policy "Enable read access for all users"
+  on "public"."sponsor_people"
+  as permissive
+  for select
+  to public
+  using (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
 

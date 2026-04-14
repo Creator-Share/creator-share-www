@@ -1,4 +1,4 @@
-create table "public"."transaction_ledger" (
+create table if not exists "public"."transaction_ledger" (
     "id" uuid not null default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
     "user_id" uuid,
@@ -15,15 +15,24 @@ create table "public"."transaction_ledger" (
 
 alter table "public"."sponsor_people" disable row level security;
 
-CREATE UNIQUE INDEX transaction_ledger_pkey ON public.transaction_ledger USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS transaction_ledger_pkey ON public.transaction_ledger USING btree (id);
 
-alter table "public"."transaction_ledger" add constraint "transaction_ledger_pkey" PRIMARY KEY using index "transaction_ledger_pkey";
+DO $$ BEGIN
+  alter table "public"."transaction_ledger" add constraint "transaction_ledger_pkey" PRIMARY KEY using index "transaction_ledger_pkey";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."transaction_ledger" add constraint "transaction_ledger_child_id_fkey" FOREIGN KEY (child_id) REFERENCES sponsor_people(id) not valid;
+DO $$ BEGIN
+  alter table "public"."transaction_ledger" add constraint "transaction_ledger_child_id_fkey" FOREIGN KEY (child_id) REFERENCES sponsor_people(id) not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."transaction_ledger" validate constraint "transaction_ledger_child_id_fkey";
 
-alter table "public"."transaction_ledger" add constraint "transaction_ledger_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) not valid;
+DO $$ BEGIN
+  alter table "public"."transaction_ledger" add constraint "transaction_ledger_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."transaction_ledger" validate constraint "transaction_ledger_user_id_fkey";
 
