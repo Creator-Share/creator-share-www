@@ -17,7 +17,6 @@ import BeneficiaryModal from "../SponsorshipModal"
 import HorizontalSponsorshipRow from "../HorizontalSponsorshipRow"
 import {
   BeneficiaryTabType,
-  TYPE_TO_ROUTE,
   ROUTE_TO_TYPE,
   getApiTypes,
 } from "@/config/beneficiaryTypes"
@@ -125,9 +124,6 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
       search: "",
     })
     onTypeChange(null)
-    if (typeof window !== "undefined") {
-      window.history.pushState({ beneficiaryType: null }, "", "/")
-    }
     scrollToCard()
   }, [resetToDefaults, handleFilterChange, onTypeChange, scrollToCard])
 
@@ -169,13 +165,6 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
   const handleTypeChange = useCallback((type: BeneficiaryTabType | null) => {
     onTypeChange(type)
     scrollToCard()
-
-    // Update the URL so the link is shareable / bookmarkable, without
-    // triggering a full Next.js page navigation.
-    const route = type === null ? "/" : (TYPE_TO_ROUTE[type] ?? "/")
-    if (typeof window !== "undefined") {
-      window.history.pushState({ beneficiaryType: type }, "", route)
-    }
   }, [onTypeChange, scrollToCard])
 
   // Sticky filter detection — only meaningful at lg+ where position:sticky applies.
