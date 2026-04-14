@@ -120,7 +120,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose }) => {
       <DialogContent 
         className="max-w-md mx-4 rounded-3xl overflow-hidden"
         style={{
-          boxShadow: "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)",
+          boxShadow: "0 60px 120px -20px rgba(0, 0, 0, 0.6), 0 24px 48px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.06)",
           borderRadius: "24px"
         }}
       >

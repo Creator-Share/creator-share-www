@@ -1,5 +1,6 @@
 "use client"
 import React, { useEffect, useState, useCallback } from "react"
+import Image from "next/image"
 import { Box, Flex, Text, Tabs } from "@chakra-ui/react"
 import { FaFacebook, FaInstagram, FaExternalLinkAlt } from "react-icons/fa"
 import {
@@ -20,35 +21,33 @@ interface AboutUsModalProps {
   open: boolean
   onClose: () => void
   defaultTab?: TabAnchor
+  prevPath?: string
 }
 
 export const AboutUsModal: React.FC<AboutUsModalProps> = ({
   open,
   onClose,
   defaultTab = "about",
+  prevPath,
 }) => {
   const [activeTab, setActiveTab] = useState<TabAnchor>(defaultTab)
 
-  // Handle tab changes - update URL hash
+  // Handle tab changes - update URL path
   const handleTabChange = useCallback((value: string) => {
     const tab = value as TabAnchor
     setActiveTab(tab)
     if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `#${tab}`)
+      window.history.replaceState(null, "", `/${tab}`)
     }
   }, [])
 
-  // Clear hash when modal closes
+  // Restore previous path when modal closes
   const handleClose = useCallback(() => {
-    if (typeof window !== "undefined" && window.location.hash) {
-      window.history.replaceState(
-        null,
-        "",
-        window.location.pathname + window.location.search,
-      )
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", prevPath ?? "/")
     }
     onClose()
-  }, [onClose])
+  }, [onClose, prevPath])
 
   // Sync active tab with defaultTab prop when modal opens
   useEffect(() => {
@@ -91,7 +90,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
         className="max-w-4xl mx-4 rounded-3xl overflow-hidden"
         style={{
           boxShadow:
-            "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)",
+            "0 60px 120px -20px rgba(0, 0, 0, 0.6), 0 24px 48px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.06)",
           borderRadius: "24px",
         }}
       >
@@ -132,6 +131,17 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
             {/* About Tab */}
             <Tabs.Content value="about" className="p-6 md:p-12">
               <Box>
+                {/* Logo */}
+                <Box mb={6}>
+                  <Image
+                    src="/logo_text.svg"
+                    alt="Creator Share"
+                    width={200}
+                    height={56}
+                    style={{ objectFit: "contain" }}
+                  />
+                </Box>
+
                 <Text fontSize="2xl" fontWeight="bold" color="gray.800" mb={4}>
                   The Creator Share Foundation
                 </Text>
@@ -144,6 +154,24 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
                   opportunity to pursue their hopes and dreams. One child at a
                   time, love is changing thousands of lives.
                 </Text>
+
+                {/* Tanzania website CTA */}
+                <a
+                  href="https://tanzania.creatorshare.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between w-full bg-[#2b7ff9] hover:bg-[#1a6fe0] transition-colors text-white rounded-2xl px-6 py-4 mb-8 group"
+                >
+                  <Box>
+                    <Text fontWeight="bold" fontSize="md" color="white">
+                      Visit Our Tanzania Website
+                    </Text>
+                    <Text fontSize="sm" color="white" opacity={0.85}>
+                      tanzania.creatorshare.com
+                    </Text>
+                  </Box>
+                  <FaExternalLinkAlt className="w-4 h-4 opacity-80 group-hover:opacity-100 flex-shrink-0" />
+                </a>
 
                 {/* Social Links */}
                 <Box mb={8}>

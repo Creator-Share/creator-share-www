@@ -62,19 +62,16 @@ const FAQ_ITEMS: FAQItem[] = [
 interface FAQModalProps {
   open: boolean
   onClose: () => void
+  prevPath?: string
 }
 
-export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
+export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose, prevPath }) => {
   const handleClose = useCallback(() => {
-    if (typeof window !== "undefined" && window.location.hash) {
-      window.history.replaceState(
-        null,
-        "",
-        window.location.pathname + window.location.search,
-      )
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", prevPath ?? "/")
     }
     onClose()
-  }, [onClose])
+  }, [onClose, prevPath])
 
   return (
     <DialogRoot
@@ -87,7 +84,7 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
         className="max-w-4xl mx-4 rounded-3xl overflow-hidden"
         style={{
           boxShadow:
-            "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)",
+            "0 60px 120px -20px rgba(0, 0, 0, 0.6), 0 24px 48px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.06)",
           borderRadius: "24px",
         }}
       >

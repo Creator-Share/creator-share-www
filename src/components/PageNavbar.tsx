@@ -53,6 +53,7 @@ export function PageNavbar() {
   const [skipTransition, setSkipTransition] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const prevScrollRef = useRef(0)
+  const prevPathRef = useRef<string>("/")
   const [aboutUsOpen, setAboutUsOpen] = useState(false)
   const [aboutUsDefaultTab, setAboutUsDefaultTab] = useState<AboutTabAnchor>("about")
   const [faqOpen, setFaqOpen] = useState(false)
@@ -91,18 +92,18 @@ export function PageNavbar() {
     })
   }, [])
 
-  // Check URL hash or path for modals (About tabs and Sign In)
-  const checkHashAndOpenModal = useCallback(() => {
+  // Check URL path for modals (About tabs, FAQ, Sign In)
+  const checkPathAndOpenModal = useCallback(() => {
     if (typeof window === "undefined") return
-    const hash = window.location.hash.slice(1) // Remove the #
-    const isLoginPage = window.location.pathname === "/login"
-    
-    if (ABOUT_TAB_ANCHORS.includes(hash as AboutTabAnchor)) {
-      setAboutUsDefaultTab(hash as AboutTabAnchor)
+    const path = window.location.pathname
+    const isLoginPage = path === "/login"
+
+    if (ABOUT_TAB_ANCHORS.includes(path.slice(1) as AboutTabAnchor)) {
+      setAboutUsDefaultTab(path.slice(1) as AboutTabAnchor)
       setAboutUsOpen(true)
-    } else if (hash === "faq") {
+    } else if (path === "/faq") {
       setFaqOpen(true)
-    } else if (hash === "signin" || isLoginPage) {
+    } else if (path === "/signin" || isLoginPage) {
       setSignInOpen(true)
     }
   }, [])
@@ -120,16 +121,16 @@ export function PageNavbar() {
     checkMobile()
     window.addEventListener("resize", checkMobile, { passive: true })
 
-    // Check hash on mount and listen for changes
-    checkHashAndOpenModal()
-    window.addEventListener("hashchange", checkHashAndOpenModal)
+    // Check path on mount and listen for popstate (browser back/forward)
+    checkPathAndOpenModal()
+    window.addEventListener("popstate", checkPathAndOpenModal)
 
     return () => {
       window.removeEventListener("scroll", handleScroll)
       window.removeEventListener("resize", checkMobile)
-      window.removeEventListener("hashchange", checkHashAndOpenModal)
+      window.removeEventListener("popstate", checkPathAndOpenModal)
     }
-  }, [fetchUser, handleScroll, checkHashAndOpenModal])
+  }, [fetchUser, handleScroll, checkPathAndOpenModal])
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -153,8 +154,8 @@ export function PageNavbar() {
   // Close menu on route change and check for modal triggers
   useEffect(() => {
     setIsOpen(false)
-    checkHashAndOpenModal()
-  }, [pathname, checkHashAndOpenModal])
+    checkPathAndOpenModal()
+  }, [pathname, checkPathAndOpenModal])
 
   const handleLogout = async () => {
     setIsOpen(false)
@@ -174,8 +175,9 @@ export function PageNavbar() {
             open={aboutUsOpen}
             onClose={() => setAboutUsOpen(false)}
             defaultTab={aboutUsDefaultTab}
+            prevPath={prevPathRef.current}
           />
-          <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} />
+          <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} prevPath={prevPathRef.current} />
           <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
         </>
       )}
@@ -275,11 +277,12 @@ export function PageNavbar() {
             asChild
           >
             <a
-              href="#faq"
+              href="/faq"
               onClick={(e) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()
-                window.history.replaceState(null, "", "#faq")
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/faq")
                 setFaqOpen(true)
               }}
             >
@@ -293,11 +296,12 @@ export function PageNavbar() {
             asChild
           >
             <a
-              href="#about"
+              href="/about"
               onClick={(e) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()
-                window.history.replaceState(null, "", "#about")
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/about")
                 setAboutUsOpen(true)
               }}
             >
@@ -429,7 +433,8 @@ export function PageNavbar() {
               _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
               onClick={() => {
                 setIsOpen(false)
-                window.history.replaceState(null, "", "#faq")
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/faq")
                 setFaqOpen(true)
               }}
               className="w-full"
@@ -445,7 +450,8 @@ export function PageNavbar() {
               _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
               onClick={() => {
                 setIsOpen(false)
-                window.history.replaceState(null, "", "#about")
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/about")
                 setAboutUsOpen(true)
               }}
               className="w-full"
