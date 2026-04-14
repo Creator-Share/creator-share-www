@@ -22,9 +22,15 @@ const nextConfig: NextConfig = {
    */
   async rewrites() {
     return [
-      { source: "/street", destination: "/" },
-      { source: "/care",   destination: "/" },
-      { source: "/dogs",   destination: "/" },
+      { source: "/street",  destination: "/" },
+      { source: "/care",    destination: "/" },
+      { source: "/dogs",    destination: "/" },
+      { source: "/about",   destination: "/" },
+      { source: "/centers", destination: "/" },
+      { source: "/contact", destination: "/" },
+      { source: "/faq",     destination: "/" },
+      { source: "/signin",  destination: "/" },
+      { source: "/login",   destination: "/" },
     ]
   },
 

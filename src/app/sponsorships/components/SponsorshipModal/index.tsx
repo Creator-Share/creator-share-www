@@ -613,6 +613,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }
 
   return (
+    <>
+    <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} />
     <DialogRoot
       open={open}
       onOpenChange={(details) => {
@@ -929,8 +931,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           </Flex>
         </DialogBody>
       </DialogContent>
-      <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} />
     </DialogRoot>
+    </>
   )
 }
 

@@ -67,8 +67,8 @@ interface FAQModalProps {
 
 export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose, prevPath }) => {
   const handleClose = useCallback(() => {
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", prevPath ?? "/")
+    if (typeof window !== "undefined" && prevPath !== undefined) {
+      window.history.replaceState(null, "", prevPath)
     }
     onClose()
   }, [onClose, prevPath])

@@ -182,7 +182,7 @@ export function PageNavbar() {
         </>
       )}
       <Box
-        className={`w-full z-[1000] sticky top-0 bg-white border-b ${isMobile && !isScrolled ? "border-transparent" : "border-gray-200"}`}
+        className={`w-full z-[1000] sticky top-0 bg-white border-b ${(isHome && !isScrolled) || (isMobile && !isScrolled) ? "border-transparent" : "border-gray-200"}`}
         style={{
           boxShadow: isScrolled
             ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)"
