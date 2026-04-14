@@ -41,6 +41,7 @@ const NAV_SCROLL_COLLAPSE_PX = 32
 const NAV_SCROLL_EXPAND_PX = 6
 
 const NAV_ROW_HEIGHT_COLLAPSED_PX = 64
+const NAV_ROW_HEIGHT_MOBILE_PX = 52
 const NAV_ROW_HEIGHT_EXPANDED_PX = 88
 const NAV_ROW_TRANSITION_MS = 300
 const navRowTransition = `height ${NAV_ROW_TRANSITION_MS}ms ease-out`
@@ -50,6 +51,7 @@ export function PageNavbar() {
   const [mounted, setMounted] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const [skipTransition, setSkipTransition] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const prevScrollRef = useRef(0)
   const [aboutUsOpen, setAboutUsOpen] = useState(false)
   const [aboutUsDefaultTab, setAboutUsDefaultTab] = useState<AboutTabAnchor>("about")
@@ -63,7 +65,7 @@ export function PageNavbar() {
   const [isAdmin, setIsAdmin] = useState(false)
 
   const isHome = pathname === "/"
-  const isHomeLogoExpanded = isHome && !isScrolled
+  const isHomeLogoExpanded = isHome && !isScrolled && !isMobile
 
   // Scroll detection for navbar shadow and home logo size (hysteresis prevents bounce near top).
   // If the user jumps more than half a viewport in one scroll event, snap the navbar to its
@@ -108,17 +110,23 @@ export function PageNavbar() {
   useEffect(() => {
     setMounted(true)
     fetchUser()
-    
+
     // Set up scroll listener
     window.addEventListener("scroll", handleScroll, { passive: true })
     handleScroll() // Check initial scroll position
 
+    // Track mobile breakpoint so the logo stays compact on small screens
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener("resize", checkMobile, { passive: true })
+
     // Check hash on mount and listen for changes
     checkHashAndOpenModal()
     window.addEventListener("hashchange", checkHashAndOpenModal)
-    
+
     return () => {
       window.removeEventListener("scroll", handleScroll)
+      window.removeEventListener("resize", checkMobile)
       window.removeEventListener("hashchange", checkHashAndOpenModal)
     }
   }, [fetchUser, handleScroll, checkHashAndOpenModal])
@@ -172,15 +180,8 @@ export function PageNavbar() {
         </>
       )}
       <Box
-        className={`w-full z-[1000] sticky top-0 ${
-          isScrolled
-            ? "bg-white border-b border-gray-200"
-            : "bg-transparent border-b border-transparent"
-        }`}
+        className={`w-full z-[1000] sticky top-0 bg-white border-b ${isMobile && !isScrolled ? "border-transparent" : "border-gray-200"}`}
         style={{
-          transition: skipTransition
-            ? "none"
-            : "background-color 500ms ease, border-color 500ms ease, box-shadow 500ms ease",
           boxShadow: isScrolled
             ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)"
             : "none",
@@ -191,7 +192,9 @@ export function PageNavbar() {
           style={{
             height: isHomeLogoExpanded
               ? NAV_ROW_HEIGHT_EXPANDED_PX
-              : NAV_ROW_HEIGHT_COLLAPSED_PX,
+              : isMobile
+                ? NAV_ROW_HEIGHT_MOBILE_PX
+                : NAV_ROW_HEIGHT_COLLAPSED_PX,
             transition: skipTransition ? "none" : navRowTransition,
           }}
         >
@@ -391,7 +394,7 @@ export function PageNavbar() {
               onClick={() => setIsOpen(!isOpen)}
               aria-label="Toggle Menu"
               variant="ghost"
-              color={isOpen ? "white" : "inherit"}
+              color={isOpen ? "white" : "gray.500"}
               _hover={{
                 bg: "transparent",
                 transform: isOpen ? "scale(1.15)" : undefined,
