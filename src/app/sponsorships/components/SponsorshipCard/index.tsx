@@ -91,10 +91,10 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         position="relative" 
         flexShrink={0} 
         className="group" 
-        height="225px" 
-        minHeight="225px"
-        maxHeight="225px"
-        width="100%" 
+        height={{ base: "225px", md: "270px", xl: "300px" }}
+        minHeight={{ base: "225px", md: "270px", xl: "300px" }}
+        maxHeight={{ base: "225px", md: "270px", xl: "300px" }}
+        width="100%"
         overflow="hidden"
       >
         <ImageCarousel
