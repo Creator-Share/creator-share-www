@@ -74,18 +74,13 @@ COMMENT ON FUNCTION trigger_update_beneficiary_from_subscription IS
   'Triggers beneficiary recalculation after subscription INSERT, UPDATE, or DELETE. Skips blind sponsorships (NULL beneficiary_id).';
 
 -- ============================================================================
--- STEP 3: Update unique index to allow multiple NULL beneficiary_id (blind sponsorships)
+-- STEP 3: Drop the unique-subscription-per-beneficiary index
 -- ============================================================================
+-- The old unique index enforced one active subscription per beneficiary.
+-- This is incompatible with open sponsorship types (e.g. SPECIAL_NEEDS)
+-- which allow multiple sponsors per beneficiary. The application layer
+-- already prevents duplicate sponsorships for fixed types via status
+-- checks and the reject_fulfilled_beneficiary_subscription trigger.
 
--- Drop the existing unique index
 DROP INDEX IF EXISTS uniq_active_subscription_per_beneficiary;
-
--- Recreate the unique index with a condition that excludes NULL beneficiary_id
--- This allows multiple blind sponsorships (NULL) but still enforces uniqueness for regular sponsorships
-CREATE UNIQUE INDEX uniq_active_subscription_per_beneficiary
-ON public.subscriptions(beneficiary_id)
-WHERE status = 'complete' AND beneficiary_id IS NOT NULL;
-
-COMMENT ON INDEX uniq_active_subscription_per_beneficiary IS 
-'Ensures only one complete subscription exists per beneficiary at any time. Allows multiple blind sponsorships (NULL beneficiary_id).';
 
