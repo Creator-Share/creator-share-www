@@ -28,18 +28,22 @@ export function HomeBgPicker() {
       {/* ── Halo layer (disabled) ───────────────────────────────────────── */}
       {/* <div aria-hidden style={{ position: "absolute", top: "-88px", ... }} /> */}
 
-      {/* White-to-gray transition below the hero */}
+      {/* White hero mask that fades into the body paper gradient below.
+          Starts at top: 0 so it fully covers the body gradient in the hero
+          area (preventing the double-fade that occurs when the body gradient
+          is visible through an unmasked hero). Fades to transparent over the
+          lower third so the paper background shows through naturally. */}
       <div
         aria-hidden
         style={{
           position: "absolute",
-          top: "672px",
+          top: 0,
           left: "calc(-50vw + 50%)",
           width: "100vw",
-          height: "500px",
+          height: "1200px",
           zIndex: 0,
           pointerEvents: "none",
-          background: "linear-gradient(to bottom, white 0%, transparent 100%)",
+          background: "linear-gradient(to bottom, white 0%, white 56%, transparent 100%)",
         }}
       />
     </>
