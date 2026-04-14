@@ -23,7 +23,7 @@ import { Beneficiaries, Activity } from "@/types"
 import { toaster } from "@/components/ui/toaster"
 import { Box, Text, Spinner, Flex, Input } from "@chakra-ui/react"
 import { useAuthStore } from "@/store/authStore"
-import { paymentOptionsCollection } from "../Payments/config"
+import { paymentOptionsCollection, specialNeedsFrequencyOptions } from "../Payments/config"
 import { Button } from "@/components/ui/button"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import {
@@ -211,14 +211,23 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     if (!open) {
       setToastCount(0)
       setLastToastTime(0)
-      setAmount(remainingAmount)
-      setSelectedOption(paymentOptionsCollection.items[0].value)
+      // SPECIAL_NEEDS: reset to the suggested default rather than the (meaningless) remainingAmount
+      setAmount(
+        isSpecialNeeds
+          ? (typeDefaultDollars ?? publicHardcodedDollars ?? minimumAmount)
+          : remainingAmount,
+      )
+      setSelectedOption(
+        isSpecialNeeds
+          ? specialNeedsFrequencyOptions[0].value
+          : paymentOptionsCollection.items[0].value,
+      )
       setLoading(false)
       setBioExpanded(false)
       setFaqOpen(false)
       setVideoUrl(beneficiary.video_url?.trim() || "")
     }
-  }, [open, remainingAmount, beneficiary.video_url])
+  }, [open, remainingAmount, beneficiary.video_url, isSpecialNeeds, typeDefaultDollars, publicHardcodedDollars])
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -299,22 +308,27 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (publicHardcodedDollars !== null) return
+    // Global hardcoded amount always locks the field (non-SPECIAL_NEEDS only)
+    if (!isSpecialNeeds && publicHardcodedDollars !== null) return
     const inputValue = e.target.value
     if (inputValue === "") {
       setAmount(0)
       return
     }
-    const newValue = Math.min(parseInt(inputValue) || 0, remainingAmount)
+    // SPECIAL_NEEDS has no budget cap — allow any positive amount
+    const newValue = isSpecialNeeds
+      ? parseInt(inputValue) || 0
+      : Math.min(parseInt(inputValue) || 0, remainingAmount)
     setAmount(newValue)
   }
 
   // Per-type default (or SPECIAL_NEEDS) always enables payment regardless of remaining amount
-  const hasFixedAmount = typeDefaultCents !== null || publicHardcodedCents !== null
+  const hasFixedAmount = !isSpecialNeeds && (typeDefaultCents !== null || publicHardcodedCents !== null)
   const canPay =
-    isSpecialNeeds ||
+    (isSpecialNeeds && amount >= minimumAmount) ||
     hasFixedAmount ||
-    (!alreadyFulfilled &&
+    (!isSpecialNeeds &&
+      !alreadyFulfilled &&
       (remainingAmount < minimumAmount
         ? amount > 0
         : amount >= minimumAmount))
@@ -356,8 +370,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         beneficiaryId: beneficiary.id,
         beneficiaryName: beneficiary.name,
         beneficiaryImage: primaryImageUrl || PERSON_PLACEHOLDER_PATH,
-        // Priority: per-type default → global goal override → user-entered amount
-        amount: typeDefaultCents !== null
+        // SPECIAL_NEEDS: always use the user-entered amount (custom per sponsorship).
+        // Others: per-type default → global goal override → user-entered amount.
+        amount: isSpecialNeeds
+          ? amount * 100
+          : typeDefaultCents !== null
           ? typeDefaultCents
           : publicHardcodedCents !== null
           ? publicHardcodedCents
@@ -367,7 +384,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         userId: user?.id,
         isEmbedded: window.self !== window.top,
         allowBelowMinimum:
-          remainingAmount < minimumAmount && amount === remainingAmount,
+          !isSpecialNeeds &&
+          remainingAmount < minimumAmount &&
+          amount === remainingAmount,
         email: user?.email || undefined,
         type: "sponsorship",
       }
@@ -456,14 +475,22 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       })
       throw new Error("Invalid amount")
     }
-    const paymentAmount =
-      remainingAmount < minimumAmount ? remainingAmount : amount
+    // SPECIAL_NEEDS: always use the user-entered amount (no budget cap)
+    const paymentAmount = isSpecialNeeds
+      ? amount
+      : remainingAmount < minimumAmount
+      ? remainingAmount
+      : amount
+    const orderLabel =
+      isSpecialNeeds && selectedOption === "one_time"
+        ? "One-time"
+        : selectedOption === "subscription"
+        ? "Monthly"
+        : "Yearly"
     return actions.order.create({
       purchase_units: [
         {
-          description: `${
-            selectedOption === "subscription" ? "Monthly" : "Yearly"
-          } Sponsorship for ${beneficiary.name}`,
+          description: `${orderLabel} Sponsorship for ${beneficiary.name}`,
           amount: { value: paymentAmount.toFixed(2), currency_code: "USD" },
         },
       ],
@@ -480,7 +507,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             beneficiary_id: beneficiary.id,
             name: `Monthly Sponsorship for ${beneficiary.name}`,
             description: `Recurring monthly sponsorship for ${beneficiary.name}`,
-            amount: remainingAmount < minimumAmount ? remainingAmount : amount,
+            // SPECIAL_NEEDS: use user-entered amount; others: cap to remaining if near goal
+            amount: isSpecialNeeds ? amount : (remainingAmount < minimumAmount ? remainingAmount : amount),
             interval_unit: "MONTH",
             interval_count: 1,
             currency_code: "USD",
@@ -530,7 +558,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         body: JSON.stringify({
           beneficiaryId: beneficiary.id,
           beneficiaryName: beneficiary.name,
-          amount: remainingAmount < minimumAmount ? remainingAmount : amount,
+          // SPECIAL_NEEDS: use user-entered amount; others: cap to remaining if near goal
+          amount: isSpecialNeeds ? amount : (remainingAmount < minimumAmount ? remainingAmount : amount),
           paymentType: selectedOption,
           location: beneficiary.country,
           userId: user?.id,
@@ -582,6 +611,37 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         />
       </button>
     )
+
+    // SPECIAL_NEEDS: continuous sponsorship with a custom amount — no budget gap concept
+    if (isSpecialNeeds) {
+      const isMonthlyFrequency = selectedOption === "subscription"
+      return (
+        <Box className="space-y-2">
+          <Text className="text-lg font-semibold text-gray-900">
+            Support {firstName}&apos;s ongoing care
+          </Text>
+          {isMonthlyFrequency ? (
+            <Text className="text-gray-700 leading-relaxed text-sm md:text-base">
+              {firstName} has special needs that require continuous, dedicated
+              support. Your monthly contribution helps cover therapy, specialized
+              care, medical needs, and the qualified carers who look after{" "}
+              {firstName} every day. You can choose any amount — and you can
+              cancel at any time. You will receive updates on {firstName}
+              &apos;s progress directly from our care team.
+            </Text>
+          ) : (
+            <Text className="text-gray-700 leading-relaxed text-sm md:text-base">
+              {firstName} has special needs that require dedicated, ongoing
+              support. Your one-time gift helps cover therapy, specialized care,
+              medical needs, and the qualified carers who look after {firstName}.
+              You can choose any amount. You will receive updates on {firstName}
+              &apos;s progress directly from our care team.
+            </Text>
+          )}
+          <Box className="mt-5">{faqLink}</Box>
+        </Box>
+      )
+    }
 
     if (gapAfterThisPaymentCents > 0) {
       return (
@@ -886,9 +946,30 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 </>
               ) : (
                 <>
-                  {/*                   <Text className="text-xl font-normal text-[#2b7ff9]/75 mb-8">
-                    Monthly Sponsorship Amount
-                  </Text> */}
+                  {/* Frequency selector — Monthly vs One-time (SPECIAL_NEEDS only) */}
+                  {isSpecialNeeds && (
+                    <div className="flex justify-center mb-3">
+                      <div className="inline-flex items-center bg-[#E5ECF9] rounded-2xl p-1 gap-1">
+                        {specialNeedsFrequencyOptions.map((opt) => {
+                          const isActive = selectedOption === opt.value
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setSelectedOption(opt.value)}
+                              className={`rounded-xl px-6 py-2 text-sm font-semibold transition-all outline-none ${
+                                isActive
+                                  ? "bg-white text-[#0654C6] shadow-sm"
+                                  : "bg-transparent text-gray-500 hover:bg-white/50"
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <Flex
                     gap={3}
                     align="start"
@@ -899,7 +980,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       flex={{ base: "1", md: "0 0 50%" }}
                       width={{ base: "100%", md: "auto" }}
                     >
-                      {remainingAmount < minimumAmount ? (
+                      {/* SPECIAL_NEEDS always shows the editable input with no budget cap.
+                          Non-SPECIAL_NEEDS: uses the existing locked/near-goal branch. */}
+                      {!isSpecialNeeds && remainingAmount < minimumAmount ? (
                         <Flex
                           className="border border-gray-300 rounded-xl bg-white overflow-hidden"
                           align="center"
@@ -935,10 +1018,16 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           <Input
                             type="number"
                             min="1"
-                            max={maxSelectableAmount}
+                            // SPECIAL_NEEDS has no budget cap — omit the max attribute
+                            max={isSpecialNeeds ? undefined : maxSelectableAmount}
                             value={amount || ""}
                             onChange={handleAmountChange}
-                            readOnly={typeDefaultDollars !== null || publicHardcodedDollars !== null}
+                            // SPECIAL_NEEDS is always editable; others locked when a type default or
+                            // global override is set.
+                            readOnly={
+                              !isSpecialNeeds &&
+                              (typeDefaultDollars !== null || publicHardcodedDollars !== null)
+                            }
                             className="px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700"
                             placeholder="Enter Amount"
                           />
@@ -987,7 +1076,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                         ) : (
                           <Box className="h-12 bg-white/80 rounded-xl flex items-center justify-center border border-gray-200">
                             <Text className="text-sm text-gray-500 text-center px-2">
-                              {remainingAmount < minimumAmount
+                              {isSpecialNeeds
+                                ? selectedOption === "one_time"
+                                  ? `Enter at least $${minimumAmount} to give once`
+                                  : `Enter at least $${minimumAmount}/month to sponsor`
+                                : remainingAmount < minimumAmount
                                 ? "Enter amount greater than $0"
                                 : `Minimum amount is $${minimumAmount}`}
                             </Text>

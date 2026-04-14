@@ -183,7 +183,7 @@ export const sendPartnershipConfirmationEmail = async (
   const subject = `Thank you for partnering with Creator Share Foundation!`
 
   const formattedAmount = (amount / 100).toFixed(2)
-  const intervalText = interval === "month" ? "monthly" : "yearly"
+  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
   const greeting = partnerName ? `Dear ${partnerName},` : "Dear Partner,"
   const logoUrl = getLogoUrl()
 
@@ -235,7 +235,7 @@ export const sendSponsorshipConfirmationEmail = async (
   const subject = `Thank you for sponsoring ${childName}!`
 
   const formattedAmount = (amount / 100).toFixed(2)
-  const intervalText = interval === "month" ? "monthly" : "yearly"
+  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
   const stripePortalUrl = "https://stripe.creatorshare.com"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
   const logoUrl = getLogoUrl()
@@ -315,7 +315,7 @@ export const sendBlindSponsorshipConfirmationEmail = async (
   const subject = `Thank you for your blind sponsorship!`
 
   const formattedAmount = (amount / 100).toFixed(2)
-  const intervalText = interval === "month" ? "monthly" : "yearly"
+  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
   const stripePortalUrl = "https://stripe.creatorshare.com"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
   const logoUrl = getLogoUrl()
@@ -374,7 +374,7 @@ export const sendBlindSponsorshipMatchedEmail = async (
   const subject = `Great news! You've been matched with ${childName}!`
 
   const formattedAmount = (amount / 100).toFixed(2)
-  const intervalText = interval === "month" ? "monthly" : "yearly"
+  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
   const profileUrl = childUsername 
     ? `${baseUrl}/sponsorships/${childUsername}`
@@ -969,7 +969,7 @@ export const sendManagerSponsorshipNotificationEmail = async (
 ) => {
   const subject = `New Sponsorship Received for ${childName}`
   const formattedAmount = (amount / 100).toFixed(2)
-  const intervalText = interval === "month" ? "monthly" : "yearly"
+  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
   const logoUrl = getLogoUrl()
 
   // Fetch beneficiary image if beneficiaryId is provided
