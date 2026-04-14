@@ -4,6 +4,7 @@ import { Box } from "@chakra-ui/react"
 import { HomeHero } from "@/components/HomeHero"
 import SponsorshipsContainer from "./sponsorships/components/SponsorshipsContainer"
 import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
+import { TYPE_TO_ROUTE } from "@/config/beneficiaryTypes"
 import { HomeBgPicker } from "@/components/HomeBg"
 
 export default function Home() {
@@ -11,6 +12,12 @@ export default function Home() {
 
   const handleTypeChange = useCallback((type: BeneficiaryTabType | null) => {
     setActiveType(type)
+    if (typeof window !== "undefined") {
+      const route = type === null ? "/" : (TYPE_TO_ROUTE[type] ?? "/")
+      if (window.location.pathname !== route) {
+        window.history.pushState({ beneficiaryType: type }, "", route)
+      }
+    }
   }, [])
 
   return (

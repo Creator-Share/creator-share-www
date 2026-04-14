@@ -6,6 +6,7 @@ import { SponsoredBeneficiary } from "@/actions"
 import PortraitBeneficiaryCard from "../SponsorshipCard/PortraitCard"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
 import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
+import { getApiTypes } from "@/config/beneficiaryTypes"
 
 // ---------------------------------------------------------------------------
 // StatsCard -- first item in the row; replaces the StatsSection above the fold
@@ -16,19 +17,28 @@ interface StatsData {
   childrenSupported: number
 }
 
-const StatsCard: React.FC = () => {
+interface StatsCardProps {
+  activeType: BeneficiaryTabType | null | undefined
+}
+
+const StatsCard: React.FC<StatsCardProps> = ({ activeType }) => {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/stats")
+    const typeParam = getApiTypes(activeType ?? null)
+    const url = typeParam
+      ? `/api/stats?beneficiary_type=${encodeURIComponent(typeParam)}`
+      : "/api/stats"
+    setLoading(true)
+    fetch(url)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d) setStats(d)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [activeType])
 
   return (
     <Box
@@ -260,7 +270,7 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
         paddingRight="16px"
       >
         {/* Stats card -- always first */}
-        <StatsCard />
+        <StatsCard activeType={activeType} />
 
         {/* Sponsored */}
         {sponsored.length > 0 && (

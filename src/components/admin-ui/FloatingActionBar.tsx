@@ -39,13 +39,15 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
 
   return (
     <Box
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-gray-200 shadow-lg"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200"
       style={{ transform: "translateZ(0)" }}
     >
       <Box className="container mx-auto px-4 py-4">
         <Flex gap={3} flexWrap="wrap" justify="center" align="center">
 
-          {/* Select dropdown */}
+          <Text className="text-sm text-gray-500">{selectedCount} items selected</Text>
+
+          {/* Select All dropdown */}
           <MenuRoot>
             <MenuTrigger asChild>
               <Button
@@ -53,7 +55,7 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
                 disabled={isSelectingAll}
               >
                 {isSelectingAll ? <Spinner size="xs" /> : null}
-                Select
+                Select All
                 <FiChevronDown className="w-4 h-4" />
               </Button>
             </MenuTrigger>
@@ -80,13 +82,6 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
             Deselect All
           </Button>
 
-          <Button
-            onClick={onDelete}
-            className="border-[2px] border-transparent rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ff0000] text-white hover:bg-[#cc0000]"
-          >
-            Delete ({selectedCount})
-          </Button>
-
           {onReinstate && hasCancelledSelected && (
             <Button
               onClick={onReinstate}
@@ -100,7 +95,7 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
           <MenuRoot>
             <MenuTrigger asChild>
               <Button
-                className="border-[2px] border-[#000000] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ffffff] text-black hover:bg-[#f0f0f0] flex items-center gap-2"
+                className="border-[2px] border-gray-300 rounded-md w-full md:w-fit h-[40px] px-6 bg-white text-gray-600 hover:bg-gray-50 flex items-center gap-2"
               >
                 Set Status
                 <FiChevronDown className="w-4 h-4" />
@@ -119,7 +114,7 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
           <MenuRoot>
             <MenuTrigger asChild>
               <Button
-                className="border-[2px] border-[#000000] rounded-md w-full md:w-fit h-[40px] px-10 bg-[#ffffff] text-black hover:bg-[#f0f0f0] flex items-center gap-2"
+                className="border-[2px] border-gray-300 rounded-md w-full md:w-fit h-[40px] px-6 bg-white text-gray-600 hover:bg-gray-50 flex items-center gap-2"
               >
                 Set Type
                 <FiChevronDown className="w-4 h-4" />
@@ -134,7 +129,13 @@ const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
             </MenuContent>
           </MenuRoot>
 
-          <Text className="text-sm text-gray-500">Selected {selectedCount} items</Text>
+          <Button
+            onClick={onDelete}
+            className="border-[2px] border-red-500 rounded-md w-full md:w-fit h-[40px] px-6 bg-white text-red-600 hover:bg-red-50"
+          >
+            Bulk Delete
+          </Button>
+
         </Flex>
       </Box>
     </Box>

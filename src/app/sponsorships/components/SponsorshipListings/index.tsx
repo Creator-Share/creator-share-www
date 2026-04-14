@@ -142,6 +142,7 @@ const BeneficiaryListings = React.forwardRef<
           else if (ref) ref.current = el
         }}
         width="100%"
+        minH={{ base: "auto", lg: "480px" }}
         className={noCard ? undefined : "border bg-white rounded-2xl"}
         mt={noCard ? 0 : 4}
         style={noCard ? undefined : { boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)" }}
@@ -153,14 +154,14 @@ const BeneficiaryListings = React.forwardRef<
         {filteredBeneficiaries.length > 0 && (
           <Box
             position="relative"
-            pt={{ base: 6, lg: 8 }}
-            pb={{ base: 4, lg: 8 }}
-            px={{ base: 4, lg: 8 }}
+            pt={{ base: 6, lg: 6 }}
+            pb={{ base: 4, lg: 6 }}
+            px={{ base: 3, md: 4 }}
             opacity={isRefreshing ? 0.4 : 1}
             pointerEvents={isRefreshing ? "none" : undefined}
             style={{ transition: "opacity 0.15s" }}
           >
-            <SimpleGrid columns={{ base: 2, md: 3, xl: 4 }} gap="1rem" className="child-card-grid">
+            <SimpleGrid columns={{ base: 2, md: 3, xl: 4 }} gap={{ base: "0.75rem", md: "1rem" }} className="child-card-grid">
               {filteredBeneficiaries.map((beneficiary) =>
                 beneficiary.id ? (
                   <Box

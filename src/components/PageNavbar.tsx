@@ -41,6 +41,7 @@ const NAV_SCROLL_COLLAPSE_PX = 32
 const NAV_SCROLL_EXPAND_PX = 6
 
 const NAV_ROW_HEIGHT_COLLAPSED_PX = 64
+const NAV_ROW_HEIGHT_MOBILE_PX = 52
 const NAV_ROW_HEIGHT_EXPANDED_PX = 88
 const NAV_ROW_TRANSITION_MS = 300
 const navRowTransition = `height ${NAV_ROW_TRANSITION_MS}ms ease-out`
@@ -50,7 +51,9 @@ export function PageNavbar() {
   const [mounted, setMounted] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const [skipTransition, setSkipTransition] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const prevScrollRef = useRef(0)
+  const prevPathRef = useRef<string>("/")
   const [aboutUsOpen, setAboutUsOpen] = useState(false)
   const [aboutUsDefaultTab, setAboutUsDefaultTab] = useState<AboutTabAnchor>("about")
   const [faqOpen, setFaqOpen] = useState(false)
@@ -63,7 +66,7 @@ export function PageNavbar() {
   const [isAdmin, setIsAdmin] = useState(false)
 
   const isHome = pathname === "/"
-  const isHomeLogoExpanded = isHome && !isScrolled
+  const isHomeLogoExpanded = isHome && !isScrolled && !isMobile
 
   // Scroll detection for navbar shadow and home logo size (hysteresis prevents bounce near top).
   // If the user jumps more than half a viewport in one scroll event, snap the navbar to its
@@ -89,18 +92,18 @@ export function PageNavbar() {
     })
   }, [])
 
-  // Check URL hash or path for modals (About tabs and Sign In)
-  const checkHashAndOpenModal = useCallback(() => {
+  // Check URL path for modals (About tabs, FAQ, Sign In)
+  const checkPathAndOpenModal = useCallback(() => {
     if (typeof window === "undefined") return
-    const hash = window.location.hash.slice(1) // Remove the #
-    const isLoginPage = window.location.pathname === "/login"
-    
-    if (ABOUT_TAB_ANCHORS.includes(hash as AboutTabAnchor)) {
-      setAboutUsDefaultTab(hash as AboutTabAnchor)
+    const path = window.location.pathname
+    const isLoginPage = path === "/login"
+
+    if (ABOUT_TAB_ANCHORS.includes(path.slice(1) as AboutTabAnchor)) {
+      setAboutUsDefaultTab(path.slice(1) as AboutTabAnchor)
       setAboutUsOpen(true)
-    } else if (hash === "faq") {
+    } else if (path === "/faq") {
       setFaqOpen(true)
-    } else if (hash === "signin" || isLoginPage) {
+    } else if (path === "/signin" || isLoginPage) {
       setSignInOpen(true)
     }
   }, [])
@@ -108,20 +111,26 @@ export function PageNavbar() {
   useEffect(() => {
     setMounted(true)
     fetchUser()
-    
+
     // Set up scroll listener
     window.addEventListener("scroll", handleScroll, { passive: true })
     handleScroll() // Check initial scroll position
 
-    // Check hash on mount and listen for changes
-    checkHashAndOpenModal()
-    window.addEventListener("hashchange", checkHashAndOpenModal)
-    
+    // Track mobile breakpoint so the logo stays compact on small screens
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener("resize", checkMobile, { passive: true })
+
+    // Check path on mount and listen for popstate (browser back/forward)
+    checkPathAndOpenModal()
+    window.addEventListener("popstate", checkPathAndOpenModal)
+
     return () => {
       window.removeEventListener("scroll", handleScroll)
-      window.removeEventListener("hashchange", checkHashAndOpenModal)
+      window.removeEventListener("resize", checkMobile)
+      window.removeEventListener("popstate", checkPathAndOpenModal)
     }
-  }, [fetchUser, handleScroll, checkHashAndOpenModal])
+  }, [fetchUser, handleScroll, checkPathAndOpenModal])
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -145,8 +154,8 @@ export function PageNavbar() {
   // Close menu on route change and check for modal triggers
   useEffect(() => {
     setIsOpen(false)
-    checkHashAndOpenModal()
-  }, [pathname, checkHashAndOpenModal])
+    checkPathAndOpenModal()
+  }, [pathname, checkPathAndOpenModal])
 
   const handleLogout = async () => {
     setIsOpen(false)
@@ -166,21 +175,15 @@ export function PageNavbar() {
             open={aboutUsOpen}
             onClose={() => setAboutUsOpen(false)}
             defaultTab={aboutUsDefaultTab}
+            prevPath={prevPathRef.current}
           />
-          <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} />
+          <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} prevPath={prevPathRef.current} />
           <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
         </>
       )}
       <Box
-        className={`w-full z-[1000] sticky top-0 ${
-          isScrolled
-            ? "bg-white border-b border-gray-200"
-            : "bg-transparent border-b border-transparent"
-        }`}
+        className={`w-full z-[1000] sticky top-0 bg-white border-b ${(isHome && !isScrolled) || (isMobile && !isScrolled) ? "border-transparent" : "border-gray-200"}`}
         style={{
-          transition: skipTransition
-            ? "none"
-            : "background-color 500ms ease, border-color 500ms ease, box-shadow 500ms ease",
           boxShadow: isScrolled
             ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)"
             : "none",
@@ -191,7 +194,9 @@ export function PageNavbar() {
           style={{
             height: isHomeLogoExpanded
               ? NAV_ROW_HEIGHT_EXPANDED_PX
-              : NAV_ROW_HEIGHT_COLLAPSED_PX,
+              : isMobile
+                ? NAV_ROW_HEIGHT_MOBILE_PX
+                : NAV_ROW_HEIGHT_COLLAPSED_PX,
             transition: skipTransition ? "none" : navRowTransition,
           }}
         >
@@ -272,11 +277,12 @@ export function PageNavbar() {
             asChild
           >
             <a
-              href="#faq"
+              href="/faq"
               onClick={(e) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()
-                window.history.replaceState(null, "", "#faq")
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/faq")
                 setFaqOpen(true)
               }}
             >
@@ -290,11 +296,12 @@ export function PageNavbar() {
             asChild
           >
             <a
-              href="#about"
+              href="/about"
               onClick={(e) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()
-                window.history.replaceState(null, "", "#about")
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/about")
                 setAboutUsOpen(true)
               }}
             >
@@ -391,7 +398,7 @@ export function PageNavbar() {
               onClick={() => setIsOpen(!isOpen)}
               aria-label="Toggle Menu"
               variant="ghost"
-              color={isOpen ? "white" : "inherit"}
+              color={isOpen ? "white" : "gray.500"}
               _hover={{
                 bg: "transparent",
                 transform: isOpen ? "scale(1.15)" : undefined,
@@ -426,7 +433,8 @@ export function PageNavbar() {
               _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
               onClick={() => {
                 setIsOpen(false)
-                window.history.replaceState(null, "", "#faq")
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/faq")
                 setFaqOpen(true)
               }}
               className="w-full"
@@ -442,7 +450,8 @@ export function PageNavbar() {
               _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
               onClick={() => {
                 setIsOpen(false)
-                window.history.replaceState(null, "", "#about")
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/about")
                 setAboutUsOpen(true)
               }}
               className="w-full"
