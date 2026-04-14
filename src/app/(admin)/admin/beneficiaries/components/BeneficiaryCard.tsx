@@ -154,7 +154,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
             </>
           ) : (
             <>
-              <Text>Goal</Text>
+              <Text>Funded</Text>
               <Text>
                 ${centsToDollars(raised)} / ${centsToDollars(goal)}
               </Text>

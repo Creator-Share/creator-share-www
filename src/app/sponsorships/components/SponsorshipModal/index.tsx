@@ -124,7 +124,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const alreadyFulfilled =
     !isOpen &&
     (beneficiary.status === "Budget Fulfilled" ||
-      beneficiary.budget_goal <= (beneficiary.budget_raised || 0))
+      (beneficiary.budget_goal > 0 && beneficiary.budget_goal <= (beneficiary.budget_raised || 0)))
 
   useEffect(() => {
     if (!open) {
@@ -281,6 +281,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
     const dollars = parseFloat(inputValue)
     setAmountCents(Number.isFinite(dollars) ? Math.round(dollars * 100) : 0)
+  }
+
+  const handleAmountBlur = () => {
+    if (!isOpen) return
+    if (amountCents > 0 && amountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS) {
+      setAmountCents(MINIMUM_OPEN_SPONSORSHIP_CENTS)
+    }
   }
 
   const canPay = isOpen
@@ -830,6 +837,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           step="0.01"
                           value={isOpen ? (amountCents > 0 ? amountCents / 100 : "") : fixedAmountCents / 100}
                           onChange={handleAmountChange}
+                          onBlur={handleAmountBlur}
                           readOnly={!isOpen}
                           disabled={!isOpen}
                           className={`px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700${!isOpen ? " bg-gray-100" : ""}`}

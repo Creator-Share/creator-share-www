@@ -62,9 +62,9 @@ export async function GET(req: Request) {
     if (status.length > 0) {
       // Include open sponsorships (budget_goal = -1) regardless of status filter,
       // except Draft/Archived which are admin-controlled visibility states.
-      const statusConditions = status.map(s => `status.eq.${s}`)
+      const statusList = status.map(s => `"${s}"`).join(",")
       const openCondition = 'and(budget_goal.eq.-1,status.not.in.(Draft,Archived))'
-      query = query.or([...statusConditions, openCondition].join(','))
+      query = query.or(`status.in.(${statusList}),${openCondition}`)
     }
 
     if (ageRangeParam) {

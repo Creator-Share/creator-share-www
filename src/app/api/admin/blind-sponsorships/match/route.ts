@@ -291,7 +291,7 @@ async function matchBeneficiaryToOldestBlindSponsorship(
     .from("beneficiaries")
     .select("id, name, username, status, budget_goal, budget_raised, beneficiary_type")
     .eq("id", beneficiaryId)
-    .or(`status.in.(${WAITING_STATUSES.join(",")}),and(budget_goal.eq.-1,status.not.in.(Draft,Archived))`)
+    .or(`status.in.(${WAITING_STATUSES.map(s => `"${s}"`).join(",")}),and(budget_goal.eq.-1,status.not.in.(Draft,Archived))`)
     .single()
 
   if (benError || !beneficiary) {

@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       .from("beneficiaries")
       .select("id, name, username, status, budget_goal, budget_raised, beneficiary_type")
       .eq("id", beneficiaryId)
-      .or(`and(status.in.(${WAITING_STATUSES.join(",")}),goal_fulfilled_at.is.null),and(budget_goal.eq.-1,status.not.in.(Draft,Archived))`)
+      .or(`and(status.in.(${WAITING_STATUSES.map(s => `"${s}"`).join(",")}),goal_fulfilled_at.is.null),and(budget_goal.eq.-1,status.not.in.(Draft,Archived))`)
       .single()
 
     if (benError || !beneficiary) {

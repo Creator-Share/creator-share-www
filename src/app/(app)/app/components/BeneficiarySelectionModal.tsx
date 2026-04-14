@@ -83,7 +83,7 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
         gender,
         biography
       `)
-      .or('and(status.in.(New,Partially Funded),goal_fulfilled_at.is.null),and(budget_goal.eq.-1,status.not.in.(Draft,Archived))')
+      .or('and(status.in.("New","Partially Funded"),goal_fulfilled_at.is.null),and(budget_goal.eq.-1,status.not.in.(Draft,Archived))')
       .order("sort_weight", { ascending: false })
       .order("created_at", { ascending: true })
       .limit(20)
