@@ -115,7 +115,14 @@ export function useBeneficiaryPagination(
         isAnimalType ||
         (filters.status || []).some((status) => (INACTIVE_STATUSES as string[]).includes(status))
 
-      if (filters.ageRange && !shouldSkipAgeRange) {
+      // Only apply the age range when the user has moved the slider away from its
+      // default position (0 → type max). At the default, treat as "no upper bound"
+      // so beneficiaries older than the slider maximum still appear in the listing.
+      // This prevents the stats card and the filter strip from diverging on a fresh page load.
+      const defaultMaxAge = isAnimalType ? 20 : 14
+      const isDefaultAgeRange =
+        filters.ageRange[0] === 0 && filters.ageRange[1] >= defaultMaxAge
+      if (filters.ageRange && !shouldSkipAgeRange && !isDefaultAgeRange) {
         params.set("ageRange", filters.ageRange.join(","))
       }
       if (filters.search) params.set("search", filters.search)
