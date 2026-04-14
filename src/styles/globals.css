@@ -52,8 +52,9 @@ body {
   }
 }
 
-/* Card grid: 2 columns down to 420px, single column below that */
-@media (max-width: 419px) {
+
+/* Card grid: single column below iPhone 16 Pro width */
+@media (max-width: 389px) {
   .child-card-grid {
     grid-template-columns: 1fr !important;
   }

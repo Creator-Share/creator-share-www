@@ -155,12 +155,12 @@ const BeneficiaryListings = React.forwardRef<
             position="relative"
             pt={{ base: 6, lg: 8 }}
             pb={{ base: 4, lg: 8 }}
-            px={{ base: 4, lg: 8 }}
+            px={{ base: 3, lg: 8 }}
             opacity={isRefreshing ? 0.4 : 1}
             pointerEvents={isRefreshing ? "none" : undefined}
             style={{ transition: "opacity 0.15s" }}
           >
-            <SimpleGrid columns={{ base: 2, md: 3, xl: 4 }} gap="1rem" className="child-card-grid">
+            <SimpleGrid columns={{ base: 2, md: 3, xl: 4 }} gap={{ base: "0.75rem", md: "1rem" }} className="child-card-grid">
               {filteredBeneficiaries.map((beneficiary) =>
                 beneficiary.id ? (
                   <Box
