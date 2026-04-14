@@ -121,7 +121,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         {beneficiary.status === "Budget Fulfilled" && <SupportedRibbon />}
 
         {/* Goal Badge — only show for fixed sponsorship types with a real goal */}
-        {beneficiary.budget_goal > 0 && (
+        {/* {beneficiary.budget_goal > 0 && (
           <Box position="absolute" top="0" right="0" zIndex={10}>
             <Badge
               bg="#CDE1FE"
@@ -137,7 +137,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
               /mo
             </Badge>
           </Box>
-        )}
+        )} */}
       </Box>
 
       {/* Card Content */}
