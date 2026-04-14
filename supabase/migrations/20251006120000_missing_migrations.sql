@@ -1,8 +1,11 @@
 drop extension if exists "pg_net";
 
-create type "public"."sponsorship_method" as enum ('PAYPAL', 'STRIPE');
+DO $$ BEGIN
+  CREATE TYPE "public"."sponsorship_method" AS ENUM ('PAYPAL', 'STRIPE');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-create table "public"."beneficiary_reservations" (
+create table if not exists "public"."beneficiary_reservations" (
   "id" uuid not null default gen_random_uuid(),
   "beneficiary_id" uuid not null,
   "reservation_token" text not null,
@@ -13,13 +16,25 @@ create table "public"."beneficiary_reservations" (
   "user_agent" text
     );
 
-alter table "public"."activities" add column "activity_source" public.activity_source;
+DO $$ BEGIN
+  ALTER TABLE "public"."activities" ADD COLUMN "activity_source" public.activity_source;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-alter table "public"."activities" add column "metadata" jsonb;
+DO $$ BEGIN
+  ALTER TABLE "public"."activities" ADD COLUMN "metadata" jsonb;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-alter table "public"."beneficiaries" add column "goal_fulfilled_at" timestamp with time zone;
+DO $$ BEGIN
+  ALTER TABLE "public"."beneficiaries" ADD COLUMN "goal_fulfilled_at" timestamp with time zone;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-alter table "public"."beneficiaries" add column "sort_weight" integer;
+DO $$ BEGIN
+  ALTER TABLE "public"."beneficiaries" ADD COLUMN "sort_weight" integer;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
 alter table "public"."beneficiaries" enable row level security;
 
@@ -29,39 +44,69 @@ alter table "public"."expenses" disable row level security;
 
 alter table "public"."media" disable row level security;
 
-alter table "public"."organization" add column "name" text;
+DO $$ BEGIN
+  ALTER TABLE "public"."organization" ADD COLUMN "name" text;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-alter table "public"."partnerships" drop column "sponsorship_id";
+DO $$ BEGIN
+  ALTER TABLE "public"."partnerships" DROP COLUMN "sponsorship_id";
+EXCEPTION WHEN undefined_column THEN NULL;
+END $$;
 
-alter table "public"."partnerships" add column "stripe_subscription_id" text;
+DO $$ BEGIN
+  ALTER TABLE "public"."partnerships" ADD COLUMN "stripe_subscription_id" text;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
 alter table "public"."role_assignments" disable row level security;
 
-alter table "public"."subscriptions" drop column "sponsorship_id";
+DO $$ BEGIN
+  ALTER TABLE "public"."subscriptions" DROP COLUMN "sponsorship_id";
+EXCEPTION WHEN undefined_column THEN NULL;
+END $$;
 
-alter table "public"."subscriptions" add column "email_notification" boolean;
+DO $$ BEGIN
+  ALTER TABLE "public"."subscriptions" ADD COLUMN "email_notification" boolean;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-alter table "public"."subscriptions" add column "sponsorship_method" public.sponsorship_method;
+DO $$ BEGIN
+  ALTER TABLE "public"."subscriptions" ADD COLUMN "sponsorship_method" public.sponsorship_method;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-alter table "public"."subscriptions" add column "stripe_subscription_id" text;
+DO $$ BEGIN
+  ALTER TABLE "public"."subscriptions" ADD COLUMN "stripe_subscription_id" text;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
-CREATE UNIQUE INDEX beneficiary_reservations_pkey ON public.beneficiary_reservations USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS beneficiary_reservations_pkey ON public.beneficiary_reservations USING btree (id);
 
-CREATE INDEX idx_bres_beneficiary_id ON public.beneficiary_reservations USING btree (beneficiary_id);
+CREATE INDEX IF NOT EXISTS idx_bres_beneficiary_id ON public.beneficiary_reservations USING btree (beneficiary_id);
 
-CREATE INDEX idx_bres_expires_at ON public.beneficiary_reservations USING btree (expires_at);
+CREATE INDEX IF NOT EXISTS idx_bres_expires_at ON public.beneficiary_reservations USING btree (expires_at);
 
-CREATE INDEX idx_bres_token ON public.beneficiary_reservations USING btree (reservation_token);
+CREATE INDEX IF NOT EXISTS idx_bres_token ON public.beneficiary_reservations USING btree (reservation_token);
 
-CREATE UNIQUE INDEX uniq_active_reservation_per_beneficiary ON public.beneficiary_reservations USING btree (beneficiary_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_active_reservation_per_beneficiary ON public.beneficiary_reservations USING btree (beneficiary_id);
 
-alter table "public"."beneficiary_reservations" add constraint "beneficiary_reservations_pkey" PRIMARY KEY using index "beneficiary_reservations_pkey";
+DO $$ BEGIN
+  alter table "public"."beneficiary_reservations" add constraint "beneficiary_reservations_pkey" PRIMARY KEY using index "beneficiary_reservations_pkey";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."beneficiary_reservations" add constraint "beneficiary_reservations_beneficiary_id_fkey" FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id) ON DELETE CASCADE not valid;
+DO $$ BEGIN
+  alter table "public"."beneficiary_reservations" add constraint "beneficiary_reservations_beneficiary_id_fkey" FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id) ON DELETE CASCADE not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."beneficiary_reservations" validate constraint "beneficiary_reservations_beneficiary_id_fkey";
 
-alter table "public"."beneficiary_reservations" add constraint "beneficiary_reservations_user_id_fkey" FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL not valid;
+DO $$ BEGIN
+  alter table "public"."beneficiary_reservations" add constraint "beneficiary_reservations_user_id_fkey" FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."beneficiary_reservations" validate constraint "beneficiary_reservations_user_id_fkey";
 
@@ -177,92 +222,115 @@ grant truncate on table "public"."media" to "service_role";
 grant update on table "public"."media" to "service_role";
 
 
+DO $$ BEGIN
   create policy "allow_delete_own"
   on "public"."beneficiary_reservations"
   as permissive
   for delete
   to public
-using (true);
+  using (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-
+DO $$ BEGIN
   create policy "allow_insert_own"
   on "public"."beneficiary_reservations"
   as permissive
   for insert
   to public
-with check (true);
+  with check (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-
+DO $$ BEGIN
   create policy "allow_select_active"
   on "public"."beneficiary_reservations"
   as permissive
   for select
   to public
-using ((expires_at > now()));
+  using ((expires_at > now()));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_user_registration();
 
 
+DO $$ BEGIN
   create policy "Allow authenticated to insert 1ps738_0"
   on "storage"."objects"
   as permissive
   for insert
   to authenticated
-with check (((bucket_id = 'media'::text) AND (auth.role() = 'authenticated'::text)));
+  with check (((bucket_id = 'media'::text) AND (auth.role() = 'authenticated'::text)));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-
+DO $$ BEGIN
   create policy "Allow update/delete in beneficiaries bucket"
   on "storage"."objects"
   as permissive
   for all
   to public
-using (((bucket_id = 'beneficiaries'::text) AND (auth.role() = 'authenticated'::text)));
+  using (((bucket_id = 'beneficiaries'::text) AND (auth.role() = 'authenticated'::text)));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-
+DO $$ BEGIN
   create policy "Allow update/delete to activities-media bucket 15im58k_0"
   on "storage"."objects"
   as permissive
   for update
   to public
-using (((bucket_id = 'activities-media'::text) AND (auth.role() = 'authenticated'::text)));
+  using (((bucket_id = 'activities-media'::text) AND (auth.role() = 'authenticated'::text)));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-
+DO $$ BEGIN
   create policy "Allow update/delete to activities-media bucket 15im58k_1"
   on "storage"."objects"
   as permissive
   for delete
   to public
-using (((bucket_id = 'activities-media'::text) AND (auth.role() = 'authenticated'::text)));
+  using (((bucket_id = 'activities-media'::text) AND (auth.role() = 'authenticated'::text)));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-
+DO $$ BEGIN
   create policy "Allow upload to beneficiaries bucket 13n3f43_0"
   on "storage"."objects"
   as permissive
   for insert
   to public
-with check (((bucket_id = 'beneficiaries'::text) AND (auth.role() = 'authenticated'::text)));
+  with check (((bucket_id = 'beneficiaries'::text) AND (auth.role() = 'authenticated'::text)));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-
+DO $$ BEGIN
   create policy "Allow upload to beneficiaries bucket 15im58k_0"
   on "storage"."objects"
   as permissive
   for insert
   to public
-with check (((bucket_id = 'activities-media'::text) AND (auth.role() = 'authenticated'::text)));
+  with check (((bucket_id = 'activities-media'::text) AND (auth.role() = 'authenticated'::text)));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-
+DO $$ BEGIN
   create policy "View all items in media 1ps738_0"
   on "storage"."objects"
   as permissive
   for select
   to public
-using ((bucket_id = 'media'::text));
+  using ((bucket_id = 'media'::text));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
