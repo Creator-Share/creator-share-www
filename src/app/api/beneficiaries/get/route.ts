@@ -47,6 +47,7 @@ export async function GET(req: Request) {
     // so PostgREST returns a Content-Range total alongside the page data (no extra round trip).
     let query = supabase.from("beneficiaries").select("*", { count: "exact" });
 
+    console.log("[DEBUG get/route] beneficiaryType:", beneficiaryType, "status:", status)
     if (beneficiaryType && beneficiaryType !== "null" && beneficiaryType !== "undefined") {
       // Support comma-separated types (e.g. "CHILD,CHILD_LABORER")
       const types = beneficiaryType.split(",").map((t) => t.trim()).filter(Boolean)
@@ -60,7 +61,12 @@ export async function GET(req: Request) {
       query = query.eq("gender", gender)
     }
     if (status.length > 0) {
-      query = query.in("status", status)
+      // Include open sponsorships (budget_goal = -1) regardless of status filter,
+      // except Draft/Archived which are admin-controlled visibility states.
+      // Avoid .in.() inside .or() — use individual .eq. conditions instead.
+      const statusConditions = status.map(s => `status.eq.${s}`)
+      const openCondition = 'and(budget_goal.eq.-1,status.neq.Draft,status.neq.Archived)'
+      query = query.or([...statusConditions, openCondition].join(','))
     }
 
     if (ageRangeParam) {

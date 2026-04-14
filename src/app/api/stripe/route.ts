@@ -15,7 +15,6 @@ export async function POST(req: Request) {
       location,
       userId,
       isEmbedded,
-      allowBelowMinimum,
       type,
       project,
       email,
@@ -41,21 +40,20 @@ export async function POST(req: Request) {
     const fallbackImage = `${baseUrl}${PERSON_PLACEHOLDER_PATH}`
 
     // For blind sponsorships, always use $33.33 (3333 cents).
-    // For regular sponsorships, the client already sends the correct per-type amount
-    // (set by NEXT_PUBLIC_SPONSORSHIP_AMOUNT_* env vars in BeneficiaryTypeNav).
-    // NEXT_PUBLIC_SPONSORSHIP_GOAL is intentionally NOT used here anymore so that
-    // per-type defaults are respected end-to-end.
+    // For regular sponsorships, the client sends the correct amount:
+    //   Fixed types: budget_goal (set at create from config)
+    //   Open types: user-chosen amount (>= MINIMUM_OPEN_SPONSORSHIP_CENTS)
     let enforcedAmount: number
     if (isBlindSponsorship) {
       enforcedAmount = 3333 // Fixed $33.33 for blind sponsorships
     } else {
-      enforcedAmount = amount // Use the per-type amount sent from the client
+      enforcedAmount = amount // Use the amount sent from the client
     }
 
-    // Validate enforced amount (keep existing minimum unless overriden intentionally)
-    if (!enforcedAmount || (enforcedAmount < 1000 && !allowBelowMinimum)) {
+    // Validate enforced amount — minimum $5 (500 cents) for open sponsorships
+    if (!enforcedAmount || enforcedAmount < 500) {
       return NextResponse.json(
-        { error: "Minimum amount is $10." },
+        { error: "Minimum amount is $5." },
         { status: 400 },
       )
     }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { sendBlindSponsorshipMatchedEmail } from "@/utils/email"
 import { WAITING_STATUSES } from "@/config/beneficiaryStatuses"
+import { isOpenSponsorshipType } from "@/config/beneficiaryTypes"
 
 export const runtime = "nodejs"
 
@@ -58,10 +59,9 @@ export async function POST(req: Request) {
     // Verify the beneficiary exists and is available
     const { data: beneficiary, error: benError } = await supabase
       .from("beneficiaries")
-      .select("id, name, username, status, budget_goal, budget_raised")
+      .select("id, name, username, status, budget_goal, budget_raised, beneficiary_type")
       .eq("id", beneficiaryId)
-      .in("status", WAITING_STATUSES)
-      .is("goal_fulfilled_at", null)
+      .or(`and(status.in.(${WAITING_STATUSES.join(",")}),goal_fulfilled_at.is.null),and(budget_goal.eq.-1,status.not.in.(Draft,Archived))`)
       .single()
 
     if (benError || !beneficiary) {
@@ -72,12 +72,15 @@ export async function POST(req: Request) {
     }
 
     // Check if beneficiary still needs funding
-    const remaining = (beneficiary.budget_goal || 0) - (beneficiary.budget_raised || 0)
-    if (remaining <= 0) {
-      return NextResponse.json(
-        { error: "This beneficiary is already fully funded" },
-        { status: 400 },
-      )
+    // Open sponsorship types (budget_goal = -1) are always available
+    if (!isOpenSponsorshipType(beneficiary.beneficiary_type)) {
+      const remaining = (beneficiary.budget_goal || 0) - (beneficiary.budget_raised || 0)
+      if (remaining <= 0) {
+        return NextResponse.json(
+          { error: "This beneficiary is already fully funded" },
+          { status: 400 },
+        )
+      }
     }
 
     // Update the subscription with the beneficiary

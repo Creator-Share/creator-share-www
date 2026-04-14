@@ -8,6 +8,7 @@ import BulkConfirmDialog from "./components/BulkConfirmDialog"
 import BeneficiaryCard from "./components/BeneficiaryCard"
 import { Beneficiaries, BeneficiaryMedia } from "@/types/admin.types"
 import { dollarsToCents } from "@/utils/currency"
+import { isOpenSponsorshipType } from "@/config/beneficiaryTypes"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { compressImages } from "@/utils/imageCompression"
 import { useFormStore } from "@/store/formStore"
@@ -19,7 +20,7 @@ import SponsorshipFilters from "@/app/sponsorships/components/SponsorshipFilters
 import FloatingActionBar from "@/components/admin-ui/FloatingActionBar"
 import {
   BeneficiaryTabType,
-  BULK_ASSIGNABLE_TYPES,
+  ALL_BENEFICIARY_TABS,
   getApiTypes,
   getMaxAgeYears,
 } from "@/config/beneficiaryTypes"
@@ -258,10 +259,9 @@ const ChildrenTable = () => {
       return false
     }
 
-    // SPECIAL_NEEDS beneficiaries have no budget goal
-    const isSpecialNeeds = formData.beneficiary_type === "SPECIAL_NEEDS"
-    const budgetGoalInCents = isSpecialNeeds
-      ? 0
+    const isOpen = isOpenSponsorshipType(formData.beneficiary_type)
+    const budgetGoalInCents = isOpen
+      ? -1
       : Math.max(0, parseInt(dollarsToCents(formData.budget_goal || 0)))
 
     try {
@@ -470,7 +470,7 @@ const ChildrenTable = () => {
 
   const handleBulkTypeUpdate = (type: string) => {
     if (selectedItems.size === 0) return
-    const match = BULK_ASSIGNABLE_TYPES.find((t) => t.type === type)
+    const match = ALL_BENEFICIARY_TABS.find((t) => t.type === type && !t.isLegacyAlias)
     setPendingBulkAction({ kind: "type", value: type, label: `change type to "${match?.label ?? type}"` })
   }
 

@@ -40,7 +40,7 @@ import { toaster } from "@/components/ui/toaster"
 import { dollarsToCents } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { compressImage } from "@/utils/imageCompression"
-import { ALL_BENEFICIARY_TABS, getDefaultSponsorshipAmount } from "@/config/beneficiaryTypes"
+import { ALL_BENEFICIARY_TABS, getDefaultBudgetGoal, isOpenSponsorshipType } from "@/config/beneficiaryTypes"
 
 type BeneficiaryModalMode = "create" | "edit"
 
@@ -148,17 +148,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   )
 
 
-  const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
-  const publicHardcodedCents = publicHardcodedRaw
-    ? parseInt(publicHardcodedRaw, 10)
-    : null
-
-  const typeDefaultCents = getDefaultSponsorshipAmount(formData.beneficiary_type)
-
-  // Effective display/save amount: per-type default > env fallback > 0
-  // Per-type default takes priority so each category shows its own amount.
-  // The env var acts as a last-resort fallback for any type without a configured default.
-  const effectiveAmountCents = typeDefaultCents ?? publicHardcodedCents ?? 0
+  const isOpenType = isOpenSponsorshipType(formData.beneficiary_type)
+  const configDefaultGoal = getDefaultBudgetGoal(formData.beneficiary_type)
 
   // Generate a short URL-style string using cryptographically secure randomness
   const generateShortUrl = useCallback(() => {
@@ -180,9 +171,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     if (isEditMode && selectedChild) {
       const formattedData = {
         ...selectedChild,
-        budget_goal: selectedChild.budget_goal
-          ? selectedChild.budget_goal / 100
-          : 0,
+        budget_goal: selectedChild.budget_goal === -1
+          ? -1
+          : selectedChild.budget_goal
+            ? selectedChild.budget_goal / 100
+            : 0,
       }
       setLocalFormData(formattedData)
       setVideoUrl(selectedChild.video_url || null)
@@ -317,36 +310,30 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const handleSelectChange = (name: string, value: string) => {
     setHasUnsavedChanges(true)
     if (isEditMode) {
-      setLocalFormData((prev) => ({
-        ...prev,
-        [name]: value,
-        // Clear budget_goal when switching to SPECIAL_NEEDS
-        ...(name === "beneficiary_type" && value === "SPECIAL_NEEDS" ? { budget_goal: 0 } : {}),
-      }))
+      if (name === "beneficiary_type") {
+        const newIsOpen = isOpenSponsorshipType(value)
+        const newDefault = getDefaultBudgetGoal(value)
+        setLocalFormData((prev) => ({
+          ...prev,
+          beneficiary_type: value as Beneficiaries["beneficiary_type"],
+          budget_goal: newIsOpen ? -1 : newDefault / 100,
+        }))
+      } else {
+        setLocalFormData((prev) => ({
+          ...prev,
+          [name]: value,
+        }))
+      }
     } else if (externalHandleSelectChange) {
-      // For beneficiary_type changes, combine the type + budget_goal update into a
-      // single setExternalFormData call to avoid stale-closure race conditions where
-      // two separate updates overwrite each other's changes.
+      // Create mode: auto-fill budget_goal from config default when type changes
       if (name === "beneficiary_type" && setExternalFormData) {
-        if (value === "SPECIAL_NEEDS") {
-          // SPECIAL_NEEDS has no budget goal — set both type and goal together
-          setExternalFormData((prev: Partial<Beneficiaries>) => ({
-            ...prev,
-            beneficiary_type: value as Beneficiaries["beneficiary_type"],
-            budget_goal: 0,
-          }))
-        } else if (publicHardcodedCents === null) {
-          // No env override — auto-fill budget_goal with per-type default alongside type
-          const newTypeDefault = getDefaultSponsorshipAmount(value)
-          setExternalFormData((prev: Partial<Beneficiaries>) => ({
-            ...prev,
-            beneficiary_type: value as Beneficiaries["beneficiary_type"],
-            ...(newTypeDefault !== null ? { budget_goal: newTypeDefault / 100 } : {}),
-          }))
-        } else {
-          // Env override is set — just update the type (budget_goal stays fixed by env)
-          externalHandleSelectChange(name as keyof Beneficiaries, value)
-        }
+        const newDefault = getDefaultBudgetGoal(value)
+        const newIsOpen = isOpenSponsorshipType(value)
+        setExternalFormData((prev: Partial<Beneficiaries>) => ({
+          ...prev,
+          beneficiary_type: value as Beneficiaries["beneficiary_type"],
+          budget_goal: newIsOpen ? -1 : newDefault / 100,
+        }))
       } else {
         externalHandleSelectChange(name as keyof Beneficiaries, value)
       }
@@ -566,12 +553,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       "biography",
       "country",
     ] as const
-    // SPECIAL_NEEDS has no budget goal, so never require it for that type
-    const isSpecialNeeds = formData.beneficiary_type === "SPECIAL_NEEDS"
-    const requiredFields =
-      !isSpecialNeeds && publicHardcodedCents === null
-        ? ([...baseRequired, "budget_goal"] as const)
-        : baseRequired
+    // Open types (e.g. SPECIAL_NEEDS) have budget_goal = -1, don't require it as form input
+    const requiredFields = isOpenType
+      ? baseRequired
+      : ([...baseRequired, "budget_goal"] as const)
     const emptyFields = requiredFields.filter((field) => !formData[field])
 
     if (emptyFields.length > 0) {
@@ -587,10 +572,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       setIsSaving(true)
 
       if (isCreateMode && handleSubmit && setExternalFormData) {
-        // If the amount is driven by config (env or per-type default), push it to form data
-        // SPECIAL_NEEDS never has a budget goal — keep it at 0
-        if (!isSpecialNeeds && effectiveAmountCents > 0 && !formData.budget_goal) {
-          setExternalFormData({ ...(formData || {}), budget_goal: effectiveAmountCents / 100 })
+        // For fixed types, auto-fill budget_goal from config default if not set
+        if (!isOpenType && configDefaultGoal > 0 && !formData.budget_goal) {
+          setExternalFormData({ ...(formData || {}), budget_goal: configDefaultGoal / 100 })
         }
 
         // Create beneficiary
@@ -619,18 +603,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           birth_date_is_estimate: birthDateIsEstimate,
         }
         const updatedData = { ...localFormData, metadata: mergedMetadata }
-        const envRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
-        const envCents = envRaw ? parseInt(envRaw, 10) : null
-        const budgetGoalInCentsFromForm = parseInt(
-          dollarsToCents(localFormData.budget_goal || 0)
-        )
-        // SPECIAL_NEEDS has no budget goal — always save 0
-        const budgetGoalInCents =
-          localFormData.beneficiary_type === "SPECIAL_NEEDS"
-            ? 0
-            : envCents !== null && !isNaN(envCents)
-            ? envCents
-            : budgetGoalInCentsFromForm
+        const isOpenEdit = isOpenSponsorshipType(localFormData.beneficiary_type)
+        const budgetGoalInCents = isOpenEdit
+          ? -1
+          : parseInt(dollarsToCents(localFormData.budget_goal || 0))
 
         // Delete images marked for removal
         if (imagesToDelete.length > 0) {
@@ -955,28 +931,27 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               </Field>
 
               {/* Budget Goal / Sponsorship Amount */}
-              {formData.beneficiary_type === "SPECIAL_NEEDS" ? (
-                // Special Needs: no budget goal — show monthly contribution as read-only
+              {isOpenType ? (
                 <Field
-                  label="Monthly Contribution"
-                  helperText="Special Needs beneficiaries have no fixed budget goal — this is the monthly sponsorship amount"
+                  label="Budget Goal"
+                  helperText="Open sponsorship — sponsors choose their own amount"
                 >
                   <Input
                     name="budget_goal"
                     type="text"
                     className="border bg-gray-100"
                     px={2}
-                    value={typeDefaultCents ? `$${(typeDefaultCents / 100).toFixed(2)}/mo` : "N/A"}
+                    value="Open (no fixed goal)"
                     readOnly
                     disabled
                   />
                 </Field>
-              ) : publicHardcodedCents === null && typeDefaultCents === null ? (
-                // No env override AND no per-type default → free-form editable field
+              ) : (
                 <Field
                   label="Budget Goal"
                   required
                   errorText="This field is required"
+                  helperText={`Default for this type: $${(configDefaultGoal / 100).toFixed(2)}`}
                 >
                   <Input
                     name="budget_goal"
@@ -988,22 +963,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     onChange={handleInputChange}
                     value={formData.budget_goal || ""}
                     disabled={disabled}
-                  />
-                </Field>
-              ) : (
-                // Env override OR per-type default → read-only display
-                <Field
-                  label="Sponsorship Amount"
-                  helperText="Default for this beneficiary type"
-                >
-                  <Input
-                    name="budget_goal"
-                    type="text"
-                    className="border bg-gray-100"
-                    px={2}
-                    value={`$${(effectiveAmountCents / 100).toFixed(2)}`}
-                    readOnly
-                    disabled
                   />
                 </Field>
               )}

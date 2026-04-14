@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Box, Text, Flex, Spinner, Grid, Image } from "@chakra-ui/react"
 import { createClient } from "@/utils/supabase/client"
+import { isOpenSponsorshipType } from "@/config/beneficiaryTypes"
 
 interface BeneficiaryWithImages {
   id: string
@@ -21,6 +22,7 @@ interface BeneficiaryWithImages {
   status: string
   budget_goal: number
   budget_raised: number
+  beneficiary_type?: string | null
   location_str?: string
   gender?: string
   biography?: string
@@ -76,12 +78,12 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
         status,
         budget_goal,
         budget_raised,
+        beneficiary_type,
         location_str,
         gender,
         biography
       `)
-      .in("status", ["New", "Partially Funded"])
-      .is("goal_fulfilled_at", null)
+      .or('and(status.in.(New,Partially Funded),goal_fulfilled_at.is.null),and(budget_goal.eq.-1,status.not.in.(Draft,Archived))')
       .order("sort_weight", { ascending: false })
       .order("created_at", { ascending: true })
       .limit(20)
@@ -99,6 +101,8 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
         age: calculateAge(b.birth_date)
       }))
       .filter((b) => {
+        // Open sponsorship types (budget_goal = -1) are always available
+        if (isOpenSponsorshipType(b.beneficiary_type)) return true
         const remaining = (b.budget_goal || 0) - (b.budget_raised || 0)
         return remaining > 0
       })
@@ -226,8 +230,9 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
 
               <Grid templateColumns="repeat(auto-fill, minmax(280px, 1fr))" gap={4}>
                 {beneficiaries.map((beneficiary) => {
-                  const remaining = (beneficiary.budget_goal || 0) - (beneficiary.budget_raised || 0)
-                  const percentFunded =
+                  const isOpenType = isOpenSponsorshipType(beneficiary.beneficiary_type)
+                  const remaining = isOpenType ? 0 : (beneficiary.budget_goal || 0) - (beneficiary.budget_raised || 0)
+                  const percentFunded = isOpenType ? 0 :
                     ((beneficiary.budget_raised || 0) / (beneficiary.budget_goal || 1)) * 100
 
                   return (
@@ -269,25 +274,33 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
                         </Text>
                       )}
 
-                      <Box className="mb-2">
-                        <Flex justify="space-between" mb={1}>
-                          <Text fontSize="xs" color="gray.600">
-                            Funding Progress
+                      {isOpenType ? (
+                        <Box className="mb-2">
+                          <Text fontSize="xs" color="blue.600" fontWeight="semibold">
+                            Open sponsorship — choose your amount
                           </Text>
-                          <Text fontSize="xs" fontWeight="semibold" color="blue.600">
-                            {Math.round(percentFunded)}%
-                          </Text>
-                        </Flex>
-                        <Box className="w-full bg-gray-200 rounded-full h-2">
-                          <Box
-                            className="bg-blue-500 h-2 rounded-full transition-all"
-                            style={{ width: `${Math.min(percentFunded, 100)}%` }}
-                          />
                         </Box>
-                        <Text fontSize="xs" color="gray.500" mt={1}>
-                          ${remaining.toFixed(2)} remaining
-                        </Text>
-                      </Box>
+                      ) : (
+                        <Box className="mb-2">
+                          <Flex justify="space-between" mb={1}>
+                            <Text fontSize="xs" color="gray.600">
+                              Funding Progress
+                            </Text>
+                            <Text fontSize="xs" fontWeight="semibold" color="blue.600">
+                              {Math.round(percentFunded)}%
+                            </Text>
+                          </Flex>
+                          <Box className="w-full bg-gray-200 rounded-full h-2">
+                            <Box
+                              className="bg-blue-500 h-2 rounded-full transition-all"
+                              style={{ width: `${Math.min(percentFunded, 100)}%` }}
+                            />
+                          </Box>
+                          <Text fontSize="xs" color="gray.500" mt={1}>
+                            ${remaining.toFixed(2)} remaining
+                          </Text>
+                        </Box>
+                      )}
 
                       {beneficiary.biography && (
                         <Text fontSize="sm" color="gray.700" className="line-clamp-2">
