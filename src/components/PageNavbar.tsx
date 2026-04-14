@@ -17,6 +17,7 @@ import { IoClose } from "react-icons/io5"
 import { AboutUsModal } from "./AboutUsModal"
 import { FAQModal } from "./FAQModal"
 import { SignInModal } from "./SignInModal"
+import { ROUTE_TO_TYPE } from "@/config/beneficiaryTypes"
 
 // const Links = [
 //   // { name: "Sponsorships", href: "/" }, // Temporarily hidden
@@ -65,7 +66,7 @@ export function PageNavbar() {
   const pathname = usePathname()
   const [isAdmin, setIsAdmin] = useState(false)
 
-  const isHome = pathname === "/"
+  const isHome = pathname in ROUTE_TO_TYPE
   const isHomeLogoExpanded = isHome && !isScrolled && !isMobile
 
   // Scroll detection for navbar shadow and home logo size (hysteresis prevents bounce near top).
