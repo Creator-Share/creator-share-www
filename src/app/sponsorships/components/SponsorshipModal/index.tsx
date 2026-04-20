@@ -25,6 +25,7 @@ import { Box, Text, Spinner, Flex, Input } from "@chakra-ui/react"
 import { useAuthStore } from "@/store/authStore"
 import { paymentOptionsCollection } from "../Payments/config"
 import { Button } from "@/components/ui/button"
+import { Tooltip } from "@/components/ui/tooltip"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import {
   generatePublicUrl,
@@ -98,8 +99,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   )
 
   const [amountCents, setAmountCents] = useState<number>(
-    isOpen ? MINIMUM_OPEN_SPONSORSHIP_CENTS : fixedAmountCents,
+    isOpen ? 0 : fixedAmountCents,
   )
+  const [tipOpen, setTipOpen] = useState(false)
   const [selectedOption, setSelectedOption] = useState<string>(
     paymentOptionsCollection.items[0].value,
   )
@@ -185,7 +187,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     if (!open) {
       setToastCount(0)
       setLastToastTime(0)
-      setAmountCents(isOpen ? MINIMUM_OPEN_SPONSORSHIP_CENTS : fixedAmountCents)
+      setAmountCents(isOpen ? 0 : fixedAmountCents)
       setSelectedOption(paymentOptionsCollection.items[0].value)
       setLoading(false)
       setBioExpanded(false)
@@ -283,16 +285,14 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     setAmountCents(Number.isFinite(dollars) ? Math.round(dollars * 100) : 0)
   }
 
-  const handleAmountBlur = () => {
-    if (!isOpen) return
-    if (amountCents > 0 && amountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS) {
-      setAmountCents(MINIMUM_OPEN_SPONSORSHIP_CENTS)
-    }
-  }
-
   const canPay = isOpen
     ? amountCents >= MINIMUM_OPEN_SPONSORSHIP_CENTS
     : !alreadyFulfilled
+
+  const belowMinimum = isOpen && amountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS
+  const disabledReason = belowMinimum
+    ? `Minimum sponsorship amount is $${(MINIMUM_OPEN_SPONSORSHIP_CENTS / 100).toFixed(2)}.`
+    : null
 
   const handleStripePayment = async () => {
     if (!canPay) {
@@ -835,11 +835,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                         </Box>
                         <Input
                           type="number"
-                          min={MINIMUM_OPEN_SPONSORSHIP_CENTS / 100}
                           step="0.01"
                           value={isOpen ? (amountCents > 0 ? amountCents / 100 : "") : fixedAmountCents / 100}
                           onChange={handleAmountChange}
-                          onBlur={handleAmountBlur}
                           readOnly={!isOpen}
                           disabled={!isOpen}
                           className={`px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700${!isOpen ? " bg-gray-100" : ""}`}
@@ -851,17 +849,35 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       flex={{ base: "1", md: "0 0 calc(50% - 12px)" }}
                       width={{ base: "100%", md: "auto" }}
                     >
-                      <Button
-                        onClick={handleStripePayment}
-                        loading={loading}
-                        loadingText="Processing..."
-                        disabled={loading || !canPay}
-                        className={`w-full h-[3.25rem] text-lg font-semibold bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] rounded-xl transition-all shadow-md hover:shadow-lg${
-                          !canPay ? " opacity-50 cursor-not-allowed" : ""
-                        }`}
+                      <Tooltip
+                        content={disabledReason}
+                        showArrow
+                        disabled={!disabledReason}
+                        open={tipOpen}
+                        onOpenChange={(e) => setTipOpen(e.open)}
                       >
-                        Sponsor {firstName} 🪽
-                      </Button>
+                        <Box
+                          as="span"
+                          display="inline-block"
+                          width="100%"
+                          tabIndex={0}
+                          onPointerDown={() => {
+                            if (disabledReason) setTipOpen(true)
+                          }}
+                        >
+                          <Button
+                            onClick={handleStripePayment}
+                            loading={loading}
+                            loadingText="Processing..."
+                            disabled={loading || !canPay}
+                            className={`w-full h-[3.25rem] text-lg font-semibold bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] rounded-xl transition-all shadow-md hover:shadow-lg${
+                              !canPay ? " opacity-50 cursor-not-allowed" : ""
+                            }`}
+                          >
+                            Sponsor {firstName} 🪽
+                          </Button>
+                        </Box>
+                      </Tooltip>
                     </Box>
                   </Flex>
 
