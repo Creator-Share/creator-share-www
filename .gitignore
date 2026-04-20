@@ -42,6 +42,8 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 .env.db
+dev.env
+prod.env
 
 # vercel
 .vercel
@@ -59,3 +61,5 @@ scripts/db/local_schema.sql
 scripts/db/diff.sql
 scripts/db/custom_types.sql
 scripts/db/push_preview.sql
+
+.mcp.json
