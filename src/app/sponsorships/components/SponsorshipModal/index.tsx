@@ -39,7 +39,20 @@ import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
 import BeneficiaryActivity, { SHOW_MORE_CLASS } from "../SponsorshipActivity"
 import { FAQModal } from "@/components/FAQModal"
-import { isOpenSponsorshipType, MINIMUM_OPEN_SPONSORSHIP_CENTS } from "@/config/beneficiaryTypes"
+import {
+  isOpenSponsorshipType,
+  MAXIMUM_OPEN_SPONSORSHIP_CENTS,
+  MINIMUM_OPEN_SPONSORSHIP_CENTS,
+} from "@/config/beneficiaryTypes"
+import { centsToDollars } from "@/utils/currency"
+
+const OPEN_SPONSORSHIP_MIN_DOLLARS = Number(
+  centsToDollars(MINIMUM_OPEN_SPONSORSHIP_CENTS),
+)
+const OPEN_SPONSORSHIP_MAX_DOLLARS = Number(
+  centsToDollars(MAXIMUM_OPEN_SPONSORSHIP_CENTS),
+)
+const OPEN_SPONSORSHIP_RANGE_MESSAGE = `Amount must be between $${OPEN_SPONSORSHIP_MIN_DOLLARS} and $${OPEN_SPONSORSHIP_MAX_DOLLARS}`
 
 // PayPal components are optional and loaded only when the env var is set.
 // Using next/dynamic avoids the broken module-level let + fire-and-forget import()
@@ -286,20 +299,22 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }
 
   const canPay = isOpen
-    ? amountCents >= MINIMUM_OPEN_SPONSORSHIP_CENTS
+    ? amountCents >= MINIMUM_OPEN_SPONSORSHIP_CENTS &&
+      amountCents <= MAXIMUM_OPEN_SPONSORSHIP_CENTS
     : !alreadyFulfilled
 
-  const belowMinimum = isOpen && amountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS
-  const disabledReason = belowMinimum
-    ? `Minimum sponsorship amount is $${(MINIMUM_OPEN_SPONSORSHIP_CENTS / 100).toFixed(2)}.`
-    : null
+  const outOfRange =
+    isOpen &&
+    (amountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS ||
+      amountCents > MAXIMUM_OPEN_SPONSORSHIP_CENTS)
+  const disabledReason = outOfRange ? OPEN_SPONSORSHIP_RANGE_MESSAGE : null
 
   const handleStripePayment = async () => {
     if (!canPay) {
       toaster.create({
         title: "Invalid Amount",
         description: isOpen
-          ? `Minimum sponsorship amount is $${(MINIMUM_OPEN_SPONSORSHIP_CENTS / 100).toFixed(2)}.`
+          ? OPEN_SPONSORSHIP_RANGE_MESSAGE
           : "This beneficiary is already fully sponsored.",
       })
       return
@@ -410,7 +425,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       toaster.create({
         title: "Invalid Amount",
         description: isOpen
-          ? `Minimum amount is $${(MINIMUM_OPEN_SPONSORSHIP_CENTS / 100).toFixed(2)}.`
+          ? OPEN_SPONSORSHIP_RANGE_MESSAGE
           : "This beneficiary is already fully sponsored.",
       })
       throw new Error("Invalid amount")
@@ -906,7 +921,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           <Box className="h-12 bg-white/80 rounded-xl flex items-center justify-center border border-gray-200">
                             <Text className="text-sm text-gray-500 text-center px-2">
                               {isOpen
-                                ? `Minimum amount is $${(MINIMUM_OPEN_SPONSORSHIP_CENTS / 100).toFixed(2)}`
+                                ? OPEN_SPONSORSHIP_RANGE_MESSAGE
                                 : "This beneficiary is already fully sponsored"}
                             </Text>
                           </Box>

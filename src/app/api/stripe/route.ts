@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
+import {
+  MAXIMUM_OPEN_SPONSORSHIP_CENTS,
+  MINIMUM_OPEN_SPONSORSHIP_CENTS,
+} from "@/config/beneficiaryTypes"
+import { centsToDollars } from "@/utils/currency"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string)
 
@@ -50,10 +55,18 @@ export async function POST(req: Request) {
       enforcedAmount = amount // Use the amount sent from the client
     }
 
-    // Validate enforced amount — minimum $5 (500 cents) for open sponsorships
-    if (!enforcedAmount || enforcedAmount < 500) {
+    // Validate enforced amount — integer cents, within [MIN, MAX] for open sponsorships.
+    // Blind sponsorships are pre-set to 3333 cents above, so they always pass.
+    if (
+      !Number.isFinite(enforcedAmount) ||
+      !Number.isInteger(enforcedAmount) ||
+      enforcedAmount < MINIMUM_OPEN_SPONSORSHIP_CENTS ||
+      enforcedAmount > MAXIMUM_OPEN_SPONSORSHIP_CENTS
+    ) {
+      const minDollars = Number(centsToDollars(MINIMUM_OPEN_SPONSORSHIP_CENTS))
+      const maxDollars = Number(centsToDollars(MAXIMUM_OPEN_SPONSORSHIP_CENTS))
       return NextResponse.json(
-        { error: "Minimum amount is $5." },
+        { error: `Amount must be between $${minDollars} and $${maxDollars}` },
         { status: 400 },
       )
     }
