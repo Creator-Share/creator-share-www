@@ -60,11 +60,20 @@ export async function GET(req: Request) {
       query = query.eq("gender", gender)
     }
     if (status.length > 0) {
-      // Include open sponsorships (budget_goal = -1) regardless of status filter,
-      // except Draft/Archived which are admin-controlled visibility states.
+      // Include open sponsorships (budget_goal = -1) alongside "waiting-like" filters
+      // (New / Partially Funded / Sponsorship Cancelled), since they're perpetual
+      // targets. Omit them when the filter is purely terminal (e.g. Budget Fulfilled
+      // only) — there, opens would masquerade as "Sponsored", which they aren't.
+      // Draft/Archived are admin-controlled visibility states and always excluded
+      // from the open branch.
       const statusList = status.map(s => `"${s}"`).join(",")
-      const openCondition = 'and(budget_goal.eq.-1,status.not.in.(Draft,Archived))'
-      query = query.or(`status.in.(${statusList}),${openCondition}`)
+      const shouldIncludeOpen = status.some((s) => s !== "Budget Fulfilled")
+      if (shouldIncludeOpen) {
+        const openCondition = 'and(budget_goal.eq.-1,status.not.in.(Draft,Archived))'
+        query = query.or(`status.in.(${statusList}),${openCondition}`)
+      } else {
+        query = query.in("status", status)
+      }
     }
 
     if (ageRangeParam) {
