@@ -661,8 +661,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             {/* LEFT COLUMN - Image & Basic Info */}
             <Box flex={{ base: "1", md: "0 0 40%" }} className="flex flex-col">
               <Box className="relative">
-                {/* Status pill: only shown for non-sponsored beneficiaries; sponsored state is conveyed by the ribbon */}
-                {!alreadyFulfilled && (
+                {/* Status pill: hidden for open sponsorships (indistinguishable across statuses) and for fulfilled fixed types (ribbon conveys sponsored state). */}
+                {!alreadyFulfilled && !isOpen && (
                   <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#2b7ff9] rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
                     <FaCircleInfo />
                     <Text className="text-xs font-semibold">
