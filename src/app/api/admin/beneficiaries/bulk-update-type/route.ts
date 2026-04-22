@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
-import { ALL_BENEFICIARY_TABS } from "@/config/beneficiaryTypes"
+import {
+  ALL_BENEFICIARY_TABS,
+  getDefaultBudgetGoal,
+  isOpenSponsorshipType,
+} from "@/config/beneficiaryTypes"
 
 const VALID_TYPES = ALL_BENEFICIARY_TABS.filter(t => t.type != null && !t.isLegacyAlias).map(t => t.type)
 
@@ -25,9 +29,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid beneficiary_type" }, { status: 400 })
     }
 
+    // Reconcile budget_goal alongside beneficiary_type to keep them in sync
+    // (same semantics as the single-edit flow in BeneficiaryModal). Open types
+    // get -1 (infinite); fixed types get their config default in cents.
+    const budget_goal = isOpenSponsorshipType(beneficiary_type)
+      ? -1
+      : getDefaultBudgetGoal(beneficiary_type)
+
     const { error: updateError } = await supabase
       .from("beneficiaries")
-      .update({ beneficiary_type })
+      .update({ beneficiary_type, budget_goal })
       .in("id", ids)
 
     if (updateError) {
