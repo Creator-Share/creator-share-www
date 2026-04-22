@@ -3,7 +3,6 @@ import { Box, Button, Flex, SimpleGrid, Spinner, Text } from "@chakra-ui/react"
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import BeneficiaryCard from "../SponsorshipCard"
 import { BeneficiaryListingsProps } from "@/types/propTypes"
-import BlindSponsorshipModal from "../BlindSponsorshipModal"
 import { Beneficiaries } from "@/types"
 
 const BeneficiaryListings = React.forwardRef<
@@ -12,6 +11,7 @@ const BeneficiaryListings = React.forwardRef<
     onLoadMore?: () => void
     hasMore?: boolean
     isLoading?: boolean
+    isRefreshing?: boolean
   }
 >(
   (
@@ -24,13 +24,15 @@ const BeneficiaryListings = React.forwardRef<
       onLoadMore,
       hasMore = false,
       isLoading = false,
+      isRefreshing = false,
       onOpenModal,
+      onClearFilters,
+      noCard = false,
     },
     ref,
   ) => {
     const SCROLL_THRESHOLD_PX = 300
     const containerRef = useRef<HTMLDivElement | null>(null)
-    const [blindModalOpen, setBlindModalOpen] = useState<boolean>(false)
     const [animatingItems, setAnimatingItems] = useState<Set<string>>(new Set())
     const prevCountRef = useRef(0)
 
@@ -140,19 +142,26 @@ const BeneficiaryListings = React.forwardRef<
           else if (ref) ref.current = el
         }}
         width="100%"
-        className="border bg-white rounded-2xl"
-        mt={4}
-        py={3}
+        minH={{ base: "auto", lg: "480px" }}
+        className={noCard ? undefined : "border bg-white rounded-2xl"}
+        mt={noCard ? 0 : 4}
+        style={noCard ? undefined : { boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)" }}
         suppressHydrationWarning={true}
       >
-        <BlindSponsorshipModal
-          open={blindModalOpen}
-          onClose={() => setBlindModalOpen(false)}
-        />
 
+        {/* Card grid -- shown with stale data dimmed while a fresh fetch is in
+            flight, preserving page height so scroll position doesn't jump. */}
         {filteredBeneficiaries.length > 0 && (
-          <Box p={{ base: 4, lg: 8 }}>
-            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap="1rem">
+          <Box
+            position="relative"
+            pt={{ base: 6, lg: 6 }}
+            pb={{ base: 4, lg: 6 }}
+            px={{ base: 3, md: 4 }}
+            opacity={isRefreshing ? 0.4 : 1}
+            pointerEvents={isRefreshing ? "none" : undefined}
+            style={{ transition: "opacity 0.15s" }}
+          >
+            <SimpleGrid columns={{ base: 2, md: 3, xl: 4 }} gap={{ base: "0.75rem", md: "1rem" }} className="child-card-grid">
               {filteredBeneficiaries.map((beneficiary) =>
                 beneficiary.id ? (
                   <Box
@@ -177,13 +186,28 @@ const BeneficiaryListings = React.forwardRef<
           </Box>
         )}
 
-        {isLoading && (
+        {/* Overlay spinner for filter-change refreshes (stale cards visible above) */}
+        {isRefreshing && filteredBeneficiaries.length > 0 && (
+          <Flex justify="center" py={8} align="center">
+            <Spinner size="xl" color="gray.400" />
+          </Flex>
+        )}
+
+        {/* Bottom spinner for "load more" pagination */}
+        {isLoading && !isRefreshing && (
           <Flex justify="center" py={12} align="center">
             <Spinner size="xl" color="gray.300" />
           </Flex>
         )}
 
-        {!isLoading && (
+        {/* Initial load spinner -- no stale cards to show yet */}
+        {isRefreshing && filteredBeneficiaries.length === 0 && (
+          <Flex justify="center" py={12} align="center">
+            <Spinner size="xl" color="gray.300" />
+          </Flex>
+        )}
+
+        {!isLoading && !isRefreshing && (
           <>
             {filteredBeneficiaries.length === 0 && (
               <Flex
@@ -199,21 +223,23 @@ const BeneficiaryListings = React.forwardRef<
                   color="gray.500"
                   textAlign="center"
                 >
-                  No matching children
+                  No matches
                 </Text>
                 <Text fontSize="sm" color="gray.400" textAlign="center" mt={1}>
                   Try adjusting your search or filters to find more results
                 </Text>
-                <Button
-                  mt={6}
-                  bg="#1C3C8C"
-                  color="white"
-                  borderRadius="16px"
-                  _hover={{ bg: "#1C2B7A" }}
-                  onClick={() => setBlindModalOpen(true)}
-                >
-                  Start a blind sponsorship instead
-                </Button>
+                {onClearFilters && (
+                  <Button
+                    mt={6}
+                    bg="#2b7ff9"
+                    color="white"
+                    borderRadius="16px"
+                    _hover={{ bg: "#1a6fe0" }}
+                    onClick={onClearFilters}
+                  >
+                    Show all
+                  </Button>
+                )}
               </Flex>
             )}
 

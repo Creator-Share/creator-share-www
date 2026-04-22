@@ -1,5 +1,6 @@
 "use client"
 import React, { useEffect, useState, useCallback } from "react"
+import Image from "next/image"
 import { Box, Flex, Text, Tabs } from "@chakra-ui/react"
 import { FaFacebook, FaInstagram, FaExternalLinkAlt } from "react-icons/fa"
 import {
@@ -20,35 +21,33 @@ interface AboutUsModalProps {
   open: boolean
   onClose: () => void
   defaultTab?: TabAnchor
+  prevPath?: string
 }
 
 export const AboutUsModal: React.FC<AboutUsModalProps> = ({
   open,
   onClose,
   defaultTab = "about",
+  prevPath,
 }) => {
   const [activeTab, setActiveTab] = useState<TabAnchor>(defaultTab)
 
-  // Handle tab changes - update URL hash
+  // Handle tab changes - update URL path
   const handleTabChange = useCallback((value: string) => {
     const tab = value as TabAnchor
     setActiveTab(tab)
     if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `#${tab}`)
+      window.history.replaceState(null, "", `/${tab}`)
     }
   }, [])
 
-  // Clear hash when modal closes
+  // Restore previous path when modal closes
   const handleClose = useCallback(() => {
-    if (typeof window !== "undefined" && window.location.hash) {
-      window.history.replaceState(
-        null,
-        "",
-        window.location.pathname + window.location.search,
-      )
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", prevPath ?? "/")
     }
     onClose()
-  }, [onClose])
+  }, [onClose, prevPath])
 
   // Sync active tab with defaultTab prop when modal opens
   useEffect(() => {
@@ -91,11 +90,11 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
         className="max-w-4xl mx-4 rounded-3xl overflow-hidden"
         style={{
           boxShadow:
-            "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)",
+            "0 60px 120px -20px rgba(0, 0, 0, 0.6), 0 24px 48px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.06)",
           borderRadius: "24px",
         }}
       >
-        <DialogHeader className="bg-[#1C3C8C] text-white px-10 py-6">
+        <DialogHeader className="bg-[#2b7ff9] text-white px-10 py-6">
           <DialogTitle fontSize="xl" fontWeight="bold">
             About Us
           </DialogTitle>
@@ -111,19 +110,19 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
             <Tabs.List className="bg-gray-50 px-0 md:px-12 border-b justify-center md:justify-start">
               <Tabs.Trigger
                 value="about"
-                className="px-6 py-6 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
+                className="px-6 py-6 text-sm font-medium data-[selected]:text-[#2b7ff9] data-[selected]:border-b-2 data-[selected]:border-[#2b7ff9]"
               >
                 About
               </Tabs.Trigger>
               <Tabs.Trigger
                 value="centers"
-                className="px-6 py-6 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
+                className="px-6 py-6 text-sm font-medium data-[selected]:text-[#2b7ff9] data-[selected]:border-b-2 data-[selected]:border-[#2b7ff9]"
               >
                 Our Centers
               </Tabs.Trigger>
               <Tabs.Trigger
                 value="contact"
-                className="px-6 py-6 text-sm font-medium data-[selected]:text-[#1C3C8C] data-[selected]:border-b-2 data-[selected]:border-[#1C3C8C]"
+                className="px-6 py-6 text-sm font-medium data-[selected]:text-[#2b7ff9] data-[selected]:border-b-2 data-[selected]:border-[#2b7ff9]"
               >
                 Contact
               </Tabs.Trigger>
@@ -132,6 +131,17 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
             {/* About Tab */}
             <Tabs.Content value="about" className="p-6 md:p-12">
               <Box>
+                {/* Logo */}
+                <Box mb={6}>
+                  <Image
+                    src="/logo_text.svg"
+                    alt="Creator Share"
+                    width={200}
+                    height={56}
+                    style={{ objectFit: "contain" }}
+                  />
+                </Box>
+
                 <Text fontSize="2xl" fontWeight="bold" color="gray.800" mb={4}>
                   The Creator Share Foundation
                 </Text>
@@ -145,6 +155,24 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
                   time, love is changing thousands of lives.
                 </Text>
 
+                {/* Tanzania website CTA */}
+                <a
+                  href="https://tanzania.creatorshare.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between w-full bg-[#2b7ff9] hover:bg-[#1a6fe0] transition-colors text-white rounded-2xl px-6 py-4 mb-8 group"
+                >
+                  <Box>
+                    <Text fontWeight="bold" fontSize="md" color="white">
+                      Visit Our Tanzania Website
+                    </Text>
+                    <Text fontSize="sm" color="white" opacity={0.85}>
+                      tanzania.creatorshare.com
+                    </Text>
+                  </Box>
+                  <FaExternalLinkAlt className="w-4 h-4 opacity-80 group-hover:opacity-100 flex-shrink-0" />
+                </a>
+
                 {/* Social Links */}
                 <Box mb={8}>
                   <Text fontWeight="semibold" color="gray.800" mb={3}>
@@ -155,7 +183,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
                       href="https://www.facebook.com/sharetanzania"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-[#1C3C8C] hover:text-[#1C2B7A] transition-colors"
+                      className="flex items-center gap-2 text-[#2b7ff9] hover:text-[#1a6fe0] transition-colors"
                     >
                       <FaFacebook className="w-6 h-6" />
                       <Text fontSize="sm">Facebook</Text>
@@ -164,7 +192,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
                       href="https://www.instagram.com/creatorshare_tanzania?igsh=ajJoYmhiNGtpYXlq"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-[#1C3C8C] hover:text-[#1C2B7A] transition-colors"
+                      className="flex items-center gap-2 text-[#2b7ff9] hover:text-[#1a6fe0] transition-colors"
                     >
                       <FaInstagram className="w-6 h-6" />
                       <Text fontSize="sm">Instagram</Text>
@@ -181,7 +209,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
                     href="https://stripe.creatorshare.com"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-[#1C3C8C] hover:underline text-sm"
+                    className="flex items-center gap-2 text-[#2b7ff9] hover:underline text-sm"
                   >
                     <FaExternalLinkAlt className="w-3 h-3" />
                     Manage Subscriptions via Stripe
@@ -212,12 +240,12 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
                       <Text
                         fontWeight="medium"
                         color="gray.800"
-                        className="group-hover:text-[#1C3C8C]"
+                        className="group-hover:text-[#2b7ff9]"
                       >
                         {center.name}
                       </Text>
                     </Box>
-                    <FaExternalLinkAlt className="w-4 h-4 text-gray-400 group-hover:text-[#1C3C8C]" />
+                    <FaExternalLinkAlt className="w-4 h-4 text-gray-400 group-hover:text-[#2b7ff9]" />
                   </a>
                 ))}
               </Box>
@@ -237,7 +265,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
                   </Text>
                   <a
                     href="mailto:enquiries@sharetanzania.com"
-                    className="text-[#1C3C8C] hover:underline"
+                    className="text-[#2b7ff9] hover:underline"
                   >
                     enquiries@sharetanzania.com
                   </a>

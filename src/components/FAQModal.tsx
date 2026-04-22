@@ -44,7 +44,7 @@ const FAQ_ITEMS: FAQItem[] = [
         <a
           href="https://tanzania.creatorshare.com/partnership"
           target="_blank"
-          className="text-[#1C3C8C] hover:underline font-medium"
+          className="text-[#2b7ff9] hover:underline font-medium"
         >
           Tanzania.CreatorShare.com/partnership
         </a>
@@ -62,19 +62,16 @@ const FAQ_ITEMS: FAQItem[] = [
 interface FAQModalProps {
   open: boolean
   onClose: () => void
+  prevPath?: string
 }
 
-export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
+export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose, prevPath }) => {
   const handleClose = useCallback(() => {
-    if (typeof window !== "undefined" && window.location.hash) {
-      window.history.replaceState(
-        null,
-        "",
-        window.location.pathname + window.location.search,
-      )
+    if (typeof window !== "undefined" && prevPath !== undefined) {
+      window.history.replaceState(null, "", prevPath)
     }
     onClose()
-  }, [onClose])
+  }, [onClose, prevPath])
 
   return (
     <DialogRoot
@@ -87,11 +84,11 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
         className="max-w-4xl mx-4 rounded-3xl overflow-hidden"
         style={{
           boxShadow:
-            "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)",
+            "0 60px 120px -20px rgba(0, 0, 0, 0.6), 0 24px 48px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.06)",
           borderRadius: "24px",
         }}
       >
-        <DialogHeader className="bg-[#1C3C8C] text-white px-10 py-6">
+        <DialogHeader className="bg-[#2b7ff9] text-white px-10 py-6">
           <DialogTitle fontSize="xl" fontWeight="bold">
             Frequently Asked Questions
           </DialogTitle>
@@ -100,7 +97,7 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
 
         <DialogBody className="p-6 md:p-10">
           <section aria-label="Sponsorship questions">
-            <Accordion.Root defaultValue={[]} className="space-y-3">
+            <Accordion.Root defaultValue={[]} collapsible className="space-y-3">
               {FAQ_ITEMS.map((item, index) => (
                 <Accordion.Item
                   key={index}
@@ -116,7 +113,7 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
                     >
                       {item.question}
                     </Text>
-                    <Accordion.ItemIndicator className="text-[#1C3C8C] flex-shrink-0 mt-0.5" />
+                    <Accordion.ItemIndicator className="text-[#2b7ff9] flex-shrink-0 mt-0.5" />
                   </Accordion.ItemTrigger>
                   <Accordion.ItemContent>
                     <Box className="px-6 py-5 border-t border-gray-100">
@@ -149,7 +146,7 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose }) => {
                 href="https://stripe.creatorshare.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-[#1C3C8C] hover:underline text-sm"
+                className="flex items-center gap-2 text-[#2b7ff9] hover:underline text-sm"
               >
                 <FaExternalLinkAlt className="w-3 h-3" />
                 Manage Subscriptions via Stripe

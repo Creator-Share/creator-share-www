@@ -23,10 +23,13 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html className={redditSans.variable}>
-      <body className="bg-[#F5F5F5] flex flex-col min-h-screen overflow-x-hidden">
+    <html className={redditSans.variable} data-theme="light" style={{ colorScheme: "light" }}>
+      {/* suppressHydrationWarning: browser extensions (e.g. password managers, dark-mode
+          injectors) modify <body> attributes client-side, causing a benign mismatch that
+          React would otherwise warn about. This is intentional — not a real hydration bug. */}
+      <body className="flex flex-col min-h-screen overflow-x-hidden" suppressHydrationWarning>
         <Providers>
-          <main className="flex-1">
+          <main className="flex-1 max-lg:bg-white">
             <PageWrapper>{children}</PageWrapper>
           </main>
           <Toaster />

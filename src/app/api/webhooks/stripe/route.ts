@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
-import { createClient } from "@/utils/supabase/client"
+import { createServiceRoleClient } from "@/utils/supabase/server"
 import { centsToDollars } from "@/utils/currency"
 import {
   sendSponsorshipConfirmationEmail,
@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic'
 const DEBUG_MODE = process.env.STRIPE_WEBHOOK_DEBUG === 'true'
 
 export async function POST(req: Request) {
-  const supabase = createClient()
+  const supabase = createServiceRoleClient()
   const sig = req.headers.get("stripe-signature") as string
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
         const amount = parseFloat(session.metadata?.amount || "0")
         const paymentType = session.metadata?.paymentType
         const customerEmail = session.customer_details?.email
-        const interval = paymentType === "subscription" ? "month" : "year"
+        const interval = paymentType === "subscription" ? "month" : paymentType === "one_time" ? "one_time" : "year"
 
         if (type === "partnership") {
           const email = session.metadata?.email

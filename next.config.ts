@@ -15,6 +15,25 @@ const nextConfig: NextConfig = {
     ]
   },
 
+  /**
+   * Serve /street, /care, and /dogs from the root page so there is only one
+   * page.tsx.  The browser URL stays as-is (e.g. /street); SponsorshipsContainer
+   * reads window.location.pathname on mount and applies the correct type filter.
+   */
+  async rewrites() {
+    return [
+      { source: "/street",  destination: "/" },
+      { source: "/care",    destination: "/" },
+      { source: "/dogs",    destination: "/" },
+      { source: "/about",   destination: "/" },
+      { source: "/centers", destination: "/" },
+      { source: "/contact", destination: "/" },
+      { source: "/faq",     destination: "/" },
+      { source: "/signin",  destination: "/" },
+      { source: "/login",   destination: "/" },
+    ]
+  },
+
   images: {
     remotePatterns: [
       {

@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import {
   Box,
   Flex,
@@ -17,6 +17,7 @@ import { IoClose } from "react-icons/io5"
 import { AboutUsModal } from "./AboutUsModal"
 import { FAQModal } from "./FAQModal"
 import { SignInModal } from "./SignInModal"
+import { ROUTE_TO_TYPE } from "@/config/beneficiaryTypes"
 
 // const Links = [
 //   // { name: "Sponsorships", href: "/" }, // Temporarily hidden
@@ -41,6 +42,7 @@ const NAV_SCROLL_COLLAPSE_PX = 32
 const NAV_SCROLL_EXPAND_PX = 6
 
 const NAV_ROW_HEIGHT_COLLAPSED_PX = 64
+const NAV_ROW_HEIGHT_MOBILE_PX = 52
 const NAV_ROW_HEIGHT_EXPANDED_PX = 88
 const NAV_ROW_TRANSITION_MS = 300
 const navRowTransition = `height ${NAV_ROW_TRANSITION_MS}ms ease-out`
@@ -49,6 +51,10 @@ export function PageNavbar() {
   const [isOpen, setIsOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
+  const [skipTransition, setSkipTransition] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const prevScrollRef = useRef(0)
+  const prevPathRef = useRef<string>("/")
   const [aboutUsOpen, setAboutUsOpen] = useState(false)
   const [aboutUsDefaultTab, setAboutUsDefaultTab] = useState<AboutTabAnchor>("about")
   const [faqOpen, setFaqOpen] = useState(false)
@@ -60,32 +66,45 @@ export function PageNavbar() {
   const pathname = usePathname()
   const [isAdmin, setIsAdmin] = useState(false)
 
-  const isHome = pathname === "/"
-  const isHomeLogoExpanded = isHome && !isScrolled
+  const isHome = pathname in ROUTE_TO_TYPE
+  const isHomeLogoExpanded = isHome && !isScrolled && !isMobile
 
-  // Scroll detection for navbar shadow and home logo size (hysteresis prevents bounce near top)
+  // Scroll detection for navbar shadow and home logo size (hysteresis prevents bounce near top).
+  // If the user jumps more than half a viewport in one scroll event, snap the navbar to its
+  // final state immediately (no transition) so the filter bar never docks under a semi-transparent bar.
   const handleScroll = useCallback(() => {
     const scrollTop = window.scrollY || document.documentElement.scrollTop
+    const delta = Math.abs(scrollTop - prevScrollRef.current)
+    prevScrollRef.current = scrollTop
+
+    if (delta > window.innerHeight / 2) {
+      setSkipTransition(true)
+      setIsScrolled(scrollTop > NAV_SCROLL_EXPAND_PX)
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => setSkipTransition(false))
+      )
+      return
+    }
+
+    setSkipTransition(false)
     setIsScrolled((wasScrolled) => {
-      if (wasScrolled) {
-        return scrollTop > NAV_SCROLL_EXPAND_PX
-      }
+      if (wasScrolled) return scrollTop > NAV_SCROLL_EXPAND_PX
       return scrollTop > NAV_SCROLL_COLLAPSE_PX
     })
   }, [])
 
-  // Check URL hash or path for modals (About tabs and Sign In)
-  const checkHashAndOpenModal = useCallback(() => {
+  // Check URL path for modals (About tabs, FAQ, Sign In)
+  const checkPathAndOpenModal = useCallback(() => {
     if (typeof window === "undefined") return
-    const hash = window.location.hash.slice(1) // Remove the #
-    const isLoginPage = window.location.pathname === "/login"
-    
-    if (ABOUT_TAB_ANCHORS.includes(hash as AboutTabAnchor)) {
-      setAboutUsDefaultTab(hash as AboutTabAnchor)
+    const path = window.location.pathname
+    const isLoginPage = path === "/login"
+
+    if (ABOUT_TAB_ANCHORS.includes(path.slice(1) as AboutTabAnchor)) {
+      setAboutUsDefaultTab(path.slice(1) as AboutTabAnchor)
       setAboutUsOpen(true)
-    } else if (hash === "faq") {
+    } else if (path === "/faq") {
       setFaqOpen(true)
-    } else if (hash === "signin" || isLoginPage) {
+    } else if (path === "/signin" || isLoginPage) {
       setSignInOpen(true)
     }
   }, [])
@@ -93,20 +112,26 @@ export function PageNavbar() {
   useEffect(() => {
     setMounted(true)
     fetchUser()
-    
+
     // Set up scroll listener
     window.addEventListener("scroll", handleScroll, { passive: true })
     handleScroll() // Check initial scroll position
 
-    // Check hash on mount and listen for changes
-    checkHashAndOpenModal()
-    window.addEventListener("hashchange", checkHashAndOpenModal)
-    
+    // Track mobile breakpoint so the logo stays compact on small screens
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener("resize", checkMobile, { passive: true })
+
+    // Check path on mount and listen for popstate (browser back/forward)
+    checkPathAndOpenModal()
+    window.addEventListener("popstate", checkPathAndOpenModal)
+
     return () => {
       window.removeEventListener("scroll", handleScroll)
-      window.removeEventListener("hashchange", checkHashAndOpenModal)
+      window.removeEventListener("resize", checkMobile)
+      window.removeEventListener("popstate", checkPathAndOpenModal)
     }
-  }, [fetchUser, handleScroll, checkHashAndOpenModal])
+  }, [fetchUser, handleScroll, checkPathAndOpenModal])
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -130,8 +155,8 @@ export function PageNavbar() {
   // Close menu on route change and check for modal triggers
   useEffect(() => {
     setIsOpen(false)
-    checkHashAndOpenModal()
-  }, [pathname, checkHashAndOpenModal])
+    checkPathAndOpenModal()
+  }, [pathname, checkPathAndOpenModal])
 
   const handleLogout = async () => {
     setIsOpen(false)
@@ -139,33 +164,30 @@ export function PageNavbar() {
     router.push("/")
   }
 
-  if (!mounted) return null
-
+  // Render the full navbar structure on every render (including SSR).
+  // Auth-dependent UI is guarded by {mounted && ...} to avoid hydration
+  // mismatches with client-side auth state while keeping the navbar height
+  // stable from the very first paint.
   return (
     <>
-      <AboutUsModal 
-        open={aboutUsOpen} 
-        onClose={() => setAboutUsOpen(false)} 
-        defaultTab={aboutUsDefaultTab}
-      />
-      <FAQModal
-        open={faqOpen}
-        onClose={() => setFaqOpen(false)}
-      />
-      <SignInModal
-        open={signInOpen}
-        onClose={() => setSignInOpen(false)}
-      />
-      <Box 
-        className={`w-full z-[1000] sticky top-0 transition-all duration-300 ${
-          isScrolled 
-            ? "bg-white border-b border-gray-200" 
-            : "bg-white"
-        }`}
+      {mounted && (
+        <>
+          <AboutUsModal
+            open={aboutUsOpen}
+            onClose={() => setAboutUsOpen(false)}
+            defaultTab={aboutUsDefaultTab}
+            prevPath={prevPathRef.current}
+          />
+          <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} prevPath={prevPathRef.current} />
+          <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
+        </>
+      )}
+      <Box
+        className={`w-full z-[1000] sticky top-0 bg-white border-b ${(isHome && !isScrolled) || (isMobile && !isScrolled) ? "border-transparent" : "border-gray-200"}`}
         style={{
-          boxShadow: isScrolled 
-            ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)" 
-            : "none"
+          boxShadow: isScrolled
+            ? "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)"
+            : "none",
         }}
       >
         <Flex
@@ -173,12 +195,19 @@ export function PageNavbar() {
           style={{
             height: isHomeLogoExpanded
               ? NAV_ROW_HEIGHT_EXPANDED_PX
-              : NAV_ROW_HEIGHT_COLLAPSED_PX,
-            transition: navRowTransition,
+              : isMobile
+                ? NAV_ROW_HEIGHT_MOBILE_PX
+                : NAV_ROW_HEIGHT_COLLAPSED_PX,
+            transition: skipTransition ? "none" : navRowTransition,
           }}
         >
         {/* Logo: larger at top on homepage only; other routes stay compact */}
-        <Box className="flex items-center flex-shrink-0 overflow-visible">
+        <Box
+          className="flex items-center flex-shrink-0 overflow-visible"
+          style={{
+            animation: "pageLogoSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
+          }}
+        >
           <NextLink href="/" passHref>
             <Image
               src="/logo_text.svg"
@@ -186,7 +215,7 @@ export function PageNavbar() {
               height={isHomeLogoExpanded ? "72px" : "48px"}
               objectFit="contain"
               style={{
-                transition: `height ${NAV_ROW_TRANSITION_MS}ms ease-out`,
+                transition: skipTransition ? "none" : `height ${NAV_ROW_TRANSITION_MS}ms ease-out`,
               }}
             />
           </NextLink>
@@ -235,48 +264,75 @@ export function PageNavbar() {
 
         {/* Right Actions */}
         <Flex
-          gap={4}
+          gap={1}
           display={{ base: "none", md: "flex" }}
           alignItems="center"
+          style={{
+            animation: "pageNavRightIn 0.5s 0.07s cubic-bezier(0.22, 1, 0.36, 1) both",
+          }}
         >
           <Button
             size="sm"
             variant="ghost"
+            borderRadius="full"
             asChild
           >
-            <a href="https://tanzania.creatorshare.com/" target="_blank" rel="noopener noreferrer">
-              Foundation
+            <a
+              href="/faq"
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                e.preventDefault()
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/faq")
+                setFaqOpen(true)
+              }}
+            >
+              FAQ
             </a>
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => {
-              window.history.replaceState(null, "", "#faq")
-              setFaqOpen(true)
-            }}
+            borderRadius="full"
+            asChild
           >
-            FAQ
+            <a
+              href="/about"
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                e.preventDefault()
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/about")
+                setAboutUsOpen(true)
+              }}
+            >
+              About Us
+            </a>
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              window.history.replaceState(null, "", "#about")
-              setAboutUsOpen(true)
-            }}
-          >
-            About Us
-          </Button>
-          {user ? (
+          {mounted && user ? (
             <>
               {isAdmin && (
                 <Button
                   size="sm"
-                  variant={pathname?.startsWith("/admin") ? "solid" : "ghost"}
-                  onClick={() => router.push("/admin")}
+                  variant="ghost"
+                  borderRadius="full"
+                  asChild
+                  style={pathname?.startsWith("/admin") ? {
+                    textDecoration: "underline",
+                    textUnderlineOffset: "4px",
+                    fontWeight: 600,
+                  } : undefined}
                 >
-                  Admin Dashboard
+                  <a
+                    href="/admin"
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                      e.preventDefault()
+                      router.push("/admin")
+                    }}
+                  >
+                    Admin Dashboard
+                  </a>
                 </Button>
               )}
               {/* Temporarily hidden
@@ -290,7 +346,7 @@ export function PageNavbar() {
               */}
               <Menu.Root>
                 <Menu.Trigger asChild>
-                  <Button size="sm" variant="ghost">
+                  <Button size="sm" variant="ghost" borderRadius="full">
                     My Account ({user.email})
                   </Button>
                 </Menu.Trigger>
@@ -311,47 +367,57 @@ export function PageNavbar() {
                 </Portal>
               </Menu.Root>
             </>
-          ) : (
+          ) : mounted ? (
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => {
-                window.history.pushState({ modal: true }, "", "/login")
-                setSignInOpen(true)
-              }}
+              borderRadius="full"
+              asChild
             >
-              Sign In
+              <a
+                href="/login"
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                  e.preventDefault()
+                  window.history.pushState({ modal: true }, "", "/login")
+                  setSignInOpen(true)
+                }}
+              >
+                Sign In
+              </a>
             </Button>
-          )}
+          ) : null}
         </Flex>
 
-        {/* Mobile menu: wrapper stays vertically centered while row height animates */}
-        <Box
-          display={{ base: "block", md: "none" }}
-          className="absolute right-4 top-1/2 z-[1101] -translate-y-1/2"
-        >
-          <Button
-            onClick={() => setIsOpen(!isOpen)}
-            aria-label="Toggle Menu"
-            variant="ghost"
-            color={isOpen ? "white" : "inherit"}
-            _hover={{
-              transform: isOpen ? "scale(1.15)" : undefined,
-              bg: isOpen ? "transparent" : undefined,
-            }}
-            transition="transform 0.2s ease"
+        {/* Mobile menu: only rendered client-side (isOpen state is client-driven) */}
+        {mounted && (
+          <Box
+            display={{ base: "block", md: "none" }}
+            className="absolute right-4 top-1/2 z-[1101] -translate-y-1/2"
           >
-            {isOpen ? (
-              <IoClose className="w-6 h-6" />
-            ) : (
-              <GiHamburgerMenu className="w-6 h-6" />
-            )}
-          </Button>
-        </Box>
+            <Button
+              onClick={() => setIsOpen(!isOpen)}
+              aria-label="Toggle Menu"
+              variant="ghost"
+              color={isOpen ? "white" : "gray.500"}
+              _hover={{
+                bg: "transparent",
+                transform: isOpen ? "scale(1.15)" : undefined,
+              }}
+              transition="transform 0.2s ease"
+            >
+              {isOpen ? (
+                <IoClose className="w-6 h-6" />
+              ) : (
+                <GiHamburgerMenu className="w-6 h-6" />
+              )}
+            </Button>
+          </Box>
+        )}
       </Flex>
 
       {/* Mobile Menu (Dropdown) */}
-      {isOpen && (
+      {mounted && isOpen && (
         <Box
           className="fixed top-0 left-0 right-0 bg-[#2B7FF9] shadow-lg md:hidden flex flex-col items-center justify-center"
           style={{ height: "100dvh" }}
@@ -359,20 +425,6 @@ export function PageNavbar() {
           pointerEvents="auto"
         >
           <VStack gap={6} py={6}>
-            {/* Foundation - always visible */}
-            <Button
-              size="lg"
-              variant="ghost"
-              color="white"
-              fontSize="xl"
-              _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
-              className="w-full"
-              asChild
-            >
-              <a href="https://tanzania.creatorshare.com/" target="_blank" rel="noopener noreferrer">
-                Foundation
-              </a>
-            </Button>
             {/* FAQ - always visible */}
             <Button
               size="lg"
@@ -382,7 +434,8 @@ export function PageNavbar() {
               _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
               onClick={() => {
                 setIsOpen(false)
-                window.history.replaceState(null, "", "#faq")
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/faq")
                 setFaqOpen(true)
               }}
               className="w-full"
@@ -398,7 +451,8 @@ export function PageNavbar() {
               _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
               onClick={() => {
                 setIsOpen(false)
-                window.history.replaceState(null, "", "#about")
+                prevPathRef.current = window.location.pathname + window.location.search
+                window.history.replaceState(null, "", "/about")
                 setAboutUsOpen(true)
               }}
               className="w-full"

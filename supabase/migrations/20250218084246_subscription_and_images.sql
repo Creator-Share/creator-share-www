@@ -1,10 +1,13 @@
-create type "public"."SubscriptionStatus" as enum ('complete', 'incomplete', 'cancelled');
+DO $$ BEGIN
+  CREATE TYPE "public"."SubscriptionStatus" AS ENUM ('complete', 'incomplete', 'cancelled');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 drop trigger if exists "update_budget_raised" on "public"."transaction_ledger";
 
 alter table "public"."transaction_ledger" drop constraint "transaction_ledger_child_id_fkey";
 
-create table "public"."sponsor_people_images" (
+create table if not exists "public"."sponsor_people_images" (
     "id" uuid not null default uuid_generate_v4(),
     "sponsor_people_id" uuid,
     "image_url" text not null,
@@ -13,7 +16,7 @@ create table "public"."sponsor_people_images" (
 );
 
 
-create table "public"."subscriptions" (
+create table if not exists "public"."subscriptions" (
     "id" uuid not null default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
     "user_id" uuid,
@@ -29,29 +32,50 @@ create table "public"."subscriptions" (
 );
 
 
-alter table "public"."sponsor_people" add column "active_subscriptions" integer default 0;
+DO $$ BEGIN
+  ALTER TABLE "public"."sponsor_people" ADD COLUMN "active_subscriptions" integer default 0;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
 alter table "public"."sponsor_people" enable row level security;
 
-CREATE UNIQUE INDEX sponsor_people_images_pkey ON public.sponsor_people_images USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS sponsor_people_images_pkey ON public.sponsor_people_images USING btree (id);
 
-CREATE UNIQUE INDEX subscriptions_pkey ON public.subscriptions USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_pkey ON public.subscriptions USING btree (id);
 
-alter table "public"."sponsor_people_images" add constraint "sponsor_people_images_pkey" PRIMARY KEY using index "sponsor_people_images_pkey";
+DO $$ BEGIN
+  alter table "public"."sponsor_people_images" add constraint "sponsor_people_images_pkey" PRIMARY KEY using index "sponsor_people_images_pkey";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."subscriptions" add constraint "subscriptions_pkey" PRIMARY KEY using index "subscriptions_pkey";
+DO $$ BEGIN
+  alter table "public"."subscriptions" add constraint "subscriptions_pkey" PRIMARY KEY using index "subscriptions_pkey";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."sponsor_people_images" add constraint "sponsor_people_images_sponsor_people_id_fkey" FOREIGN KEY (sponsor_people_id) REFERENCES sponsor_people(id) not valid;
+DO $$ BEGIN
+  alter table "public"."sponsor_people_images" add constraint "sponsor_people_images_sponsor_people_id_fkey" FOREIGN KEY (sponsor_people_id) REFERENCES sponsor_people(id) not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."sponsor_people_images" validate constraint "sponsor_people_images_sponsor_people_id_fkey";
 
-alter table "public"."subscriptions" add constraint "subscriptions_child_id_fkey" FOREIGN KEY (child_id) REFERENCES sponsor_people(id) ON UPDATE CASCADE ON DELETE SET NULL not valid;
+DO $$ BEGIN
+  alter table "public"."subscriptions" add constraint "subscriptions_child_id_fkey" FOREIGN KEY (child_id) REFERENCES sponsor_people(id) ON UPDATE CASCADE ON DELETE SET NULL not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."subscriptions" validate constraint "subscriptions_child_id_fkey";
 
-alter table "public"."subscriptions" add constraint "subscriptions_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) not valid;
+DO $$ BEGIN
+  alter table "public"."subscriptions" add constraint "subscriptions_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."subscriptions" validate constraint "subscriptions_user_id_fkey";
+
+-- Drop and re-add with updated references
+ALTER TABLE "public"."transaction_ledger" DROP CONSTRAINT IF EXISTS "transaction_ledger_child_id_fkey";
 
 alter table "public"."transaction_ledger" add constraint "transaction_ledger_child_id_fkey" FOREIGN KEY (child_id) REFERENCES sponsor_people(id) ON UPDATE CASCADE ON DELETE SET NULL not valid;
 
@@ -194,41 +218,52 @@ grant truncate on table "public"."subscriptions" to "service_role";
 
 grant update on table "public"."subscriptions" to "service_role";
 
-create policy "Enable delete for SUPER_ADMIN users only"
-on "public"."sponsor_people"
-as permissive
-for delete
-to public
-using ((EXISTS ( SELECT 1
-   FROM (role_assignments ra
-     JOIN roles r ON ((r.id = ra.role_id)))
-  WHERE ((ra.user_id = auth.uid()) AND (r.name = 'SUPER_ADMIN'::text)))));
+DO $$ BEGIN
+  create policy "Enable delete for SUPER_ADMIN users only"
+  on "public"."sponsor_people"
+  as permissive
+  for delete
+  to public
+  using ((EXISTS ( SELECT 1
+     FROM (role_assignments ra
+       JOIN roles r ON ((r.id = ra.role_id)))
+    WHERE ((ra.user_id = auth.uid()) AND (r.name = 'SUPER_ADMIN'::text)))));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-create policy "Enable insert for SUPER_ADMIN users only"
-on "public"."sponsor_people"
-as permissive
-for insert
-to public
-with check ((EXISTS ( SELECT 1
-   FROM (role_assignments ra
-     JOIN roles r ON ((r.id = ra.role_id)))
-  WHERE ((ra.user_id = auth.uid()) AND (r.name = 'SUPER_ADMIN'::text)))));
+DO $$ BEGIN
+  create policy "Enable insert for SUPER_ADMIN users only"
+  on "public"."sponsor_people"
+  as permissive
+  for insert
+  to public
+  with check ((EXISTS ( SELECT 1
+     FROM (role_assignments ra
+       JOIN roles r ON ((r.id = ra.role_id)))
+    WHERE ((ra.user_id = auth.uid()) AND (r.name = 'SUPER_ADMIN'::text)))));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-create policy "Enable update for SUPER_ADMIN users only"
-on "public"."sponsor_people"
-as permissive
-for update
-to public
-using ((EXISTS ( SELECT 1
-   FROM (role_assignments ra
-     JOIN roles r ON ((r.id = ra.role_id)))
-  WHERE ((ra.user_id = auth.uid()) AND (r.name = 'SUPER_ADMIN'::text)))));
+DO $$ BEGIN
+  create policy "Enable update for SUPER_ADMIN users only"
+  on "public"."sponsor_people"
+  as permissive
+  for update
+  to public
+  using ((EXISTS ( SELECT 1
+     FROM (role_assignments ra
+       JOIN roles r ON ((r.id = ra.role_id)))
+    WHERE ((ra.user_id = auth.uid()) AND (r.name = 'SUPER_ADMIN'::text)))));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
+DROP TRIGGER IF EXISTS preserve_active_subscriptions ON public.sponsor_people;
 CREATE TRIGGER preserve_active_subscriptions BEFORE UPDATE ON public.sponsor_people FOR EACH ROW EXECUTE FUNCTION handle_active_subscriptions();
 
+DROP TRIGGER IF EXISTS update_budget_raised ON public.subscriptions;
 CREATE TRIGGER update_budget_raised AFTER INSERT OR DELETE OR UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION calc_budget_raised();
 
 

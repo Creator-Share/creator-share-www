@@ -43,17 +43,37 @@ export async function GET(req: Request) {
 
   try {
 
-    // STEP 1: Start with base query
-    let query = supabase.from("beneficiaries").select("*");
+    // STEP 1: Start with base query — count=exact adds Prefer: count=exact header
+    // so PostgREST returns a Content-Range total alongside the page data (no extra round trip).
+    let query = supabase.from("beneficiaries").select("*", { count: "exact" });
 
-    if (beneficiaryType) {
-      query = query.eq("beneficiary_type", beneficiaryType)
+    if (beneficiaryType && beneficiaryType !== "null" && beneficiaryType !== "undefined") {
+      // Support comma-separated types (e.g. "CHILD,CHILD_LABORER")
+      const types = beneficiaryType.split(",").map((t) => t.trim()).filter(Boolean)
+      if (types.length === 1) {
+        query = query.eq("beneficiary_type", types[0])
+      } else if (types.length > 1) {
+        query = query.in("beneficiary_type", types)
+      }
     }
     if (gender) {
       query = query.eq("gender", gender)
     }
     if (status.length > 0) {
-      query = query.in("status", status)
+      // Include open sponsorships (budget_goal = -1) alongside "waiting-like" filters
+      // (New / Partially Funded / Sponsorship Cancelled), since they're perpetual
+      // targets. Omit them when the filter is purely terminal (e.g. Budget Fulfilled
+      // only) — there, opens would masquerade as "Sponsored", which they aren't.
+      // Draft/Archived are admin-controlled visibility states and always excluded
+      // from the open branch.
+      const statusList = status.map(s => `"${s}"`).join(",")
+      const shouldIncludeOpen = status.some((s) => s !== "Budget Fulfilled")
+      if (shouldIncludeOpen) {
+        const openCondition = 'and(budget_goal.eq.-1,status.not.in.(Draft,Archived))'
+        query = query.or(`status.in.(${statusList}),${openCondition}`)
+      } else {
+        query = query.in("status", status)
+      }
     }
 
     if (ageRangeParam) {
@@ -92,7 +112,7 @@ export async function GET(req: Request) {
     const rangeEnd = offset + limit - 1
     query = query.range(rangeStart, rangeEnd)
 
-    const { data, error } = await query
+    const { data, error, count } = await query
     if (error) {
       console.error("Supabase error:", error)
       return NextResponse.json({ error: "Database error" }, { status: 500 })
@@ -115,6 +135,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       people: (data || []) as Beneficiaries[],
+      totalCount: count ?? null,
       pageInfo: {
         limit,
         nextCursor:

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { BULK_ASSIGNABLE_STATUSES } from "@/config/beneficiaryStatuses"
 
 export async function POST(req: Request) {
   const supabase = await createClient()
@@ -16,10 +17,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Status is required" }, { status: 400 })
     }
 
-    // Validate status values (SOC - separation of concerns)
-    const validStatuses = ['New', 'Partially Funded', 'Budget Fulfilled', 'Archived', 'Draft']
-    
-    if (!validStatuses.includes(status)) {
+    if (!(BULK_ASSIGNABLE_STATUSES as string[]).includes(status)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 })
     }
 

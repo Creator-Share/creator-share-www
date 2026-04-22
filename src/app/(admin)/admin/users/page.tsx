@@ -6,7 +6,7 @@ import { UserRole, User, Role } from "@/types/admin.types"
 import { InviteUserDialog } from "./components/InviteUserDialog"
 import { EditRoleDialog } from "./components/EditRoleDialog"
 import { BulkActionButton } from "@/components/admin-ui/BulkActionButton"
-import DeleteDialog from "../children/components/DeleteDialog"
+import DeleteDialog from "../beneficiaries/components/DeleteDialog"
 import { toaster } from "@/components/ui/toaster"
 import { Checkbox } from "@/components/ui/checkbox"
 import { GoPlusCircle } from "react-icons/go"
@@ -426,7 +426,7 @@ const UserManagement = () => {
       primaryAction={
         <Button
           onClick={() => setIsInviteDrawerOpen(true)}
-          className="border-[2px] border-[#E0E0E0] rounded-md w-full md:w-auto h-[40px] px-6 bg-[#1C3C8C] text-white hover:bg-[#1C3C8C] justify-center"
+          className="border-[2px] border-[#E0E0E0] rounded-md w-full md:w-auto h-[40px] px-6 bg-[#2b7ff9] text-white hover:bg-[#2b7ff9] justify-center"
         >
           <GoPlusCircle className="mr-2" />
           Invite User

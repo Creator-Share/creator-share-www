@@ -1,37 +1,62 @@
--- Update transaction_ledger: add beneficiary_id column
-ALTER TABLE public.transaction_ledger
-  RENAME COLUMN child_id TO beneficiary_id;
+-- Update transaction_ledger: rename child_id to beneficiary_id
+DO $$ BEGIN
+  ALTER TABLE public.transaction_ledger RENAME COLUMN child_id TO beneficiary_id;
+EXCEPTION WHEN undefined_column THEN NULL;
+END $$;
 
--- Update subscriptions: add beneficiary_id column, drop currency column
-ALTER TABLE public.subscriptions
-  RENAME COLUMN child_id TO beneficiary_id;
+-- Update subscriptions: rename child_id to beneficiary_id
+DO $$ BEGIN
+  ALTER TABLE public.subscriptions RENAME COLUMN child_id TO beneficiary_id;
+EXCEPTION WHEN undefined_column THEN NULL;
+END $$;
 
 -- Rename people table to beneficiaries
-ALTER TABLE public.sponsor_people RENAME TO beneficiaries;
+DO $$ BEGIN
+  ALTER TABLE public.sponsor_people RENAME TO beneficiaries;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 ALTER TABLE public.beneficiaries
   ADD COLUMN IF NOT EXISTS metadata jsonb;
 
 
 -- Rename people_activities to activities, add title and rename child_id column
-ALTER TABLE public.people_activities RENAME TO activities;
+DO $$ BEGIN
+  ALTER TABLE public.people_activities RENAME TO activities;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 ALTER TABLE public.activities
   ADD COLUMN IF NOT EXISTS title text;
-ALTER TABLE public.activities
-  RENAME COLUMN child_id TO beneficiary_id;
+DO $$ BEGIN
+  ALTER TABLE public.activities RENAME COLUMN child_id TO beneficiary_id;
+EXCEPTION WHEN undefined_column THEN NULL;
+END $$;
 
 -- Rename sponsor_people_images to media
-ALTER TABLE public.sponsor_people_images RENAME TO media;
-ALTER TABLE public.media
-  RENAME COLUMN sponsor_people_id TO beneficiary_id;
+DO $$ BEGIN
+  ALTER TABLE public.sponsor_people_images RENAME TO media;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE public.media RENAME COLUMN sponsor_people_id TO beneficiary_id;
+EXCEPTION WHEN undefined_column THEN NULL;
+END $$;
 ALTER TABLE public.media
   ADD COLUMN IF NOT EXISTS activity_id uuid;
 -- Constraints
 ALTER TABLE public.media
   DROP CONSTRAINT IF EXISTS media_beneficiary_id_fkey;
-ALTER TABLE public.media
-  ADD CONSTRAINT media_beneficiary_id_fkey FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id) ON DELETE SET NULL;
-ALTER TABLE public.media
-  ADD CONSTRAINT media_activity_id_fkey FOREIGN KEY (activity_id) REFERENCES public.activities(id) ON DELETE SET NULL;
+DO $$ BEGIN
+  ALTER TABLE public.media
+    ADD CONSTRAINT media_beneficiary_id_fkey FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE public.media
+    ADD CONSTRAINT media_activity_id_fkey FOREIGN KEY (activity_id) REFERENCES public.activities(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Triggers and Indexes
 DROP TRIGGER IF EXISTS preserve_active_subscriptions ON public.beneficiaries;

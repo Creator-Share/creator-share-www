@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation"
 import { Box } from "@chakra-ui/react"
 import { Beneficiaries, Activity } from "@/types"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
+import { ACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
+import { useFilterStore } from "@/store/filterStore"
 import {
   fetchActivitiesByBeneficiaryId,
   fetchAllSponsored,
@@ -13,6 +15,23 @@ import SponsorshipFilters from "../SponsorshipFilters"
 import SponsorshipListings from "../SponsorshipListings"
 import BeneficiaryModal from "../SponsorshipModal"
 import HorizontalSponsorshipRow from "../HorizontalSponsorshipRow"
+import {
+  BeneficiaryTabType,
+  ROUTE_TO_TYPE,
+  getApiTypes,
+} from "@/config/beneficiaryTypes"
+
+/** Set of pathname values that are "type landing pages" (the modal push uses pushState, not router). */
+const TYPE_ROUTE_PATHS = new Set(["/", "/street", "/care", "/dogs"])
+
+/**
+ * Maps a UI tab type to the DB beneficiary_type values used by fetchAllSponsored.
+ * Null (All) returns undefined so no type filter is applied.
+ */
+function getSponsoredBeneficiaryTypes(type: BeneficiaryTabType | null): string[] | undefined {
+  const types = getApiTypes(type)
+  return types ? types.split(",") : undefined
+}
 
 /** First segment after `/sponsorships/`, or null when not on a profile URL. */
 function getSponsorshipUsernameFromPath(path: string): string | null {
@@ -23,18 +42,34 @@ function getSponsorshipUsernameFromPath(path: string): string | null {
   return rest ? decodeURIComponent(rest) : null
 }
 
+interface SponsorshipsContainerProps {
+  /** Controlled active type — drives filter, social row, and URL. */
+  activeType: BeneficiaryTabType | null
+  /** Called whenever the container wants to change the active type (URL nav, popstate). */
+  onTypeChange: (type: BeneficiaryTabType | null) => void
+}
+
 /**
- * Owns all shared state for the sponsorships section:
- *   - Sponsored children with recent activity (for story circles)
+ * Owns the sponsorships section state:
  *   - Beneficiary pagination (for portrait cards)
  *   - Sticky filter scroll detection
  *   - Active beneficiary + modal open/close (by object, not by index)
  *   - URL pushState/popState for deep-linkable modal URLs
  *   - Activities fetch (single fetch, passed as prop to modal)
+ *
+ * `activeType` is a controlled prop — page.tsx owns it so HomeHero and this
+ * container stay in sync.  The named routes /street, /care and /dogs are served
+ * via Next.js rewrites so the browser URL reflects the selected type.
+ * On mount this component reads window.location.pathname and notifies the parent
+ * via `onTypeChange` so the shared state is corrected.
  */
-const SponsorshipsContainer: React.FC = () => {
+const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
+  activeType,
+  onTypeChange,
+}) => {
   const pathname = usePathname()
   const filtersRef = useRef<HTMLDivElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
   const previousUrlRef = useRef<string | null>(null)
 
   const [isFiltersSticky, setIsFiltersSticky] = useState(false)
@@ -47,29 +82,108 @@ const SponsorshipsContainer: React.FC = () => {
   /** Bumps when history or our pushState/replaceState changes the meaningful URL so we re-sync modal to pathname. */
   const [urlSyncGeneration, setUrlSyncGeneration] = useState(0)
 
-  const { beneficiaries, hasMore, isLoading, handleFilterChange, loadMore } =
+  // Ref mirror so the popstate handler can read the current type without being
+  // recreated every render (avoids re-attaching the listener on every type change).
+  const activeTypeRef = useRef<BeneficiaryTabType | null>(null)
+  activeTypeRef.current = activeType
+
+  const { beneficiaries, totalCount, hasMore, isLoading, isRefreshing, handleFilterChange, loadMore } =
     useBeneficiaryPagination({
       recordsPerPage: 9,
-      beneficiaryType: "CHILD",
       autoRetry: true,
-      initialStatus: ["New", "Partially Funded", "Sponsorship Cancelled"],
+      initialStatus: ACTIVE_STATUSES as string[],
     })
 
-  // Fetch all Budget Fulfilled children, ordered by most recent activity first.
-  useEffect(() => {
-    fetchAllSponsored().then(setSponsored)
+  const resetToDefaults = useFilterStore((s) => s.resetToDefaults)
+
+  // Stable ref so the filter-sync effect never needs handleFilterChange as a dep.
+  const handleFilterChangeRef = useRef(handleFilterChange)
+  handleFilterChangeRef.current = handleFilterChange
+
+  // Scroll the viewport up so the unified card's top edge sits just below
+  // the sticky navbar. Only fires when the user is already scrolled past that
+  // point so interacting with filters while at the top of the page is a no-op.
+  const scrollToCard = useCallback(() => {
+    if (!cardRef.current) return
+    const NAVBAR_HEIGHT = 72
+    const cardTop = cardRef.current.getBoundingClientRect().top + window.scrollY
+    const target = Math.max(0, cardTop - NAVBAR_HEIGHT)
+    if (window.scrollY > target) {
+      window.scrollTo({ top: target, behavior: "smooth" })
+    }
   }, [])
 
-  // Sticky filter detection
+  // Resets all active filters and scrolls to the top of the card.
+  // Passed to SponsorshipListings so the empty-state "Show all" button works.
+  const handleShowAll = useCallback(() => {
+    resetToDefaults()
+    handleFilterChange({
+      gender: "",
+      ageRange: [0, 14],
+      status: ACTIVE_STATUSES as string[],
+      search: "",
+    })
+    onTypeChange(null)
+    scrollToCard()
+  }, [resetToDefaults, handleFilterChange, onTypeChange, scrollToCard])
+
+  // Exposed to SponsorshipFilters — wraps the pagination handler with a
+  // smooth scroll back to the top of the unified card.
+  const handleFilterChangeAndScroll = useCallback(
+    (...args: Parameters<typeof handleFilterChange>) => {
+      handleFilterChange(...args)
+      scrollToCard()
+    },
+    [handleFilterChange, scrollToCard],
+  )
+
+  // Sync the pagination filter whenever activeType changes (from hero, URL nav, or popstate).
+  useEffect(() => {
+    handleFilterChangeRef.current({ beneficiary_type: getApiTypes(activeType) })
+  }, [activeType])
+
+  // Re-fetch sponsored beneficiaries whenever the active type changes.
+  useEffect(() => {
+    const types = getSponsoredBeneficiaryTypes(activeType)
+    fetchAllSponsored(types).then(setSponsored)
+  }, [activeType])
+
+  // On mount: read the real browser URL (window.location.pathname) and notify
+  // the parent if a specific type route is active.  This handles /street, /care,
+  // /dogs served via Next.js rewrites — usePathname() always returns "/" for those
+  // paths, but window.location reflects the actual URL the user requested.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const typeFromUrl = ROUTE_TO_TYPE[window.location.pathname] ?? null
+    if (typeFromUrl !== null) {
+      onTypeChange(typeFromUrl)
+    }
+    // Only run once on mount — subsequent type changes come through onTypeChange.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleTypeChange = useCallback((type: BeneficiaryTabType | null) => {
+    onTypeChange(type)
+    scrollToCard()
+  }, [onTypeChange, scrollToCard])
+
+  // Sticky filter detection — only meaningful at lg+ where position:sticky applies.
+  // Below that breakpoint the filter scrolls with the page so isFiltersSticky
+  // must stay false regardless of scroll position.
   const handleScroll = useCallback(() => {
     if (!filtersRef.current) return
-    setIsFiltersSticky(filtersRef.current.getBoundingClientRect().top <= 64)
+    const isLgViewport = window.innerWidth >= 992
+    setIsFiltersSticky(isLgViewport && filtersRef.current.getBoundingClientRect().top <= 64)
   }, [])
 
   useEffect(() => {
     window.addEventListener("scroll", handleScroll, { passive: true })
+    window.addEventListener("resize", handleScroll, { passive: true })
     handleScroll()
-    return () => window.removeEventListener("scroll", handleScroll)
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+      window.removeEventListener("resize", handleScroll)
+    }
   }, [handleScroll])
 
   // Fetch activities whenever the active beneficiary changes (single fetch,
@@ -140,9 +254,12 @@ const SponsorshipsContainer: React.FC = () => {
 
   // Reconcile modal + active beneficiary with the current URL (deep links, client nav, back/forward).
   useEffect(() => {
+    // When a modal is opened via window.history.pushState (not router.push), Next.js's
+    // usePathname stays on the type-route path while window.location moves to
+    // /sponsorships/:username.  Use the real window URL in that situation.
     const path =
       typeof window !== "undefined" &&
-      pathname === "/" &&
+      TYPE_ROUTE_PATHS.has(pathname) &&
       window.location.pathname.startsWith("/sponsorships/")
         ? window.location.pathname
         : pathname
@@ -182,15 +299,15 @@ const SponsorshipsContainer: React.FC = () => {
           setIsModalOpen(false)
           return
         }
-        const data = (await res.json()) as { child?: Beneficiaries }
-        if (cancelled || !data?.child) {
+        const data = (await res.json()) as { beneficiary?: Beneficiaries }
+        if (cancelled || !data?.beneficiary) {
           if (!cancelled) {
             setActiveBeneficiary(null)
             setIsModalOpen(false)
           }
           return
         }
-        setActiveBeneficiary(data.child)
+        setActiveBeneficiary(data.beneficiary)
         setIsModalOpen(true)
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return
@@ -209,16 +326,25 @@ const SponsorshipsContainer: React.FC = () => {
   }, [beneficiaries, sponsored, urlSyncGeneration, pathname])
 
   useEffect(() => {
-    const onPopState = () => bumpUrlSync()
+    const onPopState = () => {
+      bumpUrlSync()
+      // Re-sync the active tab and list filter when the user navigates
+      // back/forward through type-route history entries.
+      // Guard: skip the onTypeChange call if the type hasn't actually changed.
+      if (typeof window !== "undefined") {
+        const restoredType = ROUTE_TO_TYPE[window.location.pathname] ?? null
+        if (restoredType !== activeTypeRef.current) {
+          onTypeChange(restoredType)
+        }
+      }
+    }
     window.addEventListener("popstate", onPopState)
     return () => window.removeEventListener("popstate", onPopState)
-  }, [bumpUrlSync])
+  }, [bumpUrlSync, onTypeChange])
 
   return (
-    <Box>
-      {/* Horizontal row: "Children Sponsored" cards on the left,
-          "Children Waiting" cards on the right, all identical portrait format.
-          Infinite scroll is wired to the same pagination hook as the grid below. */}
+    <Box style={{ animation: "pageContentFadeUp 0.6s 0.32s cubic-bezier(0.22, 1, 0.36, 1) both" }}>
+      {/* Horizontal row: sponsored + waiting cards, both filtered by activeType. */}
       <HorizontalSponsorshipRow
         sponsored={sponsored}
         beneficiaries={beneficiaries}
@@ -227,24 +353,47 @@ const SponsorshipsContainer: React.FC = () => {
         isLoading={isLoading}
         onLoadMore={loadMore}
         onOpenModal={openModal}
+        activeType={activeType}
       />
 
-      {/* Sticky filter bar */}
+      {/* Unified card: filter header + primary content grid.
+          Mobile: full-bleed (negates PageWrapper's px-4), no radius, fills
+          remaining viewport height so the page background appears white.
+          Desktop (lg+): inset margins, rounded corners, natural height. */}
       <Box
-        ref={filtersRef}
-        position={{ base: "relative", lg: "sticky" }}
-        top={{ lg: "60px" }}
-        zIndex={100}
+        ref={cardRef}
+        mt={{ base: 4, lg: 8 }}
+        mx={{ base: -4, lg: 5 }}
+        minHeight={{ base: "100dvh", lg: "auto" }}
+        className="bg-white border border-gray-200 lg:rounded-2xl overflow-clip"
+        style={{ boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)" }}
       >
-        <SponsorshipFilters
-          onFilterChange={handleFilterChange}
-          isSticky={isFiltersSticky}
-        />
-      </Box>
+        {/* Filter header — sticky on desktop; hard bottom border separates it from the grid */}
+        <Box
+          ref={filtersRef}
+          position={{ base: "relative", lg: "sticky" }}
+          top={{ lg: "60px" }}
+          zIndex={100}
+          className="bg-white lg:rounded-t-2xl border-b border-gray-200"
+          style={{
+            boxShadow: isFiltersSticky
+              ? "0 4px 16px -4px rgba(0,0,0,0.10)"
+              : undefined,
+          }}
+        >
+          <SponsorshipFilters
+            onFilterChange={handleFilterChangeAndScroll}
+            isSticky={isFiltersSticky}
+            beneficiaryType={activeType === "ANIMAL" ? "ANIMAL" : "CHILD"}
+            activeType={activeType}
+            onTypeChange={handleTypeChange}
+            resultCount={totalCount ?? beneficiaries.length}
+            hasMoreResults={totalCount === null && hasMore}
+            noCard
+          />
+        </Box>
 
-      {/* Primary card grid -- narrower than the row/filters so the sticky
-         filter's bottom border-radius is visible outside the card edges */}
-      <Box mx={{ base: 0, lg: 5 }}>
+        {/* Content grid — shares the unified card; no separate border/shadow */}
         <SponsorshipListings
           beneficiaryData={beneficiaries}
           selectedBeneficiaryId={activeBeneficiary?.id ?? null}
@@ -252,11 +401,14 @@ const SponsorshipsContainer: React.FC = () => {
           onLoadMore={loadMore}
           hasMore={hasMore}
           isLoading={isLoading}
+          isRefreshing={isRefreshing}
           onOpenModal={openModal}
+          onClearFilters={handleShowAll}
+          noCard
         />
       </Box>
 
-      {/* Single modal instance -- key resets local state when switching children */}
+      {/* Single modal instance -- key resets local state when switching beneficiaries */}
       {activeBeneficiary && (
         <BeneficiaryModal
           key={activeBeneficiary.id}

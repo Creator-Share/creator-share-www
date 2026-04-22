@@ -106,7 +106,7 @@ const EmbedPage = () => {
   return (
     <Box className="px-6 py-6 md:px-12 md:py-12">
       <Box className="text-center justify-center my-12">
-        <Text className="text-[#1C3C8C] font-semibold text-5xl mb-4">
+        <Text className="text-[#2b7ff9] font-semibold text-5xl mb-4">
           Sponsoring a Child with Creator Share
         </Text>
         <Text className="text-base font-normal text-[#03150E99]">

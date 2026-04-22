@@ -55,7 +55,7 @@ const ActivitiesAdminPage: React.FC = () => {
     fetchBeneficiaries()
   }, [])
 
-  // Image loading - reuse pattern from /admin/children/page.tsx
+  // Image loading - reuse pattern from /admin/beneficiaries/page.tsx
   const fetchImagesForVisibleBeneficiaries = useCallback(
     async (visibleBeneficiaries: BeneficiaryWithActivity[]) => {
       if (!visibleBeneficiaries?.length) return

@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       gender: body.gender === 'Boy' || body.gender === 'Girl' ? body.gender : 'Boy',
       birth_date: body.birth_date || undefined,
       biography: String(body.biography).trim(),
-      budget_goal: Math.max(0, Number(body.budget_goal) || 0),
+      budget_goal: Number(body.budget_goal) === -1 ? -1 : Math.max(0, Number(body.budget_goal) || 0),
       budget_raised: Math.max(0, Number(body.budget_raised) || 0),
       status: (body.status || 'New') as Status,
       country: body.country ? String(body.country).trim() : 'Unknown Country',
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
         ...(body.metadata || {}),
         birth_date_is_estimate: birthDateIsEstimate,
       },
-      beneficiary_type: 'CHILD' as BeneficiaryType,
+      beneficiary_type: (body.beneficiary_type || 'CHILD_LABORER') as BeneficiaryType,
       introduction: String(body.biography).trim()
     }
     const insertData = { ...data }

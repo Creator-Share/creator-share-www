@@ -1,5 +1,34 @@
-import React from "react"
+"use client"
+import React, { useState, useRef, useCallback, useEffect } from "react"
 import { Box, Heading, Text } from "@chakra-ui/react"
+import { ALL_BENEFICIARY_TABS } from "@/config/beneficiaryTypes"
+import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface HeroContent {
+  heading: React.ReactNode
+  description: React.ReactNode
+}
+
+interface HomeHeroProps {
+  activeType: BeneficiaryTabType | null
+  onTypeChange: (type: BeneficiaryTabType | null) => void
+}
+
+// "ALL" is the display key used when activeType is null or the legacy "CHILD" alias.
+type DisplayKey = "ALL" | BeneficiaryTabType
+
+function toDisplayKey(type: BeneficiaryTabType | null): DisplayKey {
+  if (!type || type === "CHILD") return "ALL"
+  return type
+}
+
+// ---------------------------------------------------------------------------
+// Brushstroke SVG
+// ---------------------------------------------------------------------------
 
 const BrushstrokeUnderline = () => (
   <svg
@@ -34,88 +63,461 @@ const BrushstrokeUnderline = () => (
   </svg>
 )
 
-export const HomeHero = () => {
+// ---------------------------------------------------------------------------
+// Hero content per display key
+// ---------------------------------------------------------------------------
+
+const HERO_CONTENT: Record<DisplayKey, HeroContent> = {
+  ALL: {
+    heading: (
+      <>
+        One child at a time,{" "}
+        <Box as="br" display={{ base: "none", md: "initial" }} />
+        love is{" "}
+        <Box as="span" display="inline-block" position="relative">
+          <Box as="span" style={{ position: "relative", zIndex: 1 }}>
+            changing
+          </Box>
+          <BrushstrokeUnderline />
+        </Box>{" "}
+        thousands of lives
+      </>
+    ),
+    description: (
+      <>
+        For over a decade, the{" "}
+        <a
+          href="https://tanzania.creatorshare.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: "#2b7ff9",
+            textDecoration: "underline",
+            textUnderlineOffset: "2px",
+          }}
+        >
+          Creator Share Foundation
+        </a>{" "}
+        has stewarded children&apos;s centers across Tanzania, creating home and
+        family for hundreds of the most vulnerable children on earth. Here you
+        can walk with a specific child, providing education, medical care, and
+        the belief in their potential that changes everything.
+      </>
+    ),
+  },
+
+  CHILD: {
+    heading: (
+      <>
+        One child at a time,{" "}
+        <Box as="br" display={{ base: "none", md: "initial" }} />
+        love is{" "}
+        <Box as="span" display="inline-block" position="relative">
+          <Box as="span" style={{ position: "relative", zIndex: 1 }}>
+            changing
+          </Box>
+          <BrushstrokeUnderline />
+        </Box>{" "}
+        thousands of lives
+      </>
+    ),
+    description: (
+      <>
+        For over a decade, the{" "}
+        <a
+          href="https://tanzania.creatorshare.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: "#2b7ff9",
+            textDecoration: "underline",
+            textUnderlineOffset: "2px",
+          }}
+        >
+          Creator Share Foundation
+        </a>{" "}
+        has stewarded children&apos;s centers across Tanzania, creating home and
+        family for hundreds of the most vulnerable children on earth. Here you
+        can walk with a specific child, providing education, medical care, and
+        the belief in their potential that changes everything.
+      </>
+    ),
+  },
+
+  CHILD_LABORER: {
+    heading: (
+      <>
+        Give a child laborer{" "}
+        <Box as="br" display={{ base: "none", md: "initial" }} />
+        the chance to be a child again
+      </>
+    ),
+    description: (
+      <>
+        Across Tanzania, thousands of children spend their days working instead
+        of learning, carrying loads no child should carry. Your sponsorship
+        covers school fees, daily meals, and safe housing, replacing hardship
+        with possibility. One sponsor, one child, one life quietly turned
+        around.
+      </>
+    ),
+  },
+
+  SPECIAL_NEEDS: {
+    heading: (
+      <>
+        Every child deserves{" "}
+        <Box as="br" display={{ base: "none", md: "initial" }} />
+        to be seen, known, and loved
+      </>
+    ),
+    description: (
+      <>
+        Children with special needs are too often the most invisible,
+        overlooked, underestimated, and forgotten. Through your sponsorship, a
+        child who might otherwise be hidden away receives specialized care,
+        therapy, education, and the certainty that their life has worth. You do
+        not change who they are. You change what becomes possible for them.
+      </>
+    ),
+  },
+
+  ANIMAL: {
+    heading: (
+      <>
+        Every stray deserves
+        <br />a second chance
+        <br />
+        at life
+      </>
+    ),
+    description: (
+      <>
+        Tanzania&apos;s streets are home to thousands of abandoned dogs with no
+        food, no shelter, and no one in their corner. Your sponsorship provides
+        veterinary care, a safe place to recover, and real hope for a dog that
+        has known only hardship. Small life, enormous impact.
+      </>
+    ),
+  },
+}
+
+// ---------------------------------------------------------------------------
+// Nav links — derived from central config
+// ---------------------------------------------------------------------------
+
+const HERO_LINKS: { type: BeneficiaryTabType | null; label: string }[] =
+  ALL_BENEFICIARY_TABS.filter(
+    (tab) => !tab.isLegacyAlias && tab.isPubliclyVisible,
+  ).map((tab) => ({
+    type: tab.type,
+    label: tab.label,
+  }))
+
+const EXIT_DURATION_MS = 200
+const ENTER_DURATION_MS = 300
+
+// ---------------------------------------------------------------------------
+// Shared button reset style
+// ---------------------------------------------------------------------------
+
+const BTN_RESET: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  outline: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+  appearance: "none",
+  padding: 0,
+  fontFamily: "var(--font-reddit-sans), sans-serif",
+  lineHeight: 1.25,
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
+  const displayKey = toDisplayKey(activeType)
+
+  const [displayedKey, setDisplayedKey] = useState<DisplayKey>(displayKey)
+  const [phase, setPhase] = useState<"exit" | "idle">("idle")
+  const [hoveredType, setHoveredType] = useState<BeneficiaryTabType | null>(null)
+
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const raf1Ref = useRef<number | null>(null)
+  const raf2Ref = useRef<number | null>(null)
+  const prevDisplayKeyRef = useRef<DisplayKey>(displayKey)
+
+  useEffect(() => {
+    return () => {
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current)
+      if (raf1Ref.current) cancelAnimationFrame(raf1Ref.current)
+      if (raf2Ref.current) cancelAnimationFrame(raf2Ref.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (displayKey === prevDisplayKeyRef.current) return
+    prevDisplayKeyRef.current = displayKey
+
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current)
+    if (raf1Ref.current) cancelAnimationFrame(raf1Ref.current)
+    if (raf2Ref.current) cancelAnimationFrame(raf2Ref.current)
+
+    setPhase("exit")
+
+    exitTimerRef.current = setTimeout(() => {
+      setDisplayedKey(displayKey)
+      raf1Ref.current = requestAnimationFrame(() => {
+        raf2Ref.current = requestAnimationFrame(() => {
+          setPhase("idle")
+        })
+      })
+    }, EXIT_DURATION_MS)
+  }, [displayKey])
+
+  const handleTypeClick = useCallback(
+    (type: BeneficiaryTabType | null) => {
+      if (toDisplayKey(type) === displayKey) return
+      onTypeChange(type)
+    },
+    [displayKey, onTypeChange],
+  )
+
+  const content = HERO_CONTENT[displayedKey]
+
   return (
     <Box
       className="relative"
-      background={{
-        base: "linear-gradient(to bottom, white 0%, #ebebeb 60%, #F5F5F5 100%)",
-        md: "linear-gradient(to bottom, white 0%, #f5f9ff 25%, #e8eefb 55%, #dce6f7 75%, #F5F5F5 100%)",
-      }}
       style={{
         width: "100vw",
         marginLeft: "calc(-50vw + 50%)",
+        marginTop: "-88px",
+        paddingTop: "88px",
+        paddingBottom: "16px",
       }}
     >
-      <Box className="max-w-[1200px] mx-auto px-6 md:px-8">
-        <Box className="flex flex-col md:flex-row items-center md:items-center gap-8 md:gap-12 py-12 md:py-16">
-          {/* Text Content - Left */}
-          <Box className="flex-1 text-center md:text-left">
-            <Heading
-              as="h1"
-              fontSize={{ base: "3xl", md: "4xl", lg: "5xl" }}
-              fontWeight="800"
-              color="#2b7ff9"
-              lineHeight="1.15"
-              mb={5}
-              style={{ fontFamily: "var(--font-reddit-sans), sans-serif" }}
-            >
-              One child at a time,
-              <br />
-              love is{" "}
-              <Box as="span" display="inline-block" position="relative">
-                <Box as="span" style={{ position: "relative", zIndex: 1 }}>
-                  changing
-                </Box>
-                <BrushstrokeUnderline />
-              </Box>{" "}
-              thousands
-              <br />
-              of lives
-            </Heading>
-            <Text
-              fontSize={{ base: "md", md: "lg" }}
-              color="#18181b"
-              lineHeight="1.7"
-              maxW={{ base: "none", md: "xl", lg: "2xl" }}
-            >
-              For over a decade, the{" "}
-              <a
-                href="https://tanzania.creatorshare.com"
-                target="_blank"
-                rel="noopener noreferrer"
+
+      {/* ----------------------------------------------------------------
+          Mobile: full-bleed horizontally scrollable tab strip.
+          Uses the same 100vw + negative-margin escape as the hero
+          background itself so the strip always touches both screen edges.
+      ---------------------------------------------------------------- */}
+      <Box
+        display={{ base: "block", md: "none" }}
+        overflowX="auto"
+        overflowY="hidden"
+        style={{
+          position: "relative",
+          zIndex: 1,
+          width: "100vw",
+          marginLeft: "calc(-50vw + 50%)",
+          borderBottom: "1px solid #e5e7eb",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+          animation: "pageContentFadeUp 0.45s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both",
+        }}
+        className="[&::-webkit-scrollbar]:hidden"
+      >
+        <Box
+          as="nav"
+          aria-label="Beneficiary type"
+          display="flex"
+          style={{
+            paddingLeft: "0.5rem",
+            paddingRight: "0.5rem",
+            width: "max-content",
+            minWidth: "100%",
+          }}
+        >
+          {HERO_LINKS.map(({ type, label }) => {
+            const isActive = toDisplayKey(type) === displayKey
+            return (
+              <button
+                key={type ?? "all"}
+                onClick={() => handleTypeClick(type)}
+                aria-current={isActive ? "true" : undefined}
                 style={{
-                  color: "#2b7ff9",
-                  textDecoration: "underline",
-                  textUnderlineOffset: "2px",
+                  ...BTN_RESET,
+                  position: "relative",
+                  cursor: isActive ? "default" : "pointer",
+                  paddingTop: "0.75rem",
+                  paddingBottom: "0.875rem",
+                  paddingLeft: "0.875rem",
+                  paddingRight: "0.875rem",
+                  fontSize: "0.875rem",
+                  fontWeight: isActive ? 800 : 700,
+                  color: isActive ? "#2b7ff9" : "#6b7280",
+                  whiteSpace: "nowrap",
+                  marginBottom: "-1px",
+                  transition: "color 0.18s ease",
                 }}
               >
-                Creator Share Foundation
-              </a>{" "}
-              has stewarded children&apos;s centers across Tanzania, creating
-              home and family for hundreds of the most vulnerable children on
-              earth. Here you can walk with a specific child - providing
-              education, medical care, and belief in their potential that
-              changes everything.
-            </Text>
+                {label}
+                <span
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: "0.5rem",
+                    right: "0.5rem",
+                    height: "3px",
+                    borderRadius: "99px",
+                    background: isActive ? "#2b7ff9" : "transparent",
+                    transition: "background 0.18s ease",
+                  }}
+                />
+              </button>
+            )
+          })}
+        </Box>
+      </Box>
+
+      {/* ----------------------------------------------------------------
+          Content row: desktop nav (left) + heading/description (right)
+      ---------------------------------------------------------------- */}
+      <Box
+        className="max-w-[1200px] mx-auto px-6 md:px-8"
+        style={{ position: "relative", zIndex: 1 }}
+      >
+        <Box
+          display="flex"
+          flexDirection="row"
+          alignItems={{ base: "flex-start", md: "center" }}
+          gap={{ base: 0, md: 10 }}
+          pt={{ base: 8, md: 12 }}
+          pb={{ base: 2, md: 2 }}
+          minHeight={{ base: "180px", md: "0px" }}
+        >
+          {/* Desktop-only left nav — fixed width so font/bar animations
+              never reflow the adjacent content column. */}
+          <Box
+            as="nav"
+            aria-label="Beneficiary type"
+            display={{ base: "none", md: "flex" }}
+            flexDirection="column"
+            gap={1}
+            flexShrink={0}
+            style={{
+              width: "220px",
+              animation: "pageContentFadeUp 0.5s 0.15s cubic-bezier(0.22, 1, 0.36, 1) both",
+            }}
+          >
+            {HERO_LINKS.map(({ type, label }) => {
+              const isActive = toDisplayKey(type) === displayKey
+              const isHovered = hoveredType === type && !isActive
+              return (
+                <button
+                  key={type ?? "all"}
+                  onClick={() => handleTypeClick(type)}
+                  onMouseEnter={() => setHoveredType(type)}
+                  onMouseLeave={() => setHoveredType(null)}
+                  aria-current={isActive ? "true" : undefined}
+                  style={{
+                    ...BTN_RESET,
+                    cursor: isActive ? "default" : "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  {/* Fixed height prevents the nav column from shifting
+                      vertically as the active bar animates between heights. */}
+                  <Box
+                    display="flex"
+                    alignItems="center"
+                    gap={2}
+                    style={{ height: "2.75rem" }}
+                  >
+                    {/* Circled check — visible only when active */}
+                    <Box
+                      flexShrink={0}
+                      style={{
+                        width: "18px",
+                        height: "18px",
+                        opacity: isActive ? 1 : 0,
+                        transform: isActive ? "scale(1)" : "scale(0.6)",
+                        transition: `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`,
+                      }}
+                    >
+                      <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
+                        <circle cx="9" cy="9" r="9" fill="#2b7ff9" />
+                        <path d="M5 9.5L7.5 12L13 6.5" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </Box>
+
+                    {/* Animated left bar */}
+                    <Box
+                      style={{
+                        width: "3px",
+                        flexShrink: 0,
+                        borderRadius: "2px",
+                        transition: `height ${EXIT_DURATION_MS}ms ease, background ${EXIT_DURATION_MS}ms ease, opacity ${EXIT_DURATION_MS}ms ease`,
+                        height: isActive ? "2.25rem" : isHovered ? "1.375rem" : "0.875rem",
+                        background: isActive ? "#2b7ff9" : isHovered ? "#5a84c1" : "#999",
+                        opacity: isActive ? 1 : isHovered ? 0.85 : 0.55,
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: "1.2rem",
+                        fontWeight: 800,
+                        color: isActive ? "#2b7ff9" : isHovered ? "#5a84c1" : "#888",
+                        transition: `color ${EXIT_DURATION_MS}ms ease`,
+                        display: "block",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {label}
+                    </span>
+                  </Box>
+                </button>
+              )
+            })}
           </Box>
 
-          {/* Photo - Right */}
-          <Box className="hidden md:flex flex-shrink-0 items-center justify-center">
+          {/* Animated heading + description */}
+          <Box
+            flex={1}
+            minW={0}
+            maxW={{ base: "100%", md: "75%" }}
+            style={{
+              opacity: phase === "exit" ? 0 : 1,
+              transform:
+                phase === "exit" ? "translateY(-12px)" : "translateY(0)",
+              transition:
+                phase === "exit"
+                  ? `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`
+                  : "none",
+              animation: "pageContentFadeUp 0.5s 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards",
+            }}
+          >
             <Box
-              className="relative"
-              width={{ base: "280px", md: "340px", lg: "400px" }}
-              height={{ base: "320px", md: "380px", lg: "450px" }}
+              key={displayedKey}
+              width="100%"
+              style={{
+                animation:
+                  phase !== "exit"
+                    ? `heroFadeInUp ${ENTER_DURATION_MS}ms ease forwards`
+                    : "none",
+              }}
             >
-              <img
-                src="/hero-child-tanzania.png"
-                alt="A child smiling in a photo shaped like the map of Tanzania"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "contain",
-                }}
-              />
+              <Heading
+                as="h1"
+                fontSize={{ base: "2xl", md: "3xl", lg: "4xl" }}
+                fontWeight="800"
+                color="#2b7ff9"
+                lineHeight="1.15"
+                mb={5}
+                style={{ fontFamily: "var(--font-reddit-sans), sans-serif" }}
+              >
+                {content.heading}
+              </Heading>
+              <Text
+                fontSize={{ base: "sm", md: "md" }}
+                color="#666666"
+                lineHeight="1.7"
+              >
+                {content.description}
+              </Text>
             </Box>
           </Box>
         </Box>

@@ -80,7 +80,7 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
           <DialogBody>
             {isLoading ? (
               <Flex direction="column" align="center" gap={4} py={6}>
-                <Spinner size="lg" color="#0654C6" />
+                <Spinner size="lg" color="#2b7ff9" />
                 <Text>Cancelling subscription...</Text>
                 <Text fontSize="sm" color="gray.500" textAlign="center">
                   Please wait while we process your cancellation request.
@@ -91,15 +91,15 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
                 <Text>
                   Are you sure you want to cancel your sponsorship
                   {subscription.beneficiary_id ? (
-                    <> for <strong>{subscription.child?.name || "this child"}</strong>?</>
+                    <> for <strong>{subscription.child?.name || "this beneficiary"}</strong>?</>
                   ) : (
-                    <>? This is a blind sponsorship that hasn't been matched yet.</>
+                    <>? This sponsorship hasn't been matched to a beneficiary yet.</>
                   )}
                 </Text>
                 <Text fontSize="sm" color="gray.600">
                   This action cannot be undone. Your recurring payment of{" "}
                   <strong>${(subscription.amount / 100).toFixed(2)}</strong> will stop
-                  {subscription.beneficiary_id && ", and you'll no longer be supporting this child"}.
+                  {subscription.beneficiary_id && ", and you'll no longer be supporting this beneficiary"}.
                 </Text>
                 <Flex gap={3} mt={4}>
                   <Button
@@ -151,7 +151,7 @@ export const columns: ColumnDef<Subscription>[] = [
         variant="ghost"
         onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
-        Child Name
+        Name
         <LuArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
@@ -179,7 +179,7 @@ export const columns: ColumnDef<Subscription>[] = [
                   subscription.onChooseChild?.(subscription.id)
                 }}
               >
-                Choose Child
+                Choose
               </Button>
             )}
           </div>

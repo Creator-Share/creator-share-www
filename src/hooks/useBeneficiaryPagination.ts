@@ -2,18 +2,21 @@ import { useState, useCallback, useRef, useEffect } from "react"
 import { Beneficiaries } from "@/types"
 import { toaster } from "@/components/ui/toaster"
 import { createClient } from '@supabase/supabase-js'
+import { INACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 
 type FiltersState = {
   gender: string
   ageRange: [number, number]
   status: string[]
   search?: string
-  beneficiary_type?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED"
+  /** Accepts single type or comma-separated types (e.g. "CHILD,CHILD_LABORER") */
+  beneficiary_type?: string
 }
 
 interface UseBeneficiaryPaginationOptions {
   recordsPerPage?: number
-  beneficiaryType?: "CHILD" | "ANIMAL" | "FAMILY" | "STREET_INVOLVED"
+  /** Accepts single type or comma-separated types (e.g. "CHILD,CHILD_LABORER") */
+  beneficiaryType?: string
   autoRetry?: boolean
   initialStatus?: string[] // Optional initial status filter (for admin mode)
   isAdminMode?: boolean // Flag to indicate admin mode (affects ageRange filtering with Draft)
@@ -21,9 +24,12 @@ interface UseBeneficiaryPaginationOptions {
 
 interface UseBeneficiaryPaginationReturn {
   beneficiaries: Beneficiaries[]
+  totalCount: number | null
   cursor: string | null
   hasMore: boolean
   isLoading: boolean
+  /** True while a fresh (non-pagination) fetch is in flight. The previous page's data stays visible during this time. */
+  isRefreshing: boolean
   filters: FiltersState
   setFilters: (
     filters: FiltersState | ((prev: FiltersState) => FiltersState)
@@ -52,7 +58,7 @@ export function useBeneficiaryPagination(
 ): UseBeneficiaryPaginationReturn {
   const {
     recordsPerPage = 3,
-    beneficiaryType = "CHILD",
+    beneficiaryType,
     autoRetry = true,
     initialStatus,
     isAdminMode = false,
@@ -67,9 +73,11 @@ export function useBeneficiaryPagination(
   })
 
   const [beneficiaries, setBeneficiaries] = useState<Beneficiaries[]>([])
+  const [totalCount, setTotalCount] = useState<number | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState<boolean>(true)
   const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
   const [retryCount, setRetryCount] = useState<number>(0)
 
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -92,22 +100,29 @@ export function useBeneficiaryPagination(
   const buildQuery = useCallback(
     (nextCursor: string | null) => {
       const params = new URLSearchParams()
-      params.set(
-        "beneficiary_type",
-        filters.beneficiary_type || beneficiaryType
-      )
+      const type = (filters.beneficiary_type || beneficiaryType) as string | undefined;
+      if (type && type !== "null" && type !== "undefined") {
+        params.set("beneficiary_type", type);
+      }
       if (filters.gender) params.set("gender", filters.gender)
       if (filters.status?.length) params.set("status", filters.status.join(","))
       
-      // Skip age range filtering for statuses that may include beneficiaries of any age
-      // or with incomplete data (Draft, Archived, Budget Fulfilled)
-      const skipAgeRangeStatuses = ["Draft", "Archived", "Budget Fulfilled"]
-      const shouldSkipAgeRange = (filters.status || []).some(status => 
-        skipAgeRangeStatuses.includes(status)
-      )
-      
-      
-      if (filters.ageRange && !shouldSkipAgeRange) {
+      // Skip age range filtering when:
+      //  • the type is ANIMAL (dogs don't have human-comparable ages), or
+      //  • status includes an inactive value that may cover beneficiaries of any age
+      const isAnimalType = (type ?? "").split(",").includes("ANIMAL")
+      const shouldSkipAgeRange =
+        isAnimalType ||
+        (filters.status || []).some((status) => (INACTIVE_STATUSES as string[]).includes(status))
+
+      // Only apply the age range when the user has moved the slider away from its
+      // default position (0 → type max). At the default, treat as "no upper bound"
+      // so beneficiaries older than the slider maximum still appear in the listing.
+      // This prevents the stats card and the filter strip from diverging on a fresh page load.
+      const defaultMaxAge = isAnimalType ? 20 : 14
+      const isDefaultAgeRange =
+        filters.ageRange[0] === 0 && filters.ageRange[1] >= defaultMaxAge
+      if (filters.ageRange && !shouldSkipAgeRange && !isDefaultAgeRange) {
         params.set("ageRange", filters.ageRange.join(","))
       }
       if (filters.search) params.set("search", filters.search)
@@ -125,9 +140,14 @@ export function useBeneficiaryPagination(
     async (nextCursor: string | null) => {
       const queryString = buildQuery(nextCursor)
 
-      // Abort any in-flight request when starting a fresh query (filters changed)
-      if (nextCursor === null && abortControllerRef.current) {
-        abortControllerRef.current.abort()
+      // Abort any in-flight request. Stale data is kept visible (dimmed) while
+      // the new page loads so the page height doesn't collapse and scroll
+      // position is preserved. isRefreshing signals the UI to apply the overlay.
+      if (nextCursor === null) {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort()
+        }
+        setIsRefreshing(true)
       }
 
       const controller = new AbortController()
@@ -140,6 +160,7 @@ export function useBeneficiaryPagination(
         )
         if (!res.ok) throw new Error("Failed to load beneficiaries")
         const data = await res.json()
+        if (data?.totalCount != null) setTotalCount(data.totalCount)
         const people = (data?.people || []) as Beneficiaries[]
         shuffle(people)
 
@@ -215,6 +236,7 @@ export function useBeneficiaryPagination(
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null
           setIsLoading(false)
+          if (nextCursor === null) setIsRefreshing(false)
         }
       }
     },
@@ -285,9 +307,11 @@ export function useBeneficiaryPagination(
 
   return {
     beneficiaries,
+    totalCount,
     cursor,
     hasMore,
     isLoading,
+    isRefreshing,
     filters,
     setFilters,
     handleFilterChange,

@@ -1,10 +1,11 @@
 "use client"
 import React from "react"
-import { Box, Button, Text, Progress, Badge } from "@chakra-ui/react"
+import { Box, Button, Text, Badge } from "@chakra-ui/react"
 import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Beneficiaries } from "@/types/admin.types"
 import { centsToDollars } from "@/utils/currency"
+import { isOpenSponsorshipType } from "@/config/beneficiaryTypes"
 
 interface BeneficiaryCardProps {
   beneficiary: Beneficiaries
@@ -23,13 +24,9 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   beneficiaryImages,
   loadingImages,
 }) => {
-  const publicHardcoded = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
-  const goal = Number(
-    publicHardcoded !== null ? publicHardcoded : beneficiary.budget_goal || 0
-  )
+  const isOpen = isOpenSponsorshipType(beneficiary.beneficiary_type)
+  const goal = isOpen ? 0 : (beneficiary.budget_goal ?? 0)
   const raised = Number(beneficiary.budget_raised || 0)
-  const progress =
-    goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -150,17 +147,20 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
 
       <Box className="space-y-1 mt-3">
         <Box className="flex justify-between text-sm">
-          <Text>Raised</Text>
-          <Text>
-            ${centsToDollars(beneficiary.budget_raised)} / $
-            {centsToDollars(goal || beneficiary.budget_goal)}
-          </Text>
+          {isOpen ? (
+            <>
+              <Text>Raised</Text>
+              <Text>${centsToDollars(raised)}</Text>
+            </>
+          ) : (
+            <>
+              <Text>Funded</Text>
+              <Text>
+                ${centsToDollars(raised)} / ${centsToDollars(goal)}
+              </Text>
+            </>
+          )}
         </Box>
-        <Progress.Root value={progress}>
-          <Progress.Track className="rounded-xl h-2">
-            <Progress.Range className="bg-[#1C3C8C]" />
-          </Progress.Track>
-        </Progress.Root>
       </Box>
 
       {/* Spacer to push button to bottom */}
@@ -169,7 +169,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
       {/* Edit button - always at bottom */}
       <Box className="mt-3">
         <Button
-          className="w-full bg-[#1C3C8C] text-white"
+          className="w-full bg-[#2b7ff9] text-white"
           onClick={(e) => {
             e.stopPropagation()
             onEdit(beneficiary)

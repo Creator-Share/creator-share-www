@@ -39,7 +39,8 @@ import ProofreadButton from "@/components/ai/ProofreadButton"
 import { toaster } from "@/components/ui/toaster"
 import { dollarsToCents } from "@/utils/currency"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
-import { compressImage, compressImages } from "@/utils/imageCompression"
+import { compressImage } from "@/utils/imageCompression"
+import { ALL_BENEFICIARY_TABS, getDefaultBudgetGoal, isOpenSponsorshipType } from "@/config/beneficiaryTypes"
 
 type BeneficiaryModalMode = "create" | "edit"
 
@@ -100,16 +101,15 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   )
   const [allImages, setAllImages] = useState<BeneficiaryMedia[]>([])
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
-  const [isImageLoading, setIsImageLoading] = useState(false)
+  const [imagesToDelete, setImagesToDelete] = useState<string[]>([])
 
   // Shared state
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isUnsavedChangesOpen, setIsUnsavedChangesOpen] = useState(false)
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([])
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
-  const [processedImages, setProcessedImages] = useState<File[]>([])
-  const [, setUploadedImagePaths] = useState<string[]>([])
   const [isProcessingImages, setIsProcessingImages] = useState(false)
   const [compressionProgress, setCompressionProgress] = useState<{
     current: number
@@ -121,7 +121,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [imageUploadKey, setImageUploadKey] = useState(0)
   const [videoUploadKey, setVideoUploadKey] = useState(0)
   const [showBiographyComparison, setShowBiographyComparison] = useState(false)
-  const shouldShowOverlay = isProcessingImages || isImageLoading || disabled
+  const shouldShowOverlay = isProcessingImages || disabled
 
   const resetImageUploadInput = useCallback(() => {
     if (imagePreviewUrls.length > 0) {
@@ -147,20 +147,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     (formData.metadata as BeneficiaryMetadata | undefined)?.birth_date_is_estimate
   )
 
-  // Environment variable for sponsorship amount
-  const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
-  const publicHardcodedCents = publicHardcodedRaw
-    ? parseInt(publicHardcodedRaw, 10)
-    : null
 
-  // Generate a short URL-style string
+  const isOpenType = isOpenSponsorshipType(formData.beneficiary_type)
+  const configDefaultGoal = getDefaultBudgetGoal(formData.beneficiary_type)
+
+  // Generate a short URL-style string using cryptographically secure randomness
   const generateShortUrl = useCallback(() => {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-    let result = ''
-    for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-    return result
+    return crypto.randomUUID().replace(/-/g, "").slice(0, 8)
   }, [])
 
   // Prepopulate username in create mode when modal opens
@@ -178,9 +171,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     if (isEditMode && selectedChild) {
       const formattedData = {
         ...selectedChild,
-        budget_goal: selectedChild.budget_goal
-          ? selectedChild.budget_goal / 100
-          : 0,
+        budget_goal: selectedChild.budget_goal === -1
+          ? -1
+          : selectedChild.budget_goal
+            ? selectedChild.budget_goal / 100
+            : 0,
       }
       setLocalFormData(formattedData)
       setVideoUrl(selectedChild.video_url || null)
@@ -228,16 +223,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     onClose()
   }
 
-  // Handle explicit cancel - clears data and resets
-  const handleCancel = () => {
-    if (hasUnsavedChanges) {
-      const confirmClose = window.confirm(
-        "You have unsaved changes. Clicking OK will discard all changes."
-      )
-      if (!confirmClose) return
-    }
-
-    // Clear all form data and reset state
+  // Discard changes and close — called when user confirms the unsaved-changes dialog
+  const handleDiscardChanges = () => {
+    setIsUnsavedChangesOpen(false)
     setHasUnsavedChanges(false)
     setImagePreviewUrls([])
     resetVideoUploadInput()
@@ -246,6 +234,32 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
     if (isEditMode) {
       setLocalFormData(selectedChild || {})
+      // Restore any images that were marked for deletion but not saved
+      setImagesToDelete([])
+      fetchImages()
+    }
+
+    onClose()
+  }
+
+  // Handle explicit cancel - clears data and resets
+  const handleCancel = () => {
+    if (hasUnsavedChanges) {
+      setIsUnsavedChangesOpen(true)
+      return
+    }
+
+    // No unsaved changes — clear state and close immediately
+    setHasUnsavedChanges(false)
+    setImagePreviewUrls([])
+    resetVideoUploadInput()
+    setImageFiles([])
+    resetImageUploadInput()
+
+    if (isEditMode) {
+      setLocalFormData(selectedChild || {})
+      setImagesToDelete([])
+      fetchImages()
     }
 
     onClose()
@@ -296,9 +310,33 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const handleSelectChange = (name: string, value: string) => {
     setHasUnsavedChanges(true)
     if (isEditMode) {
-      setLocalFormData((prev) => ({ ...prev, [name]: value }))
+      if (name === "beneficiary_type") {
+        const newIsOpen = isOpenSponsorshipType(value)
+        const newDefault = getDefaultBudgetGoal(value)
+        setLocalFormData((prev) => ({
+          ...prev,
+          beneficiary_type: value as Beneficiaries["beneficiary_type"],
+          budget_goal: newIsOpen ? -1 : newDefault / 100,
+        }))
+      } else {
+        setLocalFormData((prev) => ({
+          ...prev,
+          [name]: value,
+        }))
+      }
     } else if (externalHandleSelectChange) {
-      externalHandleSelectChange(name as keyof Beneficiaries, value)
+      // Create mode: auto-fill budget_goal from config default when type changes
+      if (name === "beneficiary_type" && setExternalFormData) {
+        const newDefault = getDefaultBudgetGoal(value)
+        const newIsOpen = isOpenSponsorshipType(value)
+        setExternalFormData((prev: Partial<Beneficiaries>) => ({
+          ...prev,
+          beneficiary_type: value as Beneficiaries["beneficiary_type"],
+          budget_goal: newIsOpen ? -1 : newDefault / 100,
+        }))
+      } else {
+        externalHandleSelectChange(name as keyof Beneficiaries, value)
+      }
     }
   }
 
@@ -321,20 +359,75 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }
 
-  // Compression is now handled by the utility function imported above
+  // Shared image processing helper — validates, compresses, and returns ready-to-use files.
+  // Both create-mode and edit-mode branches use this single implementation.
+  const processImageFiles = useCallback(async (accepted: File[]) => {
+    const imageFilesFiltered = accepted.filter((f) => f.type.startsWith("image/"))
+    const totalImages = imageFilesFiltered.length
+
+    setCompressionProgress({ current: 0, total: totalImages, percent: 0 })
+
+    const validFiles: File[] = []
+    const invalidFiles: string[] = []
+    const largeFiles: string[] = []
+
+    for (let i = 0; i < accepted.length; i++) {
+      const file = accepted[i]
+      const isImage = file.type.startsWith("image/")
+      const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
+
+      if (file.size > 50 * 1024 * 1024) {
+        invalidFiles.push(`${file.name} (${fileSizeMB}MB - too large, max 50MB)`)
+        continue
+      }
+
+      if (isImage) {
+        try {
+          const imageIndex = imageFilesFiltered.indexOf(file)
+          const compressed = await compressImage(file, {
+            maxSizeMB: 3.5,
+            onProgress: (progress) => {
+              const overallProgress = ((imageIndex + progress / 100) / totalImages) * 100
+              setCompressionProgress({
+                current: imageIndex + 1,
+                total: totalImages,
+                percent: Math.round(overallProgress),
+                currentFileName: file.name,
+              })
+            },
+          })
+          if (compressed.size < file.size) {
+            const sizeReduction = ((1 - compressed.size / file.size) * 100).toFixed(0)
+            largeFiles.push(`${file.name} (${sizeReduction}% smaller)`)
+          }
+          validFiles.push(compressed)
+        } catch (error) {
+          console.error(`Failed to compress ${file.name}:`, error)
+          validFiles.push(file)
+        }
+      } else {
+        invalidFiles.push(file.name)
+      }
+    }
+
+    setCompressionProgress(null)
+    return { validFiles, invalidFiles, largeFiles }
+  }, [])
 
   // Image upload handler
   const handleImageChange = async (fileDetails: {
     acceptedFiles: File[]
-    rejectedFiles?: Array<{ file: File, errors: Array<string | { code?: string, message?: string }> }>
+    rejectedFiles?: Array<{ file: File; errors: Array<string | { code?: string; message?: string }> }>
   }) => {
-    // Show helpful error messages for rejected files
     if (fileDetails.rejectedFiles && fileDetails.rejectedFiles.length > 0) {
-      const rejectedNames = fileDetails.rejectedFiles.map(r => r.file.name).join(', ')
-      const errorMessages = fileDetails.rejectedFiles.map(r =>
-        r.errors.map(e => typeof e === 'string' ? e : (e.message || e.code || 'Unknown error')).join(', ')
-      ).join('; ')
-
+      const rejectedNames = fileDetails.rejectedFiles.map((r) => r.file.name).join(", ")
+      const errorMessages = fileDetails.rejectedFiles
+        .map((r) =>
+          r.errors
+            .map((e) => (typeof e === "string" ? e : e.message || e.code || "Unknown error"))
+            .join(", ")
+        )
+        .join("; ")
       toaster.create({
         title: "Some Files Were Rejected",
         description: `Files: ${rejectedNames}. Reason: ${errorMessages}. Accepted formats: All image formats. If you're having issues, try re-saving the file or converting to a different format.`,
@@ -343,263 +436,59 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       })
     }
 
-    if (isCreateMode) {
-      // In create mode, just store files locally - don't upload to Supabase yet
-      if (fileDetails.acceptedFiles.length === 0) {
-        resetImageUploadInput()
-        return
-      }
+    if (fileDetails.acceptedFiles.length === 0) {
+      resetImageUploadInput()
+      return
+    }
 
-      // Show instant loading spinner
-      setIsProcessingImages(true)
+    setIsProcessingImages(true)
+    try {
+      const { validFiles, invalidFiles, largeFiles } = await processImageFiles(fileDetails.acceptedFiles)
 
-      try {
-        // Additional validation: check file extensions and sizes
-        const validFiles: File[] = []
-        const invalidFiles: string[] = []
-        const largeFiles: string[] = []
-        const imageFiles = fileDetails.acceptedFiles.filter(f => f.type.startsWith('image/'))
-        const totalImages = imageFiles.length
-
-        // Initialize compression progress
-        setCompressionProgress({
-          current: 0,
-          total: totalImages,
-          percent: 0,
-        })
-
-        for (let i = 0; i < fileDetails.acceptedFiles.length; i++) {
-          const file = fileDetails.acceptedFiles[i]
-          const isImage = file.type.startsWith('image/')
-          const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
-
-          // Check file size
-          if (file.size > 50 * 1024 * 1024) { // 50MB hard limit
-            invalidFiles.push(`${file.name} (${fileSizeMB}MB - too large, max 50MB)`)
-            continue
-          }
-
-          // Accept all image files
-          if (isImage) {
-            // Always compress to ensure files are under 4MB for Vercel
-            try {
-              const imageIndex = imageFiles.indexOf(file)
-              const compressed = await compressImage(file, {
-                maxSizeMB: 3.5, // Target 3.5MB to leave buffer
-                onProgress: (progress) => {
-                  // Update progress for current file
-                  const overallProgress = ((imageIndex + progress / 100) / totalImages) * 100
-                  setCompressionProgress({
-                    current: imageIndex + 1,
-                    total: totalImages,
-                    percent: Math.round(overallProgress),
-                    currentFileName: file.name,
-                  })
-                }
-              })
-              
-              if (compressed.size < file.size) {
-                const sizeReduction = ((1 - compressed.size / file.size) * 100).toFixed(0)
-                largeFiles.push(`${file.name} (${sizeReduction}% smaller)`)
-              }
-              
-              validFiles.push(compressed)
-            } catch (error) {
-              console.error(`Failed to compress ${file.name}:`, error)
-              // If compression fails, try original file (API will validate size)
-              validFiles.push(file)
-            }
-          } else {
-            invalidFiles.push(file.name)
-          }
-        }
-
-        // Clear compression progress when done
-        setCompressionProgress(null)
-
-        if (invalidFiles.length > 0) {
-          toaster.create({
-            title: "Invalid Files",
-            description: `These files were skipped: ${invalidFiles.join(', ')}. Please use PNG, JPG, JPEG, or HEIC formats under 50MB.`,
-            type: "warning",
-            duration: 6000,
-          })
-        }
-
-        if (largeFiles.length > 0) {
-          toaster.create({
-            title: "Large Files Compressed",
-            description: `These files were over 10MB and have been automatically compressed: ${largeFiles.join(', ')}`,
-            type: "info",
-            duration: 6000,
-          })
-        }
-
-        if (validFiles.length === 0) {
-          setIsProcessingImages(false)
-          return
-        }
-
-        const previewUrls = validFiles.map((file) =>
-          URL.createObjectURL(file)
-        )
-
-        setImageFiles(validFiles)
-        setImagePreviewUrls(previewUrls)
-
+      if (invalidFiles.length > 0) {
         toaster.create({
-          title: "Images Ready",
-          description: `${validFiles.length} image${validFiles.length > 1 ? 's' : ''} ready to upload. ${invalidFiles.length > 0 ? `${invalidFiles.length} file${invalidFiles.length > 1 ? 's' : ''} skipped.` : ''} Images will be uploaded when you save.`,
-          type: "success",
-          duration: 4000,
+          title: "Invalid Files",
+          description: `These files were skipped: ${invalidFiles.join(", ")}. Please use image files under 50MB.`,
+          type: "warning",
+          duration: 6000,
         })
-      } catch (error) {
-        console.error('Error processing images:', error)
+      }
+      if (largeFiles.length > 0) {
         toaster.create({
-          title: "Processing Error",
-          description: "Failed to process some images. Please try again.",
-          type: "error",
-          duration: 5000,
+          title: "Large Files Compressed",
+          description: `These files were over 10MB and have been automatically compressed: ${largeFiles.join(", ")}`,
+          type: "info",
+          duration: 6000,
         })
-      } finally {
-        setIsProcessingImages(false)
-        setCompressionProgress(null)
       }
-    } else {
-      // In edit mode, upload and optimize immediately
-      if (fileDetails.acceptedFiles.length > 0) {
-        try {
-          setIsProcessingImages(true)
+      if (validFiles.length === 0) return
 
-          // Additional validation and compression for edit mode
-          const validFiles: File[] = []
-          const invalidFiles: string[] = []
-          const largeFiles: string[] = []
-          const imageFiles = fileDetails.acceptedFiles.filter(f => f.type.startsWith('image/'))
-          const totalImages = imageFiles.length
+      const previewUrls = validFiles.map((file) => URL.createObjectURL(file))
+      setImageFiles(validFiles)
+      setImagePreviewUrls(previewUrls)
+      if (isEditMode) setHasUnsavedChanges(true)
 
-          // Initialize compression progress
-          setCompressionProgress({
-            current: 0,
-            total: totalImages,
-            percent: 0,
-          })
-
-          for (let i = 0; i < fileDetails.acceptedFiles.length; i++) {
-            const file = fileDetails.acceptedFiles[i]
-            const isImage = file.type.startsWith('image/')
-            const fileSizeMB = (file.size / 1024 / 1024).toFixed(1)
-
-            // Check file size
-            if (file.size > 50 * 1024 * 1024) { // 50MB hard limit
-              invalidFiles.push(`${file.name} (${fileSizeMB}MB - too large, max 50MB)`)
-              continue
-            }
-
-            // Accept all image files
-            if (isImage) {
-              // Always compress to ensure files are under 4MB for Vercel
-              try {
-                const imageIndex = imageFiles.indexOf(file)
-                const compressed = await compressImage(file, {
-                  maxSizeMB: 3.5, // Target 3.5MB to leave buffer
-                  onProgress: (progress) => {
-                    // Update progress for current file
-                    const overallProgress = ((imageIndex + progress / 100) / totalImages) * 100
-                    setCompressionProgress({
-                      current: imageIndex + 1,
-                      total: totalImages,
-                      percent: Math.round(overallProgress),
-                      currentFileName: file.name,
-                    })
-                  }
-                })
-                
-                if (compressed.size < file.size) {
-                  const sizeReduction = ((1 - compressed.size / file.size) * 100).toFixed(0)
-                  largeFiles.push(`${file.name} (${sizeReduction}% smaller)`)
-                }
-                
-                validFiles.push(compressed)
-              } catch (error) {
-                console.error(`Failed to compress ${file.name}:`, error)
-                // If compression fails, try original file (API will validate size)
-                validFiles.push(file)
-              }
-            } else {
-              invalidFiles.push(file.name)
-            }
-          }
-
-          // Clear compression progress when done
-          setCompressionProgress(null)
-
-          if (invalidFiles.length > 0) {
-            toaster.create({
-              title: "Invalid Files",
-              description: `These files were skipped: ${invalidFiles.join(', ')}. Please use image files under 50MB.`,
-              type: "warning",
-              duration: 6000,
-            })
-          }
-
-          if (largeFiles.length > 0) {
-            toaster.create({
-              title: "Large Files Compressed",
-              description: `These files were over 10MB and have been automatically compressed: ${largeFiles.join(', ')}`,
-              type: "info",
-              duration: 6000,
-            })
-          }
-
-          if (validFiles.length === 0) {
-            setIsProcessingImages(false)
-            return
-          }
-
-          // Upload compressed images via API (now guaranteed to be under 4MB)
-          const formData = new FormData()
-          formData.append("beneficiaryId", selectedChild?.id || "")
-          validFiles.forEach((f) => formData.append("images", f))
-
-          const response = await fetch(
-            "/api/admin/beneficiaries/images/create",
-            { method: "POST", body: formData }
-          )
-          if (!response.ok) {
-            const errorText = await response.text()
-            throw new Error(`Image upload failed: ${errorText}`)
-          }
-
-          // Reset file states
-          resetImageUploadInput()
-          setProcessedImages([])
-          setUploadedImagePaths([])
-
-          // Refresh images list
-          await fetchImages()
-
-          toaster.create({
-            title: "Images Uploaded",
-            description: `${fileDetails.acceptedFiles.length} images have been uploaded successfully.`,
-            type: "success",
-            duration: 3000,
-          })
-        } catch (error) {
-          console.error('Image optimization error:', error)
-          toaster.create({
-            title: "Optimization Error",
-            description: "Failed to optimize images. They will be uploaded as-is.",
-            type: "warning",
-            duration: 5000,
-          })
-          setImageFiles(fileDetails.acceptedFiles)
-        } finally {
-          setIsProcessingImages(false)
-        }
-      } else {
-        setImageFiles(fileDetails.acceptedFiles)
-      }
+      toaster.create({
+        title: "Images Ready",
+        description: `${validFiles.length} image${validFiles.length > 1 ? "s" : ""} ready to upload.${
+          invalidFiles.length > 0
+            ? ` ${invalidFiles.length} file${invalidFiles.length > 1 ? "s" : ""} skipped.`
+            : ""
+        } Images will be uploaded when you save.`,
+        type: "success",
+        duration: 4000,
+      })
+    } catch (error) {
+      console.error("Error processing images:", error)
+      toaster.create({
+        title: "Processing Error",
+        description: "Failed to process some images. Please try again.",
+        type: "error",
+        duration: 5000,
+      })
+    } finally {
+      setIsProcessingImages(false)
+      setCompressionProgress(null)
     }
   }
 
@@ -616,38 +505,17 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }
 
-  // Delete image handler (edit mode only)
-  const handleDeleteImage = async (imageId: string) => {
+  // Delete image handler (edit mode only) - deferred until save
+  const handleDeleteImage = (imageId: string) => {
     if (!imageId) return
-
-    try {
-      setIsImageLoading(true)
-      const response = await fetch("/api/admin/beneficiaries/images/delete", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageId }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to delete image")
-      }
-
-      setAllImages((prev) => prev.filter((img) => img.id !== imageId))
-      toaster.create({
-        title: "Success",
-        description: "Image deleted successfully",
-        duration: 3000,
-      })
-    } catch (error) {
-      console.error("Delete image error:", error)
-      toaster.create({
-        title: "Error",
-        description: "Failed to delete image",
-        duration: 3000,
-      })
-    } finally {
-      setIsImageLoading(false)
-    }
+    setAllImages((prev) => prev.filter((img) => img.id !== imageId))
+    setImagesToDelete((prev) => [...prev, imageId])
+    setHasUnsavedChanges(true)
+    toaster.create({
+      title: "Image Marked for Removal",
+      description: "This image will be removed when you save.",
+      duration: 2000,
+    })
   }
 
   // Delete preview image (create mode only)
@@ -685,10 +553,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       "biography",
       "country",
     ] as const
-    const requiredFields =
-      publicHardcodedCents === null
-        ? ([...baseRequired, "budget_goal"] as const)
-        : baseRequired
+    // Open types (e.g. SPECIAL_NEEDS) have budget_goal = -1, don't require it as form input
+    const requiredFields = isOpenType
+      ? baseRequired
+      : ([...baseRequired, "budget_goal"] as const)
     const emptyFields = requiredFields.filter((field) => !formData[field])
 
     if (emptyFields.length > 0) {
@@ -704,10 +572,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       setIsSaving(true)
 
       if (isCreateMode && handleSubmit && setExternalFormData) {
-        // Create beneficiary first
-        if (publicHardcodedCents !== null) {
-          const dollars = publicHardcodedCents / 100
-          setExternalFormData({ ...(formData || {}), budget_goal: dollars })
+        // For fixed types, auto-fill budget_goal from config default if not set
+        if (!isOpenType && configDefaultGoal > 0 && !formData.budget_goal) {
+          setExternalFormData({ ...(formData || {}), budget_goal: configDefaultGoal / 100 })
         }
 
         // Create beneficiary
@@ -723,8 +590,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         }
         resetImageUploadInput()
         resetVideoUploadInput()
-        setProcessedImages([])
-        setUploadedImagePaths([])
         setHasUnsavedChanges(false)
 
         // Reset the parent's form data
@@ -738,31 +603,33 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           birth_date_is_estimate: birthDateIsEstimate,
         }
         const updatedData = { ...localFormData, metadata: mergedMetadata }
-        const envRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
-        const envCents = envRaw ? parseInt(envRaw, 10) : null
-        const budgetGoalInCentsFromForm = parseInt(
-          dollarsToCents(localFormData.budget_goal || 0)
-        )
-        const budgetGoalInCents =
-          envCents !== null && !isNaN(envCents)
-            ? envCents
-            : budgetGoalInCentsFromForm
+        const isOpenEdit = isOpenSponsorshipType(localFormData.beneficiary_type)
+        const budgetGoalInCents = isOpenEdit
+          ? -1
+          : parseInt(dollarsToCents(localFormData.budget_goal || 0))
 
-        // Handle image uploads - upload directly to Supabase (bypasses Vercel's 4.5MB limit)
-        if (imageFiles.length > 0 || processedImages.length > 0) {
+        // Delete images marked for removal
+        if (imagesToDelete.length > 0) {
+          for (const imageId of imagesToDelete) {
+            try {
+              await fetch("/api/admin/beneficiaries/images/delete", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ imageId }),
+              })
+            } catch (error) {
+              console.error(`Failed to delete image ${imageId}:`, error)
+            }
+          }
+          setImagesToDelete([])
+        }
+
+        // Handle image uploads — imageFiles are already compressed by handleImageChange
+        if (imageFiles.length > 0) {
           try {
-            // Use processed/optimized images if available, otherwise use original files
-            const filesToUpload = processedImages.length > 0 ? processedImages : imageFiles
-
-            // Compress images before upload to ensure they're under 4MB
-            const compressedFiles = await compressImages(filesToUpload, {
-              maxSizeMB: 3.5,
-            })
-
-            // Upload compressed images via API
             const formData = new FormData()
             formData.append("beneficiaryId", selectedChild?.id || "")
-            compressedFiles.forEach((f) => formData.append("images", f))
+            imageFiles.forEach((f) => formData.append("images", f))
 
             const response = await fetch(
               "/api/admin/beneficiaries/images/create",
@@ -773,15 +640,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               throw new Error(`Image upload failed: ${errorText}`)
             }
 
-            // Reset file states
             resetImageUploadInput()
-            setProcessedImages([])
-            setUploadedImagePaths([])
-
-            // Refresh images list
             await fetchImages()
           } catch (error) {
-            console.error('Image upload error:', error)
+            console.error("Image upload error:", error)
             toaster.create({
               title: "Error",
               description: "Failed to upload images",
@@ -818,12 +680,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         }
 
         await onSave({ ...updatedData, budget_goal: budgetGoalInCents })
+        // onSave closes the modal and triggers a full list refresh in the parent,
+        // so we just clean up local state — no need for another fetchImages() call
+        // which would race against the unmount and cause redundant API requests.
         setHasUnsavedChanges(false)
         setImageFiles([])
         resetVideoUploadInput()
-
-        // Refresh images list after saving
-        await fetchImages()
       }
     } catch (error) {
       console.error("Error saving:", error)
@@ -870,21 +732,19 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         {shouldShowOverlay && (
           <div className="absolute inset-0 z-50 flex h-full w-full items-center justify-center bg-white/90 backdrop-blur-md">
             <div className="flex flex-col items-center gap-3 text-center">
-              <Spinner size="xl" color="#1C3C8C" />
-              <p className="text-lg font-medium text-[#1C3C8C]">
+              <Spinner size="xl" color="#2b7ff9" />
+              <p className="text-lg font-medium text-[#2b7ff9]">
                 {isProcessingImages
                   ? compressionProgress
                     ? `Compressing Images... ${compressionProgress.percent}%`
                     : "Processing Images..."
-                  : isImageLoading
-                    ? "Uploading Images..."
-                    : "Form Disabled"}
+                  : "Form Disabled"}
               </p>
               {compressionProgress && (
                 <div className="w-64 mt-2">
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
-                      className="bg-[#1C3C8C] h-2 rounded-full transition-all duration-300"
+                      className="bg-[#2b7ff9] h-2 rounded-full transition-all duration-300"
                       style={{ width: `${compressionProgress.percent}%` }}
                     />
                   </div>
@@ -905,7 +765,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           <DialogTitle>
             <div className="flex items-center gap-2">
               <Text fontSize="3xl" fontWeight="bold">
-                {isCreateMode ? "Add a Child" : "Edit Child"}
+                {isCreateMode ? "Add a Beneficiary" : "Edit Beneficiary"}
               </Text>
               {hasUnsavedChanges && (
                 <Text fontSize="sm" color="orange.500" fontWeight="medium">
@@ -923,9 +783,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         <DialogBody className={`p-6 flex-1 overflow-y-auto transition-opacity duration-200 ${contentDimClass}`}>
           <Fieldset.Root size="lg">
             <Stack>
-              <Fieldset.Legend>Child details</Fieldset.Legend>
+              <Fieldset.Legend>Beneficiary details</Fieldset.Legend>
               <Fieldset.HelperText>
-                Please provide child details below.
+                Please provide beneficiary details below.
               </Fieldset.HelperText>
             </Stack>
 
@@ -963,6 +823,27 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   value={formData.username || ""}
                   disabled={disabled}
                 />
+              </Field>
+
+              <Field label="Beneficiary Type" required errorText="This field is required">
+                <NativeSelectRoot disabled={disabled}>
+                  <NativeSelectField
+                    className="border"
+                    px={2}
+                    name="beneficiary_type"
+                    onChange={(e) => handleSelectChange("beneficiary_type", e.target.value)}
+                    value={formData.beneficiary_type || "CHILD_LABORER"}
+                    _disabled={undefined}
+                  >
+                    {ALL_BENEFICIARY_TABS.filter(
+                      (tab) => !tab.isLegacyAlias && tab.type !== null,
+                    ).map((tab) => (
+                      <option key={tab.type} value={tab.type as string}>
+                        {tab.label}
+                      </option>
+                    ))}
+                  </NativeSelectField>
+                </NativeSelectRoot>
               </Field>
 
               <Field label="Gender" required errorText="This field is required">
@@ -1013,7 +894,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 label="Biography"
                 required
                 errorText="This field is required"
-                helperText="Provide a detailed description about the child"
+                helperText="Provide a detailed description about the beneficiary"
               >
                 {!showBiographyComparison && (
                   <Textarea
@@ -1049,12 +930,28 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 />
               </Field>
 
-              {/* Budget Goal */}
-              {publicHardcodedCents === null ? (
+              {/* Budget Goal / Sponsorship Amount */}
+              {isOpenType ? (
+                <Field
+                  label="Budget Goal"
+                  helperText="Open sponsorship — sponsors choose their own amount"
+                >
+                  <Input
+                    name="budget_goal"
+                    type="text"
+                    className="border bg-gray-100"
+                    px={2}
+                    value="Open (no fixed goal)"
+                    readOnly
+                    disabled
+                  />
+                </Field>
+              ) : (
                 <Field
                   label="Budget Goal"
                   required
                   errorText="This field is required"
+                  helperText={`Default for this type: $${(configDefaultGoal / 100).toFixed(2)}`}
                 >
                   <Input
                     name="budget_goal"
@@ -1066,18 +963,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     onChange={handleInputChange}
                     value={formData.budget_goal || ""}
                     disabled={disabled}
-                  />
-                </Field>
-              ) : (
-                <Field label="Sponsorship Amount">
-                  <Input
-                    name="budget_goal"
-                    type="text"
-                    className="border bg-gray-100"
-                    px={2}
-                    value={`$${((publicHardcodedCents || 0) / 100).toFixed(2)}`}
-                    readOnly
-                    disabled
                   />
                 </Field>
               )}
@@ -1508,7 +1393,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           <Button
             type="button"
             onClick={handleFormSubmit}
-            className="bg-[#1C3C8C] text-white disabled:opacity-50"
+            className="bg-[#2b7ff9] text-white disabled:opacity-50"
             disabled={isSaving || disabled}
             loading={isSaving}
             loadingText={isCreateMode ? "Adding..." : "Saving..."}
@@ -1518,7 +1403,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 ? "Adding..."
                 : "Saving..."
               : isCreateMode
-                ? "Add Child"
+                ? "Add Beneficiary"
                 : "Save"}
           </Button>
         </DialogFooter>
@@ -1533,6 +1418,40 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           itemCount={1}
         />
       )}
+
+      {/* Unsaved Changes Dialog */}
+      <DialogRoot
+        open={isUnsavedChangesOpen}
+        onOpenChange={({ open }) => {
+          if (!open) setIsUnsavedChangesOpen(false)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+            <DialogCloseTrigger onClick={() => setIsUnsavedChangesOpen(false)} />
+          </DialogHeader>
+          <DialogBody>
+            <Text>
+              You have unsaved changes. Are you sure you want to discard them?
+            </Text>
+            <div className="flex gap-3 mt-4">
+              <Button
+                className="bg-gray-500 text-white p-4"
+                onClick={() => setIsUnsavedChangesOpen(false)}
+              >
+                Keep Editing
+              </Button>
+              <Button
+                className="bg-red-500 text-white p-4"
+                onClick={handleDiscardChanges}
+              >
+                Discard Changes
+              </Button>
+            </div>
+          </DialogBody>
+        </DialogContent>
+      </DialogRoot>
     </DialogRoot>
     </>
   )

@@ -76,7 +76,7 @@ const ProofreadComparison: React.FC<ProofreadComparisonProps> = ({
           Additional Instructions (optional):
         </Text>
         <Textarea
-          placeholder="E.g., 'Make it more formal' or 'Use simpler language' or 'Focus on the child's strengths'"
+          placeholder="E.g., 'Make it more formal' or 'Use simpler language' or 'Focus on their strengths'"
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
           size="sm"
@@ -130,7 +130,7 @@ const ProofreadComparison: React.FC<ProofreadComparisonProps> = ({
       <Box mt={3} p={2} bg="yellow.50" borderRadius="md" border="1px solid" borderColor="yellow.200">
         <Text fontSize="xs" color="gray.700">
           <Text as="span" fontWeight="semibold">Note:</Text>{" "}
-          Review the AI suggestions carefully. The AI aims to improve grammar, readability, and tone while preserving your original meaning and respecting the children's dignity.
+          Review the AI suggestions carefully. The AI aims to improve grammar, readability, and tone while preserving your original meaning and respecting each beneficiary's dignity.
         </Text>
       </Box>
     </Box>

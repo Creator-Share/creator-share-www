@@ -192,7 +192,7 @@ const ResetPassword = () => {
           <Button
             type="submit"
             disabled={isDisabled || loading}
-            className="bg-[#1C3C8C] text-white"
+            className="bg-[#2b7ff9] text-white"
           >
             {loading ? "Resetting..." : "Continue"}
           </Button>

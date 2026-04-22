@@ -1,4 +1,4 @@
-create table "public"."expense_assignments" (
+create table if not exists "public"."expense_assignments" (
     "id" uuid not null default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
     "beneficiary_id" uuid not null default gen_random_uuid(),
@@ -11,7 +11,7 @@ create table "public"."expense_assignments" (
 
 alter table "public"."expense_assignments" enable row level security;
 
-create table "public"."expenses" (
+create table if not exists "public"."expenses" (
     "id" uuid not null default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
     "name" text not null,
@@ -24,23 +24,38 @@ create table "public"."expenses" (
 
 alter table "public"."expenses" enable row level security;
 
-CREATE UNIQUE INDEX expense_assignments_pkey ON public.expense_assignments USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS expense_assignments_pkey ON public.expense_assignments USING btree (id);
 
-CREATE UNIQUE INDEX expenses_pkey ON public.expenses USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS expenses_pkey ON public.expenses USING btree (id);
 
-alter table "public"."expense_assignments" add constraint "expense_assignments_pkey" PRIMARY KEY using index "expense_assignments_pkey";
+DO $$ BEGIN
+  alter table "public"."expense_assignments" add constraint "expense_assignments_pkey" PRIMARY KEY using index "expense_assignments_pkey";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."expenses" add constraint "expenses_pkey" PRIMARY KEY using index "expenses_pkey";
+DO $$ BEGIN
+  alter table "public"."expenses" add constraint "expenses_pkey" PRIMARY KEY using index "expenses_pkey";
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
-alter table "public"."expense_assignments" add constraint "expense_assignments_beneficiary_id_fkey" FOREIGN KEY (beneficiary_id) REFERENCES beneficiaries(id) ON DELETE CASCADE not valid;
+DO $$ BEGIN
+  alter table "public"."expense_assignments" add constraint "expense_assignments_beneficiary_id_fkey" FOREIGN KEY (beneficiary_id) REFERENCES beneficiaries(id) ON DELETE CASCADE not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."expense_assignments" validate constraint "expense_assignments_beneficiary_id_fkey";
 
-alter table "public"."expense_assignments" add constraint "expense_assignments_expense_id_fkey" FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE not valid;
+DO $$ BEGIN
+  alter table "public"."expense_assignments" add constraint "expense_assignments_expense_id_fkey" FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."expense_assignments" validate constraint "expense_assignments_expense_id_fkey";
 
-alter table "public"."expenses" add constraint "expenses_organization_id_fkey" FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE SET NULL not valid;
+DO $$ BEGIN
+  alter table "public"."expenses" add constraint "expenses_organization_id_fkey" FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE SET NULL not valid;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 alter table "public"."expenses" validate constraint "expenses_organization_id_fkey";
 
@@ -128,17 +143,23 @@ grant truncate on table "public"."expenses" to "service_role";
 
 grant update on table "public"."expenses" to "service_role";
 
-create policy "Enable read access for all users"
-on "public"."expense_assignments"
-as permissive
-for select
-to public
-using (true);
+DO $$ BEGIN
+  create policy "Enable read access for all users"
+  on "public"."expense_assignments"
+  as permissive
+  for select
+  to public
+  using (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
-create policy "Enable read access for all users"
-on "public"."expenses"
-as permissive
-for select
-to public
-using (true);
+DO $$ BEGIN
+  create policy "Enable read access for all users"
+  on "public"."expenses"
+  as permissive
+  for select
+  to public
+  using (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

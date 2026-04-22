@@ -1,0 +1,46 @@
+name: Sync dev → deploy-dev
+
+# Runs automatically on every push to dev (including PR merges).
+# Rewrites the latest commit's author to the CreatorShare identity that
+# Vercel recognises, then force-pushes to deploy-dev, which triggers the
+# Vercel build for dev.creatorshare.com.
+#
+# This replaces the manual rewrite_authors.sh daemon that previously had to
+# run as a background process on someone's local machine.
+# See docs/vercel-ci-workarounds.md for full context.
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  sync:
+    name: Rewrite author and sync to deploy-dev
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "CreatorShare"
+          git config user.email "creatorshare@thegeeky.ninja"
+
+      # The rewrite script does `git checkout deploy-dev` internally, so the
+      # branch must exist locally before the script runs.
+      - name: Set up local deploy-dev tracking branch
+        run: git checkout -b deploy-dev origin/deploy-dev
+
+      # Return to dev so the script's initial state is correct.
+      - name: Switch back to dev
+        run: git checkout dev
+
+      - name: Run one-shot author rewrite and push
+        run: bash scripts/rewrite_authors.sh --force

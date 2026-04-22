@@ -187,7 +187,7 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
               onClick={handleSubmit}
               loading={loading}
               disabled={selectedRoleIds.size === 0}
-              className="bg-[#1C3C8C] text-white px-4 py-2"
+              className="bg-[#2b7ff9] text-white px-4 py-2"
             >
               Invite User
             </Button>

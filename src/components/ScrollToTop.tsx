@@ -46,7 +46,7 @@ export function ScrollToTop() {
       display="flex"
       alignItems="center"
       justifyContent="center"
-      boxShadow="xl"
+      style={{ boxShadow: "0 4px 20px rgba(43,127,249,0.45), 0 2px 8px rgba(0,0,0,0.18)" }}
       cursor="pointer"
       opacity={isVisible ? 1 : 0}
       visibility={isVisible ? "visible" : "hidden"}
@@ -55,7 +55,6 @@ export function ScrollToTop() {
       _hover={{
         bg: "#1C6EE8",
         transform: isVisible ? "translateY(-2px)" : "translateY(20px)",
-        boxShadow: "xl",
       }}
       _active={{
         transform: isVisible ? "translateY(0)" : "translateY(20px)",

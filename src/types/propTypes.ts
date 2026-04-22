@@ -1,5 +1,6 @@
 import { LatLngBounds } from "leaflet"
 import { Beneficiaries } from "./index"
+import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
 
 export interface FiltersProps {
   onFilterChange: (filters: {
@@ -8,7 +9,7 @@ export interface FiltersProps {
     status: string[]
     search?: string
   }) => void
-  beneficiaryType?: "CHILD" | "ANIMAL"
+  beneficiaryType?: BeneficiaryTabType
 }
 
 export interface BeneficiaryMapProps {
@@ -31,11 +32,17 @@ export interface BeneficiaryListingsProps {
   selectedBeneficiaryId: string | null
   selectedCountry: string | null
   isLoading?: boolean
+  /** When true, a fresh filter-change fetch is in progress; stale cards are shown dimmed to preserve page height and scroll position. */
+  isRefreshing?: boolean
   setSelectedBeneficiaryId?: (id: string | null) => void
   mapBounds?: LatLngBounds
-  beneficiaryType?: "CHILD" | "ANIMAL"
+  beneficiaryType?: BeneficiaryTabType
   /** Called when a card is clicked; container owns the modal. */
   onOpenModal?: (beneficiary: Beneficiaries) => void
+  /** Called when the user clicks "Show all" in the empty state; should reset all active filters. */
+  onClearFilters?: () => void
+  /** When true, suppresses the component's own card border/shadow/radius so a parent can provide the card frame. */
+  noCard?: boolean
 }
 
 export interface BeneficiaryCardProps {
@@ -47,7 +54,7 @@ export interface BeneficiaryCardProps {
   hasNext?: boolean
   hasPrevious?: boolean
   onOpenDialog?: () => void
-  beneficiaryType?: "CHILD" | "ANIMAL"
+  beneficiaryType?: BeneficiaryTabType
 }
 
 export interface SponsorshipDetailsProps {

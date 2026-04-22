@@ -12,7 +12,7 @@ import { Activity } from "@/types"
 // Block-level, auto-width ghost pill. flex + w-fit keeps it as wide as its
 // content and forces it flush to the left edge of its container.
 export const SHOW_MORE_CLASS =
-  "mt-2 flex w-fit items-center gap-1.5 text-sm font-semibold text-[#0654C6] px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+  "mt-2 flex w-fit items-center gap-1.5 text-sm font-semibold text-[#2b7ff9] px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
 
 // ---------------------------------------------------------------------------
 // Time formatting

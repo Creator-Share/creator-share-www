@@ -25,6 +25,7 @@ import { Box, Text, Spinner, Flex, Input } from "@chakra-ui/react"
 import { useAuthStore } from "@/store/authStore"
 import { paymentOptionsCollection } from "../Payments/config"
 import { Button } from "@/components/ui/button"
+import { Tooltip } from "@/components/ui/tooltip"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import {
   generatePublicUrl,
@@ -38,6 +39,20 @@ import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
 import BeneficiaryActivity, { SHOW_MORE_CLASS } from "../SponsorshipActivity"
 import { FAQModal } from "@/components/FAQModal"
+import {
+  isOpenSponsorshipType,
+  MAXIMUM_OPEN_SPONSORSHIP_CENTS,
+  MINIMUM_OPEN_SPONSORSHIP_CENTS,
+} from "@/config/beneficiaryTypes"
+import { centsToDollars } from "@/utils/currency"
+
+const OPEN_SPONSORSHIP_MIN_DOLLARS = Number(
+  centsToDollars(MINIMUM_OPEN_SPONSORSHIP_CENTS),
+)
+const OPEN_SPONSORSHIP_MAX_DOLLARS = Number(
+  centsToDollars(MAXIMUM_OPEN_SPONSORSHIP_CENTS),
+)
+const OPEN_SPONSORSHIP_RANGE_MESSAGE = `Amount must be between $${OPEN_SPONSORSHIP_MIN_DOLLARS} and $${OPEN_SPONSORSHIP_MAX_DOLLARS}`
 
 // PayPal components are optional and loaded only when the env var is set.
 // Using next/dynamic avoids the broken module-level let + fire-and-forget import()
@@ -86,34 +101,20 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [lastToastTime, setLastToastTime] = useState(0)
   const user = useAuthStore((state) => state.user)
   const { setSponsorshipInProgress } = useSponsorship()
-  const publicHardcodedRaw = process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL
-  const publicHardcodedCents = publicHardcodedRaw
-    ? parseInt(publicHardcodedRaw, 10)
-    : null
-  const effectiveGoalCents =
-    publicHardcodedCents !== null
-      ? publicHardcodedCents
-      : beneficiary.budget_goal || 0
-  const remainingAmount =
-    (effectiveGoalCents - (beneficiary.budget_raised || 0)) / 100
+  const isOpen = isOpenSponsorshipType(beneficiary.beneficiary_type)
+
+  // For fixed types the budget_goal IS the sponsorship amount (set at create time).
+  // For open types there is no goal — sponsors choose their own amount.
+  const fixedAmountCents = !isOpen ? (beneficiary.budget_goal ?? 0) : 0
   const birthDateIsEstimate = Boolean(
     (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
       ?.birth_date_is_estimate,
   )
 
-  const minimumAmount = 10
-  const maxSelectableAmount =
-    remainingAmount > minimumAmount
-      ? remainingAmount - minimumAmount < minimumAmount
-        ? remainingAmount
-        : remainingAmount - ((remainingAmount - minimumAmount) % minimumAmount)
-      : remainingAmount
-
-  const publicHardcodedDollars =
-    publicHardcodedCents !== null ? publicHardcodedCents / 100 : null
-  const [amount, setAmount] = useState<number>(
-    publicHardcodedDollars ?? remainingAmount,
+  const [amountCents, setAmountCents] = useState<number>(
+    isOpen ? 0 : fixedAmountCents,
   )
+  const [tipOpen, setTipOpen] = useState(false)
   const [selectedOption, setSelectedOption] = useState<string>(
     paymentOptionsCollection.items[0].value,
   )
@@ -134,9 +135,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     setBioExpanded(!hasActivities)
   }, [open, beneficiary.id, hasActivities, activitiesLoading])
 
+  // Open types are never "fully sponsored" — they accept unlimited sponsors.
   const alreadyFulfilled =
-    beneficiary.status === "Budget Fulfilled" ||
-    effectiveGoalCents <= (beneficiary.budget_raised || 0)
+    !isOpen &&
+    (beneficiary.status === "Budget Fulfilled" ||
+      (beneficiary.budget_goal > 0 && beneficiary.budget_goal <= (beneficiary.budget_raised || 0)))
 
   useEffect(() => {
     if (!open) {
@@ -197,14 +200,14 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     if (!open) {
       setToastCount(0)
       setLastToastTime(0)
-      setAmount(remainingAmount)
+      setAmountCents(isOpen ? 0 : fixedAmountCents)
       setSelectedOption(paymentOptionsCollection.items[0].value)
       setLoading(false)
       setBioExpanded(false)
       setFaqOpen(false)
       setVideoUrl(beneficiary.video_url?.trim() || "")
     }
-  }, [open, remainingAmount, beneficiary.video_url])
+  }, [open, isOpen, fixedAmountCents, beneficiary.video_url])
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -285,40 +288,34 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (publicHardcodedDollars !== null) return
+    if (!isOpen) return
     const inputValue = e.target.value
     if (inputValue === "") {
-      setAmount(0)
+      setAmountCents(0)
       return
     }
-    const newValue = Math.min(parseInt(inputValue) || 0, remainingAmount)
-    setAmount(newValue)
+    const dollars = parseFloat(inputValue)
+    setAmountCents(Number.isFinite(dollars) ? Math.round(dollars * 100) : 0)
   }
 
-  const canPay =
-    process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL ||
-    (!alreadyFulfilled &&
-      (publicHardcodedDollars !== null
-        ? amount === publicHardcodedDollars
-        : remainingAmount < minimumAmount
-          ? amount > 0
-          : amount >= minimumAmount))
+  const canPay = isOpen
+    ? amountCents >= MINIMUM_OPEN_SPONSORSHIP_CENTS &&
+      amountCents <= MAXIMUM_OPEN_SPONSORSHIP_CENTS
+    : !alreadyFulfilled
+
+  const outOfRange =
+    isOpen &&
+    (amountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS ||
+      amountCents > MAXIMUM_OPEN_SPONSORSHIP_CENTS)
+  const disabledReason = outOfRange ? OPEN_SPONSORSHIP_RANGE_MESSAGE : null
 
   const handleStripePayment = async () => {
     if (!canPay) {
       toaster.create({
         title: "Invalid Amount",
-        description:
-          remainingAmount < minimumAmount
-            ? `Please enter an amount greater than $0 to complete the sponsorship.`
-            : `Minimum sponsorship amount is $${minimumAmount}.`,
-      })
-      return
-    }
-    if (!process.env.NEXT_PUBLIC_SPONSORSHIP_GOAL && amount > remainingAmount) {
-      toaster.create({
-        title: "Invalid Amount",
-        description: "Amount exceeds the remaining budget needed.",
+        description: isOpen
+          ? OPEN_SPONSORSHIP_RANGE_MESSAGE
+          : "This beneficiary is already fully sponsored.",
       })
       return
     }
@@ -341,14 +338,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         beneficiaryId: beneficiary.id,
         beneficiaryName: beneficiary.name,
         beneficiaryImage: primaryImageUrl || PERSON_PLACEHOLDER_PATH,
-        amount:
-          publicHardcodedCents !== null ? publicHardcodedCents : amount * 100,
+        amount: isOpen ? amountCents : beneficiary.budget_goal,
         paymentType: selectedOption,
         location: beneficiary.country,
         userId: user?.id,
         isEmbedded: window.self !== window.top,
-        allowBelowMinimum:
-          remainingAmount < minimumAmount && amount === remainingAmount,
         email: user?.email || undefined,
         type: "sponsorship",
       }
@@ -363,10 +357,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       if (!res.ok) {
         if (data?.error === "DUPLICATE_SPONSORSHIP") {
           toaster.create({
-            title: "Child Already Sponsored",
+            title: "Already Sponsored",
             description:
               data?.message ||
-              "This child already has an active sponsorship. Please choose a different child to sponsor.",
+              "This beneficiary already has an active sponsorship. Please choose a different one.",
             duration: 8000,
           })
           setTimeout(() => onClose(), 2000)
@@ -430,15 +424,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     if (!canPay) {
       toaster.create({
         title: "Invalid Amount",
-        description:
-          remainingAmount < minimumAmount
-            ? `Please enter an amount greater than $0 to complete the sponsorship.`
-            : `Minimum amount is $${minimumAmount}.`,
+        description: isOpen
+          ? OPEN_SPONSORSHIP_RANGE_MESSAGE
+          : "This beneficiary is already fully sponsored.",
       })
       throw new Error("Invalid amount")
     }
-    const paymentAmount =
-      remainingAmount < minimumAmount ? remainingAmount : amount
+    const paymentAmount = (isOpen ? amountCents : fixedAmountCents) / 100
     return actions.order.create({
       purchase_units: [
         {
@@ -461,7 +453,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             beneficiary_id: beneficiary.id,
             name: `Monthly Sponsorship for ${beneficiary.name}`,
             description: `Recurring monthly sponsorship for ${beneficiary.name}`,
-            amount: remainingAmount < minimumAmount ? remainingAmount : amount,
+            amount: (isOpen ? amountCents : fixedAmountCents) / 100,
             interval_unit: "MONTH",
             interval_count: 1,
             currency_code: "USD",
@@ -511,7 +503,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         body: JSON.stringify({
           beneficiaryId: beneficiary.id,
           beneficiaryName: beneficiary.name,
-          amount: remainingAmount < minimumAmount ? remainingAmount : amount,
+          amount: (isOpen ? amountCents : fixedAmountCents) / 100,
           paymentType: selectedOption,
           location: beneficiary.country,
           userId: user?.id,
@@ -547,14 +539,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }
 
   const renderSponsorshipDisclaimer = () => {
-    const gapAfterThisPaymentCents =
-      beneficiary.budget_goal - beneficiary.budget_raised - amount * 100
-
     const faqLink = (
       <button
         type="button"
         onClick={() => setFaqOpen(true)}
-        className="group inline-flex cursor-pointer items-center gap-2 border-0 bg-transparent p-0 pb-0.5 text-sm md:text-base font-medium text-[#0654C6] border-b border-[#0654C6]/35 transition-colors hover:text-[#0545A5] hover:border-[#0545A5]/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0654C6]/40 focus-visible:ring-offset-2 rounded-sm"
+        className="group inline-flex cursor-pointer items-center gap-2 border-0 bg-transparent p-0 pb-0.5 text-sm md:text-base font-medium text-[#2b7ff9] border-b border-[#2b7ff9]/35 transition-colors hover:text-[#1a6fe0] hover:border-[#1a6fe0]/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2b7ff9]/40 focus-visible:ring-offset-2 rounded-sm"
       >
         <span>Common questions</span>
         <FaArrowRight
@@ -563,6 +552,26 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         />
       </button>
     )
+
+    if (isOpen) {
+      return (
+        <Box className="space-y-2">
+          <Text className="text-lg font-semibold text-gray-900">
+            Support {firstName} with any amount
+          </Text>
+          <Text className="text-gray-700 leading-relaxed text-sm md:text-base">
+            Your contribution goes directly toward supporting {firstName}
+            &apos;s care and well-being. Every dollar makes a difference. You
+            will receive updates on {firstName}&apos;s progress directly from
+            our care team.
+          </Text>
+          <Box className="mt-5">{faqLink}</Box>
+        </Box>
+      )
+    }
+
+    const gapAfterThisPaymentCents =
+      beneficiary.budget_goal - beneficiary.budget_raised - amountCents
 
     if (gapAfterThisPaymentCents > 0) {
       return (
@@ -619,6 +628,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }
 
   return (
+    <>
+    <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} />
     <DialogRoot
       open={open}
       onOpenChange={(details) => {
@@ -633,9 +644,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           borderRadius: "24px",
         }}
       >
-        <DialogHeader className="bg-[#1C3C8C] text-white px-8 py-6">
+        <DialogHeader className="bg-[#2b7ff9] text-white px-8 py-6">
           <Text fontSize="xl" fontWeight="bold">
-            {beneficiary.name || "Sponsor a Child"}
+            {beneficiary.name || "Sponsor"}
           </Text>
           <DialogCloseTrigger className="text-white hover:bg-white/20" />
         </DialogHeader>
@@ -650,9 +661,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             {/* LEFT COLUMN - Image & Basic Info */}
             <Box flex={{ base: "1", md: "0 0 40%" }} className="flex flex-col">
               <Box className="relative">
-                {/* Status pill: only shown for non-sponsored children; sponsored state is conveyed by the ribbon */}
-                {!alreadyFulfilled && (
-                  <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#0654C6] rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
+                {/* Status pill: hidden for open sponsorships (indistinguishable across statuses) and for fulfilled fixed types (ribbon conveys sponsored state). */}
+                {!alreadyFulfilled && !isOpen && (
+                  <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#2b7ff9] rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
                     <FaCircleInfo />
                     <Text className="text-xs font-semibold">
                       {getStatusText(beneficiary.status)}
@@ -665,7 +676,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                 >
                   {imageLoading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
-                      <Spinner size="lg" color="#0654C6" />
+                      <Spinner size="lg" color="#2b7ff9" />
                     </div>
                   )}
                   <ImageCarousel
@@ -673,7 +684,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     getImageSrc={getImageSrc}
                     getThumbnailSrc={getThumbnailSrc}
                     fallbackSrc={PERSON_PLACEHOLDER_PATH}
-                    alt={beneficiary.name || "Child"}
+                    alt={beneficiary.name || "Beneficiary"}
                     className="rounded-2xl aspect-[4/5] object-cover"
                     showArrowsOnHover={true}
                   />
@@ -690,7 +701,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   className="text-gray-600 text-sm"
                 >
                   <Flex align="center" gap={1.5}>
-                    <FaCalendar className="text-[#0654C6]" />
+                    <FaCalendar className="text-[#2b7ff9]" />
                     <Text className="text-sm">
                       {beneficiary.birth_date
                         ? `${Math.floor(
@@ -702,13 +713,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     </Text>
                   </Flex>
                   <Flex align="center" gap={1.5}>
-                    <FaUser className="text-[#0654C6]" />
+                    <FaUser className="text-[#2b7ff9]" />
                     <Text className="text-sm">
                       {beneficiary.gender || "Gender"}
                     </Text>
                   </Flex>
                   <Flex align="center" gap={1.5}>
-                    <FaLocationDot className="text-[#0654C6]" />
+                    <FaLocationDot className="text-[#2b7ff9]" />
                     <Text className="text-sm">
                       {beneficiary.country || "Location"}
                     </Text>
@@ -742,57 +753,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               className="flex flex-col"
               pr={{ base: 0, md: 4 }}
             >
-              {/* Progress bar -- only when goal tracking is enabled */}
-              {publicHardcodedCents == null && (
-                <Box className="space-y-2 mb-4">
-                  <Flex justify="space-between" align="center">
-                    <Text className="text-sm font-medium text-gray-600">
-                      Sponsorship Progress
-                    </Text>
-                    <Text className="text-lg font-bold text-[#0654C6]">
-                      {beneficiary.budget_goal > 0
-                        ? Math.round(
-                            (beneficiary.budget_raised /
-                              beneficiary.budget_goal) *
-                              100,
-                          )
-                        : 0}
-                      %
-                    </Text>
-                  </Flex>
-                  <Box className="w-full bg-gray-200 h-3 rounded-full overflow-hidden">
-                    <Box
-                      className="bg-[#0654C6] h-full rounded-full transition-all duration-300"
-                      style={{
-                        width: `${
-                          beneficiary.budget_goal > 0
-                            ? Math.min(
-                                (beneficiary.budget_raised /
-                                  beneficiary.budget_goal) *
-                                  100,
-                                100,
-                              )
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </Box>
-                  <Text className="text-sm text-gray-500">
-                    $
-                    {((beneficiary.budget_raised || 0) / 100).toLocaleString(
-                      undefined,
-                      { maximumFractionDigits: 0 },
-                    )}{" "}
-                    raised of $
-                    {((beneficiary.budget_goal || 0) / 100).toLocaleString(
-                      undefined,
-                      { maximumFractionDigits: 0 },
-                    )}{" "}
-                    goal
-                  </Text>
-                </Box>
-              )}
-
               {/* Bio */}
               <Box className="bg-gray-100 rounded-xl p-5 space-y-2 mb-4">
                 <Text className="text-lg font-semibold text-gray-900">
@@ -848,26 +808,26 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               {alreadyFulfilled ? (
                 <>
                   <Flex justify="center">
-                    <FaCircleCheck size={28} color="#0654C6" />
+                    <FaCircleCheck size={28} color="#2b7ff9" />
                   </Flex>
                   <Text className="text-lg font-semibold text-gray-900">
-                    This child is fully sponsored
+                    This beneficiary is fully sponsored
                   </Text>
                   <Text className="text-gray-700 leading-relaxed text-sm md:text-base">
                     {firstName} is already receiving support. You can still
-                    share their story, or find another child to sponsor.
+                    share their story, or find another to sponsor.
                   </Text>
                   <Button
                     onClick={onClose}
-                    className="w-full h-11 text-sm font-semibold bg-[#0654C6] text-white hover:bg-[#0545A5] rounded-xl transition-all shadow-md hover:shadow-lg"
+                    className="w-full h-11 text-sm font-semibold bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] rounded-xl transition-all shadow-md hover:shadow-lg"
                   >
                     <FaArrowDown className="mr-2" />
-                    Sponsor a child like {firstName}
+                    Sponsor someone like {firstName}
                   </Button>
                 </>
               ) : (
                 <>
-                  {/*                   <Text className="text-xl font-normal text-[#0654C6]/75 mb-8">
+                  {/*                   <Text className="text-xl font-normal text-[#2b7ff9]/75 mb-8">
                     Monthly Sponsorship Amount
                   </Text> */}
                   <Flex
@@ -880,65 +840,59 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       flex={{ base: "1", md: "0 0 50%" }}
                       width={{ base: "100%", md: "auto" }}
                     >
-                      {remainingAmount < minimumAmount ? (
-                        <Flex
-                          className="border border-gray-300 rounded-xl bg-white overflow-hidden"
-                          align="center"
-                          h="56px"
-                        >
-                          <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
-                            $
-                          </Box>
-                          <Input
-                            type="number"
-                            value={
-                              publicHardcodedDollars !== null
-                                ? publicHardcodedDollars
-                                : remainingAmount
-                            }
-                            readOnly={publicHardcodedDollars !== null}
-                            disabled={publicHardcodedDollars !== null}
-                            className="px-4 h-full bg-gray-100 border-0 outline-none focus:ring-0 text-lg text-gray-700"
-                            placeholder="Enter Amount"
-                          />
-                        </Flex>
-                      ) : (
-                        <Flex
-                          className="border border-gray-300 rounded-xl bg-white focus-within:border-[#0654C6] transition-colors overflow-hidden"
-                          align="center"
-                          h="56px"
-                        >
-                          <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
-                            $
-                          </Box>
-                          <Input
-                            type="number"
-                            min="1"
-                            max={maxSelectableAmount}
-                            value={amount || ""}
-                            onChange={handleAmountChange}
-                            readOnly={publicHardcodedDollars !== null}
-                            className="px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700"
-                            placeholder="Enter Amount"
-                          />
-                        </Flex>
-                      )}
+                      <Flex
+                        className="border border-gray-300 rounded-xl bg-white focus-within:border-[#2b7ff9] transition-colors overflow-hidden"
+                        align="center"
+                        h="56px"
+                      >
+                        <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
+                          $
+                        </Box>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={isOpen ? (amountCents > 0 ? amountCents / 100 : "") : fixedAmountCents / 100}
+                          onChange={handleAmountChange}
+                          readOnly={!isOpen}
+                          disabled={!isOpen}
+                          className={`px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700${!isOpen ? " bg-gray-100" : ""}`}
+                          placeholder="Enter Amount"
+                        />
+                      </Flex>
                     </Box>
                     <Box
                       flex={{ base: "1", md: "0 0 calc(50% - 12px)" }}
                       width={{ base: "100%", md: "auto" }}
                     >
-                      <Button
-                        onClick={handleStripePayment}
-                        loading={loading}
-                        loadingText="Processing..."
-                        disabled={loading || !canPay}
-                        className={`w-full h-[3.25rem] text-lg font-semibold bg-[#0654C6] text-white hover:bg-[#0545A5] rounded-xl transition-all shadow-md hover:shadow-lg${
-                          !canPay ? " opacity-50 cursor-not-allowed" : ""
-                        }`}
+                      <Tooltip
+                        content={disabledReason}
+                        showArrow
+                        disabled={!disabledReason}
+                        open={tipOpen}
+                        onOpenChange={(e) => setTipOpen(e.open)}
                       >
-                        Sponsor {firstName} 🪽
-                      </Button>
+                        <Box
+                          as="span"
+                          display="inline-block"
+                          width="100%"
+                          tabIndex={0}
+                          onPointerDown={() => {
+                            if (disabledReason) setTipOpen(true)
+                          }}
+                        >
+                          <Button
+                            onClick={handleStripePayment}
+                            loading={loading}
+                            loadingText="Processing..."
+                            disabled={loading || !canPay}
+                            className={`w-full h-[3.25rem] text-lg font-semibold bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] rounded-xl transition-all shadow-md hover:shadow-lg${
+                              !canPay ? " opacity-50 cursor-not-allowed" : ""
+                            }`}
+                          >
+                            Sponsor {firstName} 🪽
+                          </Button>
+                        </Box>
+                      </Tooltip>
                     </Box>
                   </Flex>
 
@@ -966,9 +920,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                         ) : (
                           <Box className="h-12 bg-white/80 rounded-xl flex items-center justify-center border border-gray-200">
                             <Text className="text-sm text-gray-500 text-center px-2">
-                              {remainingAmount < minimumAmount
-                                ? "Enter amount greater than $0"
-                                : `Minimum amount is $${minimumAmount}`}
+                              {isOpen
+                                ? OPEN_SPONSORSHIP_RANGE_MESSAGE
+                                : "This beneficiary is already fully sponsored"}
                             </Text>
                           </Box>
                         )}
@@ -1008,8 +962,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           </Flex>
         </DialogBody>
       </DialogContent>
-      <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} />
     </DialogRoot>
+    </>
   )
 }
 

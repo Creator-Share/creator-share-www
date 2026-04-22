@@ -280,7 +280,7 @@ export class TelegramBotService implements TelegramNotificationService {
     } = sponsorshipData;
 
     const amountFormatted = `$${(amount / 100).toFixed(2)}`;
-    const intervalText = interval === 'month' ? 'Monthly' : 'Yearly';
+    const intervalText = interval === 'month' ? 'Monthly' : interval === 'one_time' ? 'One-time' : 'Yearly';
     const sponsorDisplayName = sponsorName || sponsorEmail?.split('@')[0] || 'Anonymous';
 
     return `
@@ -288,7 +288,7 @@ export class TelegramBotService implements TelegramNotificationService {
 
 👤 <b>Beneficiary:</b> ${beneficiaryName}
 💰 <b>Amount:</b> ${amountFormatted}
-🔄 <b>Type:</b> ${intervalText} ${interval ? 'Recurring' : 'One-time'}
+🔄 <b>Type:</b> ${intervalText}${interval === 'month' || interval === 'year' ? ' Recurring' : ''}
 💳 <b>Payment Method:</b> ${paymentMethod}
 👨‍💼 <b>Sponsor:</b> ${sponsorDisplayName}
 📧 <b>Email:</b> ${sponsorEmail || 'Not provided'}
