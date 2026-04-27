@@ -6,7 +6,35 @@ NEXT_PUBLIC_MAPBOX_TOKEN=
 NEXT_PUBLIC_MAPTILER_KEY=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PORTAL_URL=
 NEXT_PUBLIC_BASE_URL=https://localhost:3000/
+
+# Multi-region Stripe (optional — leave commented out to run single-account).
+# When enabled, each region has its own Stripe account/dashboard; new
+# subscriptions and partnerships are stamped with `payment_region` so
+# cancel/refund/portal flows route to the correct account.
+#
+# STRIPE_DEFAULT_REGION controls which region new checkouts use until
+# explicit routing by beneficiary (Phase 3) lands. The legacy unsuffixed
+# vars above act as fallbacks for the default region during migration.
+#
+# STRIPE_DEFAULT_REGION=us
+# STRIPE_SECRET_KEY_US=
+# NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US=
+# STRIPE_WEBHOOK_SECRET_US=
+# STRIPE_PORTAL_URL_US=
+# NEXT_PUBLIC_STRIPE_PORTAL_URL_US=
+# STRIPE_SECRET_KEY_UK=
+# NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK=
+# STRIPE_WEBHOOK_SECRET_UK=
+# STRIPE_PORTAL_URL_UK=
+# NEXT_PUBLIC_STRIPE_PORTAL_URL_UK=
+#
+# NEXT_PUBLIC_STRIPE_PORTAL_URL_* powers the public Footer / FAQ / About
+# "Manage Subscription" links. Server-side STRIPE_PORTAL_URL_* powers email
+# template links. Set both in production so the in-app link and the email
+# link agree.
 
 # DEPRECATED — Global sponsorship amount override (dollars in cents integer string).
 # Superseded by per-type vars below (NEXT_PUBLIC_SPONSORSHIP_AMOUNT_*).

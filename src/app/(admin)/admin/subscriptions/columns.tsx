@@ -15,6 +15,8 @@ export type AdminSubscription = {
   created_at: string
   sponsorship_id: string
   user_id: string
+  sponsorship_method: "STRIPE" | "PAYPAL" | null
+  payment_region: string
   // Transformed fields
   child_name: string
   child_username: string
@@ -101,6 +103,31 @@ export const columns = (actions: ColumnActions): ColumnDef<AdminSubscription>[] 
           <div className="font-medium">{amount}</div>
           <div className="text-sm text-gray-500 capitalize">{interval}</div>
         </div>
+      )
+    },
+  },
+  {
+    accessorKey: "sponsorship_method",
+    header: "Method",
+    cell: ({ row }) => {
+      const method = row.original.sponsorship_method || "STRIPE"
+      const colorScheme = method === "PAYPAL" ? "blue" : "purple"
+      return (
+        <Badge colorScheme={colorScheme} variant="subtle">
+          {method}
+        </Badge>
+      )
+    },
+  },
+  {
+    accessorKey: "payment_region",
+    header: "Region",
+    cell: ({ row }) => {
+      const region = (row.original.payment_region || "us").toUpperCase()
+      return (
+        <Badge colorScheme="gray" variant="subtle">
+          {region}
+        </Badge>
       )
     },
   },

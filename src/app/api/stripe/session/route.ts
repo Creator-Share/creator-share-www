@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server"
-import Stripe from "stripe"
+import { coerceRegion, getStripeClient } from "@/lib/stripe/config"
 import { createClient } from "@/utils/supabase/server"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string)
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const sessionId = searchParams.get("id")
+  const region = coerceRegion(searchParams.get("region"))
 
   if (!sessionId) {
     return NextResponse.json(
@@ -14,6 +13,8 @@ export async function GET(request: Request) {
       { status: 400 },
     )
   }
+
+  const stripe = getStripeClient(region)
 
   try {
     const supabase = await createClient()

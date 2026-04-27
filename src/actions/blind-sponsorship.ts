@@ -2,9 +2,14 @@
 
 import Stripe from "stripe"
 
+import {
+  coerceRegion,
+  getPublishableKey,
+  getStripeClient,
+  getStripeConfig,
+  type StripeRegion,
+} from "@/lib/stripe/config"
 import { getPlaceholderImageUrl } from "@/utils/placeholders"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string)
 
 // For Stripe product images, we need a full URL
 const FALLBACK_IMAGE = getPlaceholderImageUrl()
@@ -16,12 +21,15 @@ export interface CreateBlindSponsorshipCheckoutParams {
   userId?: string | null
   email?: string
   isEmbedded?: boolean
+  region?: StripeRegion | string | null
 }
 
 export interface CreateBlindSponsorshipCheckoutResult {
   success: boolean
   url?: string
   clientSecret?: string
+  region?: StripeRegion
+  publishableKey?: string
   error?: string
 }
 
@@ -33,7 +41,17 @@ export async function createBlindSponsorshipCheckout(
   params: CreateBlindSponsorshipCheckoutParams,
 ): Promise<CreateBlindSponsorshipCheckoutResult> {
   try {
-    const { paymentType, userId, email, isEmbedded = false } = params
+    const {
+      paymentType,
+      userId,
+      email,
+      isEmbedded = false,
+      region: regionInput,
+    } = params
+
+    const region = coerceRegion(regionInput)
+    const stripe = getStripeClient(region)
+    const stripeCurrency = getStripeConfig(region).currency
 
     const isMonthly = paymentType === "subscription"
     const interval = isMonthly ? "month" : "year"
@@ -49,7 +67,7 @@ export async function createBlindSponsorshipCheckout(
     // Create price using the fixed amount ($33.33)
     const price = await stripe.prices.create({
       unit_amount: BLIND_SPONSORSHIP_AMOUNT_CENTS,
-      currency: "usd",
+      currency: stripeCurrency,
       recurring: { interval },
       product: product.id,
       metadata: {
@@ -80,6 +98,7 @@ export async function createBlindSponsorshipCheckout(
         paymentType,
         sponsorshipMode: "blind",
         blindLabel: BLIND_LABEL,
+        region,
       },
       subscription_data: {
         metadata: {
@@ -88,6 +107,7 @@ export async function createBlindSponsorshipCheckout(
           sponsorshipMode: "blind",
           blindLabel: BLIND_LABEL,
           beneficiaryName,
+          region,
         },
       },
     }
@@ -95,10 +115,10 @@ export async function createBlindSponsorshipCheckout(
     // Configure return URLs based on embedded mode
     if (isEmbedded) {
       sessionConfig.ui_mode = "embedded"
-      sessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?embedded=true&session_id={CHECKOUT_SESSION_ID}`
+      sessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?embedded=true&session_id={CHECKOUT_SESSION_ID}&region=${region}`
     } else {
-      sessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`
-      sessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}`
+      sessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}&region=${region}`
+      sessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}&region=${region}`
     }
 
     // Create checkout session
@@ -108,6 +128,8 @@ export async function createBlindSponsorshipCheckout(
       success: true,
       url: session.url || undefined,
       clientSecret: session.client_secret || undefined,
+      region,
+      publishableKey: getPublishableKey(region),
     }
   } catch (error) {
     console.error("Blind sponsorship checkout error:", error)

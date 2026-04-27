@@ -2,12 +2,17 @@ import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import {
+  getPublishableKey,
+  getRegionForBeneficiary,
+  getStripeClient,
+  getStripeConfig,
+  isValidStripeRegion,
+} from "@/lib/stripe/config"
+import {
   MAXIMUM_OPEN_SPONSORSHIP_CENTS,
   MINIMUM_OPEN_SPONSORSHIP_CENTS,
 } from "@/config/beneficiaryTypes"
 import { centsToDollars } from "@/utils/currency"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string)
 
 export async function POST(req: Request) {
   try {
@@ -25,7 +30,17 @@ export async function POST(req: Request) {
       email,
       sponsorshipMode,
       blindLabel,
+      region: regionInput,
     } = await req.json()
+
+    // Explicit region from the client wins (e.g. user picked a currency).
+    // Otherwise derive from beneficiary location so EU sponsors land on UK
+    // entity, etc. Falls back to STRIPE_DEFAULT_REGION when neither hints.
+    const region = isValidStripeRegion(regionInput)
+      ? regionInput
+      : getRegionForBeneficiary({ country: location })
+    const stripe = getStripeClient(region)
+    const stripeCurrency = getStripeConfig(region).currency
 
     const resolvedSponsorshipMode =
       type === "blind_sponsorship" || sponsorshipMode === "blind"
@@ -128,7 +143,7 @@ export async function POST(req: Request) {
     // One-time payments must NOT have a `recurring` property on the price
     const price = await stripe.prices.create({
       unit_amount: enforcedAmount,
-      currency: "usd",
+      currency: stripeCurrency,
       ...(isOneTime ? {} : { recurring: { interval } }),
       product: product.id,
       metadata: priceMetadata,
@@ -142,6 +157,7 @@ export async function POST(req: Request) {
             project,
             email,
             paymentType,
+            region,
           }
         : {
             beneficiaryId: beneficiaryId || null,
@@ -153,6 +169,7 @@ export async function POST(req: Request) {
             paymentType,
             sponsorshipMode: resolvedSponsorshipMode,
             blindLabel: resolvedBlindLabel,
+            region,
           }
 
     // One-time: mode="payment", no subscription_data.
@@ -176,6 +193,7 @@ export async function POST(req: Request) {
                   project,
                   amount: enforcedAmount.toString(),
                   email,
+                  region,
                 }
               : {
                   beneficiaryId: beneficiaryId || undefined,
@@ -184,6 +202,7 @@ export async function POST(req: Request) {
                   sponsorshipMode: resolvedSponsorshipMode,
                   blindLabel: resolvedBlindLabel,
                   beneficiaryName: resolvedBeneficiaryName,
+                  region,
                 },
         },
       }),
@@ -191,10 +210,10 @@ export async function POST(req: Request) {
 
     if (isEmbedded) {
       sessionConfig.ui_mode = "embedded"
-      sessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?embedded=true&session_id={CHECKOUT_SESSION_ID}`
+      sessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?embedded=true&session_id={CHECKOUT_SESSION_ID}&region=${region}`
     } else {
-      sessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`
-      sessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}`
+      sessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}&region=${region}`
+      sessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}&region=${region}`
     }
 
     const session = await stripe.checkout.sessions.create(sessionConfig)
@@ -202,6 +221,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       url: session.url,
       clientSecret: session.client_secret,
+      region,
+      publishableKey: getPublishableKey(region),
     })
   } catch (error) {
     console.error("Stripe Error:", error)

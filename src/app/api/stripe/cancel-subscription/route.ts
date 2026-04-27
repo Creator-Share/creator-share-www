@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
+import {
+  cancelPayPalSubscription,
+  isPayPalEnabled,
+} from "@/lib/paypal/client"
+import { coerceRegion, getStripeClient } from "@/lib/stripe/config"
+import type { Database } from "@/lib/types/db.types"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { createClient } from "@/utils/supabase/server"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string)
+type Supabase = SupabaseClient<Database>
+type SubscriptionRow =
+  Database["public"]["Tables"]["subscriptions"]["Row"]
 
+// Route name is historical — this endpoint now cancels both Stripe and PayPal
+// subscriptions, dispatched by `sponsorship_method` on the DB row.
 export async function POST(req: Request) {
   try {
     const { subscriptionId } = await req.json()
@@ -17,43 +28,14 @@ export async function POST(req: Request) {
 
     const supabase = await createClient()
 
-    // First check if the subscription exists in our database
-    // Try to find by sponsorship_id first, then by database id
-    let subscription
-    let fetchError
-
-    const { data: subscriptionByStripeId, error: stripeIdError } = await supabase
-      .from("subscriptions")
-      .select("*")
-      .eq("sponsorship_id", subscriptionId)
-      .single()
-
-    if (subscriptionByStripeId && !stripeIdError) {
-      subscription = subscriptionByStripeId
-      fetchError = stripeIdError
-    } else {
-      // If not found by sponsorship_id, try by database id
-      const { data: subscriptionById, error: idError } = await supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("id", subscriptionId)
-        .single()
-      
-      subscription = subscriptionById
-      fetchError = idError
-    }
-
-    if (fetchError || !subscription) {
+    const subscription = await findSubscription(supabase, subscriptionId)
+    if (!subscription) {
       return NextResponse.json(
-        {
-          error: "Subscription not found in database",
-          details: fetchError?.message || "No subscription found with provided ID"
-        },
+        { error: "Subscription not found in database" },
         { status: 404 },
       )
     }
 
-    // If subscription is already cancelled, just return success
     if (subscription.status === "cancelled") {
       return NextResponse.json({
         message: "Subscription was already cancelled",
@@ -61,197 +43,40 @@ export async function POST(req: Request) {
       })
     }
 
-    try {
-      // Cancel the subscription in Stripe only if we have a valid Stripe subscription ID
-      if (subscription.sponsorship_id) {
-        await stripe.subscriptions.cancel(subscription.sponsorship_id)
-      }
+    const providerResult = await cancelWithProvider(subscription)
+    if (providerResult.fatal) {
+      return NextResponse.json(
+        { error: providerResult.error },
+        { status: 500 },
+      )
+    }
 
-      // Get subscription data before updating
-      const beneficiaryId = subscription.beneficiary_id
-      const amount = subscription.amount
-
-      // Update our database record
-      const { error } = await supabase
-        .from("subscriptions")
-        .update({
-          status: "cancelled",
-          canceled_at: new Date().toISOString(),
-        })
-        .eq("id", subscription.id)
-
-      if (error) {
-        console.error("Database error when cancelling subscription:", error)
-        return NextResponse.json(
-          {
-            error: "Failed to update subscription in database",
-            details: error.message,
-          },
-          { status: 500 },
-        )
-      }
-
-      // Check if beneficiary has any active subscriptions and update status if needed
-      if (beneficiaryId) {
-        const { data: activeSubscriptions, error: activeError } = await supabase
-          .from("subscriptions")
-          .select("id")
-          .eq("beneficiary_id", beneficiaryId)
-          .eq("status", "complete")
-
-        if (!activeError && (!activeSubscriptions || activeSubscriptions.length === 0)) {
-          // No active subscriptions - check current status and update if needed
-          const { data: beneficiary, error: beneficiaryError } = await supabase
-            .from("beneficiaries")
-            .select("id, name, status")
-            .eq("id", beneficiaryId)
-            .single()
-
-          if (!beneficiaryError && beneficiary) {
-            // Only update to "Sponsorship Cancelled" if not already Draft or Archived
-            if (beneficiary.status !== "Draft" && beneficiary.status !== "Archived") {
-              const { error: statusUpdateError } = await supabase
-                .from("beneficiaries")
-                .update({ status: "Sponsorship Cancelled" })
-                .eq("id", beneficiaryId)
-
-              if (statusUpdateError) {
-                console.error("Error updating beneficiary status:", statusUpdateError)
-              } else {
-                // Send email notification
-                try {
-                  // Get user email if available
-                  let customerEmail: string | null = null
-                  let customerName: string | null = null
-                  if (subscription.user_id) {
-                    const { data: user } = await supabase
-                      .from("users")
-                      .select("email, name")
-                      .eq("id", subscription.user_id)
-                      .single()
-                    if (user) {
-                      customerEmail = user.email
-                      customerName = user.name
-                    }
-                  }
-                  const { sendSponsorshipCancellationNotificationEmail } = await import("@/utils/email")
-                  await sendSponsorshipCancellationNotificationEmail(
-                    beneficiary.name,
-                    customerEmail,
-                    customerName,
-                    amount
-                  )
-                } catch (emailError) {
-                  console.error("Error sending cancellation notification email:", emailError)
-                }
-              }
-            }
-          }
-        }
-      }
-
-      return NextResponse.json({
-        message: "Subscription cancelled successfully",
+    const { error: updateError } = await supabase
+      .from("subscriptions")
+      .update({
+        status: "cancelled",
+        canceled_at: new Date().toISOString(),
       })
-    } catch (stripeError) {
-      console.error("Stripe error when cancelling subscription:", stripeError)
+      .eq("id", subscription.id)
 
-      // If Stripe cancellation fails but it's because the subscription doesn't exist there,
-      // we should still update our database
-      if (stripeError instanceof Stripe.errors.StripeInvalidRequestError) {
-        // Get subscription data before updating
-        const beneficiaryId = subscription.beneficiary_id
-        const amount = subscription.amount
-
-        // Update our database to show cancelled anyway
-        const { error } = await supabase
-          .from("subscriptions")
-          .update({
-            status: "cancelled",
-            canceled_at: new Date().toISOString(),
-          })
-          .eq("id", subscription.id)
-
-        if (error) {
-          console.error("Database error when cancelling subscription:", error)
-        }
-
-        // Check if beneficiary has any active subscriptions and update status if needed
-        if (beneficiaryId) {
-          const { data: activeSubscriptions, error: activeError } = await supabase
-            .from("subscriptions")
-            .select("id")
-            .eq("beneficiary_id", beneficiaryId)
-            .eq("status", "complete")
-
-          if (!activeError && (!activeSubscriptions || activeSubscriptions.length === 0)) {
-            // No active subscriptions - check current status and update if needed
-            const { data: beneficiary, error: beneficiaryError } = await supabase
-              .from("beneficiaries")
-              .select("id, name, status")
-              .eq("id", beneficiaryId)
-              .single()
-
-            if (!beneficiaryError && beneficiary) {
-              // Only update to "Sponsorship Cancelled" if not already Draft or Archived
-              if (beneficiary.status !== "Draft" && beneficiary.status !== "Archived") {
-                const { error: statusUpdateError } = await supabase
-                  .from("beneficiaries")
-                  .update({ status: "Sponsorship Cancelled" })
-                  .eq("id", beneficiaryId)
-
-                if (statusUpdateError) {
-                  console.error("Error updating beneficiary status:", statusUpdateError)
-                } else {
-                  // Send email notification
-                  try {
-                    // Get user email if available
-                    let customerEmail: string | null = null
-                    let customerName: string | null = null
-                    if (subscription.user_id) {
-                      const { data: user } = await supabase
-                        .from("users")
-                        .select("email, name")
-                        .eq("id", subscription.user_id)
-                        .single()
-                      if (user) {
-                        customerEmail = user.email
-                        customerName = user.name
-                      }
-                    }
-                    const { sendSponsorshipCancellationNotificationEmail } = await import("@/utils/email")
-                    await sendSponsorshipCancellationNotificationEmail(
-                      beneficiary.name,
-                      customerEmail,
-                      customerName,
-                      amount
-                    )
-                  } catch (emailError) {
-                    console.error("Error sending cancellation notification email:", emailError)
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        return NextResponse.json({
-          message: "Subscription marked as cancelled in database",
-          warning: "Subscription not found in Stripe",
-        })
-      }
-
+    if (updateError) {
+      console.error("Database error when cancelling subscription:", updateError)
       return NextResponse.json(
         {
-          error: "Failed to cancel subscription with Stripe",
-          details:
-            stripeError instanceof Error
-              ? stripeError.message
-              : "Unknown error",
+          error: "Failed to update subscription in database",
+          details: updateError.message,
         },
         { status: 500 },
       )
     }
+
+    await maybeMarkBeneficiaryCancelled(supabase, subscription)
+
+    return NextResponse.json({
+      message: "Subscription cancelled successfully",
+      provider: subscription.sponsorship_method || "STRIPE",
+      providerNotFound: providerResult.notFound,
+    })
   } catch (error) {
     console.error("Error cancelling subscription:", error)
     return NextResponse.json(
@@ -260,6 +85,163 @@ export async function POST(req: Request) {
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
+    )
+  }
+}
+
+async function findSubscription(
+  supabase: Supabase,
+  id: string,
+): Promise<SubscriptionRow | null> {
+  const { data: byDbId } = await supabase
+    .from("subscriptions")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+  if (byDbId) return byDbId
+
+  const { data: byProviderId } = await supabase
+    .from("subscriptions")
+    .select("*")
+    .eq("stripe_subscription_id", id)
+    .maybeSingle()
+  return byProviderId
+}
+
+interface ProviderCancelResult {
+  notFound: boolean
+  fatal: boolean
+  error?: string
+}
+
+async function cancelWithProvider(
+  subscription: SubscriptionRow,
+): Promise<ProviderCancelResult> {
+  const providerId = subscription.stripe_subscription_id
+  // Treat missing provider subscription id as "already untracked" — nothing to
+  // cancel externally, proceed to DB update.
+  if (!providerId) {
+    return { notFound: true, fatal: false }
+  }
+
+  if (subscription.sponsorship_method === "PAYPAL") {
+    if (!isPayPalEnabled) {
+      return {
+        notFound: false,
+        fatal: true,
+        error: "PayPal is not configured — cannot cancel PayPal subscription",
+      }
+    }
+    const result = await cancelPayPalSubscription(providerId)
+    if (result.cancelled || result.alreadyCancelled || result.notFound) {
+      return { notFound: result.notFound, fatal: false }
+    }
+    return {
+      notFound: false,
+      fatal: true,
+      error: result.error || "Failed to cancel PayPal subscription",
+    }
+  }
+
+  const region = coerceRegion(subscription.payment_region)
+  const stripe = getStripeClient(region)
+  try {
+    await stripe.subscriptions.cancel(providerId)
+    return { notFound: false, fatal: false }
+  } catch (err) {
+    if (err instanceof Stripe.errors.StripeInvalidRequestError) {
+      // Subscription not in Stripe (deleted, test-mode drift, etc.) — still
+      // reconcile our DB so the user sees the cancel take effect.
+      return { notFound: true, fatal: false }
+    }
+    console.error("Stripe error when cancelling subscription:", err)
+    return {
+      notFound: false,
+      fatal: true,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to cancel subscription with Stripe",
+    }
+  }
+}
+
+async function maybeMarkBeneficiaryCancelled(
+  supabase: Supabase,
+  subscription: SubscriptionRow,
+) {
+  const beneficiaryId = subscription.beneficiary_id
+  if (!beneficiaryId) return
+
+  const { data: activeSubscriptions, error: activeError } = await supabase
+    .from("subscriptions")
+    .select("id")
+    .eq("beneficiary_id", beneficiaryId)
+    .eq("status", "complete")
+
+  if (activeError || (activeSubscriptions && activeSubscriptions.length > 0)) {
+    return
+  }
+
+  const { data: beneficiary, error: beneficiaryError } = await supabase
+    .from("beneficiaries")
+    .select("id, name, status")
+    .eq("id", beneficiaryId)
+    .single()
+
+  if (beneficiaryError || !beneficiary) return
+  if (beneficiary.status === "Draft" || beneficiary.status === "Archived") {
+    return
+  }
+
+  // "Sponsorship Cancelled" is part of the runtime enum (see config/
+  // beneficiaryStatuses.ts) but not yet in the regenerated db.types Status
+  // union, so the typed client rejects the assignment. Same pattern is used
+  // by the webhook handler via the untyped service-role client.
+  const { error: statusUpdateError } = await supabase
+    .from("beneficiaries")
+    .update({
+      status:
+        "Sponsorship Cancelled" as Database["public"]["Tables"]["beneficiaries"]["Update"]["status"],
+    })
+    .eq("id", beneficiaryId)
+
+  if (statusUpdateError) {
+    console.error("Error updating beneficiary status:", statusUpdateError)
+    return
+  }
+
+  try {
+    let customerEmail: string | null = null
+    let customerName: string | null = null
+    if (subscription.user_id) {
+      const { data: user } = await supabase
+        .from("users")
+        .select("email, first_name, last_name")
+        .eq("id", subscription.user_id)
+        .single()
+      if (user) {
+        customerEmail = user.email
+        const fullName = [user.first_name, user.last_name]
+          .filter(Boolean)
+          .join(" ")
+          .trim()
+        customerName = fullName || null
+      }
+    }
+    const { sendSponsorshipCancellationNotificationEmail } = await import(
+      "@/utils/email"
+    )
+    await sendSponsorshipCancellationNotificationEmail(
+      beneficiary.name ?? "Unknown Beneficiary",
+      customerEmail,
+      customerName,
+      subscription.amount,
+    )
+  } catch (emailError) {
+    console.error(
+      "Error sending cancellation notification email:",
+      emailError,
     )
   }
 }

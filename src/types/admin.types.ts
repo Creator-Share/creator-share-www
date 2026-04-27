@@ -232,6 +232,8 @@ export interface RawSubscription {
   created_at: string
   sponsorship_id: string
   user_id: string
+  sponsorship_method: "STRIPE" | "PAYPAL" | null
+  payment_region: string
   beneficiaries?: {
     id: string
     name: string

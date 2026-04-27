@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server"
-import Stripe from "stripe"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string)
+import { coerceRegion, getStripeClient } from "@/lib/stripe/config"
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const sessionId = searchParams.get("session_id")
+  const region = coerceRegion(searchParams.get("region"))
 
   if (!sessionId) {
     return NextResponse.json({ error: "Missing session_id" }, { status: 400 })
   }
+
+  const stripe = getStripeClient(region)
 
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
