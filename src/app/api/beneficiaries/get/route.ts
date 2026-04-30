@@ -3,6 +3,32 @@ import { createClient } from "@/utils/supabase/server"
 import { Status, Gender } from "@/types/admin.types"
 import { Beneficiaries } from "@/types"
 
+type Cursor = { ca: string | null; id: string }
+
+// Strict shapes — both values are interpolated into PostgREST .or() filters,
+// so anything that could include `,`, `(`, `)`, or operator-like fragments
+// (e.g. `.gt.`) must be rejected to prevent filter injection.
+const ISO_RE  = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function encodeCursor(c: Cursor): string {
+  return Buffer.from(JSON.stringify(c), "utf-8").toString("base64url")
+}
+
+function decodeCursor(raw: string): Cursor | null {
+  try {
+    const json = Buffer.from(raw, "base64url").toString("utf-8")
+    const obj = JSON.parse(json)
+    if (typeof obj?.id !== "string" || !UUID_RE.test(obj.id)) return null
+    if (obj.ca !== null) {
+      if (typeof obj.ca !== "string" || !ISO_RE.test(obj.ca)) return null
+    }
+    return { ca: obj.ca, id: obj.id }
+  } catch {
+    return null
+  }
+}
+
 export async function GET(req: Request) {
   const supabase = await createClient()
 
@@ -25,27 +51,15 @@ export async function GET(req: Request) {
     ? Math.min(Math.max(limitParam, 1), 60)
     : 9
 
-  // TEMPORARY: Use offset-based pagination instead of cursor-based
-  // This is a workaround for the cursor pagination issues we were experiencing
-  // TODO: Switch back to cursor-based pagination after fixing the .or() filter conflicts
-  let offset = 0
-  if (cursorParam) {
-    try {
-      const decoded = Buffer.from(cursorParam, "base64").toString("utf-8")
-      offset = Number(decoded)
-      if (!Number.isFinite(offset) || offset < 0) {
-        offset = 0
-      }
-    } catch {
-      offset = 0
-    }
-  }
+  const cursor = cursorParam ? decodeCursor(cursorParam) : null
 
   try {
 
-    // STEP 1: Start with base query — count=exact adds Prefer: count=exact header
-    // so PostgREST returns a Content-Range total alongside the page data (no extra round trip).
-    let query = supabase.from("beneficiaries").select("*", { count: "exact" });
+    // count=exact only on the first page — on cursor pages the count would
+    // reflect rows AFTER the cursor, not the total.
+    let query = cursor
+      ? supabase.from("beneficiaries").select("*")
+      : supabase.from("beneficiaries").select("*", { count: "exact" });
 
     if (beneficiaryType && beneficiaryType !== "null" && beneficiaryType !== "undefined") {
       // Support comma-separated types (e.g. "CHILD,CHILD_LABORER")
@@ -102,15 +116,29 @@ export async function GET(req: Request) {
       )
     }
 
-    // Stable ordering: created_at DESC (nulls last), then id DESC
+    // Cursor (keyset) filter — apply BEFORE order/limit.
+    // Order is created_at DESC NULLS LAST, id DESC, so "after the cursor" means:
+    //   created_at < cursor.ca
+    //   OR (created_at = cursor.ca AND id < cursor.id)
+    //   OR created_at IS NULL  (NULLs LAST, all come after non-null rows)
+    // If the cursor itself is on a NULL-created_at row, only NULL rows with id < cursor.id remain.
+    if (cursor) {
+      if (cursor.ca !== null) {
+        query = query.or(
+          `created_at.lt.${cursor.ca},and(created_at.eq.${cursor.ca},id.lt.${cursor.id}),created_at.is.null`
+        )
+      } else {
+        query = query.is("created_at", null).lt("id", cursor.id)
+      }
+    }
+
+    // Stable ordering: created_at DESC (nulls last), then id DESC.
+    // Fetch limit+1 so we can detect "more available" without a follow-up
+    // empty request when the total is an exact multiple of `limit`.
     query = query
       .order("created_at", { ascending: false, nullsFirst: false })
       .order("id", { ascending: false })
-    
-    // TEMPORARY: Use offset-based pagination - always use .range() for consistency
-    const rangeStart = offset
-    const rangeEnd = offset + limit - 1
-    query = query.range(rangeStart, rangeEnd)
+      .limit(limit + 1)
 
     const { data, error, count } = await query
     if (error) {
@@ -118,31 +146,22 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Database error" }, { status: 500 })
     }
 
-    // Log returned IDs to detect duplicates
-    const returnedIds = (data || []).map((b: Beneficiaries) => b.id)
-    
-    // Check for duplicates in this response
-    const uniqueIds = new Set(returnedIds)
-    if (uniqueIds.size !== returnedIds.length) {
-      console.error(
-        `[Offset Pagination] ⚠️  DUPLICATE IDs IN RESPONSE! Total: ${returnedIds.length}, Unique: ${uniqueIds.size}`
-      )
-    }
-
-    const hasMoreData = Boolean(data && data.length === limit)
-    
-    
+    const fetched = (data || []) as Beneficiaries[]
+    const hasMore = fetched.length > limit
+    const rows = hasMore ? fetched.slice(0, limit) : fetched
+    const last = hasMore ? rows[rows.length - 1] : null
+    const nextCursor =
+      last && last.id
+        ? encodeCursor({ ca: last.created_at ?? null, id: last.id })
+        : null
 
     return NextResponse.json({
-      people: (data || []) as Beneficiaries[],
+      people: rows,
       totalCount: count ?? null,
       pageInfo: {
         limit,
-        nextCursor:
-          data && data.length === limit
-            ? Buffer.from(String(offset + limit)).toString("base64")
-            : null,
-        hasMore: hasMoreData,
+        nextCursor,
+        hasMore,
       },
     })
   } catch (err) {
