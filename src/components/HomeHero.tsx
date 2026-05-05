@@ -182,7 +182,7 @@ const HERO_CONTENT: Record<DisplayKey, HeroContent> = {
     ),
   },
 
-  IN_OUR_CARE: {
+  FULLTIME_CARE: {
     heading: (
       <>
         A home, a family,{" "}
