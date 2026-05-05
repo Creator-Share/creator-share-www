@@ -473,55 +473,43 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                         height: type === null ? "2.75rem" : "1.75rem",
                       }}
                     >
-                      {/* Circled check — visible only when active */}
+                      {/* Heart-hand logo mark — solid on active, ghosted on hover */}
                       <Box
                         flexShrink={0}
                         style={{
-                          width: "18px",
-                          height: "18px",
-                          opacity: isActive ? 1 : 0,
-                          transform: isActive ? "scale(1)" : "scale(0.6)",
+                          width: "22px",
+                          height: "20px",
+                          opacity: isActive ? 1 : isHovered ? 0.45 : 0,
+                          transform: isActive
+                            ? "scale(1)"
+                            : isHovered
+                              ? "scale(0.65)"
+                              : "scale(0.5)",
                           transition: `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`,
                         }}
                       >
                         <svg
-                          viewBox="0 0 18 18"
+                          viewBox="-3 -3 55 50"
                           fill="none"
                           xmlns="http://www.w3.org/2000/svg"
-                          width="18"
-                          height="18"
+                          width="22"
+                          height="20"
                         >
-                          <circle cx="9" cy="9" r="9" fill="#2b7ff9" />
                           <path
-                            d="M5 9.5L7.5 12L13 6.5"
-                            stroke="white"
-                            strokeWidth="1.75"
-                            strokeLinecap="round"
+                            d="M47.72 10.5101C47.18 7.15005 45.42 4.38005 42.78 2.72005C40.05 1.01005 36.68 0.63005 33.25 1.63005C30.01 2.59005 26.84 4.32005 23.99 6.66005C21.28 3.05005 17.9 0.97005 13.98 0.47005C7.63998 -0.33995 1.80998 3.95005 0.719984 10.2301C-1.38002 22.39 8.97998 33.04 16.84 40.91C16.86 39.71 17.04 38.53 17.34 37.39C17.4 37.16 17.47 36.9301 17.55 36.7001C10.53 29.5801 2.47998 20.4201 4.13998 10.8201C4.83998 6.67005 8.29998 3.85005 12.4 3.85005C12.78 3.85005 13.16 3.87005 13.54 3.92005C17.02 4.36005 19.84 6.40005 22.2 10.1801L23.32 11.97L24.86 10.5301C27.69 7.86005 30.93 5.95005 34.25 4.95005C36.7 4.23005 39.07 4.48005 40.94 5.65005C42.73 6.78005 43.93 8.70005 44.31 11.0701C44.74 13.6501 44.51 16.12 43.81 18.46C43.91 18.34 44.03 18.24 44.14 18.13C45.11 17.23 46.41 16.9201 47.64 17.2901H47.65C48.05 15.1301 48.11 12.8801 47.72 10.5201V10.5101Z"
+                            fill="#2B7FF9"
+                            stroke="#2B7FF9"
+                            strokeWidth="3"
                             strokeLinejoin="round"
+                            paintOrder="stroke"
+                          />
+                          <path
+                            d="M47.5899 22.0201C45.6899 23.7901 45.0999 26.4801 44.1899 28.8101C43.7599 29.9301 43.1999 30.9101 42.5299 31.7901C41.6199 33.0201 40.4799 34.0501 39.1199 35.0301C36.0299 37.2501 32.4099 38.3601 28.8999 39.6801C26.2999 40.6401 23.7599 41.7001 21.5299 43.4001C20.7299 44.0001 19.2599 43.7101 19.1599 42.5401C19.0499 40.9801 19.1899 39.4501 19.5699 37.9901C20.2499 35.3201 21.6799 32.8601 23.6099 30.7901C24.4799 29.8501 25.4499 29.0201 26.4699 28.2901C29.6299 26.0101 33.4099 24.6001 37.1199 23.5301C37.8099 23.3301 38.5399 23.9101 38.7299 24.5301C38.9599 25.2801 38.5899 25.8801 37.9599 26.2601C36.0999 27.4201 34.2299 28.5901 32.3599 29.7501C32.0399 29.9501 30.4099 30.6901 30.4099 31.1601C30.4299 31.8401 31.8699 31.6601 32.2199 31.6001C36.4499 30.9201 39.7999 27.6001 42.3099 24.4001C43.8899 22.3901 44.4099 21.0201 45.6899 19.8201C47.0499 18.5501 48.9099 20.7601 47.5599 22.0201H47.5899Z"
+                            fill="#2B7FF9"
                           />
                         </svg>
                       </Box>
 
-                      {/* Animated left bar */}
-                      <Box
-                        style={{
-                          width: "3px",
-                          flexShrink: 0,
-                          borderRadius: "2px",
-                          transition: `height ${EXIT_DURATION_MS}ms ease, background ${EXIT_DURATION_MS}ms ease, opacity ${EXIT_DURATION_MS}ms ease`,
-                          height: isActive
-                            ? "1.25rem"
-                            : isHovered
-                              ? "1rem"
-                              : "0.625rem",
-                          background: isActive
-                            ? "#2b7ff9"
-                            : isHovered
-                              ? "#5a84c1"
-                              : "#999",
-                          opacity: isActive ? 1 : isHovered ? 0.85 : 0.4,
-                        }}
-                      />
                       <span
                         style={{
                           fontSize: "1.2rem",

@@ -196,23 +196,34 @@ export function PageNavbar() {
           <Box
             className="flex items-center flex-shrink-0 overflow-visible"
             style={{
-              animation:
-                "pageLogoSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
+              transform: isHomeLogoExpanded
+                ? "translateX(20px)"
+                : "translateX(0)",
+              transition: skipTransition
+                ? "none"
+                : `transform ${NAV_ROW_TRANSITION_MS}ms ease-out`,
             }}
           >
-            <NextLink href="/" passHref>
-              <Image
-                src="/logo_text.svg"
-                alt="Creator Share"
-                height={isHomeLogoExpanded ? "72px" : "48px"}
-                objectFit="contain"
-                style={{
-                  transition: skipTransition
-                    ? "none"
-                    : `height ${NAV_ROW_TRANSITION_MS}ms ease-out`,
-                }}
-              />
-            </NextLink>
+            <Box
+              style={{
+                animation:
+                  "pageLogoSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
+              }}
+            >
+              <NextLink href="/" passHref>
+                <Image
+                  src="/logo_text.svg"
+                  alt="Creator Share"
+                  height={isHomeLogoExpanded ? "72px" : "48px"}
+                  objectFit="contain"
+                  style={{
+                    transition: skipTransition
+                      ? "none"
+                      : `height ${NAV_ROW_TRANSITION_MS}ms ease-out`,
+                  }}
+                />
+              </NextLink>
+            </Box>
           </Box>
 
           {/* Desktop Menu */}
