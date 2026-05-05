@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation"
 import { Box } from "@chakra-ui/react"
 import { Beneficiaries, Activity } from "@/types"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
+import { createClient } from '@supabase/supabase-js'
 import { ACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 import { useFilterStore } from "@/store/filterStore"
 import {
@@ -29,17 +30,6 @@ const TYPE_ROUTE_PATHS = new Set([
   "/in_our_care",
   "/dogs",
 ])
-
-/**
- * Maps a UI tab type to the DB beneficiary_type values used by fetchAllSponsored.
- * Null (All) returns undefined so no type filter is applied.
- */
-function getSponsoredBeneficiaryTypes(
-  type: BeneficiaryTabType | null,
-): string[] | undefined {
-  const types = getApiTypes(type)
-  return types ? types.split(",") : undefined
-}
 
 /** First segment after `/sponsorships/`, or null when not on a profile URL. */
 function getSponsorshipUsernameFromPath(path: string): string | null {
@@ -161,7 +151,46 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
 
   // Fetch sponsored beneficiaries once on mount (all types, not filtered by activeType).
   useEffect(() => {
-    fetchAllSponsored(undefined).then(setSponsored)
+    let cancelled = false
+
+    const refresh = () => {
+      fetchAllSponsored(undefined)
+        .then((data) => {
+          if (!cancelled) setSponsored(data)
+        })
+        .catch((err) => {
+          console.warn(
+            "[SponsorshipsContainer] fetchAllSponsored failed:",
+            err,
+          )
+        })
+    }
+
+    refresh()
+
+    // Keep sponsored set in sync with subscription changes
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey)
+    const channel = supabase
+      .channel("sponsored_rt")
+      .on(
+        "postgres_changes",
+        { schema: "public", table: "subscriptions", event: "*" },
+        () => refresh(),
+      )
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   // On mount: read the real browser URL (window.location.pathname) and notify

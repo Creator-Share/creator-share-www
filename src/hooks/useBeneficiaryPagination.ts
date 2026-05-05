@@ -150,6 +150,7 @@ export function useBeneficiaryPagination(
           abortControllerRef.current.abort()
         }
         setIsRefreshing(true)
+        setFetchError(null)
       }
 
       const controller = new AbortController()
@@ -206,7 +207,11 @@ export function useBeneficiaryPagination(
           const delay = getFibonacciDelay(retryCountRef.current)
           retryCountRef.current += 1
           setRetryCount(retryCountRef.current)
+          if (retryTimeoutRef.current) {
+            clearTimeout(retryTimeoutRef.current)
+          }
           retryTimeoutRef.current = setTimeout(() => {
+            retryTimeoutRef.current = null
             fetchPage(nextCursor)
           }, delay)
         }
@@ -265,6 +270,12 @@ export function useBeneficiaryPagination(
         "postgres_changes",
         { schema: "public", table: "subscriptions", event: "*" },
         () => {
+          if (retryTimeoutRef.current) {
+            clearTimeout(retryTimeoutRef.current)
+            retryTimeoutRef.current = null
+          }
+          retryCountRef.current = 0
+          setRetryCount(0)
           fetchPage(null)
         }
       )

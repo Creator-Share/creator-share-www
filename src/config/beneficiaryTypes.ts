@@ -79,6 +79,20 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
     route: "/",
   },
   {
+    // Legacy DB alias for older "CHILD" records. Treated identically to
+    // CHILD_LABORER in queries. Hidden from nav in all contexts.
+    label: "Child Labourers",
+    type: "CHILD",
+    isLegacyAlias: true,
+    isOpenSponsorship: false,
+    defaultBudgetGoalCents: 3333,
+    isPubliclyVisible: true,
+    singularName: "child",
+    pluralName: "children",
+    maxAgeYears: 14,
+    route: "/child_laborers",
+  },
+  {
     label: "Child Labourers",
     type: "CHILD_LABORER",
     isOpenSponsorship: false,
@@ -130,6 +144,7 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
 
 /** Maps a BeneficiaryTabType to its sharable public URL path. */
 export const TYPE_TO_ROUTE: Record<BeneficiaryTabType, string> = {
+  CHILD: "/child_laborers", // legacy alias — same route as CHILD_LABORER
   CHILD_LABORER: "/child_laborers",
   SPECIAL_NEEDS: "/special_needs",
   IN_OUR_CARE: "/in_our_care",

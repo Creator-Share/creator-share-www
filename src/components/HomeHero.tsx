@@ -271,6 +271,16 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
   const [mobileContentHeight, setMobileContentHeight] = useState<number | null>(
     null,
   )
+  // Default false → desktop layout on first paint; flips on mount via matchMedia.
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 47.99em)")
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener("change", update)
+    return () => mq.removeEventListener("change", update)
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -308,6 +318,22 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
       setMobileContentHeight(contentMeasureRef.current.scrollHeight)
     }
   }, [mobileContentHeight])
+
+  useEffect(() => {
+    if (isMobile === false) {
+      setMobileContentHeight(null)
+    }
+  }, [isMobile])
+
+  useEffect(() => {
+    const el = contentMeasureRef.current
+    if (!el || !isMobile) return
+    const ro = new ResizeObserver(() => {
+      setMobileContentHeight(el.scrollHeight)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [isMobile, displayedKey])
 
   const handleTypeClick = useCallback(
     (type: BeneficiaryTabType | null) => {
@@ -421,12 +447,13 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
           pb={{ base: 0 }}
           minH={{ base: 0, md: "240px" }}
           style={{
-            height:
-              mobileContentHeight != null
-                ? `${mobileContentHeight + 24}px`
-                : undefined,
-            overflow: "hidden",
-            transition: "height 0.3s ease",
+            ...(isMobile && mobileContentHeight != null
+              ? {
+                  height: `${mobileContentHeight + 24}px`,
+                  overflow: "hidden",
+                  transition: "height 0.3s ease",
+                }
+              : {}),
           }}
         >
           {/* Desktop-only left nav — fixed width so font/bar animations

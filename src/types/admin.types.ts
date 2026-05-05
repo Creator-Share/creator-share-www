@@ -5,14 +5,21 @@ export type { Status }
 
 export type Gender = "Boy" | "Girl"
 
-export type BeneficiaryType =
-  | "CHILD"
-  | "ANIMAL"
-  | "FAMILY"
-  | "STREET_INVOLVED"
-  | "CHILD_LABORER"
-  | "SPECIAL_NEEDS"
-  | "IN_OUR_CARE"
+export const BENEFICIARY_TYPES = [
+  "CHILD",
+  "ANIMAL",
+  "FAMILY",
+  "STREET_INVOLVED",
+  "CHILD_LABORER",
+  "SPECIAL_NEEDS",
+  "IN_OUR_CARE",
+] as const
+
+export type BeneficiaryType = (typeof BENEFICIARY_TYPES)[number]
+
+export function isBeneficiaryType(v: unknown): v is BeneficiaryType {
+  return typeof v === "string" && (BENEFICIARY_TYPES as readonly string[]).includes(v)
+}
 
 export interface Geography {
   coordinates: [number, number]
