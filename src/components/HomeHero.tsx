@@ -292,10 +292,10 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
       setDisplayedKey(displayKey)
       raf1Ref.current = requestAnimationFrame(() => {
         raf2Ref.current = requestAnimationFrame(() => {
-          setPhase("idle")
           if (contentMeasureRef.current) {
             setMobileContentHeight(contentMeasureRef.current.scrollHeight)
           }
+          setPhase("idle")
         })
       })
     }, EXIT_DURATION_MS)
@@ -325,7 +325,7 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
         marginLeft: "calc(-50vw + 50%)",
         marginTop: "-88px",
         paddingTop: "88px",
-        paddingBottom: "16px",
+        paddingBottom: "4px",
       }}
     >
       {/* ----------------------------------------------------------------
@@ -415,15 +415,16 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
           flexDirection="row"
           alignItems={{ base: "flex-start", md: "center" }}
           gap={{ base: 0, md: 10 }}
-          pt={{ base: 4 }}
-          pb={{ base: 1 }}
-          className="md:!h-[260px] md:!min-h-0"
+          pt={{ base: 6 }}
+          pb={{ base: 0 }}
+          className="md:!h-[260px] md:!overflow-visible"
           style={{
-            minHeight:
+            height:
               mobileContentHeight != null
-                ? `${mobileContentHeight + 20}px`
-                : "200px",
-            transition: "min-height 0.3s ease",
+                ? `${mobileContentHeight + 24}px`
+                : undefined,
+            overflow: "hidden",
+            transition: "height 0.3s ease",
           }}
         >
           {/* Desktop-only left nav — fixed width so font/bar animations
