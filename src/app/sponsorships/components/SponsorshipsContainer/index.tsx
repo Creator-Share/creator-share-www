@@ -26,7 +26,7 @@ const TYPE_ROUTE_PATHS = new Set([
   "/",
   "/child_laborers",
   "/special_needs",
-  "/fulltime_care",
+  "/in_our_care",
   "/dogs",
 ])
 

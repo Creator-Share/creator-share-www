@@ -20,7 +20,7 @@ export type BeneficiaryTabType =
   | "CHILD"
   | "CHILD_LABORER"
   | "SPECIAL_NEEDS"
-  | "FULLTIME_CARE"
+  | "IN_OUR_CARE"
   | "ANIMAL"
 
 export interface BeneficiaryTypeConfig {
@@ -101,15 +101,15 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
     route: "/special_needs",
   },
   {
-    label: "Fulltime Care",
-    type: "FULLTIME_CARE",
+    label: "In Our Care",
+    type: "IN_OUR_CARE",
     isOpenSponsorship: true,
     defaultBudgetGoalCents: -1,
     isPubliclyVisible: true,
     singularName: "child",
     pluralName: "children",
     maxAgeYears: 14,
-    route: "/fulltime_care",
+    route: "/in_our_care",
   },
   {
     label: "Rescue Dogs",
@@ -132,7 +132,7 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
 export const TYPE_TO_ROUTE: Record<BeneficiaryTabType, string> = {
   CHILD_LABORER: "/child_laborers",
   SPECIAL_NEEDS: "/special_needs",
-  FULLTIME_CARE: "/fulltime_care",
+  IN_OUR_CARE: "/in_our_care",
   ANIMAL: "/dogs",
 }
 
@@ -144,7 +144,7 @@ export const ROUTE_TO_TYPE: Record<string, BeneficiaryTabType | null> = {
   "/": null,
   "/child_laborers": "CHILD_LABORER",
   "/special_needs": "SPECIAL_NEEDS",
-  "/fulltime_care": "FULLTIME_CARE",
+  "/in_our_care": "IN_OUR_CARE",
   "/dogs": "ANIMAL",
 }
 

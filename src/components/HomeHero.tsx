@@ -182,7 +182,7 @@ const HERO_CONTENT: Record<DisplayKey, HeroContent> = {
     ),
   },
 
-  FULLTIME_CARE: {
+  IN_OUR_CARE: {
     heading: (
       <>
         A home, a family,{" "}
@@ -192,7 +192,7 @@ const HERO_CONTENT: Record<DisplayKey, HeroContent> = {
     ),
     description: (
       <>
-        Every child in our fulltime care was once alone. Now they have a home, a
+        Every child in our care was once alone. Now they have a home, a
         school, and adults who show up with loving care. Your sponsorship
         changes lives.
       </>
@@ -268,7 +268,9 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
   const raf2Ref = useRef<number | null>(null)
   const prevDisplayKeyRef = useRef<DisplayKey>(displayKey)
   const contentMeasureRef = useRef<HTMLDivElement>(null)
-  const [mobileContentHeight, setMobileContentHeight] = useState<number | null>(null)
+  const [mobileContentHeight, setMobileContentHeight] = useState<number | null>(
+    null,
+  )
 
   useEffect(() => {
     return () => {
@@ -415,9 +417,9 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
           flexDirection="row"
           alignItems={{ base: "flex-start", md: "center" }}
           gap={{ base: 0, md: 10 }}
-          pt={{ base: 6 }}
+          pt={{ base: 6, md: 0 }}
           pb={{ base: 0 }}
-          className="md:!h-[260px] md:!overflow-visible"
+          minH={{ base: 0, md: "240px" }}
           style={{
             height:
               mobileContentHeight != null

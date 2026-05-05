@@ -80,6 +80,7 @@ export function useBeneficiaryPagination(
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
   const [retryCount, setRetryCount] = useState<number>(0)
+  const retryCountRef = useRef<number>(0)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -186,6 +187,7 @@ export function useBeneficiaryPagination(
         })
         setCursor(data?.pageInfo?.nextCursor || null)
         setHasMore(Boolean(data?.pageInfo?.hasMore))
+        retryCountRef.current = 0
         setRetryCount(0)
         setFetchError(null)
 
@@ -200,10 +202,11 @@ export function useBeneficiaryPagination(
         setFetchError(message)
 
         const MAX_AUTO_RETRIES = 3
-        if (autoRetry && retryCount < MAX_AUTO_RETRIES) {
-          const delay = getFibonacciDelay(retryCount)
+        if (autoRetry && retryCountRef.current < MAX_AUTO_RETRIES) {
+          const delay = getFibonacciDelay(retryCountRef.current)
+          retryCountRef.current += 1
+          setRetryCount(retryCountRef.current)
           retryTimeoutRef.current = setTimeout(() => {
-            setRetryCount((prev) => prev + 1)
             fetchPage(nextCursor)
           }, delay)
         }
@@ -215,13 +218,14 @@ export function useBeneficiaryPagination(
         }
       }
     },
-    [buildQuery, autoRetry, getFibonacciDelay, retryCount, setRetryCount]
+    [buildQuery, autoRetry, getFibonacciDelay]
   )
 
   const memoizedRetryFetch = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
+    retryCountRef.current = 0
     setRetryCount(0)
     fetchPage(null)
   }, [fetchPage])
