@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { Beneficiaries } from "@/types"
-import { toaster } from "@/components/ui/toaster"
 import { createClient } from '@supabase/supabase-js'
 import { INACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 
@@ -30,6 +29,8 @@ interface UseBeneficiaryPaginationReturn {
   isLoading: boolean
   /** True while a fresh (non-pagination) fetch is in flight. The previous page's data stays visible during this time. */
   isRefreshing: boolean
+  /** Non-null when the most recent fetch failed and no data is available. */
+  fetchError: string | null
   filters: FiltersState
   setFilters: (
     filters: FiltersState | ((prev: FiltersState) => FiltersState)
@@ -79,9 +80,9 @@ export function useBeneficiaryPagination(
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
   const [retryCount, setRetryCount] = useState<number>(0)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const toastIdRef = useRef<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   // Fibonacci sequence for retry delays (in seconds): 1, 1, 2, 3, 5, 8, 13...
@@ -185,13 +186,8 @@ export function useBeneficiaryPagination(
         })
         setCursor(data?.pageInfo?.nextCursor || null)
         setHasMore(Boolean(data?.pageInfo?.hasMore))
-        setRetryCount(0) // Reset retry count on success
-
-        // Dismiss any existing error toast
-        if (toastIdRef.current) {
-          toaster.dismiss(toastIdRef.current)
-          toastIdRef.current = null
-        }
+        setRetryCount(0)
+        setFetchError(null)
 
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
@@ -201,31 +197,10 @@ export function useBeneficiaryPagination(
         const message = e instanceof Error ? e.message : "Unexpected error"
         console.error("[useBeneficiaryPagination] Fetch error:", message)
 
-        // Show toast with manual retry button
-        const toastId = toaster.create({
-          title: "Failed to load beneficiaries",
-          description: autoRetry
-            ? `Retrying automatically in ${Math.ceil(
-                getFibonacciDelay(retryCount) / 1000
-              )}s...`
-            : "Click retry to try again",
-          type: "error",
-          duration: autoRetry ? getFibonacciDelay(retryCount) : 10000,
-          action: {
-            label: "Retry Now",
-            onClick: () => {
-              if (retryTimeoutRef.current) {
-                clearTimeout(retryTimeoutRef.current)
-              }
-              setRetryCount(0)
-              fetchPage(null)
-            },
-          },
-        })
-        toastIdRef.current = toastId
+        setFetchError(message)
 
-        // Auto-retry with Fibonacci backoff if enabled
-        if (autoRetry) {
+        const MAX_AUTO_RETRIES = 3
+        if (autoRetry && retryCount < MAX_AUTO_RETRIES) {
           const delay = getFibonacciDelay(retryCount)
           retryTimeoutRef.current = setTimeout(() => {
             setRetryCount((prev) => prev + 1)
@@ -312,6 +287,7 @@ export function useBeneficiaryPagination(
     hasMore,
     isLoading,
     isRefreshing,
+    fetchError,
     filters,
     setFilters,
     handleFilterChange,

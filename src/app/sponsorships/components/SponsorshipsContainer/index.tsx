@@ -22,13 +22,21 @@ import {
 } from "@/config/beneficiaryTypes"
 
 /** Set of pathname values that are "type landing pages" (the modal push uses pushState, not router). */
-const TYPE_ROUTE_PATHS = new Set(["/", "/street", "/care", "/dogs"])
+const TYPE_ROUTE_PATHS = new Set([
+  "/",
+  "/child_laborers",
+  "/special_needs",
+  "/fulltime_care",
+  "/dogs",
+])
 
 /**
  * Maps a UI tab type to the DB beneficiary_type values used by fetchAllSponsored.
  * Null (All) returns undefined so no type filter is applied.
  */
-function getSponsoredBeneficiaryTypes(type: BeneficiaryTabType | null): string[] | undefined {
+function getSponsoredBeneficiaryTypes(
+  type: BeneficiaryTabType | null,
+): string[] | undefined {
   const types = getApiTypes(type)
   return types ? types.split(",") : undefined
 }
@@ -87,12 +95,21 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
   const activeTypeRef = useRef<BeneficiaryTabType | null>(null)
   activeTypeRef.current = activeType
 
-  const { beneficiaries, totalCount, hasMore, isLoading, isRefreshing, handleFilterChange, loadMore } =
-    useBeneficiaryPagination({
-      recordsPerPage: 9,
-      autoRetry: true,
-      initialStatus: ACTIVE_STATUSES as string[],
-    })
+  const {
+    beneficiaries,
+    totalCount,
+    hasMore,
+    isLoading,
+    isRefreshing,
+    fetchError,
+    handleFilterChange,
+    loadMore,
+    retryFetch,
+  } = useBeneficiaryPagination({
+    recordsPerPage: 9,
+    autoRetry: true,
+    initialStatus: ACTIVE_STATUSES as string[],
+  })
 
   const resetToDefaults = useFilterStore((s) => s.resetToDefaults)
 
@@ -142,11 +159,10 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
     handleFilterChangeRef.current({ beneficiary_type: getApiTypes(activeType) })
   }, [activeType])
 
-  // Re-fetch sponsored beneficiaries whenever the active type changes.
+  // Fetch sponsored beneficiaries once on mount (all types, not filtered by activeType).
   useEffect(() => {
-    const types = getSponsoredBeneficiaryTypes(activeType)
-    fetchAllSponsored(types).then(setSponsored)
-  }, [activeType])
+    fetchAllSponsored(undefined).then(setSponsored)
+  }, [])
 
   // On mount: read the real browser URL (window.location.pathname) and notify
   // the parent if a specific type route is active.  This handles /street, /care,
@@ -162,10 +178,13 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleTypeChange = useCallback((type: BeneficiaryTabType | null) => {
-    onTypeChange(type)
-    scrollToCard()
-  }, [onTypeChange, scrollToCard])
+  const handleTypeChange = useCallback(
+    (type: BeneficiaryTabType | null) => {
+      onTypeChange(type)
+      scrollToCard()
+    },
+    [onTypeChange, scrollToCard],
+  )
 
   // Sticky filter detection — only meaningful at lg+ where position:sticky applies.
   // Below that breakpoint the filter scrolls with the page so isFiltersSticky
@@ -173,7 +192,9 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
   const handleScroll = useCallback(() => {
     if (!filtersRef.current) return
     const isLgViewport = window.innerWidth >= 992
-    setIsFiltersSticky(isLgViewport && filtersRef.current.getBoundingClientRect().top <= 64)
+    setIsFiltersSticky(
+      isLgViewport && filtersRef.current.getBoundingClientRect().top <= 64,
+    )
   }, [])
 
   useEffect(() => {
@@ -224,7 +245,8 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
       setIsModalOpen(true)
 
       if (typeof window !== "undefined" && beneficiary.username) {
-        previousUrlRef.current = window.location.pathname + window.location.search
+        previousUrlRef.current =
+          window.location.pathname + window.location.search
         window.history.pushState(
           { modal: true, username: beneficiary.username },
           "",
@@ -343,8 +365,13 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
   }, [bumpUrlSync, onTypeChange])
 
   return (
-    <Box style={{ animation: "pageContentFadeUp 0.6s 0.32s cubic-bezier(0.22, 1, 0.36, 1) both" }}>
-      {/* Horizontal row: sponsored + waiting cards, both filtered by activeType. */}
+    <Box
+      style={{
+        animation:
+          "pageContentFadeUp 0.6s 0.32s cubic-bezier(0.22, 1, 0.36, 1) both",
+      }}
+    >
+      {/* Horizontal row: sponsored + waiting cards, always shows all types. */}
       <HorizontalSponsorshipRow
         sponsored={sponsored}
         beneficiaries={beneficiaries}
@@ -353,7 +380,6 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
         isLoading={isLoading}
         onLoadMore={loadMore}
         onOpenModal={openModal}
-        activeType={activeType}
       />
 
       {/* Unified card: filter header + primary content grid.
@@ -366,7 +392,10 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
         mx={{ base: -4, lg: 5 }}
         minHeight={{ base: "100dvh", lg: "auto" }}
         className="bg-white border border-gray-200 lg:rounded-2xl overflow-clip"
-        style={{ boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)" }}
+        style={{
+          boxShadow:
+            "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)",
+        }}
       >
         {/* Filter header — sticky on desktop; hard bottom border separates it from the grid */}
         <Box
@@ -404,6 +433,8 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
           isRefreshing={isRefreshing}
           onOpenModal={openModal}
           onClearFilters={handleShowAll}
+          fetchError={fetchError}
+          onRetry={retryFetch}
           noCard
         />
       </Box>

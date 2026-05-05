@@ -182,6 +182,23 @@ const HERO_CONTENT: Record<DisplayKey, HeroContent> = {
     ),
   },
 
+  IN_OUR_CARE: {
+    heading: (
+      <>
+        A home, a family,{" "}
+        <Box as="br" display={{ base: "none", md: "initial" }} />
+        and a future to embrace
+      </>
+    ),
+    description: (
+      <>
+        Every child in our fulltime care was once alone. Now they have a home, a
+        school, and adults who show up with loving care. Your sponsorship
+        changes lives.
+      </>
+    ),
+  },
+
   ANIMAL: {
     heading: (
       <>
@@ -242,12 +259,16 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
 
   const [displayedKey, setDisplayedKey] = useState<DisplayKey>(displayKey)
   const [phase, setPhase] = useState<"exit" | "idle">("idle")
-  const [hoveredType, setHoveredType] = useState<BeneficiaryTabType | null>(null)
+  const [hoveredType, setHoveredType] = useState<
+    BeneficiaryTabType | null | undefined
+  >(undefined)
 
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const raf1Ref = useRef<number | null>(null)
   const raf2Ref = useRef<number | null>(null)
   const prevDisplayKeyRef = useRef<DisplayKey>(displayKey)
+  const contentMeasureRef = useRef<HTMLDivElement>(null)
+  const [mobileContentHeight, setMobileContentHeight] = useState<number | null>(null)
 
   useEffect(() => {
     return () => {
@@ -272,10 +293,19 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
       raf1Ref.current = requestAnimationFrame(() => {
         raf2Ref.current = requestAnimationFrame(() => {
           setPhase("idle")
+          if (contentMeasureRef.current) {
+            setMobileContentHeight(contentMeasureRef.current.scrollHeight)
+          }
         })
       })
     }, EXIT_DURATION_MS)
   }, [displayKey])
+
+  useEffect(() => {
+    if (contentMeasureRef.current && mobileContentHeight === null) {
+      setMobileContentHeight(contentMeasureRef.current.scrollHeight)
+    }
+  }, [mobileContentHeight])
 
   const handleTypeClick = useCallback(
     (type: BeneficiaryTabType | null) => {
@@ -298,7 +328,6 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
         paddingBottom: "16px",
       }}
     >
-
       {/* ----------------------------------------------------------------
           Mobile: full-bleed horizontally scrollable tab strip.
           Uses the same 100vw + negative-margin escape as the hero
@@ -316,7 +345,8 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
           borderBottom: "1px solid #e5e7eb",
           scrollbarWidth: "none",
           msOverflowStyle: "none",
-          animation: "pageContentFadeUp 0.45s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both",
+          animation:
+            "pageContentFadeUp 0.45s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both",
         }}
         className="[&::-webkit-scrollbar]:hidden"
       >
@@ -385,9 +415,16 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
           flexDirection="row"
           alignItems={{ base: "flex-start", md: "center" }}
           gap={{ base: 0, md: 10 }}
-          pt={{ base: 8, md: 12 }}
-          pb={{ base: 2, md: 2 }}
-          minHeight={{ base: "180px", md: "0px" }}
+          pt={{ base: 4 }}
+          pb={{ base: 1 }}
+          className="md:!h-[260px] md:!min-h-0"
+          style={{
+            minHeight:
+              mobileContentHeight != null
+                ? `${mobileContentHeight + 20}px`
+                : "200px",
+            transition: "min-height 0.3s ease",
+          }}
         >
           {/* Desktop-only left nav — fixed width so font/bar animations
               never reflow the adjacent content column. */}
@@ -396,86 +433,118 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
             aria-label="Beneficiary type"
             display={{ base: "none", md: "flex" }}
             flexDirection="column"
-            gap={1}
+            gap={0}
             flexShrink={0}
             style={{
               width: "220px",
-              animation: "pageContentFadeUp 0.5s 0.15s cubic-bezier(0.22, 1, 0.36, 1) both",
+              animation:
+                "pageContentFadeUp 0.5s 0.15s cubic-bezier(0.22, 1, 0.36, 1) both",
             }}
           >
-            {HERO_LINKS.map(({ type, label }) => {
+            {HERO_LINKS.map(({ type, label }, idx) => {
               const isActive = toDisplayKey(type) === displayKey
               const isHovered = hoveredType === type && !isActive
+              const isFirstTypeItem =
+                idx > 0 && HERO_LINKS[idx - 1].type === null
               return (
-                <button
-                  key={type ?? "all"}
-                  onClick={() => handleTypeClick(type)}
-                  onMouseEnter={() => setHoveredType(type)}
-                  onMouseLeave={() => setHoveredType(null)}
-                  aria-current={isActive ? "true" : undefined}
-                  style={{
-                    ...BTN_RESET,
-                    cursor: isActive ? "default" : "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  {/* Fixed height prevents the nav column from shifting
-                      vertically as the active bar animates between heights. */}
-                  <Box
-                    display="flex"
-                    alignItems="center"
-                    gap={2}
-                    style={{ height: "2.75rem" }}
+                <React.Fragment key={type ?? "all"}>
+                  {isFirstTypeItem && (
+                    <Box style={{ height: "14px" }} aria-hidden />
+                  )}
+                  <button
+                    onClick={() => handleTypeClick(type)}
+                    onMouseEnter={() => setHoveredType(type)}
+                    onMouseLeave={() => setHoveredType(undefined)}
+                    aria-current={isActive ? "true" : undefined}
+                    style={{
+                      ...BTN_RESET,
+                      cursor: isActive ? "default" : "pointer",
+                      textAlign: "left",
+                    }}
                   >
-                    {/* Circled check — visible only when active */}
                     <Box
-                      flexShrink={0}
+                      display="flex"
+                      alignItems="center"
+                      gap={2}
                       style={{
-                        width: "18px",
-                        height: "18px",
-                        opacity: isActive ? 1 : 0,
-                        transform: isActive ? "scale(1)" : "scale(0.6)",
-                        transition: `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`,
+                        height: type === null ? "2.75rem" : "1.75rem",
                       }}
                     >
-                      <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
-                        <circle cx="9" cy="9" r="9" fill="#2b7ff9" />
-                        <path d="M5 9.5L7.5 12L13 6.5" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </Box>
+                      {/* Circled check — visible only when active */}
+                      <Box
+                        flexShrink={0}
+                        style={{
+                          width: "18px",
+                          height: "18px",
+                          opacity: isActive ? 1 : 0,
+                          transform: isActive ? "scale(1)" : "scale(0.6)",
+                          transition: `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`,
+                        }}
+                      >
+                        <svg
+                          viewBox="0 0 18 18"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="18"
+                          height="18"
+                        >
+                          <circle cx="9" cy="9" r="9" fill="#2b7ff9" />
+                          <path
+                            d="M5 9.5L7.5 12L13 6.5"
+                            stroke="white"
+                            strokeWidth="1.75"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </Box>
 
-                    {/* Animated left bar */}
-                    <Box
-                      style={{
-                        width: "3px",
-                        flexShrink: 0,
-                        borderRadius: "2px",
-                        transition: `height ${EXIT_DURATION_MS}ms ease, background ${EXIT_DURATION_MS}ms ease, opacity ${EXIT_DURATION_MS}ms ease`,
-                        height: isActive ? "2.25rem" : isHovered ? "1.375rem" : "0.875rem",
-                        background: isActive ? "#2b7ff9" : isHovered ? "#5a84c1" : "#999",
-                        opacity: isActive ? 1 : isHovered ? 0.85 : 0.55,
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontSize: "1.2rem",
-                        fontWeight: 800,
-                        color: isActive ? "#2b7ff9" : isHovered ? "#5a84c1" : "#888",
-                        transition: `color ${EXIT_DURATION_MS}ms ease`,
-                        display: "block",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {label}
-                    </span>
-                  </Box>
-                </button>
+                      {/* Animated left bar */}
+                      <Box
+                        style={{
+                          width: "3px",
+                          flexShrink: 0,
+                          borderRadius: "2px",
+                          transition: `height ${EXIT_DURATION_MS}ms ease, background ${EXIT_DURATION_MS}ms ease, opacity ${EXIT_DURATION_MS}ms ease`,
+                          height: isActive
+                            ? "1.25rem"
+                            : isHovered
+                              ? "1rem"
+                              : "0.625rem",
+                          background: isActive
+                            ? "#2b7ff9"
+                            : isHovered
+                              ? "#5a84c1"
+                              : "#999",
+                          opacity: isActive ? 1 : isHovered ? 0.85 : 0.4,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: "1.2rem",
+                          fontWeight: 800,
+                          color: isActive
+                            ? "#2b7ff9"
+                            : isHovered
+                              ? "#5a84c1"
+                              : "#888",
+                          transition: `color ${EXIT_DURATION_MS}ms ease`,
+                          display: "block",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {label}
+                      </span>
+                    </Box>
+                  </button>
+                </React.Fragment>
               )
             })}
           </Box>
 
           {/* Animated heading + description */}
           <Box
+            ref={contentMeasureRef}
             flex={1}
             minW={0}
             maxW={{ base: "100%", md: "75%" }}
@@ -487,7 +556,8 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                 phase === "exit"
                   ? `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`
                   : "none",
-              animation: "pageContentFadeUp 0.5s 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards",
+              animation:
+                "pageContentFadeUp 0.5s 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards",
             }}
           >
             <Box

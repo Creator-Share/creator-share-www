@@ -22,15 +22,16 @@ const nextConfig: NextConfig = {
    */
   async rewrites() {
     return [
-      { source: "/street",  destination: "/" },
-      { source: "/care",    destination: "/" },
-      { source: "/dogs",    destination: "/" },
-      { source: "/about",   destination: "/" },
+      { source: "/child_laborers", destination: "/" },
+      { source: "/special_needs", destination: "/" },
+      { source: "/fulltime_care", destination: "/" },
+      { source: "/dogs", destination: "/" },
+      { source: "/about", destination: "/" },
       { source: "/centers", destination: "/" },
       { source: "/contact", destination: "/" },
-      { source: "/faq",     destination: "/" },
-      { source: "/signin",  destination: "/" },
-      { source: "/login",   destination: "/" },
+      { source: "/faq", destination: "/" },
+      { source: "/signin", destination: "/" },
+      { source: "/login", destination: "/" },
     ]
   },
 

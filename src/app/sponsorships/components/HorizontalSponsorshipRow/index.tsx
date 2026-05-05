@@ -1,6 +1,6 @@
 "use client"
-import React, { useEffect, useRef, useCallback, useState } from "react"
-import { Box, Flex, Spinner, Text } from "@chakra-ui/react"
+import React, { useEffect, useRef, useCallback, useState, useMemo } from "react"
+import { Box, Flex, Text } from "@chakra-ui/react"
 import { Beneficiaries } from "@/types"
 import { SponsoredBeneficiary } from "@/actions"
 import PortraitBeneficiaryCard from "../SponsorshipCard/PortraitCard"
@@ -57,53 +57,47 @@ const StatsCard: React.FC<StatsCardProps> = ({ activeType }) => {
       px={6}
       style={{ boxShadow: "0 4px 24px -4px rgba(0,0,0,0.08), 0 2px 8px -2px rgba(0,0,0,0.04)" }}
     >
-      {loading ? (
-        <Spinner size="lg" color="gray.300" />
-      ) : (
-        <>
-          <Flex direction="column" align="center">
-            <Text
-              fontSize="2xl"
-              fontWeight="bold"
-              color="gray.800"
-              lineHeight={1}
-            >
-              {stats?.childrenInNeed.toLocaleString() ?? "—"}
-            </Text>
-            <Text
-              fontSize="xs"
-              color="gray.500"
-              fontWeight="medium"
-              mt={1}
-              textAlign="center"
-            >
-              Waiting
-            </Text>
-          </Flex>
+      <Flex direction="column" align="center" style={{ opacity: loading ? 0 : 1, transition: "opacity 0.3s ease" }}>
+        <Text
+          fontSize="2xl"
+          fontWeight="bold"
+          color="gray.800"
+          lineHeight={1}
+        >
+          {stats?.childrenInNeed.toLocaleString() ?? "—"}
+        </Text>
+        <Text
+          fontSize="xs"
+          color="gray.500"
+          fontWeight="medium"
+          mt={1}
+          textAlign="center"
+        >
+          Waiting
+        </Text>
+      </Flex>
 
-          <Box w="40px" h="1px" bg="gray.200" />
+      <Box w="40px" h="1px" bg="gray.200" style={{ opacity: loading ? 0 : 1, transition: "opacity 0.3s ease" }} />
 
-          <Flex direction="column" align="center">
-            <Text
-              fontSize="2xl"
-              fontWeight="bold"
-              color="gray.800"
-              lineHeight={1}
-            >
-              {stats?.childrenSupported.toLocaleString() ?? "—"}
-            </Text>
-            <Text
-              fontSize="xs"
-              color="gray.500"
-              fontWeight="medium"
-              mt={1}
-              textAlign="center"
-            >
-              Sponsored
-            </Text>
-          </Flex>
-        </>
-      )}
+      <Flex direction="column" align="center" style={{ opacity: loading ? 0 : 1, transition: "opacity 0.3s ease" }}>
+        <Text
+          fontSize="2xl"
+          fontWeight="bold"
+          color="gray.800"
+          lineHeight={1}
+        >
+          {stats?.childrenSupported.toLocaleString() ?? "—"}
+        </Text>
+        <Text
+          fontSize="xs"
+          color="gray.500"
+          fontWeight="medium"
+          mt={1}
+          textAlign="center"
+        >
+          Sponsored
+        </Text>
+      </Flex>
     </Box>
   )
 }
@@ -203,10 +197,14 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
   const sectionLabels = getSectionLabels(activeType)
   const scrollRef = useRef<HTMLDivElement>(null)
   const lastLoadTimeRef = useRef(0)
+  const [scrolledLeft, setScrolledLeft] = useState(false)
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
+
+    setScrolledLeft(el.scrollLeft > 4)
+
     const now = Date.now()
     const distanceFromRight = el.scrollWidth - el.scrollLeft - el.clientWidth
     if (
@@ -239,25 +237,33 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
         marginLeft: "calc(-50vw + 50%)",
         scrollbarWidth: "none",
         msOverflowStyle: "none",
-        // Gradient mask: transparent at both screen edges, opaque in the
-        // primary-content zone.  Uses the same calc as the inner Flex's
-        // paddingLeft so the opaque region aligns with the card grid below.
+        // Gradient mask: left edge is opaque until the user scrolls, then
+        // fades in a transparent edge. Right edge always fades.
         maskImage: [
           "linear-gradient(to right,",
-          "  transparent 0,",
-          "  black max(48px, calc((100vw - 1200px) / 2 + 48px)),",
+          scrolledLeft
+            ? "  transparent 0,"
+            : "  black 0,",
+          scrolledLeft
+            ? "  black max(48px, calc((100vw - 1200px) / 2 + 48px)),"
+            : "  black max(48px, calc((100vw - 1200px) / 2 + 48px)),",
           "  black calc(100% - max(32px, calc((100vw - 1200px) / 2 + 32px))),",
           "  transparent 100%",
           ")",
         ].join(""),
         WebkitMaskImage: [
           "linear-gradient(to right,",
-          "  transparent 0,",
-          "  black max(48px, calc((100vw - 1200px) / 2 + 48px)),",
+          scrolledLeft
+            ? "  transparent 0,"
+            : "  black 0,",
+          scrolledLeft
+            ? "  black max(48px, calc((100vw - 1200px) / 2 + 48px)),"
+            : "  black max(48px, calc((100vw - 1200px) / 2 + 48px)),",
           "  black calc(100% - max(32px, calc((100vw - 1200px) / 2 + 32px))),",
           "  transparent 100%",
           ")",
         ].join(""),
+        transition: "mask-image 0.3s ease, -webkit-mask-image 0.3s ease",
       }}
       className="[&::-webkit-scrollbar]:hidden"
     >
@@ -307,17 +313,9 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
           </>
         )}
 
-        {/* Loading indicator */}
+        {/* Spacer while loading — preserves row width without a spinner */}
         {isLoading && (
-          <Flex
-          align="center"
-          justify="center"
-          w="80px"
-          h="202px"
-          flexShrink={0}
-        >
-          <Spinner size="lg" color="gray.300" />
-          </Flex>
+          <Box w="80px" h="202px" flexShrink={0} />
         )}
 
         {/* End-of-results cap */}
