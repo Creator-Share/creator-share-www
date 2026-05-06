@@ -8,7 +8,7 @@ import Image from "next/image"
 function VerifyOtpComponent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const email = searchParams?.get("email") || ""
+  const email = searchParams.get("email") || ""
 
   const [otp, setOtp] = useState("")
   const [loading, setLoading] = useState(false)
@@ -67,7 +67,7 @@ function VerifyOtpComponent() {
             Forgot your password?
           </Text>
           <Text className="text-[#8D9692] text-base">
-            Enter the 6-digit OTP sent to your email.
+            Enter the 6-digit code sent to your email.
           </Text>
         </Box>
         <Stack gap={4} className="text-[#8D9692]">

@@ -10,11 +10,15 @@ const ForgotPassword = () => {
   const router = useRouter()
   const [email, setEmail] = useState<string>("")
   const [loading, setLoading] = useState<boolean>(false)
-  const [message, setMessage] = useState<string>("")
+  const [errorMessage, setErrorMessage] = useState<string>("")
 
   const handleSendOtp = async () => {
+    if (!email) {
+      return
+    }
+
     setLoading(true)
-    setMessage("")
+    setErrorMessage("")
 
     try {
       const response = await fetch("/api/auth/reset-password", {
@@ -26,13 +30,12 @@ const ForgotPassword = () => {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to send OTP.")
+        throw new Error(result.error || "Failed to send code.")
       }
 
-      setMessage("OTP sent to your email.")
       router.push(`/forgot-password/verify?email=${encodeURIComponent(email)}`)
     } catch (err: unknown) {
-      setMessage((err as Error).message || "Failed to send OTP.")
+      setErrorMessage((err as Error).message || "Failed to send code.")
     } finally {
       setLoading(false)
     }
@@ -54,17 +57,12 @@ const ForgotPassword = () => {
             Forgot your password?
           </Text>
           <Text className="text-[#8D9692] text-base">
-            No worries! We'll immediately send you an email with a link to
-            create a new one.
+            No worries! We'll send you an email with a code to enter below.
           </Text>
         </Box>
         <Stack className="text-[#8D9692]">
           <Box>
-            <Field
-              label="Email Address"
-              invalid={!email}
-              errorText={!email ? "Email is required." : ""}
-            >
+            <Field label="Email Address">
               <Input
                 type="email"
                 placeholder="Enter your email address"
@@ -82,9 +80,9 @@ const ForgotPassword = () => {
             {loading ? "Sending..." : "Continue"}
           </Button>
         </Stack>
-        {message && (
+        {errorMessage && (
           <Text color="red.500" mt={4}>
-            {message}
+            {errorMessage}
           </Text>
         )}
       </form>
