@@ -5,20 +5,28 @@ export type { Status }
 
 export type Gender = "Boy" | "Girl"
 
+/**
+ * Source of truth for valid beneficiary_type values.
+ *
+ * Mirrors the active types in src/config/beneficiaryTypes.ts (BeneficiaryTabType).
+ * The DB column is plain text; this list is enforced at write boundaries via
+ * isBeneficiaryType. To add a type, add it here and to ALL_BENEFICIARY_TABS.
+ */
 export const BENEFICIARY_TYPES = [
   "CHILD",
-  "ANIMAL",
-  "FAMILY",
-  "STREET_INVOLVED",
   "CHILD_LABORER",
   "SPECIAL_NEEDS",
   "IN_OUR_CARE",
+  "ANIMAL",
 ] as const
 
 export type BeneficiaryType = (typeof BENEFICIARY_TYPES)[number]
 
 export function isBeneficiaryType(v: unknown): v is BeneficiaryType {
-  return typeof v === "string" && (BENEFICIARY_TYPES as readonly string[]).includes(v)
+  return (
+    typeof v === "string" &&
+    (BENEFICIARY_TYPES as readonly string[]).includes(v)
+  )
 }
 
 export interface Geography {

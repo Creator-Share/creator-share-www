@@ -200,7 +200,13 @@ export function useBeneficiaryPagination(
         const message = e instanceof Error ? e.message : "Unexpected error"
         console.error("[useBeneficiaryPagination] Fetch error:", message)
 
-        setFetchError(message)
+        // Only surface fetchError for fresh fetches (cursor === null).
+        // loadMore failures keep existing data visible; surfacing them here would
+        // either be hidden by the consumer's "no items" gate or, worse, leak into
+        // the next fresh fetch and show a stale error message.
+        if (nextCursor === null) {
+          setFetchError(message)
+        }
 
         const MAX_AUTO_RETRIES = 3
         if (autoRetry && retryCountRef.current < MAX_AUTO_RETRIES) {

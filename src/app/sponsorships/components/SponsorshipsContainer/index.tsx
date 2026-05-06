@@ -159,6 +159,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
           if (!cancelled) setSponsored(data)
         })
         .catch((err) => {
+          if (cancelled) return
           console.warn(
             "[SponsorshipsContainer] fetchAllSponsored failed:",
             err,
