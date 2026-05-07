@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { Beneficiaries } from "@/types"
-import { createClient } from '@supabase/supabase-js'
+import { subscribeToSubscriptions } from "@/lib/subscriptionsRealtime"
 import { INACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 
 type FiltersState = {
@@ -261,35 +261,16 @@ export function useBeneficiaryPagination(
   }, [filters])
 
   useEffect(() => {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn("[useBeneficiaryPagination] Supabase env missing, realtime not enabled")
-      return
-    }
-    const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-    // Listen for changes to the subscriptions table (relevant to locking logic)
-    const channel = supabase
-      .channel("beneficiary_subscriptions_rt")
-      .on(
-        "postgres_changes",
-        { schema: "public", table: "subscriptions", event: "*" },
-        () => {
-          if (retryTimeoutRef.current) {
-            clearTimeout(retryTimeoutRef.current)
-            retryTimeoutRef.current = null
-          }
-          retryCountRef.current = 0
-          setRetryCount(0)
-          fetchPage(null)
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    const unsubscribe = subscribeToSubscriptions("beneficiary-pagination", () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current)
+        retryTimeoutRef.current = null
+      }
+      retryCountRef.current = 0
+      setRetryCount(0)
+      fetchPage(null)
+    })
+    return unsubscribe
   }, [fetchPage])
 
   // Cleanup retry timeout on unmount

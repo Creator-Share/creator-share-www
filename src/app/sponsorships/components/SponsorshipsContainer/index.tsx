@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation"
 import { Box } from "@chakra-ui/react"
 import { Beneficiaries, Activity } from "@/types"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
-import { createClient } from '@supabase/supabase-js'
+import { subscribeToSubscriptions } from "@/lib/subscriptionsRealtime"
 import { ACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 import { useFilterStore } from "@/store/filterStore"
 import {
@@ -170,27 +170,13 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
     refresh()
 
     // Keep sponsored set in sync with subscription changes
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return () => {
-        cancelled = true
-      }
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey)
-    const channel = supabase
-      .channel("sponsored_rt")
-      .on(
-        "postgres_changes",
-        { schema: "public", table: "subscriptions", event: "*" },
-        () => refresh(),
-      )
-      .subscribe()
+    const unsubscribe = subscribeToSubscriptions("sponsored-container", () => {
+      if (!cancelled) refresh()
+    })
 
     return () => {
       cancelled = true
-      supabase.removeChannel(channel)
+      unsubscribe()
     }
   }, [])
 
