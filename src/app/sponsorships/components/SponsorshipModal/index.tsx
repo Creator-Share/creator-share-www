@@ -54,6 +54,13 @@ const OPEN_SPONSORSHIP_MAX_DOLLARS = Number(
 )
 const OPEN_SPONSORSHIP_RANGE_MESSAGE = `Amount must be between $${OPEN_SPONSORSHIP_MIN_DOLLARS} and $${OPEN_SPONSORSHIP_MAX_DOLLARS}`
 
+/**
+ * Suggested presets shown beneath the amount input for open-amount
+ * children (no fixed budget_goal). Picked deliberately to span a wide
+ * range of giving comfort levels.
+ */
+const OPEN_SPONSORSHIP_PRESETS_USD = [7, 33, 50, 144] as const
+
 // PayPal components are optional and loaded only when the env var is set.
 // Using next/dynamic avoids the broken module-level let + fire-and-forget import()
 // pattern, which was a race condition (React never re-rendered when those vars
@@ -895,6 +902,36 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       </Tooltip>
                     </Box>
                   </Flex>
+
+                  {isOpen && (
+                    <Flex gap={2} wrap="wrap" mt={3} aria-label="Suggested amounts">
+                      {OPEN_SPONSORSHIP_PRESETS_USD.map((amount) => {
+                        const isActive = amountCents === amount * 100
+                        return (
+                          <Button
+                            key={amount}
+                            type="button"
+                            size="sm"
+                            onClick={() => setAmountCents(amount * 100)}
+                            borderRadius="full"
+                            px={4}
+                            h="36px"
+                            fontWeight={isActive ? "semibold" : "medium"}
+                            bg={isActive ? "#2b7ff9" : "gray.100"}
+                            color={isActive ? "white" : "gray.700"}
+                            borderWidth="1px"
+                            borderColor={isActive ? "#2b7ff9" : "gray.200"}
+                            _hover={{
+                              bg: isActive ? "#1a6fe0" : "gray.200",
+                            }}
+                            transition="all 0.15s"
+                          >
+                            ${amount}
+                          </Button>
+                        )
+                      })}
+                    </Flex>
+                  )}
 
                   {isPayPalEnabled && PayPalScriptProvider && PayPalButtons && (
                     <Box className="pt-1">
