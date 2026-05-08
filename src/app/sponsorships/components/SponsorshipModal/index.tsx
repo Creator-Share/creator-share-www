@@ -852,7 +852,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       width={{ base: "100%", md: "auto" }}
                     >
                       <Tooltip
-                        content={`This is what our team on the ground needs each month to walk alongside ${firstName} and help their story unfold.`}
+                        content={`For ${firstName}, this is what every month looks like: classroom days, full meals, real healthcare, and an outreach team who knows them by name.`}
                         showArrow
                         disabled={isOpen}
                       >
