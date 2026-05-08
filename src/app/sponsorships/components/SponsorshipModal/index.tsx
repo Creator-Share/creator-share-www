@@ -852,10 +852,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       width={{ base: "100%", md: "auto" }}
                     >
                       <Tooltip
-                        content={`This is the monthly amount our outreach team needs to change ${firstName}'s life.`}
+                        content={`This is what our team on the ground needs each month to walk alongside ${firstName} and help their story unfold.`}
                         showArrow
                         disabled={isOpen}
-                        openDelay={150}
                       >
                         <Flex
                           className="border border-gray-300 rounded-xl bg-white focus-within:border-[#2b7ff9] transition-colors overflow-hidden"
