@@ -252,7 +252,14 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
           align="flex-start"
           w="max-content"
           minH="202px"
-          paddingLeft={{ base: "16px", lg: "max(36px, calc((100vw - 1200px) / 2 + 36px))" }}
+          // On desktop: pull the row 64px (SectionDivider mx+width+flex-gap)
+          // left of the content edge so the first sponsored card aligns
+          // with the primary content region below, and the vertical
+          // "Sponsored" bar floats into the left gutter.
+          paddingLeft={{
+            base: "16px",
+            lg: "max(16px, calc((100vw - 1200px) / 2 - 28px))",
+          }}
           paddingRight="16px"
         >
           {/*
