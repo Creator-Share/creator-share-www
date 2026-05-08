@@ -16,7 +16,7 @@ import { FiltersProps } from "@/types/propTypes"
 import { beneficiaryTypes, genders, status as statusOptions } from "./config"
 import { IoClose, IoSearchOutline } from "react-icons/io5"
 import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
-import { PUBLIC_STATUSES } from "@/config/beneficiaryStatuses"
+import { ALL_STATUSES, PUBLIC_STATUSES } from "@/config/beneficiaryStatuses"
 
 const SponsorshipFilters: React.FC<
   FiltersProps & {
@@ -206,9 +206,13 @@ const SponsorshipFilters: React.FC<
 
   const hasSearchQuery = mounted && searchQuery.trim().length > 0
 
+  // Mirrors the defaults seeded by SponsorshipsContainer / filterStore:
+  // admin mode shows every status, public mode shows the PUBLIC_STATUSES
+  // set. Keep these in sync with the store or the dirty-check will
+  // report phantom "active filters" on a fresh page load.
   const modeDefaultStatus = isAdminMode
-    ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived", "Sponsorship Cancelled"]
-    : ["New", "Partially Funded", "Sponsorship Cancelled"]
+    ? (ALL_STATUSES as readonly string[])
+    : (PUBLIC_STATUSES as readonly string[])
 
   const isGenderDefault = isAnimal || (selectedGender ?? "") === ""
   const isAgeDefault =
