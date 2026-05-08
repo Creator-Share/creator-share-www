@@ -73,7 +73,7 @@ const StatsCard: React.FC<StatsCardProps> = ({ activeType }) => {
           mt={1}
           textAlign="center"
         >
-          Waiting
+          Open
         </Text>
       </Flex>
 
@@ -120,7 +120,7 @@ const InNeedBadge: React.FC = () => (
     pointerEvents="none"
   >
     <Text fontSize="10px" fontWeight="bold" color="white" lineHeight={1}>
-      Waiting
+      Open
     </Text>
   </Flex>
 )

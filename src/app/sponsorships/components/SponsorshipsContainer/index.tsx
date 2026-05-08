@@ -5,7 +5,7 @@ import { Box } from "@chakra-ui/react"
 import { Beneficiaries, Activity } from "@/types"
 import { useBeneficiaryPagination } from "@/hooks/useBeneficiaryPagination"
 import { subscribeToSubscriptions } from "@/lib/subscriptionsRealtime"
-import { ACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
+import { PUBLIC_STATUSES } from "@/config/beneficiaryStatuses"
 import { useFilterStore } from "@/store/filterStore"
 import {
   fetchActivitiesByBeneficiaryId,
@@ -98,7 +98,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
   } = useBeneficiaryPagination({
     recordsPerPage: 9,
     autoRetry: true,
-    initialStatus: ACTIVE_STATUSES as string[],
+    initialStatus: PUBLIC_STATUSES as string[],
   })
 
   const resetToDefaults = useFilterStore((s) => s.resetToDefaults)
@@ -127,7 +127,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
     handleFilterChange({
       gender: "",
       ageRange: [0, 14],
-      status: ACTIVE_STATUSES as string[],
+      status: PUBLIC_STATUSES as string[],
       search: "",
     })
     onTypeChange(null)
@@ -387,7 +387,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
           "pageContentFadeUp 0.6s 0.32s cubic-bezier(0.22, 1, 0.36, 1) both",
       }}
     >
-      {/* Horizontal row: sponsored + waiting cards, always shows all types. */}
+      {/* Horizontal row: sponsored + recent cards, always shows all types. */}
       <HorizontalSponsorshipRow
         sponsored={sponsored}
         beneficiaries={beneficiaries}

@@ -16,6 +16,7 @@ import { FiltersProps } from "@/types/propTypes"
 import { beneficiaryTypes, genders, status as statusOptions } from "./config"
 import { IoClose, IoSearchOutline } from "react-icons/io5"
 import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
+import { PUBLIC_STATUSES } from "@/config/beneficiaryStatuses"
 
 const SponsorshipFilters: React.FC<
   FiltersProps & {
@@ -431,16 +432,12 @@ const SponsorshipFilters: React.FC<
                 {(
                   [
                     {
-                      label: "Waiting",
-                      statuses: [
-                        "New",
-                        "Partially Funded",
-                        "Sponsorship Cancelled",
-                      ],
+                      label: "All",
+                      statuses: PUBLIC_STATUSES as readonly string[],
                     },
                     {
                       label: "Sponsored",
-                      statuses: ["Budget Fulfilled"],
+                      statuses: ["Budget Fulfilled"] as readonly string[],
                     },
                   ] as const
                 ).map(({ label, statuses }) => {
