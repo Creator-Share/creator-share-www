@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button is referenced only by the currently commented-out All | Sponsored toggle below; keeping the import so the restore is one uncomment.
 import { Box, Button, Text, Input, IconButton } from "@chakra-ui/react"
 import { Slider } from "@/components/ui/slider"
 import {

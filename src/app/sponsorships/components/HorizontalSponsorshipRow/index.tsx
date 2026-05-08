@@ -21,6 +21,7 @@ interface StatsCardProps {
   activeType: BeneficiaryTabType | null | undefined
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentionally retained while StatsCard is hidden in the row; see the JSX comment below.
 const StatsCard: React.FC<StatsCardProps> = ({ activeType }) => {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -171,10 +172,7 @@ interface HorizontalSponsorshipRowProps {
   activeType?: BeneficiaryTabType | null
 }
 
-function getSectionLabels(_activeType: BeneficiaryTabType | null | undefined): {
-  sponsored: string
-  waiting: string
-} {
+function getSectionLabels(): { sponsored: string; waiting: string } {
   return { sponsored: "Updates", waiting: "Recent" }
 }
 
@@ -189,9 +187,10 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
   isLoading,
   onLoadMore,
   onOpenModal,
-  activeType,
+  // activeType is accepted for API stability and used by the (currently
+  // commented-out) StatsCard. Kept on the props type for callers.
 }) => {
-  const sectionLabels = getSectionLabels(activeType)
+  const sectionLabels = getSectionLabels()
   const scrollRef = useRef<HTMLDivElement>(null)
   const lastLoadTimeRef = useRef(0)
   const [scrolledLeft, setScrolledLeft] = useState(false)
