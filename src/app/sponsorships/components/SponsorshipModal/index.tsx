@@ -59,7 +59,11 @@ const OPEN_SPONSORSHIP_RANGE_MESSAGE = `Amount must be between $${OPEN_SPONSORSH
  * children (no fixed budget_goal). Picked deliberately to span a wide
  * range of giving comfort levels.
  */
-const OPEN_SPONSORSHIP_PRESETS_USD = [7, 33, 50, 144] as const
+const OPEN_SPONSORSHIP_PRESETS_USD = [7, 14, 33, 50, 144] as const
+
+/** Default open-amount preset selected when the modal first opens. */
+const OPEN_SPONSORSHIP_DEFAULT_USD = 33
+const OPEN_SPONSORSHIP_DEFAULT_CENTS = OPEN_SPONSORSHIP_DEFAULT_USD * 100
 
 // PayPal components are optional and loaded only when the env var is set.
 // Using next/dynamic avoids the broken module-level let + fire-and-forget import()
@@ -119,7 +123,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   )
 
   const [amountCents, setAmountCents] = useState<number>(
-    isOpen ? 0 : fixedAmountCents,
+    isOpen ? OPEN_SPONSORSHIP_DEFAULT_CENTS : fixedAmountCents,
   )
   const [tipOpen, setTipOpen] = useState(false)
   const [selectedOption, setSelectedOption] = useState<string>(
@@ -207,7 +211,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     if (!open) {
       setToastCount(0)
       setLastToastTime(0)
-      setAmountCents(isOpen ? 0 : fixedAmountCents)
+      setAmountCents(isOpen ? OPEN_SPONSORSHIP_DEFAULT_CENTS : fixedAmountCents)
       setSelectedOption(paymentOptionsCollection.items[0].value)
       setLoading(false)
       setBioExpanded(false)
