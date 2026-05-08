@@ -851,25 +851,32 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       flex={{ base: "1", md: "0 0 50%" }}
                       width={{ base: "100%", md: "auto" }}
                     >
-                      <Flex
-                        className="border border-gray-300 rounded-xl bg-white focus-within:border-[#2b7ff9] transition-colors overflow-hidden"
-                        align="center"
-                        h="56px"
+                      <Tooltip
+                        content={`This is the monthly amount our outreach team needs to change ${firstName}'s life.`}
+                        showArrow
+                        disabled={isOpen}
+                        openDelay={150}
                       >
-                        <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
-                          $
-                        </Box>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={isOpen ? (amountCents > 0 ? amountCents / 100 : "") : fixedAmountCents / 100}
-                          onChange={handleAmountChange}
-                          readOnly={!isOpen}
-                          disabled={!isOpen}
-                          className={`px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700${!isOpen ? " bg-gray-100" : ""}`}
-                          placeholder="Enter Amount"
-                        />
-                      </Flex>
+                        <Flex
+                          className="border border-gray-300 rounded-xl bg-white focus-within:border-[#2b7ff9] transition-colors overflow-hidden"
+                          align="center"
+                          h="56px"
+                        >
+                          <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
+                            $
+                          </Box>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={isOpen ? (amountCents > 0 ? amountCents / 100 : "") : fixedAmountCents / 100}
+                            onChange={handleAmountChange}
+                            readOnly={!isOpen}
+                            disabled={!isOpen}
+                            className={`px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700${!isOpen ? " bg-gray-100 cursor-help" : ""}`}
+                            placeholder="Enter Amount"
+                          />
+                        </Flex>
+                      </Tooltip>
                     </Box>
                     <Box
                       flex={{ base: "1", md: "0 0 calc(50% - 12px)" }}
