@@ -171,14 +171,11 @@ interface HorizontalSponsorshipRowProps {
   activeType?: BeneficiaryTabType | null
 }
 
-function getSectionLabels(activeType: BeneficiaryTabType | null | undefined): {
+function getSectionLabels(_activeType: BeneficiaryTabType | null | undefined): {
   sponsored: string
   waiting: string
 } {
-  if (activeType === "ANIMAL") {
-    return { sponsored: "Dogs Sponsored", waiting: "Dogs Waiting" }
-  }
-  return { sponsored: "Sponsored", waiting: "Waiting" }
+  return { sponsored: "Recently Sponsored", waiting: "Recently Updated" }
 }
 
 const SCROLL_THRESHOLD_PX = 400
@@ -259,18 +256,14 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
           paddingRight="16px"
         >
           {/*
-            Temporarily hidden — may bring back later. Stats card was the
-            first item in the row; SectionDividers visually segmented the
-            sponsored / waiting groups with vertical "SPONSORED" / "WAITING"
-            labels. Cards now flow as a single uninterrupted list.
-
+            Stats card temporarily hidden -- may bring back later.
             <StatsCard activeType={activeType} />
           */}
 
           {/* Sponsored */}
           {sponsored.length > 0 && (
             <>
-              {/* <SectionDivider label={sectionLabels.sponsored} /> */}
+              <SectionDivider label={sectionLabels.sponsored} />
               {sponsored.map((b) => (
                 <PortraitBeneficiaryCard
                   key={b.id}
@@ -287,7 +280,7 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
           {/* Waiting */}
           {beneficiaries.length > 0 && (
             <>
-              {/* <SectionDivider label={sectionLabels.waiting} /> */}
+              <SectionDivider label={sectionLabels.waiting} />
               {beneficiaries.map((b) =>
                 b.id ? (
                   <PortraitBeneficiaryCard
