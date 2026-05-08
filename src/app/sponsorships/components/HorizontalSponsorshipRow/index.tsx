@@ -175,7 +175,7 @@ function getSectionLabels(_activeType: BeneficiaryTabType | null | undefined): {
   sponsored: string
   waiting: string
 } {
-  return { sponsored: "Recently Sponsored", waiting: "Recently Updated" }
+  return { sponsored: "Sponsored", waiting: "Recent" }
 }
 
 const SCROLL_THRESHOLD_PX = 400
