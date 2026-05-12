@@ -15,14 +15,14 @@ interface PortraitBeneficiaryCardProps {
   /** Optional node rendered as an absolute overlay on top of the card image. */
   imageOverlay?: React.ReactNode
   /**
-   * ISO timestamp of the most recent public activity update.
-   * When present, row 2 shows a relative date ("3 days ago").
-   * When absent, row 2 shows how long the child has been waiting.
+   * ISO timestamp of the most recent public activity update. Row 2 shows
+   * "updated <time> ago" relative to this value, falling back to the
+   * beneficiary's `created_at` when no activity has been recorded.
    */
   lastActivityAt?: string | null
 }
 
-/** "3 days ago", "2w ago", "1mo ago", etc. */
+/** "updated today", "updated 3d ago", "updated 2w ago", etc. */
 function formatRelativeDate(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
   if (days === 0) return "updated today"
@@ -31,17 +31,6 @@ function formatRelativeDate(iso: string): string {
   if (days < 30) return `updated ${Math.floor(days / 7)}w ago`
   if (days < 365) return `updated ${Math.floor(days / 30)}mo ago`
   return `updated ${Math.floor(days / 365)}y ago`
-}
-
-/** "waiting 3 days", "waiting 2w", etc. */
-function formatWaiting(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
-  if (days === 0) return "added today"
-  if (days === 1) return "waiting 1 day"
-  if (days < 14) return `waiting ${days} days`
-  if (days < 30) return `waiting ${Math.floor(days / 7)}w`
-  if (days < 365) return `waiting ${Math.floor(days / 30)}mo`
-  return `waiting ${Math.floor(days / 365)}y`
 }
 
 const PortraitBeneficiaryCard: React.FC<PortraitBeneficiaryCardProps> = ({
@@ -74,11 +63,8 @@ const PortraitBeneficiaryCard: React.FC<PortraitBeneficiaryCardProps> = ({
   const lastInitial = beneficiary.name?.split(" ")[1]?.[0]
   const displayName = lastInitial ? `${firstName} ${lastInitial}.` : firstName
 
-  const subline = lastActivityAt
-    ? formatRelativeDate(lastActivityAt)
-    : beneficiary.created_at
-      ? formatWaiting(beneficiary.created_at)
-      : null
+  const sublineSource = lastActivityAt ?? beneficiary.created_at
+  const subline = sublineSource ? formatRelativeDate(sublineSource) : null
 
   return (
     <Box

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button is referenced only by the currently commented-out All | Sponsored toggle below; keeping the import so the restore is one uncomment.
 import { Box, Button, Text, Input, IconButton } from "@chakra-ui/react"
 import { Slider } from "@/components/ui/slider"
 import {
@@ -16,6 +17,7 @@ import { FiltersProps } from "@/types/propTypes"
 import { beneficiaryTypes, genders, status as statusOptions } from "./config"
 import { IoClose, IoSearchOutline } from "react-icons/io5"
 import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
+import { ALL_STATUSES, PUBLIC_STATUSES } from "@/config/beneficiaryStatuses"
 
 const SponsorshipFilters: React.FC<
   FiltersProps & {
@@ -205,9 +207,13 @@ const SponsorshipFilters: React.FC<
 
   const hasSearchQuery = mounted && searchQuery.trim().length > 0
 
+  // Mirrors the defaults seeded by SponsorshipsContainer / filterStore:
+  // admin mode shows every status, public mode shows the PUBLIC_STATUSES
+  // set. Keep these in sync with the store or the dirty-check will
+  // report phantom "active filters" on a fresh page load.
   const modeDefaultStatus = isAdminMode
-    ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived", "Sponsorship Cancelled"]
-    : ["New", "Partially Funded", "Sponsorship Cancelled"]
+    ? (ALL_STATUSES as readonly string[])
+    : (PUBLIC_STATUSES as readonly string[])
 
   const isGenderDefault = isAnimal || (selectedGender ?? "") === ""
   const isAgeDefault =
@@ -419,58 +425,61 @@ const SponsorshipFilters: React.FC<
                 </SelectRoot>
               </Box>
             </Tooltip>
-          ) : (
-            <Box minW={0}>
-              <Box
-                bg="gray.100"
-                borderRadius="16px"
-                p="2px"
-                display="flex"
-                gap={0}
-              >
-                {(
-                  [
-                    {
-                      label: "Waiting",
-                      statuses: [
-                        "New",
-                        "Partially Funded",
-                        "Sponsorship Cancelled",
-                      ],
-                    },
-                    {
-                      label: "Sponsored",
-                      statuses: ["Budget Fulfilled"],
-                    },
-                  ] as const
-                ).map(({ label, statuses }) => {
-                  const isActive =
-                    statuses.length === selectedStatus.length &&
-                    statuses.every((s) => selectedStatus.includes(s))
-                  return (
-                    <Button
-                      key={label}
-                      flex={1}
-                      size="xs"
-                      borderRadius="14px"
-                      fontSize="xs"
-                      bg={isActive ? "white" : "transparent"}
-                      color={isActive ? "#2b7ff9" : "gray.500"}
-                      fontWeight={isActive ? "semibold" : "medium"}
-                      boxShadow={isActive ? "sm" : "none"}
-                      onClick={() =>
-                        handleFilterChange({ status: [...statuses] })
-                      }
-                      _hover={{ bg: isActive ? "white" : "gray.200" }}
-                      transition="all 0.15s"
-                    >
-                      {label}
-                    </Button>
-                  )
-                })}
+          ) : null
+            /*
+              Public All | Sponsored toggle temporarily hidden.
+              The default status set (PUBLIC_STATUSES) already shows every
+              public child, so we don't need a user-facing switch right
+              now. Restore by uncommenting the block below.
+
+              <Box minW={0}>
+                <Box
+                  bg="gray.100"
+                  borderRadius="16px"
+                  p="2px"
+                  display="flex"
+                  gap={0}
+                >
+                  {(
+                    [
+                      {
+                        label: "All",
+                        statuses: PUBLIC_STATUSES as readonly string[],
+                      },
+                      {
+                        label: "Sponsored",
+                        statuses: ["Budget Fulfilled"] as readonly string[],
+                      },
+                    ] as const
+                  ).map(({ label, statuses }) => {
+                    const isActive =
+                      statuses.length === selectedStatus.length &&
+                      statuses.every((s) => selectedStatus.includes(s))
+                    return (
+                      <Button
+                        key={label}
+                        flex={1}
+                        size="xs"
+                        borderRadius="14px"
+                        fontSize="xs"
+                        bg={isActive ? "white" : "transparent"}
+                        color={isActive ? "#2b7ff9" : "gray.500"}
+                        fontWeight={isActive ? "semibold" : "medium"}
+                        boxShadow={isActive ? "sm" : "none"}
+                        onClick={() =>
+                          handleFilterChange({ status: [...statuses] })
+                        }
+                        _hover={{ bg: isActive ? "white" : "gray.200" }}
+                        transition="all 0.15s"
+                      >
+                        {label}
+                      </Button>
+                    )
+                  })}
+                </Box>
               </Box>
-            </Box>
-          )}
+            */
+          }
 
           {/* Search */}
           <Box minW={0} position="relative">

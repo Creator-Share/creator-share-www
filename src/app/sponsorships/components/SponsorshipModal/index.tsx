@@ -54,6 +54,17 @@ const OPEN_SPONSORSHIP_MAX_DOLLARS = Number(
 )
 const OPEN_SPONSORSHIP_RANGE_MESSAGE = `Amount must be between $${OPEN_SPONSORSHIP_MIN_DOLLARS} and $${OPEN_SPONSORSHIP_MAX_DOLLARS}`
 
+/**
+ * Suggested presets shown beneath the amount input for open-amount
+ * children (no fixed budget_goal). Picked deliberately to span a wide
+ * range of giving comfort levels.
+ */
+const OPEN_SPONSORSHIP_PRESETS_USD = [7, 14, 33, 50, 144] as const
+
+/** Default open-amount preset selected when the modal first opens. */
+const OPEN_SPONSORSHIP_DEFAULT_USD = 33
+const OPEN_SPONSORSHIP_DEFAULT_CENTS = OPEN_SPONSORSHIP_DEFAULT_USD * 100
+
 // PayPal components are optional and loaded only when the env var is set.
 // Using next/dynamic avoids the broken module-level let + fire-and-forget import()
 // pattern, which was a race condition (React never re-rendered when those vars
@@ -112,7 +123,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   )
 
   const [amountCents, setAmountCents] = useState<number>(
-    isOpen ? 0 : fixedAmountCents,
+    isOpen ? OPEN_SPONSORSHIP_DEFAULT_CENTS : fixedAmountCents,
   )
   const [tipOpen, setTipOpen] = useState(false)
   const [selectedOption, setSelectedOption] = useState<string>(
@@ -200,7 +211,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     if (!open) {
       setToastCount(0)
       setLastToastTime(0)
-      setAmountCents(isOpen ? 0 : fixedAmountCents)
+      setAmountCents(isOpen ? OPEN_SPONSORSHIP_DEFAULT_CENTS : fixedAmountCents)
       setSelectedOption(paymentOptionsCollection.items[0].value)
       setLoading(false)
       setBioExpanded(false)
@@ -840,25 +851,31 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       flex={{ base: "1", md: "0 0 50%" }}
                       width={{ base: "100%", md: "auto" }}
                     >
-                      <Flex
-                        className="border border-gray-300 rounded-xl bg-white focus-within:border-[#2b7ff9] transition-colors overflow-hidden"
-                        align="center"
-                        h="56px"
+                      <Tooltip
+                        content={`For ${firstName}, this is what every month looks like: classroom days, full meals, real healthcare, and an outreach team who knows them by name.`}
+                        showArrow
+                        disabled={isOpen}
                       >
-                        <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
-                          $
-                        </Box>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={isOpen ? (amountCents > 0 ? amountCents / 100 : "") : fixedAmountCents / 100}
-                          onChange={handleAmountChange}
-                          readOnly={!isOpen}
-                          disabled={!isOpen}
-                          className={`px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700${!isOpen ? " bg-gray-100" : ""}`}
-                          placeholder="Enter Amount"
-                        />
-                      </Flex>
+                        <Flex
+                          className="border border-gray-300 rounded-xl bg-white focus-within:border-[#2b7ff9] transition-colors overflow-hidden"
+                          align="center"
+                          h="56px"
+                        >
+                          <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
+                            $
+                          </Box>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={isOpen ? (amountCents > 0 ? amountCents / 100 : "") : fixedAmountCents / 100}
+                            onChange={handleAmountChange}
+                            readOnly={!isOpen}
+                            disabled={!isOpen}
+                            className={`px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700${!isOpen ? " bg-gray-100 cursor-help" : ""}`}
+                            placeholder="Enter Amount"
+                          />
+                        </Flex>
+                      </Tooltip>
                     </Box>
                     <Box
                       flex={{ base: "1", md: "0 0 calc(50% - 12px)" }}
@@ -895,6 +912,36 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       </Tooltip>
                     </Box>
                   </Flex>
+
+                  {isOpen && (
+                    <Flex gap={2} wrap="wrap" mt={3} aria-label="Suggested amounts">
+                      {OPEN_SPONSORSHIP_PRESETS_USD.map((amount) => {
+                        const isActive = amountCents === amount * 100
+                        return (
+                          <Button
+                            key={amount}
+                            type="button"
+                            size="sm"
+                            onClick={() => setAmountCents(amount * 100)}
+                            borderRadius="full"
+                            px={4}
+                            h="36px"
+                            fontWeight={isActive ? "semibold" : "medium"}
+                            bg={isActive ? "#2b7ff9" : "gray.100"}
+                            color={isActive ? "white" : "gray.700"}
+                            borderWidth="1px"
+                            borderColor={isActive ? "#2b7ff9" : "gray.200"}
+                            _hover={{
+                              bg: isActive ? "#1a6fe0" : "gray.200",
+                            }}
+                            transition="all 0.15s"
+                          >
+                            ${amount}
+                          </Button>
+                        )
+                      })}
+                    </Flex>
+                  )}
 
                   {isPayPalEnabled && PayPalScriptProvider && PayPalButtons && (
                     <Box className="pt-1">

@@ -28,6 +28,8 @@ const BeneficiaryListings = React.forwardRef<
       onOpenModal,
       onClearFilters,
       noCard = false,
+      fetchError,
+      onRetry,
     },
     ref,
   ) => {
@@ -200,50 +202,86 @@ const BeneficiaryListings = React.forwardRef<
           </Flex>
         )}
 
-        {/* Initial load spinner -- no stale cards to show yet */}
-        {isRefreshing && filteredBeneficiaries.length === 0 && (
+        {/* Initial load spinner -- no stale cards to show yet (skip when showing error state) */}
+        {isRefreshing && filteredBeneficiaries.length === 0 && !fetchError && (
           <Flex justify="center" py={12} align="center">
             <Spinner size="xl" color="gray.300" />
           </Flex>
         )}
 
-        {!isLoading && !isRefreshing && (
-          <>
-            {filteredBeneficiaries.length === 0 && (
-              <Flex
-                justify="center"
-                py={20}
-                align="center"
-                direction="column"
-                mx={8}
-              >
-                <Text
-                  fontSize="lg"
-                  fontWeight="medium"
+        {filteredBeneficiaries.length === 0 && fetchError && (
+          <Flex
+            justify="center"
+            py={20}
+            align="center"
+            direction="column"
+            mx={8}
+          >
+            <Text
+              fontSize="lg"
+              fontWeight="medium"
+              color="gray.400"
+              textAlign="center"
+            >
+              We couldn&apos;t load the listings right now
+            </Text>
+            <Text fontSize="sm" color="gray.400" textAlign="center" mt={1}>
+              This is usually temporary. Give it a moment and try again.
+            </Text>
+            {onRetry && (
+              isRefreshing || isLoading ? (
+                <Flex mt={6} justify="center">
+                  <Spinner size="md" color="gray.400" />
+                </Flex>
+              ) : (
+                <Button
+                  mt={6}
+                  variant="outline"
+                  borderRadius="16px"
                   color="gray.500"
-                  textAlign="center"
+                  borderColor="gray.300"
+                  _hover={{ bg: "gray.50", borderColor: "gray.400" }}
+                  onClick={onRetry}
                 >
-                  No matches
-                </Text>
-                <Text fontSize="sm" color="gray.400" textAlign="center" mt={1}>
-                  Try adjusting your search or filters to find more results
-                </Text>
-                {onClearFilters && (
-                  <Button
-                    mt={6}
-                    bg="#2b7ff9"
-                    color="white"
-                    borderRadius="16px"
-                    _hover={{ bg: "#1a6fe0" }}
-                    onClick={onClearFilters}
-                  >
-                    Show all
-                  </Button>
-                )}
-              </Flex>
+                  Try again
+                </Button>
+              )
             )}
+          </Flex>
+        )}
 
-          </>
+        {filteredBeneficiaries.length === 0 && !fetchError && !isLoading && !isRefreshing && (
+          <Flex
+            justify="center"
+            py={20}
+            align="center"
+            direction="column"
+            mx={8}
+          >
+            <Text
+              fontSize="lg"
+              fontWeight="medium"
+              color="gray.500"
+              textAlign="center"
+            >
+              No matches
+            </Text>
+            <Text fontSize="sm" color="gray.400" textAlign="center" mt={1}>
+              Try adjusting your search or filters to find more results
+            </Text>
+            {onClearFilters && (
+              <Button
+                mt={6}
+                bg="#2b7ff9"
+                color="white"
+                borderRadius="16px"
+                _hover={{ bg: "#1a6fe0" }}
+                onClick={onClearFilters}
+              >
+                Show all
+              </Button>
+            )}
+          </Flex>
         )}
       </Box>
     )
