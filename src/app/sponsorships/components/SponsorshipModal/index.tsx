@@ -141,6 +141,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [activeColumn, setActiveColumn] = useState<
     "monthly" | "one_time" | null
   >(isOpen ? "monthly" : null)
+  const [layoutVariant, setLayoutVariant] = useState<"split" | "simple">("split")
+  const [simpleFrequency, setSimpleFrequency] = useState<SponsorshipFrequency>("subscription")
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
   const [imageLoading, setImageLoading] = useState<boolean>(false)
   const [videoUrl, setVideoUrl] = useState<string>(
@@ -778,7 +780,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
     if (isOpen) {
       return (
-        <Box className="space-y-2">
+        <Box className="space-y-2 mt">
           <Text className="text-lg font-semibold text-gray-900">
             Support {firstName} with any amount
           </Text>
@@ -1055,6 +1057,207 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     {/* AMOUNT INPUT — combined chips + custom field for open types, inline disabled input for fixed types. */}
                     {isOpen ? (
                       <Box className="text-left w-full">
+                        {/* Floating variant switcher — fixed to browser viewport bottom-right */}
+                        <Box
+                          position="fixed"
+                          bottom="24px"
+                          right="24px"
+                          zIndex={9999}
+                          bg="white"
+                          borderWidth="1px"
+                          borderColor="gray.200"
+                          borderRadius="2xl"
+                          boxShadow="2xl"
+                          overflow="hidden"
+                          minW="220px"
+                        >
+                          {/* Ribbon header */}
+                          <Box
+                            bg="amber.400"
+                            px={4}
+                            py={2}
+                            borderBottomWidth="1px"
+                            borderColor="amber.300"
+                          >
+                            <Text fontSize="xs" fontWeight="bold" color="amber.900" letterSpacing="wide" textTransform="uppercase">
+                              🧪 Layout Preview
+                            </Text>
+                            <Text fontSize="xs" color="amber.800" mt={0.5}>
+                              Toggle between checkout variants
+                            </Text>
+                          </Box>
+
+                          {/* Toggle buttons */}
+                          <Flex>
+                            {(["split", "simple"] as const).map((v) => (
+                              <Box
+                                key={v}
+                                as="button"
+                                flex={1}
+                                px={4}
+                                py={3}
+                                bg={layoutVariant === v ? "#2b7ff9" : "white"}
+                                color={layoutVariant === v ? "white" : "gray.500"}
+                                fontWeight={layoutVariant === v ? "semibold" : "medium"}
+                                fontSize="sm"
+                                transition="all 0.15s"
+                                _hover={{ bg: layoutVariant === v ? "#1a6fe0" : "gray.50" }}
+                                borderRightWidth={v === "split" ? "1px" : 0}
+                                borderColor="gray.200"
+                                onClick={() => setLayoutVariant(v)}
+                              >
+                                {v === "split" ? "Split" : "Simple"}
+                              </Box>
+                            ))}
+                          </Flex>
+                        </Box>
+
+                        {layoutVariant === "simple" ? (
+                          /* ── SIMPLE VARIANT ── */
+                          <Box>
+                            {/* Frequency toggle */}
+                            <Flex
+                              role="radiogroup"
+                              aria-label="Payment frequency"
+                              borderWidth="1px"
+                              borderColor="gray.300"
+                              borderRadius="xl"
+                              overflow="hidden"
+                              mb={3}
+                            >
+                              {openSponsorshipFrequencyOptions.map((opt) => {
+                                const isActive = simpleFrequency === opt.value
+                                return (
+                                  <Box
+                                    key={opt.value}
+                                    as="button"
+                                    flex={1}
+                                    h="44px"
+                                    display="flex"
+                                    alignItems="center"
+                                    justifyContent="center"
+                                    bg={isActive ? "#2b7ff9" : "white"}
+                                    color={isActive ? "white" : "gray.600"}
+                                    fontWeight={isActive ? "semibold" : "medium"}
+                                    fontSize="sm"
+                                    transition="background 0.15s"
+                                    _hover={{ bg: isActive ? "#1a6fe0" : "gray.50" }}
+                                    role="radio"
+                                    aria-checked={isActive}
+                                    borderRightWidth={opt.value === "subscription" ? "1px" : 0}
+                                    borderColor="gray.300"
+                                    onClick={() => {
+                                      setSimpleFrequency(opt.value)
+                                      setActiveColumn(opt.value === "subscription" ? "monthly" : "one_time")
+                                    }}
+                                  >
+                                    {opt.label}
+                                  </Box>
+                                )
+                              })}
+                            </Flex>
+
+                            {/* Bare amount input — no presets */}
+                            <Flex
+                              borderWidth="1px"
+                              borderColor="gray.300"
+                              borderRadius="xl"
+                              overflow="hidden"
+                              bg="white"
+                              align="center"
+                              h="52px"
+                              className="focus-within:border-[#2b7ff9] transition-colors"
+                            >
+                              <Box className="px-4 h-full flex items-center text-gray-400 font-medium border-r border-gray-200 text-sm select-none">
+                                $
+                              </Box>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                autoFocus
+                                value={
+                                  simpleFrequency === "subscription"
+                                    ? (monthlyAmountCents > 0 ? monthlyAmountCents / 100 : "")
+                                    : (oneTimeAmountCents > 0 ? oneTimeAmountCents / 100 : "")
+                                }
+                                onChange={(e) => {
+                                  const dollars = parseFloat(e.target.value)
+                                  const cents = e.target.value === "" ? 0 : Number.isFinite(dollars) ? Math.round(dollars * 100) : 0
+                                  if (simpleFrequency === "subscription") {
+                                    setMonthlyAmountCents(cents)
+                                  } else {
+                                    setOneTimeAmountCents(cents)
+                                  }
+                                }}
+                                className="px-3 h-full border-0 outline-none focus:ring-0 text-base text-gray-700 flex-1"
+                                placeholder="Enter amount"
+                              />
+                            </Flex>
+
+                            {/* Single CTA */}
+                            <Tooltip
+                              content={simpleFrequency === "subscription" ? monthlyDisabledReason : oneTimeDisabledReason}
+                              showArrow
+                              disabled={!(simpleFrequency === "subscription" ? monthlyDisabledReason : oneTimeDisabledReason)}
+                              open={tipOpen}
+                              onOpenChange={(e) => setTipOpen(e.open)}
+                            >
+                              <Box
+                                as="span"
+                                display="block"
+                                width="100%"
+                                mt={3}
+                                tabIndex={0}
+                                onPointerDown={() => {
+                                  const reason = simpleFrequency === "subscription" ? monthlyDisabledReason : oneTimeDisabledReason
+                                  if (reason) setTipOpen(true)
+                                }}
+                              >
+                                <Button
+                                  onClick={() => handleStripePayment(simpleFrequency)}
+                                  loading={loadingFrequency === simpleFrequency}
+                                  loadingText="Processing..."
+                                  disabled={loading || (simpleFrequency === "subscription" ? !canPayMonthly : !canPayOneTime)}
+                                  width="100%"
+                                  h="auto"
+                                  minH="52px"
+                                  py={3}
+                                  px={3}
+                                  bg="#2b7ff9"
+                                  color="white"
+                                  fontWeight="semibold"
+                                  borderRadius="xl"
+                                  boxShadow="md"
+                                  _hover={{ bg: "#1a6fe0", boxShadow: "lg" }}
+                                  _disabled={{ bg: "#2b7ff9" }}
+                                  opacity={
+                                    (simpleFrequency === "subscription" ? !canPayMonthly : !canPayOneTime)
+                                      ? 0.5
+                                      : 1
+                                  }
+                                >
+                                  <Flex direction="column" align="center" gap={0.5} textAlign="center">
+                                    <Text fontWeight="semibold" fontSize="sm" lineHeight="short">
+                                      {simpleFrequency === "subscription"
+                                        ? `Sponsor ${firstName} 🪽`
+                                        : `Gift to ${firstName} 🪽`}
+                                    </Text>
+                                    <Text fontWeight="medium" fontSize="xs" opacity={0.9}>
+                                      {simpleFrequency === "subscription"
+                                        ? canPayMonthly
+                                          ? `$${(monthlyAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}/month`
+                                          : "Monthly Sponsorship"
+                                        : canPayOneTime
+                                          ? `$${(oneTimeAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} one-time`
+                                          : "One-Time Gift"}
+                                    </Text>
+                                  </Flex>
+                                </Button>
+                              </Box>
+                            </Tooltip>
+                          </Box>
+                        ) : (
+                        /* ── SPLIT VARIANT (existing two-column layout) ── */
                         <Flex
                           direction={{ base: "column", md: "row" }}
                           gap={{ base: 8, md: 16 }}
@@ -1241,6 +1444,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                             </Tooltip>
                           </Box>
                         </Flex>
+                        )} {/* end layoutVariant split */}
                       </Box>
                     ) : (
                       <Flex
@@ -1388,7 +1592,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       )}
 
                     {/* Context copy inside the card */}
-                    <Box className="pt-4 mt-24 text-left">
+                    <Box className="pt-8 text-left">
                       {renderSponsorshipDisclaimer()}
                     </Box>
                   </>
