@@ -63,8 +63,6 @@ export interface BeneficiaryTypeConfig {
 
 /** Minimum sponsorship amount (cents) for open sponsorship types. */
 export const MINIMUM_OPEN_SPONSORSHIP_CENTS = 500
-/** Maximum sponsorship amount (cents) for open sponsorship types. */
-export const MAXIMUM_OPEN_SPONSORSHIP_CENTS = 100000
 
 export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
   {

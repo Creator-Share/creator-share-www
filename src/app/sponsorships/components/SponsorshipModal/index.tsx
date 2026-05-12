@@ -23,8 +23,13 @@ import { Beneficiaries, Activity } from "@/types"
 import { toaster } from "@/components/ui/toaster"
 import { Box, Text, Spinner, Flex, Input } from "@chakra-ui/react"
 import { useAuthStore } from "@/store/authStore"
-import { paymentOptionsCollection } from "../Payments/config"
+import {
+  paymentOptionsCollection,
+  openSponsorshipFrequencyOptions,
+  type SponsorshipFrequency,
+} from "../Payments/config"
 import { Button } from "@/components/ui/button"
+import { HeartHandMark } from "@/components/common/HeartHandMark"
 import { Tooltip } from "@/components/ui/tooltip"
 import { BeneficiaryMedia } from "@/types/admin.types"
 import {
@@ -41,7 +46,6 @@ import BeneficiaryActivity, { SHOW_MORE_CLASS } from "../SponsorshipActivity"
 import { FAQModal } from "@/components/FAQModal"
 import {
   isOpenSponsorshipType,
-  MAXIMUM_OPEN_SPONSORSHIP_CENTS,
   MINIMUM_OPEN_SPONSORSHIP_CENTS,
 } from "@/config/beneficiaryTypes"
 import { centsToDollars } from "@/utils/currency"
@@ -49,17 +53,12 @@ import { centsToDollars } from "@/utils/currency"
 const OPEN_SPONSORSHIP_MIN_DOLLARS = Number(
   centsToDollars(MINIMUM_OPEN_SPONSORSHIP_CENTS),
 )
-const OPEN_SPONSORSHIP_MAX_DOLLARS = Number(
-  centsToDollars(MAXIMUM_OPEN_SPONSORSHIP_CENTS),
-)
-const OPEN_SPONSORSHIP_RANGE_MESSAGE = `Amount must be between $${OPEN_SPONSORSHIP_MIN_DOLLARS} and $${OPEN_SPONSORSHIP_MAX_DOLLARS}`
+const OPEN_SPONSORSHIP_RANGE_MESSAGE = `Minimum amount is $${OPEN_SPONSORSHIP_MIN_DOLLARS}`
 
-/**
- * Suggested presets shown beneath the amount input for open-amount
- * children (no fixed budget_goal). Picked deliberately to span a wide
- * range of giving comfort levels.
- */
-const OPEN_SPONSORSHIP_PRESETS_USD = [7, 14, 33, 50, 144] as const
+/** Lower-tier quick picks (left column, monthly path). */
+const OPEN_SPONSORSHIP_LEFT_PRESETS_USD = [14, 33, 50] as const
+/** Higher-tier quick picks (right column, one-time gift path). */
+const OPEN_SPONSORSHIP_RIGHT_PRESETS_USD = [50, 100, 1111] as const
 
 /** Default open-amount preset selected when the modal first opens. */
 const OPEN_SPONSORSHIP_DEFAULT_USD = 33
@@ -122,7 +121,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       ?.birth_date_is_estimate,
   )
 
-  const [amountCents, setAmountCents] = useState<number>(
+  const [monthlyAmountCents, setMonthlyAmountCents] = useState<number>(
+    isOpen ? OPEN_SPONSORSHIP_DEFAULT_CENTS : fixedAmountCents,
+  )
+  const [oneTimeAmountCents, setOneTimeAmountCents] = useState<number>(
     isOpen ? OPEN_SPONSORSHIP_DEFAULT_CENTS : fixedAmountCents,
   )
   const [tipOpen, setTipOpen] = useState(false)
@@ -130,9 +132,20 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     paymentOptionsCollection.items[0].value,
   )
   const [loading, setLoading] = useState<boolean>(false)
+  const [loadingFrequency, setLoadingFrequency] =
+    useState<SponsorshipFrequency | null>(null)
+  const [monthlyCustomMode, setMonthlyCustomMode] = useState<boolean>(false)
+  const [oneTimeCustomMode, setOneTimeCustomMode] = useState<boolean>(false)
+  const [monthlyCustomCents, setMonthlyCustomCents] = useState<number>(0)
+  const [oneTimeCustomCents, setOneTimeCustomCents] = useState<number>(0)
+  const [activeColumn, setActiveColumn] = useState<
+    "monthly" | "one_time" | null
+  >(isOpen ? "monthly" : null)
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
   const [imageLoading, setImageLoading] = useState<boolean>(false)
-  const [videoUrl, setVideoUrl] = useState<string>(beneficiary.video_url?.trim() || "")
+  const [videoUrl, setVideoUrl] = useState<string>(
+    beneficiary.video_url?.trim() || "",
+  )
   const [bioExpanded, setBioExpanded] = useState(false)
   const [faqOpen, setFaqOpen] = useState(false)
 
@@ -150,7 +163,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const alreadyFulfilled =
     !isOpen &&
     (beneficiary.status === "Budget Fulfilled" ||
-      (beneficiary.budget_goal > 0 && beneficiary.budget_goal <= (beneficiary.budget_raised || 0)))
+      (beneficiary.budget_goal > 0 &&
+        beneficiary.budget_goal <= (beneficiary.budget_raised || 0)))
 
   useEffect(() => {
     if (!open) {
@@ -211,9 +225,20 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     if (!open) {
       setToastCount(0)
       setLastToastTime(0)
-      setAmountCents(isOpen ? OPEN_SPONSORSHIP_DEFAULT_CENTS : fixedAmountCents)
+      setMonthlyAmountCents(
+        isOpen ? OPEN_SPONSORSHIP_DEFAULT_CENTS : fixedAmountCents,
+      )
+      setOneTimeAmountCents(
+        isOpen ? OPEN_SPONSORSHIP_DEFAULT_CENTS : fixedAmountCents,
+      )
       setSelectedOption(paymentOptionsCollection.items[0].value)
       setLoading(false)
+      setLoadingFrequency(null)
+      setMonthlyCustomMode(false)
+      setOneTimeCustomMode(false)
+      setMonthlyCustomCents(0)
+      setOneTimeCustomCents(0)
+      setActiveColumn(isOpen ? "monthly" : null)
       setBioExpanded(false)
       setFaqOpen(false)
       setVideoUrl(beneficiary.video_url?.trim() || "")
@@ -298,29 +323,29 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }
 
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isOpen) return
-    const inputValue = e.target.value
-    if (inputValue === "") {
-      setAmountCents(0)
-      return
-    }
-    const dollars = parseFloat(inputValue)
-    setAmountCents(Number.isFinite(dollars) ? Math.round(dollars * 100) : 0)
-  }
-
-  const canPay = isOpen
-    ? amountCents >= MINIMUM_OPEN_SPONSORSHIP_CENTS &&
-      amountCents <= MAXIMUM_OPEN_SPONSORSHIP_CENTS
+  const canPayMonthly = isOpen
+    ? monthlyAmountCents >= MINIMUM_OPEN_SPONSORSHIP_CENTS
+    : !alreadyFulfilled
+  const canPayOneTime = isOpen
+    ? oneTimeAmountCents >= MINIMUM_OPEN_SPONSORSHIP_CENTS
     : !alreadyFulfilled
 
-  const outOfRange =
-    isOpen &&
-    (amountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS ||
-      amountCents > MAXIMUM_OPEN_SPONSORSHIP_CENTS)
-  const disabledReason = outOfRange ? OPEN_SPONSORSHIP_RANGE_MESSAGE : null
+  const monthlyDisabledReason =
+    isOpen && monthlyAmountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS
+      ? OPEN_SPONSORSHIP_RANGE_MESSAGE
+      : null
+  const oneTimeDisabledReason =
+    isOpen && oneTimeAmountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS
+      ? OPEN_SPONSORSHIP_RANGE_MESSAGE
+      : null
 
-  const handleStripePayment = async () => {
+  const handleStripePayment = async (
+    paymentType: SponsorshipFrequency = "subscription",
+  ) => {
+    const amountCents =
+      paymentType === "subscription" ? monthlyAmountCents : oneTimeAmountCents
+    const canPay =
+      paymentType === "subscription" ? canPayMonthly : canPayOneTime
     if (!canPay) {
       toaster.create({
         title: "Invalid Amount",
@@ -331,7 +356,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       return
     }
 
+    setSelectedOption(paymentType)
     setLoading(true)
+    setLoadingFrequency(paymentType)
     try {
       const primaryImage = images.length > 0 ? images[0] : null
       let primaryImageUrl = beneficiary.image_url || ""
@@ -350,7 +377,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         beneficiaryName: beneficiary.name,
         beneficiaryImage: primaryImageUrl || PERSON_PLACEHOLDER_PATH,
         amount: isOpen ? amountCents : beneficiary.budget_goal,
-        paymentType: selectedOption,
+        paymentType,
         location: beneficiary.country,
         userId: user?.id,
         isEmbedded: window.self !== window.top,
@@ -416,6 +443,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       console.error("Payment Error:", err)
     } finally {
       setLoading(false)
+      setLoadingFrequency(null)
     }
   }
 
@@ -432,7 +460,13 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       }
     },
   ) => {
-    if (!canPay) {
+    const paypalAmountCents =
+      selectedOption === "subscription"
+        ? monthlyAmountCents
+        : oneTimeAmountCents
+    const canPayPayPal =
+      selectedOption === "subscription" ? canPayMonthly : canPayOneTime
+    if (!canPayPayPal) {
       toaster.create({
         title: "Invalid Amount",
         description: isOpen
@@ -441,13 +475,17 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       })
       throw new Error("Invalid amount")
     }
-    const paymentAmount = (isOpen ? amountCents : fixedAmountCents) / 100
+    const paymentAmount = (isOpen ? paypalAmountCents : fixedAmountCents) / 100
+    const frequencyLabel =
+      selectedOption === "subscription"
+        ? "Monthly"
+        : selectedOption === "one_time"
+          ? "One-time"
+          : "Yearly"
     return actions.order.create({
       purchase_units: [
         {
-          description: `${
-            selectedOption === "subscription" ? "Monthly" : "Yearly"
-          } Sponsorship for ${beneficiary.name}`,
+          description: `${frequencyLabel} Sponsorship for ${beneficiary.name}`,
           amount: { value: paymentAmount.toFixed(2), currency_code: "USD" },
         },
       ],
@@ -464,7 +502,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             beneficiary_id: beneficiary.id,
             name: `Monthly Sponsorship for ${beneficiary.name}`,
             description: `Recurring monthly sponsorship for ${beneficiary.name}`,
-            amount: (isOpen ? amountCents : fixedAmountCents) / 100,
+            amount: (isOpen ? monthlyAmountCents : fixedAmountCents) / 100,
             interval_unit: "MONTH",
             interval_count: 1,
             currency_code: "USD",
@@ -514,7 +552,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         body: JSON.stringify({
           beneficiaryId: beneficiary.id,
           beneficiaryName: beneficiary.name,
-          amount: (isOpen ? amountCents : fixedAmountCents) / 100,
+          amount: (isOpen ? oneTimeAmountCents : fixedAmountCents) / 100,
           paymentType: selectedOption,
           location: beneficiary.country,
           userId: user?.id,
@@ -549,6 +587,180 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     })
   }
 
+  /**
+   * Vertical segmented radio — presets + custom in a single bordered container
+   * with thin dividers between rows, no gaps.
+   *
+   * isActive is gated on activeColumn === column so that picking anything in one
+   * column automatically deselects the other without wiping its persisted values.
+   * The custom input value is stored separately (customCents/setCustomCents) so
+   * it survives switching to a preset and back.
+   */
+  const renderAmountPicker = ({
+    presets,
+    ariaLabel,
+    column,
+    amountCents,
+    setAmountCents,
+    customMode,
+    setCustomMode,
+    customCents,
+    setCustomCents,
+    clearOtherColumn,
+    focusOnOpen = false,
+  }: {
+    presets: readonly number[]
+    ariaLabel: string
+    column: "monthly" | "one_time"
+    amountCents: number
+    setAmountCents: React.Dispatch<React.SetStateAction<number>>
+    customMode: boolean
+    setCustomMode: React.Dispatch<React.SetStateAction<boolean>>
+    customCents: number
+    setCustomCents: React.Dispatch<React.SetStateAction<number>>
+    clearOtherColumn: () => void
+    focusOnOpen?: boolean
+  }) => {
+    const isColumnActive = activeColumn === column
+    const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!isOpen) return
+      const inputValue = e.target.value
+      const cents =
+        inputValue === ""
+          ? 0
+          : Number.isFinite(parseFloat(inputValue))
+            ? Math.round(parseFloat(inputValue) * 100)
+            : 0
+      setCustomCents(cents)
+      setAmountCents(cents)
+    }
+    const allItems = [...presets, "custom"] as const
+    return (
+      <Box
+        role="radiogroup"
+        aria-label={ariaLabel}
+        borderWidth="1px"
+        borderColor="gray.300"
+        borderRadius="xl"
+        overflow="hidden"
+        bg="white"
+      >
+        {allItems.map((item, idx) => {
+          const isCustom = item === "custom"
+          const isActive =
+            isColumnActive &&
+            (isCustom
+              ? customMode
+              : !customMode && amountCents === (item as number) * 100)
+          const isLast = idx === allItems.length - 1
+
+          return (
+            <Box
+              key={isCustom ? "custom" : (item as number)}
+              borderBottomWidth={isLast ? 0 : "1px"}
+              borderColor="gray.200"
+            >
+              {isCustom ? (
+                <Flex
+                  h="44px"
+                  align="center"
+                  overflow="hidden"
+                  bg={isActive ? "#2b7ff9" : "white"}
+                  cursor={isActive ? "text" : "pointer"}
+                  role="radio"
+                  aria-checked={isActive}
+                  tabIndex={isActive ? -1 : 0}
+                  onClick={() => {
+                    if (!isActive) {
+                      clearOtherColumn()
+                      setCustomMode(true)
+                      setActiveColumn(column)
+                      setAmountCents(customCents)
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (!isActive && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault()
+                      clearOtherColumn()
+                      setCustomMode(true)
+                      setActiveColumn(column)
+                      setAmountCents(customCents)
+                    }
+                  }}
+                  _hover={!isActive ? { bg: "gray.50" } : undefined}
+                  transition="background 0.1s"
+                >
+                  <Box
+                    className={`px-4 h-full flex items-center font-medium border-r text-sm select-none ${
+                      isActive
+                        ? "text-white border-white/30"
+                        : "text-gray-400 border-gray-200"
+                    }`}
+                  >
+                    $
+                  </Box>
+                  {isActive ? (
+                    <Input
+                      type="number"
+                      step="0.01"
+                      autoFocus={focusOnOpen || isActive}
+                      value={customCents > 0 ? customCents / 100 : ""}
+                      onChange={handleAmountChange}
+                      className="px-3 h-full border-0 outline-none focus:ring-0 text-sm text-white placeholder-white/60 flex-1 bg-transparent"
+                      placeholder="Enter amount"
+                    />
+                  ) : (
+                    <Text
+                      flex="1"
+                      pl={3}
+                      color="gray.400"
+                      fontWeight="medium"
+                      fontSize="sm"
+                    >
+                      {customCents > 0
+                        ? `$${(customCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                        : "Custom"}
+                    </Text>
+                  )}
+                </Flex>
+              ) : (
+                <Box
+                  as="button"
+                  role="radio"
+                  aria-checked={isActive}
+                  width="100%"
+                  h="44px"
+                  px={4}
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  bg={isActive ? "#2b7ff9" : "white"}
+                  color={isActive ? "white" : "gray.700"}
+                  fontWeight={isActive ? "semibold" : "medium"}
+                  fontSize="sm"
+                  cursor="pointer"
+                  transition="background 0.1s"
+                  _hover={{ bg: isActive ? "#1a6fe0" : "gray.50" }}
+                  onClick={() => {
+                    clearOtherColumn()
+                    setCustomMode(false)
+                    setAmountCents((item as number) * 100)
+                    setActiveColumn(column)
+                  }}
+                >
+                  <Text as="span">${(item as number).toLocaleString()}</Text>
+                  {isActive && (
+                    <HeartHandMark width={16} height={14} color="white" />
+                  )}
+                </Box>
+              )}
+            </Box>
+          )
+        })}
+      </Box>
+    )
+  }
+
   const renderSponsorshipDisclaimer = () => {
     const faqLink = (
       <button
@@ -581,8 +793,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       )
     }
 
+    const activeAmountCents =
+      activeColumn === "one_time" ? oneTimeAmountCents : monthlyAmountCents
     const gapAfterThisPaymentCents =
-      beneficiary.budget_goal - beneficiary.budget_raised - amountCents
+      beneficiary.budget_goal - beneficiary.budget_raised - activeAmountCents
 
     if (gapAfterThisPaymentCents > 0) {
       return (
@@ -640,376 +854,572 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   return (
     <>
-    <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} />
-    <DialogRoot
-      open={open}
-      onOpenChange={(details) => {
-        if (!details.open) onClose()
-      }}
-    >
-      <DialogContent
-        className="max-w-[95vw] md:max-w-[1100px] w-full relative rounded-3xl p-0 mt-8 md:mt-24 mx-4 overflow-hidden"
-        style={{
-          boxShadow:
-            "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)",
-          borderRadius: "24px",
+      <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} />
+      <DialogRoot
+        open={open}
+        onOpenChange={(details) => {
+          if (!details.open) onClose()
         }}
       >
-        <DialogHeader className="bg-[#2b7ff9] text-white px-8 py-6">
-          <Text fontSize="xl" fontWeight="bold">
-            {beneficiary.name || "Sponsor"}
-          </Text>
-          <DialogCloseTrigger className="text-white hover:bg-white/20" />
-        </DialogHeader>
+        <DialogContent
+          className="max-w-[95vw] md:max-w-[1100px] w-full relative rounded-3xl p-0 mt-8 md:mt-24 mx-4 overflow-hidden"
+          style={{
+            boxShadow:
+              "0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04)",
+            borderRadius: "24px",
+          }}
+        >
+          <DialogHeader className="bg-[#2b7ff9] text-white px-8 py-6">
+            <Text fontSize="xl" fontWeight="bold">
+              {beneficiary.name || "Sponsor"}
+            </Text>
+            <DialogCloseTrigger className="text-white hover:bg-white/20" />
+          </DialogHeader>
 
-        <DialogBody className="p-7 md:p-8">
-          {/* Main Content - Two Column Layout */}
-          <Flex
-            direction={{ base: "column", md: "row" }}
-            gap={{ base: 5, md: 6 }}
-            mb={4}
-          >
-            {/* LEFT COLUMN - Image & Basic Info */}
-            <Box flex={{ base: "1", md: "0 0 40%" }} className="flex flex-col">
-              <Box className="relative">
-                {/* Status pill: hidden for open sponsorships (indistinguishable across statuses) and for fulfilled fixed types (ribbon conveys sponsored state). */}
-                {!alreadyFulfilled && !isOpen && (
-                  <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#2b7ff9] rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
-                    <FaCircleInfo />
-                    <Text className="text-xs font-semibold">
-                      {getStatusText(beneficiary.status)}
-                    </Text>
-                  </Box>
-                )}
-                <Box
-                  position="relative"
-                  className="rounded-2xl overflow-hidden"
-                >
-                  {imageLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
-                      <Spinner size="lg" color="#2b7ff9" />
-                    </div>
-                  )}
-                  <ImageCarousel
-                    images={images}
-                    getImageSrc={getImageSrc}
-                    getThumbnailSrc={getThumbnailSrc}
-                    fallbackSrc={PERSON_PLACEHOLDER_PATH}
-                    alt={beneficiary.name || "Beneficiary"}
-                    className="rounded-2xl aspect-[4/5] object-cover"
-                    showArrowsOnHover={true}
-                  />
-                  {alreadyFulfilled && <SupportedRibbon size="lg" />}
-                </Box>
-              </Box>
-
-              <Box className="text-center space-y-3 mt-4">
-                <Flex
-                  align="center"
-                  gap={{ base: 2, md: 3 }}
-                  justify="center"
-                  wrap="wrap"
-                  className="text-gray-600 text-sm"
-                >
-                  <Flex align="center" gap={1.5}>
-                    <FaCalendar className="text-[#2b7ff9]" />
-                    <Text className="text-sm">
-                      {beneficiary.birth_date
-                        ? `${Math.floor(
-                            (Date.now() -
-                              new Date(beneficiary.birth_date).getTime()) /
-                              (365.25 * 24 * 60 * 60 * 1000),
-                          )} years old${birthDateIsEstimate ? " (estimated)" : ""}`
-                        : "Age unknown"}
-                    </Text>
-                  </Flex>
-                  <Flex align="center" gap={1.5}>
-                    <FaUser className="text-[#2b7ff9]" />
-                    <Text className="text-sm">
-                      {beneficiary.gender || "Gender"}
-                    </Text>
-                  </Flex>
-                  <Flex align="center" gap={1.5}>
-                    <FaLocationDot className="text-[#2b7ff9]" />
-                    <Text className="text-sm">
-                      {beneficiary.country || "Location"}
-                    </Text>
-                  </Flex>
-                </Flex>
-              </Box>
-
-              {videoUrl && (
-                <Box className="mt-4">
-                  <Box
-                    bg="white"
-                    borderRadius="xl"
-                    overflow="hidden"
-                    borderWidth="1px"
-                    borderColor="gray.200"
-                    boxShadow="sm"
-                  >
-                    <video
-                      className="w-full"
-                      src={videoUrl}
-                      controls
-                    />
-                  </Box>
-                </Box>
-              )}
-            </Box>
-
-            {/* RIGHT COLUMN */}
-            <Box
-              flex={{ base: "1", md: "0 0 60%" }}
-              className="flex flex-col"
-              pr={{ base: 0, md: 4 }}
+          <DialogBody className="p-7 md:p-8">
+            {/* Main Content - Two Column Layout */}
+            <Flex
+              direction={{ base: "column", md: "row" }}
+              gap={{ base: 5, md: 6 }}
+              mb={4}
             >
-              {/* Bio */}
-              <Box className="bg-gray-100 rounded-xl p-5 space-y-2 mb-4">
-                <Text className="text-lg font-semibold text-gray-900">
-                  About {firstName}
-                </Text>
-                <Text
-                  className="text-gray-700 leading-relaxed text-sm md:text-base"
-                  style={
-                    alreadyFulfilled && !bioExpanded
-                      ? {
-                          display: "-webkit-box",
-                          WebkitLineClamp: 5,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                        }
-                      : undefined
-                  }
-                >
-                  {beneficiary.biography || "No biography available."}
-                </Text>
-                {alreadyFulfilled && (
-                  <button
-                    onClick={() => setBioExpanded((v) => !v)}
-                    className={SHOW_MORE_CLASS}
-                  >
-                    {bioExpanded ? "Show less" : "Show more"}
-                    <span aria-hidden>{bioExpanded ? "▲" : "▼"}</span>
-                  </button>
-                )}
-              </Box>
-
-              {/* Latest Updates -- styled identically to About card */}
-              {hasActivities && (
-                <Box className="bg-gray-100 rounded-xl p-5 space-y-2">
-                  <Text className="text-lg font-semibold text-gray-900">
-                    Latest Updates
-                  </Text>
-                  <BeneficiaryActivity activities={activities} />
-                </Box>
-              )}
-            </Box>
-          </Flex>
-
-          {/* Sponsorship CTA — same place & card for fully sponsored + active checkout */}
-          <Box className="mt-8 mb-8 md:mt-16 md:mb-16 w-full flex justify-center">
-            <Box
-              className="w-full min-w-0 md:w-3/4 lg:w-2/3 rounded-xl p-5 md:p-10 space-y-2 text-center"
-              style={{
-                background: "linear-gradient(135deg, #EEF6FF 0%, #F3EEFF 100%)",
-                border: "1px solid #CDE1FE",
-              }}
-            >
-              {alreadyFulfilled ? (
-                <>
-                  <Flex justify="center">
-                    <FaCircleCheck size={28} color="#2b7ff9" />
-                  </Flex>
-                  <Text className="text-lg font-semibold text-gray-900">
-                    This beneficiary is fully sponsored
-                  </Text>
-                  <Text className="text-gray-700 leading-relaxed text-sm md:text-base">
-                    {firstName} is already receiving support. You can still
-                    share their story, or find another to sponsor.
-                  </Text>
-                  <Button
-                    onClick={onClose}
-                    className="w-full h-11 text-sm font-semibold bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] rounded-xl transition-all shadow-md hover:shadow-lg"
-                  >
-                    <FaArrowDown className="mr-2" />
-                    Sponsor someone like {firstName}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  {/*                   <Text className="text-xl font-normal text-[#2b7ff9]/75 mb-8">
-                    Monthly Sponsorship Amount
-                  </Text> */}
-                  <Flex
-                    gap={3}
-                    align="start"
-                    direction={{ base: "column", md: "row" }}
-                    className="text-left"
-                  >
-                    <Box
-                      flex={{ base: "1", md: "0 0 50%" }}
-                      width={{ base: "100%", md: "auto" }}
-                    >
-                      <Tooltip
-                        content={`For ${firstName}, this is what every month looks like: classroom days, full meals, real healthcare, and an outreach team who knows them by name.`}
-                        showArrow
-                        disabled={isOpen}
-                      >
-                        <Flex
-                          className="border border-gray-300 rounded-xl bg-white focus-within:border-[#2b7ff9] transition-colors overflow-hidden"
-                          align="center"
-                          h="56px"
-                        >
-                          <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
-                            $
-                          </Box>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={isOpen ? (amountCents > 0 ? amountCents / 100 : "") : fixedAmountCents / 100}
-                            onChange={handleAmountChange}
-                            readOnly={!isOpen}
-                            disabled={!isOpen}
-                            className={`px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700${!isOpen ? " bg-gray-100 cursor-help" : ""}`}
-                            placeholder="Enter Amount"
-                          />
-                        </Flex>
-                      </Tooltip>
+              {/* LEFT COLUMN - Image & Basic Info */}
+              <Box
+                flex={{ base: "1", md: "0 0 40%" }}
+                className="flex flex-col"
+              >
+                <Box className="relative">
+                  {/* Status pill: hidden for open sponsorships (indistinguishable across statuses) and for fulfilled fixed types (ribbon conveys sponsored state). */}
+                  {!alreadyFulfilled && !isOpen && (
+                    <Box className="absolute top-3 right-3 z-10 bg-[#CDE1FE] text-[#2b7ff9] rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
+                      <FaCircleInfo />
+                      <Text className="text-xs font-semibold">
+                        {getStatusText(beneficiary.status)}
+                      </Text>
                     </Box>
+                  )}
+                  <Box
+                    position="relative"
+                    className="rounded-2xl overflow-hidden"
+                  >
+                    {imageLoading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
+                        <Spinner size="lg" color="#2b7ff9" />
+                      </div>
+                    )}
+                    <ImageCarousel
+                      images={images}
+                      getImageSrc={getImageSrc}
+                      getThumbnailSrc={getThumbnailSrc}
+                      fallbackSrc={PERSON_PLACEHOLDER_PATH}
+                      alt={beneficiary.name || "Beneficiary"}
+                      className="rounded-2xl aspect-[4/5] object-cover"
+                      showArrowsOnHover={true}
+                    />
+                    {alreadyFulfilled && <SupportedRibbon size="lg" />}
+                  </Box>
+                </Box>
+
+                <Box className="text-center space-y-3 mt-4">
+                  <Flex
+                    align="center"
+                    gap={{ base: 2, md: 3 }}
+                    justify="center"
+                    wrap="wrap"
+                    className="text-gray-600 text-sm"
+                  >
+                    <Flex align="center" gap={1.5}>
+                      <FaCalendar className="text-[#2b7ff9]" />
+                      <Text className="text-sm">
+                        {beneficiary.birth_date
+                          ? `${Math.floor(
+                              (Date.now() -
+                                new Date(beneficiary.birth_date).getTime()) /
+                                (365.25 * 24 * 60 * 60 * 1000),
+                            )} years old${birthDateIsEstimate ? " (estimated)" : ""}`
+                          : "Age unknown"}
+                      </Text>
+                    </Flex>
+                    <Flex align="center" gap={1.5}>
+                      <FaUser className="text-[#2b7ff9]" />
+                      <Text className="text-sm">
+                        {beneficiary.gender || "Gender"}
+                      </Text>
+                    </Flex>
+                    <Flex align="center" gap={1.5}>
+                      <FaLocationDot className="text-[#2b7ff9]" />
+                      <Text className="text-sm">
+                        {beneficiary.country || "Location"}
+                      </Text>
+                    </Flex>
+                  </Flex>
+                </Box>
+
+                {videoUrl && (
+                  <Box className="mt-4">
                     <Box
-                      flex={{ base: "1", md: "0 0 calc(50% - 12px)" }}
-                      width={{ base: "100%", md: "auto" }}
+                      bg="white"
+                      borderRadius="xl"
+                      overflow="hidden"
+                      borderWidth="1px"
+                      borderColor="gray.200"
+                      boxShadow="sm"
                     >
-                      <Tooltip
-                        content={disabledReason}
-                        showArrow
-                        disabled={!disabledReason}
-                        open={tipOpen}
-                        onOpenChange={(e) => setTipOpen(e.open)}
+                      <video className="w-full" src={videoUrl} controls />
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+
+              {/* RIGHT COLUMN */}
+              <Box
+                flex={{ base: "1", md: "0 0 60%" }}
+                className="flex flex-col"
+                pr={{ base: 0, md: 4 }}
+              >
+                {/* Bio */}
+                <Box className="bg-gray-100 rounded-xl p-5 space-y-2 mb-4">
+                  <Text className="text-lg font-semibold text-gray-900">
+                    About {firstName}
+                  </Text>
+                  <Text
+                    className="text-gray-700 leading-relaxed text-sm md:text-base"
+                    style={
+                      alreadyFulfilled && !bioExpanded
+                        ? {
+                            display: "-webkit-box",
+                            WebkitLineClamp: 5,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }
+                        : undefined
+                    }
+                  >
+                    {beneficiary.biography || "No biography available."}
+                  </Text>
+                  {alreadyFulfilled && (
+                    <button
+                      onClick={() => setBioExpanded((v) => !v)}
+                      className={SHOW_MORE_CLASS}
+                    >
+                      {bioExpanded ? "Show less" : "Show more"}
+                      <span aria-hidden>{bioExpanded ? "▲" : "▼"}</span>
+                    </button>
+                  )}
+                </Box>
+
+                {/* Latest Updates -- styled identically to About card */}
+                {hasActivities && (
+                  <Box className="bg-gray-100 rounded-xl p-5 space-y-2">
+                    <Text className="text-lg font-semibold text-gray-900">
+                      Latest Updates
+                    </Text>
+                    <BeneficiaryActivity activities={activities} />
+                  </Box>
+                )}
+              </Box>
+            </Flex>
+
+            {/* Sponsorship CTA — same place & card for fully sponsored + active checkout */}
+            <Box className="mt-8 mb-8 md:mt-16 md:mb-16 w-full flex justify-center">
+              <Box
+                className="w-full min-w-0 md:w-5/6 rounded-xl px-8 py-6 md:px-16 md:py-12 space-y-2 text-center"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #EEF6FF 0%, #F3EEFF 100%)",
+                  border: "1px solid #CDE1FE",
+                }}
+              >
+                {alreadyFulfilled ? (
+                  <>
+                    <Flex justify="center">
+                      <FaCircleCheck size={28} color="#2b7ff9" />
+                    </Flex>
+                    <Text className="text-lg font-semibold text-gray-900">
+                      This beneficiary is fully sponsored
+                    </Text>
+                    <Text className="text-gray-700 leading-relaxed text-sm md:text-base">
+                      {firstName} is already receiving support. You can still
+                      share their story, or find another to sponsor.
+                    </Text>
+                    <Button
+                      onClick={onClose}
+                      className="w-full h-11 text-sm font-semibold bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] rounded-xl transition-all shadow-md hover:shadow-lg"
+                    >
+                      <FaArrowDown className="mr-2" />
+                      Sponsor someone like {firstName}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {/* AMOUNT INPUT — combined chips + custom field for open types, inline disabled input for fixed types. */}
+                    {isOpen ? (
+                      <Box className="text-left w-full">
+                        <Flex
+                          direction={{ base: "column", md: "row" }}
+                          gap={{ base: 8, md: 16 }}
+                          alignItems="stretch"
+                          width="100%"
+                        >
+                          {/* Left column: monthly — wider */}
+                          <Box flex={3} minW={0}>
+                            <Text
+                              fontWeight="semibold"
+                              fontSize="sm"
+                              color="gray.600"
+                              mb={2}
+                            >
+                              Monthly Sponsorship
+                            </Text>
+                            {renderAmountPicker({
+                              presets: OPEN_SPONSORSHIP_LEFT_PRESETS_USD,
+                              ariaLabel: "Monthly suggested amounts",
+                              column: "monthly",
+                              amountCents: monthlyAmountCents,
+                              setAmountCents: setMonthlyAmountCents,
+                              customMode: monthlyCustomMode,
+                              setCustomMode: setMonthlyCustomMode,
+                              customCents: monthlyCustomCents,
+                              setCustomCents: setMonthlyCustomCents,
+                              clearOtherColumn: () =>
+                                setOneTimeCustomMode(false),
+                              focusOnOpen: true,
+                            })}
+                            <Tooltip
+                              content={monthlyDisabledReason}
+                              showArrow
+                              disabled={!monthlyDisabledReason}
+                              open={tipOpen}
+                              onOpenChange={(e) => setTipOpen(e.open)}
+                            >
+                              <Box
+                                as="span"
+                                display="block"
+                                width="100%"
+                                mt={3}
+                                tabIndex={0}
+                                onPointerDown={() => {
+                                  if (monthlyDisabledReason) setTipOpen(true)
+                                }}
+                              >
+                                <Button
+                                  onClick={() =>
+                                    handleStripePayment("subscription")
+                                  }
+                                  loading={loadingFrequency === "subscription"}
+                                  loadingText="Processing..."
+                                  disabled={
+                                    loading ||
+                                    !canPayMonthly ||
+                                    activeColumn !== "monthly"
+                                  }
+                                  width="100%"
+                                  opacity={
+                                    activeColumn !== "monthly" || !canPayMonthly
+                                      ? 0.5
+                                      : 1
+                                  }
+                                  h="auto"
+                                  minH="52px"
+                                  py={3}
+                                  px={3}
+                                  bg="#2b7ff9"
+                                  color="white"
+                                  fontWeight="semibold"
+                                  borderRadius="xl"
+                                  boxShadow="md"
+                                  _hover={{ bg: "#1a6fe0", boxShadow: "lg" }}
+                                  _disabled={{ bg: "#2b7ff9" }}
+                                >
+                                  <Flex
+                                    direction="column"
+                                    align="center"
+                                    gap={0.5}
+                                    textAlign="center"
+                                  >
+                                    <Text
+                                      fontWeight="semibold"
+                                      fontSize="sm"
+                                      lineHeight="short"
+                                    >
+                                      Sponsor {firstName} 🪽
+                                    </Text>
+                                    <Text
+                                      fontWeight="medium"
+                                      fontSize="xs"
+                                      opacity={0.9}
+                                    >
+                                      {canPayMonthly
+                                        ? `$${(monthlyAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}/month`
+                                        : "Monthly Sponsorship"}
+                                    </Text>
+                                  </Flex>
+                                </Button>
+                              </Box>
+                            </Tooltip>
+                          </Box>
+
+                          {/* Right column: one-time gift — narrower */}
+                          <Box flex={2} minW={0}>
+                            <Text
+                              fontWeight="semibold"
+                              fontSize="sm"
+                              color="gray.600"
+                              mb={2}
+                            >
+                              One-Time Gift
+                            </Text>
+                            {renderAmountPicker({
+                              presets: OPEN_SPONSORSHIP_RIGHT_PRESETS_USD,
+                              ariaLabel: "Gift suggested amounts",
+                              column: "one_time",
+                              amountCents: oneTimeAmountCents,
+                              setAmountCents: setOneTimeAmountCents,
+                              customMode: oneTimeCustomMode,
+                              setCustomMode: setOneTimeCustomMode,
+                              customCents: oneTimeCustomCents,
+                              setCustomCents: setOneTimeCustomCents,
+                              clearOtherColumn: () =>
+                                setMonthlyCustomMode(false),
+                            })}
+                            <Tooltip
+                              content={oneTimeDisabledReason}
+                              showArrow
+                              disabled={!oneTimeDisabledReason}
+                              open={tipOpen}
+                              onOpenChange={(e) => setTipOpen(e.open)}
+                            >
+                              <Box
+                                as="span"
+                                display="block"
+                                width="100%"
+                                mt={3}
+                                tabIndex={0}
+                                onPointerDown={() => {
+                                  if (oneTimeDisabledReason) setTipOpen(true)
+                                }}
+                              >
+                                <Button
+                                  onClick={() =>
+                                    handleStripePayment("one_time")
+                                  }
+                                  loading={loadingFrequency === "one_time"}
+                                  loadingText="Processing..."
+                                  disabled={
+                                    loading ||
+                                    !canPayOneTime ||
+                                    activeColumn !== "one_time"
+                                  }
+                                  width="100%"
+                                  opacity={
+                                    activeColumn !== "one_time" ||
+                                    !canPayOneTime
+                                      ? 0.5
+                                      : 1
+                                  }
+                                  h="44px"
+                                  px={4}
+                                  bg="#EEF6FF"
+                                  color="#2b7ff9"
+                                  borderWidth="1px"
+                                  borderColor="#CDE1FE"
+                                  fontWeight="medium"
+                                  fontSize="sm"
+                                  borderRadius="xl"
+                                  boxShadow="sm"
+                                  _hover={{
+                                    bg: "#E3EEFE",
+                                    borderColor: "#A8CDEF",
+                                  }}
+                                  _disabled={{ bg: "#EEF6FF" }}
+                                >
+                                  {canPayOneTime
+                                    ? `Gift $${(oneTimeAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                                    : "One-Time Gift"}
+                                </Button>
+                              </Box>
+                            </Tooltip>
+                          </Box>
+                        </Flex>
+                      </Box>
+                    ) : (
+                      <Flex
+                        gap={3}
+                        align="start"
+                        direction={{ base: "column", md: "row" }}
+                        className="text-left"
                       >
                         <Box
-                          as="span"
-                          display="inline-block"
-                          width="100%"
-                          tabIndex={0}
-                          onPointerDown={() => {
-                            if (disabledReason) setTipOpen(true)
-                          }}
+                          flex={{ base: "1", md: "0 0 50%" }}
+                          width={{ base: "100%", md: "auto" }}
+                        >
+                          <Tooltip
+                            content={`For ${firstName}, this is what every month looks like: classroom days, full meals, real healthcare, and an outreach team who knows them by name.`}
+                            showArrow
+                          >
+                            <Flex
+                              className="border border-gray-300 rounded-xl bg-white focus-within:border-[#2b7ff9] transition-colors overflow-hidden"
+                              align="center"
+                              h="56px"
+                            >
+                              <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
+                                $
+                              </Box>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={fixedAmountCents / 100}
+                                readOnly
+                                disabled
+                                className="px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700 bg-gray-100 cursor-help"
+                                placeholder="Enter Amount"
+                              />
+                            </Flex>
+                          </Tooltip>
+                        </Box>
+                        <Box
+                          flex={{ base: "1", md: "0 0 calc(50% - 12px)" }}
+                          width={{ base: "100%", md: "auto" }}
                         >
                           <Button
-                            onClick={handleStripePayment}
+                            onClick={() => handleStripePayment("subscription")}
                             loading={loading}
                             loadingText="Processing..."
-                            disabled={loading || !canPay}
+                            disabled={loading || alreadyFulfilled}
                             className={`w-full h-[3.25rem] text-lg font-semibold bg-[#2b7ff9] text-white hover:bg-[#1a6fe0] rounded-xl transition-all shadow-md hover:shadow-lg${
-                              !canPay ? " opacity-50 cursor-not-allowed" : ""
+                              alreadyFulfilled
+                                ? " opacity-50 cursor-not-allowed"
+                                : ""
                             }`}
                           >
                             Sponsor {firstName} 🪽
                           </Button>
                         </Box>
-                      </Tooltip>
-                    </Box>
-                  </Flex>
+                      </Flex>
+                    )}
 
-                  {isOpen && (
-                    <Flex gap={2} wrap="wrap" mt={3} aria-label="Suggested amounts">
-                      {OPEN_SPONSORSHIP_PRESETS_USD.map((amount) => {
-                        const isActive = amountCents === amount * 100
-                        return (
-                          <Button
-                            key={amount}
-                            type="button"
-                            size="sm"
-                            onClick={() => setAmountCents(amount * 100)}
-                            borderRadius="full"
-                            px={4}
-                            h="36px"
-                            fontWeight={isActive ? "semibold" : "medium"}
-                            bg={isActive ? "#2b7ff9" : "gray.100"}
-                            color={isActive ? "white" : "gray.700"}
-                            borderWidth="1px"
-                            borderColor={isActive ? "#2b7ff9" : "gray.200"}
-                            _hover={{
-                              bg: isActive ? "#1a6fe0" : "gray.200",
+                    {isPayPalEnabled &&
+                      PayPalScriptProvider &&
+                      PayPalButtons && (
+                        <Box className="pt-1">
+                          {isOpen && (
+                            <Flex
+                              align="center"
+                              justify="center"
+                              gap={2}
+                              wrap="wrap"
+                              mb={2}
+                              role="radiogroup"
+                              aria-label="PayPal payment frequency"
+                            >
+                              <Text className="text-xs text-gray-500">
+                                PayPal frequency:
+                              </Text>
+                              {openSponsorshipFrequencyOptions.map((option) => {
+                                const isActive = selectedOption === option.value
+                                return (
+                                  <Button
+                                    key={option.value}
+                                    type="button"
+                                    size="xs"
+                                    role="radio"
+                                    aria-checked={isActive}
+                                    onClick={() =>
+                                      setSelectedOption(option.value)
+                                    }
+                                    borderRadius="full"
+                                    px={3}
+                                    h="28px"
+                                    fontSize="xs"
+                                    fontWeight={
+                                      isActive ? "semibold" : "medium"
+                                    }
+                                    bg={isActive ? "#2b7ff9" : "gray.100"}
+                                    color={isActive ? "white" : "gray.600"}
+                                    borderWidth="1px"
+                                    borderColor={
+                                      isActive ? "#2b7ff9" : "gray.200"
+                                    }
+                                    _hover={{
+                                      bg: isActive ? "#1a6fe0" : "gray.200",
+                                    }}
+                                    transition="all 0.15s"
+                                  >
+                                    {option.label}
+                                  </Button>
+                                )
+                              })}
+                            </Flex>
+                          )}
+                          <PayPalScriptProvider
+                            options={{
+                              "client-id": process.env
+                                .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
+                              currency: "USD",
+                              intent: "capture",
                             }}
-                            transition="all 0.15s"
                           >
-                            ${amount}
-                          </Button>
-                        )
-                      })}
-                    </Flex>
-                  )}
+                            {(
+                              isOpen
+                                ? canPayMonthly || canPayOneTime
+                                : !alreadyFulfilled
+                            ) ? (
+                              <PayPalButtons
+                                style={{
+                                  layout: "horizontal",
+                                  tagline: false,
+                                  height: 48,
+                                }}
+                                createOrder={handleCreateOrder}
+                                onApprove={handlePayPalApproval}
+                                onError={handlePayPalError}
+                              />
+                            ) : (
+                              <Box className="h-12 bg-white/80 rounded-xl flex items-center justify-center border border-gray-200">
+                                <Text className="text-sm text-gray-500 text-center px-2">
+                                  {isOpen
+                                    ? OPEN_SPONSORSHIP_RANGE_MESSAGE
+                                    : "This beneficiary is already fully sponsored"}
+                                </Text>
+                              </Box>
+                            )}
+                          </PayPalScriptProvider>
+                        </Box>
+                      )}
 
-                  {isPayPalEnabled && PayPalScriptProvider && PayPalButtons && (
-                    <Box className="pt-1">
-                      <PayPalScriptProvider
-                        options={{
-                          "client-id": process.env
-                            .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
-                          currency: "USD",
-                          intent: "capture",
-                        }}
-                      >
-                        {canPay ? (
-                          <PayPalButtons
-                            style={{
-                              layout: "horizontal",
-                              tagline: false,
-                              height: 48,
-                            }}
-                            createOrder={handleCreateOrder}
-                            onApprove={handlePayPalApproval}
-                            onError={handlePayPalError}
-                          />
-                        ) : (
-                          <Box className="h-12 bg-white/80 rounded-xl flex items-center justify-center border border-gray-200">
-                            <Text className="text-sm text-gray-500 text-center px-2">
-                              {isOpen
-                                ? OPEN_SPONSORSHIP_RANGE_MESSAGE
-                                : "This beneficiary is already fully sponsored"}
-                            </Text>
-                          </Box>
-                        )}
-                      </PayPalScriptProvider>
+                    {/* Context copy inside the card */}
+                    <Box className="pt-4 mt-24 text-left">
+                      {renderSponsorshipDisclaimer()}
                     </Box>
-                  )}
-
-                  {/* Context copy inside the card */}
-                  <Box className="pt-4 mt-6 text-left">
-                    {renderSponsorshipDisclaimer()}
-                  </Box>
-                </>
-              )}
+                  </>
+                )}
+              </Box>
             </Box>
-          </Box>
 
-          {/* Footer — actions only */}
-          <Flex className="mt-6 pt-2 w-full" justify="flex-end" gap={2}>
-            <Button
-              className="border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-              size="sm"
-              variant="outline"
-              onClick={handleCopyLink}
-            >
-              <FaLink className="mr-2" />
-              Copy Link
-            </Button>
-            <Button
-              className="border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-              size="sm"
-              variant="outline"
-              onClick={handleShareProfile}
-            >
-              <FaShare className="mr-2" />
-              Share
-            </Button>
-          </Flex>
-        </DialogBody>
-      </DialogContent>
-    </DialogRoot>
+            {/* Footer — actions only */}
+            <Flex className="mt-6 pt-2 w-full" justify="flex-end" gap={2}>
+              <Button
+                className="border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                size="sm"
+                variant="outline"
+                onClick={handleCopyLink}
+              >
+                <FaLink className="mr-2" />
+                Copy Link
+              </Button>
+              <Button
+                className="border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                size="sm"
+                variant="outline"
+                onClick={handleShareProfile}
+              >
+                <FaShare className="mr-2" />
+                Share
+              </Button>
+            </Flex>
+          </DialogBody>
+        </DialogContent>
+      </DialogRoot>
     </>
   )
 }
