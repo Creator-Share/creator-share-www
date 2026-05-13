@@ -131,6 +131,11 @@ export async function POST(req: Request) {
       metadata: priceMetadata,
     })
 
+    // Platform identity marker — every checkout created by this route includes
+    // creatorshare_platform so the Stripe webhook can positively identify
+    // sessions originating from Creator Share. Sessions without this tag
+    // (e.g. from other surfaces sharing this Stripe account) are silently
+    // acknowledged and dropped.
     const sessionMetadata: Record<string, string | null> =
       type === "partnership"
         ? {
@@ -139,6 +144,7 @@ export async function POST(req: Request) {
             project,
             email,
             paymentType,
+            creatorshare_platform: "true",
           }
         : {
             beneficiaryId: beneficiaryId || null,
@@ -150,6 +156,7 @@ export async function POST(req: Request) {
             paymentType,
             sponsorshipMode: resolvedSponsorshipMode,
             blindLabel: resolvedBlindLabel,
+            creatorshare_platform: "true",
           }
 
     // One-time: mode="payment", no subscription_data.
