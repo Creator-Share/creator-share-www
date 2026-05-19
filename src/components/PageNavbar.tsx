@@ -19,23 +19,9 @@ import { FAQModal } from "./FAQModal"
 import { SignInModal } from "./SignInModal"
 import { ROUTE_TO_TYPE } from "@/config/beneficiaryTypes"
 
-// const Links = [
-//   // { name: "Sponsorships", href: "/" }, // Temporarily hidden
-//   // { name: "Lives", href: "/lives" },
-//   // { name: "Projects", href: "/projects" },
-//   // { name: "Causes", href: "/causes" },
-//   // { name: "My Community", href: "/local" },
-//   // { name: "Share Abundance", href: "/share" },
-//   // { name: "Strays Worth Saving", href: "/strays-worth-saving" },
-//   // { name: "Sponsor-a-Family", href: "/family-in-need" },
-//   // { name: "Street Involved", href: "/street-involved" },
-//   // { name: "Child Laborers", href: "/child-labor" },
-//   // { name: "I-Frame Test", href: "/iframe-test" },
-// ]
-
 // Valid tab anchors for the About modal
 const ABOUT_TAB_ANCHORS = ["about", "centers", "contact"] as const
-type AboutTabAnchor = typeof ABOUT_TAB_ANCHORS[number]
+type AboutTabAnchor = (typeof ABOUT_TAB_ANCHORS)[number]
 
 /** Hysteresis avoids layout feedback: shrinking the bar changes scrollY and would flip a single threshold forever. */
 const NAV_SCROLL_COLLAPSE_PX = 32
@@ -56,7 +42,8 @@ export function PageNavbar() {
   const prevScrollRef = useRef(0)
   const prevPathRef = useRef<string>("/")
   const [aboutUsOpen, setAboutUsOpen] = useState(false)
-  const [aboutUsDefaultTab, setAboutUsDefaultTab] = useState<AboutTabAnchor>("about")
+  const [aboutUsDefaultTab, setAboutUsDefaultTab] =
+    useState<AboutTabAnchor>("about")
   const [faqOpen, setFaqOpen] = useState(false)
   const [signInOpen, setSignInOpen] = useState(false)
   const user = useAuthStore((state) => state.user)
@@ -81,7 +68,7 @@ export function PageNavbar() {
       setSkipTransition(true)
       setIsScrolled(scrollTop > NAV_SCROLL_EXPAND_PX)
       requestAnimationFrame(() =>
-        requestAnimationFrame(() => setSkipTransition(false))
+        requestAnimationFrame(() => setSkipTransition(false)),
       )
       return
     }
@@ -178,7 +165,11 @@ export function PageNavbar() {
             defaultTab={aboutUsDefaultTab}
             prevPath={prevPathRef.current}
           />
-          <FAQModal open={faqOpen} onClose={() => setFaqOpen(false)} prevPath={prevPathRef.current} />
+          <FAQModal
+            open={faqOpen}
+            onClose={() => setFaqOpen(false)}
+            prevPath={prevPathRef.current}
+          />
           <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
         </>
       )}
@@ -201,29 +192,43 @@ export function PageNavbar() {
             transition: skipTransition ? "none" : navRowTransition,
           }}
         >
-        {/* Logo: larger at top on homepage only; other routes stay compact */}
-        <Box
-          className="flex items-center flex-shrink-0 overflow-visible"
-          style={{
-            animation: "pageLogoSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
-          }}
-        >
-          <NextLink href="/" passHref>
-            <Image
-              src="/logo_text.svg"
-              alt="Creator Share"
-              height={isHomeLogoExpanded ? "72px" : "48px"}
-              objectFit="contain"
+          {/* Logo: larger at top on homepage only; other routes stay compact */}
+          <Box
+            className="flex items-center flex-shrink-0 overflow-visible"
+            style={{
+              transform: isHomeLogoExpanded
+                ? "translateX(20px)"
+                : "translateX(0)",
+              transition: skipTransition
+                ? "none"
+                : `transform ${NAV_ROW_TRANSITION_MS}ms ease-out`,
+            }}
+          >
+            <Box
               style={{
-                transition: skipTransition ? "none" : `height ${NAV_ROW_TRANSITION_MS}ms ease-out`,
+                animation:
+                  "pageLogoSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
               }}
-            />
-          </NextLink>
-        </Box>
+            >
+              <NextLink href="/" passHref>
+                <Image
+                  src="/logo_text.svg"
+                  alt="Creator Share"
+                  height={isHomeLogoExpanded ? "72px" : "48px"}
+                  objectFit="contain"
+                  style={{
+                    transition: skipTransition
+                      ? "none"
+                      : `height ${NAV_ROW_TRANSITION_MS}ms ease-out`,
+                  }}
+                />
+              </NextLink>
+            </Box>
+          </Box>
 
-        {/* Desktop Menu */}
-        <Flex as="nav" gap={4} display={{ base: "none", md: "flex" }}>
-          {/* Navigation links temporarily disabled
+          {/* Desktop Menu */}
+          <Flex as="nav" gap={4} display={{ base: "none", md: "flex" }}>
+            {/* Navigation links temporarily disabled
           {Links.map((link) => {
             const isActive = pathname === link.href
             return (
@@ -260,82 +265,87 @@ export function PageNavbar() {
               </Link>
             )
           })} */}
-        </Flex>
+          </Flex>
 
-        {/* Right Actions */}
-        <Flex
-          gap={1}
-          display={{ base: "none", md: "flex" }}
-          alignItems="center"
-          style={{
-            animation: "pageNavRightIn 0.5s 0.07s cubic-bezier(0.22, 1, 0.36, 1) both",
-          }}
-        >
-          <Button
-            size="sm"
-            variant="ghost"
-            borderRadius="full"
-            asChild
+          {/* Right Actions */}
+          <Flex
+            gap={1}
+            display={{ base: "none", md: "flex" }}
+            alignItems="center"
+            style={{
+              animation:
+                "pageNavRightIn 0.5s 0.07s cubic-bezier(0.22, 1, 0.36, 1) both",
+            }}
           >
-            <a
-              href="/faq"
-              onClick={(e) => {
-                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-                e.preventDefault()
-                prevPathRef.current = window.location.pathname + window.location.search
-                window.history.replaceState(null, "", "/faq")
-                setFaqOpen(true)
-              }}
-            >
-              FAQ
-            </a>
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            borderRadius="full"
-            asChild
-          >
-            <a
-              href="/about"
-              onClick={(e) => {
-                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-                e.preventDefault()
-                prevPathRef.current = window.location.pathname + window.location.search
-                window.history.replaceState(null, "", "/about")
-                setAboutUsOpen(true)
-              }}
-            >
-              About Us
-            </a>
-          </Button>
-          {mounted && user ? (
-            <>
-              {isAdmin && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  borderRadius="full"
-                  asChild
-                  style={pathname?.startsWith("/admin") ? {
-                    textDecoration: "underline",
-                    textUnderlineOffset: "4px",
-                    fontWeight: 600,
-                  } : undefined}
-                >
-                  <a
-                    href="/admin"
-                    onClick={(e) => {
-                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-                      e.preventDefault()
-                      router.push("/admin")
-                    }}
+            <Button size="sm" variant="ghost" borderRadius="full" asChild>
+              <a
+                href="/faq"
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)
+                    return
+                  e.preventDefault()
+                  prevPathRef.current =
+                    window.location.pathname + window.location.search
+                  window.history.replaceState(null, "", "/faq")
+                  setFaqOpen(true)
+                }}
+              >
+                FAQ
+              </a>
+            </Button>
+            <Button size="sm" variant="ghost" borderRadius="full" asChild>
+              <a
+                href="/about"
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)
+                    return
+                  e.preventDefault()
+                  prevPathRef.current =
+                    window.location.pathname + window.location.search
+                  window.history.replaceState(null, "", "/about")
+                  setAboutUsOpen(true)
+                }}
+              >
+                About Us
+              </a>
+            </Button>
+            {mounted && user ? (
+              <>
+                {isAdmin && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    borderRadius="full"
+                    asChild
+                    style={
+                      pathname?.startsWith("/admin")
+                        ? {
+                            textDecoration: "underline",
+                            textUnderlineOffset: "4px",
+                            fontWeight: 600,
+                          }
+                        : undefined
+                    }
                   >
-                    Admin Dashboard
-                  </a>
-                </Button>
-              )}
-              {/* Temporarily hidden
+                    <a
+                      href="/admin"
+                      onClick={(e) => {
+                        if (
+                          e.metaKey ||
+                          e.ctrlKey ||
+                          e.shiftKey ||
+                          e.button !== 0
+                        )
+                          return
+                        e.preventDefault()
+                        router.push("/admin")
+                      }}
+                    >
+                      Admin Dashboard
+                    </a>
+                  </Button>
+                )}
+                {/* Temporarily hidden
               <Button
                 size="sm"
                 variant={pathname === "/app" ? "solid" : "ghost"}
@@ -344,122 +354,120 @@ export function PageNavbar() {
                 User Dashboard
               </Button>
               */}
-              <Menu.Root>
-                <Menu.Trigger asChild>
-                  <Button size="sm" variant="ghost" borderRadius="full">
-                    My Account ({user.email})
-                  </Button>
-                </Menu.Trigger>
-                <Portal>
-                  <Menu.Positioner>
-                    <Menu.Content>
-                      <Menu.Item
-                        value="logout"
-                        onClick={() => {
-                          handleLogout()
-                        }}
-                        cursor="pointer"
-                      >
-                        Logout
-                      </Menu.Item>
-                    </Menu.Content>
-                  </Menu.Positioner>
-                </Portal>
-              </Menu.Root>
-            </>
-          ) : mounted ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              borderRadius="full"
-              asChild
+                <Menu.Root>
+                  <Menu.Trigger asChild>
+                    <Button size="sm" variant="ghost" borderRadius="full">
+                      My Account ({user.email})
+                    </Button>
+                  </Menu.Trigger>
+                  <Portal>
+                    <Menu.Positioner>
+                      <Menu.Content>
+                        <Menu.Item
+                          value="logout"
+                          onClick={() => {
+                            handleLogout()
+                          }}
+                          cursor="pointer"
+                        >
+                          Logout
+                        </Menu.Item>
+                      </Menu.Content>
+                    </Menu.Positioner>
+                  </Portal>
+                </Menu.Root>
+              </>
+            ) : mounted ? (
+              <Button size="sm" variant="ghost" borderRadius="full" asChild>
+                <a
+                  href="/login"
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)
+                      return
+                    e.preventDefault()
+                    window.history.pushState({ modal: true }, "", "/login")
+                    setSignInOpen(true)
+                  }}
+                >
+                  Sign In
+                </a>
+              </Button>
+            ) : null}
+          </Flex>
+
+          {/* Mobile menu: only rendered client-side (isOpen state is client-driven) */}
+          {mounted && (
+            <Box
+              display={{ base: "block", md: "none" }}
+              className="absolute right-4 top-1/2 z-[1101] -translate-y-1/2"
             >
-              <a
-                href="/login"
-                onClick={(e) => {
-                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-                  e.preventDefault()
-                  window.history.pushState({ modal: true }, "", "/login")
-                  setSignInOpen(true)
+              <Button
+                onClick={() => setIsOpen(!isOpen)}
+                aria-label="Toggle Menu"
+                variant="ghost"
+                color={isOpen ? "white" : "gray.500"}
+                _hover={{
+                  bg: "transparent",
+                  transform: isOpen ? "scale(1.15)" : undefined,
                 }}
+                transition="transform 0.2s ease"
               >
-                Sign In
-              </a>
-            </Button>
-          ) : null}
+                {isOpen ? (
+                  <IoClose className="w-6 h-6" />
+                ) : (
+                  <GiHamburgerMenu className="w-6 h-6" />
+                )}
+              </Button>
+            </Box>
+          )}
         </Flex>
 
-        {/* Mobile menu: only rendered client-side (isOpen state is client-driven) */}
-        {mounted && (
+        {/* Mobile Menu (Dropdown) */}
+        {mounted && isOpen && (
           <Box
-            display={{ base: "block", md: "none" }}
-            className="absolute right-4 top-1/2 z-[1101] -translate-y-1/2"
+            className="fixed top-0 left-0 right-0 bg-[#2B7FF9] shadow-lg md:hidden flex flex-col items-center justify-center"
+            style={{ height: "100dvh" }}
+            zIndex="1100"
+            pointerEvents="auto"
           >
-            <Button
-              onClick={() => setIsOpen(!isOpen)}
-              aria-label="Toggle Menu"
-              variant="ghost"
-              color={isOpen ? "white" : "gray.500"}
-              _hover={{
-                bg: "transparent",
-                transform: isOpen ? "scale(1.15)" : undefined,
-              }}
-              transition="transform 0.2s ease"
-            >
-              {isOpen ? (
-                <IoClose className="w-6 h-6" />
-              ) : (
-                <GiHamburgerMenu className="w-6 h-6" />
-              )}
-            </Button>
-          </Box>
-        )}
-      </Flex>
-
-      {/* Mobile Menu (Dropdown) */}
-      {mounted && isOpen && (
-        <Box
-          className="fixed top-0 left-0 right-0 bg-[#2B7FF9] shadow-lg md:hidden flex flex-col items-center justify-center"
-          style={{ height: "100dvh" }}
-          zIndex="1100"
-          pointerEvents="auto"
-        >
-          <VStack gap={6} py={6}>
-            {/* FAQ - always visible */}
-            <Button
-              size="lg"
-              variant="ghost"
-              color="white"
-              fontSize="xl"
-              _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
-              onClick={() => {
-                setIsOpen(false)
-                prevPathRef.current = window.location.pathname + window.location.search
-                window.history.replaceState(null, "", "/faq")
-                setFaqOpen(true)
-              }}
-              className="w-full"
-            >
-              FAQ
-            </Button>
-            {/* About Us - always visible */}
-            <Button
-              size="lg"
-              variant="ghost"
-              color="white"
-              fontSize="xl"
-              _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
-              onClick={() => {
-                setIsOpen(false)
-                prevPathRef.current = window.location.pathname + window.location.search
-                window.history.replaceState(null, "", "/about")
-                setAboutUsOpen(true)
-              }}
-              className="w-full"
-            >
-              About Us
-            </Button>
-            {/* Navigation links temporarily disabled
+            <VStack gap={6} py={6}>
+              {/* FAQ - always visible */}
+              <Button
+                size="lg"
+                variant="ghost"
+                color="white"
+                fontSize="xl"
+                _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
+                onClick={() => {
+                  setIsOpen(false)
+                  prevPathRef.current =
+                    window.location.pathname + window.location.search
+                  window.history.replaceState(null, "", "/faq")
+                  setFaqOpen(true)
+                }}
+                className="w-full"
+              >
+                FAQ
+              </Button>
+              {/* About Us - always visible */}
+              <Button
+                size="lg"
+                variant="ghost"
+                color="white"
+                fontSize="xl"
+                _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
+                onClick={() => {
+                  setIsOpen(false)
+                  prevPathRef.current =
+                    window.location.pathname + window.location.search
+                  window.history.replaceState(null, "", "/about")
+                  setAboutUsOpen(true)
+                }}
+                className="w-full"
+              >
+                About Us
+              </Button>
+              {/* Navigation links temporarily disabled
             {Links.map((link) => {
               const isActive = pathname === link.href
               return (
@@ -494,47 +502,54 @@ export function PageNavbar() {
                 </Link>
               )
             })} */}
-            {user ? (
-              <>
-                {isAdmin && (
-                  <NextLink href="/admin" passHref>
-                    <Button size="lg" variant="ghost" color="white" fontSize="xl" _hover={{ bg: "rgba(255, 255, 255, 0.1)" }} className="w-full">
-                      Admin
-                    </Button>
-                  </NextLink>
-                )}
+              {user ? (
+                <>
+                  {isAdmin && (
+                    <NextLink href="/admin" passHref>
+                      <Button
+                        size="lg"
+                        variant="ghost"
+                        color="white"
+                        fontSize="xl"
+                        _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
+                        className="w-full"
+                      >
+                        Admin
+                      </Button>
+                    </NextLink>
+                  )}
+                  <Button
+                    size="lg"
+                    variant="ghost"
+                    color="white"
+                    fontSize="xl"
+                    _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
+                    onClick={handleLogout}
+                    className="w-full"
+                  >
+                    Logout
+                  </Button>
+                </>
+              ) : (
                 <Button
                   size="lg"
                   variant="ghost"
                   color="white"
                   fontSize="xl"
                   _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
-                  onClick={handleLogout}
                   className="w-full"
+                  onClick={() => {
+                    setIsOpen(false)
+                    window.history.pushState({ modal: true }, "", "/login")
+                    setSignInOpen(true)
+                  }}
                 >
-                  Logout
+                  Sign In
                 </Button>
-              </>
-            ) : (
-              <Button
-                size="lg"
-                variant="ghost"
-                color="white"
-                fontSize="xl"
-                _hover={{ bg: "rgba(255, 255, 255, 0.1)" }}
-                className="w-full"
-                onClick={() => {
-                  setIsOpen(false)
-                  window.history.pushState({ modal: true }, "", "/login")
-                  setSignInOpen(true)
-                }}
-              >
-                Sign In
-              </Button>
-            )}
-          </VStack>
-        </Box>
-      )}
+              )}
+            </VStack>
+          </Box>
+        )}
       </Box>
     </>
   )

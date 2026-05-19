@@ -43,6 +43,10 @@ export interface BeneficiaryListingsProps {
   onClearFilters?: () => void
   /** When true, suppresses the component's own card border/shadow/radius so a parent can provide the card frame. */
   noCard?: boolean
+  /** Non-null when the fetch failed; rendered as a gentle inline message. */
+  fetchError?: string | null
+  /** Retry callback shown alongside the error state. */
+  onRetry?: () => void
 }
 
 export interface BeneficiaryCardProps {

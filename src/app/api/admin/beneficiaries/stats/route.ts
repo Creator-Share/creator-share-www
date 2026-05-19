@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
-import { BeneficiaryType } from "@/types/admin.types"
+import { BeneficiaryType, isBeneficiaryType } from "@/types/admin.types"
 
 export async function GET(req: Request) {
   const supabase = await createClient()
@@ -12,8 +12,8 @@ export async function GET(req: Request) {
 
   // Support comma-separated list of types (e.g. "CHILD,CHILD_LABORER")
   // If no type is provided, return stats for ALL beneficiary types
-  const beneficiaryTypes = beneficiaryTypeParam
-    ? (beneficiaryTypeParam.split(",").map((t) => t.trim()) as BeneficiaryType[])
+  const beneficiaryTypes: BeneficiaryType[] = beneficiaryTypeParam
+    ? beneficiaryTypeParam.split(",").map((t) => t.trim()).filter(isBeneficiaryType)
     : []
 
   try {

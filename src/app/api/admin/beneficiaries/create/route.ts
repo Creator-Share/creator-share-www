@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
-import { Beneficiaries, Status, BeneficiaryType } from "@/types/admin.types"
+import { Beneficiaries, Status, isBeneficiaryType } from "@/types/admin.types"
 import { notifyChildCreated } from "@/services/telegram"
 import { calculateAge } from "@/utils/ageCalculator"
 
@@ -35,6 +35,14 @@ export async function POST(req: Request) {
       Boolean(body.birth_date_is_estimate) ||
       Boolean(body.metadata?.birth_date_is_estimate)
 
+    const requestedType = body.beneficiary_type ?? 'CHILD_LABORER'
+    if (!isBeneficiaryType(requestedType)) {
+      return NextResponse.json(
+        { error: `Invalid beneficiary_type: ${requestedType}` },
+        { status: 400 }
+      )
+    }
+
     // Sanitize and validate input data
     const data: Partial<Beneficiaries> = {
       name: String(body.name).trim(),
@@ -54,7 +62,7 @@ export async function POST(req: Request) {
         ...(body.metadata || {}),
         birth_date_is_estimate: birthDateIsEstimate,
       },
-      beneficiary_type: (body.beneficiary_type || 'CHILD_LABORER') as BeneficiaryType,
+      beneficiary_type: requestedType,
       introduction: String(body.biography).trim()
     }
     const insertData = { ...data }

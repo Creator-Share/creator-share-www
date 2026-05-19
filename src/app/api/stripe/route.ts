@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import {
-  MAXIMUM_OPEN_SPONSORSHIP_CENTS,
   MINIMUM_OPEN_SPONSORSHIP_CENTS,
 } from "@/config/beneficiaryTypes"
 import { centsToDollars } from "@/utils/currency"
@@ -55,18 +54,16 @@ export async function POST(req: Request) {
       enforcedAmount = amount // Use the amount sent from the client
     }
 
-    // Validate enforced amount — integer cents, within [MIN, MAX] for open sponsorships.
+    // Validate enforced amount — integer cents, at least MINIMUM for open sponsorships.
     // Blind sponsorships are pre-set to 3333 cents above, so they always pass.
     if (
       !Number.isFinite(enforcedAmount) ||
       !Number.isInteger(enforcedAmount) ||
-      enforcedAmount < MINIMUM_OPEN_SPONSORSHIP_CENTS ||
-      enforcedAmount > MAXIMUM_OPEN_SPONSORSHIP_CENTS
+      enforcedAmount < MINIMUM_OPEN_SPONSORSHIP_CENTS
     ) {
       const minDollars = Number(centsToDollars(MINIMUM_OPEN_SPONSORSHIP_CENTS))
-      const maxDollars = Number(centsToDollars(MAXIMUM_OPEN_SPONSORSHIP_CENTS))
       return NextResponse.json(
-        { error: `Amount must be between $${minDollars} and $${maxDollars}` },
+        { error: `Minimum amount is $${minDollars}` },
         { status: 400 },
       )
     }
@@ -134,6 +131,11 @@ export async function POST(req: Request) {
       metadata: priceMetadata,
     })
 
+    // Platform identity marker — every checkout created by this route includes
+    // creatorshare_platform so the Stripe webhook can positively identify
+    // sessions originating from Creator Share. Sessions without this tag
+    // (e.g. from other surfaces sharing this Stripe account) are silently
+    // acknowledged and dropped.
     const sessionMetadata: Record<string, string | null> =
       type === "partnership"
         ? {
@@ -142,6 +144,7 @@ export async function POST(req: Request) {
             project,
             email,
             paymentType,
+            creatorshare_platform: "true",
           }
         : {
             beneficiaryId: beneficiaryId || null,
@@ -153,6 +156,7 @@ export async function POST(req: Request) {
             paymentType,
             sponsorshipMode: resolvedSponsorshipMode,
             blindLabel: resolvedBlindLabel,
+            creatorshare_platform: "true",
           }
 
     // One-time: mode="payment", no subscription_data.
