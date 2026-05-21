@@ -18,6 +18,7 @@ import { AboutUsModal } from "./AboutUsModal"
 import { FAQModal } from "./FAQModal"
 import { SignInModal } from "./SignInModal"
 import { ROUTE_TO_TYPE } from "@/config/beneficiaryTypes"
+import { AdminNotificationBell } from "@/components/admin/AdminNotificationBell"
 
 // Valid tab anchors for the About modal
 const ABOUT_TAB_ANCHORS = ["about", "centers", "contact"] as const
@@ -312,38 +313,41 @@ export function PageNavbar() {
             {mounted && user ? (
               <>
                 {isAdmin && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    borderRadius="full"
-                    asChild
-                    style={
-                      pathname?.startsWith("/admin")
-                        ? {
-                            textDecoration: "underline",
-                            textUnderlineOffset: "4px",
-                            fontWeight: 600,
-                          }
-                        : undefined
-                    }
-                  >
-                    <a
-                      href="/admin"
-                      onClick={(e) => {
-                        if (
-                          e.metaKey ||
-                          e.ctrlKey ||
-                          e.shiftKey ||
-                          e.button !== 0
-                        )
-                          return
-                        e.preventDefault()
-                        router.push("/admin")
-                      }}
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      borderRadius="full"
+                      asChild
+                      style={
+                        pathname?.startsWith("/admin")
+                          ? {
+                              textDecoration: "underline",
+                              textUnderlineOffset: "4px",
+                              fontWeight: 600,
+                            }
+                          : undefined
+                      }
                     >
-                      Admin Dashboard
-                    </a>
-                  </Button>
+                      <a
+                        href="/admin"
+                        onClick={(e) => {
+                          if (
+                            e.metaKey ||
+                            e.ctrlKey ||
+                            e.shiftKey ||
+                            e.button !== 0
+                          )
+                            return
+                          e.preventDefault()
+                          router.push("/admin")
+                        }}
+                      >
+                        Admin Dashboard
+                      </a>
+                    </Button>
+                    <AdminNotificationBell />
+                  </>
                 )}
                 {/* Temporarily hidden
               <Button
