@@ -110,8 +110,8 @@ export function AdminNotificationBell() {
     }
     if (notification.link) {
       router.push(notification.link)
+      setIsOpen(false)
     }
-    setIsOpen(false)
   }
 
   const timeAgo = (dateStr: string) => {
