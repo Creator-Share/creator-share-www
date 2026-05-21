@@ -10,6 +10,7 @@ import {
   sendManagerSponsorshipNotificationEmail,
 } from "@/utils/email"
 import { notifySponsorshipReceived } from "@/services/telegram"
+import { matchByStripeSubscriptionId } from "@/utils/blindSponsorships/match"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY! as string)
 
@@ -614,25 +615,16 @@ export async function POST(req: Request) {
         // Step 6: Auto-match blind sponsorships
         if (isBlindSponsorship && session.subscription) {
           try {
-            // Call the matching endpoint to automatically assign an available beneficiary
-            const matchResponse = await fetch(
-              `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/admin/blind-sponsorships/match?stripeSubscriptionId=${session.subscription}`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-              }
+            const stripeSubscriptionId = session.subscription as string
+            const matchResult = await matchByStripeSubscriptionId(
+              supabase,
+              stripeSubscriptionId,
             )
-            
-            if (matchResponse.ok) {
-              await matchResponse.json()
-            } else {
-              const errorData = await matchResponse.json()
+            if (!matchResult.ok) {
               console.error("Blind sponsorship auto-match failed:", {
-                subscriptionId: session.subscription,
-                status: matchResponse.status,
-                error: errorData.error,
+                subscriptionId: stripeSubscriptionId,
+                status: matchResult.status,
+                error: matchResult.error,
               })
               // Don't fail the webhook - matching can be done manually later
             }
