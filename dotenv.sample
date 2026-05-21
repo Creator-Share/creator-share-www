@@ -32,6 +32,20 @@ NEXT_PUBLIC_RESERVATION_TIMEOUT_MINUTES=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 
+# ClickUp Chat Configuration (#Live Updates channel)
+# API Reference: https://developer.clickup.com/docs/chat
+# CLICKUP_API_TOKEN:    Personal API token from ClickUp (Settings → Apps → API Token)
+# CLICKUP_WORKSPACE_ID: Workspace/Team ID from the ClickUp URL:
+#                       app.clickup.com/{workspaceId}/... (e.g. 9017637981)
+# CLICKUP_CHANNEL_NAME: Optional — name of the Chat channel to post to (default: "Live Updates")
+# CLICKUP_CHANNEL_ID:   Optional — direct API channel ID if already known (skips the lookup).
+#                       NOTE: this is NOT the view ID from the browser URL; it's the `id`
+#                       returned by GET /api/v3/workspaces/{workspaceId}/channels
+CLICKUP_API_TOKEN=
+CLICKUP_WORKSPACE_ID=
+# CLICKUP_CHANNEL_NAME=Live Updates
+# CLICKUP_CHANNEL_ID=
+
 # Email
 EMAIL_HOST=
 EMAIL_USER=

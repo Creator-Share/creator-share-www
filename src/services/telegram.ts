@@ -9,6 +9,7 @@ import {
   SponsorshipNotificationData,
 } from "@/types/telegram.types"
 import { Beneficiaries } from "@/types"
+import { getBeneficiaryImageUrl } from "@/utils/getBeneficiaryImageUrl"
 
 // Single Responsibility Principle (SRP) - Telegram service only handles Telegram operations
 export class TelegramBotService implements TelegramNotificationService {
@@ -136,34 +137,40 @@ export class TelegramBotService implements TelegramNotificationService {
   }
 
   /**
-   * Send a notification about a new child beneficiary
+   * Send a notification about a new child beneficiary.
+   * Attempts to send a photo if an image is available; falls back to a plain text
+   * message if the photo send fails (e.g. transient network error) so the
+   * notification is never lost entirely.
    * @param beneficiaryData - The beneficiary data
    * @param chatId - Optional chat ID
    */
   async sendChildCreatedNotification(beneficiaryData: Beneficiaries, chatId?: string): Promise<boolean> {
+    const message = this.formatChildCreatedMessage(beneficiaryData);
     try {
-      // First, try to get the child's image
-      const imageUrl = await this.getBeneficiaryImage(beneficiaryData.id);
-      
+      const imageUrl = await getBeneficiaryImageUrl(beneficiaryData.id);
+
       if (imageUrl) {
-        // Send photo with caption
-        const caption = this.formatChildCreatedMessage(beneficiaryData);
-        return await this.sendPhoto(imageUrl, caption, chatId);
-      } else {
-        // Fallback to text message if no image
-        const message = this.formatChildCreatedMessage(beneficiaryData);
-        return await this.sendMessage(message, chatId);
+        // sendPhoto catches its own errors and returns false — an explicit check is
+        // needed here so we fall through to sendMessage rather than returning false.
+        const photoSent = await this.sendPhoto(imageUrl, message, chatId);
+        if (photoSent) return true;
+
+        console.warn('Telegram: sendPhoto failed — falling back to text message');
       }
+
+      return await this.sendMessage(message, chatId);
     } catch (error) {
       console.error('Error in sendChildCreatedNotification:', error);
-      // Fallback to text message on error
-      const message = this.formatChildCreatedMessage(beneficiaryData);
+      // Fallback to text message on unexpected error
       return await this.sendMessage(message, chatId);
     }
   }
 
   /**
-   * Send a notification about a new sponsorship
+   * Send a notification about a new sponsorship.
+   * If the beneficiary has an image, sends it as a photo with the message as caption.
+   * Falls back to a plain text message if the photo send fails (e.g. network error,
+   * unreachable image URL) so the notification is never lost entirely.
    * @param sponsorshipData - The sponsorship data
    * @param chatId - Optional chat ID
    */
@@ -172,7 +179,24 @@ export class TelegramBotService implements TelegramNotificationService {
     chatId?: string
   ): Promise<boolean> {
     try {
+      // Fetch the beneficiary photo directly from Supabase (service-role, no auth needed)
+      let imageUrl: string | null = null;
+      if (sponsorshipData.beneficiaryId) {
+        imageUrl = await getBeneficiaryImageUrl(sponsorshipData.beneficiaryId);
+      }
+
       const message = this.formatSponsorshipMessage(sponsorshipData);
+
+      if (imageUrl) {
+        // Attempt to send a photo with the notification as the caption.
+        // Fall back to a plain text message if the photo send fails (e.g. transient
+        // network error reaching api.telegram.org, or the image URL is unreachable).
+        const photoSent = await this.sendPhoto(imageUrl, message, chatId);
+        if (photoSent) return true;
+
+        console.warn('Telegram: sendPhoto failed — falling back to text message');
+      }
+
       return await this.sendMessage(message, chatId);
     } catch (error) {
       console.error('Error sending sponsorship notification:', {
@@ -186,52 +210,6 @@ export class TelegramBotService implements TelegramNotificationService {
     }
   }
 
-  /**
-   * Get the first image URL for a beneficiary
-   * @param beneficiaryId - The beneficiary ID
-   * @returns Promise<string | null> - Image URL or null if not found
-   */
-  private async getBeneficiaryImage(beneficiaryId: string): Promise<string | null> {
-    try {
-      // Use the internal API to get beneficiary images
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/admin/beneficiaries/images/${beneficiaryId}`);
-      
-      if (!response.ok) {
-        console.warn(`Failed to fetch images for beneficiary ${beneficiaryId}:`, response.status);
-        return null;
-      }
-
-      const mediaData = await response.json();
-      
-      if (!Array.isArray(mediaData) || mediaData.length === 0) {
-
-        return null;
-      }
-
-      // Filter for IMAGE type and get the first one
-      const imageMedia = mediaData.filter((item: { type: string }) => item.type === "IMAGE");
-      
-      if (imageMedia.length === 0) {
-        return null;
-      }
-
-      const firstImage = imageMedia[0];
-      
-      // Try to generate public URL using the media utility
-      try {
-        const { generatePublicUrl } = await import('@/utils/supabase/media');
-        const publicUrl = generatePublicUrl(firstImage);
-        return publicUrl;
-      } catch (urlError) {
-        console.warn('Failed to generate public URL, trying fallback:', urlError);
-        // Fallback to image_url if available
-        return firstImage.image_url || null;
-      }
-    } catch (error) {
-      console.error(`Error fetching image for beneficiary ${beneficiaryId}:`, error);
-      return null;
-    }
-  }
 
   /**
    * Format the child created message
