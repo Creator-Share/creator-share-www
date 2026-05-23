@@ -1023,12 +1023,30 @@ export const sendManagerSponsorshipNotificationEmail = async (
     </div>
   `
 
-  return sendEmail({
-    to: "johnstjulien@sharetanzania.com",
-    subject,
-    html,
-    emailType: "manager_sponsorship_notification",
+  // Send to both the existing manager and the enquiries address
+  const recipients = ["johnstjulien@sharetanzania.com", "enquiries@sharetanzania.com"]
+
+  const results = await Promise.allSettled(
+    recipients.map((recipient) =>
+      sendEmail({
+        to: recipient,
+        subject,
+        html,
+        emailType: "manager_sponsorship_notification",
+      }),
+    ),
+  )
+
+  results.forEach((result, i) => {
+    if (result.status === "rejected") {
+      console.error(`[Email] Failed to send manager notification to ${recipients[i]}:`, result.reason)
+    }
   })
+
+  return {
+    success: results.some((r) => r.status === "fulfilled" && r.value.success),
+    results,
+  }
 }
 
 export const sendMonthlyPaymentConfirmationEmail = async (
@@ -1160,10 +1178,28 @@ export const sendSponsorshipCancellationNotificationEmail = async (
     </div>
   `
 
-  return sendEmail({
-    to: "johnstjulien@sharetanzania.com",
-    subject,
-    html,
-    emailType: "sponsorship_cancellation_notification",
+  // Send to both the existing manager and the enquiries address
+  const recipients = ["johnstjulien@sharetanzania.com", "enquiries@sharetanzania.com"]
+
+  const results = await Promise.allSettled(
+    recipients.map((recipient) =>
+      sendEmail({
+        to: recipient,
+        subject,
+        html,
+        emailType: "sponsorship_cancellation_notification",
+      }),
+    ),
+  )
+
+  results.forEach((result, i) => {
+    if (result.status === "rejected") {
+      console.error(`[Email] Failed to send cancellation notification to ${recipients[i]}:`, result.reason)
+    }
   })
+
+  return {
+    success: results.some((r) => r.status === "fulfilled" && r.value.success),
+    results,
+  }
 }

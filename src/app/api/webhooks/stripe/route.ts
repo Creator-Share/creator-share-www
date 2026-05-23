@@ -579,9 +579,8 @@ export async function POST(req: Request) {
         }
 
         // Send notification to manager
-        if (process.env.MANAGER_EMAIL) {
-          try {
-            await sendManagerSponsorshipNotificationEmail(
+        try {
+          await sendManagerSponsorshipNotificationEmail(
               beneficiaryName,
               amount,
               interval,
@@ -592,6 +591,17 @@ export async function POST(req: Request) {
           } catch (emailError) {
             console.error("Error sending manager notification:", emailError)
           }
+
+        // Create in-app admin notification for new sponsorship
+        try {
+          await supabase.from("admin_notifications").insert({
+            title: "New Sponsorship",
+            message: `${beneficiaryName} received a $${centsToDollars(amount)}/${interval} sponsorship${customerEmail ? ` from ${customerEmail}` : ""}`,
+            type: "sponsorship",
+            link: beneficiaryId ? `/admin/beneficiary/${beneficiaryId}` : null,
+          })
+        } catch (notifError) {
+          console.error("Error creating admin notification:", notifError)
         }
 
         // Send Telegram notification for sponsorship

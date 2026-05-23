@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/utils/supabase/server"
-import {  RoleAssignmentResponse } from "@/types"
+import { RoleAssignmentResponse } from "@/types"
 
 export default async function AdminLayout({
   children,
