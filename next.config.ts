@@ -36,6 +36,7 @@ const nextConfig: NextConfig = {
   },
 
   images: {
+    minimumCacheTTL: 604800, // 7 days — static beneficiary photos rarely change
     remotePatterns: [
       {
         protocol: "https",
