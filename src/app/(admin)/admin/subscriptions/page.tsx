@@ -19,7 +19,11 @@ const AdminSubscriptionsPage = () => {
 
   const transformSubscription = (sub: RawSubscription): AdminSubscription => ({
     ...sub,
-    child_name: sub.beneficiaries?.name || `Child ID: ${sub.child_id}`,
+    child_name:
+      sub.beneficiaries?.name ||
+      (sub.beneficiary_id
+        ? `Beneficiary ID: ${sub.beneficiary_id}`
+        : "Unknown Beneficiary"),
     child_username: sub.beneficiaries?.username || "unknown",
     user_email: `User ID: ${sub.user_id}`,
     formatted_amount: `$${(sub.amount / 100).toFixed(2)}`,
@@ -68,13 +72,19 @@ const AdminSubscriptionsPage = () => {
               if (eventType === 'INSERT' && newRecord) {
                 // Cast the newRecord to our RawSubscription type
                 const subscriptionRecord = newRecord as RawSubscription
-                
-                // Fetch beneficiary data for the new subscription
-                const { data: beneficiaryData } = await supabase
-                  .from('beneficiaries')
-                  .select('id, name, username')
-                  .eq('id', subscriptionRecord.child_id)
-                  .single()
+
+                // Fetch beneficiary data for the new subscription (only if we
+                // have a beneficiary_id — partnership rows and other future
+                // beneficiary-less subscriptions skip the lookup).
+                let beneficiaryData: RawSubscription["beneficiaries"] = null
+                if (subscriptionRecord.beneficiary_id) {
+                  const { data } = await supabase
+                    .from('beneficiaries')
+                    .select('id, name, username')
+                    .eq('id', subscriptionRecord.beneficiary_id)
+                    .single()
+                  beneficiaryData = data
+                }
 
                 const fullRecord = { ...subscriptionRecord, beneficiaries: beneficiaryData }
                 const transformed = transformSubscription(fullRecord)
@@ -83,13 +93,16 @@ const AdminSubscriptionsPage = () => {
               } else if (eventType === 'UPDATE' && newRecord) {
                 // Cast the newRecord to our RawSubscription type
                 const subscriptionRecord = newRecord as RawSubscription
-                
-                // Fetch beneficiary data for the updated subscription
-                const { data: beneficiaryData } = await supabase
-                  .from('beneficiaries')
-                  .select('id, name, username')
-                  .eq('id', subscriptionRecord.child_id)
-                  .single()
+
+                let beneficiaryData: RawSubscription["beneficiaries"] = null
+                if (subscriptionRecord.beneficiary_id) {
+                  const { data } = await supabase
+                    .from('beneficiaries')
+                    .select('id, name, username')
+                    .eq('id', subscriptionRecord.beneficiary_id)
+                    .single()
+                  beneficiaryData = data
+                }
 
                 const fullRecord = { ...subscriptionRecord, beneficiaries: beneficiaryData }
                 const transformed = transformSubscription(fullRecord)
@@ -130,7 +143,7 @@ const AdminSubscriptionsPage = () => {
     }
   }, [supabase])
 
-  const handleCancelSubscription = async (subscriptionId: string, sponsorshipId: string) => {
+  const handleCancelSubscription = async (subscriptionId: string) => {
     if (!confirm("Are you sure you want to cancel this subscription? This action cannot be undone.")) {
       return
     }
@@ -139,7 +152,7 @@ const AdminSubscriptionsPage = () => {
       const response = await fetch("/api/stripe/cancel-subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscriptionId: sponsorshipId }),
+        body: JSON.stringify({ subscriptionId }),
       })
 
       if (!response.ok) {

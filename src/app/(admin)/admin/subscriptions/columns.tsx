@@ -6,15 +6,16 @@ import { Badge } from "@chakra-ui/react"
 
 export type AdminSubscription = {
   id: string
-  child_id: string
+  beneficiary_id: string | null
   status: string
   amount: number
   interval: string
   current_period_start: string
   current_period_end: string
   created_at: string
-  sponsorship_id: string
   user_id: string
+  sponsorship_method: "STRIPE" | "PAYPAL" | null
+  payment_region: "us" | "uk"
   // Transformed fields
   child_name: string
   child_username: string
@@ -36,7 +37,7 @@ export type AdminSubscription = {
 }
 
 interface ColumnActions {
-  onCancelSubscription: (subscriptionId: string, sponsorshipId: string) => void
+  onCancelSubscription: (subscriptionId: string) => void
 }
 
 export const columns = (actions: ColumnActions): ColumnDef<AdminSubscription>[] => [
@@ -101,6 +102,31 @@ export const columns = (actions: ColumnActions): ColumnDef<AdminSubscription>[] 
           <div className="font-medium">{amount}</div>
           <div className="text-sm text-gray-500 capitalize">{interval}</div>
         </div>
+      )
+    },
+  },
+  {
+    accessorKey: "sponsorship_method",
+    header: "Method",
+    cell: ({ row }) => {
+      const method = row.original.sponsorship_method || "STRIPE"
+      const colorScheme = method === "PAYPAL" ? "blue" : "purple"
+      return (
+        <Badge colorScheme={colorScheme} variant="subtle">
+          {method}
+        </Badge>
+      )
+    },
+  },
+  {
+    accessorKey: "payment_region",
+    header: "Region",
+    cell: ({ row }) => {
+      const region = (row.original.payment_region || "us").toUpperCase()
+      return (
+        <Badge colorScheme="gray" variant="subtle">
+          {region}
+        </Badge>
       )
     },
   },
@@ -198,7 +224,7 @@ export const columns = (actions: ColumnActions): ColumnDef<AdminSubscription>[] 
               onClick={(e) => {
                 e.stopPropagation()
                 if (confirm("Are you sure you want to cancel this subscription? This action cannot be undone.")) {
-                  actions.onCancelSubscription(subscription.id, subscription.sponsorship_id)
+                  actions.onCancelSubscription(subscription.id)
                 }
               }}
               size="sm"

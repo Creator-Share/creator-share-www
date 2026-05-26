@@ -418,7 +418,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         return
       }
 
-      const { clientSecret, url } = data
+      const { clientSecret, url, publishableKey, region } = data
       window.dispatchEvent(
         new CustomEvent("payment-success", {
           detail: { beneficiaryId: beneficiary.id },
@@ -426,9 +426,15 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       )
 
       if (window.self !== window.top) {
-        if (clientSecret)
-          window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}&beneficiary_id=${beneficiary.id}`
-        else if (url) window.location.href = url
+        if (clientSecret) {
+          const params = new URLSearchParams({
+            client_secret: clientSecret,
+            beneficiary_id: beneficiary.id ?? "",
+          })
+          if (publishableKey) params.set("publishable_key", publishableKey)
+          if (region) params.set("region", region)
+          window.location.href = `/sponsorships/checkout?${params.toString()}`
+        } else if (url) window.location.href = url
         else
           toaster.create({
             title: "Payment Error",

@@ -345,6 +345,7 @@ export type Database = {
           frequency: Database["public"]["Enums"]["partnership_frequency"]
           id: string
           payment_intent: string | null
+          payment_region: Database["public"]["Enums"]["stripe_region"]
           project: Database["public"]["Enums"]["project_type"]
           status: string
           stripe_subscription_id: string | null
@@ -362,6 +363,7 @@ export type Database = {
           frequency: Database["public"]["Enums"]["partnership_frequency"]
           id?: string
           payment_intent?: string | null
+          payment_region?: Database["public"]["Enums"]["stripe_region"]
           project?: Database["public"]["Enums"]["project_type"]
           status?: string
           stripe_subscription_id?: string | null
@@ -379,6 +381,7 @@ export type Database = {
           frequency?: Database["public"]["Enums"]["partnership_frequency"]
           id?: string
           payment_intent?: string | null
+          payment_region?: Database["public"]["Enums"]["stripe_region"]
           project?: Database["public"]["Enums"]["project_type"]
           status?: string
           stripe_subscription_id?: string | null
@@ -585,6 +588,7 @@ export type Database = {
           email_notification: boolean | null
           id: string
           interval: string | null
+          payment_region: Database["public"]["Enums"]["stripe_region"]
           sponsorship_method:
             | Database["public"]["Enums"]["sponsorship_method"]
             | null
@@ -603,6 +607,7 @@ export type Database = {
           email_notification?: boolean | null
           id?: string
           interval?: string | null
+          payment_region?: Database["public"]["Enums"]["stripe_region"]
           sponsorship_method?:
             | Database["public"]["Enums"]["sponsorship_method"]
             | null
@@ -621,6 +626,7 @@ export type Database = {
           email_notification?: boolean | null
           id?: string
           interval?: string | null
+          payment_region?: Database["public"]["Enums"]["stripe_region"]
           sponsorship_method?:
             | Database["public"]["Enums"]["sponsorship_method"]
             | null
@@ -2582,6 +2588,7 @@ export type Database = {
         | "nutrition"
         | "general"
       sponsorship_method: "PAYPAL" | "STRIPE"
+      stripe_region: "us" | "uk"
       SubscriptionStatus: "complete" | "incomplete" | "cancelled"
     }
     CompositeTypes: {
@@ -2738,6 +2745,7 @@ export const Constants = {
         "general",
       ],
       sponsorship_method: ["PAYPAL", "STRIPE"],
+      stripe_region: ["us", "uk"],
       SubscriptionStatus: ["complete", "incomplete", "cancelled"],
     },
   },

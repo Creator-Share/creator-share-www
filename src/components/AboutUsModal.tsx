@@ -11,6 +11,7 @@ import {
   DialogCloseTrigger,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { getPublicPortalLinks } from "@/lib/payments/portals"
 
 // Valid tab anchors that can open the modal
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -31,6 +32,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
   prevPath,
 }) => {
   const [activeTab, setActiveTab] = useState<TabAnchor>(defaultTab)
+  const portalLinks = getPublicPortalLinks()
 
   // Handle tab changes - update URL path
   const handleTabChange = useCallback((value: string) => {
@@ -201,19 +203,22 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
                 </Box>
 
                 {/* Manage Subscriptions Link */}
-                <Box className="bg-gray-50 rounded-lg p-5 border border-gray-200">
+                <Box className="bg-gray-50 rounded-lg p-5 border border-gray-200 space-y-2">
                   <Text fontWeight="semibold" color="gray.800" mb={2}>
                     Existing Sponsor?
                   </Text>
-                  <a
-                    href="https://stripe.creatorshare.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-[#2b7ff9] hover:underline text-sm"
-                  >
-                    <FaExternalLinkAlt className="w-3 h-3" />
-                    Manage Subscriptions via Stripe
-                  </a>
+                  {portalLinks.map((link) => (
+                    <a
+                      key={`${link.provider}-${link.region ?? "default"}`}
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-[#2b7ff9] hover:underline text-sm"
+                    >
+                      <FaExternalLinkAlt className="w-3 h-3" />
+                      {link.label}
+                    </a>
+                  ))}
                 </Box>
               </Box>
             </Tabs.Content>

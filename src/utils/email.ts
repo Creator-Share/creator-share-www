@@ -1,6 +1,73 @@
 import nodemailer from "nodemailer"
+import {
+  coerceRegion,
+  getPortalUrl,
+  type StripeRegion,
+} from "@/lib/stripe/config"
+import {
+  DEFAULT_STRIPE_PORTAL_URL,
+  PAYPAL_MANAGE_URL,
+} from "@/lib/payments/portals"
 import { generatePublicUrl, MediaRow } from "@/utils/supabase/media"
 import { createServiceRoleClient } from "@/utils/supabase/server"
+
+export type SponsorshipProvider = "STRIPE" | "PAYPAL"
+
+export interface ManagementLinkOptions {
+  provider?: SponsorshipProvider | null
+  region?: StripeRegion | string | null
+}
+
+function resolveStripePortalUrl(region: StripeRegion): string {
+  return getPortalUrl(region) || DEFAULT_STRIPE_PORTAL_URL
+}
+
+/**
+ * Render the "manage your subscription" HTML block, parameterized by provider
+ * and (for Stripe) the region-specific billing portal URL. PayPal sponsors get
+ * a PayPal-branded link; Stripe sponsors get a link to the correct billing
+ * portal for the Stripe account that holds their subscription.
+ */
+export function renderManagementSection({
+  provider,
+  region,
+  variant = "compact",
+}: ManagementLinkOptions & { variant?: "compact" | "prominent" }): string {
+  if (provider === "PAYPAL") {
+    return `
+      <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
+          <b>To update or cancel your recurring PayPal sponsorship,</b> sign in to your PayPal account and open <i>Payments → Automatic Payments</i>.
+        </p>
+        <a href="${PAYPAL_MANAGE_URL}" style="display: inline-block; background-color: #0070BA; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Manage in PayPal</a>
+        <p style="font-size: 0.95rem; color: #475569; margin: 1.25rem 0 0 0;">
+          If you need help, reply to this email and we'll take care of it.
+        </p>
+      </div>
+    `
+  }
+
+  const portalUrl = resolveStripePortalUrl(coerceRegion(region))
+  if (variant === "prominent") {
+    return `
+      <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1.25rem;">
+          <b>To update or cancel your sponsorship, access your billing portal here:</b>
+        </p>
+        <a href="${portalUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500; font-size: 1.1rem;">Manage or Cancel Subscription</a>
+        <p style="font-size: 0.95rem; color: #475569; margin: 1.25rem 0 0 0;">
+          The link above lets you securely update payment methods, download receipts, or cancel your sponsorship at any time.
+        </p>
+      </div>
+    `
+  }
+  return `
+    <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
+      <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Manage your subscription, update payment methods, or view billing history:</p>
+      <a href="${portalUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Manage Subscription</a>
+    </div>
+  `
+}
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
@@ -231,14 +298,15 @@ export const sendSponsorshipConfirmationEmail = async (
   interval: string,
   sponsorName?: string | null,
   beneficiaryId?: string | null,
+  options: ManagementLinkOptions = {},
 ) => {
   const subject = `Thank you for sponsoring ${childName}!`
 
   const formattedAmount = (amount / 100).toFixed(2)
   const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
-  const stripePortalUrl = "https://stripe.creatorshare.com"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
   const logoUrl = getLogoUrl()
+  const managementSection = renderManagementSection(options)
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -281,16 +349,13 @@ export const sendSponsorshipConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5;">If you have any questions about your sponsorship, please don't hesitate to contact us.</p>
       </div>
       
-      <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Manage your subscription, update payment methods, or view billing history:</p>
-        <a href="${stripePortalUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Manage Subscription</a>
-      </div>
-      
+      ${managementSection}
+
       <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Warm regards,</p>
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
-      
+
       <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
         <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
       </div>
@@ -311,14 +376,15 @@ export const sendBlindSponsorshipConfirmationEmail = async (
   interval: string,
   blindLabel: string,
   sponsorName?: string | null,
+  options: ManagementLinkOptions = {},
 ) => {
   const subject = `Thank you for your blind sponsorship!`
 
   const formattedAmount = (amount / 100).toFixed(2)
   const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
-  const stripePortalUrl = "https://stripe.creatorshare.com"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
   const logoUrl = getLogoUrl()
+  const managementSection = renderManagementSection(options)
 
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
@@ -338,16 +404,13 @@ export const sendBlindSponsorshipConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5;">We'll keep you updated once we've matched you with a child and share their progress with you.</p>
       </div>
       
-      <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Manage your subscription, update payment methods, or view billing history:</p>
-        <a href="${stripePortalUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Manage Subscription</a>
-      </div>
-      
+      ${managementSection}
+
       <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Warm regards,</p>
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
-      
+
       <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
         <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
       </div>
@@ -458,6 +521,7 @@ export const sendPaymentFailedEmail = async (
   nextAttemptDate: Date | null,
   sponsorName?: string | null,
   beneficiaryId?: string | null,
+  options: ManagementLinkOptions = {},
 ) => {
   const subject = `Action Required: Your Sponsorship Payment for ${childName} Failed`
 
@@ -467,6 +531,7 @@ export const sendPaymentFailedEmail = async (
     : "We'll automatically try again soon."
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
   const logoUrl = getLogoUrl()
+  const managementSection = renderManagementSection(options)
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -511,11 +576,10 @@ export const sendPaymentFailedEmail = async (
           <li style="margin-bottom: 0.5rem;">Verify that your card hasn't expired</li>
           <li style="margin-bottom: 0.5rem;">Update your payment information in your account</li>
         </ul>
-        <div style="text-align: center; margin-top: 1.5rem;">
-          <a href="https://your-domain.com/account/billing" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Update Payment Method</a>
-        </div>
       </div>
-      
+
+      ${managementSection}
+
       <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Thank you for your continued support,</p>
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
@@ -1037,12 +1101,16 @@ export const sendMonthlyPaymentConfirmationEmail = async (
   amount: number,
   sponsorName?: string | null,
   beneficiaryId?: string | null,
+  options: ManagementLinkOptions = {},
 ) => {
   const subject = `Payment Confirmation: Your Sponsorship for ${childName}`
   const formattedAmount = (amount / 100).toFixed(2)
-  const stripePortalUrl = "https://stripe.creatorshare.com"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
   const logoUrl = getLogoUrl()
+  const managementSection = renderManagementSection({
+    ...options,
+    variant: "prominent",
+  })
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -1080,16 +1148,8 @@ export const sendMonthlyPaymentConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your continued support in making a difference in ${childName}'s life.</p>
       </div>
       
-      <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1.25rem;">
-          <b>To update or cancel your sponsorship, access your billing portal here:</b>
-        </p>
-        <a href="${stripePortalUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500; font-size: 1.1rem;">Manage or Cancel Subscription</a>
-        <p style="font-size: 0.95rem; color: #475569; margin: 1.25rem 0 0 0;">
-          The link above lets you securely update payment methods, download receipts, or cancel your sponsorship at any time.
-        </p>
-      </div>
-      
+      ${managementSection}
+
       <div style="border-left: 4px solid #1C3C8C; padding-left: 1rem; margin-bottom: 1.5rem;">
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">We'll continue to keep you updated on ${childName}'s progress and how your sponsorship is making an impact.</p>
         <p style="font-size: 1rem; line-height: 1.5;">If you have any questions about your sponsorship, please don't hesitate to contact us.</p>

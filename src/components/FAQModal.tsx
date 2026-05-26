@@ -10,6 +10,7 @@ import {
   DialogCloseTrigger,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { getPublicPortalLinks } from "@/lib/payments/portals"
 
 interface FAQItem {
   question: string
@@ -66,6 +67,7 @@ interface FAQModalProps {
 }
 
 export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose, prevPath }) => {
+  const portalLinks = getPublicPortalLinks()
   const handleClose = useCallback(() => {
     if (typeof window !== "undefined" && prevPath !== undefined) {
       window.history.replaceState(null, "", prevPath)
@@ -141,16 +143,19 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose, prevPath }) =
             >
               Existing Sponsor?
             </Text>
-            <Box className="bg-gray-50 rounded-lg p-5 border border-gray-200">
-              <a
-                href="https://stripe.creatorshare.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-[#2b7ff9] hover:underline text-sm"
-              >
-                <FaExternalLinkAlt className="w-3 h-3" />
-                Manage Subscriptions via Stripe
-              </a>
+            <Box className="bg-gray-50 rounded-lg p-5 border border-gray-200 space-y-2">
+              {portalLinks.map((link) => (
+                <a
+                  key={`${link.provider}-${link.region ?? "default"}`}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-[#2b7ff9] hover:underline text-sm"
+                >
+                  <FaExternalLinkAlt className="w-3 h-3" />
+                  {link.label}
+                </a>
+              ))}
             </Box>
           </section>
         </DialogBody>
