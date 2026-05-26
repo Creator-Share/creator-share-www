@@ -1,47 +1,9 @@
 import { NextResponse } from "next/server"
+import { isPayPalEnabled, paypalFetch } from "@/lib/paypal/client"
 
-// Check if PayPal is enabled by checking if client ID is configured
-const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
-
-const PAYPAL_API_URL =
-  process.env.PAYPAL_API_URL || "https://api-m.sandbox.paypal.com"
-
-async function getPayPalAccessToken() {
-  const auth = Buffer.from(
-    `${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`,
-  ).toString("base64")
-  const response = await fetch(`${PAYPAL_API_URL}/v1/oauth2/token`, {
+async function createPayPalProduct(name: string, description: string) {
+  const response = await paypalFetch("/v1/catalogs/products", {
     method: "POST",
-    headers: {
-      Authorization: `Basic ${auth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: "grant_type=client_credentials",
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error("PayPal token error response:", errorText)
-    throw new Error("Failed to get PayPal access token")
-  }
-
-  const data = await response.json()
-  return data.access_token
-}
-
-async function createPayPalProduct(
-  beneficiary_id: string,
-  name: string,
-  description: string,
-  accessToken: string,
-) {
-  // Try to create a product with beneficiary_id as the product_id
-  const response = await fetch(`${PAYPAL_API_URL}/v1/catalogs/products`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify({
       name,
       description,
@@ -50,27 +12,24 @@ async function createPayPalProduct(
     }),
   })
 
-  // If product already exists, PayPal will return an error, but that's fine
   if (response.ok) {
     const data = await response.json()
-    return data.id // PayPal-generated product ID
-  } else {
-    const data = await response.json()
-    throw new Error(data?.message || "Failed to create PayPal product")
+    return data.id as string
   }
+  const data = await response.json()
+  throw new Error(data?.message || "Failed to create PayPal product")
 }
 
 export async function POST(request: Request) {
-  if (!isPayPalEnabled) {
+  if (!isPayPalEnabled()) {
     return NextResponse.json(
-      { error: 'PayPal integration is not enabled' },
-      { status: 501 }
+      { error: "PayPal integration is not enabled" },
+      { status: 501 },
     )
   }
 
   try {
     const {
-      beneficiary_id,
       name,
       description,
       amount,
@@ -79,23 +38,10 @@ export async function POST(request: Request) {
       currency_code = "USD",
     } = await request.json()
 
-    const accessToken = await getPayPalAccessToken()
+    const product_id = await createPayPalProduct(name, description)
 
-    // Create the product with beneficiary_id as product_id
-    const product_id = await createPayPalProduct(
-      beneficiary_id,
-      name,
-      description,
-      accessToken,
-    )
-
-    // Create the plan
-    const response = await fetch(`${PAYPAL_API_URL}/v1/billing/plans`, {
+    const response = await paypalFetch("/v1/billing/plans", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify({
         product_id,
         name,
@@ -104,12 +50,12 @@ export async function POST(request: Request) {
         billing_cycles: [
           {
             frequency: {
-              interval_unit, // "MONTH" or "YEAR"
-              interval_count, // 1 for monthly/yearly
+              interval_unit,
+              interval_count,
             },
             tenure_type: "REGULAR",
             sequence: 1,
-            total_cycles: 0, // 0 = infinite
+            total_cycles: 0,
             pricing_scheme: {
               fixed_price: {
                 value: amount.toFixed(2),

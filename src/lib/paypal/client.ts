@@ -33,7 +33,30 @@ function getClientCredentials(): { clientId: string; clientSecret: string } {
   return { clientId, clientSecret }
 }
 
+// paypalFetch wraps fetch with the PayPal base URL and an auto-acquired bearer
+// token. Callers pass a relative path (e.g. "/v2/checkout/orders/123") and an
+// optional RequestInit; this keeps every PayPal route from re-spelling the
+// access-token + base-URL boilerplate. Returns the raw Response so callers can
+// branch on status codes for partial successes (e.g. RESOURCE_NOT_FOUND).
+export async function paypalFetch(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const accessToken = await getPayPalAccessToken()
+  const headers = new Headers(init.headers)
+  if (!headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${accessToken}`)
+  }
+  if (!headers.has("Content-Type") && init.method && init.method !== "GET") {
+    headers.set("Content-Type", "application/json")
+  }
+  return fetch(`${getPayPalApiUrl()}${path}`, { ...init, headers })
+}
+
 export async function getPayPalAccessToken(): Promise<string> {
+  if (!isPayPalEnabled()) {
+    throw new Error("PayPal integration is not enabled")
+  }
   const { clientId, clientSecret } = getClientCredentials()
   const auth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64")
 
