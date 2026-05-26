@@ -249,7 +249,7 @@ export interface RawSubscription {
   sponsorship_id: string
   user_id: string
   sponsorship_method: "STRIPE" | "PAYPAL" | null
-  payment_region: string
+  payment_region: "us" | "uk"
   beneficiaries?: {
     id: string
     name: string

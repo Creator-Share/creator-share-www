@@ -16,7 +16,7 @@ export type AdminSubscription = {
   sponsorship_id: string
   user_id: string
   sponsorship_method: "STRIPE" | "PAYPAL" | null
-  payment_region: string
+  payment_region: "us" | "uk"
   // Transformed fields
   child_name: string
   child_username: string

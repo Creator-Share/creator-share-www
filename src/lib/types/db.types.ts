@@ -345,7 +345,7 @@ export type Database = {
           frequency: Database["public"]["Enums"]["partnership_frequency"]
           id: string
           payment_intent: string | null
-          payment_region: string
+          payment_region: "us" | "uk"
           project: Database["public"]["Enums"]["project_type"]
           status: string
           stripe_subscription_id: string | null
@@ -363,7 +363,7 @@ export type Database = {
           frequency: Database["public"]["Enums"]["partnership_frequency"]
           id?: string
           payment_intent?: string | null
-          payment_region?: string
+          payment_region?: "us" | "uk"
           project?: Database["public"]["Enums"]["project_type"]
           status?: string
           stripe_subscription_id?: string | null
@@ -381,7 +381,7 @@ export type Database = {
           frequency?: Database["public"]["Enums"]["partnership_frequency"]
           id?: string
           payment_intent?: string | null
-          payment_region?: string
+          payment_region?: "us" | "uk"
           project?: Database["public"]["Enums"]["project_type"]
           status?: string
           stripe_subscription_id?: string | null
@@ -588,7 +588,7 @@ export type Database = {
           email_notification: boolean | null
           id: string
           interval: string | null
-          payment_region: string
+          payment_region: "us" | "uk"
           sponsorship_method:
             | Database["public"]["Enums"]["sponsorship_method"]
             | null
@@ -607,7 +607,7 @@ export type Database = {
           email_notification?: boolean | null
           id?: string
           interval?: string | null
-          payment_region?: string
+          payment_region?: "us" | "uk"
           sponsorship_method?:
             | Database["public"]["Enums"]["sponsorship_method"]
             | null
@@ -626,7 +626,7 @@ export type Database = {
           email_notification?: boolean | null
           id?: string
           interval?: string | null
-          payment_region?: string
+          payment_region?: "us" | "uk"
           sponsorship_method?:
             | Database["public"]["Enums"]["sponsorship_method"]
             | null

@@ -173,6 +173,11 @@ const UK_COUNTRY_CODES = new Set([
   "scotland",
   "wales",
   "northern ireland",
+  // Ireland routes to the UK entity (per PR scope: shared EU/UK billing
+  // surface until a dedicated EU Stripe account is brought online).
+  "ie",
+  "irl",
+  "ireland",
 ])
 
 function normalizeCountry(country: string | null | undefined): string {
