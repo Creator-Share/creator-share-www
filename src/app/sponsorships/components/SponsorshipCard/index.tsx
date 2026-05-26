@@ -6,7 +6,7 @@ import { FaLocationDot, FaPerson } from "react-icons/fa6"
 import { calculateAge } from "@/utils/ageCalculator"
 import { BeneficiaryCardProps } from "@/types/propTypes"
 import { BeneficiaryMedia } from "@/types/admin.types"
-import { getImageSrc, getThumbnailSrc } from "@/utils/supabase/media"
+import { getImageSrc } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
@@ -106,7 +106,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         <ImageCarousel
           images={images}
           getImageSrc={getImageSrc}
-          getThumbnailSrc={getThumbnailSrc}
           fallbackSrc={placeholderImage}
           alt={beneficiary.name?.split(" ")[0] ?? ""}
           className="w-full h-full rounded-t-[20px]"

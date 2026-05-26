@@ -1,5 +1,16 @@
 import { NextResponse } from "next/server"
 import { isPayPalEnabled, paypalFetch } from "@/lib/paypal/client"
+import { createServiceRoleClient } from "@/utils/supabase/server"
+import {
+  coerceSupportedCurrency,
+  convertUsdCentsToCurrency,
+  formatMoneyFromMinorUnits,
+  verifyCurrencyConversion,
+} from "@/utils/currency"
+import {
+  encodePayPalPaymentContext,
+  parsePayPalPaymentContext,
+} from "@/utils/paypalCurrencyContext"
 
 interface PayPalError {
   message?: string
@@ -11,20 +22,130 @@ interface PayPalError {
 interface PayPalOrderData {
   id: string
   status: string
+  payer?: {
+    email_address?: string
+    payer_id?: string
+    name?: {
+      given_name?: string
+      surname?: string
+    }
+  }
+  purchase_units?: Array<{
+    custom_id?: string
+    amount?: {
+      value?: string
+      currency_code?: string
+    }
+  }>
 }
 
-interface PayPalCaptureData extends PayPalOrderData {
+interface PayPalCaptureData {
+  id: string
+  status: string
   purchase_units: Array<{
     payments?: {
       captures?: Array<{
         id: string
         status: string
+        amount?: {
+          value?: string
+          currency_code?: string
+        }
       }>
     }
   }>
 }
 
-async function createPayPalOrder(amount: number, beneficiaryId?: string) {
+function toMajorAmountString(amountMinor: number, minorUnit: number) {
+  return (amountMinor / 10 ** minorUnit).toFixed(minorUnit)
+}
+
+function parsePayPalAmountMinor(value: string | undefined, minorUnit: number) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? Math.round(amount * 10 ** minorUnit) : null
+}
+
+async function persistPayPalOneTimeTransaction({
+  orderId,
+  captureId,
+  beneficiaryId,
+  beneficiaryName,
+  userId,
+  sponsorEmail,
+  payer,
+  conversion,
+}: {
+  orderId: string
+  captureId: string | null | undefined
+  beneficiaryId: string | null | undefined
+  beneficiaryName: string | null | undefined
+  userId: string | null | undefined
+  sponsorEmail: string | null | undefined
+  payer: PayPalOrderData["payer"] | undefined
+  conversion: ReturnType<typeof convertUsdCentsToCurrency>
+}) {
+  const supabase = createServiceRoleClient()
+  const providerEventId = captureId || orderId
+  const { data: existingByEvent } = await supabase
+    .from("transaction_ledger")
+    .select("id")
+    .eq("provider_event_id", providerEventId)
+    .maybeSingle()
+
+  if (existingByEvent) return
+
+  const { data: existingByReference } = await supabase
+    .from("transaction_ledger")
+    .select("id")
+    .eq("reference", orderId)
+    .eq("tx_action", "SPONSORSHIP")
+    .maybeSingle()
+
+  if (existingByReference) return
+
+  const payerName = payer?.name
+    ? `${payer.name.given_name || ""} ${payer.name.surname || ""}`.trim()
+    : null
+  const payerEmail = payer?.email_address || sponsorEmail || null
+  const { error } = await supabase.from("transaction_ledger").insert({
+    beneficiary_id: /^[0-9a-fA-F-]{36}$/.test(beneficiaryId || "")
+      ? beneficiaryId
+      : null,
+    user_id: userId || null,
+    description: `PayPal one-time sponsorship to ${beneficiaryName || beneficiaryId || "Unknown Beneficiary"} with amount of ${formatMoneyFromMinorUnits(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
+    reference: orderId,
+    credit: conversion.baseAmountUsdCents,
+    charged_amount: conversion.chargedAmountMinor,
+    charged_currency: conversion.chargedCurrency,
+    charged_currency_minor_unit: conversion.chargedCurrencyMinorUnit,
+    conversion_rate: conversion.conversionRate,
+    conversion_rate_source: conversion.conversionRateSource,
+    currency_config_version: conversion.currencyConfigVersion,
+    provider_event_id: providerEventId,
+    subscription_type: "one_time",
+    tx_action: "SPONSORSHIP",
+    customer_name: payerName,
+    customer_email: payerEmail,
+    customer_id: payer?.payer_id || null,
+    payment_intent: captureId || null,
+    payment_method_id: null,
+  })
+
+  if (error) {
+    console.error("Error creating PayPal approval transaction:", error)
+    throw new Error("Failed to record PayPal transaction")
+  }
+}
+
+async function createPayPalOrder(
+  baseAmountUsdCents: number,
+  currencyCode: string | null | undefined,
+  beneficiaryId?: string,
+) {
+  const conversion = convertUsdCentsToCurrency(
+    baseAmountUsdCents,
+    coerceSupportedCurrency(currencyCode),
+  )
   const response = await paypalFetch("/v2/checkout/orders", {
     method: "POST",
     body: JSON.stringify({
@@ -32,10 +153,16 @@ async function createPayPalOrder(amount: number, beneficiaryId?: string) {
       purchase_units: [
         {
           reference_id: beneficiaryId || undefined,
-          custom_id: beneficiaryId || undefined,
+          custom_id: encodePayPalPaymentContext(
+            beneficiaryId || null,
+            conversion,
+          ),
           amount: {
-            currency_code: "USD",
-            value: amount.toFixed(2),
+            currency_code: conversion.chargedCurrency,
+            value: toMajorAmountString(
+              conversion.chargedAmountMinor,
+              conversion.chargedCurrencyMinorUnit,
+            ),
           },
         },
       ],
@@ -116,11 +243,24 @@ export async function POST(request: Request) {
       beneficiaryId,
       beneficiaryName,
       amount,
+      base_amount_usd_cents,
+      currency_code,
       orderID,
       plan_id,
+      userId,
+      email,
       subscriber_email,
       subscriber_name,
     } = body
+
+    const baseAmountUsdCents = Number.isFinite(Number(base_amount_usd_cents))
+      ? Math.round(Number(base_amount_usd_cents))
+      : Math.round(Number(amount || 0) * 100)
+    const requestedCurrency = coerceSupportedCurrency(currency_code)
+    const conversion = convertUsdCentsToCurrency(
+      baseAmountUsdCents,
+      requestedCurrency,
+    )
 
     // If creating a subscription
     if (plan_id) {
@@ -144,7 +284,10 @@ export async function POST(request: Request) {
 
         const subscriptionPayload = {
           plan_id,
-          custom_id: beneficiaryId || undefined,
+          custom_id: encodePayPalPaymentContext(
+            beneficiaryId || null,
+            conversion,
+          ),
           subscriber,
           application_context: {
             brand_name: "Creator Share",
@@ -155,8 +298,8 @@ export async function POST(request: Request) {
               payer_selected: "PAYPAL",
               payee_preferred: "IMMEDIATE_PAYMENT_REQUIRED",
             },
-            return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?sponsorship_id=${beneficiaryId}`,
-            cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed`,
+            return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?sponsorship_id=${beneficiaryId}&currency=${conversion.chargedCurrency}`,
+            cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?currency=${conversion.chargedCurrency}`,
           },
         }
 
@@ -213,14 +356,57 @@ export async function POST(request: Request) {
           throw new Error("Invalid order status response")
         }
 
+        const purchaseUnit = orderData.purchase_units?.[0]
+        const orderContext = parsePayPalPaymentContext(purchaseUnit?.custom_id)
+        const orderConversion =
+          orderContext.conversion ||
+          convertUsdCentsToCurrency(baseAmountUsdCents, requestedCurrency)
+        const orderCurrency = coerceSupportedCurrency(
+          purchaseUnit?.amount?.currency_code,
+        )
+        const orderAmountMinor = parsePayPalAmountMinor(
+          purchaseUnit?.amount?.value,
+          orderConversion.chargedCurrencyMinorUnit,
+        )
+        if (
+          orderCurrency !== orderConversion.chargedCurrency ||
+          orderAmountMinor !== orderConversion.chargedAmountMinor ||
+          !verifyCurrencyConversion(orderConversion)
+        ) {
+          console.error("PAYMENT_CURRENCY_RECONCILIATION_FAILED", {
+            provider: "paypal",
+            orderID,
+            expected: orderConversion,
+            actualCurrency: purchaseUnit?.amount?.currency_code,
+            actualAmount: purchaseUnit?.amount?.value,
+          })
+          return NextResponse.json({
+            success: false,
+            message: "Payment currency reconciliation failed",
+            acknowledged: true,
+          })
+        }
+
         if (orderData.status === "COMPLETED") {
+          await persistPayPalOneTimeTransaction({
+            orderId: orderID,
+            captureId: orderID,
+            beneficiaryId: orderContext.beneficiaryId || beneficiaryId,
+            beneficiaryName,
+            userId,
+            sponsorEmail: email,
+            payer: orderData.payer,
+            conversion: orderConversion,
+          })
           return NextResponse.json({
             success: true,
             message: "Payment already captured",
             data: {
-              beneficiaryId,
+              beneficiaryId: orderContext.beneficiaryId || beneficiaryId,
               beneficiaryName,
-              amount,
+              amount: orderConversion.baseAmountUsdCents,
+              chargedAmount: orderConversion.chargedAmountMinor,
+              chargedCurrency: orderConversion.chargedCurrency,
               orderID,
               captureStatus: orderData.status,
             },
@@ -238,13 +424,55 @@ export async function POST(request: Request) {
           )
         }
 
+        const capture = captureData.purchase_units?.[0]?.payments?.captures?.[0]
+        const captureCurrency = coerceSupportedCurrency(capture?.amount?.currency_code)
+        const captureAmountMinor = parsePayPalAmountMinor(
+          capture?.amount?.value,
+          orderConversion.chargedCurrencyMinorUnit,
+        )
+        if (
+          captureCurrency !== orderConversion.chargedCurrency ||
+          captureAmountMinor !== orderConversion.chargedAmountMinor
+        ) {
+          console.error("PAYMENT_CURRENCY_RECONCILIATION_FAILED", {
+            provider: "paypal",
+            orderID,
+            captureId: capture?.id,
+            expected: orderConversion,
+            actualCurrency: capture?.amount?.currency_code,
+            actualAmount: capture?.amount?.value,
+          })
+          return NextResponse.json({
+            success: false,
+            message: "Payment currency reconciliation failed",
+            acknowledged: true,
+          })
+        }
+
+        await persistPayPalOneTimeTransaction({
+          orderId: orderID,
+          captureId: capture?.id || captureData.id,
+          beneficiaryId: orderContext.beneficiaryId || beneficiaryId,
+          beneficiaryName,
+          userId,
+          sponsorEmail: email,
+          payer: orderData.payer,
+          conversion: orderConversion,
+        })
+
         return NextResponse.json({
           success: true,
           message: "Payment captured successfully",
           data: {
-            beneficiaryId,
+            beneficiaryId: orderContext.beneficiaryId || beneficiaryId,
             beneficiaryName,
-            amount,
+            amount: orderConversion.baseAmountUsdCents,
+            chargedAmount: orderConversion.chargedAmountMinor,
+            chargedCurrency: orderConversion.chargedCurrency,
+            chargedDisplay: formatMoneyFromMinorUnits(
+              orderConversion.chargedAmountMinor,
+              orderConversion.chargedCurrency,
+            ),
             orderID,
             captureID: captureData.id,
             captureStatus: captureData.status,
@@ -258,7 +486,11 @@ export async function POST(request: Request) {
       }
     }
 
-    const orderData = await createPayPalOrder(amount, beneficiaryId)
+    const orderData = await createPayPalOrder(
+      baseAmountUsdCents,
+      requestedCurrency,
+      beneficiaryId,
+    )
 
     if (orderData.status !== "CREATED") {
       return NextResponse.json(

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/utils/supabase/server"
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 // New endpoint to send email notifications AFTER media is uploaded
@@ -183,32 +183,31 @@ export async function POST(req: NextRequest) {
         .eq("parent_id", activityId)
 
       if (mediaRecords && mediaRecords.length > 0) {
-        const { getStorageKey } = await import("@/utils/supabase/media")
-        const { STORAGE_BUCKET } = await import("@/utils/supabase/buckets")
+        const {
+          filterExistingMediaRows,
+          getDirectMediaUrl,
+          getExternalActivityImageUrl,
+        } = await import("@/utils/supabase/media")
 
-        const base = process.env.NEXT_PUBLIC_SUPABASE_URL
-        if (base) {
-          const normalizedBase = base.replace(/\/$/, "")
+        const serviceSupabase = createServiceRoleClient()
+        const existingMediaRecords = await filterExistingMediaRows(
+          serviceSupabase,
+          mediaRecords as unknown as import("@/utils/supabase/media").MediaRow[],
+        )
 
-          for (const mediaRecord of mediaRecords) {
-            try {
-              const key = getStorageKey(
-                mediaRecord as unknown as import("@/utils/supabase/media").MediaRow,
-              )
-              const publicUrl = `${normalizedBase}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(
-                key,
-              )}`
-              
-              if (mediaRecord.type === "IMAGE") {
-                imageUrls.push(publicUrl)
-              } else if (mediaRecord.type === "VIDEO") {
-                videoUrls.push(publicUrl)
-              } else if (mediaRecord.type === "DOCUMENT") {
-                documentUrls.push(publicUrl)
-              }
-            } catch (urlError) {
-              console.error("❌ Error generating URL for media:", urlError)
+        for (const mediaRecord of existingMediaRecords) {
+          try {
+            const media = mediaRecord as unknown as import("@/utils/supabase/media").MediaRow
+
+            if (mediaRecord.type === "IMAGE") {
+              imageUrls.push(getExternalActivityImageUrl(media))
+            } else if (mediaRecord.type === "VIDEO") {
+              videoUrls.push(getDirectMediaUrl(media))
+            } else if (mediaRecord.type === "DOCUMENT") {
+              documentUrls.push(getDirectMediaUrl(media))
             }
+          } catch (urlError) {
+            console.error("❌ Error generating URL for media:", urlError)
           }
         }
       }

@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server"
 import { isPayPalEnabled, paypalFetch } from "@/lib/paypal/client"
+import {
+  coerceSupportedCurrency,
+  convertUsdCentsToCurrency,
+} from "@/utils/currency"
+
+function toMajorAmountString(amountMinor: number, minorUnit: number) {
+  return (amountMinor / 10 ** minorUnit).toFixed(minorUnit)
+}
 
 async function createPayPalProduct(name: string, description: string) {
   const response = await paypalFetch("/v1/catalogs/products", {
@@ -33,10 +41,18 @@ export async function POST(request: Request) {
       name,
       description,
       amount,
+      base_amount_usd_cents,
       interval_unit,
       interval_count = 1,
       currency_code = "USD",
     } = await request.json()
+    const baseAmountUsdCents = Number.isFinite(Number(base_amount_usd_cents))
+      ? Math.round(Number(base_amount_usd_cents))
+      : Math.round(Number(amount || 0) * 100)
+    const conversion = convertUsdCentsToCurrency(
+      baseAmountUsdCents,
+      coerceSupportedCurrency(currency_code),
+    )
 
     const product_id = await createPayPalProduct(name, description)
 
@@ -58,12 +74,17 @@ export async function POST(request: Request) {
             total_cycles: 0,
             pricing_scheme: {
               fixed_price: {
-                value: amount.toFixed(2),
-                currency_code,
+                value: toMajorAmountString(
+                  conversion.chargedAmountMinor,
+                  conversion.chargedCurrencyMinorUnit,
+                ),
+                currency_code: conversion.chargedCurrency,
               },
             },
           },
         ],
+        taxes: undefined,
+        metadata: undefined,
         payment_preferences: {
           auto_bill_outstanding: true,
           setup_fee_failure_action: "CONTINUE",

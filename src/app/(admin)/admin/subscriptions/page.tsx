@@ -11,26 +11,37 @@ import { toaster } from "@/components/ui/toaster"
 import { LogoLoader } from "@/components/common/LogoLoader"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { RawSubscription } from "@/types/admin.types"
+import { formatMoneyFromMinorUnits } from "@/utils/currency"
 
 const AdminSubscriptionsPage = () => {
   const [subscriptions, setSubscriptions] = useState<AdminSubscription[]>([])
   const [loading, setLoading] = useState(true)
   const [supabase] = useState(() => createClient())
 
-  const transformSubscription = (sub: RawSubscription): AdminSubscription => ({
-    ...sub,
-    child_name:
-      sub.beneficiaries?.name ||
-      (sub.beneficiary_id
-        ? `Beneficiary ID: ${sub.beneficiary_id}`
-        : "Unknown Beneficiary"),
-    child_username: sub.beneficiaries?.username || "unknown",
-    user_email: `User ID: ${sub.user_id}`,
-    formatted_amount: `$${(sub.amount / 100).toFixed(2)}`,
-    formatted_created_at: new Date(sub.created_at).toLocaleDateString(),
-    formatted_current_period_start: new Date(sub.current_period_start).toLocaleDateString(),
-    formatted_current_period_end: new Date(sub.current_period_end).toLocaleDateString(),
-  })
+  const transformSubscription = (sub: RawSubscription): AdminSubscription => {
+    const canonicalAmount = formatMoneyFromMinorUnits(sub.amount, "USD")
+    const chargedAmount =
+      sub.charged_amount && sub.charged_currency
+        ? formatMoneyFromMinorUnits(sub.charged_amount, sub.charged_currency)
+        : null
+    return {
+      ...sub,
+      child_name:
+        sub.beneficiaries?.name ||
+        (sub.beneficiary_id
+          ? `Beneficiary ID: ${sub.beneficiary_id}`
+          : "Unknown Beneficiary"),
+      child_username: sub.beneficiaries?.username || "unknown",
+      user_email: `User ID: ${sub.user_id}`,
+      formatted_amount:
+        chargedAmount && sub.charged_currency !== "USD"
+          ? `${canonicalAmount} (${chargedAmount} charged)`
+          : canonicalAmount,
+      formatted_created_at: new Date(sub.created_at).toLocaleDateString(),
+      formatted_current_period_start: new Date(sub.current_period_start).toLocaleDateString(),
+      formatted_current_period_end: new Date(sub.current_period_end).toLocaleDateString(),
+    }
+  }
 
   useEffect(() => {
     let channel: RealtimeChannel | null = null

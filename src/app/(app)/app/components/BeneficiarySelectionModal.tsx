@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Box, Text, Flex, Spinner, Grid, Image } from "@chakra-ui/react"
 import { createClient } from "@/utils/supabase/client"
 import { isOpenSponsorshipType } from "@/config/beneficiaryTypes"
+import { getBrowserImageSrc } from "@/utils/supabase/media"
 
 interface BeneficiaryWithImages {
   id: string
@@ -126,7 +127,7 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
             .filter(m => m.parent_id === beneficiary.id)
             .map(m => ({
               id: m.id,
-              image_url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${m.parent_id}/${m.type}/${m.id}.${m.extension}`,
+              image_url: getBrowserImageSrc(m),
               is_primary: m.weight > 0
             }))
           

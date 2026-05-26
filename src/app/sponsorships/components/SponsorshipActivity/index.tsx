@@ -238,7 +238,6 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                       fill
                       sizes="(max-width: 768px) 33vw, 200px"
                       className="object-cover"
-                      unoptimized
                     />
                   </Box>
                 ))}
@@ -330,7 +329,6 @@ const BeneficiaryActivity: React.FC<BeneficiaryActivityProps> = ({ activities })
               width={1200}
               height={900}
               className="object-contain max-h-[90vh]"
-              unoptimized
             />
           </Box>
         </Box>

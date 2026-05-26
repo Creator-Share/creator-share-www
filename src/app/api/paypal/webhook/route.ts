@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/utils/supabase/client"
+import { createServiceRoleClient } from "@/utils/supabase/server"
 import { notifySponsorshipReceived } from "@/services/telegram"
 import { isPayPalEnabled, paypalFetch } from "@/lib/paypal/client"
 import { sendSponsorshipCancellationNotificationEmail } from "@/utils/email"
+import {
+  convertCurrencyMinorToUsdCents,
+  convertUsdCentsToCurrency,
+  formatMoneyFromMinorUnits,
+  verifyCurrencyConversion,
+} from "@/utils/currency"
+import { parsePayPalPaymentContext } from "@/utils/paypalCurrencyContext"
 
 async function getRawBody(req: Request): Promise<string> {
   const reader = req.body?.getReader()
@@ -30,6 +37,11 @@ async function getPayPalPlanDetails(planId: string) {
   return response.json()
 }
 
+function parsePayPalAmountMinor(value: string | undefined, minorUnit: number) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? Math.round(amount * 10 ** minorUnit) : null
+}
+
 export async function POST(req: Request) {
   if (!isPayPalEnabled()) {
     return NextResponse.json(
@@ -38,7 +50,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const supabase = createClient()
+  const supabase = createServiceRoleClient()
   try {
     const rawBody = await getRawBody(req)
 
@@ -84,6 +96,156 @@ export async function POST(req: Request) {
         )
       }
       case "PAYMENT.CAPTURE.COMPLETED": {
+        const capture = event.resource
+        const orderId =
+          capture.supplementary_data?.related_ids?.order_id ||
+          capture.invoice_id ||
+          null
+        if (!orderId) {
+          return NextResponse.json(
+            { message: "PayPal capture acknowledged" },
+            { status: 200 },
+          )
+        }
+
+        const orderResponse = await paypalFetch(
+          `/v2/checkout/orders/${orderId}`,
+          { method: "GET" },
+        )
+        if (!orderResponse.ok) {
+          console.error("PayPal capture order fetch failed:", {
+            orderId,
+            status: orderResponse.status,
+            body: await orderResponse.text(),
+          })
+          return NextResponse.json(
+            { message: "PayPal capture acknowledged" },
+            { status: 200 },
+          )
+        }
+
+        const order = await orderResponse.json()
+        const purchaseUnit = order.purchase_units?.[0]
+        const paymentContext = parsePayPalPaymentContext(
+          purchaseUnit?.custom_id,
+        )
+        const beneficiaryId = paymentContext.beneficiaryId
+        const captureAmount = capture.amount
+        const conversion =
+          paymentContext.conversion ||
+          convertUsdCentsToCurrency(
+            convertCurrencyMinorToUsdCents(
+              parsePayPalAmountMinor(captureAmount?.value, 2) || 0,
+              captureAmount?.currency_code || "USD",
+            ),
+            captureAmount?.currency_code || "USD",
+          )
+        const actualAmountMinor = parsePayPalAmountMinor(
+          captureAmount?.value,
+          conversion.chargedCurrencyMinorUnit,
+        )
+
+        if (
+          captureAmount?.currency_code?.toUpperCase() !==
+            conversion.chargedCurrency ||
+          actualAmountMinor !== conversion.chargedAmountMinor ||
+          !verifyCurrencyConversion(conversion)
+        ) {
+          console.error("PAYMENT_CURRENCY_RECONCILIATION_FAILED", {
+            provider: "paypal",
+            eventId: event.id,
+            orderId,
+            captureId: capture.id,
+            expected: conversion,
+            actualCurrency: captureAmount?.currency_code,
+            actualAmount: captureAmount?.value,
+          })
+          return NextResponse.json(
+            { message: "PayPal capture acknowledged" },
+            { status: 200 },
+          )
+        }
+
+        const { data: existingTransaction } = await supabase
+          .from("transaction_ledger")
+          .select("id")
+          .eq("provider_event_id", event.id || transmissionId)
+          .maybeSingle()
+
+        if (!existingTransaction) {
+          const payer = order.payer || {}
+          const payerName = payer.name
+            ? `${payer.name.given_name || ""} ${payer.name.surname || ""}`.trim()
+            : null
+          const payerEmail = payer.email_address || null
+          const { data: beneficiary, error: beneficiaryError } = beneficiaryId
+            ? await supabase
+                .from("beneficiaries")
+                .select("name")
+                .eq("id", beneficiaryId)
+                .single()
+            : { data: null, error: null }
+          const beneficiaryName =
+            !beneficiaryError && beneficiary?.name
+              ? beneficiary.name
+              : beneficiaryId || "Unknown Beneficiary"
+
+          const { error: insertError } = await supabase
+            .from("transaction_ledger")
+            .insert({
+              user_id: null,
+              credit: conversion.baseAmountUsdCents,
+              charged_amount: conversion.chargedAmountMinor,
+              charged_currency: conversion.chargedCurrency,
+              charged_currency_minor_unit: conversion.chargedCurrencyMinorUnit,
+              conversion_rate: conversion.conversionRate,
+              conversion_rate_source: conversion.conversionRateSource,
+              currency_config_version: conversion.currencyConfigVersion,
+              provider_event_id: event.id || transmissionId,
+              customer_email: payerEmail,
+              customer_name: payerName,
+              reference: orderId,
+              description: `PayPal one-time sponsorship payment for beneficiary ${beneficiaryName} with amount of ${formatMoneyFromMinorUnits(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
+              tx_action: "SPONSORSHIP",
+              subscription_type: "one_time",
+              beneficiary_id: /^[0-9a-fA-F-]{36}$/.test(beneficiaryId || "")
+                ? beneficiaryId
+                : null,
+              created_at: new Date(),
+              customer_id: payer.payer_id || null,
+              payment_intent: capture.id || null,
+              payment_method_id: null,
+            })
+
+          if (insertError) {
+            console.error("Error creating PayPal capture transaction:", insertError)
+            return NextResponse.json(
+              { error: "Failed to create capture transaction" },
+              { status: 500 },
+            )
+          }
+
+          try {
+            await notifySponsorshipReceived({
+              sponsorName: payerName || "Anonymous Sponsor",
+              sponsorEmail: payerEmail || "No email provided",
+              amount: conversion.chargedAmountMinor,
+              chargedCurrency: conversion.chargedCurrency,
+              chargedCurrencyMinorUnit: conversion.chargedCurrencyMinorUnit,
+              beneficiaryId,
+              beneficiaryName,
+              paymentMethod: "PayPal",
+              paymentReference: orderId,
+              interval: "one_time",
+            })
+          } catch (telegramError) {
+            console.error(
+              "Failed to send PayPal capture Telegram notification:",
+              telegramError,
+            )
+          }
+        }
+
         return NextResponse.json(
           { message: "PayPal payment processed successfully" },
           { status: 200 },
@@ -91,7 +253,8 @@ export async function POST(req: Request) {
       }
       case "BILLING.SUBSCRIPTION.ACTIVATED": {
         const sub = event.resource
-        const beneficiaryId = sub.custom_id || null
+        const paymentContext = parsePayPalPaymentContext(sub.custom_id)
+        const beneficiaryId = paymentContext.beneficiaryId
         const customerId = sub.subscriber?.payer_id || null
         const payerEmail = sub.subscriber?.email_address || null
 
@@ -100,11 +263,39 @@ export async function POST(req: Request) {
               sub.subscriber.name.surname || ""
             }`.trim()
           : null
-        const amount = sub.billing_info?.last_payment?.amount?.value
-          ? Math.round(
-              parseFloat(sub.billing_info.last_payment.amount.value) * 100,
-            )
-          : null
+        const lastPaymentAmount = sub.billing_info?.last_payment?.amount
+        const conversion =
+          paymentContext.conversion ||
+          convertUsdCentsToCurrency(
+            convertCurrencyMinorToUsdCents(
+              parsePayPalAmountMinor(lastPaymentAmount?.value, 2) || 0,
+              lastPaymentAmount?.currency_code || "USD",
+            ),
+            lastPaymentAmount?.currency_code || "USD",
+          )
+        const actualAmountMinor = parsePayPalAmountMinor(
+          lastPaymentAmount?.value,
+          conversion.chargedCurrencyMinorUnit,
+        )
+        if (
+          lastPaymentAmount?.currency_code?.toUpperCase() !==
+            conversion.chargedCurrency ||
+          actualAmountMinor !== conversion.chargedAmountMinor ||
+          !verifyCurrencyConversion(conversion)
+        ) {
+          console.error("PAYMENT_CURRENCY_RECONCILIATION_FAILED", {
+            provider: "paypal",
+            eventId: event.id,
+            subscriptionId: sub.id,
+            expected: conversion,
+            actualCurrency: lastPaymentAmount?.currency_code,
+            actualAmount: lastPaymentAmount?.value,
+          })
+          return NextResponse.json(
+            { message: "PayPal payment acknowledged" },
+            { status: 200 },
+          )
+        }
         const recurringReference = sub.billing_agreement_id || sub.id
 
         const { data: beneficiary, error: beneficiaryError } = beneficiaryId
@@ -119,15 +310,31 @@ export async function POST(req: Request) {
             ? beneficiary.name
             : beneficiaryId
 
-        const { error: transactionError } = await supabase
+        const providerEventId = event.id || transmissionId
+        const { data: existingTransaction } = await supabase
           .from("transaction_ledger")
-          .insert({
+          .select("id")
+          .eq("provider_event_id", providerEventId)
+          .maybeSingle()
+
+        let insertedTransaction = false
+        if (!existingTransaction) {
+          const { error: transactionError } = await supabase
+            .from("transaction_ledger")
+            .insert({
             user_id: null,
-            credit: amount,
+            credit: conversion.baseAmountUsdCents,
+            charged_amount: conversion.chargedAmountMinor,
+            charged_currency: conversion.chargedCurrency,
+            charged_currency_minor_unit: conversion.chargedCurrencyMinorUnit,
+            conversion_rate: conversion.conversionRate,
+            conversion_rate_source: conversion.conversionRateSource,
+            currency_config_version: conversion.currencyConfigVersion,
+            provider_event_id: providerEventId,
             customer_email: payerEmail,
             customer_name: payerName,
             reference: recurringReference,
-            description: `PayPal recurring sponsorship payment${beneficiaryName ? ` for beneficiary ${beneficiaryName}` : ""} with amount of ${amount}`,
+            description: `PayPal recurring sponsorship payment${beneficiaryName ? ` for beneficiary ${beneficiaryName}` : ""} with amount of ${formatMoneyFromMinorUnits(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
             tx_action: "SPONSORSHIP",
             subscription_type: "subscription",
             beneficiary_id: /^[0-9a-fA-F-]{36}$/.test(beneficiaryId || "")
@@ -137,34 +344,62 @@ export async function POST(req: Request) {
             customer_id: customerId,
             payment_intent: null,
             payment_method_id: null,
-          })
+            })
 
-        if (transactionError) {
+          if (transactionError) {
+            console.error(
+              "Error creating PayPal recurring transaction:",
+              transactionError,
+            )
+            return NextResponse.json(
+              { error: "Failed to create recurring transaction" },
+              { status: 500 },
+            )
+          }
+          insertedTransaction = true
+        }
+
+        const { error: updateSubscriptionError } = await supabase
+          .from("subscriptions")
+          .update({
+            status: "complete",
+            amount: conversion.baseAmountUsdCents,
+            charged_amount: conversion.chargedAmountMinor,
+            charged_currency: conversion.chargedCurrency,
+            charged_currency_minor_unit: conversion.chargedCurrencyMinorUnit,
+            conversion_rate: conversion.conversionRate,
+            conversion_rate_source: conversion.conversionRateSource,
+            currency_config_version: conversion.currencyConfigVersion,
+            customer_id: customerId,
+          })
+          .eq("stripe_subscription_id", sub.id)
+
+        if (updateSubscriptionError) {
           console.error(
-            "Error creating PayPal recurring transaction:",
-            transactionError,
-          )
-          return NextResponse.json(
-            { error: "Failed to create recurring transaction" },
-            { status: 500 },
+            "Error updating PayPal subscription activation:",
+            updateSubscriptionError,
           )
         }
 
-        try {
-          await notifySponsorshipReceived({
-            sponsorName: payerName || "Anonymous Sponsor",
-            sponsorEmail: payerEmail || "No email provided",
-            amount: amount || 0,
-            beneficiaryId: beneficiaryId,
-            beneficiaryName: beneficiaryName,
-            paymentMethod: "PayPal",
-            paymentReference: recurringReference,
-          })
-        } catch (telegramError) {
-          console.error(
-            "Failed to send PayPal sponsorship Telegram notification:",
-            telegramError,
-          )
+        if (insertedTransaction) {
+          try {
+            await notifySponsorshipReceived({
+              sponsorName: payerName || "Anonymous Sponsor",
+              sponsorEmail: payerEmail || "No email provided",
+              amount: conversion.chargedAmountMinor,
+              chargedCurrency: conversion.chargedCurrency,
+              chargedCurrencyMinorUnit: conversion.chargedCurrencyMinorUnit,
+              beneficiaryId: beneficiaryId,
+              beneficiaryName: beneficiaryName,
+              paymentMethod: "PayPal",
+              paymentReference: recurringReference,
+            })
+          } catch (telegramError) {
+            console.error(
+              "Failed to send PayPal sponsorship Telegram notification:",
+              telegramError,
+            )
+          }
         }
 
         return NextResponse.json(
@@ -184,7 +419,8 @@ export async function POST(req: Request) {
         const subscriber = subscription.subscriber || {}
         const customerId = subscriber.payer_id || null
         const userId = null
-        const beneficiaryId = subscription.custom_id || null
+        const paymentContext = parsePayPalPaymentContext(subscription.custom_id)
+        const beneficiaryId = paymentContext.beneficiaryId
 
         const payerEmail = subscriber.email_address || null
         const payerName = subscriber.name
@@ -205,7 +441,7 @@ export async function POST(req: Request) {
             ? beneficiary.name
             : beneficiaryId
 
-        let amount = null
+        let conversion = paymentContext.conversion
         let interval = null
         try {
           if (planId) {
@@ -214,6 +450,7 @@ export async function POST(req: Request) {
               pricing_scheme?: {
                 fixed_price: {
                   value: string
+                  currency_code?: string
                 }
               }
               frequency?: {
@@ -225,9 +462,41 @@ export async function POST(req: Request) {
                 cycle.pricing_scheme && cycle.frequency,
             )
             if (regularCycle) {
-              amount = Math.round(
-                parseFloat(regularCycle.pricing_scheme.fixed_price.value) * 100,
+              const planCurrency =
+                regularCycle.pricing_scheme.fixed_price.currency_code || "USD"
+              const planMinorAmount = parsePayPalAmountMinor(
+                regularCycle.pricing_scheme.fixed_price.value,
+                conversion?.chargedCurrencyMinorUnit || 2,
               )
+              if (conversion) {
+                if (
+                  planCurrency.toUpperCase() !== conversion.chargedCurrency ||
+                  planMinorAmount !== conversion.chargedAmountMinor ||
+                  !verifyCurrencyConversion(conversion)
+                ) {
+                  console.error("PAYMENT_CURRENCY_RECONCILIATION_FAILED", {
+                    provider: "paypal",
+                    eventId: event.id,
+                    subscriptionId: paypalSubscriptionId,
+                    expected: conversion,
+                    actualCurrency: planCurrency,
+                    actualAmount:
+                      regularCycle.pricing_scheme.fixed_price.value,
+                  })
+                  return NextResponse.json(
+                    { message: "PayPal subscription acknowledged" },
+                    { status: 200 },
+                  )
+                }
+              } else {
+                conversion = convertUsdCentsToCurrency(
+                  convertCurrencyMinorToUsdCents(
+                    planMinorAmount || 0,
+                    planCurrency,
+                  ),
+                  planCurrency,
+                )
+              }
               interval =
                 regularCycle.frequency?.interval_unit?.toLowerCase() || null
             }
@@ -245,13 +514,30 @@ export async function POST(req: Request) {
         else if (status === "CANCELLED") mappedStatus = "cancelled"
         else if (status === "EXPIRED") mappedStatus = "expired"
 
-        const { error: insertError } = await supabase
+        const { data: existingSubscription } = await supabase
+          .from("subscriptions")
+          .select("id")
+          .eq("stripe_subscription_id", paypalSubscriptionId)
+          .maybeSingle()
+
+        const { error: insertError } = existingSubscription
+          ? { error: null }
+          : await supabase
           .from("subscriptions")
           .insert({
             user_id: userId,
             stripe_subscription_id: paypalSubscriptionId,
             status: "incomplete",
-            amount: amount ?? 0,
+            amount: conversion?.baseAmountUsdCents ?? 0,
+            charged_amount: conversion?.chargedAmountMinor ?? 0,
+            charged_currency: conversion?.chargedCurrency ?? "USD",
+            charged_currency_minor_unit:
+              conversion?.chargedCurrencyMinorUnit ?? 2,
+            conversion_rate: conversion?.conversionRate ?? 1,
+            conversion_rate_source: conversion?.conversionRateSource ?? "default",
+            currency_config_version:
+              conversion?.currencyConfigVersion ?? "2026-05-26-static-v1",
+            provider_event_id: event.id || transmissionId,
             interval: interval ?? undefined,
             current_period_start: startTime,
             current_period_end: null,
@@ -278,7 +564,9 @@ export async function POST(req: Request) {
             await notifySponsorshipReceived({
               sponsorName: payerName || "Anonymous Sponsor",
               sponsorEmail: payerEmail || "No email provided",
-              amount: amount || 0,
+              amount: conversion?.chargedAmountMinor || 0,
+              chargedCurrency: conversion?.chargedCurrency,
+              chargedCurrencyMinorUnit: conversion?.chargedCurrencyMinorUnit,
               beneficiaryId: beneficiaryId,
               beneficiaryName: beneficiaryName,
               paymentMethod: "PayPal",

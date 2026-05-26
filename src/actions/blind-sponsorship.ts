@@ -4,11 +4,16 @@ import Stripe from "stripe"
 
 import {
   coerceRegion,
+  getAvailableRegions,
   getPublishableKey,
   getStripeClient,
-  getStripeConfig,
   type StripeRegion,
 } from "@/lib/stripe/config"
+import {
+  buildPaymentCurrencyMetadata,
+  coerceSupportedCurrency,
+  convertUsdCentsToCurrency,
+} from "@/utils/currency"
 import { getPlaceholderImageUrl } from "@/utils/placeholders"
 
 // For Stripe product images, we need a full URL
@@ -22,6 +27,7 @@ export interface CreateBlindSponsorshipCheckoutParams {
   email?: string
   isEmbedded?: boolean
   region?: StripeRegion | string | null
+  currency?: string | null
 }
 
 export interface CreateBlindSponsorshipCheckoutResult {
@@ -30,6 +36,8 @@ export interface CreateBlindSponsorshipCheckoutResult {
   clientSecret?: string
   region?: StripeRegion
   publishableKey?: string
+  chargedAmountMinor?: number
+  chargedCurrency?: string
   error?: string
 }
 
@@ -47,11 +55,20 @@ export async function createBlindSponsorshipCheckout(
       email,
       isEmbedded = false,
       region: regionInput,
+      currency: currencyInput,
     } = params
 
-    const region = coerceRegion(regionInput)
+    const selectedCurrency = coerceSupportedCurrency(currencyInput)
+    const region =
+      selectedCurrency === "GBP" && getAvailableRegions().includes("uk")
+        ? "uk"
+        : coerceRegion(regionInput)
     const stripe = getStripeClient(region)
-    const stripeCurrency = getStripeConfig(region).currency
+    const conversion = convertUsdCentsToCurrency(
+      BLIND_SPONSORSHIP_AMOUNT_CENTS,
+      selectedCurrency,
+    )
+    const paymentCurrencyMetadata = buildPaymentCurrencyMetadata(conversion)
 
     const isMonthly = paymentType === "subscription"
     const interval = isMonthly ? "month" : "year"
@@ -66,8 +83,8 @@ export async function createBlindSponsorshipCheckout(
 
     // Create price using the fixed amount ($33.33)
     const price = await stripe.prices.create({
-      unit_amount: BLIND_SPONSORSHIP_AMOUNT_CENTS,
-      currency: stripeCurrency,
+      unit_amount: conversion.chargedAmountMinor,
+      currency: conversion.chargedCurrency.toLowerCase(),
       recurring: { interval },
       product: product.id,
       metadata: {
@@ -76,6 +93,7 @@ export async function createBlindSponsorshipCheckout(
         sponsorshipMode: "blind",
         blindLabel: BLIND_LABEL,
         beneficiaryName,
+        ...paymentCurrencyMetadata,
       },
     })
 
@@ -103,6 +121,7 @@ export async function createBlindSponsorshipCheckout(
         blindLabel: BLIND_LABEL,
         region,
         creatorshare_platform: "true",
+        ...paymentCurrencyMetadata,
       },
       subscription_data: {
         metadata: {
@@ -114,6 +133,7 @@ export async function createBlindSponsorshipCheckout(
           beneficiaryName,
           region,
           creatorshare_platform: "true",
+          ...paymentCurrencyMetadata,
         },
       },
     }
@@ -121,10 +141,10 @@ export async function createBlindSponsorshipCheckout(
     // Configure return URLs based on embedded mode
     if (isEmbedded) {
       sessionConfig.ui_mode = "embedded"
-      sessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?embedded=true&session_id={CHECKOUT_SESSION_ID}&region=${region}`
+      sessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?embedded=true&session_id={CHECKOUT_SESSION_ID}&region=${region}&currency=${conversion.chargedCurrency}`
     } else {
-      sessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}&region=${region}`
-      sessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}&region=${region}`
+      sessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}&region=${region}&currency=${conversion.chargedCurrency}`
+      sessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}&region=${region}&currency=${conversion.chargedCurrency}`
     }
 
     // Create checkout session
@@ -136,6 +156,8 @@ export async function createBlindSponsorshipCheckout(
       clientSecret: session.client_secret || undefined,
       region,
       publishableKey: getPublishableKey(region),
+      chargedAmountMinor: conversion.chargedAmountMinor,
+      chargedCurrency: conversion.chargedCurrency,
     }
   } catch (error) {
     console.error("Blind sponsorship checkout error:", error)
@@ -148,4 +170,3 @@ export async function createBlindSponsorshipCheckout(
     }
   }
 }
-

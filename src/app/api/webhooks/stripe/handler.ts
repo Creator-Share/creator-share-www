@@ -6,7 +6,14 @@ import {
   type StripeRegion,
 } from "@/lib/stripe/config"
 import { createServiceRoleClient } from "@/utils/supabase/server"
-import { centsToDollars } from "@/utils/currency"
+import {
+  type CurrencyConversion,
+  coerceSupportedCurrency,
+  convertUsdCentsToCurrency,
+  formatMoneyFromMinorUnits,
+  parsePaymentCurrencyMetadata,
+  verifyCurrencyConversion,
+} from "@/utils/currency"
 import {
   sendSponsorshipConfirmationEmail,
   sendBlindSponsorshipConfirmationEmail,
@@ -33,6 +40,54 @@ function resolveProvider(
 
 function providerLabel(provider: SponsorshipProvider): string {
   return provider === "PAYPAL" ? "PayPal" : "Stripe"
+}
+
+function buildCurrencyReconciliationFailure(
+  eventType: string,
+  providerId: string | null | undefined,
+  expected: CurrencyConversion | null,
+  actualCurrency: string | null | undefined,
+  actualAmountMinor: number | null | undefined,
+) {
+  console.error("PAYMENT_CURRENCY_RECONCILIATION_FAILED", {
+    provider: "stripe",
+    eventType,
+    providerId,
+    expected,
+    actualCurrency,
+    actualAmountMinor,
+  })
+  return NextResponse.json({ received: true }, { status: 200 })
+}
+
+function reconcileStripeCheckoutSession(
+  session: Stripe.Checkout.Session,
+): CurrencyConversion | null {
+  const explicit = parsePaymentCurrencyMetadata(session.metadata)
+  if (explicit) return explicit
+
+  const legacyAmount = Number(session.metadata?.amount)
+  if (
+    session.currency?.toUpperCase() === "USD" &&
+    Number.isFinite(legacyAmount)
+  ) {
+    return convertUsdCentsToCurrency(Math.round(legacyAmount), "USD")
+  }
+
+  return null
+}
+
+function validateStripeCurrencyAmount(
+  conversion: CurrencyConversion | null,
+  actualCurrency: string | null | undefined,
+  actualAmountMinor: number | null | undefined,
+): conversion is CurrencyConversion {
+  return Boolean(
+    conversion &&
+      actualCurrency?.toUpperCase() === conversion.chargedCurrency &&
+      actualAmountMinor === conversion.chargedAmountMinor &&
+      verifyCurrencyConversion(conversion),
+  )
 }
 
 export async function handleStripeWebhook(req: Request, region: StripeRegion) {
@@ -75,7 +130,6 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session
         const type = session.metadata?.type
-        const amount = parseFloat(session.metadata?.amount || "0")
         const paymentType = session.metadata?.paymentType
         const customerEmail = session.customer_details?.email
         const interval = paymentType === "subscription" ? "month" : paymentType === "one_time" ? "one_time" : "year"
@@ -89,6 +143,47 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
             { received: true },
             { status: 200 },
           )
+        }
+
+        const { data: processedTransaction } = await supabase
+          .from("transaction_ledger")
+          .select("id")
+          .eq("provider_event_id", event.id)
+          .maybeSingle()
+
+        if (processedTransaction) {
+          return NextResponse.json(
+            { message: "Transaction already processed" },
+            { status: 200 },
+          )
+        }
+
+        const conversion = reconcileStripeCheckoutSession(session)
+        if (
+          !validateStripeCurrencyAmount(
+            conversion,
+            session.currency,
+            session.amount_total,
+          )
+        ) {
+          return buildCurrencyReconciliationFailure(
+            event.type,
+            session.id,
+            conversion,
+            session.currency,
+            session.amount_total,
+          )
+        }
+
+        const amount = conversion.baseAmountUsdCents
+        const currencyPersistence = {
+          charged_amount: conversion.chargedAmountMinor,
+          charged_currency: conversion.chargedCurrency,
+          charged_currency_minor_unit: conversion.chargedCurrencyMinorUnit,
+          conversion_rate: conversion.conversionRate,
+          conversion_rate_source: conversion.conversionRateSource,
+          currency_config_version: conversion.currencyConfigVersion,
+          provider_event_id: event.id,
         }
 
         if (type === "partnership") {
@@ -169,6 +264,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
               : null,
             stripe_subscription_id: session.subscription as string,
             payment_region: region,
+            ...currencyPersistence,
             current_period_start: new Date(),
             current_period_end: new Date(
               Date.now() +
@@ -222,6 +318,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                   : null,
                 stripe_subscription_id: session.subscription as string,
                 payment_region: region,
+                ...currencyPersistence,
                 current_period_start: new Date(),
                 current_period_end: new Date(
                   Date.now() +
@@ -254,12 +351,23 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
           }
 
           // Create transaction record for partnership
-          const { error: transactionError } = await supabase
+          const partnershipReference =
+            session.invoice?.toString() || session.id
+          const { data: existingPartnershipTransaction } = await supabase
+            .from("transaction_ledger")
+            .select("id")
+            .eq("provider_event_id", event.id)
+            .maybeSingle()
+
+          const { error: transactionError } = existingPartnershipTransaction
+            ? { error: null }
+            : await supabase
             .from("transaction_ledger")
             .insert({
-              description: `Partnership payment for ${project} project with amount of ${centsToDollars(amount)}`,
-              reference: session.invoice as string,
+              description: `Partnership payment for ${project} project with amount of ${formatMoneyFromMinorUnits(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
+              reference: partnershipReference,
               credit: amount,
+              ...currencyPersistence,
               subscription_type:
                 session.metadata?.paymentType === "one_time"
                   ? "one_time"
@@ -282,6 +390,12 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                 amount,
                 session.mode === "subscription" ? "month" : "year",
                 session.customer_details?.name || null,
+                {
+                  provider: "STRIPE",
+                  region,
+                  chargedAmountMinor: conversion.chargedAmountMinor,
+                  chargedCurrency: conversion.chargedCurrency,
+                },
               )
             } catch (emailError) {
               console.error("Error sending partnership email:", emailError)
@@ -323,7 +437,15 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
         // monthly budget_raised metric. The tLedger entry and emails below
         // handle the one-time case instead.
         if (session.mode === "subscription" && session.subscription) {
-          const { error: subscriptionError } = await supabase
+          const { data: existingSubscription } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("stripe_subscription_id", session.subscription as string)
+            .maybeSingle()
+
+          const { error: subscriptionError } = existingSubscription
+            ? { error: null }
+            : await supabase
             .from("subscriptions")
             .insert({
               stripe_subscription_id: session.subscription as string,
@@ -340,6 +462,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
               customer_id: session.customer as string,
               sponsorship_method: "STRIPE",
               payment_region: region,
+              ...currencyPersistence,
             })
 
           // Step 2: Handle subscription insert errors
@@ -516,14 +639,24 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
         // payments there is no subscription to roll back, so errors here
         // are logged but never fatal.
         // This is a separate operation - log error but don't rollback subscription
-        const { error: transactionError } = await supabase
+        const sponsorshipReference = session.invoice?.toString() || session.id
+        const { data: existingSponsorshipTransaction } = await supabase
+          .from("transaction_ledger")
+          .select("id")
+          .eq("provider_event_id", event.id)
+          .maybeSingle()
+
+        const { error: transactionError } = existingSponsorshipTransaction
+          ? { error: null }
+          : await supabase
           .from("transaction_ledger")
           .insert({
             beneficiary_id: beneficiaryId || null,
             user_id: userId,
-            description: `Sponsorship to ${beneficiaryName} with amount of ${amount}`,
-            reference: session.invoice as string,
+            description: `Sponsorship to ${beneficiaryName} with amount of ${formatMoneyFromMinorUnits(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
+            reference: sponsorshipReference,
             credit: amount,
+            ...currencyPersistence,
             subscription_type:
               session.metadata?.paymentType === "one_time"
                 ? "one_time"
@@ -549,8 +682,9 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
           .from("activities")
           .insert({
             title: "SPONSORSHIP",
-            description: `Someone sponsored with $${centsToDollars(
-              amount,
+            description: `Someone sponsored with ${formatMoneyFromMinorUnits(
+              conversion.chargedAmountMinor,
+              conversion.chargedCurrency,
             )}/${interval}`,
             beneficiary_id: beneficiaryId || null,
             user_id: userId,
@@ -585,7 +719,12 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                 interval,
                 blindLabel,
                 session.customer_details?.name || null,
-                { provider: sessionProvider, region },
+                {
+                  provider: sessionProvider,
+                  region,
+                  chargedAmountMinor: conversion.chargedAmountMinor,
+                  chargedCurrency: conversion.chargedCurrency,
+                },
               )
             } else {
               await sendSponsorshipConfirmationEmail(
@@ -595,7 +734,12 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                 interval,
                 session.customer_details?.name || null,
                 beneficiaryId || null,
-                { provider: sessionProvider, region },
+                {
+                  provider: sessionProvider,
+                  region,
+                  chargedAmountMinor: conversion.chargedAmountMinor,
+                  chargedCurrency: conversion.chargedCurrency,
+                },
               )
             }
           } catch (emailError) {
@@ -613,6 +757,12 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
               customerEmail,
               session.customer_details?.name,
               beneficiaryId || null,
+              {
+                provider: sessionProvider,
+                region,
+                chargedAmountMinor: conversion.chargedAmountMinor,
+                chargedCurrency: conversion.chargedCurrency,
+              },
             )
           } catch (emailError) {
             console.error("Error sending manager notification:", emailError)
@@ -624,7 +774,9 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
           await notifySponsorshipReceived({
             sponsorName: session.customer_details?.name || customerEmail?.split('@')[0] || "Anonymous Sponsor",
             sponsorEmail: customerEmail || "No email provided",
-            amount: amount,
+            amount: conversion.chargedAmountMinor,
+            chargedCurrency: conversion.chargedCurrency,
+            chargedCurrencyMinorUnit: conversion.chargedCurrencyMinorUnit,
             beneficiaryId: beneficiaryId,
             beneficiaryName: beneficiaryName,
             paymentMethod: providerLabel(sessionProvider),
@@ -720,7 +872,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
 
         const { data: subscriptionData, error: subscriptionError } = await supabase
           .from("subscriptions")
-          .select(`beneficiary_id`)
+          .select(`beneficiary_id, charged_amount, charged_currency, charged_currency_minor_unit, amount`)
           .eq("stripe_subscription_id", subscriptionId)
           .maybeSingle()
 
@@ -771,13 +923,21 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
             await sendPaymentFailedEmail(
               customerEmail,
               beneficiaryName,
-              invoice.amount_due / 100,
+              invoice.amount_due || subscriptionData?.amount || 0,
               invoice.next_payment_attempt
                 ? new Date(invoice.next_payment_attempt * 1000)
                 : null,
               customerName,
               subscriptionData?.beneficiary_id || null,
-              { provider: "STRIPE", region },
+              {
+                provider: "STRIPE",
+                region,
+                chargedAmountMinor:
+                  invoice.amount_due || subscriptionData?.charged_amount,
+                chargedCurrency:
+                  invoice.currency?.toUpperCase() ||
+                  subscriptionData?.charged_currency,
+              },
             )
           } catch (emailError) {
             console.error("Error sending payment failed email:", emailError)
@@ -1025,13 +1185,62 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
           // Check if this is an application subscription by querying our database
           const { data: subscriptionData } = await supabase
             .from("subscriptions")
-            .select("id")
+            .select("id, amount, charged_amount, charged_currency, charged_currency_minor_unit")
             .eq("stripe_subscription_id", subscriptionId)
             .maybeSingle()
 
           // Silently acknowledge non-application subscription invoices
           if (!subscriptionData) {
             return NextResponse.json({ received: true }, { status: 200 })
+          }
+
+          if (
+            subscriptionData.charged_currency &&
+            invoice.currency?.toUpperCase() !==
+              subscriptionData.charged_currency
+          ) {
+            return buildCurrencyReconciliationFailure(
+              event.type,
+              invoice.id,
+              {
+                baseAmountUsdCents: subscriptionData.amount || 0,
+                chargedAmountMinor: subscriptionData.charged_amount || 0,
+                chargedCurrency: coerceSupportedCurrency(
+                  subscriptionData.charged_currency,
+                ),
+                chargedCurrencyMinorUnit:
+                  subscriptionData.charged_currency_minor_unit || 2,
+                conversionRate: 1,
+                conversionRateSource: "default",
+                currencyConfigVersion: "stored-subscription",
+              },
+              invoice.currency,
+              invoice.amount_paid,
+            )
+          }
+
+          if (
+            typeof subscriptionData.charged_amount === "number" &&
+            invoice.amount_paid !== subscriptionData.charged_amount
+          ) {
+            return buildCurrencyReconciliationFailure(
+              event.type,
+              invoice.id,
+              {
+                baseAmountUsdCents: subscriptionData.amount || 0,
+                chargedAmountMinor: subscriptionData.charged_amount,
+                chargedCurrency: coerceSupportedCurrency(
+                  subscriptionData.charged_currency,
+                ),
+                chargedCurrencyMinorUnit:
+                  subscriptionData.charged_currency_minor_unit || 2,
+                conversionRate: 1,
+                conversionRateSource: "default",
+                currencyConfigVersion: "stored-subscription",
+              },
+              invoice.currency,
+              invoice.amount_paid,
+            )
           }
 
           // Update subscription status
@@ -1050,7 +1259,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
               // Get subscription details to find beneficiary and customer email
               const { data: subscriptionData, error: subscriptionError } = await supabase
                 .from("subscriptions")
-                .select("beneficiary_id, user_id, amount")
+                .select("beneficiary_id, user_id, amount, charged_amount, charged_currency")
                 .eq("stripe_subscription_id", subscriptionId)
                 .maybeSingle()
 
@@ -1082,10 +1291,17 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                     await sendMonthlyPaymentConfirmationEmail(
                         customerEmail,
                         beneficiaryData.name,
-                        invoice.amount_paid,
+                        subscriptionData.amount,
                         customerName,
                         subscriptionData.beneficiary_id,
-                        { provider: "STRIPE", region },
+                        {
+                          provider: "STRIPE",
+                          region,
+                          chargedAmountMinor: invoice.amount_paid,
+                          chargedCurrency:
+                            invoice.currency?.toUpperCase() ||
+                            subscriptionData.charged_currency,
+                        },
                       )
                   } catch (emailError) {
                     console.error("Error sending monthly payment confirmation email:", emailError)

@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server"
 import { isPayPalEnabled, paypalFetch } from "@/lib/paypal/client"
 import { createClient } from "@/utils/supabase/server"
+import {
+  convertCurrencyMinorToUsdCents,
+  convertUsdCentsToCurrency,
+  verifyCurrencyConversion,
+} from "@/utils/currency"
+import { parsePayPalPaymentContext } from "@/utils/paypalCurrencyContext"
+
+function parsePayPalAmountMinor(value: string | undefined, minorUnit: number) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? Math.round(amount * 10 ** minorUnit) : null
+}
 
 export async function GET(req: Request) {
   if (!isPayPalEnabled()) {
@@ -65,12 +76,14 @@ export async function GET(req: Request) {
           )
         }
 
+        const paymentContext = parsePayPalPaymentContext(paypalData.custom_id)
+        const beneficiaryId = paymentContext.beneficiaryId
         let beneficiaryData = null
-        if (paypalData.custom_id) {
+        if (beneficiaryId) {
           const { data: beneficiary } = await supabase
             .from("beneficiaries")
             .select("name, location_str")
-            .eq("id", paypalData.custom_id)
+            .eq("id", beneficiaryId)
             .single()
 
           if (beneficiary) {
@@ -79,19 +92,81 @@ export async function GET(req: Request) {
         }
 
         if (paypalData.status === "ACTIVE") {
+          const lastPaymentAmount = paypalData.billing_info?.last_payment?.amount
+          const conversion =
+            paymentContext.conversion ||
+            convertUsdCentsToCurrency(
+              convertCurrencyMinorToUsdCents(
+                parsePayPalAmountMinor(lastPaymentAmount?.value, 2) || 0,
+                lastPaymentAmount?.currency_code || "USD",
+              ),
+              lastPaymentAmount?.currency_code || "USD",
+            )
+          const actualAmountMinor = parsePayPalAmountMinor(
+            lastPaymentAmount?.value,
+            conversion.chargedCurrencyMinorUnit,
+          )
+          if (
+            lastPaymentAmount?.currency_code?.toUpperCase() !==
+              conversion.chargedCurrency ||
+            actualAmountMinor !== conversion.chargedAmountMinor ||
+            !verifyCurrencyConversion(conversion)
+          ) {
+            console.error("PAYMENT_CURRENCY_RECONCILIATION_FAILED", {
+              provider: "paypal",
+              paypalSubscriptionId: paypalData.id,
+              expected: conversion,
+              actualCurrency: lastPaymentAmount?.currency_code,
+              actualAmount: lastPaymentAmount?.value,
+            })
+            return NextResponse.json(
+              { error: "Payment currency reconciliation failed" },
+              { status: 409 },
+            )
+          }
+
+          const { data: existingSubscription } = await supabase
+            .from("subscriptions")
+            .select(
+              `
+              *,
+              beneficiaries (
+                name,
+                location_str
+              )
+            `,
+            )
+            .eq("stripe_subscription_id", paypalData.id)
+            .maybeSingle()
+
+          if (existingSubscription) {
+            return NextResponse.json({
+              subscription: {
+                ...existingSubscription,
+                beneficiaries:
+                  existingSubscription.beneficiaries || beneficiaryData,
+                status: paypalData.status?.toLowerCase(),
+              },
+              paypal_order: null,
+            })
+          }
+
           const { data: newSubscription, error: createError } = await supabase
             .from("subscriptions")
             .insert({
               stripe_subscription_id: paypalData.id,
-              beneficiary_id: paypalData.custom_id,
+              beneficiary_id: beneficiaryId,
               user_id: user.id,
               customer_id: paypalData.subscriber.payer_id,
               sponsorship_method: "PAYPAL",
-              amount: Math.round(
-                parseFloat(
-                  paypalData.billing_info?.last_payment?.amount?.value || "0",
-                ) * 100,
-              ),
+              amount: conversion.baseAmountUsdCents,
+              charged_amount: conversion.chargedAmountMinor,
+              charged_currency: conversion.chargedCurrency,
+              charged_currency_minor_unit:
+                conversion.chargedCurrencyMinorUnit,
+              conversion_rate: conversion.conversionRate,
+              conversion_rate_source: conversion.conversionRateSource,
+              currency_config_version: conversion.currencyConfigVersion,
               interval: "month",
               status: "complete",
               current_period_start:

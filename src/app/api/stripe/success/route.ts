@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server"
 import { coerceRegion, getStripeClient } from "@/lib/stripe/config"
+import {
+  formatMoneyFromMinorUnits,
+  parsePaymentCurrencyMetadata,
+} from "@/utils/currency"
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -16,11 +20,22 @@ export async function GET(req: Request) {
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ["payment_intent", "subscription", "customer"],
     })
+    const conversion = parsePaymentCurrencyMetadata(session.metadata)
+    const chargedCurrency =
+      conversion?.chargedCurrency || session.currency?.toUpperCase() || null
+    const chargedAmountMinor =
+      conversion?.chargedAmountMinor || session.amount_total || null
 
     return NextResponse.json({
       id: session.id,
       amount_total: session.amount_total,
       currency: session.currency,
+      charged_amount: chargedAmountMinor,
+      charged_currency: chargedCurrency,
+      charged_display:
+        chargedAmountMinor !== null && chargedCurrency
+          ? formatMoneyFromMinorUnits(chargedAmountMinor, chargedCurrency)
+          : null,
       customer_email: session.customer_details?.email,
       payment_status: session.payment_status,
       subscription: session.subscription,

@@ -92,7 +92,6 @@ const PortraitBeneficiaryCard: React.FC<PortraitBeneficiaryCardProps> = ({
           fill
           sizes="135px"
           className="object-cover object-top"
-          unoptimized
         />
         {/* Glass shine overlay */}
         <div

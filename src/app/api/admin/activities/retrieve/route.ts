@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/utils/supabase/server"
-import { generatePublicUrl } from "@/utils/supabase/media"
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
+import {
+  filterExistingMediaRows,
+  generatePublicUrl,
+  MediaRow,
+} from "@/utils/supabase/media"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 export async function GET(req: NextRequest) {
@@ -56,8 +60,11 @@ export async function GET(req: NextRequest) {
   }
 
   // Group media by parent_id for quick lookup
-  const mediaByParent: Record<string, typeof allMedia> = {}
-  for (const media of allMedia || []) {
+  const serviceSupabase = createServiceRoleClient()
+  const existingMedia = await filterExistingMediaRows(serviceSupabase, (allMedia || []) as unknown as MediaRow[])
+
+  const mediaByParent: Record<string, MediaRow[]> = {}
+  for (const media of existingMedia) {
     const key = String(media.parent_id)
     if (!mediaByParent[key]) {
       mediaByParent[key] = []
@@ -74,7 +81,7 @@ export async function GET(req: NextRequest) {
 
     for (const media of mediaRecords) {
       try {
-        const url = generatePublicUrl(media as unknown as import('@/utils/supabase/media').MediaRow)
+        const url = generatePublicUrl(media)
         if (media.type === "IMAGE") {
           images_url.push(url)
         } else if (media.type === "VIDEO") {
