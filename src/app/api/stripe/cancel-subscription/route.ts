@@ -8,6 +8,7 @@ import { coerceRegion, getStripeClient } from "@/lib/stripe/config"
 import type { Database } from "@/lib/types/db.types"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createClient } from "@/utils/supabase/server"
+import { sendSponsorshipCancellationNotificationEmail } from "@/utils/email"
 
 type Supabase = SupabaseClient<Database>
 type SubscriptionRow =
@@ -229,9 +230,6 @@ async function maybeMarkBeneficiaryCancelled(
         customerName = fullName || null
       }
     }
-    const { sendSponsorshipCancellationNotificationEmail } = await import(
-      "@/utils/email"
-    )
     await sendSponsorshipCancellationNotificationEmail(
       beneficiary.name ?? "Unknown Beneficiary",
       customerEmail,

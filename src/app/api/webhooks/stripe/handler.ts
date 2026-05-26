@@ -13,11 +13,27 @@ import {
   sendPaymentFailedEmail,
   sendMonthlyPaymentConfirmationEmail,
   sendManagerSponsorshipNotificationEmail,
+  sendPartnershipConfirmationEmail,
+  sendBudgetFulfilledRejectionEmail,
+  sendSponsorshipCancellationNotificationEmail,
+  type SponsorshipProvider,
 } from "@/utils/email"
 import { notifySponsorshipReceived } from "@/services/telegram"
 
-// Debug mode - only enable in development or for troubleshooting
-const DEBUG_MODE = process.env.STRIPE_WEBHOOK_DEBUG === 'true'
+// Resolve provider for downstream emails / telegram notifications from
+// session or subscription metadata, defaulting to STRIPE. This handler only
+// fires for Stripe events today, but reading metadata keeps the door open
+// for routing tests and for a future shared webhook surface.
+function resolveProvider(
+  metadata: Stripe.Metadata | null | undefined,
+): SponsorshipProvider {
+  const raw = metadata?.provider?.toUpperCase()
+  return raw === "PAYPAL" ? "PAYPAL" : "STRIPE"
+}
+
+function providerLabel(provider: SponsorshipProvider): string {
+  return provider === "PAYPAL" ? "PayPal" : "Stripe"
+}
 
 export async function handleStripeWebhook(req: Request, region: StripeRegion) {
   const stripe = getStripeClient(region)
@@ -260,9 +276,6 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
           // Send confirmation email for partnership
           if (email) {
             try {
-              const { sendPartnershipConfirmationEmail } = await import(
-                "@/utils/email"
-              )
               await sendPartnershipConfirmationEmail(
                 email,
                 project,
@@ -430,7 +443,6 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
               // Step 4: Send rejection email
               if (customerEmail) {
                 try {
-                  const { sendBudgetFulfilledRejectionEmail } = await import("@/utils/email")
                   const emailResult = await sendBudgetFulfilledRejectionEmail(
                     customerEmail,
                     beneficiaryName,
@@ -559,6 +571,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
         // Therefore, confirmation emails are ONLY sent for successful sponsorships.
         // ============================================================
         // Send confirmation to sponsor if we have their email
+        const sessionProvider = resolveProvider(session.metadata)
         if (customerEmail) {
           try {
             if (isBlindSponsorship) {
@@ -568,7 +581,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                 interval,
                 blindLabel,
                 session.customer_details?.name || null,
-                { provider: "STRIPE", region },
+                { provider: sessionProvider, region },
               )
             } else {
               await sendSponsorshipConfirmationEmail(
@@ -578,7 +591,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                 interval,
                 session.customer_details?.name || null,
                 beneficiaryId || null,
-                { provider: "STRIPE", region },
+                { provider: sessionProvider, region },
               )
             }
           } catch (emailError) {
@@ -610,7 +623,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
             amount: amount,
             beneficiaryId: beneficiaryId,
             beneficiaryName: beneficiaryName,
-            paymentMethod: "Stripe",
+            paymentMethod: providerLabel(sessionProvider),
             paymentReference: session.id,
             interval: interval,
           });
@@ -667,8 +680,6 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
 
         // Silently acknowledge non-application payments
         if (type !== "partnership" && !subscriptionId) {
-          if (DEBUG_MODE) {
-          }
           return NextResponse.json({ received: true }, { status: 200 })
         }
 
@@ -757,7 +768,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                 : null,
               customerName,
               subscriptionData?.beneficiary_id || null,
-              { provider: "STRIPE", region },
+              { provider: resolveProvider(invoice.metadata), region },
             )
           } catch (emailError) {
             console.error("Error sending payment failed email:", emailError)
@@ -776,8 +787,6 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
 
         // Silently acknowledge non-application subscriptions (no type or unknown type)
         if (!type || (type !== "partnership" && type !== "sponsorship")) {
-          if (DEBUG_MODE) {
-          }
           return NextResponse.json({ received: true }, { status: 200 })
         }
 
@@ -830,8 +839,6 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
 
         // Silently acknowledge non-application subscriptions (no type or unknown type)
         if (!type || (type !== "partnership" && type !== "sponsorship")) {
-          if (DEBUG_MODE) {
-          }
           return NextResponse.json({ received: true }, { status: 200 })
         }
 
@@ -931,7 +938,6 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                         console.error("Error fetching customer from Stripe:", customerError)
                       }
                     }
-                    const { sendSponsorshipCancellationNotificationEmail } = await import("@/utils/email")
                     await sendSponsorshipCancellationNotificationEmail(
                       beneficiary.name,
                       customerEmail,
@@ -970,8 +976,6 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
 
           // Silently acknowledge non-application subscription invoices
           if (!subscriptionData) {
-            if (DEBUG_MODE) {
-            }
             return NextResponse.json({ received: true }, { status: 200 })
           }
 
@@ -1024,7 +1028,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                         invoice.amount_paid,
                         customerName,
                         subscriptionData.beneficiary_id,
-                        { provider: "STRIPE", region },
+                        { provider: resolveProvider(invoice.metadata), region },
                       )
                   } catch (emailError) {
                     console.error("Error sending monthly payment confirmation email:", emailError)
@@ -1060,8 +1064,6 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
       }
 
       default:
-        if (DEBUG_MODE) {
-        }
         // Silently acknowledge unhandled event types
         return NextResponse.json(
           { received: true },
