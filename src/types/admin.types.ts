@@ -237,16 +237,23 @@ export const ROLE_PERMISSIONS: Record<UserRoleName, RolePermissions> = {
 }
 
 //subscriptions
+//
+// Field names mirror the live DB schema. Historically this carried
+// `child_id` and `sponsorship_id`, but the underlying columns are
+// `beneficiary_id` (since 20251006120000_missing_migrations.sql) and the
+// row's own primary key (`id`); there is no separate sponsorship id. The
+// admin page now reads beneficiary_id and passes subscription.id to the
+// cancel endpoint, which dispatches against either the DB id or the
+// stripe_subscription_id via findSubscription.
 export interface RawSubscription {
   id: string
-  child_id: string
+  beneficiary_id: string | null
   status: string
   amount: number
   interval: string
   current_period_start: string
   current_period_end: string
   created_at: string
-  sponsorship_id: string
   user_id: string
   sponsorship_method: "STRIPE" | "PAYPAL" | null
   payment_region: "us" | "uk"

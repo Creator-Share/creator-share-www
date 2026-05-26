@@ -6,14 +6,13 @@ import { Badge } from "@chakra-ui/react"
 
 export type AdminSubscription = {
   id: string
-  child_id: string
+  beneficiary_id: string | null
   status: string
   amount: number
   interval: string
   current_period_start: string
   current_period_end: string
   created_at: string
-  sponsorship_id: string
   user_id: string
   sponsorship_method: "STRIPE" | "PAYPAL" | null
   payment_region: "us" | "uk"
@@ -38,7 +37,7 @@ export type AdminSubscription = {
 }
 
 interface ColumnActions {
-  onCancelSubscription: (subscriptionId: string, sponsorshipId: string) => void
+  onCancelSubscription: (subscriptionId: string) => void
 }
 
 export const columns = (actions: ColumnActions): ColumnDef<AdminSubscription>[] => [
@@ -225,7 +224,7 @@ export const columns = (actions: ColumnActions): ColumnDef<AdminSubscription>[] 
               onClick={(e) => {
                 e.stopPropagation()
                 if (confirm("Are you sure you want to cancel this subscription? This action cannot be undone.")) {
-                  actions.onCancelSubscription(subscription.id, subscription.sponsorship_id)
+                  actions.onCancelSubscription(subscription.id)
                 }
               }}
               size="sm"
