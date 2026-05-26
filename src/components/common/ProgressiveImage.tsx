@@ -136,7 +136,6 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
 
   // Check if src is a local path (starts with /) or external URL
   const isLocalImage = displaySrc.startsWith('/')
-  const isThumbnailLocal = thumbnailSrc?.startsWith('/')
 
   return (
     <Box
@@ -205,7 +204,7 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
               sizes={sizes || "100vw"}
               onLoad={handleThumbnailLoad}
               onError={handleThumbnailError}
-              unoptimized={isThumbnailLocal}
+              unoptimized={true}
               style={{ objectPosition: "center 5%" }}
               priority
             />
@@ -218,7 +217,7 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
               className="object-cover"
               onLoad={handleThumbnailLoad}
               onError={handleThumbnailError}
-              unoptimized={isThumbnailLocal}
+              unoptimized={true}
               style={{ objectPosition: "center 5%" }}
               priority
             />

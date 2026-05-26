@@ -145,7 +145,7 @@ async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | n
     
     // Try to generate public URL using the media utility
     try {
-      const publicUrl = generatePublicUrl(firstImage)
+      const publicUrl = generatePublicUrl(firstImage, { forceTransform: true })
       return publicUrl
     } catch (urlError) {
       console.error(`[Email] Failed to generate public URL for beneficiary ${beneficiaryId}:`, urlError)

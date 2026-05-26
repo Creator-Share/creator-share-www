@@ -46,23 +46,62 @@ export const getStorageKey = (media: MediaRow): string => {
   return `${normalizedParentId}/${normalizedType}/${normalizedId}.${normalizedExt}`
 }
 
+/* ---- Shared internal helpers ---- */
+
+export interface ImageTransformOptions {
+  width?: number
+  height?: number
+  quality?: number
+  resize?: 'cover' | 'contain' | 'fill'
+  format?: 'origin'
+}
+
 /**
- * Generate the public URL for a given media row.
- * For images, uses Supabase's image transformation API to ensure WebP format and proper sizing.
- * For videos, returns the direct public URL.
+ * Build a direct storage URL for a given key.
+ * Always returns the /storage/v1/object/public/ path (no Supabase transforms).
  */
-export const generatePublicUrl = (media: MediaRow): string => {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+function buildStorageUrl(key: string): string {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "")
   if (!base) {
     throw new Error("Environment variable NEXT_PUBLIC_SUPABASE_URL is not set")
   }
+  return `${base}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
+}
 
+/* ---- Public API ---- */
+
+export interface GeneratePublicUrlOptions {
+  /**
+   * When true, generates a Supabase-transformed URL instead of a direct storage URL.
+   * Used only for email rendering (email clients don't go through Next.js <Image>).
+   * Requires Supabase Pro plan for the /render/image/ endpoint.
+   */
+  forceTransform?: boolean
+}
+
+/**
+ * Generate a public URL for a given media row.
+ *
+ * By default returns a direct /storage/v1/object/public/ URL which relies on
+ * Next.js <Image> optimization for resizing and format conversion.
+ *
+ * Pass { forceTransform: true } when the URL will be used outside of Next.js
+ * rendering (e.g. email <img> tags), to get a Supabase-transformed WebP URL.
+ *
+ * For videos and other media types, always returns the direct public URL.
+ */
+export const generatePublicUrl = (
+  media: MediaRow,
+  options?: GeneratePublicUrlOptions,
+): string => {
   const key = getStorageKey(media)
-  const supabase = createClient()
 
-  if (media.type === "IMAGE") {
-    // Use Supabase's built-in image transformation API
-    const { data } = supabase.storage
+  if (
+    media.type === "IMAGE" &&
+    options?.forceTransform
+  ) {
+    // Supabase transform — used by email where <Image> optimization isn't available
+    const { data } = createClient().storage
       .from(STORAGE_BUCKET)
       .getPublicUrl(key, {
         transform: {
@@ -72,53 +111,29 @@ export const generatePublicUrl = (media: MediaRow): string => {
           resize: "cover",
         },
       })
-
     return data.publicUrl
   }
 
-  // For videos and other media types, return the direct public URL
-  const normalizedBase = base.replace(/\/$/, "")
-  return `${normalizedBase}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
+  return buildStorageUrl(key)
 }
 
 /**
- * Generate a thumbnail URL for progressive image loading.
- * Creates a small, low-quality version for blur-up placeholder effect.
- * Falls back to the regular image URL if transformation fails.
+ * Generate a thumbnail URL for progressive image loading (blur-up effect).
+ * Returns a Next.js /_next/image URL optimized to 16px at low quality.
+ * The caller should render this via <Image unoptimized={true}> with CSS blur.
+ * Returns undefined when the URL cannot be constructed.
  */
 export const generateThumbnailUrl = (media: MediaRow): string | undefined => {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!base) {
+  if (media.type !== "IMAGE") return undefined
+
+  try {
+    const directUrl = buildStorageUrl(getStorageKey(media))
+    const encodedUrl = encodeURIComponent(directUrl)
+    return `/_next/image?url=${encodedUrl}&w=16&q=20`
+  } catch (error) {
+    console.warn("Failed to generate thumbnail URL:", error)
     return undefined
   }
-
-  const key = getStorageKey(media)
-  const supabase = createClient()
-
-  if (media.type === "IMAGE") {
-    try {
-      // Generate a small, low-quality thumbnail for progressive loading
-      // Supabase's transform API uses /render/image/ endpoint - this is correct!
-      const { data } = supabase.storage
-        .from(STORAGE_BUCKET)
-        .getPublicUrl(key, {
-          transform: {
-            width: 40,
-            height: 40,
-            quality: 20,
-            resize: "cover",
-          },
-        })
-
-      return data.publicUrl
-    } catch (error) {
-      console.warn('Failed to generate thumbnail URL:', error)
-      return undefined
-    }
-  }
-
-  // For videos and other media types, don't generate thumbnails
-  return undefined
 }
 
 /**
