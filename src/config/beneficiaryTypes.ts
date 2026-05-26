@@ -117,7 +117,7 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
     type: "IN_OUR_CARE",
     isOpenSponsorship: true,
     defaultBudgetGoalCents: -1,
-    isPubliclyVisible: true,
+    isPubliclyVisible: false, // hidden until beneficiaries are available
     singularName: "child",
     pluralName: "children",
     maxAgeYears: 14,
