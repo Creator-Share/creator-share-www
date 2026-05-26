@@ -59,6 +59,73 @@ export async function getPayPalAccessToken(): Promise<string> {
   return data.access_token
 }
 
+// Subset of the PayPal /v2/checkout/orders response we actually read.
+// Documented here rather than declared as `any` so future drift is loud.
+export interface PayPalOrderResponse {
+  id?: string
+  status?: string
+  payer?: {
+    email_address?: string
+    [key: string]: unknown
+  } | null
+  purchase_units?: Array<{
+    description?: string
+    amount?: { value?: string; currency_code?: string } | null
+    shipping?: {
+      address?: { country_code?: string } | null
+    } | null
+    [key: string]: unknown
+  }>
+  [key: string]: unknown
+}
+
+export interface PayPalOrderResult {
+  ok: boolean
+  status: number
+  order?: PayPalOrderResponse
+  error?: string
+}
+
+// GET /v2/checkout/orders/{id} — returns the order or a structured error.
+// Centralised here so callers don't reimplement the live/sandbox URL or
+// reach for `process.env.PAYPAL_API_URL` directly.
+export async function getPayPalOrder(
+  orderId: string,
+): Promise<PayPalOrderResult> {
+  if (!isPayPalEnabled()) {
+    return { ok: false, status: 501, error: "PayPal integration is not enabled" }
+  }
+
+  const accessToken = await getPayPalAccessToken()
+  const response = await fetch(
+    `${getPayPalApiUrl()}/v2/checkout/orders/${orderId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    },
+  )
+
+  if (!response.ok) {
+    let body: unknown
+    try {
+      body = await response.json()
+    } catch {
+      body = await response.text().catch(() => "")
+    }
+    console.error("PayPal order fetch error:", {
+      status: response.status,
+      body,
+      orderId,
+    })
+    return { ok: false, status: response.status }
+  }
+
+  const order = (await response.json()) as PayPalOrderResponse
+  return { ok: true, status: response.status, order }
+}
+
 export interface PayPalCancelResult {
   cancelled: boolean
   alreadyCancelled: boolean
