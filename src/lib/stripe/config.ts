@@ -196,11 +196,3 @@ export function getRegionForBeneficiary(
   }
   return STRIPE_DEFAULT_REGION
 }
-
-export function getRegionForCurrency(currency: string): StripeRegion {
-  const lower = currency.toLowerCase()
-  for (const region of getAvailableRegions()) {
-    if (REGION_ENV_MAP[region].currency === lower) return region
-  }
-  return STRIPE_DEFAULT_REGION
-}

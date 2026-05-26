@@ -13,11 +13,14 @@ NEXT_PUBLIC_BASE_URL=https://localhost:3000/
 # Multi-region Stripe (optional — leave commented out to run single-account).
 # When enabled, each region has its own Stripe account/dashboard; new
 # subscriptions and partnerships are stamped with `payment_region` so
-# cancel/refund/portal flows route to the correct account.
+# cancel/refund/portal/email flows route to the correct account.
 #
-# STRIPE_DEFAULT_REGION controls which region new checkouts use until
-# explicit routing by beneficiary (Phase 3) lands. The legacy unsuffixed
-# vars above act as fallbacks for the default region during migration.
+# STRIPE_DEFAULT_REGION sets the region used when checkout cannot derive one
+# from the beneficiary location (or the client-supplied override). It is
+# validated at module load: a value outside the supported set ("us" | "uk")
+# throws on boot rather than crashing the first request. The legacy
+# unsuffixed vars above act as fallbacks for the default region during
+# migration to per-region keys.
 #
 # STRIPE_DEFAULT_REGION=us
 # STRIPE_SECRET_KEY_US=
@@ -34,7 +37,20 @@ NEXT_PUBLIC_BASE_URL=https://localhost:3000/
 # NEXT_PUBLIC_STRIPE_PORTAL_URL_* powers the public Footer / FAQ / About
 # "Manage Subscription" links. Server-side STRIPE_PORTAL_URL_* powers email
 # template links. Set both in production so the in-app link and the email
-# link agree.
+# link agree. If you configure only one region during rollout, the other
+# region still renders a working link using the legacy
+# https://stripe.creatorshare.com fallback rather than dropping out.
+#
+# Webhook endpoints:
+#   /api/webhooks/stripe/{region}  -- preferred, validates against the
+#                                     STRIPE_WEBHOOK_SECRET_<REGION> for the
+#                                     account that sent the event.
+#   /api/webhooks/stripe           -- legacy back-compat shim that delegates
+#                                     to STRIPE_DEFAULT_REGION. Stripe
+#                                     dashboards pointed here for a non-
+#                                     default account will fail signature
+#                                     verification; migrate them to the
+#                                     per-region URL once both regions ship.
 
 # DEPRECATED — Global sponsorship amount override (dollars in cents integer string).
 # Superseded by per-type vars below (NEXT_PUBLIC_SPONSORSHIP_AMOUNT_*).
@@ -51,6 +67,11 @@ RESERVATION_TIMEOUT_MINUTES=
 NEXT_PUBLIC_RESERVATION_TIMEOUT_MINUTES=
 
 # PayPal Integration (optional - PayPal is enabled when NEXT_PUBLIC_PAYPAL_CLIENT_ID is set)
+# PAYPAL_API_URL defaults to the LIVE endpoint (https://api-m.paypal.com).
+# Set it explicitly to https://api-m.sandbox.paypal.com for local/dev
+# testing; otherwise leave it unset in production. Setting it to sandbox in
+# production silently 404s every cancel attempt and lets our DB go out of
+# sync with PayPal.
 # NEXT_PUBLIC_PAYPAL_CLIENT_ID=
 # PAYPAL_CLIENT_SECRET=
 # PAYPAL_API_URL=https://api-m.sandbox.paypal.com
