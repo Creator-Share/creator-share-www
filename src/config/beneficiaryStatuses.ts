@@ -26,11 +26,24 @@ export const WAITING_STATUSES: Status[] = ["New", "Partially Funded"]
 /**
  * Statuses treated as "active" for the default public filter — includes
  * Sponsorship Cancelled so reinstated beneficiaries remain discoverable.
+ *
+ * Used by the stats waiting count and admin queries that need the
+ * narrower (open / not-yet-fully-funded) set.
  */
 export const ACTIVE_STATUSES: Status[] = [
   "New",
   "Partially Funded",
   "Sponsorship Cancelled",
+]
+
+/**
+ * Full set of statuses the public listing surfaces. Superset of
+ * ACTIVE_STATUSES that also includes Budget Fulfilled, so the public
+ * "All" filter shows sponsored children alongside open ones.
+ */
+export const PUBLIC_STATUSES: Status[] = [
+  ...ACTIVE_STATUSES,
+  "Budget Fulfilled",
 ]
 
 /** Statuses where age-range filtering is skipped (records may span any age). */

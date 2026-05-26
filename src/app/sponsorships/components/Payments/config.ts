@@ -8,13 +8,15 @@ export const paymentOptionsCollection = createListCollection({
 })
 
 /**
- * Payment frequency options shown inside the SPECIAL_NEEDS sponsorship modal.
+ * Payment frequency options shown for open-amount sponsorship types
+ * (SPECIAL_NEEDS, IN_OUR_CARE). Fixed-price types stay recurring-only.
  * "subscription" → Stripe/PayPal recurring monthly charge.
  * "one_time"     → Stripe/PayPal single charge.
  */
-export const specialNeedsFrequencyOptions = [
+export const openSponsorshipFrequencyOptions = [
   { label: "Monthly", value: "subscription" },
   { label: "One-time", value: "one_time" },
 ] as const
 
-export type SpecialNeedsFrequency = (typeof specialNeedsFrequencyOptions)[number]["value"]
+export type SponsorshipFrequency =
+  (typeof openSponsorshipFrequencyOptions)[number]["value"]

@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { Beneficiaries } from "@/types"
-import { toaster } from "@/components/ui/toaster"
-import { createClient } from '@supabase/supabase-js'
+import { subscribeToSubscriptions } from "@/lib/subscriptionsRealtime"
 import { INACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 
 type FiltersState = {
@@ -30,6 +29,8 @@ interface UseBeneficiaryPaginationReturn {
   isLoading: boolean
   /** True while a fresh (non-pagination) fetch is in flight. The previous page's data stays visible during this time. */
   isRefreshing: boolean
+  /** Non-null when the most recent fetch failed and no data is available. */
+  fetchError: string | null
   filters: FiltersState
   setFilters: (
     filters: FiltersState | ((prev: FiltersState) => FiltersState)
@@ -79,9 +80,10 @@ export function useBeneficiaryPagination(
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
   const [retryCount, setRetryCount] = useState<number>(0)
+  const retryCountRef = useRef<number>(0)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const toastIdRef = useRef<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   // Fibonacci sequence for retry delays (in seconds): 1, 1, 2, 3, 5, 8, 13...
@@ -148,6 +150,7 @@ export function useBeneficiaryPagination(
           abortControllerRef.current.abort()
         }
         setIsRefreshing(true)
+        setFetchError(null)
       }
 
       const controller = new AbortController()
@@ -185,13 +188,9 @@ export function useBeneficiaryPagination(
         })
         setCursor(data?.pageInfo?.nextCursor || null)
         setHasMore(Boolean(data?.pageInfo?.hasMore))
-        setRetryCount(0) // Reset retry count on success
-
-        // Dismiss any existing error toast
-        if (toastIdRef.current) {
-          toaster.dismiss(toastIdRef.current)
-          toastIdRef.current = null
-        }
+        retryCountRef.current = 0
+        setRetryCount(0)
+        setFetchError(null)
 
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
@@ -201,34 +200,24 @@ export function useBeneficiaryPagination(
         const message = e instanceof Error ? e.message : "Unexpected error"
         console.error("[useBeneficiaryPagination] Fetch error:", message)
 
-        // Show toast with manual retry button
-        const toastId = toaster.create({
-          title: "Failed to load beneficiaries",
-          description: autoRetry
-            ? `Retrying automatically in ${Math.ceil(
-                getFibonacciDelay(retryCount) / 1000
-              )}s...`
-            : "Click retry to try again",
-          type: "error",
-          duration: autoRetry ? getFibonacciDelay(retryCount) : 10000,
-          action: {
-            label: "Retry Now",
-            onClick: () => {
-              if (retryTimeoutRef.current) {
-                clearTimeout(retryTimeoutRef.current)
-              }
-              setRetryCount(0)
-              fetchPage(null)
-            },
-          },
-        })
-        toastIdRef.current = toastId
+        // Only surface fetchError for fresh fetches (cursor === null).
+        // loadMore failures keep existing data visible; surfacing them here would
+        // either be hidden by the consumer's "no items" gate or, worse, leak into
+        // the next fresh fetch and show a stale error message.
+        if (nextCursor === null) {
+          setFetchError(message)
+        }
 
-        // Auto-retry with Fibonacci backoff if enabled
-        if (autoRetry) {
-          const delay = getFibonacciDelay(retryCount)
+        const MAX_AUTO_RETRIES = 3
+        if (autoRetry && retryCountRef.current < MAX_AUTO_RETRIES) {
+          const delay = getFibonacciDelay(retryCountRef.current)
+          retryCountRef.current += 1
+          setRetryCount(retryCountRef.current)
+          if (retryTimeoutRef.current) {
+            clearTimeout(retryTimeoutRef.current)
+          }
           retryTimeoutRef.current = setTimeout(() => {
-            setRetryCount((prev) => prev + 1)
+            retryTimeoutRef.current = null
             fetchPage(nextCursor)
           }, delay)
         }
@@ -240,13 +229,14 @@ export function useBeneficiaryPagination(
         }
       }
     },
-    [buildQuery, autoRetry, getFibonacciDelay, retryCount, setRetryCount]
+    [buildQuery, autoRetry, getFibonacciDelay]
   )
 
   const memoizedRetryFetch = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
+    retryCountRef.current = 0
     setRetryCount(0)
     fetchPage(null)
   }, [fetchPage])
@@ -271,29 +261,16 @@ export function useBeneficiaryPagination(
   }, [filters])
 
   useEffect(() => {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn("[useBeneficiaryPagination] Supabase env missing, realtime not enabled")
-      return
-    }
-    const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-    // Listen for changes to the subscriptions table (relevant to locking logic)
-    const channel = supabase
-      .channel("beneficiary_subscriptions_rt")
-      .on(
-        "postgres_changes",
-        { schema: "public", table: "subscriptions", event: "*" },
-        () => {
-          fetchPage(null)
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    const unsubscribe = subscribeToSubscriptions("beneficiary-pagination", () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current)
+        retryTimeoutRef.current = null
+      }
+      retryCountRef.current = 0
+      setRetryCount(0)
+      fetchPage(null)
+    })
+    return unsubscribe
   }, [fetchPage])
 
   // Cleanup retry timeout on unmount
@@ -312,6 +289,7 @@ export function useBeneficiaryPagination(
     hasMore,
     isLoading,
     isRefreshing,
+    fetchError,
     filters,
     setFilters,
     handleFilterChange,

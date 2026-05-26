@@ -115,9 +115,7 @@ export type Database = {
       beneficiaries: {
         Row: {
           active_subscriptions: number | null
-          beneficiary_type:
-            | Database["public"]["Enums"]["beneficiary_types"]
-            | null
+          beneficiary_type: string | null
           biography: string | null
           birth_date: string | null
           budget_goal: number | null
@@ -138,9 +136,7 @@ export type Database = {
         }
         Insert: {
           active_subscriptions?: number | null
-          beneficiary_type?:
-            | Database["public"]["Enums"]["beneficiary_types"]
-            | null
+          beneficiary_type?: string | null
           biography?: string | null
           birth_date?: string | null
           budget_goal?: number | null
@@ -161,9 +157,7 @@ export type Database = {
         }
         Update: {
           active_subscriptions?: number | null
-          beneficiary_type?:
-            | Database["public"]["Enums"]["beneficiary_types"]
-            | null
+          beneficiary_type?: string | null
           biography?: string | null
           birth_date?: string | null
           budget_goal?: number | null
@@ -1021,9 +1015,7 @@ export type Database = {
         Args: { ne_lat: number; ne_lng: number; sw_lat: number; sw_lng: number }
         Returns: {
           active_subscriptions: number | null
-          beneficiary_type:
-            | Database["public"]["Enums"]["beneficiary_types"]
-            | null
+          beneficiary_type: string | null
           biography: string | null
           birth_date: string | null
           budget_goal: number | null
@@ -2580,12 +2572,6 @@ export type Database = {
     Enums: {
       activity_source: "admin" | "sponsorship" | "system"
       activity_type: "INFO" | "UPDATE" | "SUBSCRIPTION"
-      beneficiary_types:
-        | "CHILD"
-        | "ANIMAL"
-        | "FAMILY"
-        | "STREET_INVOLVED"
-        | "CHILD_LABORER"
       Gender: "Boy" | "Girl"
       media_type: "IMAGE" | "VIDEO"
       partnership_frequency: "monthly" | "annually"
@@ -2740,13 +2726,6 @@ export const Constants = {
     Enums: {
       activity_source: ["admin", "sponsorship", "system"],
       activity_type: ["INFO", "UPDATE", "SUBSCRIPTION"],
-      beneficiary_types: [
-        "CHILD",
-        "ANIMAL",
-        "FAMILY",
-        "STREET_INVOLVED",
-        "CHILD_LABORER",
-      ],
       Gender: ["Boy", "Girl"],
       media_type: ["IMAGE", "VIDEO"],
       partnership_frequency: ["monthly", "annually"],

@@ -64,15 +64,26 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
         const customerEmail = session.customer_details?.email
         const interval = paymentType === "subscription" ? "month" : paymentType === "one_time" ? "one_time" : "year"
 
+        // Platform-origin gate: only process sessions our Stripe route created.
+        // Every session created through src/app/api/stripe/route.ts includes
+        // creatorshare_platform: "true" in session metadata. Sessions from
+        // other surfaces sharing this Stripe account are silently acknowledged.
+        if (session.metadata?.creatorshare_platform !== "true") {
+          return NextResponse.json(
+            { received: true },
+            { status: 200 },
+          )
+        }
+
         if (type === "partnership") {
           const email = session.metadata?.email
           const project = session.metadata?.project
 
           if (!email || !amount || !project) {
-            if (DEBUG_MODE) {
-              console.log ('[DEBUG] Partnership payment missing required metadata - silently rejecting')
-            }
-            // Partnership payment missing required metadata - silently reject
+            console.error(
+              "[creatorshare] Partnership session missing required metadata:",
+              session.metadata,
+            )
             return NextResponse.json(
               { received: true },
               { status: 200 },
@@ -234,7 +245,9 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
               reference: session.invoice as string,
               credit: amount,
               subscription_type:
-                session.mode === "subscription" ? "subscription" : "payment",
+                session.metadata?.paymentType === "one_time"
+                  ? "one_time"
+                  : "subscription",
               tx_action: "PARTNERSHIP",
               customer_name: session.customer_details?.name || null,
               customer_email: email || null,
@@ -278,13 +291,10 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
         const userId = session.metadata?.userId || null
 
         if ((!beneficiaryId && !isBlindSponsorship) || !amount) {
-          if (DEBUG_MODE) {
-            console.error(
-              "Missing required metadata in Stripe session:",
-              session.metadata,
-            )
-          }
-          // Non-application payment - silently acknowledge without logging customer data
+          console.error(
+            "[creatorshare] Sponsorship session missing required metadata:",
+            session.metadata,
+          )
           return NextResponse.json(
             { received: true },
             { status: 200 },
@@ -292,7 +302,13 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
         }
 
 
-        // Step 1: Insert subscription first - trigger will validate atomically
+        // Step 1: Insert subscription — trigger will validate atomically.
+        //
+        // One-time payments (mode === "payment") intentionally skip this
+        // block: one-time gifts to open-sponsorship types (budget_goal = -1)
+        // have no recurring period to track and should not contribute to the
+        // monthly budget_raised metric. The tLedger entry and emails below
+        // handle the one-time case instead.
         if (session.mode === "subscription" && session.subscription) {
           const { error: subscriptionError } = await supabase
             .from("subscriptions")
@@ -483,7 +499,10 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
           }
         }
 
-        // Step 4: Create transaction ledger entry (AFTER successful subscription insert)
+        // Step 4: Create transaction ledger entry.
+        // Runs for both subscription and one-time checkouts. For one-time
+        // payments there is no subscription to roll back, so errors here
+        // are logged but never fatal.
         // This is a separate operation - log error but don't rollback subscription
         const { error: transactionError } = await supabase
           .from("transaction_ledger")
@@ -494,7 +513,9 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
             reference: session.invoice as string,
             credit: amount,
             subscription_type:
-              session.mode === "subscription" ? "subscription" : "payment",
+              session.metadata?.paymentType === "one_time"
+                ? "one_time"
+                : "subscription",
             tx_action: "SPONSORSHIP",
             customer_name: session.customer_details?.name || null,
             customer_email: customerEmail || null,

@@ -36,7 +36,8 @@ const ResetPassword = () => {
 
   const router = useRouter()
   const [loading, setLoading] = useState<boolean>(false)
-  const [message, setMessage] = useState<string>("")
+  const [successMessage, setSuccessMessage] = useState<string>("")
+  const [errorMessage, setErrorMessage] = useState<string>("")
   const setIsDisabled = useFormStore((state) => state.setIsDisabled)
   const isDisabled = useFormStore((state) => state.isDisabled)
   const [showPassword, setShowPassword] = useState(false)
@@ -59,11 +60,12 @@ const ResetPassword = () => {
 
   const onSubmit = async (data: FormValues) => {
     setLoading(true)
-    setMessage("")
+    setSuccessMessage("")
+    setErrorMessage("")
 
     const validation = validatePassword(data.password)
     if (!validation.isValid) {
-      setMessage(validation.error)
+      setErrorMessage(validation.error)
       setLoading(false)
       return
     }
@@ -81,10 +83,10 @@ const ResetPassword = () => {
         throw new Error(result.error || "Failed to reset password.")
       }
 
-      setMessage("Password reset successful! Please log in again.")
+      setSuccessMessage("Password reset successful! Please log in again.")
       setTimeout(() => router.push("/login"), 2000)
     } catch (err) {
-      setMessage((err as Error).message || "Failed to reset password.")
+      setErrorMessage((err as Error).message || "Failed to reset password.")
     } finally {
       setLoading(false)
     }
@@ -197,9 +199,14 @@ const ResetPassword = () => {
             {loading ? "Resetting..." : "Continue"}
           </Button>
         </Stack>
-        {message && (
+        {successMessage && (
+          <Text color="green.500" mt={4}>
+            {successMessage}
+          </Text>
+        )}
+        {errorMessage && (
           <Text color="red.500" mt={4}>
-            {message}
+            {errorMessage}
           </Text>
         )}
       </form>

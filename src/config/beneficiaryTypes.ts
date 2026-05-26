@@ -16,7 +16,12 @@
  *     Budget goal is -1 (infinite). Never "fully sponsored."
  */
 
-export type BeneficiaryTabType = "CHILD" | "CHILD_LABORER" | "SPECIAL_NEEDS" | "ANIMAL"
+export type BeneficiaryTabType =
+  | "CHILD"
+  | "CHILD_LABORER"
+  | "SPECIAL_NEEDS"
+  | "IN_OUR_CARE"
+  | "ANIMAL"
 
 export interface BeneficiaryTypeConfig {
   label: string
@@ -58,8 +63,6 @@ export interface BeneficiaryTypeConfig {
 
 /** Minimum sponsorship amount (cents) for open sponsorship types. */
 export const MINIMUM_OPEN_SPONSORSHIP_CENTS = 500
-/** Maximum sponsorship amount (cents) for open sponsorship types. */
-export const MAXIMUM_OPEN_SPONSORSHIP_CENTS = 100000
 
 export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
   {
@@ -85,7 +88,7 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
     singularName: "child",
     pluralName: "children",
     maxAgeYears: 14,
-    route: "/street",
+    route: "/child_laborers",
   },
   {
     label: "Child Labourers",
@@ -96,7 +99,7 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
     singularName: "child",
     pluralName: "children",
     maxAgeYears: 14,
-    route: "/street",
+    route: "/child_laborers",
   },
   {
     label: "Special Needs",
@@ -107,7 +110,18 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
     singularName: "child",
     pluralName: "children",
     maxAgeYears: 14,
-    route: "/care",
+    route: "/special_needs",
+  },
+  {
+    label: "In Our Care",
+    type: "IN_OUR_CARE",
+    isOpenSponsorship: true,
+    defaultBudgetGoalCents: -1,
+    isPubliclyVisible: true,
+    singularName: "child",
+    pluralName: "children",
+    maxAgeYears: 14,
+    route: "/in_our_care",
   },
   {
     label: "Rescue Dogs",
@@ -128,9 +142,10 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
 
 /** Maps a BeneficiaryTabType to its sharable public URL path. */
 export const TYPE_TO_ROUTE: Record<BeneficiaryTabType, string> = {
-  CHILD: "/street", // legacy alias — same route as CHILD_LABORER
-  CHILD_LABORER: "/street",
-  SPECIAL_NEEDS: "/care",
+  CHILD: "/child_laborers", // legacy alias — same route as CHILD_LABORER
+  CHILD_LABORER: "/child_laborers",
+  SPECIAL_NEEDS: "/special_needs",
+  IN_OUR_CARE: "/in_our_care",
   ANIMAL: "/dogs",
 }
 
@@ -140,8 +155,9 @@ export const TYPE_TO_ROUTE: Record<BeneficiaryTabType, string> = {
  */
 export const ROUTE_TO_TYPE: Record<string, BeneficiaryTabType | null> = {
   "/": null,
-  "/street": "CHILD_LABORER",
-  "/care": "SPECIAL_NEEDS",
+  "/child_laborers": "CHILD_LABORER",
+  "/special_needs": "SPECIAL_NEEDS",
+  "/in_our_care": "IN_OUR_CARE",
   "/dogs": "ANIMAL",
 }
 
@@ -181,7 +197,9 @@ export function isOpenSponsorshipType(
  * Returns the comma-separated beneficiary_type string expected by the API.
  * CHILD_LABORER expands to "CHILD,CHILD_LABORER" to include legacy records.
  */
-export function getApiTypes(type: BeneficiaryTabType | null): string | undefined {
+export function getApiTypes(
+  type: BeneficiaryTabType | null,
+): string | undefined {
   if (!type) return undefined
   if (type === "CHILD_LABORER") return "CHILD,CHILD_LABORER"
   return type
