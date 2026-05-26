@@ -3,9 +3,11 @@
 // safe to import from client components (Footer, FAQ, About) as well as
 // server-side email rendering.
 //
-// When no region-specific NEXT_PUBLIC_STRIPE_PORTAL_URL_* var is set, falls
-// back to a single legacy portal link so existing single-account deployments
-// keep working unchanged.
+// Fallback semantics (per-region, not all-or-nothing): any region that is
+// not configured via NEXT_PUBLIC_STRIPE_PORTAL_URL_<REGION> falls back to
+// DEFAULT_STRIPE_PORTAL_URL. This means a deployment that configures only
+// UK during rollout still renders a working US "Manage Subscription" link
+// pointed at the legacy hosted portal.
 
 import {
   ALL_STRIPE_REGIONS,
@@ -38,23 +40,32 @@ const PUBLIC_PORTAL_URLS: Record<StripeRegion, string | undefined> = {
 export function getPublicPortalLinks(): PortalLink[] {
   const links: PortalLink[] = []
 
-  for (const region of ALL_STRIPE_REGIONS) {
-    const href = PUBLIC_PORTAL_URLS[region]
-    if (!href) continue
-    links.push({
-      provider: "STRIPE",
-      region,
-      href,
-      label: `Manage Subscription (${STRIPE_REGION_LABELS[region]})`,
-    })
-  }
+  // If NO region-specific URLs are configured at all, render the legacy
+  // single "Manage Subscription" link (no region label) to keep single-
+  // account deployments looking unchanged.
+  const anyRegionConfigured = ALL_STRIPE_REGIONS.some(
+    (region) => !!PUBLIC_PORTAL_URLS[region],
+  )
 
-  if (links.length === 0) {
+  if (!anyRegionConfigured) {
     links.push({
       provider: "STRIPE",
       href: DEFAULT_STRIPE_PORTAL_URL,
       label: "Manage Subscription",
     })
+  } else {
+    // At least one region is configured. Render a link for every region,
+    // falling back to the legacy URL for any region without a NEXT_PUBLIC_
+    // override so partial-rollout deployments don't drop the other regions.
+    for (const region of ALL_STRIPE_REGIONS) {
+      const href = PUBLIC_PORTAL_URLS[region] || DEFAULT_STRIPE_PORTAL_URL
+      links.push({
+        provider: "STRIPE",
+        region,
+        href,
+        label: `Manage Subscription (${STRIPE_REGION_LABELS[region]})`,
+      })
+    }
   }
 
   if (process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID) {

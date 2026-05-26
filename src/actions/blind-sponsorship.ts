@@ -89,6 +89,9 @@ export async function createBlindSponsorshipCheckout(
         card: { request_three_d_secure: "automatic" },
       },
       customer_email: email,
+      // creatorshare_platform marks every checkout we create so the Stripe
+      // webhook can positively identify our sessions and silently drop
+      // anything else flowing through a shared Stripe account.
       metadata: {
         beneficiaryName,
         childName: beneficiaryName,
@@ -99,6 +102,7 @@ export async function createBlindSponsorshipCheckout(
         sponsorshipMode: "blind",
         blindLabel: BLIND_LABEL,
         region,
+        creatorshare_platform: "true",
       },
       subscription_data: {
         metadata: {
@@ -108,6 +112,7 @@ export async function createBlindSponsorshipCheckout(
           blindLabel: BLIND_LABEL,
           beneficiaryName,
           region,
+          creatorshare_platform: "true",
         },
       },
     }

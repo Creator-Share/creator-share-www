@@ -2,10 +2,25 @@
 // PayPal has no regional-account split today — the architectural decision is
 // single PayPal account, multi-region Stripe.
 
-export const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+export const PAYPAL_LIVE_API_URL = "https://api-m.paypal.com"
+export const PAYPAL_SANDBOX_API_URL = "https://api-m.sandbox.paypal.com"
 
+// Function rather than module-load const so server-side toggles take effect
+// without a process restart (e.g. flipping PayPal on/off via an env update on
+// the next request lifecycle).
+export function isPayPalEnabled(): boolean {
+  return !!(
+    process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || process.env.PAYPAL_CLIENT_ID
+  )
+}
+
+// Default to the LIVE PayPal endpoint. Defaulting to sandbox previously meant
+// that a production deploy without PAYPAL_API_URL set would silently hit
+// sandbox, return 404 for real subscriptions, and let cancel flows update our
+// DB while the live subscription kept billing. Sandbox is now strictly opt-in
+// via PAYPAL_API_URL=https://api-m.sandbox.paypal.com.
 export function getPayPalApiUrl(): string {
-  return process.env.PAYPAL_API_URL || "https://api-m.sandbox.paypal.com"
+  return process.env.PAYPAL_API_URL || PAYPAL_LIVE_API_URL
 }
 
 function getClientCredentials(): { clientId: string; clientSecret: string } {
@@ -58,7 +73,7 @@ export async function cancelPayPalSubscription(
   subscriptionId: string,
   reason = "Cancelled by subscriber",
 ): Promise<PayPalCancelResult> {
-  if (!isPayPalEnabled) {
+  if (!isPayPalEnabled()) {
     return {
       cancelled: false,
       alreadyCancelled: false,

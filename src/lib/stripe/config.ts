@@ -22,11 +22,28 @@ const LEGACY_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 const LEGACY_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
 const LEGACY_PORTAL_URL = process.env.STRIPE_PORTAL_URL
 
-const DEFAULT_REGION_ENV = process.env.STRIPE_DEFAULT_REGION as
-  | StripeRegion
-  | undefined
+// Validate STRIPE_DEFAULT_REGION at module load: a typo like
+// STRIPE_DEFAULT_REGION=eu otherwise short-circuits coerceRegion() into
+// returning "eu", then crashes inside getStripeConfig with a confusing
+// "Cannot read properties of undefined (reading 'secretKey')" error rather
+// than the cleanly worded missing-region error we expect.
+const RAW_DEFAULT_REGION_ENV = process.env.STRIPE_DEFAULT_REGION
+if (
+  RAW_DEFAULT_REGION_ENV !== undefined &&
+  RAW_DEFAULT_REGION_ENV !== "" &&
+  !isValidStripeRegion(RAW_DEFAULT_REGION_ENV)
+) {
+  throw new Error(
+    `Invalid STRIPE_DEFAULT_REGION="${RAW_DEFAULT_REGION_ENV}". ` +
+      `Expected one of: ${ALL_STRIPE_REGIONS.join(", ")}.`,
+  )
+}
 
-export const STRIPE_DEFAULT_REGION: StripeRegion = DEFAULT_REGION_ENV || "us"
+export const STRIPE_DEFAULT_REGION: StripeRegion = isValidStripeRegion(
+  RAW_DEFAULT_REGION_ENV,
+)
+  ? RAW_DEFAULT_REGION_ENV
+  : "us"
 
 // Region-specific env vars take precedence; legacy unsuffixed vars act as
 // fallbacks for the primary region during migration.
@@ -60,7 +77,12 @@ const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
     portalUrl:
       process.env.STRIPE_PORTAL_URL_UK ||
       (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_PORTAL_URL || "" : ""),
-    currency: "gbp",
+    // TODO(uk-pricing): switch to "gbp" once the UI supports per-region
+    // currency display + a price table denominated in pence. Until then,
+    // bill UK Stripe in USD so the dollar amounts the UI shows match what
+    // the customer is charged. Otherwise a sponsor picking "$15/month"
+    // gets charged £15 (~$19), a ~25% silent overcharge.
+    currency: "usd",
     label: "Creator Share UK",
   },
 }
@@ -74,6 +96,13 @@ function isRegionConfigured(region: StripeRegion): boolean {
 // Kept as `isValidRegion` alias for backward compat with existing callers.
 export const isValidRegion = isValidStripeRegion
 
+// Permissive coercion: invalid input (including attacker-supplied query
+// strings like ?region=foobar) silently maps to STRIPE_DEFAULT_REGION
+// rather than throwing. This is intentional because the canonical region
+// for a checkout lives on the Stripe session or DB row, not the URL;
+// downstream lookups against the wrong account fail closed with a
+// cleanly worded error. Do not use this function as an authorization
+// boundary.
 export function coerceRegion(
   value: string | null | undefined,
 ): StripeRegion {

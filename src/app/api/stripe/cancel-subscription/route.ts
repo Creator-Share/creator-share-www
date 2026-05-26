@@ -125,7 +125,7 @@ async function cancelWithProvider(
   }
 
   if (subscription.sponsorship_method === "PAYPAL") {
-    if (!isPayPalEnabled) {
+    if (!isPayPalEnabled()) {
       return {
         notFound: false,
         fatal: true,
