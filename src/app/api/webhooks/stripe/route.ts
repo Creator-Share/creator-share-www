@@ -536,6 +536,7 @@ export async function POST(req: Request) {
             )}/${interval}`,
             beneficiary_id: beneficiaryId || null,
             user_id: userId,
+            is_public: true,
           })
 
         if (activityError) {

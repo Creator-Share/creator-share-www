@@ -40,11 +40,13 @@ import {
 } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
+import SupportedCheckBadge from "@/components/common/SupportedCheckBadge"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
 import BeneficiaryActivity, { SHOW_MORE_CLASS } from "../SponsorshipActivity"
 import { FAQModal } from "@/components/FAQModal"
 import {
+  hasOpenSponsorshipSupport,
   isOpenSponsorshipType,
   MINIMUM_OPEN_SPONSORSHIP_CENTS,
 } from "@/config/beneficiaryTypes"
@@ -112,6 +114,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const user = useAuthStore((state) => state.user)
   const { setSponsorshipInProgress } = useSponsorship()
   const isOpen = isOpenSponsorshipType(beneficiary.beneficiary_type)
+  const hasOpenSupport = isOpen && hasOpenSponsorshipSupport(beneficiary)
 
   // For fixed types the budget_goal IS the sponsorship amount (set at create time).
   // For open types there is no goal — sponsors choose their own amount.
@@ -777,16 +780,39 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     )
 
     if (isOpen) {
+      const supportCopy = hasOpenSupport
+        ? {
+            heading: `${firstName} is already receiving support`,
+            body: (
+              <>
+                {firstName} is already receiving support, and additional gifts
+                help keep care steady for {firstName} and all children
+                receiving care. Your contribution strengthens daily meals,
+                health care, schooling, and the care team supporting them. You
+                will receive updates from our team as that support continues.
+              </>
+            ),
+          }
+        : {
+            heading: `Support ${firstName} with any amount`,
+            body: (
+              <>
+                Your contribution helps support {firstName} and all children
+                receiving care. Every gift strengthens daily care, meals, health
+                care, schooling, and the care team supporting them. You will
+                receive updates on {firstName}&apos;s progress directly from our
+                team.
+              </>
+            ),
+          }
+
       return (
         <Box className="space-y-2">
           <Text className="text-lg font-semibold text-gray-900">
-            Support {firstName} with any amount
+            {supportCopy.heading}
           </Text>
           <Text className="text-gray-700 leading-relaxed text-sm md:text-base">
-            Your contribution goes directly toward supporting {firstName}
-            &apos;s care and well-being. Every dollar makes a difference. You
-            will receive updates on {firstName}&apos;s progress directly from
-            our care team.
+            {supportCopy.body}
           </Text>
           <Box className="mt-5">{faqLink}</Box>
         </Box>
@@ -916,6 +942,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       className="rounded-2xl aspect-[4/5] object-cover"
                       showArrowsOnHover={true}
                     />
+                    {hasOpenSupport && <SupportedCheckBadge size="lg" />}
                     {alreadyFulfilled && <SupportedRibbon size="lg" />}
                   </Box>
                 </Box>

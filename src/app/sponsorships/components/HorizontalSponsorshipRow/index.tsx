@@ -5,8 +5,13 @@ import { Beneficiaries } from "@/types"
 import { SponsoredBeneficiary } from "@/actions"
 import PortraitBeneficiaryCard from "../SponsorshipCard/PortraitCard"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
+import SupportedCheckBadge from "@/components/common/SupportedCheckBadge"
 import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
-import { getApiTypes } from "@/config/beneficiaryTypes"
+import {
+  getApiTypes,
+  hasOpenSponsorshipSupport,
+  isOpenSponsorshipType,
+} from "@/config/beneficiaryTypes"
 
 // ---------------------------------------------------------------------------
 // StatsCard -- first item in the row; replaces the StatsSection above the fold
@@ -276,7 +281,12 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
                   beneficiary={b}
                   onOpenDialog={() => onOpenModal(b)}
                   isSelected={selectedBeneficiaryId === b.id}
-                  imageOverlay={<SupportedRibbon />}
+                  imageOverlay={
+                    isOpenSponsorshipType(b.beneficiary_type) &&
+                    hasOpenSponsorshipSupport(b)
+                      ? <SupportedCheckBadge />
+                      : <SupportedRibbon />
+                  }
                   lastActivityAt={b.last_activity_at}
                 />
               ))}
@@ -294,7 +304,12 @@ const HorizontalSponsorshipRow: React.FC<HorizontalSponsorshipRowProps> = ({
                     beneficiary={b}
                     onOpenDialog={() => onOpenModal(b)}
                     isSelected={selectedBeneficiaryId === b.id}
-                    imageOverlay={<InNeedBadge />}
+                    imageOverlay={
+                      isOpenSponsorshipType(b.beneficiary_type) &&
+                      hasOpenSponsorshipSupport(b)
+                        ? <SupportedCheckBadge />
+                        : <InNeedBadge />
+                    }
                   />
                 ) : null,
               )}
