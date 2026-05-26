@@ -158,40 +158,79 @@ export function getAvailableRegions(): StripeRegion[] {
   return ALL_STRIPE_REGIONS.filter(isRegionConfigured)
 }
 
-// Country codes (ISO 3166-1 alpha-2 + a couple of common full-name forms) that
-// route to the UK Stripe entity. Anything not in this set falls through to the
-// default region. The map is intentionally conservative — production routing
-// rules (e.g. EU vs UK split, currency-driven overrides) will need to be
-// extended here as new entities come online.
-const UK_COUNTRY_CODES = new Set([
+// Single-word tokens that route to the UK Stripe entity. We match against
+// individual words after stripping punctuation, so "England, UK", "London /
+// United Kingdom", and "Wales" all hit. ISO codes + the constituent country
+// names are listed here. Phrases that contain a space (e.g. "united kingdom")
+// must go in UK_COUNTRY_PHRASES below instead.
+const UK_COUNTRY_TOKENS = new Set([
   "uk",
   "gb",
   "gbr",
-  "united kingdom",
-  "great britain",
   "england",
   "scotland",
   "wales",
-  "northern ireland",
-  // Ireland routes to the UK entity (per PR scope: shared EU/UK billing
-  // surface until a dedicated EU Stripe account is brought online).
+  // Ireland routes to the UK entity until a dedicated EU Stripe account is
+  // brought online (PR scope: shared EU/UK billing surface).
   "ie",
   "irl",
   "ireland",
 ])
 
+// Multi-word phrases that route to the UK entity. Matched as substrings on
+// the normalised (lowercase, punctuation collapsed to spaces) input. Listed
+// separately so we never get false positives from a single word like "great"
+// or "kingdom" appearing in an unrelated country name.
+const UK_COUNTRY_PHRASES = [
+  "united kingdom",
+  "great britain",
+  "northern ireland",
+  "republic of ireland",
+]
+
+// Normalises free-text admin-entered country strings into a tokenisable form.
+// Lowercases, collapses any non-letter character (punctuation, digits,
+// underscores) into a single space, then trims. Examples:
+//   "England, UK"        -> "england uk"
+//   "London / Scotland." -> "london scotland"
+//   "U.K."               -> "u k"  (matched via UK_COUNTRY_TOKENS short codes)
 function normalizeCountry(country: string | null | undefined): string {
-  return (country || "").trim().toLowerCase()
+  return (country || "")
+    .toLowerCase()
+    .replace(/[^a-z]+/g, " ")
+    .trim()
+}
+
+function matchesUk(normalized: string): boolean {
+  if (!normalized) return false
+  const tokens = new Set(normalized.split(" "))
+  for (const t of UK_COUNTRY_TOKENS) {
+    if (tokens.has(t)) return true
+  }
+  // Phrase match needs space-separated comparison so we don't match a phrase
+  // hidden inside a longer word; the normaliser already guarantees single
+  // spaces between tokens, so substring checks here are word-boundary safe.
+  const padded = ` ${normalized} `
+  for (const phrase of UK_COUNTRY_PHRASES) {
+    if (padded.includes(` ${phrase} `)) return true
+  }
+  return false
 }
 
 // Returns the configured region for a beneficiary, falling back to the default
 // when the beneficiary's country doesn't map to a configured region. Callers
 // that need explicit override should prefer `coerceRegion` on a request param.
+//
+// Country is treated as free text rather than an enum because the admin form
+// accepts arbitrary strings ("Greater London", "Glasgow, Scotland", "United
+// Kingdom (Wales)" have all appeared in production). We tokenise and phrase-
+// match instead of doing a strict equality check to avoid silently routing UK
+// sponsorships through the US Stripe account.
 export function getRegionForBeneficiary(
   beneficiary?: { country?: string | null } | null,
 ): StripeRegion {
-  const country = normalizeCountry(beneficiary?.country)
-  if (country && UK_COUNTRY_CODES.has(country) && isRegionConfigured("uk")) {
+  const normalized = normalizeCountry(beneficiary?.country)
+  if (matchesUk(normalized) && isRegionConfigured("uk")) {
     return "uk"
   }
   return STRIPE_DEFAULT_REGION

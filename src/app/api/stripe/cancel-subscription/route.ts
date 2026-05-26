@@ -4,7 +4,7 @@ import {
   cancelPayPalSubscription,
   isPayPalEnabled,
 } from "@/lib/paypal/client"
-import { coerceRegion, getStripeClient } from "@/lib/stripe/config"
+import { getStripeClient } from "@/lib/stripe/config"
 import type { Database } from "@/lib/types/db.types"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createClient } from "@/utils/supabase/server"
@@ -144,8 +144,9 @@ async function cancelWithProvider(
     }
   }
 
-  const region = coerceRegion(subscription.payment_region)
-  const stripe = getStripeClient(region)
+  // subscription.payment_region is the public.stripe_region enum, so it's
+  // already typed as StripeRegion; no coercion needed.
+  const stripe = getStripeClient(subscription.payment_region)
   try {
     await stripe.subscriptions.cancel(providerId)
     return { notFound: false, fatal: false }

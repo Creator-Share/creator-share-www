@@ -20,6 +20,12 @@ export const PAYPAL_MANAGE_URL = "https://www.paypal.com/myaccount/autopay/"
 export interface PortalLink {
   provider: "STRIPE" | "PAYPAL"
   region?: StripeRegion
+  // True when the href is the shared DEFAULT_STRIPE_PORTAL_URL rather than a
+  // region-specific NEXT_PUBLIC_STRIPE_PORTAL_URL_<REGION>. UI can use this to
+  // collapse duplicates or annotate the link (e.g. "Manage Subscription (UK,
+  // legacy)") so users aren't surprised when two region links point at the
+  // same portal during a partial rollout.
+  isFallback?: boolean
   href: string
   label: string
 }
@@ -57,13 +63,20 @@ export function getPublicPortalLinks(): PortalLink[] {
     // At least one region is configured. Render a link for every region,
     // falling back to the legacy URL for any region without a NEXT_PUBLIC_
     // override so partial-rollout deployments don't drop the other regions.
+    // Fallback links carry isFallback=true so the UI can dedupe or annotate
+    // them (two regions both pointing at the legacy portal would otherwise
+    // be indistinguishable in the footer).
     for (const region of ALL_STRIPE_REGIONS) {
-      const href = PUBLIC_PORTAL_URLS[region] || DEFAULT_STRIPE_PORTAL_URL
+      const override = PUBLIC_PORTAL_URLS[region]
+      const isFallback = !override
       links.push({
         provider: "STRIPE",
         region,
-        href,
-        label: `Manage Subscription (${STRIPE_REGION_LABELS[region]})`,
+        isFallback,
+        href: override || DEFAULT_STRIPE_PORTAL_URL,
+        label: isFallback
+          ? `Manage Subscription (${STRIPE_REGION_LABELS[region]}, legacy)`
+          : `Manage Subscription (${STRIPE_REGION_LABELS[region]})`,
       })
     }
   }
