@@ -224,9 +224,14 @@ const HERO_CONTENT: Record<DisplayKey, HeroContent> = {
 // Nav links — derived from central config
 // ---------------------------------------------------------------------------
 
+const HIDDEN_HOME_LINK_TYPES = new Set<BeneficiaryTabType>(["IN_OUR_CARE"])
+
 const HERO_LINKS: { type: BeneficiaryTabType | null; label: string }[] =
   ALL_BENEFICIARY_TABS.filter(
-    (tab) => !tab.isLegacyAlias && tab.isPubliclyVisible,
+    (tab) =>
+      !tab.isLegacyAlias &&
+      tab.isPubliclyVisible &&
+      (tab.type === null || !HIDDEN_HOME_LINK_TYPES.has(tab.type)),
   ).map((tab) => ({
     type: tab.type,
     label: tab.label,
