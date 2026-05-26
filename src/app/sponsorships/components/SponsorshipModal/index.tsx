@@ -341,6 +341,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     isOpen && oneTimeAmountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS
       ? OPEN_SPONSORSHIP_RANGE_MESSAGE
       : null
+  const oneTimeButtonDisabled =
+    loading || !canPayOneTime || activeColumn !== "one_time"
 
   const handleStripePayment = async (
     paymentType: SponsorshipFrequency = "subscription",
@@ -1233,14 +1235,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                                   loading={loadingFrequency === "one_time"}
                                   loadingText="Processing..."
                                   disabled={
-                                    loading ||
-                                    !canPayOneTime ||
-                                    activeColumn !== "one_time"
+                                    oneTimeButtonDisabled
                                   }
                                   width="100%"
                                   opacity={
-                                    activeColumn !== "one_time" ||
-                                    !canPayOneTime
+                                    oneTimeButtonDisabled
                                       ? 0.5
                                       : 1
                                   }
@@ -1260,7 +1259,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                                   }}
                                   _disabled={{ bg: "#EEF6FF" }}
                                 >
-                                  {canPayOneTime
+                                  {!oneTimeButtonDisabled
                                     ? `Gift $${(oneTimeAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
                                     : "One-Time Gift"}
                                 </Button>
