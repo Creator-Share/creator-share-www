@@ -759,6 +759,11 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
               }
             }
             
+            // invoice.metadata is not auto-populated from session or
+            // subscription metadata, so reading provider from it is illusory.
+            // Hardcode STRIPE here: this entire handler only fires for
+            // Stripe events. A future PayPal webhook surface would call
+            // sendPaymentFailedEmail with its own { provider: "PAYPAL" }.
             await sendPaymentFailedEmail(
               customerEmail,
               beneficiaryName,
@@ -768,7 +773,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                 : null,
               customerName,
               subscriptionData?.beneficiary_id || null,
-              { provider: resolveProvider(invoice.metadata), region },
+              { provider: "STRIPE", region },
             )
           } catch (emailError) {
             console.error("Error sending payment failed email:", emailError)
@@ -785,9 +790,23 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
         const subscription = event.data.object as Stripe.Subscription
         const type = subscription.metadata?.type
 
-        // Silently acknowledge non-application subscriptions (no type or unknown type)
-        if (!type || (type !== "partnership" && type !== "sponsorship")) {
-          return NextResponse.json({ received: true }, { status: 200 })
+        // The metadata-type filter rejects random Stripe Connect / third-party
+        // subscriptions, but it would also reject our own subscriptions that
+        // were created before subscription_data.metadata started carrying a
+        // `type` field. To avoid silently dropping cancellations from those
+        // legacy rows, fall back to a DB lookup keyed on stripe_subscription_id
+        // before bailing.
+        const isKnownType = type === "partnership" || type === "sponsorship"
+        if (!isKnownType) {
+          const { data: knownSub } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("stripe_subscription_id", subscription.id)
+            .maybeSingle()
+
+          if (!knownSub) {
+            return NextResponse.json({ received: true }, { status: 200 })
+          }
         }
 
         // Map Stripe subscription status to our database status
@@ -837,12 +856,44 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
         const subscription = event.data.object as Stripe.Subscription
         const type = subscription.metadata?.type
 
-        // Silently acknowledge non-application subscriptions (no type or unknown type)
-        if (!type || (type !== "partnership" && type !== "sponsorship")) {
-          return NextResponse.json({ received: true }, { status: 200 })
+        // See customer.subscription.updated above: filter by metadata type but
+        // fall back to a DB lookup so we never drop a cancellation for a
+        // subscription we have on file. Resolve `type` from the DB row when
+        // metadata is missing so the partnership/sponsorship branch below
+        // still routes correctly.
+        let resolvedType: "partnership" | "sponsorship" | null =
+          type === "partnership" || type === "sponsorship" ? type : null
+
+        if (!resolvedType) {
+          const { data: knownSub } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("stripe_subscription_id", subscription.id)
+            .maybeSingle()
+
+          if (!knownSub) {
+            // Check partnerships too (email-keyed), then bail if neither matches.
+            const email = subscription.metadata?.email
+            if (email) {
+              const { data: knownPartnership } = await supabase
+                .from("partnerships")
+                .select("id")
+                .eq("email", email)
+                .eq("status", "complete")
+                .maybeSingle()
+              if (knownPartnership) {
+                resolvedType = "partnership"
+              }
+            }
+            if (!resolvedType) {
+              return NextResponse.json({ received: true }, { status: 200 })
+            }
+          } else {
+            resolvedType = "sponsorship"
+          }
         }
 
-        if (type === "partnership") {
+        if (resolvedType === "partnership") {
           const email = subscription.metadata?.email
           if (email) {
             const { error: updateError } = await supabase
@@ -1022,13 +1073,15 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                 // Send monthly payment confirmation email
                 if (customerEmail && beneficiaryData) {
                   try {
+                    // See note on sendPaymentFailedEmail above: invoice
+                    // metadata is empty by default, so hardcode STRIPE.
                     await sendMonthlyPaymentConfirmationEmail(
                         customerEmail,
                         beneficiaryData.name,
                         invoice.amount_paid,
                         customerName,
                         subscriptionData.beneficiary_id,
-                        { provider: resolveProvider(invoice.metadata), region },
+                        { provider: "STRIPE", region },
                       )
                   } catch (emailError) {
                     console.error("Error sending monthly payment confirmation email:", emailError)

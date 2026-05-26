@@ -187,6 +187,14 @@ export async function POST(req: Request) {
       customer_email: email,
       metadata: sessionMetadata,
       ...(!isOneTime && {
+        // subscription_data.metadata is what Stripe stamps onto the resulting
+        // Stripe.Subscription, which is the metadata read by every
+        // customer.subscription.* / invoice.* event handler. It MUST carry
+        // creatorshare_platform (so the identity gate protects those events
+        // too) and `type` (so the type-name filter for subscription events
+        // routes sponsorship cancellations through reconciliation instead of
+        // dropping them silently when a sponsor cancels via Stripe's
+        // hosted billing portal).
         subscription_data: {
           metadata:
             type === "partnership"
@@ -196,8 +204,10 @@ export async function POST(req: Request) {
                   amount: enforcedAmount.toString(),
                   email,
                   region,
+                  creatorshare_platform: "true",
                 }
               : {
+                  type: "sponsorship",
                   beneficiaryId: beneficiaryId || undefined,
                   userId: userId || null,
                   amount: enforcedAmount.toString(),
@@ -205,6 +215,7 @@ export async function POST(req: Request) {
                   blindLabel: resolvedBlindLabel,
                   beneficiaryName: resolvedBeneficiaryName,
                   region,
+                  creatorshare_platform: "true",
                 },
         },
       }),

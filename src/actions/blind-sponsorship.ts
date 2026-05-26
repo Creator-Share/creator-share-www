@@ -106,6 +106,7 @@ export async function createBlindSponsorshipCheckout(
       },
       subscription_data: {
         metadata: {
+          type: "sponsorship",
           userId: userId || null,
           amount: BLIND_SPONSORSHIP_AMOUNT_CENTS.toString(),
           sponsorshipMode: "blind",

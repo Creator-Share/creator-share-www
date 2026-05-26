@@ -18,32 +18,40 @@ export async function GET(request: Request) {
 
   try {
     const supabase = await createClient()
-    let session = null
-    let sessionStatus = null
-    let errorDetails = null
+    let stripeErrorDetails: string | null = null
 
     try {
-      session = await stripe.checkout.sessions.retrieve(sessionId, {
+      const session = await stripe.checkout.sessions.retrieve(sessionId, {
         expand: ["customer_details", "payment_intent"],
       })
 
-      sessionStatus = session.status
       return NextResponse.json({
         session,
-        status: sessionStatus,
+        status: session.status,
       })
     } catch (stripeError) {
-      errorDetails =
+      stripeErrorDetails =
         stripeError instanceof Error
           ? stripeError.message
           : "Unknown Stripe error"
     }
 
-    const { data: transaction } = await supabase
+    // Stripe lookup failed (test/live mismatch, deleted session, etc.).
+    // Fall back to our own ledger + subscriptions store. Subscriptions are
+    // identified by stripe_subscription_id; the legacy code path queried a
+    // dropped `sponsorship_id` column and silently returned "not found".
+    const { data: transaction, error: transactionError } = await supabase
       .from("transaction_ledger")
       .select("*, beneficiaries(name, location_str)")
       .eq("reference", sessionId)
-      .single()
+      .maybeSingle()
+
+    if (transactionError) {
+      console.error(
+        "[stripe/session] transaction_ledger lookup failed:",
+        transactionError,
+      )
+    }
 
     if (transaction) {
       return NextResponse.json({
@@ -62,11 +70,18 @@ export async function GET(request: Request) {
       })
     }
 
-    const { data: subscription } = await supabase
+    const { data: subscription, error: subscriptionError } = await supabase
       .from("subscriptions")
       .select("*, beneficiaries!inner(name, location_str)")
-      .eq("sponsorship_id", sessionId)
-      .single()
+      .eq("stripe_subscription_id", sessionId)
+      .maybeSingle()
+
+    if (subscriptionError) {
+      console.error(
+        "[stripe/session] subscriptions lookup failed:",
+        subscriptionError,
+      )
+    }
 
     if (subscription) {
       return NextResponse.json({
@@ -84,36 +99,12 @@ export async function GET(request: Request) {
         status: subscription.status,
       })
     }
-    const { data: partialSubscriptions } = await supabase
-      .from("subscriptions")
-      .select("*, beneficiaries!inner(name, location_str)")
-      .ilike("sponsorship_id", `%${sessionId}%`)
-      .limit(1)
 
-    if (partialSubscriptions && partialSubscriptions.length > 0) {
-      return NextResponse.json({
-        session: {
-          id: sessionId,
-          status: partialSubscriptions[0].status,
-          metadata: {
-            childName: partialSubscriptions[0].beneficiaries?.name || "",
-            childLocation:
-              partialSubscriptions[0].beneficiaries?.location_str || "",
-          },
-          customer_details: {
-            email: "",
-          },
-        },
-        status: partialSubscriptions[0].status,
-      })
-    }
-
-    // If we can't find any records, return a clear error with details
     return NextResponse.json(
       {
         error: "Payment session not found",
         code: "SESSION_NOT_FOUND",
-        details: errorDetails,
+        details: stripeErrorDetails,
         checkedStripe: true,
         checkedDatabase: true,
       },
