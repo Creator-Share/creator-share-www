@@ -5,6 +5,7 @@ import {
   formatMoneyFromMinorUnits,
   getDefaultCurrencyForCountry,
 } from "../src/utils/currency"
+import { getStripeRegionForPaymentCurrency } from "../src/lib/stripe/currencyRouting"
 
 test.describe("payment currency support", () => {
   test("maps supported countries to the expected default currencies", () => {
@@ -66,6 +67,13 @@ test.describe("payment currency support", () => {
     expect(formatMoneyFromMinorUnits(1500, "AUD")).toMatch(/A?\$15\.00|15\.00/)
     expect(formatMoneyFromMinorUnits(800, "GBP")).toContain("8.00")
     expect(formatMoneyFromMinorUnits(900, "EUR")).toContain("9.00")
+  })
+
+  test("routes only USD to the US Stripe account", () => {
+    expect(getStripeRegionForPaymentCurrency("USD")).toBe("us")
+    expect(getStripeRegionForPaymentCurrency("AUD")).toBe("uk")
+    expect(getStripeRegionForPaymentCurrency("GBP")).toBe("uk")
+    expect(getStripeRegionForPaymentCurrency("EUR")).toBe("uk")
   })
 
   test("currency detection endpoint reads the Vercel country header", async ({

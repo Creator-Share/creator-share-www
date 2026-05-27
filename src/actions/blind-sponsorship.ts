@@ -3,12 +3,11 @@
 import Stripe from "stripe"
 
 import {
-  coerceRegion,
-  getAvailableRegions,
   getPublishableKey,
   getStripeClient,
   type StripeRegion,
 } from "@/lib/stripe/config"
+import { getStripeRegionForPaymentCurrency } from "@/lib/stripe/currencyRouting"
 import {
   buildPaymentCurrencyMetadata,
   coerceSupportedCurrency,
@@ -54,15 +53,11 @@ export async function createBlindSponsorshipCheckout(
       userId,
       email,
       isEmbedded = false,
-      region: regionInput,
       currency: currencyInput,
     } = params
 
     const selectedCurrency = coerceSupportedCurrency(currencyInput)
-    const region =
-      selectedCurrency === "GBP" && getAvailableRegions().includes("uk")
-        ? "uk"
-        : coerceRegion(regionInput)
+    const region = getStripeRegionForPaymentCurrency(selectedCurrency)
     const stripe = getStripeClient(region)
     const conversion = convertUsdCentsToCurrency(
       BLIND_SPONSORSHIP_AMOUNT_CENTS,

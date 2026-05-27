@@ -8,12 +8,10 @@ import {
   MediaRow,
 } from "@/utils/supabase/media"
 import {
-  getAvailableRegions,
   getPublishableKey,
-  getRegionForBeneficiary,
   getStripeClient,
-  isValidStripeRegion,
 } from "@/lib/stripe/config"
+import { getStripeRegionForPaymentCurrency } from "@/lib/stripe/currencyRouting"
 import { MINIMUM_OPEN_SPONSORSHIP_CENTS } from "@/config/beneficiaryTypes"
 import {
   buildPaymentCurrencyMetadata,
@@ -78,17 +76,11 @@ export async function POST(req: Request) {
       email,
       sponsorshipMode,
       blindLabel,
-      region: regionInput,
       currency: currencyInput,
     } = await req.json()
 
     const selectedCurrency = coerceSupportedCurrency(currencyInput)
-    const availableRegions = getAvailableRegions()
-    const region = isValidStripeRegion(regionInput)
-      ? regionInput
-      : selectedCurrency === "GBP" && availableRegions.includes("uk")
-        ? "uk"
-        : getRegionForBeneficiary({ country: location })
+    const region = getStripeRegionForPaymentCurrency(selectedCurrency)
     const stripe = getStripeClient(region)
 
     const resolvedSponsorshipMode =

@@ -15,12 +15,13 @@ NEXT_PUBLIC_BASE_URL=https://localhost:3000/
 # subscriptions and partnerships are stamped with `payment_region` so
 # cancel/refund/portal/email flows route to the correct account.
 #
-# STRIPE_DEFAULT_REGION sets the region used when checkout cannot derive one
-# from the beneficiary location (or the client-supplied override). It is
-# validated at module load: a value outside the supported set ("us" | "uk")
-# throws on boot rather than crashing the first request. The legacy
-# unsuffixed vars above act as fallbacks for the default region during
-# migration to per-region keys.
+# Sponsor checkout routes Stripe accounts from selected payment currency:
+# USD goes to the US account, while AUD, GBP, and EUR go to the UK account.
+# STRIPE_DEFAULT_REGION remains the legacy fallback region for non-currency
+# paths and must stay "us" for this deployment. A value outside the supported
+# set ("us" | "uk") throws on boot rather than crashing the first request.
+# The legacy unsuffixed vars above act as fallbacks for the default region
+# during migration to per-region keys, but they do not configure both accounts.
 #
 # STRIPE_DEFAULT_REGION=us
 # STRIPE_SECRET_KEY_US=
