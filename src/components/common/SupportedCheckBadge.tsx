@@ -10,10 +10,11 @@ const SupportedCheckBadge: React.FC<SupportedCheckBadgeProps> = ({
   size = "sm",
 }) => {
   const isLarge = size === "lg"
-  const dimension = isLarge ? 56 : 36
-  const offset = isLarge ? 6 : 4
-  const outerPetals = Array.from({ length: 12 })
-  const innerPetals = Array.from({ length: 12 })
+  const dimension = isLarge ? 64 : 42
+  const offset = isLarge ? 12 : 8
+  const petalCount = 11
+  const petalStep = 360 / petalCount
+  const petals = Array.from({ length: petalCount })
 
   return (
     <Box
@@ -29,46 +30,46 @@ const SupportedCheckBadge: React.FC<SupportedCheckBadgeProps> = ({
       aria-label="Receiving support"
     >
       <svg
-        viewBox="0 0 100 100"
+        viewBox="0 0 120 120"
         width="100%"
         height="100%"
         role="img"
         aria-hidden="true"
       >
-        <g>
-          {outerPetals.map((_, index) => (
+        <g opacity="0.38">
+          {petals.map((_, index) => (
             <path
               key={`outer-${index}`}
-              d="M50 6 C60 15 61 29 50 39 C39 29 40 15 50 6Z"
-              transform={`rotate(${index * 30} 50 50)`}
-              fill={index % 2 === 0 ? "#2b7ff9" : "#1f73ea"}
+              d="M60 10 C70 18 77 35 60 54 C43 35 50 18 60 10Z"
+              transform={`rotate(${index * petalStep + petalStep / 2} 60 60)`}
+              fill="#2b7ff9"
             />
           ))}
         </g>
-        <g opacity="0.95">
-          {innerPetals.map((_, index) => (
+        <g opacity="1">
+          {petals.map((_, index) => (
             <path
               key={`inner-${index}`}
-              d="M50 17 C57 24 57 34 50 42 C43 34 43 24 50 17Z"
-              transform={`rotate(${index * 30 + 15} 50 50)`}
-              fill="#69a8ff"
+              d="M60 18 C70 27 76 43 60 62 C44 43 50 27 60 18Z"
+              transform={`rotate(${index * petalStep} 60 60)`}
+              fill="#1f73ea"
             />
           ))}
         </g>
-        <circle cx="50" cy="50" r="28" fill="#2b7ff9" />
+        <circle cx="60" cy="60" r="29" fill="#2b7ff9" />
         <circle
-          cx="50"
-          cy="50"
-          r="23"
-          fill="none"
-          stroke="rgba(255,255,255,0.42)"
-          strokeWidth="3"
-        />
-        <path
-          d="M35 50.5 45.2 60.4 66 39"
+          cx="60"
+          cy="60"
+          r="26.75"
           fill="none"
           stroke="white"
-          strokeWidth="8"
+          strokeWidth="4.5"
+        />
+        <path
+          d="M48 60.4 56.2 68.4 73 51"
+          fill="none"
+          stroke="white"
+          strokeWidth="7"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
