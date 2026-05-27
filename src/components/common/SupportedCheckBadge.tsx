@@ -10,8 +10,10 @@ const SupportedCheckBadge: React.FC<SupportedCheckBadgeProps> = ({
   size = "sm",
 }) => {
   const isLarge = size === "lg"
-  const dimension = isLarge ? 58 : 38
-  const offset = isLarge ? 3 : 1
+  const dimension = isLarge ? 56 : 36
+  const offset = isLarge ? 6 : 4
+  const outerPetals = Array.from({ length: 12 })
+  const innerPetals = Array.from({ length: 12 })
 
   return (
     <Box
@@ -27,59 +29,46 @@ const SupportedCheckBadge: React.FC<SupportedCheckBadgeProps> = ({
       aria-label="Receiving support"
     >
       <svg
-        viewBox="0 0 72 72"
+        viewBox="0 0 100 100"
         width="100%"
         height="100%"
         role="img"
         aria-hidden="true"
       >
-        <g transform="translate(36 36)">
-          {Array.from({ length: 12 }).map((_, index) => (
-            <ellipse
+        <g>
+          {outerPetals.map((_, index) => (
+            <path
               key={`outer-${index}`}
-              cx="0"
-              cy="-20"
-              rx="7.2"
-              ry="13.8"
-              transform={`rotate(${index * 30})`}
+              d="M50 6 C60 15 61 29 50 39 C39 29 40 15 50 6Z"
+              transform={`rotate(${index * 30} 50 50)`}
               fill={index % 2 === 0 ? "#2b7ff9" : "#1f73ea"}
             />
           ))}
-          {Array.from({ length: 8 }).map((_, index) => (
-            <ellipse
+        </g>
+        <g opacity="0.95">
+          {innerPetals.map((_, index) => (
+            <path
               key={`inner-${index}`}
-              cx="0"
-              cy="-14"
-              rx="5.6"
-              ry="10.8"
-              transform={`rotate(${index * 45 + 22.5})`}
-              fill="#5da0ff"
-              opacity="0.92"
+              d="M50 17 C57 24 57 34 50 42 C43 34 43 24 50 17Z"
+              transform={`rotate(${index * 30 + 15} 50 50)`}
+              fill="#69a8ff"
             />
           ))}
         </g>
+        <circle cx="50" cy="50" r="28" fill="#2b7ff9" />
         <circle
-          cx="36"
-          cy="36"
-          r="21.8"
+          cx="50"
+          cy="50"
+          r="23"
           fill="none"
-          stroke="white"
-          strokeWidth="3.4"
-        />
-        <circle cx="36" cy="36" r="18.2" fill="#2b7ff9" />
-        <circle
-          cx="36"
-          cy="36"
-          r="13.5"
-          fill="none"
-          stroke="rgba(255,255,255,0.36)"
-          strokeWidth="1.6"
+          stroke="rgba(255,255,255,0.42)"
+          strokeWidth="3"
         />
         <path
-          d="M26.5 36.4 33 42.8 46.8 29.1"
+          d="M35 50.5 45.2 60.4 66 39"
           fill="none"
           stroke="white"
-          strokeWidth="5"
+          strokeWidth="8"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
