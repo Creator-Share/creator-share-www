@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test"
 import {
   convertCurrencyMinorToUsdCents,
   convertUsdCentsToCurrency,
-  formatMoneyFromMinorUnits,
+  formatMoney,
   getDefaultCurrencyForCountry,
 } from "../src/utils/currency"
 import { getStripeRegionForPaymentCurrency } from "../src/lib/stripe/currencyRouting"
@@ -19,54 +19,45 @@ test.describe("payment currency support", () => {
     expect(getDefaultCurrencyForCountry("TZ")).toBe("USD")
   })
 
-  test("converts canonical USD cents with static rates and explicit minor units", () => {
+  test("converts canonical USD cents with configured rates", () => {
+    const now = Date.now()
     expect(convertUsdCentsToCurrency(1000, "USD")).toMatchObject({
       baseAmountUsdCents: 1000,
       chargedAmountMinor: 1000,
       chargedCurrency: "USD",
-      chargedCurrencyMinorUnit: 2,
     })
     expect(convertUsdCentsToCurrency(1000, "AUD")).toMatchObject({
       baseAmountUsdCents: 1000,
-      chargedAmountMinor: 1500,
+      chargedAmountMinor: 1400,
       chargedCurrency: "AUD",
-      chargedCurrencyMinorUnit: 2,
     })
     expect(convertUsdCentsToCurrency(1000, "GBP")).toMatchObject({
-      chargedAmountMinor: 800,
+      chargedAmountMinor: 740,
       chargedCurrency: "GBP",
     })
     expect(convertUsdCentsToCurrency(1000, "EUR")).toMatchObject({
-      chargedAmountMinor: 900,
+      chargedAmountMinor: 860,
       chargedCurrency: "EUR",
     })
   })
 
-  test("converts selected currency input back to canonical USD cents", () => {
-    expect(convertCurrencyMinorToUsdCents(1500, "AUD")).toBe(1000)
-    expect(convertCurrencyMinorToUsdCents(800, "GBP")).toBe(1000)
-    expect(convertCurrencyMinorToUsdCents(900, "EUR")).toBe(1000)
+  test("converts foreign currency minor units back to canonical USD cents", () => {
+    expect(convertCurrencyMinorToUsdCents(1400, "AUD")).toBe(1000)
+    expect(convertCurrencyMinorToUsdCents(740, "GBP")).toBe(1000)
+    expect(convertCurrencyMinorToUsdCents(860, "EUR")).toBe(1000)
   })
 
-  test("honors environment rate overrides", () => {
-    const previous = process.env.USD_TO_AUD_RATE
-    process.env.USD_TO_AUD_RATE = "2"
-    try {
-      expect(convertUsdCentsToCurrency(1000, "AUD")).toMatchObject({
-        chargedAmountMinor: 2000,
-        conversionRate: 2,
-        conversionRateSource: "env",
-      })
-    } finally {
-      if (previous === undefined) delete process.env.USD_TO_AUD_RATE
-      else process.env.USD_TO_AUD_RATE = previous
-    }
+  test("uses configured rates from config/rates.ts", () => {
+    expect(convertUsdCentsToCurrency(1000, "AUD")).toMatchObject({
+      chargedAmountMinor: 1400,
+      conversionRate: 1.40,
+    })
   })
 
   test("formats charged provider amounts with their actual currency", () => {
-    expect(formatMoneyFromMinorUnits(1500, "AUD")).toMatch(/A?\$15\.00|15\.00/)
-    expect(formatMoneyFromMinorUnits(800, "GBP")).toContain("8.00")
-    expect(formatMoneyFromMinorUnits(900, "EUR")).toContain("9.00")
+    expect(formatMoney(1500, "AUD")).toMatch(/A?\$15\.00|15\.00/)
+    expect(formatMoney(800, "GBP")).toContain("8.00")
+    expect(formatMoney(900, "EUR")).toContain("9.00")
   })
 
   test("routes only USD to the US Stripe account", () => {

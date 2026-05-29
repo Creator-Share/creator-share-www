@@ -298,7 +298,7 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
                             />
                           </Box>
                           <Text fontSize="xs" color="gray.500" mt={1}>
-                            ${remaining.toFixed(2)} remaining
+                            ${(remaining / 100).toFixed(2)} remaining
                           </Text>
                         </Box>
                       )}

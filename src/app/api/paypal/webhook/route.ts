@@ -6,7 +6,7 @@ import { sendSponsorshipCancellationNotificationEmail } from "@/utils/email"
 import {
   convertCurrencyMinorToUsdCents,
   convertUsdCentsToCurrency,
-  formatMoneyFromMinorUnits,
+  formatMoney,
   verifyCurrencyConversion,
 } from "@/utils/currency"
 import { parsePayPalPaymentContext } from "@/utils/paypalCurrencyContext"
@@ -37,9 +37,9 @@ async function getPayPalPlanDetails(planId: string) {
   return response.json()
 }
 
-function parsePayPalAmountMinor(value: string | undefined, minorUnit: number) {
+function parsePayPalAmountMinor(value: string | undefined) {
   const amount = Number(value)
-  return Number.isFinite(amount) ? Math.round(amount * 10 ** minorUnit) : null
+  return Number.isFinite(amount) ? Math.round(amount * 100) : null
 }
 
 export async function POST(req: Request) {
@@ -135,14 +135,13 @@ export async function POST(req: Request) {
           paymentContext.conversion ||
           convertUsdCentsToCurrency(
             convertCurrencyMinorToUsdCents(
-              parsePayPalAmountMinor(captureAmount?.value, 2) || 0,
+              parsePayPalAmountMinor(captureAmount?.value) || 0,
               captureAmount?.currency_code || "USD",
             ),
             captureAmount?.currency_code || "USD",
           )
         const actualAmountMinor = parsePayPalAmountMinor(
           captureAmount?.value,
-          conversion.chargedCurrencyMinorUnit,
         )
 
         if (
@@ -197,15 +196,12 @@ export async function POST(req: Request) {
               credit: conversion.baseAmountUsdCents,
               charged_amount: conversion.chargedAmountMinor,
               charged_currency: conversion.chargedCurrency,
-              charged_currency_minor_unit: conversion.chargedCurrencyMinorUnit,
               conversion_rate: conversion.conversionRate,
-              conversion_rate_source: conversion.conversionRateSource,
-              currency_config_version: conversion.currencyConfigVersion,
               provider_event_id: event.id || transmissionId,
               customer_email: payerEmail,
               customer_name: payerName,
               reference: orderId,
-              description: `PayPal one-time sponsorship payment for beneficiary ${beneficiaryName} with amount of ${formatMoneyFromMinorUnits(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
+              description: `PayPal one-time sponsorship payment for beneficiary ${beneficiaryName} with amount of ${formatMoney(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
               tx_action: "SPONSORSHIP",
               subscription_type: "one_time",
               beneficiary_id: /^[0-9a-fA-F-]{36}$/.test(beneficiaryId || "")
@@ -231,7 +227,6 @@ export async function POST(req: Request) {
               sponsorEmail: payerEmail || "No email provided",
               amount: conversion.chargedAmountMinor,
               chargedCurrency: conversion.chargedCurrency,
-              chargedCurrencyMinorUnit: conversion.chargedCurrencyMinorUnit,
               beneficiaryId,
               beneficiaryName,
               paymentMethod: "PayPal",
@@ -268,14 +263,13 @@ export async function POST(req: Request) {
           paymentContext.conversion ||
           convertUsdCentsToCurrency(
             convertCurrencyMinorToUsdCents(
-              parsePayPalAmountMinor(lastPaymentAmount?.value, 2) || 0,
+              parsePayPalAmountMinor(lastPaymentAmount?.value) || 0,
               lastPaymentAmount?.currency_code || "USD",
             ),
             lastPaymentAmount?.currency_code || "USD",
           )
         const actualAmountMinor = parsePayPalAmountMinor(
           lastPaymentAmount?.value,
-          conversion.chargedCurrencyMinorUnit,
         )
         if (
           lastPaymentAmount?.currency_code?.toUpperCase() !==
@@ -326,15 +320,12 @@ export async function POST(req: Request) {
             credit: conversion.baseAmountUsdCents,
             charged_amount: conversion.chargedAmountMinor,
             charged_currency: conversion.chargedCurrency,
-            charged_currency_minor_unit: conversion.chargedCurrencyMinorUnit,
             conversion_rate: conversion.conversionRate,
-            conversion_rate_source: conversion.conversionRateSource,
-            currency_config_version: conversion.currencyConfigVersion,
             provider_event_id: providerEventId,
             customer_email: payerEmail,
             customer_name: payerName,
             reference: recurringReference,
-            description: `PayPal recurring sponsorship payment${beneficiaryName ? ` for beneficiary ${beneficiaryName}` : ""} with amount of ${formatMoneyFromMinorUnits(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
+            description: `PayPal recurring sponsorship payment${beneficiaryName ? ` for beneficiary ${beneficiaryName}` : ""} with amount of ${formatMoney(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
             tx_action: "SPONSORSHIP",
             subscription_type: "subscription",
             beneficiary_id: /^[0-9a-fA-F-]{36}$/.test(beneficiaryId || "")
@@ -366,10 +357,7 @@ export async function POST(req: Request) {
             amount: conversion.baseAmountUsdCents,
             charged_amount: conversion.chargedAmountMinor,
             charged_currency: conversion.chargedCurrency,
-            charged_currency_minor_unit: conversion.chargedCurrencyMinorUnit,
             conversion_rate: conversion.conversionRate,
-            conversion_rate_source: conversion.conversionRateSource,
-            currency_config_version: conversion.currencyConfigVersion,
             customer_id: customerId,
           })
           .eq("stripe_subscription_id", sub.id)
@@ -388,7 +376,6 @@ export async function POST(req: Request) {
               sponsorEmail: payerEmail || "No email provided",
               amount: conversion.chargedAmountMinor,
               chargedCurrency: conversion.chargedCurrency,
-              chargedCurrencyMinorUnit: conversion.chargedCurrencyMinorUnit,
               beneficiaryId: beneficiaryId,
               beneficiaryName: beneficiaryName,
               paymentMethod: "PayPal",
@@ -466,7 +453,6 @@ export async function POST(req: Request) {
                 regularCycle.pricing_scheme.fixed_price.currency_code || "USD"
               const planMinorAmount = parsePayPalAmountMinor(
                 regularCycle.pricing_scheme.fixed_price.value,
-                conversion?.chargedCurrencyMinorUnit || 2,
               )
               if (conversion) {
                 if (
@@ -531,12 +517,7 @@ export async function POST(req: Request) {
             amount: conversion?.baseAmountUsdCents ?? 0,
             charged_amount: conversion?.chargedAmountMinor ?? 0,
             charged_currency: conversion?.chargedCurrency ?? "USD",
-            charged_currency_minor_unit:
-              conversion?.chargedCurrencyMinorUnit ?? 2,
             conversion_rate: conversion?.conversionRate ?? 1,
-            conversion_rate_source: conversion?.conversionRateSource ?? "default",
-            currency_config_version:
-              conversion?.currencyConfigVersion ?? "2026-05-26-static-v1",
             provider_event_id: event.id || transmissionId,
             interval: interval ?? undefined,
             current_period_start: startTime,
@@ -566,7 +547,6 @@ export async function POST(req: Request) {
               sponsorEmail: payerEmail || "No email provided",
               amount: conversion?.chargedAmountMinor || 0,
               chargedCurrency: conversion?.chargedCurrency,
-              chargedCurrencyMinorUnit: conversion?.chargedCurrencyMinorUnit,
               beneficiaryId: beneficiaryId,
               beneficiaryName: beneficiaryName,
               paymentMethod: "PayPal",

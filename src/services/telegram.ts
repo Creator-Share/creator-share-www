@@ -9,7 +9,7 @@ import {
   SponsorshipNotificationData,
 } from "@/types/telegram.types"
 import { Beneficiaries } from "@/types"
-import { formatMoneyFromMinorUnits } from "@/utils/currency"
+import { formatMoney } from "@/utils/currency"
 import {
   filterExistingMediaRows,
   getExternalTelegramImageUrl,
@@ -272,7 +272,6 @@ export class TelegramBotService implements TelegramNotificationService {
       beneficiaryName,
       amount,
       chargedCurrency,
-      chargedCurrencyMinorUnit,
       interval,
       sponsorName,
       sponsorEmail,
@@ -280,8 +279,8 @@ export class TelegramBotService implements TelegramNotificationService {
     } = sponsorshipData;
 
     const amountFormatted = chargedCurrency
-      ? formatMoneyFromMinorUnits(amount, chargedCurrency)
-      : `$${(amount / 10 ** (chargedCurrencyMinorUnit || 2)).toFixed(chargedCurrencyMinorUnit || 2)}`;
+      ? formatMoney(amount, chargedCurrency)
+      : `$${(amount / 100).toFixed(2)}`;
     const intervalText = interval === 'month' ? 'Monthly' : interval === 'one_time' ? 'One-time' : 'Yearly';
     const sponsorDisplayName = sponsorName || sponsorEmail?.split('@')[0] || 'Anonymous';
 

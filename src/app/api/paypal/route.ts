@@ -4,7 +4,9 @@ import { createServiceRoleClient } from "@/utils/supabase/server"
 import {
   coerceSupportedCurrency,
   convertUsdCentsToCurrency,
-  formatMoneyFromMinorUnits,
+  dollarsToCents,
+  centsToDollars,
+  formatMoney,
   verifyCurrencyConversion,
 } from "@/utils/currency"
 import {
@@ -56,13 +58,13 @@ interface PayPalCaptureData {
   }>
 }
 
-function toMajorAmountString(amountMinor: number, minorUnit: number) {
-  return (amountMinor / 10 ** minorUnit).toFixed(minorUnit)
+function parsePayPalAmountMinor(value: string | undefined) {
+  const val = Number(value)
+  return Number.isFinite(val) ? Number(dollarsToCents(val)) : null
 }
 
-function parsePayPalAmountMinor(value: string | undefined, minorUnit: number) {
-  const amount = Number(value)
-  return Number.isFinite(amount) ? Math.round(amount * 10 ** minorUnit) : null
+function toMajorAmountString(amountMinor: number) {
+  return (amountMinor / 100).toFixed(2)
 }
 
 async function persistPayPalOneTimeTransaction({
@@ -112,15 +114,12 @@ async function persistPayPalOneTimeTransaction({
       ? beneficiaryId
       : null,
     user_id: userId || null,
-    description: `PayPal one-time sponsorship to ${beneficiaryName || beneficiaryId || "Unknown Beneficiary"} with amount of ${formatMoneyFromMinorUnits(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
+    description: `PayPal one-time sponsorship to ${beneficiaryName || beneficiaryId || "Unknown Beneficiary"} with amount of ${formatMoney(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
     reference: orderId,
     credit: conversion.baseAmountUsdCents,
     charged_amount: conversion.chargedAmountMinor,
     charged_currency: conversion.chargedCurrency,
-    charged_currency_minor_unit: conversion.chargedCurrencyMinorUnit,
     conversion_rate: conversion.conversionRate,
-    conversion_rate_source: conversion.conversionRateSource,
-    currency_config_version: conversion.currencyConfigVersion,
     provider_event_id: providerEventId,
     subscription_type: "one_time",
     tx_action: "SPONSORSHIP",
@@ -161,7 +160,6 @@ async function createPayPalOrder(
             currency_code: conversion.chargedCurrency,
             value: toMajorAmountString(
               conversion.chargedAmountMinor,
-              conversion.chargedCurrencyMinorUnit,
             ),
           },
         },
@@ -366,7 +364,6 @@ export async function POST(request: Request) {
         )
         const orderAmountMinor = parsePayPalAmountMinor(
           purchaseUnit?.amount?.value,
-          orderConversion.chargedCurrencyMinorUnit,
         )
         if (
           orderCurrency !== orderConversion.chargedCurrency ||
@@ -428,7 +425,6 @@ export async function POST(request: Request) {
         const captureCurrency = coerceSupportedCurrency(capture?.amount?.currency_code)
         const captureAmountMinor = parsePayPalAmountMinor(
           capture?.amount?.value,
-          orderConversion.chargedCurrencyMinorUnit,
         )
         if (
           captureCurrency !== orderConversion.chargedCurrency ||
@@ -469,7 +465,7 @@ export async function POST(request: Request) {
             amount: orderConversion.baseAmountUsdCents,
             chargedAmount: orderConversion.chargedAmountMinor,
             chargedCurrency: orderConversion.chargedCurrency,
-            chargedDisplay: formatMoneyFromMinorUnits(
+            chargedDisplay: formatMoney(
               orderConversion.chargedAmountMinor,
               orderConversion.chargedCurrency,
             ),

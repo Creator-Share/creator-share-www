@@ -14,7 +14,7 @@ import {
   MediaRow,
 } from "@/utils/supabase/media"
 import { createServiceRoleClient } from "@/utils/supabase/server"
-import { formatMoneyFromMinorUnits } from "@/utils/currency"
+import { formatMoney } from "@/utils/currency"
 
 export type SponsorshipProvider = "STRIPE" | "PAYPAL"
 
@@ -33,12 +33,12 @@ function formatEmailAmount(
     options.chargedCurrency &&
     typeof options.chargedAmountMinor === "number"
   ) {
-    return formatMoneyFromMinorUnits(
+    return formatMoney(
       options.chargedAmountMinor,
       options.chargedCurrency,
     )
   }
-  return formatMoneyFromMinorUnits(canonicalUsdCents, "USD")
+  return formatMoney(canonicalUsdCents, "USD")
 }
 
 function resolveStripePortalUrl(region: StripeRegion): string {

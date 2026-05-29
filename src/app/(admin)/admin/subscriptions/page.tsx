@@ -11,7 +11,7 @@ import { toaster } from "@/components/ui/toaster"
 import { LogoLoader } from "@/components/common/LogoLoader"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { RawSubscription } from "@/types/admin.types"
-import { formatMoneyFromMinorUnits } from "@/utils/currency"
+import { formatMoney } from "@/utils/currency"
 
 const AdminSubscriptionsPage = () => {
   const [subscriptions, setSubscriptions] = useState<AdminSubscription[]>([])
@@ -19,10 +19,10 @@ const AdminSubscriptionsPage = () => {
   const [supabase] = useState(() => createClient())
 
   const transformSubscription = (sub: RawSubscription): AdminSubscription => {
-    const canonicalAmount = formatMoneyFromMinorUnits(sub.amount, "USD")
+    const canonicalAmount = formatMoney(sub.amount, "USD")
     const chargedAmount =
       sub.charged_amount && sub.charged_currency
-        ? formatMoneyFromMinorUnits(sub.charged_amount, sub.charged_currency)
+        ? formatMoney(sub.charged_amount, sub.charged_currency)
         : null
     return {
       ...sub,

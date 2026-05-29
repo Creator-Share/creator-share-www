@@ -253,10 +253,7 @@ export interface RawSubscription {
   amount: number
   charged_amount?: number | null
   charged_currency?: Database["public"]["Enums"]["payment_currency"]
-  charged_currency_minor_unit?: number
   conversion_rate?: number
-  conversion_rate_source?: string
-  currency_config_version?: string
   interval: string
   current_period_start: string
   current_period_end: string

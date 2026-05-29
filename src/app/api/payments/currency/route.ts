@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import {
-  CURRENCY_CONFIG_VERSION,
   DEFAULT_SUPPORTED_CURRENCY,
   SUPPORTED_CURRENCIES,
   getDefaultCurrencyForCountry,
@@ -24,6 +23,5 @@ export async function GET(req: Request) {
     rates: Object.fromEntries(
       SUPPORTED_CURRENCIES.map((item) => [item, getUsdConversionRate(item)]),
     ),
-    configVersion: CURRENCY_CONFIG_VERSION,
   })
 }

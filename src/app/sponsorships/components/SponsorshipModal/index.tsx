@@ -173,8 +173,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     (usdCents: number) => {
       const conversion = getConvertedAmount(usdCents)
       return (
-        conversion.chargedAmountMinor /
-        10 ** conversion.chargedCurrencyMinorUnit
+        conversion.chargedAmountMinor / 100
       )
     },
     [getConvertedAmount],
@@ -541,7 +540,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       isOpen ? paypalAmountCents : fixedAmountCents,
     )
     const paymentAmount =
-      conversion.chargedAmountMinor / 10 ** conversion.chargedCurrencyMinorUnit
+      conversion.chargedAmountMinor / 100
     const frequencyLabel =
       selectedOption === "subscription"
         ? "Monthly"

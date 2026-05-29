@@ -8,9 +8,9 @@ import {
 } from "@/utils/currency"
 import { parsePayPalPaymentContext } from "@/utils/paypalCurrencyContext"
 
-function parsePayPalAmountMinor(value: string | undefined, minorUnit: number) {
+function parsePayPalAmountMinor(value: string | undefined) {
   const amount = Number(value)
-  return Number.isFinite(amount) ? Math.round(amount * 10 ** minorUnit) : null
+  return Number.isFinite(amount) ? Math.round(amount * 100) : null
 }
 
 export async function GET(req: Request) {
@@ -97,14 +97,13 @@ export async function GET(req: Request) {
             paymentContext.conversion ||
             convertUsdCentsToCurrency(
               convertCurrencyMinorToUsdCents(
-                parsePayPalAmountMinor(lastPaymentAmount?.value, 2) || 0,
+                parsePayPalAmountMinor(lastPaymentAmount?.value) || 0,
                 lastPaymentAmount?.currency_code || "USD",
               ),
               lastPaymentAmount?.currency_code || "USD",
             )
           const actualAmountMinor = parsePayPalAmountMinor(
             lastPaymentAmount?.value,
-            conversion.chargedCurrencyMinorUnit,
           )
           if (
             lastPaymentAmount?.currency_code?.toUpperCase() !==
@@ -162,11 +161,7 @@ export async function GET(req: Request) {
               amount: conversion.baseAmountUsdCents,
               charged_amount: conversion.chargedAmountMinor,
               charged_currency: conversion.chargedCurrency,
-              charged_currency_minor_unit:
-                conversion.chargedCurrencyMinorUnit,
               conversion_rate: conversion.conversionRate,
-              conversion_rate_source: conversion.conversionRateSource,
-              currency_config_version: conversion.currencyConfigVersion,
               interval: "month",
               status: "complete",
               current_period_start:

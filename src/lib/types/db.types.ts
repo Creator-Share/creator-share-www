@@ -339,11 +339,8 @@ export type Database = {
           card_type: string | null
           charged_amount: number | null
           charged_currency: Database["public"]["Enums"]["payment_currency"]
-          charged_currency_minor_unit: number
           conversion_rate: number
-          conversion_rate_source: string
           created_at: string
-          currency_config_version: string
           current_period_end: string | null
           current_period_start: string | null
           customer_id: string | null
@@ -364,11 +361,8 @@ export type Database = {
           card_type?: string | null
           charged_amount?: number | null
           charged_currency?: Database["public"]["Enums"]["payment_currency"]
-          charged_currency_minor_unit?: number
           conversion_rate?: number
-          conversion_rate_source?: string
           created_at?: string
-          currency_config_version?: string
           current_period_end?: string | null
           current_period_start?: string | null
           customer_id?: string | null
@@ -389,11 +383,8 @@ export type Database = {
           card_type?: string | null
           charged_amount?: number | null
           charged_currency?: Database["public"]["Enums"]["payment_currency"]
-          charged_currency_minor_unit?: number
           conversion_rate?: number
-          conversion_rate_source?: string
           created_at?: string
-          currency_config_version?: string
           current_period_end?: string | null
           current_period_start?: string | null
           customer_id?: string | null
@@ -604,11 +595,8 @@ export type Database = {
           canceled_at: string | null
           charged_amount: number | null
           charged_currency: Database["public"]["Enums"]["payment_currency"]
-          charged_currency_minor_unit: number
           conversion_rate: number
-          conversion_rate_source: string
           created_at: string
-          currency_config_version: string
           current_period_end: string | null
           current_period_start: string | null
           customer_id: string | null
@@ -630,11 +618,8 @@ export type Database = {
           canceled_at?: string | null
           charged_amount?: number | null
           charged_currency?: Database["public"]["Enums"]["payment_currency"]
-          charged_currency_minor_unit?: number
           conversion_rate?: number
-          conversion_rate_source?: string
           created_at?: string
-          currency_config_version?: string
           current_period_end?: string | null
           current_period_start?: string | null
           customer_id?: string | null
@@ -656,11 +641,8 @@ export type Database = {
           canceled_at?: string | null
           charged_amount?: number | null
           charged_currency?: Database["public"]["Enums"]["payment_currency"]
-          charged_currency_minor_unit?: number
           conversion_rate?: number
-          conversion_rate_source?: string
           created_at?: string
-          currency_config_version?: string
           current_period_end?: string | null
           current_period_start?: string | null
           customer_id?: string | null
@@ -698,12 +680,9 @@ export type Database = {
           beneficiary_id: string | null
           charged_amount: number | null
           charged_currency: Database["public"]["Enums"]["payment_currency"]
-          charged_currency_minor_unit: number
           conversion_rate: number
-          conversion_rate_source: string
           created_at: string
           credit: number | null
-          currency_config_version: string
           customer_email: string | null
           customer_id: string | null
           customer_name: string | null
@@ -721,12 +700,9 @@ export type Database = {
           beneficiary_id?: string | null
           charged_amount?: number | null
           charged_currency?: Database["public"]["Enums"]["payment_currency"]
-          charged_currency_minor_unit?: number
           conversion_rate?: number
-          conversion_rate_source?: string
           created_at?: string
           credit?: number | null
-          currency_config_version?: string
           customer_email?: string | null
           customer_id?: string | null
           customer_name?: string | null
@@ -744,12 +720,9 @@ export type Database = {
           beneficiary_id?: string | null
           charged_amount?: number | null
           charged_currency?: Database["public"]["Enums"]["payment_currency"]
-          charged_currency_minor_unit?: number
           conversion_rate?: number
-          conversion_rate_source?: string
           created_at?: string
           credit?: number | null
-          currency_config_version?: string
           customer_email?: string | null
           customer_id?: string | null
           customer_name?: string | null

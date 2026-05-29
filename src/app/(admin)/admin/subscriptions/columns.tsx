@@ -11,10 +11,7 @@ export type AdminSubscription = {
   amount: number
   charged_amount?: number | null
   charged_currency?: string | null
-  charged_currency_minor_unit?: number | null
   conversion_rate?: number | null
-  conversion_rate_source?: string | null
-  currency_config_version?: string | null
   interval: string
   current_period_start: string
   current_period_end: string

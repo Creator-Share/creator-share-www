@@ -23,7 +23,6 @@ export interface SponsorshipNotificationData {
   sponsorEmail: string;
   amount: number;
   chargedCurrency?: string;
-  chargedCurrencyMinorUnit?: number;
   beneficiaryId?: string | null;
   beneficiaryName: string;
   paymentMethod: string;

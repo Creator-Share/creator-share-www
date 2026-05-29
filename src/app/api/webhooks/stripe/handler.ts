@@ -10,7 +10,7 @@ import {
   type CurrencyConversion,
   coerceSupportedCurrency,
   convertUsdCentsToCurrency,
-  formatMoneyFromMinorUnits,
+  formatMoney,
   parsePaymentCurrencyMetadata,
   verifyCurrencyConversion,
 } from "@/utils/currency"
@@ -179,10 +179,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
         const currencyPersistence = {
           charged_amount: conversion.chargedAmountMinor,
           charged_currency: conversion.chargedCurrency,
-          charged_currency_minor_unit: conversion.chargedCurrencyMinorUnit,
           conversion_rate: conversion.conversionRate,
-          conversion_rate_source: conversion.conversionRateSource,
-          currency_config_version: conversion.currencyConfigVersion,
           provider_event_id: event.id,
         }
 
@@ -364,7 +361,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
             : await supabase
             .from("transaction_ledger")
             .insert({
-              description: `Partnership payment for ${project} project with amount of ${formatMoneyFromMinorUnits(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
+              description: `Partnership payment for ${project} project with amount of ${formatMoney(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
               reference: partnershipReference,
               credit: amount,
               ...currencyPersistence,
@@ -653,7 +650,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
           .insert({
             beneficiary_id: beneficiaryId || null,
             user_id: userId,
-            description: `Sponsorship to ${beneficiaryName} with amount of ${formatMoneyFromMinorUnits(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
+            description: `Sponsorship to ${beneficiaryName} with amount of ${formatMoney(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
             reference: sponsorshipReference,
             credit: amount,
             ...currencyPersistence,
@@ -682,7 +679,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
           .from("activities")
           .insert({
             title: "SPONSORSHIP",
-            description: `Someone sponsored with ${formatMoneyFromMinorUnits(
+            description: `Someone sponsored with ${formatMoney(
               conversion.chargedAmountMinor,
               conversion.chargedCurrency,
             )}/${interval}`,
@@ -776,7 +773,6 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
             sponsorEmail: customerEmail || "No email provided",
             amount: conversion.chargedAmountMinor,
             chargedCurrency: conversion.chargedCurrency,
-            chargedCurrencyMinorUnit: conversion.chargedCurrencyMinorUnit,
             beneficiaryId: beneficiaryId,
             beneficiaryName: beneficiaryName,
             paymentMethod: providerLabel(sessionProvider),
@@ -872,7 +868,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
 
         const { data: subscriptionData, error: subscriptionError } = await supabase
           .from("subscriptions")
-          .select(`beneficiary_id, charged_amount, charged_currency, charged_currency_minor_unit, amount`)
+          .select(`beneficiary_id, charged_amount, charged_currency, amount`)
           .eq("stripe_subscription_id", subscriptionId)
           .maybeSingle()
 
@@ -1185,7 +1181,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
           // Check if this is an application subscription by querying our database
           const { data: subscriptionData } = await supabase
             .from("subscriptions")
-            .select("id, amount, charged_amount, charged_currency, charged_currency_minor_unit")
+            .select("id, amount, charged_amount, charged_currency")
             .eq("stripe_subscription_id", subscriptionId)
             .maybeSingle()
 
@@ -1208,11 +1204,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                 chargedCurrency: coerceSupportedCurrency(
                   subscriptionData.charged_currency,
                 ),
-                chargedCurrencyMinorUnit:
-                  subscriptionData.charged_currency_minor_unit || 2,
                 conversionRate: 1,
-                conversionRateSource: "default",
-                currencyConfigVersion: "stored-subscription",
               },
               invoice.currency,
               invoice.amount_paid,
@@ -1232,11 +1224,7 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
                 chargedCurrency: coerceSupportedCurrency(
                   subscriptionData.charged_currency,
                 ),
-                chargedCurrencyMinorUnit:
-                  subscriptionData.charged_currency_minor_unit || 2,
                 conversionRate: 1,
-                conversionRateSource: "default",
-                currencyConfigVersion: "stored-subscription",
               },
               invoice.currency,
               invoice.amount_paid,

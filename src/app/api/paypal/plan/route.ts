@@ -5,8 +5,8 @@ import {
   convertUsdCentsToCurrency,
 } from "@/utils/currency"
 
-function toMajorAmountString(amountMinor: number, minorUnit: number) {
-  return (amountMinor / 10 ** minorUnit).toFixed(minorUnit)
+function toMajorAmountString(amountMinor: number) {
+  return (amountMinor / 100).toFixed(2)
 }
 
 async function createPayPalProduct(name: string, description: string) {
@@ -76,7 +76,6 @@ export async function POST(request: Request) {
               fixed_price: {
                 value: toMajorAmountString(
                   conversion.chargedAmountMinor,
-                  conversion.chargedCurrencyMinorUnit,
                 ),
                 currency_code: conversion.chargedCurrency,
               },

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { coerceRegion, getStripeClient } from "@/lib/stripe/config"
 import {
-  formatMoneyFromMinorUnits,
+  formatMoney,
   parsePaymentCurrencyMetadata,
 } from "@/utils/currency"
 
@@ -34,7 +34,7 @@ export async function GET(req: Request) {
       charged_currency: chargedCurrency,
       charged_display:
         chargedAmountMinor !== null && chargedCurrency
-          ? formatMoneyFromMinorUnits(chargedAmountMinor, chargedCurrency)
+          ? formatMoney(chargedAmountMinor, chargedCurrency)
           : null,
       customer_email: session.customer_details?.email,
       payment_status: session.payment_status,
