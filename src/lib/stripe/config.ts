@@ -13,10 +13,13 @@ export interface StripeRegionConfig {
   publishableKey: string
   webhookSecret: string
   portalUrl: string
-  currency: string
   label: string
 }
 
+// Legacy unsuffixed vars are rollout fallbacks only. They configure the
+// STRIPE_DEFAULT_REGION account when region-specific values are absent.
+// Checkout account routing is selected-currency aware and lives in
+// getStripeRegionForPaymentCurrency().
 const LEGACY_SECRET_KEY = process.env.STRIPE_SECRET_KEY
 const LEGACY_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 const LEGACY_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
@@ -45,8 +48,9 @@ export const STRIPE_DEFAULT_REGION: StripeRegion = isValidStripeRegion(
   ? RAW_DEFAULT_REGION_ENV
   : "us"
 
-// Region-specific env vars take precedence; legacy unsuffixed vars act as
-// fallbacks for the primary region during migration.
+// Region-specific env vars take precedence. Legacy unsuffixed vars are only
+// used for the default region during migration and never configure both
+// Stripe accounts.
 const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
   us: {
     secretKey:
@@ -61,7 +65,6 @@ const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
     portalUrl:
       process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_US ||
       (STRIPE_DEFAULT_REGION === "us" ? LEGACY_PORTAL_URL || "" : ""),
-    currency: "usd",
     label: "Creator Share US",
   },
   uk: {
@@ -77,12 +80,6 @@ const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
     portalUrl:
       process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_UK ||
       (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_PORTAL_URL || "" : ""),
-    // TODO(uk-pricing): switch to "gbp" once the UI supports per-region
-    // currency display + a price table denominated in pence. Until then,
-    // bill UK Stripe in USD so the dollar amounts the UI shows match what
-    // the customer is charged. Otherwise a sponsor picking "$15/month"
-    // gets charged £15 (~$19), a ~25% silent overcharge.
-    currency: "usd",
     label: "Creator Share UK",
   },
 }
