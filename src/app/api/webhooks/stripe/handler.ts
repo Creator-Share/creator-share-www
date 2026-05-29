@@ -91,7 +91,7 @@ function validateStripeCurrencyAmount(
   )
 }
 
-export async function handleStripeWebhook(req: Request, _hint: StripeRegion) {
+export async function handleStripeWebhook(req: Request) {
   const supabase = createServiceRoleClient()
   const sig = req.headers.get("stripe-signature") as string
   const rawBody = await req.text()
