@@ -13,14 +13,8 @@ export interface StripeRegionConfig {
   publishableKey: string
   webhookSecret: string
   portalUrl: string
-  currency: string
   label: string
 }
-
-const LEGACY_SECRET_KEY = process.env.STRIPE_SECRET_KEY
-const LEGACY_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-const LEGACY_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
-const LEGACY_PORTAL_URL = process.env.STRIPE_PORTAL_URL
 
 // Validate STRIPE_DEFAULT_REGION at module load: a typo like
 // STRIPE_DEFAULT_REGION=eu otherwise short-circuits coerceRegion() into
@@ -45,44 +39,22 @@ export const STRIPE_DEFAULT_REGION: StripeRegion = isValidStripeRegion(
   ? RAW_DEFAULT_REGION_ENV
   : "us"
 
-// Region-specific env vars take precedence; legacy unsuffixed vars act as
-// fallbacks for the primary region during migration.
+// Stripe accounts are configured explicitly per region. STRIPE_DEFAULT_REGION
+// only selects which configured account is used when a caller does not provide
+// a valid region.
 const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
   us: {
-    secretKey:
-      process.env.STRIPE_SECRET_KEY_US ||
-      (STRIPE_DEFAULT_REGION === "us" ? LEGACY_SECRET_KEY || "" : ""),
-    publishableKey:
-      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US ||
-      (STRIPE_DEFAULT_REGION === "us" ? LEGACY_PUBLISHABLE_KEY || "" : ""),
-    webhookSecret:
-      process.env.STRIPE_WEBHOOK_SECRET_US ||
-      (STRIPE_DEFAULT_REGION === "us" ? LEGACY_WEBHOOK_SECRET || "" : ""),
-    portalUrl:
-      process.env.STRIPE_PORTAL_URL_US ||
-      (STRIPE_DEFAULT_REGION === "us" ? LEGACY_PORTAL_URL || "" : ""),
-    currency: "usd",
+    secretKey: process.env.STRIPE_SECRET_KEY_US || "",
+    publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US || "",
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_US || "",
+    portalUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_US || "",
     label: "Creator Share US",
   },
   uk: {
-    secretKey:
-      process.env.STRIPE_SECRET_KEY_UK ||
-      (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_SECRET_KEY || "" : ""),
-    publishableKey:
-      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK ||
-      (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_PUBLISHABLE_KEY || "" : ""),
-    webhookSecret:
-      process.env.STRIPE_WEBHOOK_SECRET_UK ||
-      (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_WEBHOOK_SECRET || "" : ""),
-    portalUrl:
-      process.env.STRIPE_PORTAL_URL_UK ||
-      (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_PORTAL_URL || "" : ""),
-    // TODO(uk-pricing): switch to "gbp" once the UI supports per-region
-    // currency display + a price table denominated in pence. Until then,
-    // bill UK Stripe in USD so the dollar amounts the UI shows match what
-    // the customer is charged. Otherwise a sponsor picking "$15/month"
-    // gets charged £15 (~$19), a ~25% silent overcharge.
-    currency: "usd",
+    secretKey: process.env.STRIPE_SECRET_KEY_UK || "",
+    publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK || "",
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_UK || "",
+    portalUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_UK || "",
     label: "Creator Share UK",
   },
 }
@@ -115,7 +87,7 @@ export function getStripeConfig(
   const config = REGION_ENV_MAP[region]
   if (!config.secretKey) {
     throw new Error(
-      `Stripe region "${region}" is not configured — missing STRIPE_SECRET_KEY_${region.toUpperCase()}`,
+      `Stripe region "${region}" is not configured, missing STRIPE_SECRET_KEY_${region.toUpperCase()}`,
     )
   }
   return config
