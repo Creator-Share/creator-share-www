@@ -35,25 +35,31 @@ import { BeneficiaryMedia } from "@/types/admin.types"
 import {
   generatePublicUrl,
   getImageSrc,
-  getThumbnailSrc,
   MediaRow,
 } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
+import SupportedCheckBadge from "@/components/common/SupportedCheckBadge"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { useSponsorship } from "../../hooks/useSponsorship"
 import BeneficiaryActivity, { SHOW_MORE_CLASS } from "../SponsorshipActivity"
 import { FAQModal } from "@/components/FAQModal"
+import { NativeSelectField, NativeSelectRoot } from "@/components/ui/native-select"
 import {
+  hasOpenSponsorshipSupport,
   isOpenSponsorshipType,
   MINIMUM_OPEN_SPONSORSHIP_CENTS,
 } from "@/config/beneficiaryTypes"
-import { centsToDollars } from "@/utils/currency"
-
-const OPEN_SPONSORSHIP_MIN_DOLLARS = Number(
-  centsToDollars(MINIMUM_OPEN_SPONSORSHIP_CENTS),
-)
-const OPEN_SPONSORSHIP_RANGE_MESSAGE = `Minimum amount is $${OPEN_SPONSORSHIP_MIN_DOLLARS}`
+import {
+  SUPPORTED_CURRENCIES,
+  type SupportedCurrency,
+  coerceSupportedCurrency,
+  convertCurrencyMinorToUsdCents,
+  convertUsdCentsToCurrency,
+  formatConversionForDisplay,
+  getDefaultCurrencyForLocale,
+} from "@/utils/currency"
+import { encodePayPalPaymentContext } from "@/utils/paypalCurrencyContext"
 
 /** Lower-tier quick picks (left column, monthly path). */
 const OPEN_SPONSORSHIP_LEFT_PRESETS_USD = [14, 33, 50] as const
@@ -63,6 +69,7 @@ const OPEN_SPONSORSHIP_RIGHT_PRESETS_USD = [50, 100, 1111] as const
 /** Default open-amount preset selected when the modal first opens. */
 const OPEN_SPONSORSHIP_DEFAULT_USD = 33
 const OPEN_SPONSORSHIP_DEFAULT_CENTS = OPEN_SPONSORSHIP_DEFAULT_USD * 100
+const SPONSORSHIP_CURRENCY_STORAGE_KEY = "creator-share:sponsorship-currency"
 
 // PayPal components are optional and loaded only when the env var is set.
 // Using next/dynamic avoids the broken module-level let + fire-and-forget import()
@@ -94,7 +101,7 @@ interface BeneficiaryModalProps {
   open: boolean
   onClose: () => void
   beneficiary: Beneficiaries
-  /** Activities pre-fetched by SponsorshipsContainer -- avoids a double fetch. */
+  /** Activities pre-fetched by SponsorshipsContainer, avoids a double fetch. */
   activities?: Activity[]
   /** True while activities are being fetched for the active beneficiary. */
   activitiesLoading?: boolean
@@ -112,9 +119,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const user = useAuthStore((state) => state.user)
   const { setSponsorshipInProgress } = useSponsorship()
   const isOpen = isOpenSponsorshipType(beneficiary.beneficiary_type)
+  const hasOpenSupport = isOpen && hasOpenSponsorshipSupport(beneficiary)
 
   // For fixed types the budget_goal IS the sponsorship amount (set at create time).
-  // For open types there is no goal — sponsors choose their own amount.
+  // For open types there is no goal. Sponsors choose their own amount.
   const fixedAmountCents = !isOpen ? (beneficiary.budget_goal ?? 0) : 0
   const birthDateIsEstimate = Boolean(
     (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
@@ -138,6 +146,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [oneTimeCustomMode, setOneTimeCustomMode] = useState<boolean>(false)
   const [monthlyCustomCents, setMonthlyCustomCents] = useState<number>(0)
   const [oneTimeCustomCents, setOneTimeCustomCents] = useState<number>(0)
+  const [selectedCurrency, setSelectedCurrency] =
+    useState<SupportedCurrency>("USD")
   const [activeColumn, setActiveColumn] = useState<
     "monthly" | "one_time" | null
   >(isOpen ? "monthly" : null)
@@ -151,6 +161,27 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   const hasActivities = activities.length > 0
 
+  const getConvertedAmount = useCallback(
+    (usdCents: number) => convertUsdCentsToCurrency(usdCents, selectedCurrency),
+    [selectedCurrency],
+  )
+  const formatUsdCentsForSponsor = useCallback(
+    (usdCents: number) => formatConversionForDisplay(getConvertedAmount(usdCents)),
+    [getConvertedAmount],
+  )
+  const getConvertedMajorAmount = useCallback(
+    (usdCents: number) => {
+      const conversion = getConvertedAmount(usdCents)
+      return (
+        conversion.chargedAmountMinor / 100
+      )
+    },
+    [getConvertedAmount],
+  )
+  const openSponsorshipRangeMessage = `Minimum amount is ${formatUsdCentsForSponsor(
+    MINIMUM_OPEN_SPONSORSHIP_CENTS,
+  )}`
+
   // About card: collapsed by default when there are updates (room for Latest Updates);
   // expanded by default when there are none (full bio visible, button reads "Show less").
   // Wait until activities have loaded so an empty in-flight list is not treated as "no updates".
@@ -159,7 +190,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     setBioExpanded(!hasActivities)
   }, [open, beneficiary.id, hasActivities, activitiesLoading])
 
-  // Open types are never "fully sponsored" — they accept unlimited sponsors.
+  // Open types are never "fully sponsored". They accept unlimited sponsors.
   const alreadyFulfilled =
     !isOpen &&
     (beneficiary.status === "Budget Fulfilled" ||
@@ -222,6 +253,32 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }, [open, beneficiary.id, loadImages])
 
   useEffect(() => {
+    if (!open) return
+    const stored = window.localStorage.getItem(SPONSORSHIP_CURRENCY_STORAGE_KEY)
+    if (stored) {
+      setSelectedCurrency(coerceSupportedCurrency(stored))
+      return
+    }
+    let cancelled = false
+    fetch("/api/payments/currency")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { currency?: string } | null) => {
+        if (cancelled) return
+        const detected =
+          data?.currency || getDefaultCurrencyForLocale(navigator.language)
+        setSelectedCurrency(coerceSupportedCurrency(detected))
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSelectedCurrency(getDefaultCurrencyForLocale(navigator.language))
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open])
+
+  useEffect(() => {
     if (!open) {
       setToastCount(0)
       setLastToastTime(0)
@@ -244,6 +301,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       setVideoUrl(beneficiary.video_url?.trim() || "")
     }
   }, [open, isOpen, fixedAmountCents, beneficiary.video_url])
+
+  const handleCurrencyChange = (value: string) => {
+    const currency = coerceSupportedCurrency(value)
+    setSelectedCurrency(currency)
+    window.localStorage.setItem(SPONSORSHIP_CURRENCY_STORAGE_KEY, currency)
+  }
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -332,12 +395,14 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   const monthlyDisabledReason =
     isOpen && monthlyAmountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS
-      ? OPEN_SPONSORSHIP_RANGE_MESSAGE
+      ? openSponsorshipRangeMessage
       : null
   const oneTimeDisabledReason =
     isOpen && oneTimeAmountCents < MINIMUM_OPEN_SPONSORSHIP_CENTS
-      ? OPEN_SPONSORSHIP_RANGE_MESSAGE
+      ? openSponsorshipRangeMessage
       : null
+  const oneTimeButtonDisabled =
+    loading || !canPayOneTime || activeColumn !== "one_time"
 
   const handleStripePayment = async (
     paymentType: SponsorshipFrequency = "subscription",
@@ -350,7 +415,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       toaster.create({
         title: "Invalid Amount",
         description: isOpen
-          ? OPEN_SPONSORSHIP_RANGE_MESSAGE
+          ? openSponsorshipRangeMessage
           : "This beneficiary is already fully sponsored.",
       })
       return
@@ -360,22 +425,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     setLoading(true)
     setLoadingFrequency(paymentType)
     try {
-      const primaryImage = images.length > 0 ? images[0] : null
-      let primaryImageUrl = beneficiary.image_url || ""
-      if (primaryImage) {
-        try {
-          primaryImageUrl = generatePublicUrl(
-            primaryImage as unknown as MediaRow,
-          )
-        } catch {
-          primaryImageUrl = beneficiary.image_url || ""
-        }
-      }
-
       const payload = {
         beneficiaryId: beneficiary.id,
         beneficiaryName: beneficiary.name,
-        beneficiaryImage: primaryImageUrl || PERSON_PLACEHOLDER_PATH,
         amount: isOpen ? amountCents : beneficiary.budget_goal,
         paymentType,
         location: beneficiary.country,
@@ -383,6 +435,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         isEmbedded: window.self !== window.top,
         email: user?.email || undefined,
         type: "sponsorship",
+        currency: selectedCurrency,
       }
 
       const res = await fetch("/api/stripe", {
@@ -411,7 +464,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         return
       }
 
-      const { clientSecret, url } = data
+      const { clientSecret, url, publishableKey, region } = data
       window.dispatchEvent(
         new CustomEvent("payment-success", {
           detail: { beneficiaryId: beneficiary.id },
@@ -419,9 +472,16 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       )
 
       if (window.self !== window.top) {
-        if (clientSecret)
-          window.location.href = `/sponsorships/checkout?client_secret=${clientSecret}&beneficiary_id=${beneficiary.id}`
-        else if (url) window.location.href = url
+        if (clientSecret) {
+          const params = new URLSearchParams({
+            client_secret: clientSecret,
+            beneficiary_id: beneficiary.id ?? "",
+          })
+          if (publishableKey) params.set("publishable_key", publishableKey)
+          if (region) params.set("region", region)
+          params.set("currency", selectedCurrency)
+          window.location.href = `/sponsorships/checkout?${params.toString()}`
+        } else if (url) window.location.href = url
         else
           toaster.create({
             title: "Payment Error",
@@ -454,6 +514,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         create: (options: {
           purchase_units: Array<{
             description: string
+            custom_id?: string
             amount: { value: string; currency_code: string }
           }>
         }) => Promise<string>
@@ -470,12 +531,16 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       toaster.create({
         title: "Invalid Amount",
         description: isOpen
-          ? OPEN_SPONSORSHIP_RANGE_MESSAGE
+          ? openSponsorshipRangeMessage
           : "This beneficiary is already fully sponsored.",
       })
       throw new Error("Invalid amount")
     }
-    const paymentAmount = (isOpen ? paypalAmountCents : fixedAmountCents) / 100
+    const conversion = getConvertedAmount(
+      isOpen ? paypalAmountCents : fixedAmountCents,
+    )
+    const paymentAmount =
+      conversion.chargedAmountMinor / 100
     const frequencyLabel =
       selectedOption === "subscription"
         ? "Monthly"
@@ -486,7 +551,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       purchase_units: [
         {
           description: `${frequencyLabel} Sponsorship for ${beneficiary.name}`,
-          amount: { value: paymentAmount.toFixed(2), currency_code: "USD" },
+          custom_id: encodePayPalPaymentContext(beneficiary.id, conversion),
+          amount: {
+            value: paymentAmount.toFixed(2),
+            currency_code: conversion.chargedCurrency,
+          },
         },
       ],
     })
@@ -502,10 +571,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             beneficiary_id: beneficiary.id,
             name: `Monthly Sponsorship for ${beneficiary.name}`,
             description: `Recurring monthly sponsorship for ${beneficiary.name}`,
-            amount: (isOpen ? monthlyAmountCents : fixedAmountCents) / 100,
+            base_amount_usd_cents: isOpen
+              ? monthlyAmountCents
+              : fixedAmountCents,
             interval_unit: "MONTH",
             interval_count: 1,
-            currency_code: "USD",
+            currency_code: selectedCurrency,
           }),
         })
         const planData = await planRes.json()
@@ -520,6 +591,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           body: JSON.stringify({
             plan_id: planData.plan.id,
             beneficiaryId: beneficiary.id,
+            base_amount_usd_cents: isOpen
+              ? monthlyAmountCents
+              : fixedAmountCents,
+            currency_code: selectedCurrency,
             subscriber_email: user?.email,
             subscriber_name: user?.email || "",
           }),
@@ -550,11 +625,14 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          beneficiaryId: beneficiary.id,
-          beneficiaryName: beneficiary.name,
-          amount: (isOpen ? oneTimeAmountCents : fixedAmountCents) / 100,
-          paymentType: selectedOption,
-          location: beneficiary.country,
+            beneficiaryId: beneficiary.id,
+            beneficiaryName: beneficiary.name,
+            base_amount_usd_cents: isOpen
+              ? oneTimeAmountCents
+              : fixedAmountCents,
+            currency_code: selectedCurrency,
+            paymentType: selectedOption,
+            location: beneficiary.country,
           userId: user?.id,
           email: user?.email,
           orderID: data.orderID,
@@ -588,7 +666,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   }
 
   /**
-   * Vertical segmented radio — presets + custom in a single bordered container
+   * Vertical segmented radio, presets plus custom in a single bordered container.
    * with thin dividers between rows, no gaps.
    *
    * isActive is gated on activeColumn === column so that picking anything in one
@@ -629,7 +707,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         inputValue === ""
           ? 0
           : Number.isFinite(parseFloat(inputValue))
-            ? Math.round(parseFloat(inputValue) * 100)
+            ? convertCurrencyMinorToUsdCents(
+                Math.round(parseFloat(inputValue) * 100),
+                selectedCurrency,
+              )
             : 0
       setCustomCents(cents)
       setAmountCents(cents)
@@ -697,14 +778,18 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                         : "text-gray-400 border-gray-200"
                     }`}
                   >
-                    $
+	                    {selectedCurrency}
                   </Box>
                   {isActive ? (
                     <Input
-                      type="number"
-                      step="0.01"
-                      autoFocus={focusOnOpen || isActive}
-                      value={customCents > 0 ? customCents / 100 : ""}
+	                      type="number"
+	                      step="0.01"
+	                      autoFocus={focusOnOpen || isActive}
+	                      value={
+	                        customCents > 0
+	                          ? getConvertedMajorAmount(customCents)
+	                          : ""
+	                      }
                       onChange={handleAmountChange}
                       className="px-3 h-full border-0 outline-none focus:ring-0 text-sm text-white placeholder-white/60 flex-1 bg-transparent"
                       placeholder="Enter amount"
@@ -717,9 +802,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       fontWeight="medium"
                       fontSize="sm"
                     >
-                      {customCents > 0
-                        ? `$${(customCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-                        : "Custom"}
+	                      {customCents > 0
+	                        ? formatUsdCentsForSponsor(customCents)
+	                        : "Custom"}
                     </Text>
                   )}
                 </Flex>
@@ -748,7 +833,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     setActiveColumn(column)
                   }}
                 >
-                  <Text as="span">${(item as number).toLocaleString()}</Text>
+	                  <Text as="span">
+	                    {formatUsdCentsForSponsor((item as number) * 100)}
+	                  </Text>
                   {isActive && (
                     <HeartHandMark width={16} height={14} color="white" />
                   )}
@@ -777,16 +864,39 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     )
 
     if (isOpen) {
+      const supportCopy = hasOpenSupport
+        ? {
+            heading: `${firstName} is already receiving support`,
+            body: (
+              <>
+                {firstName} is already receiving support, and additional gifts
+                help keep care steady for {firstName} and all children
+                receiving care. Your contribution strengthens daily meals,
+                health care, schooling, and the care team supporting them. You
+                will receive updates from our team as that support continues.
+              </>
+            ),
+          }
+        : {
+            heading: `Support ${firstName} with any amount`,
+            body: (
+              <>
+                Your contribution helps support {firstName} and all children
+                receiving care. Every gift strengthens daily care, meals, health
+                care, schooling, and the care team supporting them. You will
+                receive updates on {firstName}&apos;s progress directly from our
+                team.
+              </>
+            ),
+          }
+
       return (
-        <Box className="space-y-2">
+        <Box className="space-y-2 mt">
           <Text className="text-lg font-semibold text-gray-900">
-            Support {firstName} with any amount
+            {supportCopy.heading}
           </Text>
           <Text className="text-gray-700 leading-relaxed text-sm md:text-base">
-            Your contribution goes directly toward supporting {firstName}
-            &apos;s care and well-being. Every dollar makes a difference. You
-            will receive updates on {firstName}&apos;s progress directly from
-            our care team.
+            {supportCopy.body}
           </Text>
           <Box className="mt-5">{faqLink}</Box>
         </Box>
@@ -910,12 +1020,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                     <ImageCarousel
                       images={images}
                       getImageSrc={getImageSrc}
-                      getThumbnailSrc={getThumbnailSrc}
                       fallbackSrc={PERSON_PLACEHOLDER_PATH}
                       alt={beneficiary.name || "Beneficiary"}
                       className="rounded-2xl aspect-[4/5] object-cover"
                       showArrowsOnHover={true}
                     />
+                    {hasOpenSupport && <SupportedCheckBadge size="lg" />}
                     {alreadyFulfilled && <SupportedRibbon size="lg" />}
                   </Box>
                 </Box>
@@ -1008,7 +1118,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   )}
                 </Box>
 
-                {/* Latest Updates -- styled identically to About card */}
+                {/* Latest Updates, styled identically to About card */}
                 {hasActivities && (
                   <Box className="bg-gray-100 rounded-xl p-5 space-y-2">
                     <Text className="text-lg font-semibold text-gray-900">
@@ -1020,7 +1130,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               </Box>
             </Flex>
 
-            {/* Sponsorship CTA — same place & card for fully sponsored + active checkout */}
+            {/* Sponsorship CTA, same place and card for fully sponsored plus active checkout */}
             <Box className="mt-8 mb-8 md:mt-16 md:mb-16 w-full flex justify-center">
               <Box
                 className="w-full min-w-0 md:w-5/6 rounded-xl px-8 py-6 md:px-16 md:py-12 space-y-2 text-center"
@@ -1052,7 +1162,56 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   </>
                 ) : (
                   <>
-                    {/* AMOUNT INPUT — combined chips + custom field for open types, inline disabled input for fixed types. */}
+                    {/* Amount input, combined chips plus custom field for open types, inline disabled input for fixed types. */}
+                    <Box
+                      textAlign="left"
+                      mb={{ base: 8, md: 10 }}
+                      maxW={{ base: "100%", md: "360px" }}
+                    >
+                      <Text
+                        fontWeight="semibold"
+                        fontSize="sm"
+                        color="gray.600"
+                        mb={2}
+                      >
+                        Payment Currency
+                      </Text>
+                      <NativeSelectRoot
+                        size="sm"
+                        width="100%"
+                        bg="white"
+                        borderRadius="xl"
+                      >
+                        <NativeSelectField
+                          aria-label="Payment currency"
+                          value={selectedCurrency}
+                          onChange={(e) =>
+                            handleCurrencyChange(e.target.value)
+                          }
+                          h="56px"
+                          borderRadius="xl"
+                          borderColor="gray.300"
+                          bg="white"
+                          px={4}
+                          fontSize="md"
+                          color="gray.700"
+                          boxShadow="sm"
+                          transition="border-color 0.15s ease, box-shadow 0.15s ease"
+                          _focusVisible={{
+                            borderColor: "#2b7ff9",
+                            boxShadow: "0 0 0 1px #2b7ff9",
+                            outline: "none",
+                          }}
+                          className="rounded-xl border border-gray-300 bg-white text-base text-gray-700"
+                        >
+                          {SUPPORTED_CURRENCIES.map((currency) => (
+                            <option key={currency} value={currency}>
+                              {currency}
+                            </option>
+                          ))}
+                        </NativeSelectField>
+                      </NativeSelectRoot>
+                    </Box>
                     {isOpen ? (
                       <Box className="text-left w-full">
                         <Flex
@@ -1061,7 +1220,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                           alignItems="stretch"
                           width="100%"
                         >
-                          {/* Left column: monthly — wider */}
+                          {/* Left column, monthly, wider */}
                           <Box flex={3} minW={0}>
                             <Text
                               fontWeight="semibold"
@@ -1150,7 +1309,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                                       opacity={0.9}
                                     >
                                       {canPayMonthly
-                                        ? `$${(monthlyAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}/month`
+                                        ? `${formatUsdCentsForSponsor(monthlyAmountCents)}/month`
                                         : "Monthly Sponsorship"}
                                     </Text>
                                   </Flex>
@@ -1159,7 +1318,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                             </Tooltip>
                           </Box>
 
-                          {/* Right column: one-time gift — narrower */}
+                          {/* Right column, one-time gift, narrower */}
                           <Box flex={2} minW={0}>
                             <Text
                               fontWeight="semibold"
@@ -1206,14 +1365,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                                   loading={loadingFrequency === "one_time"}
                                   loadingText="Processing..."
                                   disabled={
-                                    loading ||
-                                    !canPayOneTime ||
-                                    activeColumn !== "one_time"
+                                    oneTimeButtonDisabled
                                   }
                                   width="100%"
                                   opacity={
-                                    activeColumn !== "one_time" ||
-                                    !canPayOneTime
+                                    oneTimeButtonDisabled
                                       ? 0.5
                                       : 1
                                   }
@@ -1233,8 +1389,8 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                                   }}
                                   _disabled={{ bg: "#EEF6FF" }}
                                 >
-                                  {canPayOneTime
-                                    ? `Gift $${(oneTimeAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                                  {!oneTimeButtonDisabled
+                                    ? `Gift ${formatUsdCentsForSponsor(oneTimeAmountCents)}`
                                     : "One-Time Gift"}
                                 </Button>
                               </Box>
@@ -1263,12 +1419,12 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                               h="56px"
                             >
                               <Box className="bg-gray-100 px-4 h-full flex items-center text-gray-700 font-medium border-r border-gray-300">
-                                $
+                                {selectedCurrency}
                               </Box>
                               <Input
                                 type="number"
                                 step="0.01"
-                                value={fixedAmountCents / 100}
+                                value={getConvertedMajorAmount(fixedAmountCents)}
                                 readOnly
                                 disabled
                                 className="px-4 h-full border-0 outline-none focus:ring-0 text-lg text-gray-700 bg-gray-100 cursor-help"
@@ -1352,10 +1508,11 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                             </Flex>
                           )}
                           <PayPalScriptProvider
+                            key={selectedCurrency}
                             options={{
                               "client-id": process.env
                                 .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
-                              currency: "USD",
+                              currency: selectedCurrency,
                               intent: "capture",
                             }}
                           >
@@ -1378,7 +1535,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                               <Box className="h-12 bg-white/80 rounded-xl flex items-center justify-center border border-gray-200">
                                 <Text className="text-sm text-gray-500 text-center px-2">
                                   {isOpen
-                                    ? OPEN_SPONSORSHIP_RANGE_MESSAGE
+                                    ? openSponsorshipRangeMessage
                                     : "This beneficiary is already fully sponsored"}
                                 </Text>
                               </Box>
@@ -1388,7 +1545,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       )}
 
                     {/* Context copy inside the card */}
-                    <Box className="pt-4 mt-24 text-left">
+                    <Box className="pt-8 text-left">
                       {renderSponsorshipDisclaimer()}
                     </Box>
                   </>
@@ -1396,7 +1553,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               </Box>
             </Box>
 
-            {/* Footer — actions only */}
+            {/* Footer, actions only */}
             <Flex className="mt-6 pt-2 w-full" justify="flex-end" gap={2}>
               <Button
                 className="border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"

@@ -6,7 +6,6 @@ import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 
 interface ProgressiveImageProps {
   src: string
-  thumbnailSrc?: string
   alt: string
   className?: string
   fallbackSrc?: string
@@ -15,16 +14,16 @@ interface ProgressiveImageProps {
   height?: number
   fill?: boolean
   sizes?: string
+  priority?: boolean
 }
 
-/**
- * ProgressiveImage component that loads a low-quality thumbnail first,
- * then transitions to the full-quality image for a smooth loading experience.
- * Ensures consistent placeholder sizes even before images are loaded.
- */
+const shouldBypassImageOptimization = (src: string): boolean =>
+  src.startsWith("blob:") ||
+  src.startsWith("data:") ||
+  /\.svg(?:$|\?)/i.test(src)
+
 export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
   src,
-  thumbnailSrc,
   alt,
   className = "",
   fallbackSrc,
@@ -33,38 +32,16 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
   height,
   fill = true,
   sizes,
+  priority = false,
 }) => {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
-  const [thumbnailLoaded, setThumbnailLoaded] = useState(false)
-  const [thumbnailError, setThumbnailError] = useState(false)
 
-  // Default placeholder - use SVG directly from public folder
   const defaultPlaceholder = PERSON_PLACEHOLDER_PATH
 
-  // Reset states when src changes
   useEffect(() => {
     setImageLoaded(false)
     setImageError(false)
-    setThumbnailLoaded(false)
-    setThumbnailError(false)
-    
-    // Check if image is already loaded (for cached images)
-    const img = new window.Image()
-    img.onload = () => {
-      setImageLoaded(true)
-    }
-    img.onerror = () => {
-      setImageError(true)
-      setImageLoaded(true)
-    }
-    img.src = src
-    
-    // Cleanup
-    return () => {
-      img.onload = null
-      img.onerror = null
-    }
   }, [src])
 
   const handleImageLoad = () => {
@@ -73,29 +50,13 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
 
   const handleImageError = () => {
     setImageError(true)
-    setImageLoaded(true) // Stop showing loading state
-  }
-
-  const handleThumbnailLoad = () => {
-    setThumbnailLoaded(true)
-  }
-
-  const handleThumbnailError = () => {
-    setThumbnailError(true)
-    // If thumbnail fails, skip it and show full image immediately
+    setImageLoaded(true)
   }
 
   const displaySrc = imageError && fallbackSrc ? fallbackSrc : src
-  const hasThumbnail = !!thumbnailSrc && !thumbnailError
-  
-  // If no thumbnail, show image immediately without progressive loading
-  const shouldShowImageImmediately = !hasThumbnail
-  
-  // Determine final fallback - prefer provided fallback, then default placeholder
   const finalFallback = fallbackSrc || defaultPlaceholder
-  
-  // Ensure we have a valid src
-  if (!displaySrc || displaySrc.trim() === '') {
+
+  if (!displaySrc || displaySrc.trim() === "") {
     return (
       <Box
         position="relative"
@@ -118,7 +79,7 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
             fill
             className="object-cover"
             sizes={sizes || "100vw"}
-            unoptimized
+            unoptimized={shouldBypassImageOptimization(finalFallback)}
           />
         ) : (
           <Image
@@ -127,16 +88,12 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
             width={width || 400}
             height={height || 400}
             className="object-cover"
-            unoptimized
+            unoptimized={shouldBypassImageOptimization(finalFallback)}
           />
         )}
       </Box>
     )
   }
-
-  // Check if src is a local path (starts with /) or external URL
-  const isLocalImage = displaySrc.startsWith('/')
-  const isThumbnailLocal = thumbnailSrc?.startsWith('/')
 
   return (
     <Box
@@ -146,87 +103,37 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
       overflow="hidden"
       className={className}
       style={style}
-      bg={hasThumbnail ? "transparent" : "gray.100"}
+      bg="gray.100"
       minHeight={fill ? undefined : height || 200}
       minWidth={fill ? undefined : width || 200}
     >
-      {/* Placeholder background - only show if no thumbnail available */}
-      {!hasThumbnail && (
-        <Box
-          position="absolute"
-          top={0}
-          left={0}
-          width="100%"
-          height="100%"
-          bg="gray.100"
-          zIndex={0}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-        >
-          {!imageLoaded && (
-            <Image
-              src={defaultPlaceholder}
-              alt=""
-              fill={fill}
-              width={fill ? undefined : width || 200}
-              height={fill ? undefined : height || 200}
-              className="object-cover opacity-30"
-              sizes={sizes || "100vw"}
-              unoptimized
-              aria-hidden="true"
-            />
-          )}
-        </Box>
-      )}
+      <Box
+        position="absolute"
+        top={0}
+        left={0}
+        width="100%"
+        height="100%"
+        bg="gray.100"
+        zIndex={0}
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+      >
+        {!imageLoaded && (
+          <Image
+            src={defaultPlaceholder}
+            alt=""
+            fill={fill}
+            width={fill ? undefined : width || 200}
+            height={fill ? undefined : height || 200}
+            className="object-cover opacity-30"
+            sizes={sizes || "100vw"}
+            unoptimized={shouldBypassImageOptimization(defaultPlaceholder)}
+            aria-hidden="true"
+          />
+        )}
+      </Box>
 
-      {/* Thumbnail/Placeholder - Only show if we have a separate thumbnail and it hasn't errored */}
-      {hasThumbnail && thumbnailSrc && (
-        <Box
-          position="absolute"
-          top={0}
-          left={0}
-          width="100%"
-          height="100%"
-          zIndex={1}
-          style={{
-            filter: thumbnailLoaded && !imageLoaded ? "blur(10px)" : "none",
-            transform: thumbnailLoaded && !imageLoaded ? "scale(1.1)" : "scale(1)",
-            transition: "filter 0.3s ease-out, transform 0.3s ease-out, opacity 0.5s ease-out",
-            opacity: imageLoaded ? 0 : 1,
-          }}
-        >
-          {fill ? (
-            <Image
-              src={thumbnailSrc}
-              alt={alt}
-              fill
-              className="object-cover"
-              sizes={sizes || "100vw"}
-              onLoad={handleThumbnailLoad}
-              onError={handleThumbnailError}
-              unoptimized={isThumbnailLocal}
-              style={{ objectPosition: "center 5%" }}
-              priority
-            />
-          ) : (
-            <Image
-              src={thumbnailSrc}
-              alt={alt}
-              width={width || 400}
-              height={height || 400}
-              className="object-cover"
-              onLoad={handleThumbnailLoad}
-              onError={handleThumbnailError}
-              unoptimized={isThumbnailLocal}
-              style={{ objectPosition: "center 5%" }}
-              priority
-            />
-          )}
-        </Box>
-      )}
-
-      {/* Full Quality Image - Always try to load, fades in when loaded */}
       <Box
         position="absolute"
         top={0}
@@ -235,27 +142,23 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
         height="100%"
         zIndex={2}
         style={{
-          opacity:
-            shouldShowImageImmediately 
-              ? 1 // Show immediately if no thumbnail
-              : imageLoaded 
-                ? 1 
-                : 0, // Hide until loaded when using thumbnail
+          opacity: imageLoaded ? 1 : 0,
           transition: "opacity 0.5s ease-in",
         }}
       >
         {fill ? (
           <Image
-            key={displaySrc} // Force re-render when src changes
+            key={displaySrc}
             src={displaySrc}
             alt={alt}
             fill
             className="object-cover"
-            loading="eager"
+            loading={priority ? undefined : "lazy"}
+            priority={priority}
             onLoad={handleImageLoad}
             onError={handleImageError}
             sizes={sizes || "100vw"}
-            unoptimized={isLocalImage}
+            unoptimized={shouldBypassImageOptimization(displaySrc)}
             style={{ objectPosition: "center 5%" }}
           />
         ) : (
@@ -266,16 +169,16 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
             width={width || 400}
             height={height || 400}
             className="object-cover"
-            loading="eager"
+            loading={priority ? undefined : "lazy"}
+            priority={priority}
             onLoad={handleImageLoad}
             onError={handleImageError}
-            unoptimized={isLocalImage}
+            unoptimized={shouldBypassImageOptimization(displaySrc)}
             style={{ objectPosition: "center 5%" }}
           />
         )}
       </Box>
 
-      {/* Fallback - Shows if main image fails and no fallbackSrc */}
       {imageError && !fallbackSrc && (
         <Box
           position="absolute"
@@ -298,7 +201,7 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
               fill
               className="object-cover"
               sizes={sizes || "100vw"}
-              unoptimized
+              unoptimized={shouldBypassImageOptimization(defaultPlaceholder)}
             />
           ) : (
             <Image
@@ -307,7 +210,7 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
               width={width || 400}
               height={height || 400}
               className="object-cover"
-              unoptimized
+              unoptimized={shouldBypassImageOptimization(defaultPlaceholder)}
             />
           )}
         </Box>
@@ -315,4 +218,3 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
     </Box>
   )
 }
-

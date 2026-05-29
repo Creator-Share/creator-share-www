@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { MediaRow, uploadFile } from "@/utils/supabase/media"
-import { getTransformedImageUrl } from "@/utils/supabase/imageTransform"
+import { MediaRow, getDirectMediaUrl, uploadFile } from "@/utils/supabase/media"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
 // Route segment config for Vercel deployment
@@ -91,12 +90,7 @@ export async function POST(req: Request) {
 
       const respItem = {
         ...mediaRow,
-        public_url: getTransformedImageUrl('media', `${beneficiaryId}/IMAGE/${mediaRow.id}.${extension}`, {
-          width: 800,
-          height: 800,
-          quality: 90,
-          resize: 'cover'
-        }),
+        public_url: getDirectMediaUrl(mediaRow),
         upload_error: uploadErrorMessage,
       }
 

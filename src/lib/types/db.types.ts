@@ -337,6 +337,9 @@ export type Database = {
           amount: number
           card_number: string | null
           card_type: string | null
+          charged_amount: number | null
+          charged_currency: Database["public"]["Enums"]["payment_currency"]
+          conversion_rate: number
           created_at: string
           current_period_end: string | null
           current_period_start: string | null
@@ -345,6 +348,8 @@ export type Database = {
           frequency: Database["public"]["Enums"]["partnership_frequency"]
           id: string
           payment_intent: string | null
+          payment_region: Database["public"]["Enums"]["stripe_region"]
+          provider_event_id: string | null
           project: Database["public"]["Enums"]["project_type"]
           status: string
           stripe_subscription_id: string | null
@@ -354,6 +359,9 @@ export type Database = {
           amount: number
           card_number?: string | null
           card_type?: string | null
+          charged_amount?: number | null
+          charged_currency?: Database["public"]["Enums"]["payment_currency"]
+          conversion_rate?: number
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
@@ -362,6 +370,8 @@ export type Database = {
           frequency: Database["public"]["Enums"]["partnership_frequency"]
           id?: string
           payment_intent?: string | null
+          payment_region?: Database["public"]["Enums"]["stripe_region"]
+          provider_event_id?: string | null
           project?: Database["public"]["Enums"]["project_type"]
           status?: string
           stripe_subscription_id?: string | null
@@ -371,6 +381,9 @@ export type Database = {
           amount?: number
           card_number?: string | null
           card_type?: string | null
+          charged_amount?: number | null
+          charged_currency?: Database["public"]["Enums"]["payment_currency"]
+          conversion_rate?: number
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
@@ -379,6 +392,8 @@ export type Database = {
           frequency?: Database["public"]["Enums"]["partnership_frequency"]
           id?: string
           payment_intent?: string | null
+          payment_region?: Database["public"]["Enums"]["stripe_region"]
+          provider_event_id?: string | null
           project?: Database["public"]["Enums"]["project_type"]
           status?: string
           stripe_subscription_id?: string | null
@@ -578,6 +593,9 @@ export type Database = {
           amount: number | null
           beneficiary_id: string | null
           canceled_at: string | null
+          charged_amount: number | null
+          charged_currency: Database["public"]["Enums"]["payment_currency"]
+          conversion_rate: number
           created_at: string
           current_period_end: string | null
           current_period_start: string | null
@@ -585,6 +603,8 @@ export type Database = {
           email_notification: boolean | null
           id: string
           interval: string | null
+          payment_region: Database["public"]["Enums"]["stripe_region"]
+          provider_event_id: string | null
           sponsorship_method:
             | Database["public"]["Enums"]["sponsorship_method"]
             | null
@@ -596,6 +616,9 @@ export type Database = {
           amount?: number | null
           beneficiary_id?: string | null
           canceled_at?: string | null
+          charged_amount?: number | null
+          charged_currency?: Database["public"]["Enums"]["payment_currency"]
+          conversion_rate?: number
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
@@ -603,6 +626,8 @@ export type Database = {
           email_notification?: boolean | null
           id?: string
           interval?: string | null
+          payment_region?: Database["public"]["Enums"]["stripe_region"]
+          provider_event_id?: string | null
           sponsorship_method?:
             | Database["public"]["Enums"]["sponsorship_method"]
             | null
@@ -614,6 +639,9 @@ export type Database = {
           amount?: number | null
           beneficiary_id?: string | null
           canceled_at?: string | null
+          charged_amount?: number | null
+          charged_currency?: Database["public"]["Enums"]["payment_currency"]
+          conversion_rate?: number
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
@@ -621,6 +649,8 @@ export type Database = {
           email_notification?: boolean | null
           id?: string
           interval?: string | null
+          payment_region?: Database["public"]["Enums"]["stripe_region"]
+          provider_event_id?: string | null
           sponsorship_method?:
             | Database["public"]["Enums"]["sponsorship_method"]
             | null
@@ -648,6 +678,9 @@ export type Database = {
       transaction_ledger: {
         Row: {
           beneficiary_id: string | null
+          charged_amount: number | null
+          charged_currency: Database["public"]["Enums"]["payment_currency"]
+          conversion_rate: number
           created_at: string
           credit: number | null
           customer_email: string | null
@@ -657,6 +690,7 @@ export type Database = {
           id: string
           payment_intent: string | null
           payment_method_id: string | null
+          provider_event_id: string | null
           reference: string | null
           subscription_type: string | null
           tx_action: string | null
@@ -664,6 +698,9 @@ export type Database = {
         }
         Insert: {
           beneficiary_id?: string | null
+          charged_amount?: number | null
+          charged_currency?: Database["public"]["Enums"]["payment_currency"]
+          conversion_rate?: number
           created_at?: string
           credit?: number | null
           customer_email?: string | null
@@ -673,6 +710,7 @@ export type Database = {
           id?: string
           payment_intent?: string | null
           payment_method_id?: string | null
+          provider_event_id?: string | null
           reference?: string | null
           subscription_type?: string | null
           tx_action?: string | null
@@ -680,6 +718,9 @@ export type Database = {
         }
         Update: {
           beneficiary_id?: string | null
+          charged_amount?: number | null
+          charged_currency?: Database["public"]["Enums"]["payment_currency"]
+          conversion_rate?: number
           created_at?: string
           credit?: number | null
           customer_email?: string | null
@@ -689,6 +730,7 @@ export type Database = {
           id?: string
           payment_intent?: string | null
           payment_method_id?: string | null
+          provider_event_id?: string | null
           reference?: string | null
           subscription_type?: string | null
           tx_action?: string | null
@@ -2569,6 +2611,7 @@ export type Database = {
       Gender: "Boy" | "Girl"
       media_type: "IMAGE" | "VIDEO"
       partnership_frequency: "monthly" | "annually"
+      payment_currency: "USD" | "AUD" | "GBP" | "EUR"
       PersonStatus:
         | "New"
         | "Partially Funded"
@@ -2582,6 +2625,7 @@ export type Database = {
         | "nutrition"
         | "general"
       sponsorship_method: "PAYPAL" | "STRIPE"
+      stripe_region: "us" | "uk"
       SubscriptionStatus: "complete" | "incomplete" | "cancelled"
     }
     CompositeTypes: {
@@ -2723,6 +2767,7 @@ export const Constants = {
       Gender: ["Boy", "Girl"],
       media_type: ["IMAGE", "VIDEO"],
       partnership_frequency: ["monthly", "annually"],
+      payment_currency: ["USD", "AUD", "GBP", "EUR"],
       PersonStatus: [
         "New",
         "Partially Funded",
@@ -2738,6 +2783,7 @@ export const Constants = {
         "general",
       ],
       sponsorship_method: ["PAYPAL", "STRIPE"],
+      stripe_region: ["us", "uk"],
       SubscriptionStatus: ["complete", "incomplete", "cancelled"],
     },
   },

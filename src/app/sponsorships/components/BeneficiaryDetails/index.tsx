@@ -6,7 +6,7 @@ import { calculateAge } from "@/utils/ageCalculator"
 import { formatDate } from "@/utils/dateFormatter"
 import { Beneficiaries, BeneficiaryMedia } from "@/types"
 import { useState, useEffect } from "react"
-import { generatePublicUrl, generateThumbnailUrl, MediaRow } from "@/utils/supabase/media"
+import { getImageSrc } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 
@@ -62,30 +62,6 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
     (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
       ?.birth_date_is_estimate
   )
-
-  // Helper function for ImageCarousel
-  const getImageSrc = (image: { id?: string; image_url?: string }) => {
-    if (image.id) {
-      try {
-        return generatePublicUrl(image as unknown as MediaRow)
-      } catch {
-        return image.image_url || ""
-      }
-    }
-    return image.image_url || ""
-  }
-
-  // Helper function for generating thumbnail URLs for progressive loading
-  const getThumbnailSrc = (image: { id?: string; image_url?: string }) => {
-    if (image.id) {
-      try {
-        return generateThumbnailUrl(image as unknown as MediaRow)
-      } catch {
-        return undefined
-      }
-    }
-    return undefined
-  }
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -146,7 +122,6 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
           <ImageCarousel
             images={images}
             getImageSrc={getImageSrc}
-            getThumbnailSrc={getThumbnailSrc}
             fallbackSrc={placeholderImage}
             alt={beneficiary.name}
             className="w-full h-full rounded-xl object-cover"

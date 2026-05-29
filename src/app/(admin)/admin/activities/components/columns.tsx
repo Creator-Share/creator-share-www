@@ -37,7 +37,6 @@ function ActivityMediaCell({ activity }: { activity: Activity }) {
               width={PHOTO_THUMB_PX}
               height={PHOTO_THUMB_PX}
               className="object-cover"
-              unoptimized
             />
           </div>
         ))}

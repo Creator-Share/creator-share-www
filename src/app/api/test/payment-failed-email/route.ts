@@ -11,7 +11,7 @@ export async function GET(req: Request) {
     const result = await sendPaymentFailedEmail(
       email,
       "Test Child",
-      25.99,
+      2599,
       new Date(Date.now() + 24 * 60 * 60 * 1000),
     )
 

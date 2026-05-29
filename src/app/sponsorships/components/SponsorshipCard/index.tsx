@@ -6,11 +6,15 @@ import { FaLocationDot, FaPerson } from "react-icons/fa6"
 import { calculateAge } from "@/utils/ageCalculator"
 import { BeneficiaryCardProps } from "@/types/propTypes"
 import { BeneficiaryMedia } from "@/types/admin.types"
-import { getImageSrc, getThumbnailSrc } from "@/utils/supabase/media"
+import { getImageSrc } from "@/utils/supabase/media"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
-import { isOpenSponsorshipType } from "@/config/beneficiaryTypes"
+import SupportedCheckBadge from "@/components/common/SupportedCheckBadge"
+import {
+  hasOpenSponsorshipSupport,
+  isOpenSponsorshipType,
+} from "@/config/beneficiaryTypes"
 import { RIM_OVERLAY, CARD_SHADOW, CARD_SHADOW_SELECTED } from "./cardStyles"
 
 const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
@@ -23,6 +27,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
 
   const isOpen = isOpenSponsorshipType(beneficiary.beneficiary_type)
+  const hasOpenSupport = isOpen && hasOpenSponsorshipSupport(beneficiary)
   const placeholderImage = PERSON_PLACEHOLDER_PATH
 
   useEffect(() => {
@@ -101,7 +106,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
         <ImageCarousel
           images={images}
           getImageSrc={getImageSrc}
-          getThumbnailSrc={getThumbnailSrc}
           fallbackSrc={placeholderImage}
           alt={beneficiary.name?.split(" ")[0] ?? ""}
           className="w-full h-full rounded-t-[20px]"
@@ -119,6 +123,7 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
           }}
         />
 
+        {hasOpenSupport && <SupportedCheckBadge />}
         {!isOpen && beneficiary.status === "Budget Fulfilled" && <SupportedRibbon />}
 
         {/* Goal Badge — only show for fixed sponsorship types with a real goal */}

@@ -1,19 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/utils/supabase/server"
-import { getStorageKey, MediaRow } from "@/utils/supabase/media"
-import { STORAGE_BUCKET } from "@/utils/supabase/buckets"
-
-const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "")
-
-/**
- * Build a direct storage URL for a media row, bypassing the image-transform
- * API (which requires a Supabase Pro plan). Both images and videos are served
- * from /storage/v1/object/public so this works on all plan tiers.
- */
-function getDirectUrl(m: MediaRow): string {
-  const key = getStorageKey(m)
-  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
-}
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
+import {
+  filterExistingMediaRows,
+  getDirectMediaUrl,
+  MediaRow,
+} from "@/utils/supabase/media"
 
 /**
  * Public endpoint: fetch public activities for a beneficiary, with their
@@ -62,8 +53,11 @@ export async function GET(
   }
 
   // Group media by parent_id for O(n) lookup.
-  const mediaByParent: Record<string, typeof allMedia> = {}
-  for (const m of allMedia || []) {
+  const serviceSupabase = createServiceRoleClient()
+  const existingMedia = await filterExistingMediaRows(serviceSupabase, (allMedia || []) as unknown as MediaRow[])
+
+  const mediaByParent: Record<string, MediaRow[]> = {}
+  for (const m of existingMedia) {
     const key = String(m.parent_id)
     if (!mediaByParent[key]) mediaByParent[key] = []
     mediaByParent[key].push(m)
@@ -75,7 +69,7 @@ export async function GET(
 
     for (const m of mediaByParent[String(activity.id)] || []) {
       try {
-        const url = getDirectUrl(m as unknown as MediaRow)
+        const url = getDirectMediaUrl(m as unknown as MediaRow)
         if (m.type === "IMAGE") images_url.push(url)
         else if (m.type === "VIDEO") videos_url.push(url)
       } catch {

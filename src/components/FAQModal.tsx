@@ -10,6 +10,7 @@ import {
   DialogCloseTrigger,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { getPublicPortalLinks } from "@/lib/payments/portals"
 
 interface FAQItem {
   question: string
@@ -66,6 +67,13 @@ interface FAQModalProps {
 }
 
 export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose, prevPath }) => {
+  const allLinks = getPublicPortalLinks()
+  const stripeLinks = allLinks.filter((l) => l.provider === "STRIPE")
+
+  // Only show the selector when Stripe portal URLs differ per region.
+  const uniqueStripeUrls = new Set(stripeLinks.map((l) => l.href))
+  const needsRegionSelector = uniqueStripeUrls.size >= 1
+
   const handleClose = useCallback(() => {
     if (typeof window !== "undefined" && prevPath !== undefined) {
       window.history.replaceState(null, "", prevPath)
@@ -142,15 +150,39 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose, prevPath }) =
               Existing Sponsor?
             </Text>
             <Box className="bg-gray-50 rounded-lg p-5 border border-gray-200">
-              <a
-                href="https://stripe.creatorshare.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-[#2b7ff9] hover:underline text-sm"
-              >
-                <FaExternalLinkAlt className="w-3 h-3" />
-                Manage Subscriptions via Stripe
-              </a>
+              <Box className="space-y-3">
+                {needsRegionSelector ? (
+                  <div className="flex flex-wrap gap-3">
+                    {stripeLinks.map((link) => (
+                      <a
+                        key={`${link.provider}-${link.region}`}
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex flex-1 min-w-[200px] items-center justify-between gap-3 px-5 py-3.5 bg-white border border-gray-200 rounded-xl text-sm hover:border-[#2b7ff9] hover:shadow-sm hover:text-[#2b7ff9] transition-all group"
+                      >
+                        <span className="font-semibold text-gray-800 group-hover:text-[#2b7ff9] transition-colors">
+                          {link.region === "us" ? "🇺🇸 USD" : link.region === "uk" ? "🇬🇧 GBP / EUR / AUD" : "Manage Subscription"}
+                        </span>
+                        <FaExternalLinkAlt className="w-3 h-3 text-gray-400 group-hover:text-[#2b7ff9] flex-shrink-0 transition-colors" />
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  stripeLinks.map((link) => (
+                    <a
+                      key={`${link.provider}-${link.region ?? "default"}`}
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-[#2b7ff9] hover:underline text-sm"
+                    >
+                      <FaExternalLinkAlt className="w-3 h-3" />
+                      {link.label}
+                    </a>
+                  ))
+                )}
+              </Box>
             </Box>
           </section>
         </DialogBody>

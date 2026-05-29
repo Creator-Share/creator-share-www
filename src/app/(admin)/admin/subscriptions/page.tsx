@@ -11,22 +11,37 @@ import { toaster } from "@/components/ui/toaster"
 import { LogoLoader } from "@/components/common/LogoLoader"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { RawSubscription } from "@/types/admin.types"
+import { formatMoney } from "@/utils/currency"
 
 const AdminSubscriptionsPage = () => {
   const [subscriptions, setSubscriptions] = useState<AdminSubscription[]>([])
   const [loading, setLoading] = useState(true)
   const [supabase] = useState(() => createClient())
 
-  const transformSubscription = (sub: RawSubscription): AdminSubscription => ({
-    ...sub,
-    child_name: sub.beneficiaries?.name || `Child ID: ${sub.child_id}`,
-    child_username: sub.beneficiaries?.username || "unknown",
-    user_email: `User ID: ${sub.user_id}`,
-    formatted_amount: `$${(sub.amount / 100).toFixed(2)}`,
-    formatted_created_at: new Date(sub.created_at).toLocaleDateString(),
-    formatted_current_period_start: new Date(sub.current_period_start).toLocaleDateString(),
-    formatted_current_period_end: new Date(sub.current_period_end).toLocaleDateString(),
-  })
+  const transformSubscription = (sub: RawSubscription): AdminSubscription => {
+    const canonicalAmount = formatMoney(sub.amount, "USD")
+    const chargedAmount =
+      sub.charged_amount && sub.charged_currency
+        ? formatMoney(sub.charged_amount, sub.charged_currency)
+        : null
+    return {
+      ...sub,
+      child_name:
+        sub.beneficiaries?.name ||
+        (sub.beneficiary_id
+          ? `Beneficiary ID: ${sub.beneficiary_id}`
+          : "Unknown Beneficiary"),
+      child_username: sub.beneficiaries?.username || "unknown",
+      user_email: `User ID: ${sub.user_id}`,
+      formatted_amount:
+        chargedAmount && sub.charged_currency !== "USD"
+          ? `${canonicalAmount} (${chargedAmount} charged)`
+          : canonicalAmount,
+      formatted_created_at: new Date(sub.created_at).toLocaleDateString(),
+      formatted_current_period_start: new Date(sub.current_period_start).toLocaleDateString(),
+      formatted_current_period_end: new Date(sub.current_period_end).toLocaleDateString(),
+    }
+  }
 
   useEffect(() => {
     let channel: RealtimeChannel | null = null
@@ -68,13 +83,19 @@ const AdminSubscriptionsPage = () => {
               if (eventType === 'INSERT' && newRecord) {
                 // Cast the newRecord to our RawSubscription type
                 const subscriptionRecord = newRecord as RawSubscription
-                
-                // Fetch beneficiary data for the new subscription
-                const { data: beneficiaryData } = await supabase
-                  .from('beneficiaries')
-                  .select('id, name, username')
-                  .eq('id', subscriptionRecord.child_id)
-                  .single()
+
+                // Fetch beneficiary data for the new subscription (only if we
+                // have a beneficiary_id — partnership rows and other future
+                // beneficiary-less subscriptions skip the lookup).
+                let beneficiaryData: RawSubscription["beneficiaries"] = null
+                if (subscriptionRecord.beneficiary_id) {
+                  const { data } = await supabase
+                    .from('beneficiaries')
+                    .select('id, name, username')
+                    .eq('id', subscriptionRecord.beneficiary_id)
+                    .single()
+                  beneficiaryData = data
+                }
 
                 const fullRecord = { ...subscriptionRecord, beneficiaries: beneficiaryData }
                 const transformed = transformSubscription(fullRecord)
@@ -83,13 +104,16 @@ const AdminSubscriptionsPage = () => {
               } else if (eventType === 'UPDATE' && newRecord) {
                 // Cast the newRecord to our RawSubscription type
                 const subscriptionRecord = newRecord as RawSubscription
-                
-                // Fetch beneficiary data for the updated subscription
-                const { data: beneficiaryData } = await supabase
-                  .from('beneficiaries')
-                  .select('id, name, username')
-                  .eq('id', subscriptionRecord.child_id)
-                  .single()
+
+                let beneficiaryData: RawSubscription["beneficiaries"] = null
+                if (subscriptionRecord.beneficiary_id) {
+                  const { data } = await supabase
+                    .from('beneficiaries')
+                    .select('id, name, username')
+                    .eq('id', subscriptionRecord.beneficiary_id)
+                    .single()
+                  beneficiaryData = data
+                }
 
                 const fullRecord = { ...subscriptionRecord, beneficiaries: beneficiaryData }
                 const transformed = transformSubscription(fullRecord)
@@ -130,7 +154,7 @@ const AdminSubscriptionsPage = () => {
     }
   }, [supabase])
 
-  const handleCancelSubscription = async (subscriptionId: string, sponsorshipId: string) => {
+  const handleCancelSubscription = async (subscriptionId: string) => {
     if (!confirm("Are you sure you want to cancel this subscription? This action cannot be undone.")) {
       return
     }
@@ -139,7 +163,7 @@ const AdminSubscriptionsPage = () => {
       const response = await fetch("/api/stripe/cancel-subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscriptionId: sponsorshipId }),
+        body: JSON.stringify({ subscriptionId }),
       })
 
       if (!response.ok) {

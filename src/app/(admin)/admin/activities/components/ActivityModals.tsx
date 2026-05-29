@@ -1275,7 +1275,7 @@ export const EditActivityModal: React.FC<EditModalProps> = ({
                 <div key={src} className="relative group" style={{ width: 150, height: 150 }}>
                   {/* Thumbnail */}
                   <div style={{ width: "100%", height: "100%", borderRadius: 8, overflow: "hidden", border: "1px solid #e5e7eb", backgroundColor: "#f9fafb", position: "relative" }}>
-                    <Image src={src} alt={`Existing ${index + 1}`} fill className="object-cover" unoptimized />
+                    <Image src={src} alt={`Existing ${index + 1}`} fill className="object-cover" />
                   </div>
 
                   {/* State: deleting — spinner overlay */}

@@ -9,6 +9,13 @@ import {
   SponsorshipNotificationData,
 } from "@/types/telegram.types"
 import { Beneficiaries } from "@/types"
+import { formatMoney } from "@/utils/currency"
+import {
+  filterExistingMediaRows,
+  getExternalTelegramImageUrl,
+  MediaRow,
+} from "@/utils/supabase/media"
+import { createServiceRoleClient } from "@/utils/supabase/server"
 
 // Single Responsibility Principle (SRP) - Telegram service only handles Telegram operations
 export class TelegramBotService implements TelegramNotificationService {
@@ -193,40 +200,31 @@ export class TelegramBotService implements TelegramNotificationService {
    */
   private async getBeneficiaryImage(beneficiaryId: string): Promise<string | null> {
     try {
-      // Use the internal API to get beneficiary images
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/admin/beneficiaries/images/${beneficiaryId}`);
-      
-      if (!response.ok) {
-        console.warn(`Failed to fetch images for beneficiary ${beneficiaryId}:`, response.status);
+      const supabase = createServiceRoleClient()
+      const { data: mediaData, error } = await supabase
+        .from("media")
+        .select("*")
+        .eq("parent_id", beneficiaryId)
+        .eq("type", "IMAGE")
+        .order("weight", { ascending: false })
+        .limit(10)
+
+      if (error) {
+        console.warn(`Failed to fetch images for beneficiary ${beneficiaryId}:`, error)
         return null;
       }
 
-      const mediaData = await response.json();
-      
-      if (!Array.isArray(mediaData) || mediaData.length === 0) {
-
+      if (!mediaData || mediaData.length === 0) {
         return null;
       }
 
-      // Filter for IMAGE type and get the first one
-      const imageMedia = mediaData.filter((item: { type: string }) => item.type === "IMAGE");
-      
-      if (imageMedia.length === 0) {
-        return null;
-      }
+      const existingMedia = await filterExistingMediaRows(
+        supabase,
+        mediaData as unknown as MediaRow[],
+      )
+      if (existingMedia.length === 0) return null
 
-      const firstImage = imageMedia[0];
-      
-      // Try to generate public URL using the media utility
-      try {
-        const { generatePublicUrl } = await import('@/utils/supabase/media');
-        const publicUrl = generatePublicUrl(firstImage);
-        return publicUrl;
-      } catch (urlError) {
-        console.warn('Failed to generate public URL, trying fallback:', urlError);
-        // Fallback to image_url if available
-        return firstImage.image_url || null;
-      }
+      return getExternalTelegramImageUrl(existingMedia[0])
     } catch (error) {
       console.error(`Error fetching image for beneficiary ${beneficiaryId}:`, error);
       return null;
@@ -273,13 +271,16 @@ export class TelegramBotService implements TelegramNotificationService {
     const {
       beneficiaryName,
       amount,
+      chargedCurrency,
       interval,
       sponsorName,
       sponsorEmail,
       paymentMethod
     } = sponsorshipData;
 
-    const amountFormatted = `$${(amount / 100).toFixed(2)}`;
+    const amountFormatted = chargedCurrency
+      ? formatMoney(amount, chargedCurrency)
+      : `$${(amount / 100).toFixed(2)}`;
     const intervalText = interval === 'month' ? 'Monthly' : interval === 'one_time' ? 'One-time' : 'Yearly';
     const sponsorDisplayName = sponsorName || sponsorEmail?.split('@')[0] || 'Anonymous';
 

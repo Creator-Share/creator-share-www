@@ -10,6 +10,9 @@ type StripeSessionDetails = {
   id: string
   amount_total?: number | null
   currency?: string | null
+  charged_amount?: number | null
+  charged_currency?: string | null
+  charged_display?: string | null
   customer_email?: string | null
   payment_status?: string | null
   subscription?: unknown
@@ -83,7 +86,10 @@ export default function PaymentSuccessClient() {
       : null
 
     if (sessionId) {
-      fetch(`/api/stripe/success?session_id=${sessionId}`)
+      const region = searchParams.get("region")
+      const params = new URLSearchParams({ session_id: sessionId })
+      if (region) params.set("region", region)
+      fetch(`/api/stripe/success?${params.toString()}`)
         .then(async (res) => {
           if (!res.ok) throw new Error("Invalid Stripe session ID")
           const data = await res.json()
@@ -238,6 +244,27 @@ export default function PaymentSuccessClient() {
     return "—"
   }
 
+  const getChargedAmount = () => {
+    if (status?.provider === "stripe") {
+      return status.details?.charged_display || "—"
+    }
+    if (isPayPalEnabled && status?.provider === "paypal") {
+      const subscription = status.details?.subscription as
+        | {
+            charged_amount?: number
+            charged_currency?: string
+            amount?: number
+          }
+        | undefined
+      if (subscription?.charged_amount && subscription?.charged_currency) {
+        return `${subscription.charged_currency} ${(
+          subscription.charged_amount / 100
+        ).toFixed(2)}`
+      }
+    }
+    return "—"
+  }
+
   return (
     <div
       style={{
@@ -321,6 +348,16 @@ export default function PaymentSuccessClient() {
             >
               <span style={{ fontWeight: 500 }}>Name</span>
               <span>{getBeneficiaryName()}</span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "0.25rem",
+              }}
+            >
+              <span style={{ fontWeight: 500 }}>Amount</span>
+              <span>{getChargedAmount()}</span>
             </div>
             <div
               style={{

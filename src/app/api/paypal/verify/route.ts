@@ -1,39 +1,23 @@
 import { NextResponse } from "next/server"
+import { isPayPalEnabled, paypalFetch } from "@/lib/paypal/client"
+import { createClient } from "@/utils/supabase/server"
+import {
+  convertCurrencyMinorToUsdCents,
+  convertUsdCentsToCurrency,
+  verifyCurrencyConversion,
+} from "@/utils/currency"
+import { parsePayPalPaymentContext } from "@/utils/paypalCurrencyContext"
 
-// Check if PayPal is enabled by checking if client ID is configured
-const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
-
-const PAYPAL_API_URL =
-  process.env.PAYPAL_API_URL || "https://api-m.sandbox.paypal.com"
-
-async function getPayPalAccessToken() {
-  const auth = Buffer.from(
-    `${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`,
-  ).toString("base64")
-  const response = await fetch(`${PAYPAL_API_URL}/v1/oauth2/token`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${auth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: "grant_type=client_credentials",
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error("PayPal token error response:", errorText)
-    throw new Error("Failed to get PayPal access token")
-  }
-
-  const data = await response.json()
-  return data.access_token
+function parsePayPalAmountMinor(value: string | undefined) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? Math.round(amount * 100) : null
 }
 
 export async function GET(req: Request) {
-  if (!isPayPalEnabled) {
+  if (!isPayPalEnabled()) {
     return NextResponse.json(
-      { error: 'PayPal integration is not enabled' },
-      { status: 501 }
+      { error: "PayPal integration is not enabled" },
+      { status: 501 },
     )
   }
 
@@ -49,110 +33,168 @@ export async function GET(req: Request) {
   }
 
   try {
-    const accessToken = await getPayPalAccessToken()
-
-    // If we have a sponsorship_id (PayPal subscription ID), try database first, then PayPal API
     if (sponsorshipId) {
-      const { createClient } = await import("@/utils/supabase/server")
       const supabase = await createClient()
 
-      // Get authenticated user
-      const { data: { user } } = await supabase.auth.getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
       if (!user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
       }
-      
-      // First try to find the subscription in the database
+
       const { data: subscription, error: subscriptionError } = await supabase
         .from("subscriptions")
-        .select(`
+        .select(
+          `
           *,
           beneficiaries (
             name,
             location_str
           )
-        `)
+        `,
+        )
         .eq("stripe_subscription_id", sponsorshipId)
         .single()
 
       if (subscription && !subscriptionError) {
-        return NextResponse.json({
-          subscription: subscription,
-        })
+        return NextResponse.json({ subscription })
       }
+
       try {
-        const res = await fetch(`${PAYPAL_API_URL}/v1/billing/subscriptions/${sponsorshipId}`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        })
+        const res = await paypalFetch(
+          `/v1/billing/subscriptions/${sponsorshipId}`,
+          { method: "GET" },
+        )
 
         const paypalData = await res.json()
-        if (res.ok) {
-          let beneficiaryData = null
-          if (paypalData.custom_id) {
-            const { data: beneficiary } = await supabase
-              .from("beneficiaries")
-              .select("name, location_str")
-              .eq("id", paypalData.custom_id)
-              .single()
-            
-            if (beneficiary) {
-              beneficiaryData = beneficiary
-            }
-          }
-
-          // If subscription is active, create a record in our database
-          if (paypalData.status === "ACTIVE") {
-            const { data: newSubscription, error: createError } = await supabase
-              .from("subscriptions")
-              .insert({
-                stripe_subscription_id: paypalData.id, // Using stripe_subscription_id for PayPal too
-                beneficiary_id: paypalData.custom_id,
-                user_id: user.id, // Add authenticated user's ID
-                customer_id: paypalData.subscriber.payer_id, // Add PayPal payer ID
-                sponsorship_method: "PAYPAL", // Set payment method
-                amount: Math.round(parseFloat(paypalData.billing_info?.last_payment?.amount?.value || "0") * 100), // Convert to cents
-                interval: "month", // PayPal plans are monthly
-                status: "complete", // Map PayPal's ACTIVE status to our complete status
-                current_period_start: paypalData.billing_info?.last_payment?.time || paypalData.create_time,
-                current_period_end: paypalData.billing_info?.next_billing_time,
-                created_at: paypalData.create_time
-              })
-              .select()
-              .single()
-
-            if (createError) {
-              console.error("Failed to create subscription record:", createError)
-            } else {
-              return NextResponse.json({
-                subscription: {
-                  ...newSubscription,
-                  beneficiaries: beneficiaryData,
-                  status: paypalData.status?.toLowerCase()
-                },
-                paypal_order: null,
-              })
-            }
-          }
-
-          return NextResponse.json({
-            subscription: {
-              ...paypalData,
-              beneficiaries: beneficiaryData,
-              status: paypalData.status?.toLowerCase() || "incomplete"
-            },
-            paypal_order: null,
-          })
-        } else {
+        if (!res.ok) {
           console.error("PayPal subscription fetch failed:", paypalData)
           return NextResponse.json(
             { error: "PayPal subscription not found" },
             { status: 404 },
           )
         }
+
+        const paymentContext = parsePayPalPaymentContext(paypalData.custom_id)
+        const beneficiaryId = paymentContext.beneficiaryId
+        let beneficiaryData = null
+        if (beneficiaryId) {
+          const { data: beneficiary } = await supabase
+            .from("beneficiaries")
+            .select("name, location_str")
+            .eq("id", beneficiaryId)
+            .single()
+
+          if (beneficiary) {
+            beneficiaryData = beneficiary
+          }
+        }
+
+        if (paypalData.status === "ACTIVE") {
+          const lastPaymentAmount = paypalData.billing_info?.last_payment?.amount
+          const conversion =
+            paymentContext.conversion ||
+            convertUsdCentsToCurrency(
+              convertCurrencyMinorToUsdCents(
+                parsePayPalAmountMinor(lastPaymentAmount?.value) || 0,
+                lastPaymentAmount?.currency_code || "USD",
+              ),
+              lastPaymentAmount?.currency_code || "USD",
+            )
+          const actualAmountMinor = parsePayPalAmountMinor(
+            lastPaymentAmount?.value,
+          )
+          if (
+            lastPaymentAmount?.currency_code?.toUpperCase() !==
+              conversion.chargedCurrency ||
+            actualAmountMinor !== conversion.chargedAmountMinor ||
+            !verifyCurrencyConversion(conversion)
+          ) {
+            console.error("PAYMENT_CURRENCY_RECONCILIATION_FAILED", {
+              provider: "paypal",
+              paypalSubscriptionId: paypalData.id,
+              expected: conversion,
+              actualCurrency: lastPaymentAmount?.currency_code,
+              actualAmount: lastPaymentAmount?.value,
+            })
+            return NextResponse.json(
+              { error: "Payment currency reconciliation failed" },
+              { status: 409 },
+            )
+          }
+
+          const { data: existingSubscription } = await supabase
+            .from("subscriptions")
+            .select(
+              `
+              *,
+              beneficiaries (
+                name,
+                location_str
+              )
+            `,
+            )
+            .eq("stripe_subscription_id", paypalData.id)
+            .maybeSingle()
+
+          if (existingSubscription) {
+            return NextResponse.json({
+              subscription: {
+                ...existingSubscription,
+                beneficiaries:
+                  existingSubscription.beneficiaries || beneficiaryData,
+                status: paypalData.status?.toLowerCase(),
+              },
+              paypal_order: null,
+            })
+          }
+
+          const { data: newSubscription, error: createError } = await supabase
+            .from("subscriptions")
+            .insert({
+              stripe_subscription_id: paypalData.id,
+              beneficiary_id: beneficiaryId,
+              user_id: user.id,
+              customer_id: paypalData.subscriber.payer_id,
+              sponsorship_method: "PAYPAL",
+              amount: conversion.baseAmountUsdCents,
+              charged_amount: conversion.chargedAmountMinor,
+              charged_currency: conversion.chargedCurrency,
+              conversion_rate: conversion.conversionRate,
+              interval: "month",
+              status: "complete",
+              current_period_start:
+                paypalData.billing_info?.last_payment?.time ||
+                paypalData.create_time,
+              current_period_end: paypalData.billing_info?.next_billing_time,
+              created_at: paypalData.create_time,
+            })
+            .select()
+            .single()
+
+          if (createError) {
+            console.error("Failed to create subscription record:", createError)
+          } else {
+            return NextResponse.json({
+              subscription: {
+                ...newSubscription,
+                beneficiaries: beneficiaryData,
+                status: paypalData.status?.toLowerCase(),
+              },
+              paypal_order: null,
+            })
+          }
+        }
+
+        return NextResponse.json({
+          subscription: {
+            ...paypalData,
+            beneficiaries: beneficiaryData,
+            status: paypalData.status?.toLowerCase() || "incomplete",
+          },
+          paypal_order: null,
+        })
       } catch (paypalError) {
         console.error("PayPal API error:", paypalError)
         return NextResponse.json(
@@ -160,14 +202,11 @@ export async function GET(req: Request) {
           { status: 500 },
         )
       }
-    } else if (token) {
-      // If we only have a token, fetch PayPal order details
-      const res = await fetch(`${PAYPAL_API_URL}/v2/checkout/orders/${token}`, {
+    }
+
+    if (token) {
+      const res = await paypalFetch(`/v2/checkout/orders/${token}`, {
         method: "GET",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
       })
 
       const data = await res.json()
