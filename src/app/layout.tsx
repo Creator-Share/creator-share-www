@@ -4,6 +4,7 @@ import { Providers } from "@/components/Providers"
 import "@/styles/globals.css"
 import { PageWrapper } from "@/components/PageWrapper"
 import { Toaster } from "@/components/ui/toaster"
+import { Analytics } from "@vercel/analytics/next"
 
 const redditSans = Reddit_Sans({
   subsets: ["latin"],
@@ -34,6 +35,7 @@ export default function RootLayout({
           </main>
           <Toaster />
         </Providers>
+        <Analytics />
       </body>
     </html>
   )
