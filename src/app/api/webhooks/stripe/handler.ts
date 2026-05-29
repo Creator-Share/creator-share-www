@@ -5,6 +5,7 @@ import {
   getWebhookSecret,
   type StripeRegion,
 } from "@/lib/stripe/config"
+import { getStripeRegionForPaymentMetadata } from "@/lib/stripe/currencyRouting"
 import { createServiceRoleClient } from "@/utils/supabase/server"
 import {
   type CurrencyConversion,
@@ -91,13 +92,14 @@ function validateStripeCurrencyAmount(
 }
 
 export async function handleStripeWebhook(req: Request, region: StripeRegion) {
-  const stripe = getStripeClient(region)
+  const requestRegion = region
+  const stripe = getStripeClient(requestRegion)
   const supabase = createServiceRoleClient()
   const sig = req.headers.get("stripe-signature") as string
 
   let webhookSecret: string
   try {
-    webhookSecret = getWebhookSecret(region)
+    webhookSecret = getWebhookSecret(requestRegion)
   } catch (err) {
     console.error("Webhook secret lookup failed:", err)
     return NextResponse.json(
@@ -125,6 +127,19 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
   }
 
   try {
+    const eventRegion = getStripeRegionForPaymentMetadata(
+      (event.data.object as { metadata?: Stripe.Metadata | null }).metadata,
+      requestRegion,
+    )
+    if (eventRegion !== requestRegion) {
+      console.error("Stripe webhook route region differs from payment metadata:", {
+        eventId: event.id,
+        eventType: event.type,
+        requestRegion,
+        eventRegion,
+      })
+    }
+    const region = eventRegion
 
     switch (event.type) {
       case "checkout.session.completed": {

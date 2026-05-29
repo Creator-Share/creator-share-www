@@ -5,7 +5,10 @@ import {
   formatMoney,
   getDefaultCurrencyForCountry,
 } from "../src/utils/currency"
-import { getStripeRegionForPaymentCurrency } from "../src/lib/stripe/currencyRouting"
+import {
+  getStripeRegionForPaymentCurrency,
+  getStripeRegionForPaymentMetadata,
+} from "../src/lib/stripe/currencyRouting"
 
 test.describe("payment currency support", () => {
   test("maps supported countries to the expected default currencies", () => {
@@ -65,6 +68,19 @@ test.describe("payment currency support", () => {
     expect(getStripeRegionForPaymentCurrency("AUD")).toBe("uk")
     expect(getStripeRegionForPaymentCurrency("GBP")).toBe("uk")
     expect(getStripeRegionForPaymentCurrency("EUR")).toBe("uk")
+  })
+
+  test("prefers checkout metadata region over legacy webhook route fallback", () => {
+    expect(getStripeRegionForPaymentMetadata({ region: "uk" }, "us")).toBe(
+      "uk",
+    )
+    expect(getStripeRegionForPaymentMetadata({ region: "us" }, "uk")).toBe(
+      "us",
+    )
+    expect(getStripeRegionForPaymentMetadata({ region: "nope" }, "us")).toBe(
+      "us",
+    )
+    expect(getStripeRegionForPaymentMetadata(null, "uk")).toBe("uk")
   })
 
   test("currency detection endpoint reads the Vercel country header", async ({

@@ -161,8 +161,17 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose, prevPath }) =
                         rel="noopener noreferrer"
                         className="inline-flex flex-1 min-w-[200px] items-center justify-between gap-3 px-5 py-3.5 bg-white border border-gray-200 rounded-xl text-sm hover:border-[#2b7ff9] hover:shadow-sm hover:text-[#2b7ff9] transition-all group"
                       >
-                        <span className="font-semibold text-gray-800 group-hover:text-[#2b7ff9] transition-colors">
-                          {link.region === "us" ? "🇺🇸 USD" : link.region === "uk" ? "🇬🇧 GBP / EUR / AUD" : "Manage Subscription"}
+                        <span className="flex flex-col gap-1">
+                          <span className="font-semibold text-gray-800 group-hover:text-[#2b7ff9] transition-colors">
+                            {link.region === "us"
+                              ? "🇺🇸 USD"
+                              : link.region === "uk"
+                                ? "🇬🇧 GBP / EUR / AUD"
+                                : "Manage Subscription"}
+                          </span>
+                          <span className="text-xs font-medium text-gray-500 group-hover:text-[#2b7ff9] transition-colors">
+                            Manage subscription here
+                          </span>
                         </span>
                         <FaExternalLinkAlt className="w-3 h-3 text-gray-400 group-hover:text-[#2b7ff9] flex-shrink-0 transition-colors" />
                       </a>
