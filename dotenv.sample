@@ -7,6 +7,8 @@ NEXT_PUBLIC_MAPTILER_KEY=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
+# Legacy single-account server fallback for email portal links.
+# Prefer NEXT_PUBLIC_STRIPE_PORTAL_URL_US/UK for new deployments.
 STRIPE_PORTAL_URL=
 NEXT_PUBLIC_BASE_URL=https://localhost:3000/
 
@@ -27,19 +29,17 @@ NEXT_PUBLIC_BASE_URL=https://localhost:3000/
 # STRIPE_SECRET_KEY_US=
 # NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US=
 # STRIPE_WEBHOOK_SECRET_US=
-# STRIPE_PORTAL_URL_US=
 # NEXT_PUBLIC_STRIPE_PORTAL_URL_US=
 # STRIPE_SECRET_KEY_UK=
 # NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK=
 # STRIPE_WEBHOOK_SECRET_UK=
-# STRIPE_PORTAL_URL_UK=
 # NEXT_PUBLIC_STRIPE_PORTAL_URL_UK=
 #
 # NEXT_PUBLIC_STRIPE_PORTAL_URL_* powers the public Footer / FAQ / About
-# "Manage Subscription" links. Server-side STRIPE_PORTAL_URL_* powers email
-# template links. Set both in production so the in-app link and the email
-# link agree. If you configure only one region during rollout, the other
-# region still renders a working link using the legacy
+# "Manage Subscription" links and server-rendered email template links.
+# These URLs are not secrets, so use the same NEXT_PUBLIC values for both
+# browser and server surfaces. If you configure only one region during
+# rollout, the other region still renders a working link using the legacy
 # https://stripe.creatorshare.com fallback rather than dropping out.
 #
 # Webhook endpoints:

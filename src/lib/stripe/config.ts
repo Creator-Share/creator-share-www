@@ -59,7 +59,7 @@ const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
       process.env.STRIPE_WEBHOOK_SECRET_US ||
       (STRIPE_DEFAULT_REGION === "us" ? LEGACY_WEBHOOK_SECRET || "" : ""),
     portalUrl:
-      process.env.STRIPE_PORTAL_URL_US ||
+      process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_US ||
       (STRIPE_DEFAULT_REGION === "us" ? LEGACY_PORTAL_URL || "" : ""),
     currency: "usd",
     label: "Creator Share US",
@@ -75,7 +75,7 @@ const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
       process.env.STRIPE_WEBHOOK_SECRET_UK ||
       (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_WEBHOOK_SECRET || "" : ""),
     portalUrl:
-      process.env.STRIPE_PORTAL_URL_UK ||
+      process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_UK ||
       (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_PORTAL_URL || "" : ""),
     // TODO(uk-pricing): switch to "gbp" once the UI supports per-region
     // currency display + a price table denominated in pence. Until then,
