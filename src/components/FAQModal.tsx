@@ -72,7 +72,7 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose, prevPath }) =
 
   // Only show the selector when Stripe portal URLs differ per region.
   const uniqueStripeUrls = new Set(stripeLinks.map((l) => l.href))
-  const needsRegionSelector = uniqueStripeUrls.size > 1
+  const needsRegionSelector = uniqueStripeUrls.size >= 1
 
   const handleClose = useCallback(() => {
     if (typeof window !== "undefined" && prevPath !== undefined) {
@@ -162,8 +162,7 @@ export const FAQModal: React.FC<FAQModalProps> = ({ open, onClose, prevPath }) =
                         className="inline-flex flex-1 min-w-[200px] items-center justify-between gap-3 px-5 py-3.5 bg-white border border-gray-200 rounded-xl text-sm hover:border-[#2b7ff9] hover:shadow-sm hover:text-[#2b7ff9] transition-all group"
                       >
                         <span className="font-semibold text-gray-800 group-hover:text-[#2b7ff9] transition-colors">
-                          {link.region === "us" ? "🇺🇸" : "🇬🇧"}{" "}
-                          {link.region === "us" ? "USD" : "GBP / EUR / AUD"}
+                          {link.region === "us" ? "🇺🇸 USD" : link.region === "uk" ? "🇬🇧 GBP / EUR / AUD" : "Manage Subscription"}
                         </span>
                         <FaExternalLinkAlt className="w-3 h-3 text-gray-400 group-hover:text-[#2b7ff9] flex-shrink-0 transition-colors" />
                       </a>
