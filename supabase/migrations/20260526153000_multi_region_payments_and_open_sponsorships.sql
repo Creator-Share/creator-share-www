@@ -48,8 +48,8 @@ UPDATE public.subscriptions SET charged_amount = amount;
 
 -- Backfill partnerships: charged_amount and charged_currency (all pre-migration rows are USD-only)
 UPDATE public.partnerships
-SET charged_amount = amount
-WHERE charged_amount IS NULL;
+SET charged_amount = amount;
+-- WHERE charged_amount IS NULL;
 
 -- Same backfill for transaction_ledger: all pre-migration rows are USD-only.
 UPDATE public.transaction_ledger
