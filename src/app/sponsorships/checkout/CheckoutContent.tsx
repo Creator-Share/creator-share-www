@@ -1,17 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Box, Text, Button, Spinner, Center } from "@chakra-ui/react"
 import {
   EmbeddedCheckout,
   EmbeddedCheckoutProvider,
 } from "@stripe/react-stripe-js"
-import { loadStripe } from "@stripe/stripe-js"
+import { loadStripe, type Stripe } from "@stripe/stripe-js"
 
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string,
-)
+const FALLBACK_PUBLISHABLE_KEY =
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
 
 export default function CheckoutContent() {
   const searchParams = useSearchParams()
@@ -20,10 +19,22 @@ export default function CheckoutContent() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [ ,setBeneficiaryId] = useState<string | null>(null)
+  const [publishableKey, setPublishableKey] = useState<string>(
+    FALLBACK_PUBLISHABLE_KEY,
+  )
+
+  // Stripe.js requires a stable promise reference for the lifetime of the
+  // checkout. Recompute only when the publishable key actually changes.
+  const stripePromise = useMemo<Promise<Stripe | null> | null>(() => {
+    if (!publishableKey) return null
+    return loadStripe(publishableKey)
+  }, [publishableKey])
 
   useEffect(() => {
     const secret = searchParams.get("client_secret")
     const bId = searchParams.get("beneficiary_id")
+    const pk = searchParams.get("publishable_key")
+    if (pk) setPublishableKey(pk)
     if (secret) {
       setClientSecret(secret)
       setBeneficiaryId(bId)
@@ -63,7 +74,7 @@ export default function CheckoutContent() {
     )
   }
 
-  if (!clientSecret) {
+  if (!clientSecret || !stripePromise) {
     return (
       <Box className="p-8 text-center">
         <Text className="text-xl mb-4 text-red-600">

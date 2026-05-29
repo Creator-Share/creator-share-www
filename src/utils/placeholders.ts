@@ -15,6 +15,8 @@ export const PERSON_PLACEHOLDER_PATH = '/placeholder-person.svg'
  */
 export function getPlaceholderImageUrl(baseUrl?: string): string {
   const base = baseUrl || process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
-  return `${base}${PERSON_PLACEHOLDER_PATH}`
+  if (base.includes("localhost") || base.includes("127.0.0.1")) {
+    return `https://creator-share-www.vercel.app${PERSON_PLACEHOLDER_PATH}`
+  }
+  return `${base.replace(/\/$/, "")}${PERSON_PLACEHOLDER_PATH}`
 }
-

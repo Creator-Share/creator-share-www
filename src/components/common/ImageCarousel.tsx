@@ -6,7 +6,6 @@ import { ProgressiveImage } from "./ProgressiveImage"
 interface ImageCarouselProps {
   images: Array<{ id?: string; image_url?: string }>
   getImageSrc: (image: { id?: string; image_url?: string }) => string
-  getThumbnailSrc?: (image: { id?: string; image_url?: string }) => string | undefined
   fallbackSrc: string
   alt: string
   className?: string
@@ -16,7 +15,6 @@ interface ImageCarouselProps {
 export const ImageCarousel: React.FC<ImageCarouselProps> = ({
   images,
   getImageSrc,
-  getThumbnailSrc,
   fallbackSrc,
   alt,
   className = "",
@@ -44,9 +42,6 @@ export const ImageCarousel: React.FC<ImageCarouselProps> = ({
 
   const currentImage = images[currentImageIndex]
   const imageSrc = currentImage ? getImageSrc(currentImage) : fallbackSrc
-  const thumbnailSrc = currentImage && getThumbnailSrc 
-    ? getThumbnailSrc(currentImage) 
-    : undefined
 
   if (images.length === 0) {
     return (
@@ -63,7 +58,6 @@ export const ImageCarousel: React.FC<ImageCarouselProps> = ({
     <Box position="relative" className={`group ${className}`} width="100%" height="100%">
       <ProgressiveImage
         src={imageSrc || fallbackSrc}
-        thumbnailSrc={thumbnailSrc}
         alt={alt}
         className=""
         fallbackSrc={fallbackSrc}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/utils/supabase/server"
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
-import { deleteFile, MediaRow } from "@/utils/supabase/media"
+import { deleteFile, filterExistingMediaRows, MediaRow } from "@/utils/supabase/media"
 
 // GET: Retrieve all images for a beneficiary by beneficiary_id
 export async function GET(
@@ -24,7 +24,10 @@ export async function GET(
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    return NextResponse.json(data, { status: 200 })
+    const serviceSupabase = createServiceRoleClient()
+    const existing = await filterExistingMediaRows(serviceSupabase, (data || []) as unknown as MediaRow[])
+
+    return NextResponse.json(existing, { status: 200 })
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error"
     return NextResponse.json({ error: errorMessage }, { status: 500 })

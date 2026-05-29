@@ -1,12 +1,65 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
+import { createServiceRoleClient } from "@/utils/supabase/server"
 import {
-  MINIMUM_OPEN_SPONSORSHIP_CENTS,
-} from "@/config/beneficiaryTypes"
-import { centsToDollars } from "@/utils/currency"
+  filterExistingMediaRows,
+  getExternalCheckoutImageUrl,
+  MediaRow,
+} from "@/utils/supabase/media"
+import {
+  getPublishableKey,
+  getStripeClient,
+} from "@/lib/stripe/config"
+import { getStripeRegionForPaymentCurrency } from "@/lib/stripe/currencyRouting"
+import { MINIMUM_OPEN_SPONSORSHIP_CENTS } from "@/config/beneficiaryTypes"
+import {
+  buildPaymentCurrencyMetadata,
+  coerceSupportedCurrency,
+  convertUsdCentsToCurrency,
+  formatConversionForDisplay,
+} from "@/utils/currency"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string)
+const PUBLIC_BASE_URL = "https://creator-share-www.vercel.app"
+
+function getPublicSiteBaseUrl(): string {
+  const base = process.env.NEXT_PUBLIC_BASE_URL || PUBLIC_BASE_URL
+  if (base.includes("localhost") || base.includes("127.0.0.1")) {
+    return PUBLIC_BASE_URL
+  }
+  return base.replace(/\/$/, "")
+}
+
+async function getStripeProductImageUrl(
+  beneficiaryId: string | null | undefined,
+  fallbackImage: string,
+): Promise<string> {
+  if (!beneficiaryId) return fallbackImage
+
+  try {
+    const supabase = createServiceRoleClient()
+    const { data, error } = await supabase
+      .from("media")
+      .select("*")
+      .eq("parent_id", beneficiaryId)
+      .eq("type", "IMAGE")
+      .order("weight", { ascending: true })
+      .limit(10)
+
+    if (error || !data || data.length === 0) return fallbackImage
+
+    const existingMedia = await filterExistingMediaRows(
+      supabase,
+      data as unknown as MediaRow[],
+    )
+    if (existingMedia.length === 0) return fallbackImage
+
+    return getExternalCheckoutImageUrl(existingMedia[0])
+  } catch (error) {
+    console.error("Failed to resolve Stripe product image:", error)
+    return fallbackImage
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -15,7 +68,6 @@ export async function POST(req: Request) {
       beneficiaryName,
       amount,
       paymentType,
-      beneficiaryImage,
       location,
       userId,
       isEmbedded,
@@ -24,7 +76,12 @@ export async function POST(req: Request) {
       email,
       sponsorshipMode,
       blindLabel,
+      currency: currencyInput,
     } = await req.json()
+
+    const selectedCurrency = coerceSupportedCurrency(currencyInput)
+    const region = getStripeRegionForPaymentCurrency(selectedCurrency)
+    const stripe = getStripeClient(region)
 
     const resolvedSponsorshipMode =
       type === "blind_sponsorship" || sponsorshipMode === "blind"
@@ -38,10 +95,7 @@ export async function POST(req: Request) {
         : "Unknown Beneficiary")
     const resolvedBlindLabel =
       blindLabel || "the next child who needs support"
-    // Use SVG directly from public folder
-    // For Stripe product images, we need a full URL (Stripe requires absolute URLs)
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
-    const fallbackImage = `${baseUrl}${PERSON_PLACEHOLDER_PATH}`
+    const fallbackImage = `${getPublicSiteBaseUrl()}${PERSON_PLACEHOLDER_PATH}`
 
     // For blind sponsorships, always use $33.33 (3333 cents).
     // For regular sponsorships, the client sends the correct amount:
@@ -61,12 +115,17 @@ export async function POST(req: Request) {
       !Number.isInteger(enforcedAmount) ||
       enforcedAmount < MINIMUM_OPEN_SPONSORSHIP_CENTS
     ) {
-      const minDollars = Number(centsToDollars(MINIMUM_OPEN_SPONSORSHIP_CENTS))
+      const minimumConversion = convertUsdCentsToCurrency(
+        MINIMUM_OPEN_SPONSORSHIP_CENTS,
+        selectedCurrency,
+      )
       return NextResponse.json(
-        { error: `Minimum amount is $${minDollars}` },
+        { error: `Minimum amount is ${formatConversionForDisplay(minimumConversion)}` },
         { status: 400 },
       )
     }
+    const conversion = convertUsdCentsToCurrency(enforcedAmount, selectedCurrency)
+    const paymentCurrencyMetadata = buildPaymentCurrencyMetadata(conversion)
 
     const isMonthly = paymentType === "subscription"
     const isOneTime = paymentType === "one_time"
@@ -92,16 +151,10 @@ export async function POST(req: Request) {
       productName = `${isOneTime ? "One-time" : isMonthly ? "Monthly" : "Yearly"} Blind Sponsorship`
       productImages = [fallbackImage]
     } else {
-      const safeImage = beneficiaryImage
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || ""
-      const isLocalBase = /localhost|127\.0\.0\.1/.test(baseUrl)
-      const fullImageUrl = safeImage.startsWith("http")
-        ? safeImage
-        : isLocalBase
-          ? `${baseUrl}${PERSON_PLACEHOLDER_PATH}` // Use path constant, construct full URL for Stripe
-          : `${baseUrl}${safeImage}`
       productName = `${isOneTime ? "One-time" : isMonthly ? "Monthly" : "Yearly"} Sponsorship for ${resolvedBeneficiaryName}`
-      productImages = [fullImageUrl]
+      productImages = [
+        await getStripeProductImageUrl(beneficiaryId, fallbackImage),
+      ]
     }
 
     const product = await stripe.products.create({
@@ -112,7 +165,12 @@ export async function POST(req: Request) {
     // Stripe MetadataParam requires all values to be string | number | null — cast explicitly.
     const priceMetadata: Record<string, string | null> =
       type === "partnership"
-        ? { type: "partnership", project, amount: enforcedAmount.toString() }
+        ? {
+            type: "partnership",
+            project,
+            amount: enforcedAmount.toString(),
+            ...paymentCurrencyMetadata,
+          }
         : {
             beneficiaryId: beneficiaryId || null,
             userId: userId || null,
@@ -120,12 +178,13 @@ export async function POST(req: Request) {
             sponsorshipMode: resolvedSponsorshipMode,
             blindLabel: resolvedBlindLabel,
             beneficiaryName: resolvedBeneficiaryName,
+            ...paymentCurrencyMetadata,
           }
 
     // One-time payments must NOT have a `recurring` property on the price
     const price = await stripe.prices.create({
-      unit_amount: enforcedAmount,
-      currency: "usd",
+      unit_amount: conversion.chargedAmountMinor,
+      currency: conversion.chargedCurrency.toLowerCase(),
       ...(isOneTime ? {} : { recurring: { interval } }),
       product: product.id,
       metadata: priceMetadata,
@@ -144,7 +203,9 @@ export async function POST(req: Request) {
             project,
             email,
             paymentType,
+            region,
             creatorshare_platform: "true",
+            ...paymentCurrencyMetadata,
           }
         : {
             beneficiaryId: beneficiaryId || null,
@@ -156,7 +217,9 @@ export async function POST(req: Request) {
             paymentType,
             sponsorshipMode: resolvedSponsorshipMode,
             blindLabel: resolvedBlindLabel,
+            region,
             creatorshare_platform: "true",
+            ...paymentCurrencyMetadata,
           }
 
     // One-time: mode="payment", no subscription_data.
@@ -172,6 +235,14 @@ export async function POST(req: Request) {
       customer_email: email,
       metadata: sessionMetadata,
       ...(!isOneTime && {
+        // subscription_data.metadata is what Stripe stamps onto the resulting
+        // Stripe.Subscription, which is the metadata read by every
+        // customer.subscription.* / invoice.* event handler. It MUST carry
+        // creatorshare_platform (so the identity gate protects those events
+        // too) and `type` (so the type-name filter for subscription events
+        // routes sponsorship cancellations through reconciliation instead of
+        // dropping them silently when a sponsor cancels via Stripe's
+        // hosted billing portal).
         subscription_data: {
           metadata:
             type === "partnership"
@@ -180,14 +251,21 @@ export async function POST(req: Request) {
                   project,
                   amount: enforcedAmount.toString(),
                   email,
+                  region,
+                  creatorshare_platform: "true",
+                  ...paymentCurrencyMetadata,
                 }
               : {
+                  type: "sponsorship",
                   beneficiaryId: beneficiaryId || undefined,
                   userId: userId || null,
                   amount: enforcedAmount.toString(),
                   sponsorshipMode: resolvedSponsorshipMode,
                   blindLabel: resolvedBlindLabel,
                   beneficiaryName: resolvedBeneficiaryName,
+                  region,
+                  creatorshare_platform: "true",
+                  ...paymentCurrencyMetadata,
                 },
         },
       }),
@@ -195,10 +273,10 @@ export async function POST(req: Request) {
 
     if (isEmbedded) {
       sessionConfig.ui_mode = "embedded"
-      sessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?embedded=true&session_id={CHECKOUT_SESSION_ID}`
+      sessionConfig.return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?embedded=true&session_id={CHECKOUT_SESSION_ID}&region=${region}&currency=${conversion.chargedCurrency}`
     } else {
-      sessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`
-      sessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}`
+      sessionConfig.success_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}&region=${region}&currency=${conversion.chargedCurrency}`
+      sessionConfig.cancel_url = `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?session_id={CHECKOUT_SESSION_ID}&region=${region}&currency=${conversion.chargedCurrency}`
     }
 
     const session = await stripe.checkout.sessions.create(sessionConfig)
@@ -206,6 +284,10 @@ export async function POST(req: Request) {
     return NextResponse.json({
       url: session.url,
       clientSecret: session.client_secret,
+      region,
+      publishableKey: getPublishableKey(region),
+      chargedAmountMinor: conversion.chargedAmountMinor,
+      chargedCurrency: conversion.chargedCurrency,
     })
   } catch (error) {
     console.error("Stripe Error:", error)

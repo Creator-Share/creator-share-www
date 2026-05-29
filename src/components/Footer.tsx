@@ -3,11 +3,13 @@ import React, { useEffect, useState } from "react"
 import { FaFacebook, FaInstagram } from "react-icons/fa"
 import NextLink from "next/link"
 import { useAuthStore } from "@/store/authStore"
+import { getPublicPortalLinks } from "@/lib/payments/portals"
 
 export const Footer = () => {
   const [mounted, setMounted] = useState(false)
   const user = useAuthStore((state) => state.user)
   const fetchUser = useAuthStore((state) => state.fetchUser)
+  const portalLinks = getPublicPortalLinks()
 
   useEffect(() => {
     setMounted(true)
@@ -111,14 +113,20 @@ export const Footer = () => {
           </ul>
           <div className="mt-4">
             <h3 className="text-lg font-semibold mb-2">Manage Subscriptions</h3>
-            <a
-              href="https://stripe.creatorshare.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:underline"
-            >
-              Manage Subscriptions
-            </a>
+            <ul className="space-y-1">
+              {portalLinks.map((link) => (
+                <li key={`${link.provider}-${link.region ?? "default"}`}>
+                  <a
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>

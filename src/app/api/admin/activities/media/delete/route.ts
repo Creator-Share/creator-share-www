@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
-import { MediaRow, getStorageKey } from "@/utils/supabase/media"
+import { MediaRow, getDirectMediaUrl, getStorageKey } from "@/utils/supabase/media"
 import { STORAGE_BUCKET } from "@/utils/supabase/buckets"
 
 export const runtime = "nodejs"
@@ -57,12 +57,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "No media found for this activity" }, { status: 404 })
   }
 
-  // ── Find the record whose public URL matches mediaUrl ─────────────────────
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "")
-  if (!base) {
-    return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
-  }
-
   let targetRecord: MediaRow | null = null
 
   for (const record of allMedia) {
@@ -70,20 +64,7 @@ export async function DELETE(req: NextRequest) {
     // The cast to MediaRow is safe because those are the only fields getStorageKey reads.
     // TODO: align MediaRow with the supabase-generated type so this cast is unnecessary.
     const mediaRecord = record as unknown as MediaRow
-    const key = getStorageKey(mediaRecord)
-
-    let candidateUrl: string
-    if (mediaRecord.type === "IMAGE") {
-      const { data } = supabase.storage
-        .from(STORAGE_BUCKET)
-        .getPublicUrl(key, {
-          transform: { width: 800, height: 800, quality: 85, resize: "cover" },
-        })
-      candidateUrl = data.publicUrl
-    } else {
-      // encodeURIComponent per segment encodes +, #, ?, & which encodeURI misses
-      candidateUrl = `${base}/storage/v1/object/public/${STORAGE_BUCKET}/${key.split("/").map(encodeURIComponent).join("/")}`
-    }
+    const candidateUrl = getDirectMediaUrl(mediaRecord)
 
     if (candidateUrl === mediaUrl) {
       targetRecord = mediaRecord

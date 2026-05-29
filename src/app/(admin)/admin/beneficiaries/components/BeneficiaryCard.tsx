@@ -88,7 +88,6 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
               alt={`${beneficiary.name}'s photo`}
               fill
               className="rounded-lg object-cover"
-              unoptimized
             />
           ) : (
             <div className="w-full h-full rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 text-sm text-center p-2">

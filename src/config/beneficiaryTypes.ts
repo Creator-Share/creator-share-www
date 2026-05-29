@@ -126,8 +126,8 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
   {
     label: "Rescue Dogs",
     type: "ANIMAL",
-    isOpenSponsorship: false,
-    defaultBudgetGoalCents: 2500,
+    isOpenSponsorship: true,
+    defaultBudgetGoalCents: -1,
     isPubliclyVisible: false, // coming soon
     singularName: "dog",
     pluralName: "dogs",
@@ -191,6 +191,23 @@ export function isOpenSponsorshipType(
   type: BeneficiaryTabType | string | null | undefined,
 ): boolean {
   return findConfig(type)?.isOpenSponsorship ?? false
+}
+
+export function isFixedSponsorshipType(
+  type: BeneficiaryTabType | string | null | undefined,
+): boolean {
+  const config = findConfig(type)
+  return Boolean(config?.type && !config.isOpenSponsorship)
+}
+
+export function hasOpenSponsorshipSupport(beneficiary: {
+  active_subscriptions?: number | null
+  budget_raised?: number | null
+}): boolean {
+  return (
+    Number(beneficiary.active_subscriptions ?? 0) > 0 ||
+    Number(beneficiary.budget_raised ?? 0) > 0
+  )
 }
 
 /**

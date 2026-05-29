@@ -6,9 +6,57 @@
 
 import { STORAGE_BUCKET } from "@/utils/supabase/buckets"
 import type { Database } from "@/lib/types/db.types"
-import { createClient } from "@/utils/supabase/client"
 
 export type MediaRow = Database["public"]["Tables"]["media"]["Row"]
+
+type MediaImage = Partial<
+  Pick<MediaRow, "id" | "parent_id" | "type" | "extension">
+> & {
+  image_url?: string | null
+}
+
+type StorageListClient = {
+  storage: {
+    from: (bucket: string) => {
+      list: (
+        path: string,
+        options?: { limit?: number; search?: string },
+      ) => Promise<{
+        data: Array<{ name: string }> | null
+        error: { message?: string } | null
+      }>
+    }
+  }
+}
+
+export interface ExternalImageOptions {
+  width?: number
+  height?: number
+  quality?: number
+  resize?: "cover" | "contain" | "fill"
+  format?: "origin"
+}
+
+const getSupabaseBaseUrl = (): string => {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!base) {
+    throw new Error("Environment variable NEXT_PUBLIC_SUPABASE_URL is not set")
+  }
+  return base.replace(/\/$/, "")
+}
+
+const encodeStoragePath = (path: string): string =>
+  path.split("/").map(encodeURIComponent).join("/")
+
+const buildTransformQuery = (options: ExternalImageOptions): string => {
+  const params = new URLSearchParams()
+  if (options.width) params.set("width", String(options.width))
+  if (options.height) params.set("height", String(options.height))
+  if (options.quality) params.set("quality", String(options.quality))
+  if (options.resize) params.set("resize", options.resize)
+  if (options.format) params.set("format", options.format)
+  return params.toString()
+}
 
 /**
  * Compose the storage key for a media row.
@@ -46,90 +94,55 @@ export const getStorageKey = (media: MediaRow): string => {
   return `${normalizedParentId}/${normalizedType}/${normalizedId}.${normalizedExt}`
 }
 
-/**
- * Generate the public URL for a given media row.
- * For images, uses Supabase's image transformation API to ensure WebP format and proper sizing.
- * For videos, returns the direct public URL.
- */
-export const generatePublicUrl = (media: MediaRow): string => {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!base) {
-    throw new Error("Environment variable NEXT_PUBLIC_SUPABASE_URL is not set")
-  }
-
+export const getDirectMediaUrl = (media: MediaRow): string => {
+  const base = getSupabaseBaseUrl()
   const key = getStorageKey(media)
-  const supabase = createClient()
-
-  if (media.type === "IMAGE") {
-    // Use Supabase's built-in image transformation API
-    const { data } = supabase.storage
-      .from(STORAGE_BUCKET)
-      .getPublicUrl(key, {
-        transform: {
-          width: 800,
-          height: 800,
-          quality: 85,
-          resize: "cover",
-        },
-      })
-
-    return data.publicUrl
-  }
-
-  // For videos and other media types, return the direct public URL
-  const normalizedBase = base.replace(/\/$/, "")
-  return `${normalizedBase}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
+  return `${base}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeStoragePath(key)}`
 }
 
-/**
- * Generate a thumbnail URL for progressive image loading.
- * Creates a small, low-quality version for blur-up placeholder effect.
- * Falls back to the regular image URL if transformation fails.
- */
-export const generateThumbnailUrl = (media: MediaRow): string | undefined => {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!base) {
-    return undefined
-  }
+export const getExternalImageUrl = (
+  media: MediaRow,
+  options: ExternalImageOptions = {},
+): string => {
+  if (media.type !== "IMAGE") return getDirectMediaUrl(media)
 
+  const base = getSupabaseBaseUrl()
   const key = getStorageKey(media)
-  const supabase = createClient()
-
-  if (media.type === "IMAGE") {
-    try {
-      // Generate a small, low-quality thumbnail for progressive loading
-      // Supabase's transform API uses /render/image/ endpoint - this is correct!
-      const { data } = supabase.storage
-        .from(STORAGE_BUCKET)
-        .getPublicUrl(key, {
-          transform: {
-            width: 40,
-            height: 40,
-            quality: 20,
-            resize: "cover",
-          },
-        })
-
-      return data.publicUrl
-    } catch (error) {
-      console.warn('Failed to generate thumbnail URL:', error)
-      return undefined
-    }
-  }
-
-  // For videos and other media types, don't generate thumbnails
-  return undefined
+  const query = buildTransformQuery(options)
+  const url = `${base}/storage/v1/render/image/public/${STORAGE_BUCKET}/${encodeStoragePath(key)}`
+  return query ? `${url}?${query}` : url
 }
 
-/**
- * Derive a displayable URL from a media object that may carry either a storage
- * id (preferred) or a legacy image_url string. Used uniformly across card and
- * modal components so the logic is never duplicated.
- */
-export const getImageSrc = (image: { id?: string; image_url?: string }): string => {
+export const getExternalProfileImageUrl = (media: MediaRow): string =>
+  getExternalImageUrl(media, {
+    width: 600,
+    height: 600,
+    quality: 85,
+    resize: "cover",
+  })
+
+export const getExternalActivityImageUrl = (media: MediaRow): string =>
+  getExternalImageUrl(media, {
+    width: 600,
+    quality: 82,
+    resize: "contain",
+  })
+
+export const getExternalCheckoutImageUrl = (media: MediaRow): string =>
+  getExternalImageUrl(media, {
+    width: 800,
+    height: 800,
+    quality: 85,
+    resize: "cover",
+  })
+
+export const getExternalTelegramImageUrl = (media: MediaRow): string =>
+  getExternalCheckoutImageUrl(media)
+
+export const getBrowserImageSrc = (image: MediaImage): string => {
   if (image.id) {
     try {
-      return generatePublicUrl(image as unknown as MediaRow)
+      return getDirectMediaUrl(image as MediaRow)
     } catch {
       return image.image_url || ""
     }
@@ -137,21 +150,34 @@ export const getImageSrc = (image: { id?: string; image_url?: string }): string 
   return image.image_url || ""
 }
 
-/**
- * Derive a thumbnail URL for progressive blur-up loading. Returns undefined
- * when thumbnail generation is not possible -- callers should skip progressive
- * loading in that case and render the full image directly.
- */
-export const getThumbnailSrc = (image: { id?: string; image_url?: string }): string | undefined => {
-  if (image.id) {
-    try {
-      return generateThumbnailUrl(image as unknown as MediaRow)
-    } catch {
-      return undefined
-    }
-  }
+export const getBrowserThumbnailSrc = (
+  _image?: MediaImage,
+): string | undefined => {
+  void _image
   return undefined
 }
+
+/**
+ * Compatibility wrapper. Browser paths should use direct storage URLs so
+ * next/image and Vercel own browser optimization.
+ */
+export const generatePublicUrl = (media: MediaRow): string =>
+  getDirectMediaUrl(media)
+
+/**
+ * Compatibility wrapper. Browser thumbnails are disabled so Supabase does not
+ * transform images that Vercel will optimize in the browser.
+ */
+export const generateThumbnailUrl = (_media?: MediaRow): string | undefined => {
+  void _media
+  return undefined
+}
+
+export const getImageSrc = (image: MediaImage): string =>
+  getBrowserImageSrc(image)
+
+export const getThumbnailSrc = (image?: MediaImage): string | undefined =>
+  getBrowserThumbnailSrc(image)
 
 /**
  * Generate a public URL directly from a storage key (no bucket name).
@@ -160,11 +186,38 @@ export const getPublicUrlFromKey = (key: string): string => {
   if (!key || key.trim() === "") {
     throw new Error("Storage key is required")
   }
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!base) {
-    throw new Error("Environment variable NEXT_PUBLIC_SUPABASE_URL is not set")
-  }
-  return `${base.replace(/\/$/, "")}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURI(key)}`
+  const base = getSupabaseBaseUrl()
+  return `${base}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeStoragePath(key)}`
+}
+
+export async function mediaFileExists(
+  supabaseClient: StorageListClient,
+  media: MediaRow,
+): Promise<boolean> {
+  const key = getStorageKey(media)
+  const lastSlash = key.lastIndexOf("/")
+  const folder = lastSlash >= 0 ? key.slice(0, lastSlash) : ""
+  const fileName = lastSlash >= 0 ? key.slice(lastSlash + 1) : key
+
+  const { data, error } = await supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .list(folder, { limit: 1, search: fileName })
+
+  if (error) return false
+  return Boolean(data?.some((item) => item.name === fileName))
+}
+
+export async function filterExistingMediaRows<T extends MediaRow>(
+  supabaseClient: StorageListClient,
+  mediaRows: T[],
+): Promise<T[]> {
+  const checks = await Promise.all(
+    mediaRows.map(async (media) => ({
+      media,
+      exists: await mediaFileExists(supabaseClient, media),
+    })),
+  )
+  return checks.filter((check) => check.exists).map((check) => check.media)
 }
 
 /**

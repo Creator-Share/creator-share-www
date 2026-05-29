@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/utils/supabase/server"
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
+import { filterExistingMediaRows, MediaRow } from "@/utils/supabase/media"
 
 export async function GET(
   req: Request,
@@ -20,7 +21,10 @@ export async function GET(
       return NextResponse.json({ error: "Database error" }, { status: 500 })
     }
 
-    return NextResponse.json(data)
+    const serviceSupabase = createServiceRoleClient()
+    const existing = await filterExistingMediaRows(serviceSupabase, (data || []) as unknown as MediaRow[])
+
+    return NextResponse.json(existing)
   } catch (err) {
     console.error("Unexpected error:", err)
     return NextResponse.json(
