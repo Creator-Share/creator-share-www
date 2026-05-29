@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import {
+  ALL_STRIPE_REGIONS,
   getStripeClient,
   getWebhookSecret,
   type StripeRegion,
@@ -90,39 +91,45 @@ function validateStripeCurrencyAmount(
   )
 }
 
-export async function handleStripeWebhook(req: Request, region: StripeRegion) {
-  const stripe = getStripeClient(region)
+export async function handleStripeWebhook(req: Request, _hint: StripeRegion) {
   const supabase = createServiceRoleClient()
   const sig = req.headers.get("stripe-signature") as string
+  const rawBody = await req.text()
 
-  let webhookSecret: string
-  try {
-    webhookSecret = getWebhookSecret(region)
-  } catch (err) {
-    console.error("Webhook secret lookup failed:", err)
-    return NextResponse.json(
-      { error: "Webhook secret not configured for region" },
-      { status: 500 },
-    )
+  // Try each configured region's webhook secret. The Stripe account whose
+  // signing secret matches determines the region for downstream API calls
+  // (refunds, subscription lookups, etc.).
+  let region: StripeRegion | undefined
+  let event: Stripe.Event | undefined
+
+  for (const candidate of ALL_STRIPE_REGIONS) {
+    let secret: string
+    try {
+      secret = getWebhookSecret(candidate)
+    } catch {
+      continue // region not configured, skip
+    }
+
+    try {
+      event = Stripe.webhooks.constructEvent(rawBody, sig, secret)
+      region = candidate
+      break
+    } catch {
+      continue // secret didn't match, try next
+    }
   }
 
-  let event
-
-  try {
-    const rawBody = await req.text()
-
-    event = stripe.webhooks.constructEvent(
-      rawBody,
-      sig as string,
-      webhookSecret,
-    )
-  } catch (err) {
-    console.error("Error verifying Stripe webhook:", err)
-    return NextResponse.json(
-      { error: "Webhook verification failed" },
-      { status: 400 },
-    )
+  if (!region || !event) {
+    // None of our configured secrets matched — this event belongs to a
+    // different webhook endpoint on the same shared Stripe account
+    // (e.g. Donorbox payment_intent.succeeded events). Discard silently.
+    console.warn("[webhook]", `event=${extractEventId(rawBody)} discarded — not ours`)
+    return NextResponse.json({ received: true }, { status: 200 })
   }
+
+  console.log("[webhook]", region, "event=" + event.id, "type=" + event.type)
+
+  const stripe = getStripeClient(region)
 
   try {
 
@@ -1332,22 +1339,13 @@ export async function handleStripeWebhook(req: Request, region: StripeRegion) {
         )
     }
   } catch (error) {
-    console.error("Detailed webhook error:", {
-      error,
-      eventType: event?.type,
-      eventId: event?.id,
-      message: error instanceof Error ? error.message : "Unknown error occurred",
-      stack: error instanceof Error ? error.stack : undefined,
-    })
+    console.warn("[webhook]", region, event?.id || "?", "error=", error instanceof Error ? error.message : String(error))
     // Always return 200 to Stripe to prevent retries for unexpected errors
-    // Log the error for investigation but don't fail the webhook
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Unknown error occurred",
-        received: true,
-      },
-      { status: 200 },
-    )
+    return NextResponse.json({ received: true }, { status: 200 })
   }
+}
+
+// Extract the event id from raw JSON payload without parsing the full body.
+function extractEventId(rawBody: string): string | undefined {
+  return rawBody.match(/"id"\s*:\s*"(evt_[^"]+)"/)?.[1]
 }
