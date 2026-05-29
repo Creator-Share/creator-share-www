@@ -16,15 +16,6 @@ export interface StripeRegionConfig {
   label: string
 }
 
-// Legacy unsuffixed vars are rollout fallbacks only. They configure the
-// STRIPE_DEFAULT_REGION account when region-specific values are absent.
-// Checkout account routing is selected-currency aware and lives in
-// getStripeRegionForPaymentCurrency().
-const LEGACY_SECRET_KEY = process.env.STRIPE_SECRET_KEY
-const LEGACY_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-const LEGACY_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
-const LEGACY_PORTAL_URL = process.env.STRIPE_PORTAL_URL
-
 // Validate STRIPE_DEFAULT_REGION at module load: a typo like
 // STRIPE_DEFAULT_REGION=eu otherwise short-circuits coerceRegion() into
 // returning "eu", then crashes inside getStripeConfig with a confusing
@@ -48,38 +39,22 @@ export const STRIPE_DEFAULT_REGION: StripeRegion = isValidStripeRegion(
   ? RAW_DEFAULT_REGION_ENV
   : "us"
 
-// Region-specific env vars take precedence. Legacy unsuffixed vars are only
-// used for the default region during migration and never configure both
-// Stripe accounts.
+// Stripe accounts are configured explicitly per region. STRIPE_DEFAULT_REGION
+// only selects which configured account is used when a caller does not provide
+// a valid region.
 const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
   us: {
-    secretKey:
-      process.env.STRIPE_SECRET_KEY_US ||
-      (STRIPE_DEFAULT_REGION === "us" ? LEGACY_SECRET_KEY || "" : ""),
-    publishableKey:
-      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US ||
-      (STRIPE_DEFAULT_REGION === "us" ? LEGACY_PUBLISHABLE_KEY || "" : ""),
-    webhookSecret:
-      process.env.STRIPE_WEBHOOK_SECRET_US ||
-      (STRIPE_DEFAULT_REGION === "us" ? LEGACY_WEBHOOK_SECRET || "" : ""),
-    portalUrl:
-      process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_US ||
-      (STRIPE_DEFAULT_REGION === "us" ? LEGACY_PORTAL_URL || "" : ""),
+    secretKey: process.env.STRIPE_SECRET_KEY_US || "",
+    publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US || "",
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_US || "",
+    portalUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_US || "",
     label: "Creator Share US",
   },
   uk: {
-    secretKey:
-      process.env.STRIPE_SECRET_KEY_UK ||
-      (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_SECRET_KEY || "" : ""),
-    publishableKey:
-      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK ||
-      (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_PUBLISHABLE_KEY || "" : ""),
-    webhookSecret:
-      process.env.STRIPE_WEBHOOK_SECRET_UK ||
-      (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_WEBHOOK_SECRET || "" : ""),
-    portalUrl:
-      process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_UK ||
-      (STRIPE_DEFAULT_REGION === "uk" ? LEGACY_PORTAL_URL || "" : ""),
+    secretKey: process.env.STRIPE_SECRET_KEY_UK || "",
+    publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK || "",
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_UK || "",
+    portalUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_UK || "",
     label: "Creator Share UK",
   },
 }
@@ -112,7 +87,7 @@ export function getStripeConfig(
   const config = REGION_ENV_MAP[region]
   if (!config.secretKey) {
     throw new Error(
-      `Stripe region "${region}" is not configured — missing STRIPE_SECRET_KEY_${region.toUpperCase()}`,
+      `Stripe region "${region}" is not configured, missing STRIPE_SECRET_KEY_${region.toUpperCase()}`,
     )
   }
   return config
