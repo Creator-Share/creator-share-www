@@ -18,7 +18,6 @@ interface UseBeneficiaryPaginationOptions {
   beneficiaryType?: string
   autoRetry?: boolean
   initialStatus?: string[] // Optional initial status filter (for admin mode)
-  isAdminMode?: boolean // Flag to indicate admin mode (affects ageRange filtering with Draft)
 }
 
 interface UseBeneficiaryPaginationReturn {
@@ -62,7 +61,6 @@ export function useBeneficiaryPagination(
     beneficiaryType,
     autoRetry = true,
     initialStatus,
-    isAdminMode = false,
   } = options
 
   const [filters, setFilters] = useState<FiltersState>({
@@ -130,12 +128,9 @@ export function useBeneficiaryPagination(
       if (filters.search) params.set("search", filters.search)
       params.set("limit", String(recordsPerPage))
       if (nextCursor) params.set("cursor", nextCursor)
-      if (isAdminMode) params.set("admin_mode", "true")
-      
-      
       return params.toString()
     },
-    [filters, beneficiaryType, recordsPerPage, isAdminMode]
+    [filters, beneficiaryType, recordsPerPage]
   )
 
   const fetchPage = useCallback(

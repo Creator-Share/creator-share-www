@@ -75,18 +75,11 @@ const SponsorshipFilters: React.FC<
   const hasInitializedRef = useRef(false)
   useEffect(() => {
     if (isAdminMode && mounted && !hasInitializedRef.current) {
-      const allStatuses = [
-        "New",
-        "Partially Funded",
-        "Budget Fulfilled",
-        "Draft",
-        "Archived",
-        "Sponsorship Cancelled",
-      ]
+      const allStatuses = [...ALL_STATUSES]
       const hasAllStatuses = allStatuses.every((status) =>
         selectedStatus.includes(status),
       )
-      if (!hasAllStatuses && selectedStatus.length === 0) {
+      if (!hasAllStatuses) {
         hasInitializedRef.current = true
         setStatus(allStatuses)
         onFilterChange({

@@ -65,7 +65,6 @@ const ChildrenTable = () => {
       beneficiaryType: activeType ?? undefined,
       autoRetry: true,
       initialStatus: allStatuses,
-      isAdminMode: true,
     })
 
   useEffect(() => {
