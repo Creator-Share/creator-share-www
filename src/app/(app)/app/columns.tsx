@@ -25,7 +25,7 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
   }
 
   const handleConfirmCancel = async () => {
-    const subscriptionId = subscription.sponsorship_id || subscription.id
+    const subscriptionId = subscription.stripe_subscription_id || subscription.id
     
     if (!subscriptionId) {
       setIsModalOpen(false)
@@ -135,7 +135,7 @@ export type Subscription = {
   interval: string
   current_period_start: string
   current_period_end: string
-  sponsorship_id: string
+  stripe_subscription_id: string | null
   child: {
     name: string
     username: string
