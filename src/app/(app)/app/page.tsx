@@ -110,9 +110,7 @@ const UserDashboard = () => {
     if (error) {
       console.error(error)
       // Only show error banner if we have nothing cached
-      if (active.length === 0 && past.length === 0 && blind.length === 0) {
-        setFetchError("Couldn't load your sponsorships")
-      }
+      setFetchError("Couldn't load your sponsorships")
       setLoading(false); setRefreshing(false); return
     }
 
@@ -155,7 +153,8 @@ const UserDashboard = () => {
   // ── Real-time ──
   useEffect(() => {
     if (!user) return
-    const ch = supabaseRef.current
+    const supabase = supabaseRef.current
+    const ch = supabase
       .channel("dashboard_subscriptions")
       .on<SubscriptionRow>("postgres_changes",
         { event: "*", schema: "public", table: "subscriptions", filter: `user_id=eq.${user.id}` },
@@ -176,7 +175,7 @@ const UserDashboard = () => {
           }
         })
       .subscribe()
-    return () => { supabaseRef.current.removeChannel(ch) }
+    return () => { supabase.removeChannel(ch) }
   }, [user, fetchData])
 
   // ── Optimistic cancel with retry ──
