@@ -267,6 +267,20 @@ const UserDashboard = () => {
             </Text>
             {refreshing && <Text fontSize="xs" color="#2b7ff9" mt={1} animation="pulse 1.5s infinite">Refreshing…</Text>}
           </Box>
+          <Link href="/app/transactions" style={{ textDecoration: "none" }}>
+            <Button
+              size="sm"
+              variant="outline"
+              borderRadius="12px"
+              borderColor="#2b7ff9"
+              color="#2b7ff9"
+              _hover={{ bg: "#2b7ff9", color: "white" }}
+              fontSize="xs"
+              px={3}
+            >
+              View all transactions →
+            </Button>
+          </Link>
         </Flex>
 
         <Flex gap={4} mt={5} wrap="wrap">

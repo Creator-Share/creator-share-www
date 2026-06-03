@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react"
 import { Box, Text, Flex, Separator, Skeleton, Table } from "@chakra-ui/react"
 import { createClient } from "@/utils/supabase/client"
+import Link from "next/link"
 
 interface TransactionRow {
   id: string
@@ -82,7 +83,7 @@ export const PaymentHistory: React.FC<PaymentHistoryProps> = ({ userId }) => {
         </Flex>
 
         {expanded && (
-          <Box bg="white" borderRadius="xl" boxShadow="sm" overflow="hidden">
+          <Box bg="white" borderRadius="xl" boxShadow="sm" overflow="hidden" pb={3}>
             {loading ? (
               <Box p={6}>
                 <Skeleton height="20px" mb={3} borderRadius="md" />
@@ -118,6 +119,21 @@ export const PaymentHistory: React.FC<PaymentHistoryProps> = ({ userId }) => {
                   </Table.Body>
                 </Table.Root>
               </Box>
+            )}
+            {expanded && txns.length > 0 && (
+              <Flex justify="center" pt={2}>
+                <Link href="/app/transactions" style={{ textDecoration: "none" }}>
+                  <Text
+                    fontSize="xs"
+                    color="#2b7ff9"
+                    fontWeight="500"
+                    _hover={{ textDecoration: "underline" }}
+                    cursor="pointer"
+                  >
+                    See full breakdown with filters →
+                  </Text>
+                </Link>
+              </Flex>
             )}
           </Box>
         )}

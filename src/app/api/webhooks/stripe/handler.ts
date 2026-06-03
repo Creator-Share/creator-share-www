@@ -379,6 +379,7 @@ export async function handleStripeWebhook(req: Request) {
               tx_action: "PARTNERSHIP",
               customer_name: session.customer_details?.name || null,
               customer_email: email || null,
+              payment_region: region,
             })
 
           if (transactionError) {
@@ -668,6 +669,7 @@ export async function handleStripeWebhook(req: Request) {
             tx_action: "SPONSORSHIP",
             customer_name: session.customer_details?.name || null,
             customer_email: customerEmail || null,
+            payment_region: region,
           })
 
         if (transactionError) {

@@ -690,6 +690,7 @@ export type Database = {
           id: string
           payment_intent: string | null
           payment_method_id: string | null
+          payment_region: Database["public"]["Enums"]["stripe_region"] | null
           provider_event_id: string | null
           reference: string | null
           subscription_type: string | null
@@ -710,6 +711,7 @@ export type Database = {
           id?: string
           payment_intent?: string | null
           payment_method_id?: string | null
+          payment_region?: Database["public"]["Enums"]["stripe_region"] | null
           provider_event_id?: string | null
           reference?: string | null
           subscription_type?: string | null
@@ -730,6 +732,7 @@ export type Database = {
           id?: string
           payment_intent?: string | null
           payment_method_id?: string | null
+          payment_region?: Database["public"]["Enums"]["stripe_region"] | null
           provider_event_id?: string | null
           reference?: string | null
           subscription_type?: string | null
