@@ -1,8 +1,7 @@
 "use client"
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import {
-  Box, Heading, Text, Button, SimpleGrid, Skeleton, Flex, VStack, Table,
-  Separator,
+  Box, Heading, Text, Button, SimpleGrid, Skeleton, Flex, VStack,
 } from "@chakra-ui/react"
 import { createClient } from "@/utils/supabase/client"
 import { useAuthStore } from "@/store/authStore"
@@ -10,6 +9,8 @@ import { toaster } from "@/components/ui/toaster"
 import Link from "next/link"
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js"
 import { BeneficiarySelectionModal } from "./components/BeneficiarySelectionModal"
+import { PaymentHistory } from "./components/PaymentHistory"
+import { DashboardErrorBoundary } from "./components/DashboardErrorBoundary"
 import SponsoredBeneficiaryCard from "./components/SponsoredBeneficiaryCard"
 const HEADER_GRADIENT = "linear-gradient(135deg, #dbeafe 0%, #e0f2fe 50%, #f0f9ff 100%)"
 const BLIND_BANNER_GRADIENT = "linear-gradient(135deg, #fef9c3 0%, #fef3c7 100%)"
@@ -36,10 +37,6 @@ interface BeneficiaryProfile {
 }
 
 interface Sponsorship { sub: SubscriptionRow; ben: BeneficiaryProfile }
-interface TransactionRow {
-  id: string; created_at: string; credit: number | null; description: string | null
-  beneficiary_id: string | null; reference: string | null
-}
 
 const CACHE_KEY = "dashboard_cache"
 
@@ -91,11 +88,6 @@ const UserDashboard = () => {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
-
-  // Payment history
-  const [txns, setTxns] = useState<TransactionRow[]>([])
-  const [txnsLoading, setTxnsLoading] = useState(false)
-  const [txnsExpanded, setTxnsExpanded] = useState(false)
 
   // Modal + collapse state
   const [modalOpen, setModalOpen] = useState(false)
@@ -188,10 +180,16 @@ const UserDashboard = () => {
   }, [user, fetchData])
 
   // ── Optimistic cancel with retry ──
+  const activeRef = useRef(active)
+  const pastRef = useRef(past)
+  activeRef.current = active
+  pastRef.current = past
+
   const handleCancel = useCallback(async (subId: string) => {
-    const prevA = active; const prevP = past
-    const m = active.find(x => x.sub.id === subId)
+    const m = activeRef.current.find(x => x.sub.id === subId)
     if (!m) return
+    const prevA = activeRef.current
+    const prevP = pastRef.current
     setActive(prev => prev.filter(x => x.sub.id !== subId))
     const opt: Sponsorship = { sub: { ...m.sub, status: "cancelled" as const, canceled_at: new Date().toISOString() }, ben: m.ben }
     setPast(prev => [opt, ...prev])
@@ -202,7 +200,6 @@ const UserDashboard = () => {
         body: JSON.stringify({ subscriptionId: opt.sub.stripe_subscription_id || opt.sub.id }),
       })
       if (!res.ok) { const b = await res.json(); throw new Error(b.error || "Failed") }
-      // Cache is updated on the next fetchData cycle
       toaster.create({ title: "Sponsorship ended", description: "You can always start a new one later.", type: "success", duration: 4000 })
     } catch (err) {
       setActive(prevA); setPast(prevP)
@@ -213,22 +210,7 @@ const UserDashboard = () => {
         action: { label: "Retry", onClick: () => handleCancel(subId) },
       })
     }
-  }, [active, past, blind])
-
-  // ── Payment history fetch ──
-  const fetchTxns = useCallback(async () => {
-    if (!user || txns.length > 0) return
-    setTxnsLoading(true)
-    const { data, error } = await supabaseRef.current
-      .from("transaction_ledger").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20)
-    if (error) {
-      console.error(error)
-      toaster.create({ title: "Couldn't load payment history", type: "error", duration: 3000 })
-    } else if (data) {
-      setTxns(data as unknown as TransactionRow[])
-    }
-    setTxnsLoading(false)
-  }, [user, txns.length])
+  }, [])
 
   const stats = useMemo(() => computeStats(active, past), [active, past])
   const showEmpty = !loading && active.length === 0 && past.length === 0 && blind.length === 0
@@ -401,51 +383,7 @@ const UserDashboard = () => {
       )}
 
       {/* ── Payment history ── */}
-      <Separator mb={6} />
-      <Box mb={8}>
-        <Flex as="button" w="full" align="center" justify="space-between"
-          onClick={() => { setTxnsExpanded(v => !v); if (!txnsExpanded && txns.length === 0) fetchTxns() }}
-          mb={txnsExpanded ? 4 : 0} className="group">
-          <Box textAlign="left">
-            <Heading size="md">Payment history</Heading>
-            <Text fontSize="sm" color="gray.500">Your past contributions and receipts</Text>
-          </Box>
-          <Text fontSize="sm" color="#2b7ff9" fontWeight="600" className="group-hover:underline">
-            {txnsExpanded ? "Collapse ▲" : "View all ▼"}
-          </Text>
-        </Flex>
-
-        {txnsExpanded && (
-          <Box bg="white" borderRadius="xl" boxShadow="sm" overflow="hidden">
-            {txnsLoading ? (
-              <Box p={6}><Skeleton height="20px" mb={3} borderRadius="md" /><Skeleton height="20px" mb={3} borderRadius="md" /><Skeleton height="20px" borderRadius="md" /></Box>
-            ) : txns.length === 0 ? (
-              <Text fontSize="sm" color="gray.400" p={6} textAlign="center">No payment records yet.</Text>
-            ) : (
-              <Box overflowX="auto">
-                <Table.Root size="sm">
-                  <Table.Header>
-                    <Table.Row>
-                      <Table.ColumnHeader>Date</Table.ColumnHeader>
-                      <Table.ColumnHeader>Amount</Table.ColumnHeader>
-                      <Table.ColumnHeader>Description</Table.ColumnHeader>
-                    </Table.Row>
-                  </Table.Header>
-                  <Table.Body>
-                    {txns.map(t => (
-                      <Table.Row key={t.id}>
-                        <Table.Cell fontSize="xs">{fmtDate(t.created_at)}</Table.Cell>
-                        <Table.Cell fontSize="xs" fontWeight="600" color="#059669">{cents(t.credit)}</Table.Cell>
-                        <Table.Cell fontSize="xs" color="gray.600">{t.description || "Sponsorship payment"}</Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Root>
-              </Box>
-            )}
-          </Box>
-        )}
-      </Box>
+      {user && <PaymentHistory userId={user.id} />}
 
       {/* ── Modal ── */}
       {modalSubId && (
@@ -460,4 +398,10 @@ const UserDashboard = () => {
   )
 }
 
-export default UserDashboard
+export default function DashboardPage() {
+  return (
+    <DashboardErrorBoundary>
+      <UserDashboard />
+    </DashboardErrorBoundary>
+  )
+}
