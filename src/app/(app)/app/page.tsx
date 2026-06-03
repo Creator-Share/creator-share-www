@@ -11,7 +11,8 @@ import Link from "next/link"
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js"
 import { BeneficiarySelectionModal } from "./components/BeneficiarySelectionModal"
 import SponsoredBeneficiaryCard from "./components/SponsoredBeneficiaryCard"
-import { HEADER_GRADIENT, BLIND_BANNER_GRADIENT } from "@/app/sponsorships/components/SponsorshipCard/cardStyles"
+const HEADER_GRADIENT = "linear-gradient(135deg, #dbeafe 0%, #e0f2fe 50%, #f0f9ff 100%)"
+const BLIND_BANNER_GRADIENT = "linear-gradient(135deg, #fef9c3 0%, #fef3c7 100%)"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

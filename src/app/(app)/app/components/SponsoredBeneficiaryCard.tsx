@@ -4,7 +4,7 @@ import { Box, Text, Flex, Badge, Button } from "@chakra-ui/react"
 import { FaCalendar, FaLocationDot, FaPerson, FaHeart } from "react-icons/fa6"
 import { MdCancelPresentation } from "react-icons/md"
 import { calculateAge } from "@/utils/ageCalculator"
-import { getImageSrc, getThumbnailSrc } from "@/utils/supabase/media"
+import { getImageSrc } from "@/utils/supabase/media"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import { ImageCarousel } from "@/components/common/ImageCarousel"
 import { BeneficiaryMedia } from "@/types/admin.types"
@@ -74,7 +74,7 @@ const SponsoredBeneficiaryCard: React.FC<Props> = ({ beneficiary, subscription, 
         {/* ── Photo ── */}
         <Box position="relative" flexShrink={0} height={{ base: "200px", md: "240px" }} w="100%" overflow="hidden">
           <ImageCarousel
-            images={images} getImageSrc={getImageSrc} getThumbnailSrc={getThumbnailSrc}
+            images={images} getImageSrc={getImageSrc}
             fallbackSrc={placeholderImage} alt={beneficiary.name?.split(" ")[0] ?? ""}
             className="w-full h-full rounded-t-[20px]" showArrowsOnHover={true}
           />
