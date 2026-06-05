@@ -427,7 +427,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
             body: JSON.stringify({
               activityId,
               beneficiaryId,
-              selectedSponsorIds: Array.from(selectedSponsorIds),
+              selectedSponsorshipIds: Array.from(selectedSponsorIds),
             }),
           })
         } catch (err) {
