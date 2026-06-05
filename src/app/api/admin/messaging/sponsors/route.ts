@@ -5,7 +5,6 @@ import { redactEmail } from "@/utils/privacy"
 
 export interface SponsorInfo {
   subscriptionId: string
-  userId: string | null
   emailRedacted: string
   name: string | null
   amount: number | null
@@ -27,10 +26,10 @@ export async function GET(req: NextRequest) {
   const auth = await requireSuperAdmin(supabase)
   if (!auth.ok) return auth.response
 
-  // Step 1: Fetch all active subscriptions for this beneficiary
+  // Step 1: Fetch all active subscriptions with direct email read
   const { data: subscriptions, error: subsError } = await supabase
     .from("subscriptions")
-    .select("id, user_id, amount, interval, email_notification, customer_id")
+    .select("id, email, email_notification, amount, interval, customer_id")
     .eq("beneficiary_id", beneficiaryId)
     .eq("status", "complete")
     .order("created_at", { ascending: false })
@@ -47,83 +46,71 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ sponsors: [] }, { status: 200 })
   }
 
-  // Step 2: For each subscription, get customer info from transaction_ledger
+  // Step 2: Batch resolve missing emails from transaction_ledger via FK join
+  // Build a map keyed by subscription id for fast lookup
+  const emailFromTledger = new Map<string, { customer_email: string; customer_name: string | null }>()
+
+  const missingEmailIds = subscriptions
+    .filter((s) => !s.email)
+    .map((s) => s.id)
+
+  if (missingEmailIds.length > 0) {
+    const { data: txRows } = await supabase
+      .from("transaction_ledger")
+      .select("subscription_id, customer_email, customer_name")
+      .in("subscription_id", missingEmailIds)
+      .not("customer_email", "is", null)
+
+    if (txRows) {
+      for (const tx of txRows) {
+        if (tx.subscription_id && tx.customer_email) {
+          // Only set if not already set (first match wins — most recent ordering
+          // would require ordering but any email is better than none for now)
+          if (!emailFromTledger.has(tx.subscription_id)) {
+            emailFromTledger.set(tx.subscription_id, {
+              customer_email: tx.customer_email,
+              customer_name: tx.customer_name,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  // Step 3: Build the result list — single pass, no N+1
   const sponsors: SponsorInfo[] = []
 
   for (const sub of subscriptions) {
-    let email: string | null = null
+    let email: string | null = sub.email
     let name: string | null = null
 
-    // First, try to get customer info from transaction_ledger
-    // Get the most recent transaction for this beneficiary that matches the subscription
-    const { data: transactions, error: txError } = await supabase
-      .from("transaction_ledger")
-      .select("customer_email, customer_name, customer_id")
-      .eq("beneficiary_id", beneficiaryId)
-      .eq("subscription_type", "subscription")
-      .not("customer_email", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(10) // Get recent transactions to find a match
-
-    if (txError) {
-      console.error("⚠️ [SPONSORS API] Error fetching transaction_ledger:", txError)
-    }
-
-    // Try to match transaction to subscription by customer_id if available
-    let matchedTransaction = null
-    if (transactions && transactions.length > 0) {
-      if (sub.customer_id) {
-        // Try to match by customer_id first
-        matchedTransaction = transactions.find(
-          (tx) => tx.customer_id === sub.customer_id
-        )
-      }
-      // If no match by customer_id or customer_id not available, use most recent
-      if (!matchedTransaction) {
-        matchedTransaction = transactions[0]
+    // Fallback to tledger FK join result if email not on subscriptions row
+    if (!email) {
+      const tledger = emailFromTledger.get(sub.id)
+      if (tledger) {
+        email = tledger.customer_email
+        name = tledger.customer_name ? tledger.customer_name.split(" ")[0] : null
       }
     }
 
-    if (matchedTransaction) {
-      email = matchedTransaction.customer_email
-      // Only show first name for privacy
-      name = matchedTransaction.customer_name
-        ? matchedTransaction.customer_name.split(" ")[0]
-        : null
-    }
-
-    // Fallback: Try to get from users table if user_id exists
-    if (!email && sub.user_id) {
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("email, first_name, last_name")
-        .eq("id", sub.user_id)
-        .single()
-
-      if (userError) {
-        console.error("⚠️ [SPONSORS API] Error fetching user:", userError)
-      }
-
-      if (userData) {
-        email = userData.email
-        name = userData.first_name || null
-      }
-    }
-
-    // Only include sponsors with valid email
-    if (email) {
-      sponsors.push({
+    // Skip unresolvable — log warning for backfill gap
+    if (!email) {
+      console.warn("⚠️ [SPONSORS API] No email resolvable for subscription:", {
         subscriptionId: sub.id,
-        userId: sub.user_id,
-        emailRedacted: redactEmail(email),
-        name,
-        amount: sub.amount,
-        interval: sub.interval,
-        emailNotification: sub.email_notification,
+        beneficiaryId,
       })
+      continue
     }
+
+    sponsors.push({
+      subscriptionId: sub.id,
+      emailRedacted: redactEmail(email),
+      name,
+      amount: sub.amount,
+      interval: sub.interval,
+      emailNotification: sub.email_notification,
+    })
   }
 
   return NextResponse.json({ sponsors }, { status: 200 })
 }
-
