@@ -433,6 +433,11 @@ export async function handleStripeWebhook(req: Request) {
         }
 
 
+        // Hoisted variable: captures the new subscription UUID for the tledger
+        // insert below. This must be declared before the `if` block because the
+        // subscription insert and tledger insert live in separate scopes.
+        let newSubscriptionId: string | null = null
+
         // Step 1: Insert subscription — trigger will validate atomically.
         //
         // One-time payments (mode === "payment") intentionally skip this
@@ -447,27 +452,43 @@ export async function handleStripeWebhook(req: Request) {
             .eq("stripe_subscription_id", session.subscription as string)
             .maybeSingle()
 
-          const { error: subscriptionError } = existingSubscription
-            ? { error: null }
-            : await supabase
-            .from("subscriptions")
-            .insert({
-              stripe_subscription_id: session.subscription as string,
-              user_id: userId,
-              beneficiary_id: beneficiaryId || null,
-              status: "complete",
-              amount: amount,
-              interval: interval,
-              current_period_start: new Date(),
-              current_period_end: new Date(
-                Date.now() +
-                  (interval === "month" ? 30 : 365) * 24 * 60 * 60 * 1000,
-              ),
-              customer_id: session.customer as string,
-              sponsorship_method: "STRIPE",
-              payment_region: region,
-              ...currencyPersistence,
-            })
+          let subscriptionError: { message?: string } | null = null
+          let insertedSub: { id: string } | null = null
+
+          if (existingSubscription) {
+            newSubscriptionId = existingSubscription.id
+          } else {
+            const result = await supabase
+              .from("subscriptions")
+              .insert({
+                stripe_subscription_id: session.subscription as string,
+                email: session.customer_details?.email || null,     // ← NEW
+                user_id: userId,
+                beneficiary_id: beneficiaryId || null,
+                status: "complete",
+                amount: amount,
+                interval: interval,
+                current_period_start: new Date(),
+                current_period_end: new Date(
+                  Date.now() +
+                    (interval === "month" ? 30 : 365) * 24 * 60 * 60 * 1000,
+                ),
+                customer_id: session.customer as string,
+                sponsorship_method: "STRIPE",
+                payment_region: region,
+                ...currencyPersistence,
+              })
+              .select("id")                        // ← NEW: select id back
+              .single()                            // ← NEW: single row
+
+            subscriptionError = result.error || null
+            insertedSub = result.data
+
+            // Capture the returned UUID for the tledger insert
+            if (!subscriptionError && insertedSub) {
+              newSubscriptionId = insertedSub.id
+            }
+          }
 
           // Step 2: Handle subscription insert errors
           if (subscriptionError) {
@@ -657,6 +678,7 @@ export async function handleStripeWebhook(req: Request) {
           .insert({
             beneficiary_id: beneficiaryId || null,
             user_id: userId,
+            subscription_id: newSubscriptionId,         // ← NEW
             description: `Sponsorship to ${beneficiaryName} with amount of ${formatMoney(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
             reference: sponsorshipReference,
             credit: amount,
@@ -668,6 +690,7 @@ export async function handleStripeWebhook(req: Request) {
             tx_action: "SPONSORSHIP",
             customer_name: session.customer_details?.name || null,
             customer_email: customerEmail || null,
+            customer_id: session.customer as string || null,    // ← NEW
           })
 
         if (transactionError) {
@@ -864,9 +887,14 @@ export async function handleStripeWebhook(req: Request) {
         }
 
         // Handle regular sponsorship payment failure
+        // Keep email in sync even on failed payments — invoice always carries
+        // the current email address
         const { error: updateError } = await supabase
           .from("subscriptions")
-          .update({ status: "incomplete" })
+          .update({
+            status: "incomplete",
+            email: invoice.customer_email,           // ← NEW: keep denormalized copy fresh
+          })
           .eq("stripe_subscription_id", subscriptionId)
 
         if (updateError) {
@@ -1238,10 +1266,13 @@ export async function handleStripeWebhook(req: Request) {
             )
           }
 
-          // Update subscription status
+          // Update subscription status and keep email in sync with invoice
           await supabase
             .from("subscriptions")
-            .update({ status: "complete" })
+            .update({
+              status: "complete",
+              email: invoice.customer_email,          // ← NEW: keep denormalized copy fresh
+            })
             .eq("stripe_subscription_id", subscriptionId)
 
           // Send monthly payment confirmation email

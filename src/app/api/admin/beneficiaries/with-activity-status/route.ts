@@ -9,11 +9,10 @@ export async function GET() {
     const auth = await requireSuperAdmin(supabase)
     if (!auth.ok) return auth.response
 
-    // Fetch all sponsored beneficiaries (CHILD type with active subscriptions)
+    // Fetch all beneficiaries with active subscriptions
     const { data: beneficiaries, error: beneficiariesError } = await supabase
       .from("beneficiaries")
       .select("*")
-      .eq("beneficiary_type", "CHILD")
       .gt("active_subscriptions", 0)
 
     if (beneficiariesError) {
