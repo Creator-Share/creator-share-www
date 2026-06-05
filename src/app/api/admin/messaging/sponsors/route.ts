@@ -93,12 +93,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Skip unresolvable — log warning for backfill gap
+    // Skip unresolvable — backfill gap, handled offline
     if (!email) {
-      console.warn("⚠️ [SPONSORS API] No email resolvable for subscription:", {
-        subscriptionId: sub.id,
-        beneficiaryId,
-      })
       continue
     }
 
