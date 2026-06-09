@@ -291,7 +291,7 @@ const ExpensesPage = () => {
                       }))
                     }
                   }}
-                  placeholder="e.g., 📚, 🎒"
+                  placeholder="e.g., book, backpack"
                   className="border"
                 />
               </Field>

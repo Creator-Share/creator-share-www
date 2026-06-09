@@ -804,7 +804,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               <Field
                 label={
                   <Tooltip
-                    content="⚠️ Warning: Changing this after children are created will break existing links to their profiles"
+                    content="Warning: Changing this after children are created will break existing links to their profiles"
                     showArrow
                   >
                     <span style={{ cursor: 'help', borderBottom: '1px dotted #666' }}>

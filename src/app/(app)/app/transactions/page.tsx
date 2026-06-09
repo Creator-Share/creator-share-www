@@ -53,10 +53,10 @@ function fmtDate(d: string) {
   })
 }
 
-function regionInfo(region: "us" | "uk" | null): { label: string; emoji: string } {
-  if (region === "us") return { label: "US", emoji: "🇺🇸" }
-  if (region === "uk") return { label: "UK", emoji: "🇬🇧" }
-  return { label: "Other", emoji: "💳" }
+function regionLabel(region: "us" | "uk" | null): string {
+  if (region === "us") return "US"
+  if (region === "uk") return "UK"
+  return "Other"
 }
 
 function typeLabel(t: string | null): string {
@@ -210,7 +210,7 @@ const TransactionPage = () => {
           <Tooltip
             content={
               <Box fontSize="xs" lineHeight="1.7">
-                <Text>💰 {formatUsdCents(stats.totalDonated * 100)} — total across all transactions</Text>
+                <Text>Total across all transactions: {formatUsdCents(stats.totalDonated * 100)}</Text>
               </Box>
             }
             contentProps={{ maxW: "300px" }}
@@ -229,14 +229,14 @@ const TransactionPage = () => {
       <Flex gap={3} mb={5} wrap="wrap" align="center">
         <Text fontSize="sm" fontWeight="600" color="gray.500" mr={1}>Type:</Text>
         <FilterPill value="all" current={filterType} label="All" setter={setFilterType} />
-        <FilterPill value="subscription" current={filterType} label="📅 Subscriptions" setter={setFilterType} />
-        <FilterPill value="one_time" current={filterType} label="⚡ One-time" setter={setFilterType} />
+        <FilterPill value="subscription" current={filterType} label="Subscriptions" setter={setFilterType} />
+        <FilterPill value="one_time" current={filterType} label="One-time" setter={setFilterType} />
 
         <Text fontSize="sm" fontWeight="600" color="gray.500" ml={2} mr={1}>Region:</Text>
         <FilterPill value="all" current={filterRegion} label="All" setter={setFilterRegion} />
-        <FilterPill value="us" current={filterRegion} label="🇺🇸 US" setter={setFilterRegion} />
-        <FilterPill value="uk" current={filterRegion} label="🇬🇧 UK" setter={setFilterRegion} />
-        <FilterPill value="other" current={filterRegion} label="💳 Other" setter={setFilterRegion} />
+        <FilterPill value="us" current={filterRegion} label="US" setter={setFilterRegion} />
+        <FilterPill value="uk" current={filterRegion} label="UK" setter={setFilterRegion} />
+        <FilterPill value="other" current={filterRegion} label="Other" setter={setFilterRegion} />
       </Flex>
 
       {/* ── Error ── */}
@@ -250,7 +250,6 @@ const TransactionPage = () => {
       {/* ── Empty state ── */}
       {filtered.length === 0 && !fetchError && (
         <Box textAlign="center" py={16}>
-          <Text fontSize="4xl" mb={4}>{txns.length === 0 ? "💳" : "🔍"}</Text>
           <Heading size="md" mb={2}>
             {txns.length === 0 ? "No transactions yet" : "No transactions match your filters"}
           </Heading>
@@ -282,7 +281,7 @@ const TransactionPage = () => {
 
           {filtered.map(t => {
             const isForeign = t.charged_currency != null && t.charged_currency !== "USD"
-            const region = regionInfo(t.payment_region)
+            const region = regionLabel(t.payment_region)
             const isChargedCurrent =
               t.charged_amount != null &&
               t.charged_currency != null
@@ -347,7 +346,7 @@ const TransactionPage = () => {
                     textTransform="none"
                     fontWeight="500"
                   >
-                    {region.emoji} {region.label}
+                    {region}
                   </Badge>
                 </Box>
 

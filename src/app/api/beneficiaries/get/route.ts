@@ -66,9 +66,15 @@ export async function GET(req: Request) {
       // only) — there, opens would masquerade as "Sponsored", which they aren't.
       // Draft/Archived are admin-controlled visibility states and always excluded
       // from the open branch.
+      //
+      // Gate: only include the open condition when the user's filter explicitly
+      // includes "New" or "Partially Funded" (the core waiting statuses). Without
+      // this gate, selecting only "Sponsorship Cancelled" would still pull in
+      // every open-ended beneficiary regardless of status, overriding the user's
+      // explicit narrow selection.
       const statusList = status.map(s => `"${s}"`).join(",")
-      const shouldIncludeOpen = status.some((s) => s !== "Budget Fulfilled")
-      if (shouldIncludeOpen) {
+      const hasWaitingStatus = status.some((s) => s === "New" || s === "Partially Funded")
+      if (hasWaitingStatus) {
         const openCondition = 'and(budget_goal.eq.-1,status.not.in.(Draft,Archived))'
         query = query.or(`status.in.(${statusList}),${openCondition}`)
       } else {

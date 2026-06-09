@@ -281,7 +281,6 @@ const UserDashboard = () => {
   if (showEmpty) {
     return (
       <Box className="container mx-auto py-20 text-center" maxW="1200px" px={4}>
-        <Text fontSize="4xl" mb={4}>🌍</Text>
         <Heading size="lg" mb={2}>Ready to change a life?</Heading>
         <Text color="gray.500" mb={8} maxW="480px" mx="auto" lineHeight="1.6">
           Your sponsorship gives a child access to education, nutrition, healthcare, and
@@ -334,8 +333,8 @@ const UserDashboard = () => {
           <Tooltip
             content={
               <Box fontSize="xs" lineHeight="1.7">
-                <Text>💰 {cents(stats.totalDonated * 100)} — commitment from active & past subscriptions</Text>
-                <Text>💵 {cents(actualTotalCents ?? 0)} — actually charged</Text>
+                <Text>Commitment from active & past subscriptions: {cents(stats.totalDonated * 100)}</Text>
+                <Text>Actually charged: {cents(actualTotalCents ?? 0)}</Text>
               </Box>
             }
             contentProps={{
@@ -371,7 +370,7 @@ const UserDashboard = () => {
       {/* ── Blind banner ── */}
       {blind.length > 0 && (
         <Box mb={6} p={5} bg={BLIND_BANNER_GRADIENT} border="1px" borderColor="#fde68a" borderRadius="xl">
-          <Text fontWeight="600" mb={1}>📋 Waiting to be matched</Text>
+          <Text fontWeight="600" mb={1}>Waiting to be matched</Text>
           <Text fontSize="sm" color="gray.600" mb={3}>
             You have {blind.length} sponsorship{blind.length > 1 ? "s" : ""} ready to go —
             choose which child you&apos;d like to support!
@@ -442,8 +441,8 @@ const UserDashboard = () => {
                     <Box display="flex" gap={3} p={4} bg="white" borderRadius="xl" boxShadow="sm"
                       alignItems="center" cursor="pointer"
                       _hover={{ boxShadow: "md", transform: "translateY(-1px)", transition: "all 0.15s" }}>
-                      <Box w="44px" h="44px" borderRadius="full" bg="gray.50" flexShrink={0} overflow="hidden" display="flex" alignItems="center" justifyContent="center" fontSize="lg" opacity={0.7}>
-                        💛
+                      <Box w="44px" h="44px" borderRadius="full" bg="gray.100" flexShrink={0} overflow="hidden" display="flex" alignItems="center" justifyContent="center" fontSize="lg" opacity={0.7}>
+                        <Text fontSize="xs" fontWeight="bold" color="gray.400">Past</Text>
                       </Box>
                       <Box flex={1} minW={0}>
                         <Text fontWeight="600" fontSize="sm"

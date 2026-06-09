@@ -113,7 +113,7 @@ const SponsoredBeneficiaryCard: React.FC<Props> = ({ beneficiary, subscription, 
           {beneficiary.beneficiary_type && (
             <Box mb={1.5}>
               <Badge fontSize="10px" px={2} py={0.5} borderRadius="full" colorPalette="purple" fontWeight="500" textTransform="none">
-                {beneficiary.beneficiary_type === "fulltime_care" ? "🏠 Full-time care" : beneficiary.beneficiary_type === "child" ? "👶 Child" : beneficiary.beneficiary_type}
+                {beneficiary.beneficiary_type === "fulltime_care" ? "Full-time care" : beneficiary.beneficiary_type === "child" ? "Child" : beneficiary.beneficiary_type}
               </Badge>
             </Box>
           )}

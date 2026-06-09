@@ -155,10 +155,6 @@ const AdminSubscriptionsPage = () => {
   }, [supabase])
 
   const handleCancelSubscription = async (subscriptionId: string) => {
-    if (!confirm("Are you sure you want to cancel this subscription? This action cannot be undone.")) {
-      return
-    }
-
     try {
       const response = await fetch("/api/stripe/cancel-subscription", {
         method: "POST",

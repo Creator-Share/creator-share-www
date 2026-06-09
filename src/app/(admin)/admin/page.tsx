@@ -15,6 +15,7 @@ const Dashboard = () => {
     { label: "Manage Users", path: "/admin/users" },
     { label: "Manage Beneficiaries", path: "/admin/beneficiaries" },
     { label: "Manage Subscriptions", path: "/admin/subscriptions" },
+    { label: "Payments", path: "/admin/payments" },
     { label: "Manage Activities", path: "/admin/activities" },
     // { label: 'Manage Child Laborers', path: '/admin/child-laborer' },
     // { label: 'Manage Street Involved', path: '/admin/street-involved' },

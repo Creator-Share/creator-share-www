@@ -356,7 +356,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({
         {budgetGoal > 0 && remainingBudget <= 0 && (
           <Box className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <Text className="text-yellow-800 text-sm">
-              ⚠️ Budget limit reached. You cannot create more expenses.
+              Budget limit reached. You cannot create more expenses.
             </Text>
           </Box>
         )}
@@ -412,7 +412,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({
                 onChange={(e) =>
                   setNewExpense((prev) => ({ ...prev, icon: e.target.value }))
                 }
-                placeholder="e.g., 📚, 🎒"
+                placeholder="e.g., book, backpack"
                 className="border"
                 px={2}
               />
@@ -435,13 +435,13 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({
                     <Text className="text-lg">
                       {totalAssignedExpenses + Number(newExpense.price) * 100 >
                       budgetGoal
-                        ? "⚠️"
-                        : "✅"}
+                        ? "Warning"
+                        : "OK"}
                     </Text>
                     <Text>
                       {`This expense will use $${newExpense.price.toFixed(2)} of your remaining $${centsToDollars(remainingBudget)} budget.`}
                       {totalAssignedExpenses + Number(newExpense.price) * 100 >
-                        budgetGoal && ` ⚠️ This will EXCEED your budget goal!`}
+                        budgetGoal && ` This will EXCEED your budget goal!`}
                     </Text>
                   </Box>
                 </Box>

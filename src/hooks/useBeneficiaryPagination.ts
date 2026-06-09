@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { Beneficiaries } from "@/types"
 import { subscribeToSubscriptions } from "@/lib/subscriptionsRealtime"
-import { INACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
 
 type FiltersState = {
   gender: string
@@ -109,13 +108,10 @@ export function useBeneficiaryPagination(
       if (filters.gender) params.set("gender", filters.gender)
       if (filters.status?.length) params.set("status", filters.status.join(","))
       
-      // Skip age range filtering when:
-      //  • the type is ANIMAL (dogs don't have human-comparable ages), or
-      //  • status includes an inactive value that may cover beneficiaries of any age
+      // Skip age range filtering for ANIMAL type (dogs don't have human-comparable ages).
+      // For other types, always apply the age range — the API already gracefully
+      // handles null birth_dates so inactive-status records are not affected.
       const isAnimalType = (type ?? "").split(",").includes("ANIMAL")
-      const shouldSkipAgeRange =
-        isAnimalType ||
-        (filters.status || []).some((status) => (INACTIVE_STATUSES as string[]).includes(status))
 
       // Only apply the age range when the user has moved the slider away from its
       // default position (0 → type max). At the default, treat as "no upper bound"
@@ -124,7 +120,7 @@ export function useBeneficiaryPagination(
       const defaultMaxAge = isAnimalType ? 20 : 14
       const isDefaultAgeRange =
         filters.ageRange[0] === 0 && filters.ageRange[1] >= defaultMaxAge
-      if (filters.ageRange && !shouldSkipAgeRange && !isDefaultAgeRange) {
+      if (filters.ageRange && !isAnimalType && !isDefaultAgeRange) {
         params.set("ageRange", filters.ageRange.join(","))
       }
       if (filters.search) params.set("search", filters.search)

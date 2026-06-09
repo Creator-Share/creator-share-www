@@ -121,9 +121,11 @@ export interface FilterState {
   selectedGender: string
   selectedAgeRange: [number, number]
   selectedStatus: string[]
+  searchQuery: string
   setGender: (gender: string) => void
   setAgeRange: (ageRange: [number, number]) => void
   setStatus: (status: string[]) => void
+  setSearchQuery: (query: string) => void
   resetToDefaults: () => void
   isDirty: () => boolean
 }

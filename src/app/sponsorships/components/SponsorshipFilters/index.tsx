@@ -48,6 +48,7 @@ const SponsorshipFilters: React.FC<
     setGender,
     setAgeRange,
     setStatus,
+    setSearchQuery,
   } = useFilterStore()
 
   // When activeType prop is provided (main page), derive animal mode from it.
@@ -63,13 +64,16 @@ const SponsorshipFilters: React.FC<
     selectedAgeRange[1] || defaultMaxAge,
   )
 
-  const [searchQuery, setSearchQuery] = useState<string>("")
   const [mounted, setMounted] = useState(false)
+  // Local input value for responsive typing. Persisted to the Zustand store
+  // via setSearchQuery in the debounced handleFilterChange call.
+  const [searchQuery, setLocalSearchQuery] = useState<string>("")
 
   const isInternalUpdateRef = useRef(false)
   const ageRangeUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const previousAgeRangeRef = useRef<[number, number]>([minAge, maxAge])
   const sliderDebounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null)
 
   // Initialize admin status filter when in admin mode (only on mount)
   const hasInitializedRef = useRef(false)
@@ -181,7 +185,7 @@ const SponsorshipFilters: React.FC<
 
     const defaultStatus = isAdminMode
       ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived", "Sponsorship Cancelled"]
-      : ["New", "Partially Funded", "Sponsorship Cancelled"]
+      : [...PUBLIC_STATUSES]
 
     isInternalUpdateRef.current = true
 
@@ -501,8 +505,15 @@ const SponsorshipFilters: React.FC<
               onChange={(e) => {
                 if (!mounted) return
                 const value = e.target.value
-                setSearchQuery(value)
-                handleFilterChange({ search: value })
+                // Update input immediately for responsive typing
+                setLocalSearchQuery(value)
+                // Persist to store + trigger API call with debounce
+                if (searchDebounceRef.current) {
+                  clearTimeout(searchDebounceRef.current)
+                }
+                searchDebounceRef.current = setTimeout(() => {
+                  handleFilterChange({ search: value })
+                }, 300)
               }}
               size="xs"
               borderRadius="16px"
@@ -527,7 +538,11 @@ const SponsorshipFilters: React.FC<
                 top="50%"
                 transform="translateY(-50%)"
                 onClick={() => {
-                  setSearchQuery("")
+                  setLocalSearchQuery("")
+                  // Cancel any pending debounced search
+                  if (searchDebounceRef.current) {
+                    clearTimeout(searchDebounceRef.current)
+                  }
                   handleFilterChange({ search: "" })
                 }}
                 variant="ghost"
