@@ -1,9 +1,11 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import {
   Box, Heading, Text, Flex, Badge, Skeleton, HStack, Button,
 } from "@chakra-ui/react"
+import { Tooltip } from "@/components/ui/tooltip"
 import { createClient } from "@/utils/supabase/client"
 import { useAuthStore } from "@/store/authStore"
 import { redactEmail } from "@/utils/privacy"
@@ -32,6 +34,16 @@ type FilterRegion = "all" | "us" | "uk" | "other"
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const HEADER_GRADIENT = "linear-gradient(135deg, #dbeafe 0%, #e0f2fe 50%, #f0f9ff 100%)"
+function txnCacheKey(userId: string) {
+  return `transactions_cache_${userId}`
+}
+
+function readTxnCache(userId: string): TransactionRow[] | null {
+  try { const raw = sessionStorage.getItem(txnCacheKey(userId)); return raw ? JSON.parse(raw) : null } catch { return null }
+}
+function writeTxnCache(userId: string, txns: TransactionRow[]) {
+  try { sessionStorage.setItem(txnCacheKey(userId), JSON.stringify(txns)) } catch { /* noop */ }
+}
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("en-GB", {
@@ -59,13 +71,30 @@ const TransactionPage = () => {
   const { user } = useAuthStore()
   const supabaseRef = useRef(createClient())
 
-  const [txns, setTxns] = useState<TransactionRow[]>([])
+  const [txns, setTxns] = useState<TransactionRow[]>(() => user ? readTxnCache(user.id) ?? [] : [])
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
-  // Filters
-  const [filterType, setFilterType] = useState<FilterType>("all")
-  const [filterRegion, setFilterRegion] = useState<FilterRegion>("all")
+  // Filters synced with URL params
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  const filterType = (searchParams.get("type") as FilterType) || "all"
+  const filterRegion = (searchParams.get("region") as FilterRegion) || "all"
+
+  const setFilterType = (value: FilterType) => {
+    const p = new URLSearchParams(searchParams.toString())
+    if (value === "all") p.delete("type")
+    else p.set("type", value)
+    router.replace(`/app/transactions?${p.toString()}`, { scroll: false })
+  }
+
+  const setFilterRegion = (value: FilterRegion) => {
+    const p = new URLSearchParams(searchParams.toString())
+    if (value === "all") p.delete("region")
+    else p.set("region", value)
+    router.replace(`/app/transactions?${p.toString()}`, { scroll: false })
+  }
 
   // ── Data fetch ──
   const fetchTxns = useCallback(async () => {
@@ -84,7 +113,9 @@ const TransactionPage = () => {
       console.error(error)
       setFetchError("Couldn't load your transactions")
     } else if (data) {
-      setTxns(data as unknown as TransactionRow[])
+      const rows = data as unknown as TransactionRow[]
+      setTxns(rows)
+      writeTxnCache(user.id, rows)
     }
     setLoading(false)
   }, [user])
@@ -176,12 +207,21 @@ const TransactionPage = () => {
             <Text fontSize="24px" fontWeight="bold" color="#059669">{stats.oneTimeCount}</Text>
             <Text fontSize="xs" color="gray.500" mt={0.5}>One-time</Text>
           </Box>
-          <Box bg="white" px={5} py={3.5} borderRadius="xl" boxShadow="sm" minW="140px">
-            <Text fontSize="24px" fontWeight="bold" color="gray.700">
-              {formatUsdCents(stats.totalDonated * 100)}
-            </Text>
-            <Text fontSize="xs" color="gray.500" mt={0.5}>Total contributed</Text>
-          </Box>
+          <Tooltip
+            content={
+              <Box fontSize="xs" lineHeight="1.7">
+                <Text>💰 {formatUsdCents(stats.totalDonated * 100)} — total across all transactions</Text>
+              </Box>
+            }
+            contentProps={{ maxW: "300px" }}
+          >
+            <Box bg="white" px={5} py={3.5} borderRadius="xl" boxShadow="sm" minW="140px" cursor="help">
+              <Text fontSize="24px" fontWeight="bold" color="gray.700">
+                {formatUsdCents(stats.totalDonated * 100)}
+              </Text>
+              <Text fontSize="xs" color="gray.500" mt={0.5}>Total contributed</Text>
+            </Box>
+          </Tooltip>
         </HStack>
       </Box>
 
@@ -259,8 +299,9 @@ const TransactionPage = () => {
                 gap={{ base: 2, md: 0 }}
                 _hover={{ boxShadow: "md", transform: "translateY(-1px)" }}
                 transition="all 0.15s"
+                wrap={{ base: "wrap", md: "nowrap" }}
               >
-                {/* Date */}
+                {/* Date + Amount row (always visible) */}
                 <Box flex="1.2" fontSize="sm" color="gray.600" whiteSpace="nowrap">
                   {fmtDate(t.created_at)}
                 </Box>
@@ -310,7 +351,7 @@ const TransactionPage = () => {
                   </Badge>
                 </Box>
 
-                {/* Sponsor info (obfuscated) */}
+                {/* Sponsor info (obfuscated) — hidden on mobile */}
                 <Box flex="1.6" minW={0} display={{ base: "none", md: "block" }}>
                   {t.customer_name && (
                     <Text fontSize="sm" fontWeight="500" color="gray.700"
@@ -328,8 +369,8 @@ const TransactionPage = () => {
                   )}
                 </Box>
 
-                {/* Description */}
-                <Box flex="2" minW={0} display={{ base: "none", md: "block" }}>
+                {/* Description — shown as full-width second row on mobile */}
+                <Box w={{ base: "full", md: "auto" }} flex={{ base: "none", md: "2" }} order={{ base: 1, md: 0 }} mt={{ base: 0.5, md: 0 }} minW={0}>
                   <Text fontSize="xs" color="gray.500"
                     css={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "280px" }}>
                     {t.description || "—"}
@@ -344,4 +385,18 @@ const TransactionPage = () => {
   )
 }
 
-export default TransactionPage
+export default function TransactionPageWrapper() {
+  return (
+    <Suspense fallback={
+      <Box className="container mx-auto py-8" maxW="1200px" px={4}>
+        <Skeleton height="28px" width="220px" mb={2} borderRadius="lg" />
+        <Skeleton height="14px" width="160px" mb={8} borderRadius="lg" />
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} height="56px" mb={2} borderRadius="xl" />
+        ))}
+      </Box>
+    }>
+      <TransactionPage />
+    </Suspense>
+  )
+}

@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Box, Text, Flex, Badge, Button } from "@chakra-ui/react"
+import { Box, Text, Flex, Badge, Button, Spinner } from "@chakra-ui/react"
 import { FaCalendar, FaLocationDot, FaPerson, FaHeart } from "react-icons/fa6"
 import { MdCancelPresentation } from "react-icons/md"
 import { calculateAge } from "@/utils/ageCalculator"
@@ -27,6 +27,7 @@ interface Props {
   subscription: SubscriptionInfo
   onViewProfile?: () => void
   onCancel?: () => void
+  isCancelling?: boolean
 }
 
 /** Friendly relative-duration label like "3 months" or "since Apr 2025" */
@@ -37,7 +38,7 @@ function sinceLabel(start: string, now = Date.now()) {
   return `${months} months`
 }
 
-const SponsoredBeneficiaryCard: React.FC<Props> = ({ beneficiary, subscription, onViewProfile, onCancel }) => {
+const SponsoredBeneficiaryCard: React.FC<Props> = ({ beneficiary, subscription, onViewProfile, onCancel, isCancelling }) => {
   const [images, setImages] = useState<BeneficiaryMedia[]>([])
   const [cancelOpen, setCancelOpen] = useState(false)
   const placeholderImage = PERSON_PLACEHOLDER_PATH
@@ -82,7 +83,7 @@ const SponsoredBeneficiaryCard: React.FC<Props> = ({ beneficiary, subscription, 
 
           <Badge
             position="absolute" top={3} right={3} zIndex={10}
-            bg="rgba(255,255,255,0.9)" color={subscription.status === "cancelled" ? "gray.500" : "#2b7ff9"}
+            bg="rgba(255,255,255,0.9)" color={subscription.status === "cancelled" ? "gray.500" : "#059669"}
             fontSize="xs" px={3} py={1.5} borderRadius="full" fontWeight="600" backdropFilter="blur(4px)"
           >
             <FaHeart style={{ display: "inline", marginRight: 4, opacity: 0.7 }} />
@@ -109,6 +110,13 @@ const SponsoredBeneficiaryCard: React.FC<Props> = ({ beneficiary, subscription, 
           </Flex>
 
           {/* Quick info */}
+          {beneficiary.beneficiary_type && (
+            <Box mb={1.5}>
+              <Badge fontSize="10px" px={2} py={0.5} borderRadius="full" colorPalette="purple" fontWeight="500" textTransform="none">
+                {beneficiary.beneficiary_type === "fulltime_care" ? "🏠 Full-time care" : beneficiary.beneficiary_type === "child" ? "👶 Child" : beneficiary.beneficiary_type}
+              </Badge>
+            </Box>
+          )}
           <Flex gap={3} flexWrap="wrap" className="text-[#666666]" mb={2}>
             {age !== null && (
               <Flex align="center" gap={1}>
@@ -135,48 +143,66 @@ const SponsoredBeneficiaryCard: React.FC<Props> = ({ beneficiary, subscription, 
 
           {/* Actions */}
           <Flex gap={2} mt="auto">
-            <Button size="sm" variant="outline" flex={1} borderRadius="12px" onClick={onViewProfile}>
+            <Button size="sm" variant="outline" flex={1} borderRadius="12px" onClick={onViewProfile}
+              borderColor="gray.200" _hover={{ bg: "#2b7ff9", color: "white", borderColor: "#2b7ff9" }}>
               See their story
             </Button>
             {subscription.status !== "cancelled" && (
-              <Button size="sm" variant="ghost" flexShrink={0}
-                borderRadius="12px" color="gray.400" _hover={{ color: "red.500", bg: "red.50" }}
-                onClick={() => setCancelOpen(true)}>
-                <MdCancelPresentation className="mr-1" /> End
+              <Button size="sm" variant={isCancelling ? "solid" : "ghost"} flexShrink={0}
+                borderRadius="12px"
+                color={isCancelling ? "white" : "gray.400"}
+                bg={isCancelling ? "red.500" : "transparent"}
+                _hover={{ color: isCancelling ? "white" : "red.500", bg: isCancelling ? "red.600" : "red.50" }}
+                onClick={() => setCancelOpen(true)}
+                loading={!!isCancelling}
+              >
+                <MdCancelPresentation className="mr-1" /> {isCancelling ? "Cancelling…" : "End"}
               </Button>
             )}
           </Flex>
         </Box>
       </Box>
 
-      {/* ── Kind cancel dialog ── */}
-      <DialogRoot open={cancelOpen} onOpenChange={(d) => { if (!d.open) setCancelOpen(false) }}>
+{/* ── Kind cancel dialog ── */}
+      <DialogRoot open={cancelOpen} onOpenChange={(d) => { if (!d.open && !isCancelling) setCancelOpen(false) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <Text className="text-lg font-semibold">Leaving so soon?</Text>
-            <DialogCloseTrigger />
+            <DialogCloseTrigger disabled={!!isCancelling} />
           </DialogHeader>
           <DialogBody>
-            <Flex direction="column" gap={4}>
-              <Text>
-                If you end your sponsorship, <strong>{beneficiary.name}</strong> will lose
-                the support you&apos;ve been providing.
-              </Text>
-              <Text fontSize="sm" color="gray.600">
-                Your recurring payment of <strong>{amountStr}</strong> will stop immediately.
-                You can always start a new sponsorship later.
-              </Text>
-            </Flex>
+            {isCancelling ? (
+              <Flex direction="column" align="center" gap={4} py={6}>
+                <Spinner size="lg" color="#2b7ff9" />
+                <Text fontWeight="600">Ending your sponsorship…</Text>
+                <Text fontSize="sm" color="gray.500" textAlign="center">
+                  Please wait while we process your request.
+                </Text>
+              </Flex>
+            ) : (
+              <Flex direction="column" gap={4}>
+                <Text>
+                  If you end your sponsorship, <strong>{beneficiary.name}</strong> will lose
+                  the support you&apos;ve been providing.
+                </Text>
+                <Text fontSize="sm" color="gray.600">
+                  Your recurring payment of <strong>{amountStr}</strong> will stop immediately.
+                  You can always start a new sponsorship later.
+                </Text>
+              </Flex>
+            )}
           </DialogBody>
           <DialogFooter>
             <Flex gap={3} w="full" justify="flex-end">
               <Button variant="outline" borderRadius="12px"
-                onClick={() => setCancelOpen(false)}>
+                onClick={() => setCancelOpen(false)}
+                disabled={!!isCancelling}>
                 Keep sponsoring
               </Button>
               <Button borderRadius="12px"
                 className="bg-red-600 hover:bg-red-700 text-white"
-                onClick={() => { setCancelOpen(false); onCancel?.() }}>
+                onClick={() => { setCancelOpen(false); onCancel?.() }}
+                loading={!!isCancelling}>
                 End sponsorship
               </Button>
             </Flex>

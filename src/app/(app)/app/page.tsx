@@ -1,8 +1,9 @@
 "use client"
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import {
-  Box, Heading, Text, Button, SimpleGrid, Skeleton, Flex, VStack,
+  Box, Heading, Text, Button, SimpleGrid, Skeleton, Flex, VStack, Spinner,
 } from "@chakra-ui/react"
+import { Tooltip } from "@/components/ui/tooltip"
 import { createClient } from "@/utils/supabase/client"
 import { useAuthStore } from "@/store/authStore"
 import { toaster } from "@/components/ui/toaster"
@@ -12,6 +13,7 @@ import { BeneficiarySelectionModal } from "./components/BeneficiarySelectionModa
 import { PaymentHistory } from "./components/PaymentHistory"
 import { DashboardErrorBoundary } from "./components/DashboardErrorBoundary"
 import SponsoredBeneficiaryCard from "./components/SponsoredBeneficiaryCard"
+
 const HEADER_GRADIENT = "linear-gradient(135deg, #dbeafe 0%, #e0f2fe 50%, #f0f9ff 100%)"
 const BLIND_BANNER_GRADIENT = "linear-gradient(135deg, #fef9c3 0%, #fef3c7 100%)"
 
@@ -38,27 +40,32 @@ interface BeneficiaryProfile {
 
 interface Sponsorship { sub: SubscriptionRow; ben: BeneficiaryProfile }
 
-const CACHE_KEY = "dashboard_cache"
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
 }
 
-function monthsBetween(start: string, end?: string) {
-  const to = end ? new Date(end).getTime() : Date.now()
-  return Math.max(1, Math.round((to - new Date(start).getTime()) / (30 * 24 * 60 * 60 * 1000)))
+function elapsedLabel(start: string, end?: string): string {
+  const ms = (end ? new Date(end).getTime() : Date.now()) - new Date(start).getTime()
+  const days = Math.round(ms / (24 * 60 * 60 * 1000))
+  if (days < 30) return days <= 1 ? "a day" : `${days} days`
+  const months = Math.round(days / 30)
+  if (months < 2) return "a month"
+  return `${months} months`
 }
 
 function computeStats(active: Sponsorship[], past: Sponsorship[]) {
   let totalCents = 0; let earliest: string | null = null
   for (const { sub } of [...active, ...past]) {
-    totalCents += sub.amount
+    const months = sub.canceled_at
+      ? Math.max(1, Math.round((new Date(sub.canceled_at).getTime() - new Date(sub.created_at).getTime()) / (30 * 24 * 60 * 60 * 1000)))
+      : Math.max(1, Math.round((Date.now() - new Date(sub.created_at).getTime()) / (30 * 24 * 60 * 60 * 1000)))
+    totalCents += sub.amount * months
     if (!earliest || sub.created_at < earliest) earliest = sub.created_at
   }
-  const mo = earliest ? monthsBetween(earliest) : 0
-  return { totalDonated: totalCents / 100, monthsActive: mo }
+  const label = earliest ? elapsedLabel(earliest) : ""
+  return { totalDonated: totalCents / 100, durationLabel: label }
 }
 
 function cents(n: number | null | undefined) {
@@ -66,14 +73,18 @@ function cents(n: number | null | undefined) {
   return `$${(n / 100).toFixed(n % 100 === 0 ? 0 : 2)}`
 }
 
-function readCache() {
+function cacheKey(userId?: string) {
+  return userId ? `dashboard_cache_${userId}` : "dashboard_cache"
+}
+
+function readCache(userId?: string) {
   try {
-    const raw = sessionStorage.getItem(CACHE_KEY)
+    const raw = sessionStorage.getItem(cacheKey(userId))
     return raw ? JSON.parse(raw) as { active: Sponsorship[]; past: Sponsorship[]; blind: SubscriptionRow[] } | null : null
   } catch { return null }
 }
-function writeCache(active: Sponsorship[], past: Sponsorship[], blind: SubscriptionRow[]) {
-  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ active, past, blind })) } catch { /* noop */ }
+function writeCache(userId: string, active: Sponsorship[], past: Sponsorship[], blind: SubscriptionRow[]) {
+  try { sessionStorage.setItem(cacheKey(userId), JSON.stringify({ active, past, blind })) } catch { /* noop */ }
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
@@ -88,6 +99,7 @@ const UserDashboard = () => {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [actualTotalCents, setActualTotalCents] = useState<number | null>(null)
 
   // Modal + collapse state
   const [modalOpen, setModalOpen] = useState(false)
@@ -132,21 +144,35 @@ const UserDashboard = () => {
     const toSps = (list: SubscriptionRow[]) =>
       list.map(s => ({ sub: s, ben: benMap.get(s.beneficiary_id!)! })).filter(x => x.ben)
 
+    // Also fetch actual transaction total
+    const { data: txns } = await supabase
+      .from("transaction_ledger")
+      .select("credit")
+      .eq("user_id", user.id)
+    let actualTotal = 0
+    if (txns) {
+      for (const t of txns as { credit: number | null }[]) {
+        actualTotal += t.credit ?? 0
+      }
+    }
+    setActualTotalCents(actualTotal)
+
     const na = toSps(act); const np = toSps(pst); const nb = bln
-    setActive(na); setPast(np); setBlind(nb); writeCache(na, np, nb)
+    setActive(na); setPast(np); setBlind(nb); writeCache(user.id, na, np, nb)
     setLoading(false); setRefreshing(false)
   }, [user])
 
-  // Hydrate from cache after mount (avoids SSR hydration mismatch)
+  // Hydrate from cache on mount & when user identity resolves, so the correct
+  // user-scoped key is always used (even on SPA navigations where auth is instant).
   useEffect(() => {
-    const cache = readCache()
+    const cache = readCache(user?.id)
     if (cache) {
       setActive(cache.active)
       setPast(cache.past)
       setBlind(cache.blind)
       setLoading(false)
     }
-  }, [])
+  }, [user])
 
   useEffect(() => { fetchData(true) }, [fetchData])
 
@@ -165,8 +191,13 @@ const UserDashboard = () => {
               setBlind(prev => prev.some(x => x.id === p.new.id) ? prev : [p.new, ...prev])
           } else if (p.eventType === "UPDATE") {
             if (p.new.status === "cancelled") {
-              setActive(prev => { const m = prev.find(x => x.sub.id === p.new.id); if (!m) return prev; setPast(pst => [{ ...m, sub: { ...m.sub, status: "cancelled", canceled_at: p.new.canceled_at } }, ...pst]); return prev.filter(x => x.sub.id !== p.new.id) })
+              setActive(prev => prev.filter(x => x.sub.id !== p.new.id))
               setBlind(prev => prev.filter(x => x.id !== p.new.id))
+              setPast(pst => {
+                const m = activeRef.current.find(x => x.sub.id === p.new.id)
+                if (!m) return pst
+                return [{ ...m, sub: { ...m.sub, status: "cancelled", canceled_at: p.new.canceled_at } }, ...pst]
+              })
             } else if (p.new.status === "complete" && p.new.beneficiary_id) fetchData(true)
           } else if (p.eventType === "DELETE") {
             setActive(prev => prev.filter(x => x.sub.id !== p.old.id))
@@ -180,28 +211,40 @@ const UserDashboard = () => {
 
   // ── Optimistic cancel with retry ──
   const activeRef = useRef(active)
-  const pastRef = useRef(past)
   activeRef.current = active
-  pastRef.current = past
 
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+
+  // Empty deps is intentional: activeRef (ref) stays current via render-body
+  // assignment, and state setters are stable. The retry self-reference works
+  // because closures capture the binding, not the value.
   const handleCancel = useCallback(async (subId: string) => {
-    const m = activeRef.current.find(x => x.sub.id === subId)
-    if (!m) return
-    const prevA = activeRef.current
-    const prevP = pastRef.current
+    const originalIndex = activeRef.current.findIndex(x => x.sub.id === subId)
+    if (originalIndex === -1) return
+    const m = activeRef.current[originalIndex]
+    setCancellingId(subId)
+
+    // Optimistic remove from active (don't move to past until API confirms)
     setActive(prev => prev.filter(x => x.sub.id !== subId))
-    const opt: Sponsorship = { sub: { ...m.sub, status: "cancelled" as const, canceled_at: new Date().toISOString() }, ben: m.ben }
-    setPast(prev => [opt, ...prev])
 
     try {
       const res = await fetch("/api/stripe/cancel-subscription", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscriptionId: opt.sub.stripe_subscription_id || opt.sub.id }),
+        body: JSON.stringify({ subscriptionId: m.sub.stripe_subscription_id || m.sub.id }),
       })
       if (!res.ok) { const b = await res.json(); throw new Error(b.error || "Failed") }
+      // API succeeded — safely move to past
+      const opt: Sponsorship = { sub: { ...m.sub, status: "cancelled" as const, canceled_at: new Date().toISOString() }, ben: m.ben }
+      setPast(prev => [opt, ...prev])
+      setCancellingId(null)
       toaster.create({ title: "Sponsorship ended", description: "You can always start a new one later.", type: "success", duration: 4000 })
     } catch (err) {
-      setActive(prevA); setPast(prevP)
+      // Rollback — restore at original position so the card doesn't jump
+      setActive(prev => {
+        const at = Math.min(originalIndex, prev.length)
+        return [...prev.slice(0, at), m, ...prev.slice(at)]
+      })
+      setCancellingId(null)
       toaster.create({
         title: "Couldn't process cancellation",
         description: err instanceof Error ? err.message : "Something went wrong",
@@ -261,11 +304,11 @@ const UserDashboard = () => {
           <Box>
             <Heading size="lg" mb={1} color="gray.800">Your impact</Heading>
             <Text color="gray.500" fontSize="sm">
-              {stats.monthsActive > 0
-                ? `Making a difference for ${stats.monthsActive} month${stats.monthsActive === 1 ? "" : "s"}`
+              {stats.durationLabel
+                ? `Making a difference for ${stats.durationLabel}`
                 : "Every bit of support matters"}
             </Text>
-            {refreshing && <Text fontSize="xs" color="#2b7ff9" mt={1} animation="pulse 1.5s infinite">Refreshing…</Text>}
+            {refreshing && <Flex align="center" gap={1.5} mt={1}><Spinner size="xs" color="#2b7ff9" /><Text fontSize="xs" color="#2b7ff9">Updating…</Text></Flex>}
           </Box>
           <Link href="/app/transactions" style={{ textDecoration: "none" }}>
             <Button
@@ -288,10 +331,26 @@ const UserDashboard = () => {
             <Text fontSize="28px" fontWeight="bold" color="#2b7ff9">{active.length}</Text>
             <Text fontSize="xs" color="gray.500" mt={0.5}>{active.length === 1 ? "Child sponsored" : "Children sponsored"}</Text>
           </Box>
-          <Box bg="white" px={5} py={3.5} borderRadius="xl" boxShadow="sm" minW="130px">
-            <Text fontSize="28px" fontWeight="bold" color="#059669">{stats.totalDonated < 1000 ? `$${stats.totalDonated.toFixed(0)}` : `$${(stats.totalDonated / 1000).toFixed(1)}k`}</Text>
-            <Text fontSize="xs" color="gray.500" mt={0.5}>Total contributed</Text>
-          </Box>
+          <Tooltip
+            content={
+              <Box fontSize="xs" lineHeight="1.7">
+                <Text>💰 {cents(stats.totalDonated * 100)} — commitment from active & past subscriptions</Text>
+                <Text>💵 {cents(actualTotalCents ?? 0)} — actually charged</Text>
+              </Box>
+            }
+            contentProps={{
+              bg: "gray.800",
+              color: "white",
+              borderRadius: "lg",
+              p: 3,
+            }}
+            showArrow
+          >
+            <Box bg="white" px={5} py={3.5} borderRadius="xl" boxShadow="sm" minW="130px" cursor="help">
+              <Text fontSize="28px" fontWeight="bold" color="#059669">{stats.totalDonated < 1000 ? `$${stats.totalDonated.toFixed(0)}` : `$${(stats.totalDonated / 1000).toFixed(1)}k`}</Text>
+              <Text fontSize="xs" color="gray.500" mt={0.5}>Committed</Text>
+            </Box>
+          </Tooltip>
           {past.length > 0 && (
             <Box bg="white" px={5} py={3.5} borderRadius="xl" boxShadow="sm" minW="130px">
               <Text fontSize="28px" fontWeight="bold" color="gray.400">{past.length}</Text>
@@ -317,10 +376,21 @@ const UserDashboard = () => {
             You have {blind.length} sponsorship{blind.length > 1 ? "s" : ""} ready to go —
             choose which child you&apos;d like to support!
           </Text>
-          <Button size="sm" borderRadius="12px" bg="#2b7ff9" color="white" _hover={{ bg: "#1a6fe0" }}
-            onClick={() => { setModalSubId(blind[0].id); setModalOpen(true) }}>
-            Choose a child
-          </Button>
+          {blind.length === 1 ? (
+            <Button size="sm" borderRadius="12px" bg="#2b7ff9" color="white" _hover={{ bg: "#1a6fe0" }}
+              onClick={() => { setModalSubId(blind[0].id); setModalOpen(true) }}>
+              Choose a child
+            </Button>
+          ) : (
+            <Flex gap={2} wrap="wrap">
+              {blind.map((b, i) => (
+                <Button key={b.id} size="sm" borderRadius="12px" bg="#2b7ff9" color="white" _hover={{ bg: "#1a6fe0" }}
+                  onClick={() => { setModalSubId(b.id); setModalOpen(true) }}>
+                  Choose a child #{i + 1}
+                </Button>
+              ))}
+            </Flex>
+          )}
         </Box>
       )}
 
@@ -341,6 +411,7 @@ const UserDashboard = () => {
                 }}
                 onViewProfile={() => window.location.href = `/sponsorships/${ben.username}`}
                 onCancel={() => handleCancel(sub.id)}
+                isCancelling={cancellingId === sub.id}
               />
             ))}
           </SimpleGrid>
@@ -364,21 +435,21 @@ const UserDashboard = () => {
           {pastExpanded && (
             <VStack gap={2} align="stretch">
               {past.map(({ sub, ben }) => {
-                const dur = sub.created_at && sub.canceled_at ? monthsBetween(sub.created_at, sub.canceled_at) : null
+                const dur = sub.created_at && sub.canceled_at ? elapsedLabel(sub.created_at, sub.canceled_at) : null
                 return (
                   <Link key={sub.id} href={`/sponsorships/${ben.username}`}
                     style={{ textDecoration: "none", color: "inherit", display: "block" }}>
                     <Box display="flex" gap={3} p={4} bg="white" borderRadius="xl" boxShadow="sm"
                       alignItems="center" cursor="pointer"
                       _hover={{ boxShadow: "md", transform: "translateY(-1px)", transition: "all 0.15s" }}>
-                      <Box w="44px" h="44px" borderRadius="full" bg="gray.50" flexShrink={0} display="flex" alignItems="center" justifyContent="center" fontSize="lg">
+                      <Box w="44px" h="44px" borderRadius="full" bg="gray.50" flexShrink={0} overflow="hidden" display="flex" alignItems="center" justifyContent="center" fontSize="lg" opacity={0.7}>
                         💛
                       </Box>
                       <Box flex={1} minW={0}>
                         <Text fontWeight="600" fontSize="sm"
                           css={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ben.name}</Text>
                         <Flex gap={2} mt={0.5} align="center" wrap="wrap">
-                          {dur && <Text fontSize="xs" color="gray.500">Supported for {dur} month{dur === 1 ? "" : "s"}</Text>}
+                          {dur && <Text fontSize="xs" color="gray.500">Supported for {dur}</Text>}
                           <Text fontSize="xs" color="gray.400">·</Text>
                           <Text fontSize="xs" color="gray.400">Ended {fmtDate(sub.canceled_at!)}</Text>
                         </Flex>
