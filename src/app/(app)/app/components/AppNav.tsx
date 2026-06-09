@@ -2,17 +2,16 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { Box, Flex, Text, IconButton } from "@chakra-ui/react"
-import { FiHome, FiCreditCard, FiMenu, FiX, FiLogOut } from "react-icons/fi"
+import { Box, Flex, Text } from "@chakra-ui/react"
+import { FiHome, FiCreditCard, FiLogOut } from "react-icons/fi"
 import { useAuthStore } from "@/store/authStore"
-import { useState } from "react"
 
 const NAV_ITEMS = [
   { href: "/app", label: "Dashboard", icon: FiHome },
   { href: "/app/transactions", label: "Transactions", icon: FiCreditCard },
 ] as const
 
-// ── Shared rendering for nav items (used by both mobile drawer and desktop sidebar) ──
+// ── Shared desktop nav items ──
 
 function NavItems({ activeFn, onItemClick }: {
   activeFn: (href: string) => boolean
@@ -85,7 +84,6 @@ function NavFooter({ email }: { email?: string | null }) {
 export function AppNav() {
   const pathname = usePathname()
   const { user } = useAuthStore()
-  const [mobileOpen, setMobileOpen] = useState(false)
 
   const isActive = (href: string) => {
     if (href === "/app") return pathname === "/app"
@@ -94,68 +92,47 @@ export function AppNav() {
 
   return (
     <>
-      {/* ── Mobile top bar ── */}
+      {/* ── Mobile bottom tab bar ── */}
       <Flex
         display={{ base: "flex", md: "none" }}
-        align="center"
-        justify="space-between"
-        px={4}
-        py={3}
-        bg="white"
-        borderBottom="1px"
-        borderColor="gray.100"
-        position="sticky"
-        top={0}
-        zIndex={50}
-      >
-        <Text fontWeight="700" fontSize="md" color="gray.800">
-          My Account
-        </Text>
-        <IconButton
-          aria-label="Toggle navigation"
-          variant="ghost"
-          size="sm"
-          onClick={() => setMobileOpen(!mobileOpen)}
-        >
-          {mobileOpen ? <FiX /> : <FiMenu />}
-        </IconButton>
-      </Flex>
-
-      {/* ── Mobile drawer overlay ── */}
-      {mobileOpen && (
-        <Box
-          display={{ base: "block", md: "none" }}
-          position="fixed"
-          inset={0}
-          bg="rgba(0,0,0,0.3)"
-          zIndex={40}
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-
-      {/* ── Mobile drawer ── */}
-      <Box
-        display={{ base: "block", md: "none" }}
         position="fixed"
-        top="52px"
-        left={0}
         bottom={0}
-        w="240px"
+        left={0}
+        right={0}
+        h="64px"
         bg="white"
-        borderRight="1px"
+        borderTop="1px"
         borderColor="gray.100"
-        zIndex={45}
-        transform={mobileOpen ? "translateX(0)" : "translateX(-100%)"}
-        transition="transform 0.2s ease"
-        shadow="lg"
-        pt={4}
+        zIndex={50}
+        align="center"
+        justify="space-around"
+        px={2}
+        shadow="0 -2px 12px rgba(0,0,0,0.06)"
       >
-        <Flex direction="column" h="full">
-          <NavItems activeFn={isActive} onItemClick={() => setMobileOpen(false)} />
-          <Box flex={1} />
-          <NavFooter email={user?.email} />
-        </Flex>
-      </Box>
+        {NAV_ITEMS.map((item) => {
+          const active = isActive(item.href)
+          const Icon = item.icon
+          return (
+            <Link key={item.href} href={item.href} style={{ textDecoration: "none", flex: 1 }}>
+              <Flex
+                direction="column"
+                align="center"
+                justify="center"
+                gap={0.5}
+                py={2}
+                borderRadius="lg"
+                color={active ? "#2b7ff9" : "gray.400"}
+                transition="all 0.12s"
+              >
+                <Icon size={20} />
+                <Text fontSize="10px" fontWeight={active ? "600" : "400"} letterSpacing="0.02em">
+                  {item.label}
+                </Text>
+              </Flex>
+            </Link>
+          )
+        })}
+      </Flex>
 
       {/* ── Desktop sidebar ── */}
       <Flex
