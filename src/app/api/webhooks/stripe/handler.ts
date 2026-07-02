@@ -417,6 +417,7 @@ export async function handleStripeWebhook(req: Request) {
         const isBlindSponsorship = sponsorshipMode === "blind"
         const beneficiaryId = session.metadata?.beneficiaryId || null
         const beneficiaryNameFromMetadata = session.metadata?.beneficiaryName
+        let beneficiaryType = session.metadata?.beneficiaryType || null
         const blindLabel =
           session.metadata?.blindLabel || "the next child who needs support"
         const userId = session.metadata?.userId || null
@@ -647,7 +648,7 @@ export async function handleStripeWebhook(req: Request) {
           const { data: beneficiaryData, error: beneficiaryError } =
             await supabase
               .from("beneficiaries")
-              .select("name")
+              .select("name, beneficiary_type")
               .eq("id", beneficiaryId)
               .single()
 
@@ -656,6 +657,7 @@ export async function handleStripeWebhook(req: Request) {
             // Continue processing - this is not critical
           } else if (beneficiaryData?.name) {
             beneficiaryName = beneficiaryData.name
+            beneficiaryType = beneficiaryData.beneficiary_type || beneficiaryType
           }
         }
 
@@ -805,6 +807,7 @@ export async function handleStripeWebhook(req: Request) {
             chargedCurrency: conversion.chargedCurrency,
             beneficiaryId: beneficiaryId,
             beneficiaryName: beneficiaryName,
+            beneficiaryType,
             paymentMethod: providerLabel(sessionProvider),
             paymentReference: session.id,
             interval: interval,
