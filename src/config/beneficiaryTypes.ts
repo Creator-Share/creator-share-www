@@ -200,6 +200,20 @@ export function isFixedSponsorshipType(
   return Boolean(config?.type && !config.isOpenSponsorship)
 }
 
+export function getBeneficiaryTypeLabel(
+  type: BeneficiaryTabType | string | null | undefined,
+): string | null {
+  if (!type) return null
+  const config = findConfig(type)
+  if (config?.label) return config.label
+
+  return type
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ")
+}
+
 export function hasOpenSponsorshipSupport(beneficiary: {
   active_subscriptions?: number | null
   budget_raised?: number | null

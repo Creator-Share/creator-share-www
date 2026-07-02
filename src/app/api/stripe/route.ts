@@ -72,6 +72,7 @@ export async function POST(req: Request) {
       userId,
       isEmbedded,
       type,
+      beneficiaryType,
       project,
       email,
       sponsorshipMode,
@@ -178,6 +179,7 @@ export async function POST(req: Request) {
             sponsorshipMode: resolvedSponsorshipMode,
             blindLabel: resolvedBlindLabel,
             beneficiaryName: resolvedBeneficiaryName,
+            beneficiaryType: beneficiaryType || null,
             ...paymentCurrencyMetadata,
           }
 
@@ -217,6 +219,7 @@ export async function POST(req: Request) {
             paymentType,
             sponsorshipMode: resolvedSponsorshipMode,
             blindLabel: resolvedBlindLabel,
+            beneficiaryType: beneficiaryType || null,
             region,
             creatorshare_platform: "true",
             ...paymentCurrencyMetadata,
@@ -263,6 +266,7 @@ export async function POST(req: Request) {
                   sponsorshipMode: resolvedSponsorshipMode,
                   blindLabel: resolvedBlindLabel,
                   beneficiaryName: resolvedBeneficiaryName,
+                  beneficiaryType: beneficiaryType || undefined,
                   region,
                   creatorshare_platform: "true",
                   ...paymentCurrencyMetadata,
