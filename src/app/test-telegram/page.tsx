@@ -186,12 +186,12 @@ export default function TestTelegramPage() {
           <div className="space-y-2 text-sm">
             <p><strong>1.</strong> Make sure you have added the environment variables to your <code>.env.local</code>:</p>
             <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">
-{`TELEGRAM_BOT_TOKEN=8268585751:AAHf1JGEJ1QvdveRYqRTDvQzHqKBt9dnl80
+{`TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_numerical_chat_id`}
             </pre>
             <p><strong>2.</strong> Get your chat ID by messaging your bot and visiting:</p>
             <code className="bg-gray-100 p-1 rounded text-xs">
-              https://api.telegram.org/bot8268585751:AAHf1JGEJ1QvdveRYqRTDvQzHqKBt9dnl80/getUpdates
+              https://api.telegram.org/(your bot token)/getUpdates
             </code>
             <p><strong>3.</strong> Restart your development server after adding environment variables.</p>
           </div>
