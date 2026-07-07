@@ -26,7 +26,7 @@ The Telegram bot integration automatically sends notifications to your Telegram 
 4. Follow the prompts to create your bot:
    - Choose a name for your bot (e.g., "Creator Share Notifications")
    - Choose a username (must end with 'bot', e.g., "creator_share_bot")
-5. BotFather will provide you with a bot token like: `8268585751:AAHf1JGEJ1QvdveRYqRTDvQzHqKBt9dnl80`
+5. BotFather will provide you with a bot token like: `{REPL}`
 
 ### 2. Get Your Chat ID
 
@@ -41,7 +41,7 @@ Add the following variables to your `.env.local` file:
 
 ```bash
 # Telegram Bot Configuration
-TELEGRAM_BOT_TOKEN=8268585751:AAHf1JGEJ1QvdveRYqRTDvQzHqKBt9dnl80
+TELEGRAM_BOT_TOKEN={REPL}
 TELEGRAM_CHAT_ID=-123456789
 ```
 

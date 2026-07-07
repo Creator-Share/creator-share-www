@@ -1,29 +1,32 @@
 # Creator Share — Modernization Upgrade Plan
 
-This is the sequenced remediation roadmap derived from the six findings documents in this folder. It is organized into five phases, ordered so that the highest risk-per-effort work lands first and later phases build on earlier ones. Each item links to its finding and states an acceptance criterion.
+This is the sequenced remediation roadmap derived from the findings documents in this folder. It is organized into phases, ordered so that the highest risk-per-effort work lands first and later phases build on earlier ones. Each item links to its finding and states an acceptance criterion.
+
+> **⚠️ Corrected 2026-07-05 after production verification.** The original Phase 0 was dominated by an "enable RLS everywhere" emergency. **That was a false positive** — verification against the live database ([findings-production-verification.md](./findings-production-verification.md)) proved **RLS is already correctly enforced on every sensitive table in production**. Phase 0 has been re-scoped to what is actually exploitable/urgent: rotating the leaked token, closing the **migration↔prod drift** (so the good security posture is reproducible and version-controlled), tightening a handful of over-permissive policies, and the RLS-independent app-layer fixes.
 
 **How to read the effort/impact tags:** effort is a rough T-shirt size (S ≈ hours, M ≈ 1–3 days, L ≈ a week+). "Impact" is the blast radius if left unaddressed.
 
-A guiding principle throughout: **the database is the security boundary, not the API layer.** The app-layer auth is already correct; most of the critical risk is that a browser can bypass it entirely via the anon key. Phase 0 closes that.
+Guiding principle: **the database security boundary is already enforced correctly in production — but it lives only in the dashboard, not in the committed migrations.** The urgent work is to (a) rotate a live leaked secret, (b) make the security posture reproducible in code before a rebuild/restore silently reintroduces the theoretical holes, and (c) fix the app-layer paths (service-role writes, PII-returning endpoints) that RLS does not cover.
 
 ---
 
 ## Phase 0 — Stop the bleeding (do this week)
 
-These are exploitable now with no privileges, or leak a live secret. Nothing else should be prioritized above them.
+Re-scoped after production verification. These are the genuinely urgent items: a live leaked secret, the drift that makes the (good) security posture non-reproducible, and RLS-independent app-layer holes.
 
 | # | Action | Finding | Effort | Impact |
 |---|---|---|---|---|
-| 0.1 | **Rotate the leaked Telegram bot token** via BotFather; remove it from `test-telegram/page.tsx` and `docs/telegram-bot-setup.md`; delete the `/test-telegram` page. Scrub git history (`git filter-repo`) as a secondary step. | [SEC C5](./findings-security.md#c5) | S | Full bot takeover |
-| 0.2 | **Delete or guard all `src/app/api/test/**` routes** and `/test-embed-iframe`; add `/api/test` to a middleware deny-list. | [SEC H1](./findings-security.md#h1) | S | Open email relay, unauth writes |
-| 0.3 | **Ship an RLS remediation migration**: `ENABLE ROW LEVEL SECURITY` + `REVOKE ALL FROM anon, authenticated` on `role_assignments`, `users`, `subscriptions`, `transaction_ledger`, `partnerships`, `activities`, `media`, `expenses`, `expense_assignments`, `email_logs`, `beneficiary_reservations`, `activity_subscriptions`. Rewrite the dormant `USING(true)`/`WITH CHECK(true)` policies to real owner/admin predicates **before** enabling. | [SEC C1–C4/C6](./findings-security.md#c1), [DATA D1](./findings-data-layer-rls.md) | M | Admin takeover, PII/PCI exposure, donation forgery |
-| 0.4 | **Revoke the base-schema default privileges** (`ALTER DEFAULT PRIVILEGES … REVOKE ALL … FROM anon, authenticated`) so new tables are locked by default. | [DATA D2](./findings-data-layer-rls.md) | S | Future tables silently exposed |
-| 0.5 | **Close the `complete-invitation` escalation**: stop reading roles from user-writable `user_metadata`; source invited roles from a server-only `invitations` table (written by the admin invite route) or `app_metadata`. | [SEC C3 / API §5] | M | Privilege escalation independent of 0.3 |
-| 0.6 | **Auth + ownership-check `/api/stripe/cancel-subscription`** and `/api/stripe/session` + `/api/stripe/success` (require `getUser()`, verify ownership, stop returning PII). | [SEC C2/H3](./findings-security.md#c2) | S | Cancel anyone's sponsorship; PII leak |
+| 0.1 | **Rotate the leaked Telegram bot token** via BotFather (only real fix — it's in git history). Then delete the hardcoded fallback in `src/config/telegram.ts:3`, remove it from `test-telegram/page.tsx`, delete/guard the `/test-telegram` page. Docs already scrubbed. `git filter-repo` is a secondary step. | [SEC C5](./findings-security.md#c5) | S | **CRITICAL** — full bot takeover |
+| 0.2 | **Close the `complete-invitation` escalation** (now the top escalation vector): stop deriving roles from user-writable `user_metadata.role_ids` — it's written via the service-role client, which **bypasses RLS**. Source invited roles from a server-only `invitations` table (written by the admin invite route) or `app_metadata`. | [SEC C5→C3 note](./findings-production-verification.md) | M | **HIGH** — privilege escalation (RLS does not cover service-role writes) |
+| 0.3 | **Delete or guard all `src/app/api/test/**` routes** and `/test-embed-iframe`; add `/api/test` to a middleware deny-list. (`payment-failed-email` = open email relay; `test/telegram` spams the ops channel.) | [SEC H1](./findings-security.md#h1) | S | Open email relay, ops-channel spam |
+| 0.4 | **Close the migration↔prod drift**: `supabase db pull` (or dump `pg_policies`/grants) to capture the live RLS, policies, and grants into a committed migration, so a rebuild/restore reproduces the hardened posture instead of the insecure migration state. Add a CI check that fails if any `public` table is RLS-off. | [DATA D1](./findings-data-layer-rls.md), [VERIFY M-DRIFT-1](./findings-production-verification.md) | M | **HIGH** — DR/staging/local rebuilds are insecure |
+| 0.5 | **Tighten the over-permissive live policies**: drop the `{public}` INSERT `WITH CHECK(true)` on `transaction_ledger`/`partnerships` (route those writes via service role); bind the authenticated `WITH CHECK(true)` INSERT/UPDATE on `media`/`subscriptions` to ownership; drop the leftover `USING(true)` SELECT on `roles`/`role_assignments`; de-duplicate redundant policies. | [VERIFY M-DRIFT-2, L-ENUM, M1](./findings-production-verification.md) | M | Ledger/media injection; admin enumeration |
+| 0.6 | **Pin `search_path` on SECURITY DEFINER functions** — `is_super_admin()` (underpins every admin policy) and `handle_user_registration`: `SET search_path = public, pg_temp`. | [DATA M5](./findings-data-layer-rls.md#m5) | S | Hardening of the core authz function |
+| 0.7 | **Fix the PII-leaking endpoints**: `/api/stripe/session` + `/api/stripe/success` require auth + return only non-PII status. Add an explicit `getUser()` + ownership check to `/api/stripe/cancel-subscription` (RLS blocks the cross-user path today, but don't rely on it implicitly). | [SEC H3](./findings-security.md#h3) | S | PII leak; DiD on cancel |
 
-**Acceptance:** a logged-in non-admin user cannot (a) read `subscriptions`/`users`/`transaction_ledger` via the anon PostgREST endpoint, (b) insert a `role_assignments` row, (c) insert a `transaction_ledger` row, (d) cancel another user's subscription. The Telegram token no longer appears in any bundle or in git `HEAD`. Add a regression test for each.
+**Acceptance:** the Telegram token is rotated and absent from `HEAD` and every bundle; a self-set `user_metadata.role_ids` cannot promote a user via `complete-invitation`; `/api/test/**` is unreachable in prod; a fresh `supabase db reset` from committed migrations produces a database with RLS **on** and the same policies as prod (verified by re-running the `pg_policies` diff); `stripe/session` returns no PII to an unauthenticated caller. Add a regression test for each.
 
-> **Note on realtime:** `src/lib/subscriptionsRealtime.ts` opens a browser realtime channel on `public.subscriptions`, which only works today because that table is unprotected. After 0.3, re-implement it behind a scoped RLS policy or a server proxy. Verify before deploying 0.3.
+> **Note on realtime:** `src/lib/subscriptionsRealtime.ts` opens a browser realtime channel on `public.subscriptions`. Because RLS is enabled in prod, the channel already only delivers rows the caller is authorized to see — no change required, but confirm it still functions for authenticated sponsors after 0.5's policy edits.
 
 ---
 
@@ -35,7 +38,7 @@ Money can currently be duplicated, silently captured, or lost. These are correct
 |---|---|---|---|---|
 | 1.1 | **Fix PayPal one-time double-credit**: have the webhook dedup on `reference = orderId AND tx_action` (mirror the client path); add a partial unique index on `(reference, tx_action)`. | [PAY P2](./findings-payments.md) | M | Double-charged ledger, doubled `budget_raised` |
 | 1.2 | **Fix silent money-capture on reconciliation failure**: on a *successful* charge, accept the charged amount or refund + alert — never return 200 with no record. | [PAY P3](./findings-payments.md) | M | Sponsor charged, gets nothing |
-| 1.3 | **Fix blind-sponsorship auto-match**: call the match logic in-process instead of an unauthenticated HTTP round-trip to an admin route. | [PAY P1](./findings-payments.md) | M | Blind sponsorships orphaned by default |
+| 1.3 | **Fix blind-sponsorship auto-match**: call the match logic in-process instead of an unauthenticated HTTP round-trip to an admin route. **Also reconcile the 18 already-orphaned complete subscriptions** found in prod (17 Stripe, oldest 2025-07-29) — match or refund them. | [PAY P1](./findings-payments.md), [VERIFY §3](./findings-production-verification.md) | M | **18 real sponsors** unmatched for months |
 | 1.4 | **Return 5xx for transient webhook errors** so Stripe retries (handler is idempotent); add a reconciliation sweep job. | [PAY P4/P9](./findings-payments.md) | M | Events lost on DB blips |
 | 1.5 | **Re-derive `amount`/`userId`/`beneficiaryId` server-side** at checkout; require auth on checkout creation; stop persisting a new Product/Price per call. | [PAY P5/P6](./findings-payments.md), [SEC H... ] | M | Underpayment, mis-attribution, Stripe bloat |
 | 1.6 | **Key partnership lifecycle on subscription/customer id**, not email; apply the `beneficiary_id` UUID guard consistently in PayPal. | [PAY P7/P8](./findings-payments.md) | S | Over-broad cancellation, mis-attribution |
@@ -109,8 +112,8 @@ Lower urgency; do opportunistically after Phases 0–4.
 ## Sequencing at a glance
 
 ```
-Phase 0  ██  Security emergencies        (this week — blocks nothing, unblocks trust)
-Phase 1  ███ Payment integrity           (this sprint — depends on 0.3 RLS for the ledger)
+Phase 0  ██  Token rotation + drift + policy tightening  (this week)
+Phase 1  ███ Payment integrity           (this sprint — includes reconciling 18 orphaned sponsorships)
 Phase 2  ███ Backend foundation          (enables consistent Phase 1/3 fixes)
 Phase 3  ████ Frontend modernization     (depends on 2.1 typed client, 2.2 wrapper)
 Phase 4  ███ Tooling / tests / CI        (can start in parallel with Phase 2)
