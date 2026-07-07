@@ -48,8 +48,16 @@ Query: `pg_class.relrowsecurity` + policy counts + `information_schema.role_tabl
 ## 2. Real issues the live audit *did* surface
 
 ### M-DRIFT-1 — Migrations do not reproduce production security (**the headline finding**)
-The repo migrations contain **zero** `ENABLE ROW LEVEL SECURITY` statements for the sensitive tables and **none** of the 29 live policies (e.g. `role_assignments_insert_super_admin`, `subscriptions_select_own_or_super_admin`, the `is_super_admin()` predicate). The entire authorization model exists only in the running databases. **Anyone who rebuilds the DB from migrations — local dev, a fresh staging project, a disaster-recovery restore — gets an insecure database** (RLS off, `GRANT ALL TO anon` intact). This is an operational / reproducibility / DR risk, **not** a live breach.
-**Fix:** `supabase db pull` (or dump `pg_policies`) to capture the live RLS/policies/grants into a committed migration, then keep migrations authoritative. Add a CI check that fails if a `public` table is RLS-off.
+The current protective policy set exists **only in the running database**, not in the committed migrations. **Anyone who rebuilds the DB from migrations — local dev, a fresh staging project, a disaster-recovery restore — gets an insecure database** (RLS off on the sensitive tables, `GRANT ALL TO anon` intact). Operational / reproducibility / DR risk, **not** a live breach.
+
+**How the drift happened (proven, not inferred):**
+- Prod's migration ledger (`supabase_migrations.schema_migrations`) holds **35 migrations that match the 35 repo files exactly** — nothing was applied as an out-of-band migration, nothing is missing.
+- The ledger stores each migration's SQL. Across all 35: **5 enable RLS, 8 create policies, 3 disable RLS** — migrations *did* manage RLS historically (e.g. `20251006120000_missing_migrations` *disables* it on `role_assignments`/`media`/`expenses`, which is why the migration end-state looks insecure).
+- **Zero of the 35 migrations reference `is_super_admin`** — the function every current protective policy depends on — and it is defined in no migration file.
+- No auto-RLS event trigger is installed on the project (only stock Supabase internals in `pg_event_trigger`), so RLS was not auto-enabled either.
+- **Therefore the protective policies (`*_insert_super_admin`, `*_select_own_or_super_admin`, …) were authored by hand directly against production — via the Supabase Policies UI and/or SQL Editor — and never written back to a migration.** Fingerprint: several live policies retain Supabase's dashboard-template names verbatim (`Enable select for authenticated users only`, `Enable insert for authenticated users only`).
+
+**Fix:** `supabase db pull` (or dump `pg_policies`/grants) to capture the live RLS/policies/grants + `is_super_admin()` into a committed migration, then keep migrations authoritative. Add a CI check (or scheduled Supabase linter run) that fails if a `public` table is RLS-off. Going forward, make schema changes via migrations, not the dashboard.
 
 ### M-DRIFT-2 — `transaction_ledger` & `partnerships` allow `{public}` INSERT with `WITH CHECK (true)`
 Live policies: `transaction_ledger.insert_user` (roles `{public}`, `WITH CHECK true`) and `partnerships."Allow public insert"` / `partnerships_insert_public` (roles `{public}`, `WITH CHECK true`). `{public}` includes `anon`, so **an anonymous caller can INSERT rows** into the financial ledger and partnerships (they cannot read them back — SELECT is owner/admin scoped). Likely a leftover to support unauthenticated checkout, but there is **no DB-layer constraint** on what gets written → ledger/partnership pollution.
@@ -82,7 +90,7 @@ Read-only aggregates over the live tables:
 ### Index / constraint reality (live `pg_indexes`)
 - **No `UNIQUE` on `subscriptions.stripe_subscription_id`** — only `provider_event_id` is unique. Confirms payments **M4**. Add a unique index.
 - **`transaction_ledger (reference, tx_action)` is indexed but NOT unique** — so the cross-path PayPal dedup (client `capture.id` vs webhook `event.id`) isn't enforced. Add a `UNIQUE` (partial, `WHERE reference IS NOT NULL`).
-- **`uniq_active_subscription_per_beneficiary` does NOT exist in prod** — the "one complete subscription per beneficiary" guarantee the migrations claim is **not enforced** in production (more drift). The 0-victims result means the app-layer check has held so far; add the partial unique index to make it real.
+- **`uniq_active_subscription_per_beneficiary` does NOT exist in prod — and that is by design, NOT drift.** Migration `20251126040000_remove_duplicate_subscription_constraint` **intentionally dropped it** ("beneficiaries should accept multiple sponsors until their budget goal is met"). The budget cap is enforced by the `reject_fulfilled_beneficiary_subscription` trigger, not a unique index. **Do not re-add this index** — it would break the multi-sponsor model. (The 0 "beneficiaries with >1 complete sub" result is just current data, not an invariant.) *This corrects an earlier characterization of it as drift.*
 - **`beneficiaries` has three identical GIST indexes** on `location_geo` (`idx_beneficiaries_location_geo`, `idx_people_location`, `idx_people_location_geo`) — wasteful; drop two.
 - **No index on `beneficiaries.(beneficiary_type, status)`** — the hot public-listing filter. Confirms data **L1**.
 - Dead functions `get_active_subscription_total` (filters non-existent `status='active'`) and `filter_by_polygon` exist in prod — safe to drop.
