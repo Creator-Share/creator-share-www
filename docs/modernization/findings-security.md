@@ -26,6 +26,8 @@ The **real, verified residuals** from this area (all lower severity) are documen
 ### C5 — Live Telegram bot token committed and shipped to the browser  ⚠️ ACT NOW (unchanged — CRITICAL)
 A live bot token is hardcoded as a fallback in [`src/config/telegram.ts:3`](../../src/config/telegram.ts) (`process.env.TELEGRAM_BOT_TOKEN || '<token>'`) and rendered in the `"use client"` page [`src/app/test-telegram/page.tsx:189`](../../src/app/test-telegram/page.tsx) & `:194`, so it ships in the public JS bundle and is served at `/test-telegram`. (The value has been redacted from this repo's docs, but it remains in source and in git history.)
 
+**Confirmed active (2026-07-05):** a read-only Telegram `getMe` call on the committed token returned a live bot — `@CreatorShareBot`, "Creator Share" (id `8268585751`). Not a placeholder; it is the org's real notification bot.
+
 **Exploit:** Anyone reading the bundle gets full bot control (read `getUpdates`, send/spoof messages, hijack the notification channel).
 
 **Fix:** **Rotate the token via BotFather now** — it is in git history and already public; removing it from files does not remediate it. Then delete the hardcoded fallback in `src/config/telegram.ts`, remove it from the client page (delete/guard `/test-telegram`), and never embed a bot token client-side. `git filter-repo` to scrub history is secondary to rotation.
