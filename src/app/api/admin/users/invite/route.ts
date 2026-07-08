@@ -20,13 +20,12 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
-    // Use Supabase's built-in inviteUserByEmail with first role as primary
+    // Use Supabase's built-in inviteUserByEmail
     const { data: inviteData, error: inviteError } = await serviceSupabase.auth.admin.inviteUserByEmail(
       email,
       {
         data: {
-          role_ids: role_ids, // Store all role IDs for later assignment
-          invited_by: user.id
+          invited_by: user.id  // Only track who invited, no role_ids here
         },
         redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://creator-share-www.vercel.app'}/set-password`
       }
@@ -39,10 +38,28 @@ export async function POST(request: Request) {
         details: inviteError.message 
       }, { status: 500 })
     }
-    
+
+    // Assign roles immediately — don't defer to a client-callable endpoint
+    const newAssignments = role_ids.map((roleId: string) => ({
+      user_id: inviteData.user.id,
+      role_id: roleId
+    }))
+
+    const { error: roleInsertError } = await serviceSupabase
+      .from("role_assignments")
+      .insert(newAssignments)
+
+    if (roleInsertError) {
+      console.error("Error assigning roles to invited user:", roleInsertError)
+      return NextResponse.json({ 
+        error: "User invited but roles could not be assigned",
+        details: roleInsertError.message
+      }, { status: 500 })
+    }
+
     return NextResponse.json(
       { 
-        message: "User invited successfully", 
+        message: "User invited and roles assigned successfully", 
         user: inviteData.user,
         invitationSent: true
       },
