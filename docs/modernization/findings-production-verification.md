@@ -1,0 +1,127 @@
+# Production Verification (authoritative)
+
+**Date:** 2026-07-05 · **Method:** read-only queries against the live **production** Supabase project (`tlriizdnutdytxkawhud`) via the Management API SQL endpoint, plus anonymous PostgREST probes using the public `anon` key. No writes were performed against any live system.
+
+> **Why this document exists — a correction.** The original security and data-layer findings read the repo's **migration files** (`supabase/migrations/`) — the right thing to do — but reported the state those migrations *produce* as the **live production** state. It isn't: production was hardened **out-of-band** (RLS enabled and policies authored directly in the Supabase dashboard) in ways the committed migrations never captured. So the audit's single highest-severity claim — *anonymous privilege escalation to SUPER_ADMIN and mass PII/financial exposure via disabled RLS* — is **a false positive against production.**
+>
+> The divergence itself is the real finding, and it is serious: migrations are supposed to describe production, and here they don't (see **M-DRIFT-1**). This document records what the live database actually enforces and reframes the genuine issues verification surfaced. **Takeaway:** the mistake was reporting a migration-derived state as a *live* severity without confirming it against the running system — not the reading of the migrations, which is exactly what exposed the drift. Every RLS claim below is now backed by a live query.
+
+---
+
+## 1. RLS is enabled on every sensitive table in production
+
+Query: `pg_class.relrowsecurity` + policy counts + `information_schema.role_table_grants` for all `public` tables.
+
+| Table | RLS | Policies | Anon can READ? (live probe) | Verdict |
+|---|---|---|---|---|
+| `role_assignments` | ✅ on | 5 | 0 rows | **Protected** |
+| `roles` | ✅ on | 5 | 0 rows | Protected (see §3) |
+| `users` | ✅ on | 4 | 0 rows | **Protected** — PII safe |
+| `subscriptions` | ✅ on | 4 | 0 rows | **Protected** |
+| `transaction_ledger` | ✅ on | 5 | 0 rows | **Protected** (read) |
+| `partnerships` | ✅ on | 6 | 0 rows | Protected (read) |
+| `email_logs` | ✅ on | 4 | 0 rows | Protected |
+| `activity_subscriptions` | ✅ on | 4 | 0 rows | Protected |
+| `activities` | ✅ on | 5 | 56 rows — all `is_public=true` | Protected (public feed by design) |
+| `media` | ✅ on | 7 | 1021 rows | Public by design (image URLs) |
+| `beneficiaries` | ✅ on | 8 | 366 rows | Public by design |
+| `expenses` / `expense_assignments` | ✅ on | 5 each | **401 — anon grant revoked** | Most-locked |
+| `spatial_ref_sys` | ⬜ off | 0 | (PostGIS system table) | N/A — normal |
+
+**Proof that `0 rows` = RLS filtering, not empty tables:** using the dev service-role key on the dev project, the same tables hold real data (24 users, 23 subscriptions, 26 ledger rows, 4 role_assignments, 51 email logs) while the dev **anon** role sees zero of each. Production is more populated still, so its zeros are RLS enforcement.
+
+> Every table also still carries the Supabase default `GRANT ALL … TO anon`. That is **harmless here because RLS gates it** — grants are necessary-but-not-sufficient; the policies are the enforcement layer. (`expenses`/`expense_assignments` additionally have the grant revoked.)
+
+### Refuted findings (were CRITICAL, are not exploitable in production)
+
+| Original | Claim | Reality |
+|---|---|---|
+| security **C1** / data **D1** | Anon INSERT into `role_assignments` → self-grant SUPER_ADMIN | `role_assignments` INSERT policy `WITH CHECK is_super_admin()`; anon cannot insert, non-admin authenticated cannot insert. **Refuted.** |
+| security **C2** | Anon read/write all `subscriptions` + cancel-subscription IDOR | RLS `select own_or_super_admin`; anon reads nothing. `cancel-subscription` uses the session client so its SELECT/UPDATE run under RLS → cross-user cancel is blocked. **Refuted** (see §3 for the residual DiD note). |
+| security **C3** / data (ledger) | Anon INSERT into `transaction_ledger` → forge donations, inflate `budget_raised` | Partly real, but **not** as framed: `budget_raised` is recomputed from `subscriptions`, not the ledger, so ledger inserts do **not** inflate funding. Anon *can* insert ledger rows (see §2, M-DRIFT-2). Downgraded to Medium data-integrity. |
+| security **C4** / data **D1** | Anon read/write `users` (PII) | RLS `select own_or_super_admin`; anon reads nothing. **Refuted.** |
+| security **C6** | Anon read `partnerships` card data | RLS `select own_or_super_admin`; anon reads nothing (anon INSERT is allowed — see §2). **Read exposure refuted.** |
+| data **D2** | Default privileges make all tables anon-exploitable | Grants exist but RLS gates them; not exploitable. **Refuted** (still worth tightening as hygiene). |
+
+---
+
+## 2. Real issues the live audit *did* surface
+
+### M-DRIFT-1 — Migrations do not reproduce production security (**the headline finding**)
+The current protective policy set exists **only in the running database**, not in the committed migrations. **Anyone who rebuilds the DB from migrations — local dev, a fresh staging project, a disaster-recovery restore — gets an insecure database** (RLS off on the sensitive tables, `GRANT ALL TO anon` intact). Operational / reproducibility / DR risk, **not** a live breach.
+
+**How the drift happened (proven, not inferred):**
+- Prod's migration ledger (`supabase_migrations.schema_migrations`) holds **35 migrations that match the 35 repo files exactly** — nothing was applied as an out-of-band migration, nothing is missing.
+- The ledger stores each migration's SQL. Across all 35: **5 enable RLS, 8 create policies, 3 disable RLS** — migrations *did* manage RLS historically (e.g. `20251006120000_missing_migrations` *disables* it on `role_assignments`/`media`/`expenses`, which is why the migration end-state looks insecure).
+- **Zero of the 35 migrations reference `is_super_admin`** — the function every current protective policy depends on — and it is defined in no migration file.
+- No auto-RLS event trigger is installed on the project (only stock Supabase internals in `pg_event_trigger`), so RLS was not auto-enabled either.
+- **Therefore the protective policies (`*_insert_super_admin`, `*_select_own_or_super_admin`, …) were authored by hand directly against production — via the Supabase Policies UI and/or SQL Editor — and never written back to a migration.** Fingerprint: several live policies retain Supabase's dashboard-template names verbatim (`Enable select for authenticated users only`, `Enable insert for authenticated users only`).
+
+**Fix:** `supabase db pull` (or dump `pg_policies`/grants) to capture the live RLS/policies/grants + `is_super_admin()` into a committed migration, then keep migrations authoritative. Add a CI check (or scheduled Supabase linter run) that fails if a `public` table is RLS-off. Going forward, make schema changes via migrations, not the dashboard.
+
+### M-DRIFT-2 — `transaction_ledger` & `partnerships` allow `{public}` INSERT with `WITH CHECK (true)`
+Live policies: `transaction_ledger.insert_user` (roles `{public}`, `WITH CHECK true`) and `partnerships."Allow public insert"` / `partnerships_insert_public` (roles `{public}`, `WITH CHECK true`). `{public}` includes `anon`, so **an anonymous caller can INSERT rows** into the financial ledger and partnerships (they cannot read them back — SELECT is owner/admin scoped). Likely a leftover to support unauthenticated checkout, but there is **no DB-layer constraint** on what gets written → ledger/partnership pollution.
+**Fix:** drop the permissive `{public}` INSERT policies; route these writes through the service-role client (webhooks/checkout API), or replace with a narrow column-constrained policy.
+
+### M-DEFINER — `is_super_admin()` is SECURITY DEFINER without a pinned `search_path`
+`is_super_admin()` (`prosecdef = true`, `proconfig = null`) underpins **every** admin RLS policy. `handle_user_registration` (also SECURITY DEFINER) has the same gap. This is the standard Supabase-linter "mutable search_path in SECURITY DEFINER" warning — a schema-shadowing hardening gap in the most security-critical function in the system.
+**Fix:** `ALTER FUNCTION public.is_super_admin() SET search_path = public, pg_temp;` (and the same for `handle_user_registration`).
+
+### L-ENUM — Authenticated users can enumerate all admins
+`role_assignments` and `roles` each carry a leftover permissive SELECT policy (`Enable select for authenticated users only` / `roles_select_authenticated`, `USING true`, role `authenticated`) **in addition to** the correct `_select_own` policy. Because policies are OR'd, **any logged-in user can read the full `role_assignments` and `roles` tables** — i.e. discover who the SUPER_ADMINs are and the SUPER_ADMIN role id. No escalation (INSERT is admin-gated), but it violates least privilege and silently defeats the well-named `_select_own` policy.
+**Fix:** drop the `USING (true)` SELECT policies; keep `_select_own`.
+
+### Policy hygiene — redundant/duplicate policies
+Duplicate policies exist across the hardened tables (two SELECT on `role_assignments`, two INSERT on `transaction_ledger`, two INSERT + two SELECT on `partnerships`, two SELECT on `roles`). The pre-hardening permissive versions were never dropped. Consolidate to one policy per (table, command, role).
+
+---
+
+## 3. Payments & schema: latent-vs-materialized (data-level checks)
+
+Read-only aggregates over the live tables:
+
+| Check | Result | Meaning |
+|---|---|---|
+| Complete subscriptions with `beneficiary_id IS NULL` | **18** (of 43 complete; 17 Stripe, all >7 days old, oldest 2025-07-29) | **Materialized problem** — corroborates payments **C1** (blind-sponsorship auto-match failing). Real sponsors, unmatched for months. |
+| Duplicate `(reference, tx_action)` ledger groups | 0 | PayPal double-credit is **latent** (no `UNIQUE`), no victims yet |
+| Beneficiaries with >1 complete subscription | 0 | Double-sponsorship **latent**, no victims yet |
+| Duplicate `stripe_subscription_id` | 0 | Insert-on-GET race **latent**, no victims yet |
+
+### Index / constraint reality (live `pg_indexes`)
+- **No `UNIQUE` on `subscriptions.stripe_subscription_id`** — only `provider_event_id` is unique. Confirms payments **M4**. Add a unique index.
+- **`transaction_ledger (reference, tx_action)` is indexed but NOT unique** — so the cross-path PayPal dedup (client `capture.id` vs webhook `event.id`) isn't enforced. Add a `UNIQUE` (partial, `WHERE reference IS NOT NULL`).
+- **`uniq_active_subscription_per_beneficiary` does NOT exist in prod — and that is by design, NOT drift.** Migration `20251126040000_remove_duplicate_subscription_constraint` **intentionally dropped it** ("beneficiaries should accept multiple sponsors until their budget goal is met"). The budget cap is enforced by the `reject_fulfilled_beneficiary_subscription` trigger, not a unique index. **Do not re-add this index** — it would break the multi-sponsor model. (The 0 "beneficiaries with >1 complete sub" result is just current data, not an invariant.) *This corrects an earlier characterization of it as drift.*
+- **`beneficiaries` has three identical GIST indexes** on `location_geo` (`idx_beneficiaries_location_geo`, `idx_people_location`, `idx_people_location_geo`) — wasteful; drop two.
+- **No index on `beneficiaries.(beneficiary_type, status)`** — the hot public-listing filter. Confirms data **L1**.
+- Dead functions `get_active_subscription_total` (filters non-existent `status='active'`) and `filter_by_polygon` exist in prod — safe to drop.
+
+### `beneficiary_reservations` divergence
+Table **exists in dev, 404s in prod** — the reservation feature's table isn't deployed to production (or isn't exposed). Any prod code path touching it would fail. Reconcile.
+
+---
+
+## 4. Dev ↔ Prod drift (secondary finding)
+
+Beyond migrations↔live, the two live environments differ:
+- `expenses` / `expense_assignments`: anon grant **revoked** on prod (401), **granted** on dev (RLS-empty 200).
+- `beneficiary_reservations`: **exists on dev, absent on prod.**
+
+Both environments were hardened by hand and separately, so they've diverged. A single committed source-of-truth migration (M-DRIFT-1) fixes this class of problem.
+
+---
+
+## 5. Net effect on the audit's severity ranking
+
+| Item | Was | Now |
+|---|---|---|
+| RLS: anon privilege-escalation / PII exposure (sec C1,C2,C4,C6; data D1,D2) | CRITICAL ×5 | **Refuted** (production enforces RLS) |
+| Migrations↔prod↔dev drift (rebuild = insecure DB) | (not identified) | **HIGH** (new) |
+| 18 orphaned blind sponsorships | HIGH (unverified) | **HIGH — materialized, 18 real cases** |
+| Live Telegram token in source + browser bundle (sec C5) | CRITICAL | **CRITICAL — unchanged; rotate now** |
+| `{public}` INSERT on ledger/partnerships | (folded into C3) | **MEDIUM** |
+| `is_super_admin()` search_path | MEDIUM (data M5, partial) | **MEDIUM — underpins all authz** |
+| Missing unique indexes / constraints (payments) | MEDIUM latent | **MEDIUM latent — confirmed, 0 victims** |
+| Authenticated admin-enumeration (permissive SELECT) | (not identified) | **LOW** (new) |
+| Code-level HIGHs (test endpoints, `stripe/session` PII leak, filter injection, rate limiting) | HIGH/MED | **Unchanged — RLS-independent, still valid** |
+
+The database authorization layer — the thing the original report called the app's biggest problem — is in fact **sound in production**. The real, verified work is: **rotate the leaked token**, **reconcile the 18 orphaned sponsorships + fix the matching path**, **close the migration/prod drift** (so the security posture is reproducible and version-controlled), tighten a few **permissive policies**, add the **missing payment constraints**, and the unchanged **code-level** hardening.

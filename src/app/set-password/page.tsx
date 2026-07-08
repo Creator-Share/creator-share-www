@@ -154,23 +154,6 @@ export default function SetPasswordPage() {
                 return
             }
 
-            // Assign the role after password is set
-            try {
-                const roleResponse = await fetch('/api/auth/complete-invitation', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                })
-
-                if (!roleResponse.ok) {
-                    const roleError = await roleResponse.json()
-                    console.error("Role assignment failed:", roleError)
-                }
-            } catch (roleError) {
-                console.error("Error assigning role:", roleError)
-            }
-
             setPasswordCompleted(true)
 
             toaster.create({
