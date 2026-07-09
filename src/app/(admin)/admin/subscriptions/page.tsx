@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { DataTable } from "@/components/admin-ui/Tables/data-table"
 import { columns, type AdminSubscription } from "@/app/(admin)/admin/subscriptions/columns"
 import { createClient } from "@/utils/supabase/client"
@@ -17,6 +17,10 @@ const AdminSubscriptionsPage = () => {
   const [subscriptions, setSubscriptions] = useState<AdminSubscription[]>([])
   const [loading, setLoading] = useState(true)
   const [supabase] = useState(() => createClient())
+  const [searchTerm, setSearchTerm] = useState("")
+  // Unique channel name per component instance to avoid "cannot add postgres_changes
+  // callbacks after subscribe()" errors when React StrictMode double-mounts.
+  const channelNameRef = useRef(`subscriptions_changes_${Math.random().toString(36).slice(2, 8)}`)
 
   const transformSubscription = (sub: RawSubscription): AdminSubscription => {
     const canonicalAmount = formatMoney(sub.amount, "USD")
@@ -47,6 +51,55 @@ const AdminSubscriptionsPage = () => {
     let channel: RealtimeChannel | null = null
     let mounted = true
 
+    const enrichBeneficiary = async (subId: string, beneficiaryId: string | null) => {
+      if (!beneficiaryId) return
+      const { data } = await supabase
+        .from('beneficiaries')
+        .select('id, name, username')
+        .eq('id', beneficiaryId)
+        .single()
+      if (data && mounted) {
+        setSubscriptions(prev =>
+          prev.map(sub =>
+            sub.id === subId
+              ? { ...sub, child_name: data.name, child_username: data.username }
+              : sub
+          )
+        )
+      }
+    }
+
+    const handleSubscriptionChange = (payload: any) => {
+      if (!mounted) return
+
+      const { eventType, new: newRecord, old: oldRecord } = payload
+
+      if (eventType === 'INSERT' && newRecord) {
+        const record = newRecord as RawSubscription
+        // Insert immediately with placeholder beneficiary data
+        const transformed = transformSubscription({
+          ...record,
+          beneficiaries: null,
+        })
+        setSubscriptions(prev => [transformed, ...prev])
+        // Enrich asynchronously — no await in the callback
+        enrichBeneficiary(record.id, record.beneficiary_id)
+      } else if (eventType === 'UPDATE' && newRecord) {
+        const record = newRecord as RawSubscription
+        const transformed = transformSubscription({
+          ...record,
+          beneficiaries: null,
+        })
+        setSubscriptions(prev =>
+          prev.map(sub => sub.id === transformed.id ? transformed : sub)
+        )
+        enrichBeneficiary(record.id, record.beneficiary_id)
+      } else if (eventType === 'DELETE' && oldRecord) {
+        const record = oldRecord as RawSubscription
+        setSubscriptions(prev => prev.filter(sub => sub.id !== record.id))
+      }
+    }
+
     const initialize = async () => {
       try {
         const { data, error } = await supabase
@@ -65,9 +118,10 @@ const AdminSubscriptionsPage = () => {
           setLoading(false)
         }
 
-        // Subscribe to real-time changes
+        // Register the realtime listener first, then subscribe.
+        // Calling .on() after .subscribe() throws "cannot add postgres_changes callbacks".
         channel = supabase
-          .channel('subscriptions_changes')
+          .channel(channelNameRef.current)
           .on(
             'postgres_changes',
             {
@@ -75,57 +129,7 @@ const AdminSubscriptionsPage = () => {
               schema: 'public',
               table: 'subscriptions',
             },
-            async (payload) => {
-              if (!mounted) return
-
-              const { eventType, new: newRecord, old: oldRecord } = payload
-
-              if (eventType === 'INSERT' && newRecord) {
-                // Cast the newRecord to our RawSubscription type
-                const subscriptionRecord = newRecord as RawSubscription
-
-                // Fetch beneficiary data for the new subscription (only if we
-                // have a beneficiary_id — partnership rows and other future
-                // beneficiary-less subscriptions skip the lookup).
-                let beneficiaryData: RawSubscription["beneficiaries"] = null
-                if (subscriptionRecord.beneficiary_id) {
-                  const { data } = await supabase
-                    .from('beneficiaries')
-                    .select('id, name, username')
-                    .eq('id', subscriptionRecord.beneficiary_id)
-                    .single()
-                  beneficiaryData = data
-                }
-
-                const fullRecord = { ...subscriptionRecord, beneficiaries: beneficiaryData }
-                const transformed = transformSubscription(fullRecord)
-
-                setSubscriptions(prev => [transformed, ...prev])
-              } else if (eventType === 'UPDATE' && newRecord) {
-                // Cast the newRecord to our RawSubscription type
-                const subscriptionRecord = newRecord as RawSubscription
-
-                let beneficiaryData: RawSubscription["beneficiaries"] = null
-                if (subscriptionRecord.beneficiary_id) {
-                  const { data } = await supabase
-                    .from('beneficiaries')
-                    .select('id, name, username')
-                    .eq('id', subscriptionRecord.beneficiary_id)
-                    .single()
-                  beneficiaryData = data
-                }
-
-                const fullRecord = { ...subscriptionRecord, beneficiaries: beneficiaryData }
-                const transformed = transformSubscription(fullRecord)
-
-                setSubscriptions(prev =>
-                  prev.map(sub => sub.id === transformed.id ? transformed : sub)
-                )
-              } else if (eventType === 'DELETE' && oldRecord) {
-                const subscriptionRecord = oldRecord as RawSubscription
-                setSubscriptions(prev => prev.filter(sub => sub.id !== subscriptionRecord.id))
-              }
-            }
+            handleSubscriptionChange
           )
           .subscribe()
 
@@ -190,12 +194,27 @@ const AdminSubscriptionsPage = () => {
   }
 
 
+  const filteredSubscriptions = subscriptions.filter(sub => {
+    if (!searchTerm) return true
+    const q = searchTerm.toLowerCase()
+    return (
+      sub.child_name?.toLowerCase().includes(q) ||
+      sub.child_username?.toLowerCase().includes(q) ||
+      sub.user_email?.toLowerCase().includes(q) ||
+      sub.formatted_amount?.toLowerCase().includes(q) ||
+      sub.id?.toLowerCase().includes(q) ||
+      sub.beneficiary_id?.toLowerCase().includes(q) ||
+      sub.user_id?.toLowerCase().includes(q) ||
+      sub.status?.toLowerCase().includes(q)
+    )
+  })
+
   return (
     <AdminPageLayout
       title="Subscriptions Management"
       description="Manage all active and cancelled subscriptions across the platform"
-      searchValue=""
-      onSearchChange={() => {}}
+      searchValue={searchTerm}
+      onSearchChange={setSearchTerm}
       showResults={true}
       breadcrumb={[
         {
@@ -212,12 +231,17 @@ const AdminSubscriptionsPage = () => {
             <div className="text-lg">No subscriptions found</div>
             <div className="text-sm text-gray-500 mt-2">Check your database connection</div>
           </div>
+        ) : filteredSubscriptions.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="text-lg">No subscriptions match your search</div>
+            <div className="text-sm text-gray-500 mt-2">Try adjusting your search terms</div>
+          </div>
         ) : (
           <DataTable
             columns={columns({
               onCancelSubscription: handleCancelSubscription,
             }) as unknown as ColumnDef<unknown, unknown>[]}
-            data={subscriptions}
+            data={filteredSubscriptions}
             controls="bottom"
             tableHeight="h-[70vh]"
           />
