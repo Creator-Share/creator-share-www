@@ -142,6 +142,8 @@ See [telegram-bot-setup.md](./docs/telegram-bot-setup.md) for detailed setup ins
 
 ## 📚 Documentation
 
+- **[Advocate Platform Architecture](./docs/advocate-platform-roadmap.md)** - Approved architecture, security boundaries, delivery roadmap, and release gates
+- **[Repo-Wide Fast Follows](./FAST_FOLLOWS.md)** - Canonical register for intentionally deferred work
 - **[Setup Guide](./docs/setup.md)** - Database configuration and extension setup
 - **[Branching & Deployment](./docs/branches.md)** - Git workflow and CI/CD process
 - **[Stripe Webhooks](./docs/stripe-webhook.md)** - Payment webhook configuration
@@ -319,4 +321,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Made with ❤️ by the Creator Share team**
-
