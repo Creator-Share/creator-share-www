@@ -60,20 +60,14 @@ export async function GET(req: Request) {
       query = query.eq("gender", gender)
     }
     if (status.length > 0) {
-      // Include open sponsorships (budget_goal = -1) alongside "waiting-like" filters
-      // (New / Partially Funded / Sponsorship Cancelled), since they're perpetual
-      // targets. Omit them when the filter is purely terminal (e.g. Budget Fulfilled
-      // only) — there, opens would masquerade as "Sponsored", which they aren't.
-      // Draft/Archived are admin-controlled visibility states and always excluded
-      // from the open branch.
-      const statusList = status.map(s => `"${s}"`).join(",")
-      const shouldIncludeOpen = status.some((s) => s !== "Budget Fulfilled")
-      if (shouldIncludeOpen) {
-        const openCondition = 'and(budget_goal.eq.-1,status.not.in.(Draft,Archived))'
-        query = query.or(`status.in.(${statusList}),${openCondition}`)
-      } else {
-        query = query.in("status", status)
-      }
+      // Previously this used .or() to inject open sponsorships (budget_goal = -1)
+      // regardless of their status. That logic was flawed — a "Sponsorship
+      // Cancelled" filter was leaking open-sponsorship children with "New" or
+      // "Partially Funded" status because the open branch used
+      // status.not.in.(Draft,Archived) instead of constraining to the requested
+      // statuses. A properly-constrained open branch is redundant (it's a strict
+      // subset of status.in.()), so we now use a simple .in() for correctness.
+      query = query.in("status", status)
     }
 
     if (ageRangeParam) {
