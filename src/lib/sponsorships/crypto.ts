@@ -49,10 +49,20 @@ const ENVELOPE_KEY_INFO = Buffer.from(
   "creator-share/sponsorship/envelope-key/v1",
   "utf8",
 )
+const CHECKOUT_RECEIPT_HMAC_KEY_INFO = Buffer.from(
+  "creator-share/sponsorship/checkout-receipt-hmac-key/v1",
+  "utf8",
+)
+const CHECKOUT_RECEIPT_HMAC_CONTEXT = Buffer.from(
+  "creator-share/sponsorship/checkout-receipt/v1\0",
+  "utf8",
+)
 
 const CANONICAL_BASE64_PATTERN =
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 const OPAQUE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const LOCAL_PART_PATTERN =
   /^[\p{L}\p{N}!#$%&'*+\-/=?^_`{|}~.]+$/u
 const DOMAIN_LABEL_PATTERN =
@@ -127,6 +137,7 @@ export interface SponsorshipCrypto {
   ): VersionedEncryptedEnvelope
   decryptSecretPayload(envelope: Uint8Array): Buffer
   generateOpaqueToken(): OpaqueToken
+  deriveCheckoutReceipt(operationId: string): OpaqueToken
   digestOpaqueToken(token: string): Buffer
 }
 
@@ -434,6 +445,10 @@ export function createSponsorshipCrypto(
   const appSecret = decodeAppSecret(configuration?.appSecretBase64)
   const emailHmacKey = deriveKey(appSecret, EMAIL_HMAC_KEY_INFO)
   const encryptionKey = deriveKey(appSecret, ENVELOPE_KEY_INFO)
+  const checkoutReceiptHmacKey = deriveKey(
+    appSecret,
+    CHECKOUT_RECEIPT_HMAC_KEY_INFO,
+  )
   appSecret.fill(0)
 
   const randomBytes = dependencies.randomBytes ?? systemRandomBytes
@@ -518,6 +533,25 @@ export function createSponsorshipCrypto(
         }
       } finally {
         tokenBytes.fill(0)
+      }
+    },
+
+    deriveCheckoutReceipt(operationId: string): OpaqueToken {
+      if (typeof operationId !== "string" || !UUID_PATTERN.test(operationId)) {
+        throw fail("invalid-token", "Invalid sponsorship token")
+      }
+
+      const receiptBytes = createHmac("sha256", checkoutReceiptHmacKey)
+        .update(CHECKOUT_RECEIPT_HMAC_CONTEXT)
+        .update(operationId.toLowerCase(), "utf8")
+        .digest()
+      const token = receiptBytes.toString("base64url")
+      const digest = sha256Digest(receiptBytes)
+
+      return {
+        token,
+        digest,
+        digestRpcBytea: toSupabaseRpcBytea(digest),
       }
     },
 

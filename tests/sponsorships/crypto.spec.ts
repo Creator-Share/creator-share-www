@@ -350,6 +350,34 @@ test.describe("opaque tokens, digests, and Supabase bytea", () => {
     expect(first.digestRpcBytea).toBe(toSupabaseRpcBytea(first.digest))
   })
 
+  test("derives stable, secret-bound checkout receipts from exact operation ids", () => {
+    const operationId = "44444444-4444-4444-8444-444444444444"
+    const crypto = createSponsorshipCrypto({ appSecretBase64: APP_SECRET })
+    const sameKey = createSponsorshipCrypto({ appSecretBase64: APP_SECRET })
+    const otherKey = createSponsorshipCrypto({
+      appSecretBase64: OTHER_APP_SECRET,
+    })
+
+    const first = crypto.deriveCheckoutReceipt(operationId)
+    const replay = sameKey.deriveCheckoutReceipt(operationId.toUpperCase())
+    const unrelated = crypto.deriveCheckoutReceipt(
+      "55555555-5555-4555-8555-555555555555",
+    )
+
+    expect(first.token).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(first.token).toBe(replay.token)
+    expect(first.digest).toEqual(replay.digest)
+    expect(first.token).not.toBe(unrelated.token)
+    expect(first.token).not.toBe(
+      otherKey.deriveCheckoutReceipt(operationId).token,
+    )
+    expect(crypto.digestOpaqueToken(first.token)).toEqual(first.digest)
+    expectCryptoError(
+      () => crypto.deriveCheckoutReceipt("not-an-operation-id"),
+      "invalid-token",
+    )
+  })
+
   test("rejects malformed tokens and never copies a token into its error", () => {
     const crypto = createSponsorshipCrypto({ appSecretBase64: APP_SECRET })
     const rawToken = `${"a".repeat(42)}!`
