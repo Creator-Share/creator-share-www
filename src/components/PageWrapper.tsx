@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { PageNavbar } from "./PageNavbar"
 import { ScrollToTop } from "./ScrollToTop"
+import { AdvocateExposureTracker } from "./advocates/AdvocateExposureTracker"
 
 export function PageWrapper({ children }: { children: React.ReactNode }) {
   const [isEmbedded, setIsEmbedded] = useState(false)
@@ -21,6 +22,7 @@ export function PageWrapper({ children }: { children: React.ReactNode }) {
   return (
     <>
       {shouldShowNavbar && <PageNavbar />}
+      <AdvocateExposureTracker />
       <div className="w-full max-w-[1200px] mx-auto px-4 max-lg:pb-0 pb-4 max-lg:bg-white">
         {children}
       </div>
