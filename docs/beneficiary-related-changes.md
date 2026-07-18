@@ -121,7 +121,7 @@ This task list includes all files under /src that reference old schema elements 
 - src/app/api/admin/children/bulk-delete/route.ts  
   Review "subscriptions" table usage.
 
-- src/app/api/stripe/cancel-subscription/route.ts  
+- src/app/api/sponsorships/subscriptions/cancel/route.ts
   Review subscription cancellation logic.
 
 - src/app/api/stripe/session/route.ts  

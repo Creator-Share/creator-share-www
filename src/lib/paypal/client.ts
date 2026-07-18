@@ -20,7 +20,15 @@ export function isPayPalEnabled(): boolean {
 // DB while the live subscription kept billing. Sandbox is now strictly opt-in
 // via PAYPAL_API_URL=https://api-m.sandbox.paypal.com.
 export function getPayPalApiUrl(): string {
-  return process.env.PAYPAL_API_URL || PAYPAL_LIVE_API_URL
+  const configuredUrl = process.env.PAYPAL_API_URL
+  if (!configuredUrl) return PAYPAL_LIVE_API_URL
+  if (
+    configuredUrl !== PAYPAL_LIVE_API_URL &&
+    configuredUrl !== PAYPAL_SANDBOX_API_URL
+  ) {
+    throw new Error("PayPal API URL is invalid")
+  }
+  return configuredUrl
 }
 
 function getClientCredentials(): { clientId: string; clientSecret: string } {
@@ -42,7 +50,7 @@ export async function paypalFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  const accessToken = await getPayPalAccessToken()
+  const accessToken = await getPayPalAccessToken(init.signal)
   const headers = new Headers(init.headers)
   if (!headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${accessToken}`)
@@ -53,7 +61,9 @@ export async function paypalFetch(
   return fetch(`${getPayPalApiUrl()}${path}`, { ...init, headers })
 }
 
-export async function getPayPalAccessToken(): Promise<string> {
+export async function getPayPalAccessToken(
+  signal?: AbortSignal | null,
+): Promise<string> {
   if (!isPayPalEnabled()) {
     throw new Error("PayPal integration is not enabled")
   }
@@ -67,11 +77,13 @@ export async function getPayPalAccessToken(): Promise<string> {
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: "grant_type=client_credentials",
+    signal,
   })
 
   if (!response.ok) {
-    const errorText = await response.text()
-    console.error("PayPal token error response:", errorText)
+    console.error("PayPal token request failed", {
+      httpStatus: response.status,
+    })
     throw new Error("Failed to get PayPal access token")
   }
 
@@ -80,151 +92,4 @@ export async function getPayPalAccessToken(): Promise<string> {
     throw new Error("Invalid PayPal token response")
   }
   return data.access_token
-}
-
-// Subset of the PayPal /v2/checkout/orders response we actually read.
-// Documented here rather than declared as `any` so future drift is loud.
-export interface PayPalOrderResponse {
-  id?: string
-  status?: string
-  payer?: {
-    email_address?: string
-    [key: string]: unknown
-  } | null
-  purchase_units?: Array<{
-    description?: string
-    amount?: { value?: string; currency_code?: string } | null
-    shipping?: {
-      address?: { country_code?: string } | null
-    } | null
-    [key: string]: unknown
-  }>
-  [key: string]: unknown
-}
-
-export interface PayPalOrderResult {
-  ok: boolean
-  status: number
-  order?: PayPalOrderResponse
-  error?: string
-}
-
-// GET /v2/checkout/orders/{id} — returns the order or a structured error.
-// Centralised here so callers don't reimplement the live/sandbox URL or
-// reach for `process.env.PAYPAL_API_URL` directly.
-export async function getPayPalOrder(
-  orderId: string,
-): Promise<PayPalOrderResult> {
-  if (!isPayPalEnabled()) {
-    return { ok: false, status: 501, error: "PayPal integration is not enabled" }
-  }
-
-  const accessToken = await getPayPalAccessToken()
-  const response = await fetch(
-    `${getPayPalApiUrl()}/v2/checkout/orders/${orderId}`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-    },
-  )
-
-  if (!response.ok) {
-    let body: unknown
-    try {
-      body = await response.json()
-    } catch {
-      body = await response.text().catch(() => "")
-    }
-    console.error("PayPal order fetch error:", {
-      status: response.status,
-      body,
-      orderId,
-    })
-    return { ok: false, status: response.status }
-  }
-
-  const order = (await response.json()) as PayPalOrderResponse
-  return { ok: true, status: response.status, order }
-}
-
-export interface PayPalCancelResult {
-  cancelled: boolean
-  alreadyCancelled: boolean
-  notFound: boolean
-  error?: string
-}
-
-// POST /v1/billing/subscriptions/{id}/cancel — 204 on success.
-// Treat 404 and "already cancelled" as soft success so the DB state can still
-// be reconciled.
-export async function cancelPayPalSubscription(
-  subscriptionId: string,
-  reason = "Cancelled by subscriber",
-): Promise<PayPalCancelResult> {
-  if (!isPayPalEnabled()) {
-    return {
-      cancelled: false,
-      alreadyCancelled: false,
-      notFound: false,
-      error: "PayPal integration is not enabled",
-    }
-  }
-
-  const accessToken = await getPayPalAccessToken()
-  const response = await fetch(
-    `${getPayPalApiUrl()}/v1/billing/subscriptions/${subscriptionId}/cancel`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ reason }),
-    },
-  )
-
-  if (response.status === 204) {
-    return { cancelled: true, alreadyCancelled: false, notFound: false }
-  }
-
-  let body: unknown
-  try {
-    body = await response.json()
-  } catch {
-    body = await response.text().catch(() => "")
-  }
-
-  const bodyObj =
-    body && typeof body === "object" ? (body as Record<string, unknown>) : {}
-  const paypalName = typeof bodyObj.name === "string" ? bodyObj.name : ""
-  const paypalMessage =
-    typeof bodyObj.message === "string" ? bodyObj.message : ""
-
-  if (response.status === 404 || paypalName === "RESOURCE_NOT_FOUND") {
-    return { cancelled: false, alreadyCancelled: false, notFound: true }
-  }
-
-  // PayPal returns 422 SUBSCRIPTION_STATUS_INVALID for already-cancelled subs.
-  if (
-    response.status === 422 &&
-    /CANCELLED|SUSPENDED|EXPIRED/i.test(
-      paypalName + " " + paypalMessage + " " + JSON.stringify(body),
-    )
-  ) {
-    return { cancelled: false, alreadyCancelled: true, notFound: false }
-  }
-
-  console.error("PayPal cancel failed:", {
-    status: response.status,
-    body,
-    subscriptionId,
-  })
-  return {
-    cancelled: false,
-    alreadyCancelled: false,
-    notFound: false,
-    error: paypalMessage || `PayPal cancel failed with status ${response.status}`,
-  }
 }

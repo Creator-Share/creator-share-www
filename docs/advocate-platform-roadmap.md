@@ -163,7 +163,7 @@ The exact migration is authoritative. The intended bounded contexts are:
 - `advocate_domain_integrations`
 - `domain_provisioning_jobs`
 - `advocate_branding`
-- `advocate_public_metrics`
+- `advocate_public_metric_selections`
 - `advocate_beneficiaries`
 
 Branding is intentionally constrained. Rich text is sanitized against a strict allowlist. No advocate supplied script, style sheet, raw HTML, iframe, tracking pixel, or arbitrary URL execution is permitted.
@@ -320,6 +320,7 @@ Moving DNS to Vercel would simplify wildcard certificates and remove one provisi
 | Business audit events with redacted content | Indefinite.                                               |
 | Raw exposure and visitor linkage            | About 400 days.                                           |
 | Raw IP address and user agent forensic data | 90 days.                                                  |
+| Encrypted checkout contact material         | Until terminal settlement and welcome materialization.    |
 | Sanitized audit metadata                    | Indefinite.                                               |
 | Provider and infrastructure logs            | Longest practical retention supported by plan and budget. |
 
@@ -345,6 +346,9 @@ This phase is a release gate. The current invitation flow cannot be extended bec
 - Add refund, reversal, dispute, and renewal ledger parity.
 - Add passwordless account claim and sponsorship management.
 - Add the durable welcome email sequence.
+- Cryptographically erase sealed checkout contact material after terminal settlement and welcome materialization while retaining noncontact fingerprints and audit evidence.
+
+The v2 checkout database functions and application callers use an additive two phase release. Follow [the payment boundary release runbook](./advocate-payment-release-runbook.md). The database release gate is deployment evidence, not a runtime request flag. Legacy service scoped functions are revoked only in a later migration after the v2 caller deployment and warm instance drain are proven.
 
 ### Phase 2: Tenant routing and provisioning
 
@@ -416,6 +420,7 @@ No advocate tenant may publish until all of the following are true:
 - Advocate roles cannot read sponsor contact or raw tracking data.
 - Audit redaction and append only protections pass adversarial tests.
 - Retention cleanup jobs are configured.
+- Sealed checkout contact ciphertext is erased after its recovery and welcome duties end.
 - Rollback and suspension procedures are exercised.
 
 ## 12. MVP exclusions

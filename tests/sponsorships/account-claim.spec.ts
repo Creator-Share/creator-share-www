@@ -240,8 +240,8 @@ test.describe("sponsor claim start boundary", () => {
       CANONICAL_ORIGIN,
       crypto,
       {
-        async isPendingClaim() {
-          return false
+        async getClaimStartMode() {
+          return null
         },
         async getAuthenticatedUser() {
           authenticatedLookupCount += 1
@@ -265,8 +265,8 @@ test.describe("sponsor claim start boundary", () => {
       CANONICAL_ORIGIN,
       crypto,
       {
-        async isPendingClaim() {
-          return true
+        async getClaimStartMode() {
+          return "initial-claim"
         },
         async getAuthenticatedUser() {
           return {
@@ -286,14 +286,18 @@ test.describe("sponsor claim start boundary", () => {
   })
 
   test("sends a fixed passwordless callback for a signed-out user", async () => {
-    const sent: Array<{ email: string; emailRedirectTo: string }> = []
+    const sent: Array<{
+      email: string
+      emailRedirectTo: string
+      shouldCreateUser: boolean
+    }> = []
     const disposition = await decideSponsorClaimStart(
       preparedClaim(),
       CANONICAL_ORIGIN,
       crypto,
       {
-        async isPendingClaim() {
-          return true
+        async getClaimStartMode() {
+          return "initial-claim"
         },
         async getAuthenticatedUser() {
           return null
@@ -310,6 +314,38 @@ test.describe("sponsor claim start boundary", () => {
         email: "sponsor+family@example.com",
         emailRedirectTo:
           "https://creatorshare.com/auth/callback?next=%2Fsponsor%2Fclaim",
+        shouldCreateUser: true,
+      },
+    ])
+  })
+
+  test("reuses a consumed welcome link without creating a new account", async () => {
+    const sent: Array<{ email: string; shouldCreateUser: boolean }> = []
+    const disposition = await decideSponsorClaimStart(
+      preparedClaim(),
+      CANONICAL_ORIGIN,
+      crypto,
+      {
+        async getClaimStartMode() {
+          return "account-reauth"
+        },
+        async getAuthenticatedUser() {
+          return null
+        },
+        async sendMagicLink(input) {
+          sent.push({
+            email: input.email,
+            shouldCreateUser: input.shouldCreateUser,
+          })
+        },
+      },
+    )
+
+    expect(disposition).toBe("check-email")
+    expect(sent).toEqual([
+      {
+        email: "sponsor+family@example.com",
+        shouldCreateUser: false,
       },
     ])
   })
@@ -320,8 +356,8 @@ test.describe("sponsor claim start boundary", () => {
       CANONICAL_ORIGIN,
       crypto,
       {
-        async isPendingClaim() {
-          return true
+        async getClaimStartMode() {
+          return "initial-claim"
         },
         async getAuthenticatedUser() {
           return null

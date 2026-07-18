@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+
 import { NextRequest, NextResponse } from "next/server"
 
 import {
@@ -18,6 +20,16 @@ export const runtime = "nodejs"
 
 const GENERIC_START_RESPONSE = { status: "check-email" } as const
 const MAXIMUM_START_BODY_BYTES = 4096
+
+function requestTraceId(request: NextRequest): string | null {
+  for (const name of ["x-vercel-id", "cf-ray", "traceparent", "x-trace-id"]) {
+    const value = request.headers.get(name)?.trim()
+    if (value && value.length <= 255 && /^[\x21-\x7e]+$/.test(value)) {
+      return value
+    }
+  }
+  return null
+}
 
 function genericResponse() {
   return NextResponse.json(GENERIC_START_RESPONSE, {
@@ -97,23 +109,27 @@ export async function POST(request: NextRequest) {
     canonicalOrigin,
     sponsorshipCrypto,
     {
-      async isPendingClaim(input) {
-        const { data, error } = await serviceClient
-          .from("sponsorship_account_claims")
-          .select("id")
-          .eq("token_digest", input.claimTokenDigest)
-          .eq("email_hmac", input.emailDigest)
-          .eq(
-            "email_normalization_version",
-            input.emailNormalizationVersion,
-          )
-          .eq("email_hmac_key_version", input.emailHmacKeyVersion)
-          .eq("status", "pending")
-          .gt("expires_at", new Date().toISOString())
-          .limit(1)
-          .maybeSingle()
+      async getClaimStartMode(input) {
+        const { data, error } = await serviceClient.rpc(
+          "resolve_sponsor_account_claim_start",
+          {
+            target_claim_token_digest: input.claimTokenDigest,
+            target_email_hmac: input.emailDigest,
+            target_email_normalization_version:
+              input.emailNormalizationVersion,
+            target_email_hmac_key_version: input.emailHmacKeyVersion,
+            context_request_id: randomUUID(),
+            context_trace_id: requestTraceId(request),
+          },
+        )
+        if (error) throw error
 
-        return !error && Boolean(data)
+        const row = Array.isArray(data) ? data[0] : data
+        if (!row || typeof row !== "object") return null
+        const mode = (row as { claim_start_mode?: unknown }).claim_start_mode
+        return mode === "initial-claim" || mode === "account-reauth"
+          ? mode
+          : null
       },
       async getAuthenticatedUser() {
         const { data, error } = await authClient.auth.getUser()
@@ -129,7 +145,7 @@ export async function POST(request: NextRequest) {
           email: input.email,
           options: {
             emailRedirectTo: input.emailRedirectTo,
-            shouldCreateUser: true,
+            shouldCreateUser: input.shouldCreateUser,
           },
         })
         if (error) throw error

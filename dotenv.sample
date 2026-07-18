@@ -21,10 +21,12 @@ STRIPE_DEFAULT_REGION=us
 STRIPE_SECRET_KEY_US=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US=
 STRIPE_WEBHOOK_SECRET_US=
+STRIPE_WEBHOOK_SECRET_US_PREVIOUS=
 NEXT_PUBLIC_STRIPE_PORTAL_URL_US=
 STRIPE_SECRET_KEY_UK=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK=
 STRIPE_WEBHOOK_SECRET_UK=
+STRIPE_WEBHOOK_SECRET_UK_PREVIOUS=
 NEXT_PUBLIC_STRIPE_PORTAL_URL_UK=
 #
 # NEXT_PUBLIC_STRIPE_PORTAL_URL_* powers the public Footer / FAQ / About
@@ -32,16 +34,14 @@ NEXT_PUBLIC_STRIPE_PORTAL_URL_UK=
 # These URLs are not secrets, so use the same NEXT_PUBLIC values for both
 # browser and server surfaces.
 #
-# Webhook endpoints:
-#   /api/webhooks/stripe/{region}     preferred, validates against the
-#                                     STRIPE_WEBHOOK_SECRET_<REGION> for the
-#                                     account that sent the event.
-#   /api/webhooks/stripe              legacy back-compat shim that delegates
-#                                     to STRIPE_DEFAULT_REGION. Stripe
-#                                     dashboards pointed here for a non-
-#                                     default account will fail signature
-#                                     verification; migrate them to the
-#                                     per-region URL once both regions ship.
+# Webhook endpoint:
+#   /api/webhooks/stripe              shared by both regional Stripe accounts.
+#                                     It verifies each signed event against the
+#                                     configured current and previous secret for
+#                                     every region, rejects ambiguous secret
+#                                     reuse, and derives the account scope only
+#                                     from the successful signature candidate.
+# Configure this exact URL in both Stripe dashboards.
 
 # DEPRECATED, Global sponsorship amount override (dollars in cents integer string).
 # Superseded by per-type vars below (NEXT_PUBLIC_SPONSORSHIP_AMOUNT_*).
@@ -77,8 +77,47 @@ EMAIL_HOST=
 EMAIL_USER=
 EMAIL_PASSWORD=
 EMAIL_PORT=587
-EMAIL_SECURE=true
+EMAIL_SECURE=false
 EMAIL_FROM="Creator Share" <noreply@creatorshare.com>
+
+# Vercel sends CRON_SECRET as a Bearer token to each scheduled GET endpoint.
+# Generate at least 32 random characters. The payment and welcome workers use
+# this value unless a nonempty worker-specific override is configured for an
+# external scheduler.
+CRON_SECRET=
+# PAYMENT_GATEWAY_EVENT_WORKER_SECRET=
+# SPONSOR_WELCOME_EMAIL_WORKER_SECRET=
+# SUBSCRIPTION_CANCELLATION_WORKER_SECRET=
+PAYMENT_GATEWAY_EVENT_BATCH_SIZE=20
+PAYMENT_GATEWAY_EVENT_CONCURRENCY=4
+SPONSOR_WELCOME_EMAIL_BATCH_SIZE=4
+SPONSOR_WELCOME_EMAIL_CONCURRENCY=4
+# Base retry delay. Provider handoff failures back off exponentially from this
+# value, capped at one day and never scheduled beyond contact retention.
+SPONSOR_WELCOME_EMAIL_RETRY_AFTER_SECONDS=300
+# Hard SMTP deadline and invocation response reserve. Their sum must not exceed
+# 55 seconds inside the 60 second Vercel route.
+SPONSOR_WELCOME_EMAIL_TRANSPORT_TIMEOUT_MILLISECONDS=20000
+SPONSOR_WELCOME_EMAIL_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+# Bounded provider cancellation batch. Retry timing is durable in the database.
+SUBSCRIPTION_CANCELLATION_BATCH_SIZE=4
+SUBSCRIPTION_CANCELLATION_CONCURRENCY=2
+SUBSCRIPTION_CANCELLATION_PROVIDER_TIMEOUT_MILLISECONDS=15000
+SUBSCRIPTION_CANCELLATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+
+# Automated advocate domain provisioning. Cloudflare remains authoritative
+# DNS. The CNAME must be DNS only and target Vercel's configured CNAME target.
+ADVOCATE_CLOUDFLARE_API_TOKEN=
+ADVOCATE_CLOUDFLARE_ZONE_ID=
+ADVOCATE_CLOUDFLARE_CNAME_TARGET=cname.vercel-dns.com
+ADVOCATE_CLOUDFLARE_TTL_SECONDS=300
+ADVOCATE_VERCEL_API_TOKEN=
+ADVOCATE_VERCEL_PROJECT_ID=prj_sw8gr27A4a1ej6pEUl9J24kQf1lX
+ADVOCATE_VERCEL_TEAM_ID=team_UfUPp9ohc1CvKuuNAsEwzP6O
+ADVOCATE_PROVISIONING_BATCH_SIZE=3
+ADVOCATE_PROVISIONING_LEASE_SECONDS=300
+ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS=15000
+# ADVOCATE_PROVISIONING_WORKER_SECRET=
 
 # Sponsor identity HMACs, account-claim tokens, and encrypted email outbox
 # payloads. Server only. Generate one canonical base64 value containing at

@@ -43,6 +43,7 @@ export interface CheckoutOperation {
 }
 
 export interface StoredCheckoutReceipt {
+  provider: CheckoutOperationProvider
   receipt: string
   operationId: string
   storedAt: string
@@ -210,12 +211,14 @@ export function loadOrCreateCheckoutOperation(options: {
 /** Stores the bearer receipt only in tab-scoped storage before navigation. */
 export function persistCheckoutReceipt(options: {
   storage: CheckoutStorage
+  provider: CheckoutOperationProvider
   operationId: string
   receipt: string
   now?: Date
 }): boolean {
   const now = options.now ?? new Date()
   if (
+    (options.provider !== "stripe" && options.provider !== "paypal") ||
     !UUID_V4_PATTERN.test(options.operationId) ||
     !OPAQUE_RECEIPT_PATTERN.test(options.receipt) ||
     !Number.isFinite(now.getTime())
@@ -228,6 +231,7 @@ export function persistCheckoutReceipt(options: {
       CHECKOUT_RECEIPT_STORAGE_KEY,
       JSON.stringify({
         version: CHECKOUT_STATE_VERSION,
+        provider: options.provider,
         receipt: options.receipt,
         operationId: options.operationId.toLowerCase(),
         storedAt: now.toISOString(),
@@ -261,12 +265,13 @@ export function readCheckoutReceipt(options: {
   if (
     !isRecord(value) ||
     value.version !== CHECKOUT_STATE_VERSION ||
+    (value.provider !== "stripe" && value.provider !== "paypal") ||
     typeof value.receipt !== "string" ||
     !OPAQUE_RECEIPT_PATTERN.test(value.receipt) ||
     typeof value.operationId !== "string" ||
     !UUID_V4_PATTERN.test(value.operationId) ||
     typeof value.storedAt !== "string" ||
-    Object.keys(value).length !== 4
+    Object.keys(value).length !== 5
   ) {
     return null
   }
@@ -282,6 +287,7 @@ export function readCheckoutReceipt(options: {
   }
 
   return {
+    provider: value.provider,
     receipt: value.receipt,
     operationId: value.operationId.toLowerCase(),
     storedAt: new Date(storedAt).toISOString(),

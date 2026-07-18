@@ -71,16 +71,17 @@ export interface SponsorClaimAuthenticatedUser {
 }
 
 export interface SponsorClaimStartDependencies {
-  isPendingClaim(input: {
+  getClaimStartMode(input: {
     claimTokenDigest: SupabaseRpcBytea
     emailDigest: SupabaseRpcBytea
     emailNormalizationVersion: number
     emailHmacKeyVersion: number
-  }): Promise<boolean>
+  }): Promise<"initial-claim" | "account-reauth" | null>
   getAuthenticatedUser(): Promise<SponsorClaimAuthenticatedUser | null>
   sendMagicLink(input: {
     email: string
     emailRedirectTo: string
+    shouldCreateUser: boolean
   }): Promise<void>
 }
 
@@ -334,9 +335,9 @@ export async function decideSponsorClaimStart(
   crypto: SponsorshipCrypto,
   dependencies: SponsorClaimStartDependencies,
 ): Promise<"ready" | "check-email"> {
-  let pending = false
+  let mode: "initial-claim" | "account-reauth" | null = null
   try {
-    pending = await dependencies.isPendingClaim({
+    mode = await dependencies.getClaimStartMode({
       claimTokenDigest: prepared.claimTokenDigest,
       emailDigest: prepared.email.digestRpcBytea,
       emailNormalizationVersion: prepared.email.normalizationVersion,
@@ -345,7 +346,7 @@ export async function decideSponsorClaimStart(
   } catch {
     return "check-email"
   }
-  if (!pending) return "check-email"
+  if (mode === null) return "check-email"
 
   let currentUser: SponsorClaimAuthenticatedUser | null = null
   try {
@@ -362,6 +363,7 @@ export async function decideSponsorClaimStart(
     await dependencies.sendMagicLink({
       email: prepared.email.normalizedEmail,
       emailRedirectTo: buildSponsorClaimMagicLinkCallback(canonicalOrigin),
+      shouldCreateUser: mode === "initial-claim",
     })
   } catch {
     // The public response remains generic for unknown and known accounts.

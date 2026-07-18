@@ -572,11 +572,44 @@ SELECT extensions.throws_ok(
 );
 
 SELECT extensions.ok(
+  (
+    SELECT verified
+    FROM public.verify_email_outbox_delivery_material(
+      target_outbox_id => (
+        SELECT outbox_id FROM payment_test_email_leases
+      ),
+      target_lease_token => (
+        SELECT lease_token FROM payment_test_email_leases
+      ),
+      verified_recipient_email_hmac => decode(repeat('ab', 32), 'hex'),
+      verified_claim_token_digest => decode(repeat('ef', 32), 'hex')
+    )
+  ),
+  'email delivery proves its decrypted recipient and claim token before send'
+);
+
+SELECT public.begin_email_outbox_delivery_handoff(
+  target_outbox_id => (
+    SELECT outbox_id FROM payment_test_email_leases
+  ),
+  target_lease_token => (
+    SELECT lease_token FROM payment_test_email_leases
+  ),
+  verified_recipient_email_hmac => decode(repeat('ab', 32), 'hex'),
+  target_provider_message_id =>
+    '<sponsor-welcome.' ||
+    (SELECT outbox_id::text FROM payment_test_email_leases) ||
+    '@creatorshare.com>'
+);
+
+SELECT extensions.ok(
   public.complete_email_outbox_delivery(
     (SELECT outbox_id FROM payment_test_email_leases),
     (SELECT lease_token FROM payment_test_email_leases),
     decode(repeat('ab', 32), 'hex'),
-    'provider-message-payment-test-0001'
+    '<sponsor-welcome.' ||
+    (SELECT outbox_id::text FROM payment_test_email_leases) ||
+    '@creatorshare.com>'
   ) IS NOT NULL,
   'the active lease completes only with the server recomputed recipient proof'
 );

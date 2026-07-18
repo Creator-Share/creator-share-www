@@ -257,5 +257,14 @@ export function loadDomainWorkerConfig(
 export function loadWorkerRouteSecret(
   env: ProvisioningEnvironment = process.env,
 ): string {
-  return requireSecret(env, "ADVOCATE_PROVISIONING_WORKER_SECRET", 32)
+  const dedicated = env.ADVOCATE_PROVISIONING_WORKER_SECRET
+  const selected = dedicated === undefined || dedicated === ""
+    ? env.CRON_SECRET
+    : dedicated
+
+  return requireSecret(
+    { ADVOCATE_PROVISIONING_WORKER_SECRET: selected },
+    "ADVOCATE_PROVISIONING_WORKER_SECRET",
+    32,
+  )
 }

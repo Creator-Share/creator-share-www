@@ -7,9 +7,59 @@ import { Box, Heading, Text, Button } from "@chakra-ui/react"
 import { useAuthStore } from "@/store/authStore"
 import { ColumnDef } from "@tanstack/react-table"
 import { BeneficiarySelectionModal } from "./components/BeneficiarySelectionModal"
+import { OneTimeSponsorshipHistory } from "./components/OneTimeSponsorshipHistory"
+import type { SponsorOneTimeHistoryItem } from "@/lib/sponsorships/sponsorAccountHistory"
+import { presentSubscriptionSubject } from "@/lib/sponsorships/subscriptionPresentation"
+import { parseSponsorRecurringSponsorships } from "@/lib/sponsorships/sponsorRecurringSponsorships"
+
+interface SponsorHistoryPageResponse {
+  items: SponsorOneTimeHistoryItem[]
+  nextCursor: string | null
+}
+
+async function fetchSponsorHistoryPage(
+  cursor: string | null = null,
+): Promise<SponsorHistoryPageResponse> {
+  const search = new URLSearchParams({ limit: "20" })
+  if (cursor) search.set("cursor", cursor)
+  const response = await fetch(`/api/sponsor-account/history?${search}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  })
+  if (!response.ok) throw new Error("sponsor_history_unavailable")
+
+  const payload = (await response.json()) as Partial<SponsorHistoryPageResponse>
+  if (
+    !Array.isArray(payload.items) ||
+    (payload.nextCursor !== null &&
+      typeof payload.nextCursor !== "string")
+  ) {
+    throw new Error("sponsor_history_malformed")
+  }
+  return {
+    items: payload.items,
+    nextCursor: payload.nextCursor ?? null,
+  }
+}
+
+async function fetchRecurringSponsorships(): Promise<Subscription[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc(
+    "list_my_recurring_sponsorships",
+  )
+  if (error) throw error
+  return parseSponsorRecurringSponsorships(data)
+}
 
 const UserDashboard = () => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
+  const [oneTimeHistory, setOneTimeHistory] = useState<
+    SponsorOneTimeHistoryItem[]
+  >([])
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null)
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string | null>(null)
@@ -18,29 +68,56 @@ const UserDashboard = () => {
   const fetchSubscriptions = useCallback(async () => {
     if (!user) return
 
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from("subscriptions")
-      .select(
-        `
-          *,
-          child:beneficiaries(
-            name,
-            username
-          )
-        `,
-      )
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
+    const [subscriptionsResult, historyResult] = await Promise.allSettled([
+      fetchRecurringSponsorships(),
+      fetchSponsorHistoryPage(),
+    ])
 
-    if (error) {
-      console.error("Error fetching subscriptions:", error)
-      return
+    if (subscriptionsResult.status === "rejected") {
+      console.error("Error fetching subscriptions")
+    } else {
+      setSubscriptions(subscriptionsResult.value)
     }
 
-    setSubscriptions(data || [])
+    if (historyResult.status === "fulfilled") {
+      setOneTimeHistory(historyResult.value.items)
+      setHistoryCursor(historyResult.value.nextCursor)
+      setHistoryError(null)
+    } else {
+      console.error("Error fetching one time sponsorship history")
+      setHistoryError(
+        "We could not load your one time sponsorship history. Please try again.",
+      )
+    }
     setLoading(false)
   }, [user])
+
+  const loadMoreHistory = useCallback(async () => {
+    if (!historyCursor || historyLoadingMore) return
+    setHistoryLoadingMore(true)
+    setHistoryError(null)
+    try {
+      const page = await fetchSponsorHistoryPage(historyCursor)
+      setOneTimeHistory((existing) => {
+        const seen = new Set(
+          existing.map((item) => item.sponsorshipIntentId),
+        )
+        return [
+          ...existing,
+          ...page.items.filter(
+            (item) => !seen.has(item.sponsorshipIntentId),
+          ),
+        ]
+      })
+      setHistoryCursor(page.nextCursor)
+    } catch {
+      setHistoryError(
+        "We could not load more sponsorships. Please try again.",
+      )
+    } finally {
+      setHistoryLoadingMore(false)
+    }
+  }, [historyCursor, historyLoadingMore])
 
   useEffect(() => {
     fetchSubscriptions()
@@ -60,12 +137,25 @@ const UserDashboard = () => {
     return <div>Loading...</div>
   }
 
-  // Count blind sponsorships awaiting match
-  const blindSponsorships = subscriptions.filter(
-    (sub) => !sub.beneficiary_id && sub.status === "complete"
+  const completedSubscriptions = subscriptions.filter(
+    (subscription) => subscription.status === "complete",
   )
-  const matchedSponsorships = subscriptions.filter(
-    (sub) => sub.beneficiary_id && sub.status === "complete"
+  const subjectFor = (subscription: Subscription) =>
+    presentSubscriptionSubject({
+      subjectKind: subscription.subject_kind,
+      partnershipProject: subscription.partnership_project,
+      beneficiaryId: subscription.beneficiary_id,
+    })
+  const blindSponsorships = completedSubscriptions.filter(
+    (subscription) => subjectFor(subscription).subjectKind === "blind",
+  )
+  const partnershipSubscriptions = completedSubscriptions.filter(
+    (subscription) => subjectFor(subscription).subjectKind === "partnership",
+  )
+  const matchedSponsorships = completedSubscriptions.filter(
+    (subscription) =>
+      subjectFor(subscription).subjectKind === "standard" &&
+      subscription.beneficiary_id !== null,
   )
 
   return (
@@ -110,7 +200,7 @@ const UserDashboard = () => {
               Active Sponsorships
             </Text>
             <Text fontSize="xl" fontWeight="bold" color="blue.700">
-              {matchedSponsorships.length}
+              {matchedSponsorships.length + partnershipSubscriptions.length}
             </Text>
           </Box>
           {blindSponsorships.length > 0 && (
@@ -123,17 +213,38 @@ const UserDashboard = () => {
               </Text>
             </Box>
           )}
+          {partnershipSubscriptions.length > 0 && (
+            <Box className="px-4 py-2 bg-purple-50 rounded-lg">
+              <Text fontSize="sm" color="gray.600">
+                Partnerships
+              </Text>
+              <Text fontSize="xl" fontWeight="bold" color="purple.700">
+                {partnershipSubscriptions.length}
+              </Text>
+            </Box>
+          )}
         </Box>
       )}
 
       <DataTable
         columns={columns as unknown as ColumnDef<unknown, unknown>[]}
-        data={subscriptions.map(sub => ({
-          ...sub,
-          onChooseChild: handleChooseChild
+        data={subscriptions.map((subscription) => ({
+          ...subscription,
+          onChooseChild:
+            subjectFor(subscription).subjectKind === "blind"
+              ? handleChooseChild
+              : undefined,
         }))}
         controls="bottom"
         tableHeight="h-[50vh]"
+      />
+
+      <OneTimeSponsorshipHistory
+        items={oneTimeHistory}
+        nextCursor={historyCursor}
+        loadingMore={historyLoadingMore}
+        error={historyError}
+        onLoadMore={loadMoreHistory}
       />
 
       {/* Beneficiary Selection Modal */}

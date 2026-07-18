@@ -152,12 +152,14 @@ test.describe("sponsorship checkout client retry state", () => {
     expect(
       persistCheckoutReceipt({
         storage,
+        provider: "stripe",
         operationId: FIRST_ID,
         receipt: RECEIPT,
         now: NOW,
       }),
     ).toBe(true)
     expect(readCheckoutReceipt({ storage, now: NOW })).toEqual({
+      provider: "stripe",
       receipt: RECEIPT,
       operationId: FIRST_ID,
       storedAt: NOW.toISOString(),
@@ -166,6 +168,7 @@ test.describe("sponsorship checkout client retry state", () => {
     expect(
       persistCheckoutReceipt({
         storage,
+        provider: "stripe",
         operationId: FIRST_ID,
         receipt: "cs_test_session_should_not_be_stored_here",
         now: NOW,
@@ -197,6 +200,7 @@ test.describe("sponsorship checkout client retry state", () => {
     expect(
       persistCheckoutReceipt({
         storage: deniedStorage,
+        provider: "stripe",
         operationId: FIRST_ID,
         receipt: RECEIPT,
         now: NOW,
@@ -216,12 +220,14 @@ test.describe("sponsorship checkout client retry state", () => {
     })
     persistCheckoutReceipt({
       storage,
+      provider: "paypal",
       operationId: FIRST_ID,
       receipt: RECEIPT,
       now: NOW,
     })
 
     expect(storage.values.size).toBe(2)
+    expect(readCheckoutReceipt({ storage, now: NOW })?.provider).toBe("paypal")
     clearCheckoutClientState(storage)
     expect(storage.values.size).toBe(0)
   })

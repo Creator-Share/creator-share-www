@@ -1,6 +1,7 @@
 "use client"
-import React, { useEffect, useState, useCallback } from "react"
+import React, { useEffect, useState, useCallback, useRef } from "react"
 import dynamic from "next/dynamic"
+import type { PayPalButtonsComponentProps } from "@paypal/react-paypal-js"
 import {
   DialogRoot,
   DialogContent,
@@ -59,7 +60,15 @@ import {
   formatConversionForDisplay,
   getDefaultCurrencyForLocale,
 } from "@/utils/currency"
-import { encodePayPalPaymentContext } from "@/utils/paypalCurrencyContext"
+import {
+  clearCheckoutClientState,
+  loadOrCreateCheckoutOperation,
+  persistCheckoutReceipt,
+} from "@/lib/sponsorships/checkout/clientState"
+import {
+  buildPayPalBrowserCapturePayload,
+  buildPayPalBrowserStartPayload,
+} from "@/lib/sponsorships/checkout/paypalBrowserPayload"
 
 /** Lower-tier quick picks (left column, monthly path). */
 const OPEN_SPONSORSHIP_LEFT_PRESETS_USD = [14, 33, 50] as const
@@ -89,7 +98,7 @@ const PayPalScriptProvider = isPayPalEnabled
   : null
 
 const PayPalButtons = isPayPalEnabled
-  ? dynamic(
+  ? dynamic<PayPalButtonsComponentProps>(
       () =>
         import("@paypal/react-paypal-js").then((m) => ({
           default: m.PayPalButtons,
@@ -167,6 +176,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   )
   const [bioExpanded, setBioExpanded] = useState(false)
   const [faqOpen, setFaqOpen] = useState(false)
+  const paypalCaptureRef = useRef<{
+    operationId: string
+    checkoutReceipt: string
+  } | null>(null)
 
   const hasActivities = activities.length > 0
 
@@ -454,11 +467,26 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     setLoading(true)
     setLoadingFrequency(paymentType)
     try {
+      const requestedAmountUsdCents = isOpen
+        ? amountCents
+        : fixedAmountCents
+      const checkoutRequestId = loadOrCreateCheckoutOperation({
+        storage: window.sessionStorage,
+        scope: {
+          provider: "stripe",
+          subject: "standard",
+          beneficiaryId: beneficiary.id,
+          partnershipProject: null,
+          paymentType,
+          baseAmountUsdCents: requestedAmountUsdCents,
+          currency: selectedCurrency,
+        },
+      }).operationId
       const payload = {
         beneficiaryId: beneficiary.id,
         beneficiaryName: beneficiary.name,
         beneficiaryType: beneficiary.beneficiary_type,
-        amount: isOpen ? amountCents : beneficiary.budget_goal,
+        amount: requestedAmountUsdCents,
         paymentType,
         location: beneficiary.country,
         userId: user?.id,
@@ -466,6 +494,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         email: validatedEmail,
         type: "sponsorship",
         currency: selectedCurrency,
+        checkoutRequestId,
       }
 
       const res = await fetch("/api/stripe", {
@@ -476,6 +505,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       const data = await res.json()
 
       if (!res.ok) {
+        if (res.status === 400 || res.status === 409) {
+          clearCheckoutClientState(window.sessionStorage)
+        }
         if (data?.error === "DUPLICATE_SPONSORSHIP") {
           toaster.create({
             title: "Already Sponsored",
@@ -494,7 +526,19 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         return
       }
 
-      const { clientSecret, url, publishableKey, region } = data
+      const {
+        checkoutReceipt,
+        clientSecret,
+        url,
+        publishableKey,
+        region,
+      } = data
+      persistCheckoutReceipt({
+        storage: window.sessionStorage,
+        provider: "stripe",
+        operationId: checkoutRequestId,
+        receipt: checkoutReceipt,
+      })
       window.dispatchEvent(
         new CustomEvent("payment-success", {
           detail: { beneficiaryId: beneficiary.id },
@@ -537,31 +581,17 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }
 
-  const handleCreateOrder = async (
-    _data: Record<string, unknown>,
-    actions: {
-      order: {
-        create: (options: {
-          purchase_units: Array<{
-            description: string
-            custom_id?: string
-            amount: { value: string; currency_code: string }
-          }>
-        }) => Promise<string>
-      }
-    },
-  ) => {
-    if (!getValidatedSponsorEmail()) {
-      throw new Error("A valid email is required")
-    }
+  const startPayPalCheckout = async (
+    paymentType: SponsorshipFrequency,
+  ): Promise<string | null> => {
+    const validatedEmail = getValidatedSponsorEmail()
+    if (!validatedEmail) throw new Error("A valid email is required")
 
-    const paypalAmountCents =
-      selectedOption === "subscription"
-        ? monthlyAmountCents
-        : oneTimeAmountCents
-    const canPayPayPal =
-      selectedOption === "subscription" ? canPayMonthly : canPayOneTime
-    if (!canPayPayPal) {
+    const amountCents =
+      paymentType === "subscription" ? monthlyAmountCents : oneTimeAmountCents
+    const canPay =
+      paymentType === "subscription" ? canPayMonthly : canPayOneTime
+    if (!canPay) {
       toaster.create({
         title: "Invalid Amount",
         description: isOpen
@@ -570,119 +600,101 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       })
       throw new Error("Invalid amount")
     }
-    const conversion = getConvertedAmount(
-      isOpen ? paypalAmountCents : fixedAmountCents,
-    )
-    const paymentAmount =
-      conversion.chargedAmountMinor / 100
-    const frequencyLabel =
-      selectedOption === "subscription"
-        ? "Monthly"
-        : selectedOption === "one_time"
-          ? "One-time"
-          : "Yearly"
-    return actions.order.create({
-      purchase_units: [
-        {
-          description: `${frequencyLabel} Sponsorship for ${beneficiary.name}`,
-          custom_id: encodePayPalPaymentContext(beneficiary.id, conversion),
-          amount: {
-            value: paymentAmount.toFixed(2),
-            currency_code: conversion.chargedCurrency,
-          },
-        },
-      ],
+
+    const requestedAmountUsdCents = isOpen ? amountCents : fixedAmountCents
+    const operationId = loadOrCreateCheckoutOperation({
+      storage: window.sessionStorage,
+      scope: {
+        provider: "paypal",
+        subject: "standard",
+        beneficiaryId: beneficiary.id,
+        partnershipProject: null,
+        paymentType,
+        baseAmountUsdCents: requestedAmountUsdCents,
+        currency: selectedCurrency,
+      },
+    }).operationId
+    const response = await fetch("/api/paypal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayPalBrowserStartPayload({
+        beneficiaryId: beneficiary.id,
+        requestedAmountUsdCents,
+        paymentType,
+        sponsorEmail: validatedEmail,
+        currency: selectedCurrency,
+        checkoutRequestId: operationId,
+      })),
     })
+    const responseData = await response.json()
+    if (!response.ok) {
+      if (response.status === 400 || response.status === 409) {
+        clearCheckoutClientState(window.sessionStorage)
+      }
+      throw new Error(responseData.error || "Failed to start PayPal checkout")
+    }
+    persistCheckoutReceipt({
+      storage: window.sessionStorage,
+      provider: "paypal",
+      operationId,
+      receipt: responseData.checkoutReceipt,
+    })
+    paypalCaptureRef.current = {
+      operationId,
+      checkoutReceipt: responseData.checkoutReceipt,
+    }
+
+    if (typeof responseData.approvalUrl === "string") {
+      window.location.href = responseData.approvalUrl
+      return null
+    }
+    if (typeof responseData.url === "string") {
+      window.location.href = responseData.url
+      return null
+    }
+    if (typeof responseData.orderID !== "string") {
+      throw new Error("PayPal checkout did not return an order")
+    }
+    return responseData.orderID
   }
 
-  const handlePayPalApproval = async (data: { orderID: string }) => {
+  const handleCreateOrder = async () => {
+    if (selectedOption !== "one_time") {
+      throw new Error("Select one-time PayPal checkout")
+    }
+    const orderId = await startPayPalCheckout("one_time")
+    if (!orderId) throw new Error("PayPal order is still processing")
+    return orderId
+  }
+
+  const handlePayPalApproval = async () => {
     try {
-      const validatedEmail = getValidatedSponsorEmail()
-      if (!validatedEmail) return
-
-      if (selectedOption === "subscription") {
-        const planRes = await fetch("/api/paypal/plan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            beneficiary_id: beneficiary.id,
-            name: `Monthly Sponsorship for ${beneficiary.name}`,
-            description: `Recurring monthly sponsorship for ${beneficiary.name}`,
-            base_amount_usd_cents: isOpen
-              ? monthlyAmountCents
-              : fixedAmountCents,
-            interval_unit: "MONTH",
-            interval_count: 1,
-            currency_code: selectedCurrency,
-          }),
-        })
-        const planData = await planRes.json()
-        if (!planRes.ok)
-          throw new Error(
-            planData.error?.message || "Failed to create/get PayPal plan",
-          )
-
-        const subRes = await fetch("/api/paypal", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            plan_id: planData.plan.id,
-            beneficiaryId: beneficiary.id,
-            base_amount_usd_cents: isOpen
-              ? monthlyAmountCents
-              : fixedAmountCents,
-            currency_code: selectedCurrency,
-            subscriber_email: validatedEmail,
-          }),
-        })
-        const subData = await subRes.json()
-        if (!subRes.ok)
-          throw new Error(
-            subData.error?.message || "Failed to create PayPal subscription",
-          )
-
-        type PayPalLink = { rel?: string; href?: string }
-        const approvalUrl = subData.subscription?.links?.find(
-          (l: PayPalLink) => l.rel === "approve",
-        )?.href
-        if (approvalUrl) {
-          window.dispatchEvent(
-            new CustomEvent("payment-success", {
-              detail: { beneficiaryId: beneficiary.id },
-            }),
-          )
-          window.location.href = approvalUrl
-          return
-        }
-        throw new Error("No approval link returned from PayPal")
-      }
-
+      const capture = paypalCaptureRef.current
+      if (!capture) throw new Error("PayPal checkout state is unavailable")
       const response = await fetch("/api/paypal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            beneficiaryId: beneficiary.id,
-            beneficiaryName: beneficiary.name,
-            base_amount_usd_cents: isOpen
-              ? oneTimeAmountCents
-              : fixedAmountCents,
-            currency_code: selectedCurrency,
-            paymentType: selectedOption,
-            location: beneficiary.country,
-          userId: user?.id,
-          email: validatedEmail,
-          orderID: data.orderID,
-        }),
+        body: JSON.stringify(buildPayPalBrowserCapturePayload({
+          checkoutRequestId: capture.operationId,
+          checkoutReceipt: capture.checkoutReceipt,
+        })),
       })
       const responseData = await response.json()
-      if (!response.ok)
-        throw new Error(responseData.error || "Failed to process payment")
-
-      toaster.create({
-        title: "Success",
-        description: "Your payment has been processed successfully!",
+      if (!response.ok) {
+        throw new Error(responseData.error || "Failed to capture PayPal order")
+      }
+      persistCheckoutReceipt({
+        storage: window.sessionStorage,
+        provider: "paypal",
+        operationId: capture.operationId,
+        receipt: responseData.checkoutReceipt,
       })
-      window.location.href = `/payments/success?order_id=${data.orderID}`
+      window.dispatchEvent(
+        new CustomEvent("payment-success", {
+          detail: { beneficiaryId: beneficiary.id },
+        }),
+      )
+      window.location.href = responseData.url || "/payments/success"
     } catch (error) {
       const err = error as Error
       toaster.create({
@@ -693,12 +705,35 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     }
   }
 
-  const handlePayPalError = (err: Error) => {
+  const handlePayPalRecurringApproval = async () => {
+    setLoading(true)
+    setLoadingFrequency("subscription")
+    try {
+      await startPayPalCheckout("subscription")
+    } catch (error) {
+      const err = error as Error
+      toaster.create({
+        title: "Payment Error",
+        description: err.message || "Something went wrong. Please try again.",
+        duration: 5000,
+      })
+    } finally {
+      setLoading(false)
+      setLoadingFrequency(null)
+    }
+  }
+
+  const handlePayPalError = (err: Record<string, unknown>) => {
     console.error("PayPal Error:", err)
     toaster.create({
       title: "Payment Error",
       description: "Something went wrong with PayPal. Please try again.",
     })
+  }
+
+  const handlePayPalCancel = () => {
+    clearCheckoutClientState(window.sessionStorage)
+    paypalCaptureRef.current = null
   }
 
   /**
@@ -1532,73 +1567,74 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                       </Flex>
                     )}
 
-                    {isPayPalEnabled &&
-                      PayPalScriptProvider &&
-                      PayPalButtons && (
-                        <Box className="pt-1">
-                          {isOpen && (
-                            <Flex
-                              align="center"
-                              justify="center"
-                              gap={2}
-                              wrap="wrap"
-                              mb={2}
-                              role="radiogroup"
-                              aria-label="PayPal payment frequency"
-                            >
-                              <Text className="text-xs text-gray-500">
-                                PayPal frequency:
-                              </Text>
-                              {openSponsorshipFrequencyOptions.map((option) => {
-                                const isActive = selectedOption === option.value
-                                return (
-                                  <Button
-                                    key={option.value}
-                                    type="button"
-                                    size="xs"
-                                    role="radio"
-                                    aria-checked={isActive}
-                                    onClick={() =>
-                                      setSelectedOption(option.value)
-                                    }
-                                    borderRadius="full"
-                                    px={3}
-                                    h="28px"
-                                    fontSize="xs"
-                                    fontWeight={
-                                      isActive ? "semibold" : "medium"
-                                    }
-                                    bg={isActive ? "#2b7ff9" : "gray.100"}
-                                    color={isActive ? "white" : "gray.600"}
-                                    borderWidth="1px"
-                                    borderColor={
-                                      isActive ? "#2b7ff9" : "gray.200"
-                                    }
-                                    _hover={{
-                                      bg: isActive ? "#1a6fe0" : "gray.200",
-                                    }}
-                                    transition="all 0.15s"
-                                  >
-                                    {option.label}
-                                  </Button>
-                                )
-                              })}
-                            </Flex>
-                          )}
-                          <PayPalScriptProvider
-                            key={selectedCurrency}
-                            options={{
-                              "client-id": process.env
-                                .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
-                              currency: selectedCurrency,
-                              intent: "capture",
-                            }}
+                    {isPayPalEnabled && (
+                      <Box className="pt-1">
+                        {isOpen && (
+                          <Flex
+                            align="center"
+                            justify="center"
+                            gap={2}
+                            wrap="wrap"
+                            mb={2}
+                            role="radiogroup"
+                            aria-label="PayPal payment frequency"
                           >
-                            {(
-                              isOpen
-                                ? canPayMonthly || canPayOneTime
-                                : !alreadyFulfilled
-                            ) ? (
+                            <Text className="text-xs text-gray-500">
+                              PayPal frequency:
+                            </Text>
+                            {openSponsorshipFrequencyOptions.map((option) => {
+                              const isActive = selectedOption === option.value
+                              return (
+                                <Button
+                                  key={option.value}
+                                  type="button"
+                                  size="xs"
+                                  role="radio"
+                                  aria-checked={isActive}
+                                  onClick={() =>
+                                    setSelectedOption(option.value)
+                                  }
+                                  borderRadius="full"
+                                  px={3}
+                                  h="28px"
+                                  fontSize="xs"
+                                  fontWeight={
+                                    isActive ? "semibold" : "medium"
+                                  }
+                                  bg={isActive ? "#2b7ff9" : "gray.100"}
+                                  color={isActive ? "white" : "gray.600"}
+                                  borderWidth="1px"
+                                  borderColor={
+                                    isActive ? "#2b7ff9" : "gray.200"
+                                  }
+                                  _hover={{
+                                    bg: isActive ? "#1a6fe0" : "gray.200",
+                                  }}
+                                  transition="all 0.15s"
+                                >
+                                  {option.label}
+                                </Button>
+                              )
+                            })}
+                          </Flex>
+                        )}
+                        {(
+                          isOpen
+                            ? canPayMonthly || canPayOneTime
+                            : !alreadyFulfilled
+                        ) ? (
+                          selectedOption === "one_time" &&
+                          PayPalScriptProvider &&
+                          PayPalButtons ? (
+                            <PayPalScriptProvider
+                              key={selectedCurrency}
+                              options={{
+                                clientId: process.env
+                                  .NEXT_PUBLIC_PAYPAL_CLIENT_ID as string,
+                                currency: selectedCurrency,
+                                intent: "capture",
+                              }}
+                            >
                               <PayPalButtons
                                 style={{
                                   layout: "horizontal",
@@ -1607,20 +1643,33 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                                 }}
                                 createOrder={handleCreateOrder}
                                 onApprove={handlePayPalApproval}
+                                onCancel={handlePayPalCancel}
                                 onError={handlePayPalError}
                               />
-                            ) : (
-                              <Box className="h-12 bg-white/80 rounded-xl flex items-center justify-center border border-gray-200">
-                                <Text className="text-sm text-gray-500 text-center px-2">
-                                  {isOpen
-                                    ? openSponsorshipRangeMessage
-                                    : "This beneficiary is already fully sponsored"}
-                                </Text>
-                              </Box>
-                            )}
-                          </PayPalScriptProvider>
-                        </Box>
-                      )}
+                            </PayPalScriptProvider>
+                          ) : (
+                            <Button
+                              type="button"
+                              onClick={handlePayPalRecurringApproval}
+                              loading={loadingFrequency === "subscription"}
+                              loadingText="Preparing PayPal..."
+                              disabled={loading || !canPayMonthly}
+                              className="w-full h-12 text-base font-semibold bg-[#ffc439] text-[#111827] hover:bg-[#f4b72c] rounded-md transition-colors"
+                            >
+                              Continue with PayPal
+                            </Button>
+                          )
+                        ) : (
+                          <Box className="h-12 bg-white/80 rounded-xl flex items-center justify-center border border-gray-200">
+                            <Text className="text-sm text-gray-500 text-center px-2">
+                              {isOpen
+                                ? openSponsorshipRangeMessage
+                                : "This beneficiary is already fully sponsored"}
+                            </Text>
+                          </Box>
+                        )}
+                      </Box>
+                    )}
 
                     {/* Context copy inside the card */}
                     <Box className="pt-8 text-left">

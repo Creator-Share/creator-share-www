@@ -3,7 +3,37 @@
     "src/app/api/admin/beneficiaries/images/create/route.ts": {
       "maxDuration": 60,
       "memory": 3008
+    },
+    "src/app/api/internal/payments/gateway-events/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/advocates/provisioning/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/sponsorships/welcome-emails/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/sponsorships/subscription-cancellations/route.ts": {
+      "maxDuration": 60
     }
   },
+  "crons": [
+    {
+      "path": "/api/internal/advocates/provisioning",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/payments/gateway-events",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/sponsorships/welcome-emails",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/sponsorships/subscription-cancellations",
+      "schedule": "* * * * *"
+    }
+  ],
   "regions": ["sfo1"]
 }

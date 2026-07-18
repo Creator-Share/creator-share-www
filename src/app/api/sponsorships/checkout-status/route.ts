@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       repository: {
         async readByReceiptDigest(digest) {
           const { data, error } = await supabase.rpc(
-            "read_sponsorship_checkout_status",
+            "read_sponsorship_checkout_status_v2",
             { target_checkout_receipt_digest: digest },
           )
           if (error) throw new Error("Checkout status lookup failed")

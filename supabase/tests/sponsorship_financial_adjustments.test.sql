@@ -1121,6 +1121,219 @@ SELECT extensions.throws_ok(
 );
 
 INSERT INTO adjustment_test_times
+VALUES ('paypal_dispute_debit', clock_timestamp());
+
+CREATE TEMP TABLE adjustment_paypal_dispute_debit_ingest ON COMMIT DROP AS
+SELECT ingested.*
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'paypal_gross_movement'
+  ),
+  target_provider => 'PAYPAL',
+  target_provider_account_scope => 'paypal',
+  target_provider_event_id => 'WH-PAYPAL-DISPUTE-DEBIT-0001',
+  target_event_type => 'CUSTOMER.DISPUTE.CREATED',
+  target_provider_object_type => 'capture',
+  target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
+  target_adjustment_provider_movement_type => 'dispute',
+  target_adjustment_provider_movement_id => 'PP-D-123456789',
+  target_base_amount_usd_cents => 1200,
+  target_charged_amount_minor => 1200,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"status":"UNDER_REVIEW"}'::jsonb,
+  target_payload_ciphertext => decode('e7', 'hex'),
+  target_payload_sha256 => decode(repeat('e7', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value
+    FROM adjustment_test_times
+    WHERE key = 'paypal_dispute_debit'
+  ),
+  target_occurred_at => (
+    SELECT value
+    FROM adjustment_test_times
+    WHERE key = 'paypal_dispute_debit'
+  ),
+  target_verification_method => 'paypal_webhook_signature_api'
+) ingested;
+
+SELECT extensions.ok(
+  (
+    SELECT adjustment_kind = 'sponsorship_dispute_debit'
+      AND NOT is_duplicate
+    FROM adjustment_paypal_dispute_debit_ingest
+  )
+  AND (
+    SELECT is_duplicate
+    FROM public.ingest_verified_sponsorship_financial_adjustment(
+      target_original_financial_movement_id => (
+        SELECT value
+        FROM adjustment_test_context
+        WHERE key = 'paypal_gross_movement'
+      ),
+      target_provider => 'PAYPAL',
+      target_provider_account_scope => 'paypal',
+      target_provider_event_id => 'WH-PAYPAL-DISPUTE-DEBIT-0001',
+      target_event_type => 'CUSTOMER.DISPUTE.CREATED',
+      target_provider_object_type => 'capture',
+      target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
+      target_adjustment_provider_movement_type => 'dispute',
+      target_adjustment_provider_movement_id => 'PP-D-123456789',
+      target_base_amount_usd_cents => 1200,
+      target_charged_amount_minor => 1200,
+      target_charged_currency => 'USD',
+      target_conversion_rate => 1,
+      target_redacted_payload => '{"status":"UNDER_REVIEW"}'::jsonb,
+      target_payload_ciphertext => decode('e7', 'hex'),
+      target_payload_sha256 => decode(repeat('e7', 32), 'hex'),
+      target_signature_verified_at => clock_timestamp(),
+      target_occurred_at => (
+        SELECT value
+        FROM adjustment_test_times
+        WHERE key = 'paypal_dispute_debit'
+      ),
+      target_verification_method => 'paypal_webhook_signature_api'
+    )
+  ),
+  'partial PayPal dispute debit ingestion is idempotent on one original capture'
+);
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'paypal_dispute_debit',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT gateway_event_id
+  FROM adjustment_paypal_dispute_debit_ingest
+);
+
+CREATE TEMP TABLE adjustment_paypal_dispute_debit_result ON COMMIT DROP AS
+SELECT applied.*
+FROM public.apply_sponsorship_financial_adjustment(
+  (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_dispute_debit'
+  ),
+  (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_dispute_debit'
+  )
+) applied;
+
+SELECT extensions.ok(
+  (
+    SELECT application_effect = 'dispute_debit_applied'
+      AND net_base_amount_usd_cents = 3800
+      AND net_charged_amount_minor = 3800
+    FROM adjustment_paypal_dispute_debit_result
+  ),
+  'a partial PayPal dispute creates one bounded negative movement'
+);
+
+INSERT INTO adjustment_test_times
+VALUES ('paypal_dispute_credit', clock_timestamp());
+
+CREATE TEMP TABLE adjustment_paypal_dispute_credit_ingest ON COMMIT DROP AS
+SELECT ingested.*
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'paypal_gross_movement'
+  ),
+  target_provider => 'PAYPAL',
+  target_provider_account_scope => 'paypal',
+  target_provider_event_id => 'WH-PAYPAL-DISPUTE-CREDIT-0001',
+  target_event_type => 'CUSTOMER.DISPUTE.RESOLVED',
+  target_provider_object_type => 'capture',
+  target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
+  target_adjustment_provider_movement_type => 'dispute',
+  target_adjustment_provider_movement_id => 'PP-D-123456789',
+  target_base_amount_usd_cents => 1200,
+  target_charged_amount_minor => 1200,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"outcome":"RESOLVED_SELLER_FAVOUR"}'::jsonb,
+  target_payload_ciphertext => decode('e8', 'hex'),
+  target_payload_sha256 => decode(repeat('e8', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value
+    FROM adjustment_test_times
+    WHERE key = 'paypal_dispute_credit'
+  ),
+  target_occurred_at => (
+    SELECT value
+    FROM adjustment_test_times
+    WHERE key = 'paypal_dispute_credit'
+  ),
+  target_verification_method => 'paypal_webhook_signature_api'
+) ingested;
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'paypal_dispute_credit',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT gateway_event_id
+  FROM adjustment_paypal_dispute_credit_ingest
+);
+
+CREATE TEMP TABLE adjustment_paypal_dispute_credit_result ON COMMIT DROP AS
+SELECT applied.*
+FROM public.apply_sponsorship_financial_adjustment(
+  (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_dispute_credit'
+  ),
+  (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_dispute_credit'
+  )
+) applied;
+
+SELECT extensions.ok(
+  (
+    SELECT application_effect = 'dispute_credit_applied'
+      AND net_base_amount_usd_cents = 5000
+      AND net_charged_amount_minor = 5000
+    FROM adjustment_paypal_dispute_credit_result
+  )
+  AND (
+    SELECT count(*) = 2
+    FROM public.sponsorship_financial_movements movement
+    WHERE movement.original_financial_movement_id = (
+      SELECT value
+      FROM adjustment_test_context
+      WHERE key = 'paypal_gross_movement'
+    )
+      AND movement.provider = 'PAYPAL'
+      AND movement.provider_movement_type = 'dispute'
+      AND movement.provider_movement_id = 'PP-D-123456789'
+      AND movement.entry_kind IN (
+        'sponsorship_dispute_debit',
+        'sponsorship_dispute_credit'
+      )
+  ),
+  'a seller-favor PayPal resolution credits only the outstanding dispute debit'
+);
+
+INSERT INTO adjustment_test_times
 VALUES ('paypal_reversal', clock_timestamp());
 
 INSERT INTO adjustment_test_context

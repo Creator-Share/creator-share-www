@@ -1,5 +1,9 @@
 import type { Status } from "@/config/beneficiaryStatuses"
 import type { Database } from "@/lib/types/db.types"
+import type {
+  SubscriptionPartnershipProject,
+  SubscriptionSubjectKind,
+} from "@/lib/sponsorships/subscriptionPresentation"
 
 // Re-export so consumers importing from "@/types/admin.types" continue to work
 export type { Status }
@@ -261,6 +265,8 @@ export interface RawSubscription {
   user_id: string
   sponsorship_method: "STRIPE" | "PAYPAL" | null
   payment_region: Database["public"]["Enums"]["stripe_region"]
+  subject_kind?: SubscriptionSubjectKind | null
+  partnership_project?: SubscriptionPartnershipProject | null
   beneficiaries?: {
     id: string
     name: string

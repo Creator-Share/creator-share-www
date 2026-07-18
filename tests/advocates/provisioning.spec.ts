@@ -9,6 +9,7 @@ import {
   loadPayPalPaymentPathConfig,
   loadStripePaymentPathConfig,
   loadVercelProvisioningConfig,
+  loadWorkerRouteSecret,
 } from "../../src/lib/advocates/provisioning/config"
 import { PaymentPathReadinessAdapter } from "../../src/lib/advocates/provisioning/paymentPaths"
 import { VercelDomainAdapter } from "../../src/lib/advocates/provisioning/vercel"
@@ -899,6 +900,33 @@ test("worker route bearer comparison is exact", () => {
 })
 
 test.describe("domain provisioning configuration", () => {
+  test("uses Vercel cron authentication unless a dedicated secret is configured", () => {
+    const cronSecret = "c".repeat(48)
+    const dedicatedSecret = "d".repeat(48)
+
+    expect(loadWorkerRouteSecret({ CRON_SECRET: cronSecret })).toBe(
+      cronSecret,
+    )
+    expect(
+      loadWorkerRouteSecret({
+        ADVOCATE_PROVISIONING_WORKER_SECRET: "",
+        CRON_SECRET: cronSecret,
+      }),
+    ).toBe(cronSecret)
+    expect(
+      loadWorkerRouteSecret({
+        ADVOCATE_PROVISIONING_WORKER_SECRET: dedicatedSecret,
+        CRON_SECRET: cronSecret,
+      }),
+    ).toBe(dedicatedSecret)
+    expect(() =>
+      loadWorkerRouteSecret({
+        ADVOCATE_PROVISIONING_WORKER_SECRET: " ".repeat(48),
+        CRON_SECRET: cronSecret,
+      }),
+    ).toThrow()
+  })
+
   test("accepts only bounded worker and exact provider configuration", () => {
     const env = {
       ADVOCATE_CLOUDFLARE_API_TOKEN: cloudflareConfig.apiToken,

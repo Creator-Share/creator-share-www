@@ -11,6 +11,12 @@ import {
   DialogCloseTrigger,
 } from "@/components/ui/dialog"
 import { Spinner, Text, Flex } from "@chakra-ui/react"
+import { presentSubscriptionSubject } from "@/lib/sponsorships/subscriptionPresentation"
+import {
+  parseSubscriptionCancellationClientResult,
+  subscriptionCancellationNotice,
+} from "@/lib/sponsorships/cancellation/subscriptionCancellationClient"
+import type { SponsorRecurringSponsorship } from "@/lib/sponsorships/sponsorRecurringSponsorships"
 
 // Cancel Subscription Button Component with Modal
 const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
@@ -18,6 +24,11 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const subject = presentSubscriptionSubject({
+    subjectKind: subscription.subject_kind,
+    partnershipProject: subscription.partnership_project,
+    beneficiaryId: subscription.beneficiary_id,
+  })
 
   const handleCancelClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -25,8 +36,8 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
   }
 
   const handleConfirmCancel = async () => {
-    const subscriptionId = subscription.sponsorship_id || subscription.id
-    
+    const subscriptionId = subscription.id
+
     if (!subscriptionId) {
       setIsModalOpen(false)
       return
@@ -35,20 +46,28 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
     setIsLoading(true)
 
     try {
-      const response = await fetch("/api/stripe/cancel-subscription", {
+      const response = await fetch("/api/sponsorships/subscriptions/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscriptionId }),
       })
 
-      const result = await response.json()
+      const body = (await response.json().catch(() => null)) as unknown
+      const result = parseSubscriptionCancellationClientResult(body)
 
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to cancel subscription")
+      if (!result) {
+        const error =
+          body && typeof body === "object" && "error" in body
+            ? String((body as { error?: unknown }).error)
+            : "Failed to cancel subscription"
+        throw new Error(error)
       }
 
-      // Success - refresh the page
-      window.location.reload()
+      const notice = subscriptionCancellationNotice(result.status)
+      alert(`${notice.title}\n\n${notice.description}`)
+      setIsLoading(false)
+      setIsModalOpen(false)
+      if (result.status === "cancelled") window.location.reload()
     } catch (error) {
       console.error("Error canceling subscription:", error)
       setIsLoading(false)
@@ -89,17 +108,20 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
             ) : (
               <Flex direction="column" gap={4}>
                 <Text>
-                  Are you sure you want to cancel your sponsorship
-                  {subscription.beneficiary_id ? (
+                  Are you sure you want to cancel your {subject.subjectKind === "partnership" ? "partnership" : "sponsorship"}
+                  {subject.subjectKind === "partnership" ? (
+                    <> for the <strong>{subject.title}</strong>?</>
+                  ) : subscription.beneficiary_id ? (
                     <> for <strong>{subscription.child?.name || "this beneficiary"}</strong>?</>
                   ) : (
                     <>? This sponsorship hasn't been matched to a beneficiary yet.</>
                   )}
                 </Text>
                 <Text fontSize="sm" color="gray.600">
-                  This action cannot be undone. Your recurring payment of{" "}
-                  <strong>${(subscription.amount / 100).toFixed(2)}</strong> will stop
-                  {subscription.beneficiary_id && ", and you'll no longer be supporting this beneficiary"}.
+                  Once provider processing begins, this request cannot be
+                  withdrawn. Future billing of{" "}
+                  <strong>${(subscription.amount / 100).toFixed(2)}</strong>{" "}
+                  stops only after the payment provider confirms cancellation.
                 </Text>
                 <Flex gap={3} mt={4}>
                   <Button
@@ -127,19 +149,7 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
   )
 }
 
-export type Subscription = {
-  id: string
-  beneficiary_id: string | null
-  status: string
-  amount: number
-  interval: string
-  current_period_start: string
-  current_period_end: string
-  sponsorship_id: string
-  child: {
-    name: string
-    username: string
-  } | null
+export type Subscription = SponsorRecurringSponsorship & {
   onChooseChild?: (subscriptionId: string) => void
 }
 
@@ -158,9 +168,24 @@ export const columns: ColumnDef<Subscription>[] = [
     cell: ({ row }) => {
       const subscription = row.original
       const child = subscription.child
-      
-      // Check if this is a blind sponsorship (beneficiary_id is null)
-      if (!subscription.beneficiary_id) {
+      const subject = presentSubscriptionSubject({
+        subjectKind: subscription.subject_kind,
+        partnershipProject: subscription.partnership_project,
+        beneficiaryId: subscription.beneficiary_id,
+      })
+
+      if (subject.subjectKind === "partnership") {
+        return (
+          <div className="flex items-center gap-3">
+            <div>
+              <div className="font-medium text-gray-700">{subject.title}</div>
+              <div className="text-xs text-gray-500">{subject.subtitle}</div>
+            </div>
+          </div>
+        )
+      }
+
+      if (subject.subjectKind === "blind") {
         return (
           <div className="flex items-center gap-3">
             <div>
@@ -170,7 +195,7 @@ export const columns: ColumnDef<Subscription>[] = [
             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
               Pending
             </span>
-            {subscription.onChooseChild && (
+            {subject.canChooseChild && subscription.onChooseChild && (
               <Button
                 size="xs"
                 colorScheme="blue"
@@ -262,8 +287,8 @@ export const columns: ColumnDef<Subscription>[] = [
       </Button>
     ),
     cell: ({ row }) => {
-      const date = row.getValue("current_period_end") as string
-      return <div>{new Date(date).toLocaleDateString()}</div>
+      const date = row.getValue("current_period_end") as string | null
+      return <div>{date ? new Date(date).toLocaleDateString() : "N/A"}</div>
     },
   },
   {

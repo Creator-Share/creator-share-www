@@ -22,7 +22,7 @@ function response(body: Record<string, unknown>, status: number) {
   })
 }
 
-export async function POST(request: NextRequest) {
+async function handle(request: NextRequest) {
   let expectedSecret: string
   try {
     expectedSecret = loadWorkerRouteSecret()
@@ -67,3 +67,6 @@ export async function POST(request: NextRequest) {
     return response({ ok: false, code: "worker_execution_failed" }, 503)
   }
 }
+
+export const GET = handle
+export const POST = handle

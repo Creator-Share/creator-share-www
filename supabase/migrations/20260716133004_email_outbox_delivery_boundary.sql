@@ -138,7 +138,7 @@ BEGIN
         USING ERRCODE = '23514';
     END IF;
 
-    NEW.max_attempts := 8;
+    NEW.max_attempts := 128;
     NEW.available_at := v_now;
     NEW.attempt_count := 0;
     NEW.locked_at := NULL;
@@ -616,6 +616,7 @@ DECLARE
   v_now timestamptz := clock_timestamp();
   v_outbox public.email_outbox%ROWTYPE;
   v_retryable boolean;
+  v_effective_retry_after_seconds integer;
 BEGIN
   IF outbox_id IS NULL
      OR lease_token IS NULL
@@ -643,12 +644,27 @@ BEGIN
      OR v_outbox.locked_lease_token_digest IS DISTINCT FROM
        extensions.digest(lease_token, 'sha256') THEN
     RAISE EXCEPTION 'Email failure proof does not match the active delivery lease'
-      USING ERRCODE = '42501';
+      USING ERRCODE = '55P03';
   END IF;
 
+  /*
+   * The caller supplies a base delay. Provider failures back off from the
+   * durable attempt count, with a one-day ceiling. Invalid sealed material is
+   * terminal and remains unavailable until the retention worker redacts it.
+   */
+  v_effective_retry_after_seconds := LEAST(
+    86400::numeric,
+    retry_after_seconds::numeric
+    * power(
+        2::numeric,
+        LEAST(GREATEST(v_outbox.attempt_count - 1, 0), 30)
+      )
+  )::integer;
+
   v_retryable :=
-    v_outbox.attempt_count < v_outbox.max_attempts
-    AND v_now + make_interval(secs => retry_after_seconds)
+    error_summary <> 'welcome_email_material_invalid'
+    AND v_outbox.attempt_count < v_outbox.max_attempts
+    AND v_now + make_interval(secs => v_effective_retry_after_seconds)
       < v_outbox.contact_retention_expires_at;
 
   PERFORM audit.set_actor_context(
@@ -674,7 +690,7 @@ BEGIN
     status = 'failed',
     available_at = CASE
       WHEN v_retryable
-        THEN v_now + make_interval(secs => retry_after_seconds)
+        THEN v_now + make_interval(secs => v_effective_retry_after_seconds)
       ELSE outbox.contact_retention_expires_at
     END,
     last_error = error_summary

@@ -513,19 +513,19 @@ CREATE TABLE public.advocate_branding (
     logo_alt_text IS NULL OR char_length(logo_alt_text) <= 300
   ),
   CONSTRAINT advocate_branding_opening_header_size_check CHECK (
-    octet_length(opening_header_html) <= 50000
+    octet_length(opening_header_html) <= 16384
   ),
   CONSTRAINT advocate_branding_about_size_check CHECK (
-    octet_length(about_biography_html) <= 200000
+    octet_length(about_biography_html) <= 16384
   )
 );
 
 COMMENT ON TABLE public.advocate_branding IS
   'MVP branding fields: primary and accent colors, one logo, an opening header, and an About biography.';
 COMMENT ON COLUMN public.advocate_branding.opening_header_html IS
-  'Sanitized rich-text HTML. The application must sanitize against the approved allowlist on write and render.';
+  'Sanitized rich-text HTML, limited to 16 KiB. The application must sanitize against the approved allowlist on write and render.';
 COMMENT ON COLUMN public.advocate_branding.about_biography_html IS
-  'Sanitized rich-text HTML. The application must sanitize against the approved allowlist on write and render.';
+  'Sanitized rich-text HTML, limited to 16 KiB. The application must sanitize against the approved allowlist on write and render.';
 
 CREATE TABLE public.advocate_public_metric_selections (
   advocate_id uuid NOT NULL REFERENCES public.advocates(id) ON DELETE CASCADE,
@@ -2640,7 +2640,13 @@ BEGIN
       'deployment_id',
       'domain_hostname',
       'permission_key',
-      'role_key'
+      'role_key',
+      'prior_status',
+      'manual_review_code',
+      'ownership_conflict',
+      'observed_provider_product_id',
+      'observed_provider_plan_id',
+      'evidence_sha256'
     ]::text[])
       OR jsonb_typeof(entry.value) NOT IN ('string', 'number', 'boolean', 'null')
   ) THEN
