@@ -4,6 +4,10 @@ import {
   type ProvisioningEnvironment,
 } from "./config"
 import { CloudflareDomainAdapter } from "./cloudflare"
+import {
+  isPaymentPathProvider,
+  PaymentPathReadinessAdapter,
+} from "./paymentPaths"
 import type { FetchImplementation } from "./providerHttp"
 import {
   DomainProvisioningError,
@@ -33,6 +37,13 @@ export function createDomainProviderAdapterFactory(options: {
     if (provider === "vercel") {
       return new VercelDomainAdapter(
         loadVercelProvisioningConfig(env),
+        fetchImplementation,
+      )
+    }
+    if (isPaymentPathProvider(provider)) {
+      return new PaymentPathReadinessAdapter(
+        provider,
+        env,
         fetchImplementation,
       )
     }

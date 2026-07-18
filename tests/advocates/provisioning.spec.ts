@@ -1,12 +1,16 @@
 import { expect, test } from "@playwright/test"
 
 import { isAuthorizedDomainWorkerRequest } from "../../src/lib/advocates/provisioning/auth"
+import { createDomainProviderAdapterFactory } from "../../src/lib/advocates/provisioning/adapters"
 import { CloudflareDomainAdapter } from "../../src/lib/advocates/provisioning/cloudflare"
 import {
   loadCloudflareProvisioningConfig,
   loadDomainWorkerConfig,
+  loadPayPalPaymentPathConfig,
+  loadStripePaymentPathConfig,
   loadVercelProvisioningConfig,
 } from "../../src/lib/advocates/provisioning/config"
+import { PaymentPathReadinessAdapter } from "../../src/lib/advocates/provisioning/paymentPaths"
 import { VercelDomainAdapter } from "../../src/lib/advocates/provisioning/vercel"
 import { processDomainProvisioningJob } from "../../src/lib/advocates/provisioning/worker"
 import type { DomainProvisioningRepository } from "../../src/lib/advocates/provisioning/repository"
@@ -63,6 +67,26 @@ const vercelConfig = {
   projectId: "prj_Abcdefgh12345678",
   teamId: "team_Abcdefgh12345678",
   requestTimeoutMs: 5_000,
+}
+
+const stripeUsEnvironment = {
+  STRIPE_SECRET_KEY_US: `sk_live_${"a".repeat(32)}`,
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US: `pk_live_${"b".repeat(32)}`,
+  STRIPE_WEBHOOK_SECRET_US: `whsec_${"c".repeat(32)}`,
+}
+
+const stripeUkEnvironment = {
+  STRIPE_SECRET_KEY_UK: `sk_live_${"d".repeat(32)}`,
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK: `pk_live_${"e".repeat(32)}`,
+  STRIPE_WEBHOOK_SECRET_UK: `whsec_${"f".repeat(32)}`,
+}
+
+const paypalEnvironment = {
+  NEXT_PUBLIC_PAYPAL_CLIENT_ID: `paypal_client_${"g".repeat(32)}`,
+  PAYPAL_CLIENT_ID: `paypal_client_${"g".repeat(32)}`,
+  PAYPAL_CLIENT_SECRET: `paypal_secret_${"h".repeat(32)}`,
+  PAYPAL_WEBHOOK_ID: "8PT597110X687430L",
+  PAYPAL_API_URL: "https://api-m.paypal.com",
 }
 
 function jsonResponse(body: unknown, status = 200, headers?: HeadersInit) {
@@ -368,6 +392,303 @@ test.describe("Vercel advocate domain adapter", () => {
   })
 })
 
+test.describe("payment path readiness adapters", () => {
+  for (const stripeCase of [
+    {
+      provider: "stripe_us" as const,
+      environment: stripeUsEnvironment,
+      secret: stripeUsEnvironment.STRIPE_SECRET_KEY_US,
+    },
+    {
+      provider: "stripe_uk" as const,
+      environment: stripeUkEnvironment,
+      secret: stripeUkEnvironment.STRIPE_SECRET_KEY_UK,
+    },
+  ]) {
+    test(`${stripeCase.provider} proves its exact live Stripe account without mutation`, async () => {
+      const calls: Array<{ url: string; init?: RequestInit }> = []
+      const adapter = new PaymentPathReadinessAdapter(
+        stripeCase.provider,
+        stripeCase.environment,
+        queuedFetch(
+          [jsonResponse({ object: "balance", livemode: true, available: [] })],
+          calls,
+        ),
+      )
+      const stripeJob = { ...job, provider: stripeCase.provider }
+      const stripeContext = {
+        ...context,
+        integrationProvider: stripeCase.provider,
+      }
+
+      const reconciliation = await adapter.reconcile(stripeJob, stripeContext)
+
+      expect(reconciliation).toEqual({
+        outcome: "matches_intent",
+        desiredStateVerified: true,
+        evidence: {
+          provider_status: "payment_path_ready",
+          provider_resource_id: `${stripeCase.provider}:hosted_checkout`,
+          http_status: 200,
+          verified: true,
+        },
+      })
+      expect(calls).toHaveLength(1)
+      expect(calls[0].url).toBe("https://api.stripe.com/v1/balance")
+      expect(calls[0].init?.method).toBe("GET")
+      const headers = new Headers(calls[0].init?.headers)
+      expect(headers.get("Authorization")).toBe(
+        `Bearer ${stripeCase.secret}`,
+      )
+      expect(JSON.stringify(reconciliation)).not.toContain(stripeCase.secret)
+    })
+  }
+
+  test("proves the live PayPal app with OAuth client credentials and discards the token", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const accessToken = `live_access_token_${"z".repeat(32)}`
+    const adapter = new PaymentPathReadinessAdapter(
+      "paypal",
+      paypalEnvironment,
+      queuedFetch(
+        [
+          jsonResponse({
+            access_token: accessToken,
+            token_type: "Bearer",
+            expires_in: 31_668,
+          }),
+        ],
+        calls,
+      ),
+    )
+    const paypalJob = { ...job, provider: "paypal" as const }
+    const paypalContext = {
+      ...context,
+      integrationProvider: "paypal" as const,
+    }
+
+    const reconciliation = await adapter.reconcile(paypalJob, paypalContext)
+
+    expect(reconciliation).toEqual({
+      outcome: "matches_intent",
+      desiredStateVerified: true,
+      evidence: {
+        provider_status: "payment_path_ready",
+        provider_resource_id: "paypal:hosted_checkout",
+        http_status: 200,
+        verified: true,
+      },
+    })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe("https://api-m.paypal.com/v1/oauth2/token")
+    expect(calls[0].init?.method).toBe("POST")
+    expect(calls[0].init?.body).toBe("grant_type=client_credentials")
+    const headers = new Headers(calls[0].init?.headers)
+    expect(headers.get("Authorization")).toBe(
+      `Basic ${Buffer.from(
+        `${paypalEnvironment.NEXT_PUBLIC_PAYPAL_CLIENT_ID}:${paypalEnvironment.PAYPAL_CLIENT_SECRET}`,
+      ).toString("base64")}`,
+    )
+    expect(headers.get("Content-Type")).toBe(
+      "application/x-www-form-urlencoded",
+    )
+    expect(JSON.stringify(reconciliation)).not.toContain(accessToken)
+    expect(JSON.stringify(reconciliation)).not.toContain(
+      paypalEnvironment.PAYPAL_CLIENT_SECRET,
+    )
+  })
+
+  test("classifies provider authorization failures as terminal without leaking provider bodies", async () => {
+    const responseSecret = "provider_body_must_never_escape"
+    const adapter = new PaymentPathReadinessAdapter(
+      "stripe_us",
+      stripeUsEnvironment,
+      queuedFetch(
+        [
+          jsonResponse(
+            { error: { message: responseSecret } },
+            401,
+            { "request-id": "request_with_no_persistence_need" },
+          ),
+        ],
+        [],
+      ),
+    )
+
+    let thrown: unknown
+    try {
+      await adapter.reconcile(
+        { ...job, provider: "stripe_us" },
+        { ...context, integrationProvider: "stripe_us" },
+      )
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toMatchObject({
+      code: "stripe_us_configuration_or_authorization_failed",
+      retryable: false,
+      evidence: { http_status: 401 },
+    })
+    expect(String(thrown)).not.toContain(responseSecret)
+    expect(JSON.stringify(thrown)).not.toContain(responseSecret)
+    expect(JSON.stringify(thrown)).not.toContain(
+      stripeUsEnvironment.STRIPE_SECRET_KEY_US,
+    )
+  })
+
+  for (const retryCase of [
+    {
+      name: "Stripe rate limit",
+      provider: "stripe_us" as const,
+      environment: stripeUsEnvironment,
+      response: jsonResponse({ error: "limited" }, 429, {
+        "Retry-After": "17",
+      }),
+      expectedCode: "stripe_us_probe_transient_error",
+      retryAfterSeconds: 17,
+    },
+    {
+      name: "PayPal server error",
+      provider: "paypal" as const,
+      environment: paypalEnvironment,
+      response: jsonResponse({ error: "unavailable" }, 503),
+      expectedCode: "paypal_probe_transient_error",
+      retryAfterSeconds: undefined,
+    },
+  ]) {
+    test(`retries a ${retryCase.name}`, async () => {
+      const adapter = new PaymentPathReadinessAdapter(
+        retryCase.provider,
+        retryCase.environment,
+        queuedFetch([retryCase.response], []),
+      )
+
+      await expect(
+        adapter.reconcile(
+          { ...job, provider: retryCase.provider },
+          { ...context, integrationProvider: retryCase.provider },
+        ),
+      ).rejects.toMatchObject({
+        code: retryCase.expectedCode,
+        retryable: true,
+        retryAfterSeconds: retryCase.retryAfterSeconds,
+      })
+    })
+  }
+
+  test("retries a bounded regional Stripe network failure", async () => {
+    const adapter = new PaymentPathReadinessAdapter(
+      "stripe_uk",
+      stripeUkEnvironment,
+      (async () => {
+        throw new Error("socket unavailable")
+      }) as typeof fetch,
+    )
+
+    await expect(
+      adapter.reconcile(
+        { ...job, provider: "stripe_uk" },
+        { ...context, integrationProvider: "stripe_uk" },
+      ),
+    ).rejects.toMatchObject({
+      code: "stripe_uk_probe_network_error",
+      retryable: true,
+      evidence: {},
+    })
+  })
+
+  for (const provider of ["stripe_us", "stripe_uk", "paypal"] as const) {
+    test(`${provider} teardown is verified locally without credentials or provider calls`, async () => {
+      let called = false
+      const adapter = new PaymentPathReadinessAdapter(
+        provider,
+        {},
+        (async () => {
+          called = true
+          throw new Error("Provider must not be called during teardown")
+        }) as typeof fetch,
+      )
+
+      const reconciliation = await adapter.reconcile(
+        { ...job, kind: "deprovision", provider },
+        { ...context, integrationProvider: provider },
+      )
+
+      expect(reconciliation).toEqual({
+        outcome: "matches_intent",
+        desiredStateVerified: true,
+        evidence: {
+          provider_status: "absent",
+          provider_resource_id: `${provider}:hosted_checkout`,
+          verified: true,
+          already_applied: true,
+        },
+      })
+      expect(called).toBe(false)
+      await expect(
+        adapter.apply(
+          { ...job, kind: "deprovision", provider },
+          { ...context, integrationProvider: provider },
+          reconciliation,
+        ),
+      ).resolves.toEqual(reconciliation.evidence)
+      expect(called).toBe(false)
+    })
+  }
+
+  test("apply only returns exact verified evidence and never probes or mutates", async () => {
+    let called = false
+    const adapter = new PaymentPathReadinessAdapter(
+      "stripe_us",
+      stripeUsEnvironment,
+      (async () => {
+        called = true
+        throw new Error("Apply must not call a provider")
+      }) as typeof fetch,
+    )
+    const reconciliation: ProviderReconciliation = {
+      outcome: "matches_intent",
+      desiredStateVerified: true,
+      evidence: {
+        provider_status: "payment_path_ready",
+        provider_resource_id: "stripe_us:hosted_checkout",
+        http_status: 200,
+        verified: true,
+      },
+    }
+
+    await expect(
+      adapter.apply(
+        { ...job, provider: "stripe_us" },
+        { ...context, integrationProvider: "stripe_us" },
+        reconciliation,
+      ),
+    ).resolves.toEqual(reconciliation.evidence)
+    await expect(
+      adapter.apply(
+        { ...job, provider: "stripe_us" },
+        { ...context, integrationProvider: "stripe_us" },
+        {
+          ...reconciliation,
+          evidence: { ...reconciliation.evidence, verified: false },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "payment_path_apply_not_verified",
+      retryable: false,
+    })
+    expect(called).toBe(false)
+  })
+
+  test("factory supports all three payment paths without eagerly requiring credentials", () => {
+    const factory = createDomainProviderAdapterFactory({ env: {} })
+    for (const provider of ["stripe_us", "stripe_uk", "paypal"] as const) {
+      expect(factory(provider)).toMatchObject({ provider })
+    }
+  })
+})
+
 function fakeRepository(
   events: string[],
   overrides: Partial<DomainProvisioningRepository> = {},
@@ -399,6 +720,55 @@ function fakeRepository(
 }
 
 test.describe("domain provisioning worker", () => {
+  test("settles a verified payment path without entering the mutation phase", async () => {
+    const events: string[] = []
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const stripeJob = { ...job, provider: "stripe_us" as const }
+    const stripeContext = {
+      ...context,
+      integrationProvider: "stripe_us" as const,
+    }
+    let completedEvidence: SafeProviderEvidence | undefined
+    const repository = fakeRepository(events, {
+      async loadContext() {
+        events.push("load_context")
+        return stripeContext
+      },
+      async complete(_job, status, _errorCode, evidence) {
+        events.push(`complete_${status}`)
+        completedEvidence = evidence
+        return status
+      },
+    })
+
+    const result = await processDomainProvisioningJob({
+      repository,
+      adapterFactory: createDomainProviderAdapterFactory({
+        env: stripeUsEnvironment,
+        fetchImplementation: queuedFetch(
+          [jsonResponse({ object: "balance", livemode: true })],
+          calls,
+        ),
+      }),
+      config: { batchSize: 3, leaseSeconds: 300 },
+      job: stripeJob,
+    })
+
+    expect(result.status).toBe("succeeded")
+    expect(events).toEqual([
+      "load_context",
+      "record_reconciliation",
+      "complete_succeeded",
+    ])
+    expect(completedEvidence).toEqual({
+      provider_status: "payment_path_ready",
+      provider_resource_id: "stripe_us:hosted_checkout",
+      http_status: 200,
+      verified: true,
+    })
+    expect(calls).toHaveLength(1)
+  })
+
   test("records reconciliation, heartbeats, applies, and verifies before success", async () => {
     const events: string[] = []
     const initial: ProviderReconciliation = {
@@ -575,6 +945,46 @@ test.describe("domain provisioning configuration", () => {
 
     expect(() =>
       loadDomainWorkerConfig({ ADVOCATE_PROVISIONING_BATCH_SIZE: "100" }),
+    ).toThrow("worker_configuration_invalid")
+  })
+
+  test("requires live payment checkout and webhook configuration", () => {
+    expect(loadStripePaymentPathConfig("stripe_us", stripeUsEnvironment)).toMatchObject({
+      provider: "stripe_us",
+      secretKey: stripeUsEnvironment.STRIPE_SECRET_KEY_US,
+      publishableKey:
+        stripeUsEnvironment.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US,
+      webhookSecret: stripeUsEnvironment.STRIPE_WEBHOOK_SECRET_US,
+    })
+    expect(loadPayPalPaymentPathConfig(paypalEnvironment)).toMatchObject({
+      provider: "paypal",
+      clientId: paypalEnvironment.NEXT_PUBLIC_PAYPAL_CLIENT_ID,
+      webhookId: paypalEnvironment.PAYPAL_WEBHOOK_ID,
+    })
+
+    expect(() =>
+      loadStripePaymentPathConfig("stripe_us", {
+        ...stripeUsEnvironment,
+        STRIPE_SECRET_KEY_US: `sk_test_${"a".repeat(32)}`,
+      }),
+    ).toThrow("worker_configuration_invalid")
+    expect(() =>
+      loadStripePaymentPathConfig("stripe_us", {
+        ...stripeUsEnvironment,
+        STRIPE_WEBHOOK_SECRET_US: undefined,
+      }),
+    ).toThrow("worker_configuration_invalid")
+    expect(() =>
+      loadPayPalPaymentPathConfig({
+        ...paypalEnvironment,
+        PAYPAL_API_URL: "https://api-m.sandbox.paypal.com",
+      }),
+    ).toThrow("worker_configuration_invalid")
+    expect(() =>
+      loadPayPalPaymentPathConfig({
+        ...paypalEnvironment,
+        PAYPAL_CLIENT_ID: "a_different_browser_client_id",
+      }),
     ).toThrow("worker_configuration_invalid")
   })
 })

@@ -15,6 +15,24 @@ export interface VercelProvisioningConfig {
   requestTimeoutMs: number
 }
 
+export type StripePaymentPathProvider = "stripe_us" | "stripe_uk"
+
+export interface StripePaymentPathConfig {
+  provider: StripePaymentPathProvider
+  secretKey: string
+  publishableKey: string
+  webhookSecret: string
+  requestTimeoutMs: number
+}
+
+export interface PayPalPaymentPathConfig {
+  provider: "paypal"
+  clientId: string
+  clientSecret: string
+  webhookId: string
+  requestTimeoutMs: number
+}
+
 export interface DomainWorkerConfig {
   batchSize: number
   leaseSeconds: number
@@ -50,6 +68,17 @@ function requireSecret(
   ) {
     throw configurationError()
   }
+  return value
+}
+
+function requireCredential(
+  env: ProvisioningEnvironment,
+  key: string,
+  pattern: RegExp,
+  minimumLength = 20,
+): string {
+  const value = requireSecret(env, key, minimumLength)
+  if (!pattern.test(value)) throw configurationError()
   return value
 }
 
@@ -123,6 +152,80 @@ export function loadVercelProvisioningConfig(
     apiToken: requireSecret(env, "ADVOCATE_VERCEL_API_TOKEN"),
     projectId,
     ...(teamId ? { teamId } : {}),
+    requestTimeoutMs: parseBoundedInteger(
+      env.ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS,
+      15_000,
+      1_000,
+      60_000,
+    ),
+  }
+}
+
+export function loadStripePaymentPathConfig(
+  provider: StripePaymentPathProvider,
+  env: ProvisioningEnvironment = process.env,
+): StripePaymentPathConfig {
+  const suffix = provider === "stripe_us" ? "US" : "UK"
+
+  return {
+    provider,
+    secretKey: requireCredential(
+      env,
+      `STRIPE_SECRET_KEY_${suffix}`,
+      /^sk_live_[A-Za-z0-9_]+$/,
+    ),
+    publishableKey: requireCredential(
+      env,
+      `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_${suffix}`,
+      /^pk_live_[A-Za-z0-9_]+$/,
+    ),
+    webhookSecret: requireCredential(
+      env,
+      `STRIPE_WEBHOOK_SECRET_${suffix}`,
+      /^whsec_[A-Za-z0-9_]+$/,
+    ),
+    requestTimeoutMs: parseBoundedInteger(
+      env.ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS,
+      15_000,
+      1_000,
+      60_000,
+    ),
+  }
+}
+
+export function loadPayPalPaymentPathConfig(
+  env: ProvisioningEnvironment = process.env,
+): PayPalPaymentPathConfig {
+  if (
+    env.PAYPAL_API_URL !== undefined &&
+    env.PAYPAL_API_URL !== "https://api-m.paypal.com"
+  ) {
+    throw configurationError()
+  }
+
+  const clientId = requireCredential(
+    env,
+    "NEXT_PUBLIC_PAYPAL_CLIENT_ID",
+    /^[A-Za-z0-9_-]+$/,
+  )
+  if (env.PAYPAL_CLIENT_ID !== undefined && env.PAYPAL_CLIENT_ID !== clientId) {
+    throw configurationError()
+  }
+
+  return {
+    provider: "paypal",
+    clientId,
+    clientSecret: requireCredential(
+      env,
+      "PAYPAL_CLIENT_SECRET",
+      /^[A-Za-z0-9_-]+$/,
+    ),
+    webhookId: requireCredential(
+      env,
+      "PAYPAL_WEBHOOK_ID",
+      /^[A-Za-z0-9_-]+$/,
+      8,
+    ),
     requestTimeoutMs: parseBoundedInteger(
       env.ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS,
       15_000,

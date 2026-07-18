@@ -75,7 +75,7 @@ export interface ProviderReconciliation {
 }
 
 export interface DomainProviderAdapter {
-  readonly provider: SupportedDomainProvider
+  readonly provider: DomainProvisioningProvider
   reconcile(
     job: ClaimedDomainProvisioningJob,
     context: DomainProvisioningContext,
