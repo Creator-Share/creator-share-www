@@ -1,74 +1,35 @@
-import {
-  ADVOCATE_TENANT_ROOT,
-  resolveAdvocateHost,
-} from "@/lib/advocates/host"
+import "server-only"
 
-export const SPONSORSHIP_VISITOR_COOKIE_NAME = "cs_sponsorship_visitor_v1"
-export const SPONSORSHIP_VISITOR_COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60
+import { createHash } from "node:crypto"
+
+export * from "./visitorCookieToken"
+
+import type { VerifiedSponsorshipVisitorToken } from "./visitorCookieToken"
 
 const VISITOR_TOKEN_BYTES = 32
-const VISITOR_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
+const VISITOR_TOKEN_PATTERN = /^v1\.([A-Za-z0-9_-]{43})\.[A-Za-z0-9_-]{22}$/
 
-export interface SponsorshipVisitorCookieOptions {
-  domain?: string
-  httpOnly: true
-  maxAge: number
-  path: "/"
-  sameSite: "lax"
-  secure: boolean
+function sponsorshipVisitorIdFromToken(
+  value: VerifiedSponsorshipVisitorToken,
+): string | null {
+  return VISITOR_TOKEN_PATTERN.exec(value)?.[1] ?? null
 }
 
-function encodeBase64Url(bytes: Uint8Array): string {
-  let binary = ""
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "")
-}
-
-export function createSponsorshipVisitorToken(): string {
-  const bytes = new Uint8Array(VISITOR_TOKEN_BYTES)
-  crypto.getRandomValues(bytes)
-  return encodeBase64Url(bytes)
-}
-
-export function isValidSponsorshipVisitorToken(
-  value: string | null | undefined,
-): value is string {
-  return typeof value === "string" && VISITOR_TOKEN_PATTERN.test(value)
-}
-
-function getNormalizedHostname(rawHost: string | null): string | null {
-  const resolution = resolveAdvocateHost(rawHost, {
-    allowLocalhostDevelopment: true,
-  })
-
-  if (resolution.kind === "invalid") return null
-  if (resolution.kind === "tenant-candidate") {
-    return resolution.requestHostname
+/**
+ * Produces the one canonical database join key for an authenticated visitor.
+ * Callers must first authenticate the cookie with readSponsorshipVisitorCookie.
+ */
+export function sponsorshipVisitorDigestFromToken(
+  value: VerifiedSponsorshipVisitorToken,
+): Buffer | null {
+  const visitorId = sponsorshipVisitorIdFromToken(value)
+  if (visitorId === null) return null
+  const visitorIdBytes = Buffer.from(visitorId, "base64url")
+  if (
+    visitorIdBytes.length !== VISITOR_TOKEN_BYTES ||
+    visitorIdBytes.toString("base64url") !== visitorId
+  ) {
+    return null
   }
-  return resolution.normalizedHostname
-}
-
-export function getSponsorshipVisitorCookieOptions(
-  rawHost: string | null,
-  requestIsSecure: boolean,
-): SponsorshipVisitorCookieOptions {
-  const hostname = getNormalizedHostname(rawHost)
-  const isCreatorShareDomain =
-    hostname === ADVOCATE_TENANT_ROOT ||
-    hostname?.endsWith(`.${ADVOCATE_TENANT_ROOT}`) === true
-
-  return {
-    ...(isCreatorShareDomain
-      ? { domain: `.${ADVOCATE_TENANT_ROOT}` }
-      : {}),
-    httpOnly: true,
-    maxAge: SPONSORSHIP_VISITOR_COOKIE_MAX_AGE_SECONDS,
-    path: "/",
-    sameSite: "lax",
-    secure: isCreatorShareDomain || requestIsSecure,
-  }
+  return createHash("sha256").update(visitorIdBytes).digest()
 }

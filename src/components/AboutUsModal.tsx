@@ -5,6 +5,7 @@ import { Box, Flex, Image, Text, Tabs } from "@chakra-ui/react"
 import { FaFacebook, FaInstagram, FaExternalLinkAlt } from "react-icons/fa"
 import { usePublicSite } from "@/components/advocates/PublicSiteProvider"
 import { createPublicSiteCssVariables } from "@/lib/advocates/publicSiteTheme"
+import { notifyPublicPathChange } from "@/lib/advocates/publicPathChanges"
 import {
   DialogRoot,
   DialogContent,
@@ -58,6 +59,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
     setActiveTab(tab)
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", `/${tab}`)
+      notifyPublicPathChange()
     }
   }, [])
 
@@ -65,6 +67,7 @@ export const AboutUsModal: React.FC<AboutUsModalProps> = ({
   const handleClose = useCallback(() => {
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", prevPath ?? "/")
+      notifyPublicPathChange()
     }
     onClose()
   }, [onClose, prevPath])

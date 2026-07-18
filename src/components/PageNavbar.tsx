@@ -26,6 +26,7 @@ import {
 } from "./ui/dialog"
 import { ROUTE_TO_TYPE } from "@/config/beneficiaryTypes"
 import { resolvePublicSiteTheme } from "@/lib/advocates/publicSiteTheme"
+import { notifyPublicPathChange } from "@/lib/advocates/publicPathChanges"
 import { usePublicSite } from "./advocates/PublicSiteProvider"
 
 // Valid tab anchors for the About modal
@@ -119,7 +120,7 @@ export function PageNavbar() {
 
   useEffect(() => {
     setMounted(true)
-    fetchUser()
+    if (publicSite.kind === "primary") fetchUser()
 
     // Set up scroll listener
     window.addEventListener("scroll", handleScroll, { passive: true })
@@ -139,18 +140,26 @@ export function PageNavbar() {
       window.removeEventListener("resize", checkMobile)
       window.removeEventListener("popstate", checkPathAndOpenModal)
     }
-  }, [fetchUser, handleScroll, checkPathAndOpenModal])
+  }, [fetchUser, handleScroll, checkPathAndOpenModal, publicSite.kind])
 
   useEffect(() => {
     const checkAdminStatus = async () => {
-      if (user?.id) {
+      if (publicSite.kind === "primary" && user?.id) {
         const response = await fetch("/api/auth/check-admin")
-        const { isAdmin } = await response.json()
-        setIsAdmin(isAdmin)
+        if (!response.ok) return
+        const data: unknown = await response.json()
+        setIsAdmin(
+          Boolean(
+            data &&
+            typeof data === "object" &&
+            "isAdmin" in data &&
+            data.isAdmin === true,
+          ),
+        )
       }
     }
     checkAdminStatus()
-  }, [user])
+  }, [publicSite.kind, user])
 
   useEffect(() => {
     if (isOpen) {
@@ -197,7 +206,12 @@ export function PageNavbar() {
             onClose={() => setFaqOpen(false)}
             prevPath={prevPathRef.current}
           />
-          <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
+          {publicSite.kind === "primary" ? (
+            <SignInModal
+              open={signInOpen}
+              onClose={() => setSignInOpen(false)}
+            />
+          ) : null}
         </>
       )}
       <Box
@@ -363,6 +377,7 @@ export function PageNavbar() {
                   prevPathRef.current =
                     window.location.pathname + window.location.search
                   window.history.replaceState(null, "", "/faq")
+                  notifyPublicPathChange()
                   setFaqOpen(true)
                 }}
               >
@@ -379,6 +394,7 @@ export function PageNavbar() {
                   prevPathRef.current =
                     window.location.pathname + window.location.search
                   window.history.replaceState(null, "", "/about")
+                  notifyPublicPathChange()
                   setAboutUsOpen(true)
                 }}
               >
@@ -387,43 +403,44 @@ export function PageNavbar() {
                   : "About Us"}
               </a>
             </Button>
-            {mounted && user ? (
-              <>
-                {isAdmin && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    borderRadius="full"
-                    asChild
-                    style={
-                      pathname?.startsWith("/admin")
-                        ? {
-                            textDecoration: "underline",
-                            textUnderlineOffset: "4px",
-                            fontWeight: 600,
-                          }
-                        : undefined
-                    }
-                  >
-                    <a
-                      href="/admin"
-                      onClick={(e) => {
-                        if (
-                          e.metaKey ||
-                          e.ctrlKey ||
-                          e.shiftKey ||
-                          e.button !== 0
-                        )
-                          return
-                        e.preventDefault()
-                        router.push("/admin")
-                      }}
+            {publicSite.kind === "primary" &&
+              (mounted && user ? (
+                <>
+                  {isAdmin ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      borderRadius="full"
+                      asChild
+                      style={
+                        pathname?.startsWith("/admin")
+                          ? {
+                              textDecoration: "underline",
+                              textUnderlineOffset: "4px",
+                              fontWeight: 600,
+                            }
+                          : undefined
+                      }
                     >
-                      Admin Dashboard
-                    </a>
-                  </Button>
-                )}
-                {/* Temporarily hidden
+                      <a
+                        href="/admin"
+                        onClick={(e) => {
+                          if (
+                            e.metaKey ||
+                            e.ctrlKey ||
+                            e.shiftKey ||
+                            e.button !== 0
+                          )
+                            return
+                          e.preventDefault()
+                          router.push("/admin")
+                        }}
+                      >
+                        Admin Dashboard
+                      </a>
+                    </Button>
+                  ) : null}
+                  {/* Temporarily hidden
               <Button
                 size="sm"
                 variant={pathname === "/app" ? "solid" : "ghost"}
@@ -432,45 +449,50 @@ export function PageNavbar() {
                 User Dashboard
               </Button>
               */}
-                <Menu.Root>
-                  <Menu.Trigger asChild>
-                    <Button size="sm" variant="ghost" borderRadius="full">
-                      My Account ({user.email})
-                    </Button>
-                  </Menu.Trigger>
-                  <Portal>
-                    <Menu.Positioner>
-                      <Menu.Content>
-                        <Menu.Item
-                          value="logout"
-                          onClick={() => {
-                            handleLogout()
-                          }}
-                          cursor="pointer"
-                        >
-                          Logout
-                        </Menu.Item>
-                      </Menu.Content>
-                    </Menu.Positioner>
-                  </Portal>
-                </Menu.Root>
-              </>
-            ) : mounted ? (
-              <Button size="sm" variant="ghost" borderRadius="full" asChild>
-                <a
-                  href="/login"
-                  onClick={(e) => {
-                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)
-                      return
-                    e.preventDefault()
-                    window.history.pushState({ modal: true }, "", "/login")
-                    setSignInOpen(true)
-                  }}
-                >
-                  Sign In
-                </a>
-              </Button>
-            ) : null}
+                  <Menu.Root>
+                    <Menu.Trigger asChild>
+                      <Button size="sm" variant="ghost" borderRadius="full">
+                        My Account ({user.email})
+                      </Button>
+                    </Menu.Trigger>
+                    <Portal>
+                      <Menu.Positioner>
+                        <Menu.Content>
+                          <Menu.Item
+                            value="logout"
+                            onClick={() => {
+                              handleLogout()
+                            }}
+                            cursor="pointer"
+                          >
+                            Logout
+                          </Menu.Item>
+                        </Menu.Content>
+                      </Menu.Positioner>
+                    </Portal>
+                  </Menu.Root>
+                </>
+              ) : mounted ? (
+                <Button size="sm" variant="ghost" borderRadius="full" asChild>
+                  <a
+                    href="/login"
+                    onClick={(e) => {
+                      if (
+                        e.metaKey ||
+                        e.ctrlKey ||
+                        e.shiftKey ||
+                        e.button !== 0
+                      )
+                        return
+                      e.preventDefault()
+                      window.history.pushState({ modal: true }, "", "/login")
+                      setSignInOpen(true)
+                    }}
+                  >
+                    Sign In
+                  </a>
+                </Button>
+              ) : null)}
           </Flex>
 
           {/* Mobile menu: only rendered client-side (isOpen state is client-driven) */}
@@ -608,6 +630,7 @@ export function PageNavbar() {
                           prevPathRef.current =
                             window.location.pathname + window.location.search
                           window.history.replaceState(null, "", "/faq")
+                          notifyPublicPathChange()
                           setFaqOpen(true)
                         }}
                         className="w-full"
@@ -625,63 +648,13 @@ export function PageNavbar() {
                           prevPathRef.current =
                             window.location.pathname + window.location.search
                           window.history.replaceState(null, "", "/about")
+                          notifyPublicPathChange()
                           setAboutUsOpen(true)
                         }}
                         className="w-full"
                       >
                         About {publicSite.displayName}
                       </Button>
-                      {user ? (
-                        <>
-                          {isAdmin && (
-                            <NextLink href="/admin" passHref>
-                              <Button
-                                size="lg"
-                                variant="ghost"
-                                color={mobileMenuForeground}
-                                fontSize="xl"
-                                _hover={{
-                                  bg: advocateMobileMenuHoverBackground,
-                                }}
-                                className="w-full"
-                              >
-                                Admin
-                              </Button>
-                            </NextLink>
-                          )}
-                          <Button
-                            size="lg"
-                            variant="ghost"
-                            color={mobileMenuForeground}
-                            fontSize="xl"
-                            _hover={{ bg: advocateMobileMenuHoverBackground }}
-                            onClick={handleLogout}
-                            className="w-full"
-                          >
-                            Logout
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          size="lg"
-                          variant="ghost"
-                          color={mobileMenuForeground}
-                          fontSize="xl"
-                          _hover={{ bg: advocateMobileMenuHoverBackground }}
-                          className="w-full"
-                          onClick={() => {
-                            setIsOpen(false)
-                            window.history.pushState(
-                              { modal: true },
-                              "",
-                              "/login",
-                            )
-                            setSignInOpen(true)
-                          }}
-                        >
-                          Sign In
-                        </Button>
-                      )}
                     </VStack>
                   </Flex>
                 </DialogContent>
@@ -733,6 +706,7 @@ export function PageNavbar() {
                   prevPathRef.current =
                     window.location.pathname + window.location.search
                   window.history.replaceState(null, "", "/faq")
+                  notifyPublicPathChange()
                   setFaqOpen(true)
                 }}
                 className="w-full"
@@ -751,6 +725,7 @@ export function PageNavbar() {
                   prevPathRef.current =
                     window.location.pathname + window.location.search
                   window.history.replaceState(null, "", "/about")
+                  notifyPublicPathChange()
                   setAboutUsOpen(true)
                 }}
                 className="w-full"

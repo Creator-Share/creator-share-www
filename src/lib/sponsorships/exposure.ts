@@ -2,8 +2,13 @@ import "server-only"
 
 import { createHash } from "node:crypto"
 
+import { isQualifyingAdvocateExposurePagePath } from "@/lib/advocates/publicBrowsePaths"
+
 import { toSupabaseRpcBytea, type SupabaseRpcBytea } from "./crypto"
-import { isValidSponsorshipVisitorToken } from "./visitorCookie"
+import {
+  sponsorshipVisitorDigestFromToken,
+  type VerifiedSponsorshipVisitorToken,
+} from "./visitorCookie"
 
 const EXPOSURE_WINDOW_MILLISECONDS = 5 * 60 * 1000
 const BOT_USER_AGENT_PATTERN =
@@ -14,15 +19,18 @@ export interface QualifiedExposureContext {
   referrerHost: string | null
 }
 
-export function shouldRejectExposureRequest(headers: Headers): boolean {
+export function shouldRejectExposureRequest(
+  headers: Headers,
+  expectedOrigin: string,
+): boolean {
   const purpose = `${headers.get("purpose") || ""} ${
     headers.get("sec-purpose") || ""
   }`
   if (/prefetch|prerender/i.test(purpose)) return true
   if (headers.get("next-router-prefetch") !== null) return true
 
-  const fetchSite = headers.get("sec-fetch-site")
-  if (fetchSite && fetchSite !== "same-origin") return true
+  if (headers.get("sec-fetch-site") !== "same-origin") return true
+  if (headers.get("origin") !== expectedOrigin) return true
 
   const userAgent = headers.get("user-agent") || ""
   return !userAgent || BOT_USER_AGENT_PATTERN.test(userAgent)
@@ -50,9 +58,13 @@ export function getQualifiedExposureContext(
     ? `${expectedHostname}:${expectedPort}`
     : expectedHostname
   if (referrerUrl.host.toLowerCase() !== expectedHost.toLowerCase()) return null
-  if (!referrerUrl.pathname.startsWith("/") || referrerUrl.pathname.length > 500) {
+  if (
+    !referrerUrl.pathname.startsWith("/") ||
+    referrerUrl.pathname.length > 500
+  ) {
     return null
   }
+  if (!isQualifyingAdvocateExposurePagePath(referrerUrl.pathname)) return null
 
   return {
     pagePath: referrerUrl.pathname,
@@ -61,13 +73,13 @@ export function getQualifiedExposureContext(
 }
 
 export function digestSponsorshipVisitorToken(
-  token: string,
+  token: VerifiedSponsorshipVisitorToken,
 ): { digest: Buffer; digestRpcBytea: SupabaseRpcBytea } {
-  if (!isValidSponsorshipVisitorToken(token)) {
+  const digest = sponsorshipVisitorDigestFromToken(token)
+  if (digest === null) {
     throw new Error("Invalid sponsorship visitor token")
   }
 
-  const digest = createHash("sha256").update(token, "utf8").digest()
   return { digest, digestRpcBytea: toSupabaseRpcBytea(digest) }
 }
 

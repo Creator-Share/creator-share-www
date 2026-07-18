@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import {
   isTrustedCheckoutJsonRequest,
-  resolveTrustedCheckoutRequestOrigin,
+  resolveTrustedPrimaryRequestOrigin,
 } from "@/lib/sponsorships/checkout/requestSecurity"
 import {
   MAXIMUM_SUBSCRIPTION_CANCELLATION_BODY_BYTES,
@@ -97,7 +97,7 @@ async function readBoundedBody(request: NextRequest): Promise<string | null> {
 }
 
 export async function POST(request: NextRequest) {
-  const expectedOrigin = resolveTrustedCheckoutRequestOrigin({
+  const expectedOrigin = resolveTrustedPrimaryRequestOrigin({
     rawHost: request.headers.get("host"),
   })
   if (

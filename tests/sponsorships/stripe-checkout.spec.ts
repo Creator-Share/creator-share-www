@@ -3,6 +3,7 @@ import Module from "node:module"
 import { resolve } from "node:path"
 
 import { expect, test } from "@playwright/test"
+import type { VerifiedSponsorshipVisitorToken } from "../../src/lib/sponsorships/visitorCookie"
 
 import type {
   AttachProviderObjectInput,
@@ -16,6 +17,8 @@ import type {
 
 type CheckoutModule =
   typeof import("../../src/lib/sponsorships/checkout/stripeCheckout")
+type VisitorCookieModule =
+  typeof import("../../src/lib/sponsorships/visitorCookie")
 type NodeModuleLoader = (
   request: string,
   parent: unknown,
@@ -42,6 +45,9 @@ const checkoutModule = testRequire(
 const { createSponsorshipCrypto } = testRequire(
   "../../src/lib/sponsorships/crypto",
 ) as typeof import("../../src/lib/sponsorships/crypto")
+const { createSponsorshipVisitorToken } = testRequire(
+  "../../src/lib/sponsorships/visitorCookie",
+) as VisitorCookieModule
 nodeModule._load = originalModuleLoad
 
 const {
@@ -62,7 +68,8 @@ const CHECKOUT_SESSION_ID = "cs_test_authoritative123"
 const CHECKOUT_URL =
   "https://checkout.stripe.com/c/pay/cs_test_authoritative123"
 const NOW = new Date("2026-07-18T08:00:00.000Z")
-const VISITOR_TOKEN = Buffer.alloc(32, 9).toString("base64url")
+const VISITOR_TOKEN =
+  `v1.${Buffer.alloc(32, 9).toString("base64url")}.${"A".repeat(22)}` as VerifiedSponsorshipVisitorToken
 const APP_SECRET = Buffer.alloc(48, 7).toString("base64")
 
 interface RecordedCalls {
@@ -595,20 +602,40 @@ test.describe("checkout host and visitor classification", () => {
     ).toThrowError(SponsorshipCheckoutError)
   })
 
-  test("treats a malformed or ambiguous visitor cookie as an absent hint", () => {
-    expect(
+  test("accepts one authentic visitor candidate and rejects true ambiguity", async () => {
+    const environment = {
+      NODE_ENV: "production",
+      SPONSORSHIP_VISITOR_COOKIE_SECRET_V1: APP_SECRET,
+    }
+    const signedToken = await createSponsorshipVisitorToken(environment)
+    const secondSignedToken = await createSponsorshipVisitorToken(environment)
+    expect(signedToken).not.toBeNull()
+    expect(secondSignedToken).not.toBeNull()
+    await expect(
       readSponsorshipVisitorCookie(
-        `other=value; cs_sponsorship_visitor_v1=${VISITOR_TOKEN}`,
+        `other=value; cs_sponsorship_visitor_v1=${signedToken}`,
+        environment,
       ),
-    ).toBe(VISITOR_TOKEN)
-    expect(
+    ).resolves.toBe(signedToken)
+    await expect(
       readSponsorshipVisitorCookie(
-        `cs_sponsorship_visitor_v1=${VISITOR_TOKEN}; ` +
-          `cs_sponsorship_visitor_v1=${Buffer.alloc(32, 8).toString("base64url")}`,
+        `cs_sponsorship_visitor_v1=${signedToken}; ` +
+          `cs_sponsorship_visitor_v1=${secondSignedToken}`,
+        environment,
       ),
-    ).toBeNull()
-    expect(
-      readSponsorshipVisitorCookie("cs_sponsorship_visitor_v1=not-a-token"),
-    ).toBeNull()
+    ).resolves.toBeNull()
+    await expect(
+      readSponsorshipVisitorCookie(
+        `cs_sponsorship_visitor_v1=${signedToken}; ` +
+          `cs_sponsorship_visitor_v1=${VISITOR_TOKEN}`,
+        environment,
+      ),
+    ).resolves.toBe(signedToken)
+    await expect(
+      readSponsorshipVisitorCookie(
+        "cs_sponsorship_visitor_v1=not-a-token",
+        environment,
+      ),
+    ).resolves.toBeNull()
   })
 })

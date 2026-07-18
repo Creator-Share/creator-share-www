@@ -9,6 +9,7 @@ The release must preserve the current sponsorship checkout until every new appli
 Configure and validate these server only values in every target environment:
 
 - `SPONSORSHIP_CRYPTO_SECRET_V1`, one canonical base64 value containing at least 32 random bytes. Never rotate it by replacing the current value. Introduce a new numbered key and migration plan.
+- `SPONSORSHIP_VISITOR_COOKIE_SECRET_V1`, a separate canonical base64 value containing at least 32 random bytes. It signs only the first party visitor token and must never equal `SPONSORSHIP_CRYPTO_SECRET_V1`. An absent or malformed production value disables anonymous attribution without blocking sponsorship payment. Generate it with a cryptographically secure random source, store it as a server only value, and run the visitor cookie canary before promotion.
 - `CRON_SECRET`, a random secret of at least 32 characters. Vercel sends this value as a Bearer token to each scheduled worker route.
 - `PAYMENT_GATEWAY_EVENT_WORKER_SECRET`, optional. Use only for a non-Vercel scheduler. When present, its caller must send this value instead of `CRON_SECRET`.
 - `SPONSOR_WELCOME_EMAIL_WORKER_SECRET`, optional, with the same external-scheduler rule.
@@ -35,6 +36,22 @@ Both regional Stripe webhook endpoints must deliver events using API version `20
 The PayPal webhook endpoint accepts at most 64 KiB and verifies the exact raw event representation through PayPal's signature verification API. Do not place a body parser, JSON normalizer, or proxy transformation in front of it. Unsupported signed events are acknowledged after durable contact-free quarantine evidence is written. Permanent chain mismatches are also quarantined. Provider lookup outages remain retryable and return a static unavailable response.
 
 The production Vercel project must support one-minute Cron schedules. The repository schedules the payment event worker, sponsor welcome worker, subscription cancellation worker, and advocate provisioner every minute with authenticated GET requests. Vercel does not retry one failed Cron invocation, so durable database leases and the next scheduled invocation provide recovery. Confirm the project plan accepts this frequency before promotion.
+
+## Visitor attribution release boundary
+
+The visitor token is an authenticated pseudonymous identifier, not payment authority, proof of identity, or proof of a human visit. The exposure endpoint never creates a token from a bare analytics request and requires exact same origin browser metadata, but an automated client can still load a public page, receive a valid token, and imitate the follow-up request. Direct and post visit sponsorship outcomes remain payment backed. Raw visit and reach counts remain susceptible to deliberate automation until FF-024 adds Cloudflare rate limits and bot scoring.
+
+The token is scoped to `.creatorshare.com` so a later primary site sponsorship can join to an earlier advocate exposure. A browser therefore sends it to every Creator Share subdomain. `HttpOnly` prevents script access but does not prevent a sibling subdomain server from receiving the token. Before enabling the cookie in production:
+
+1. Export the complete Cloudflare DNS record inventory for `creatorshare.com`.
+2. Record the hosting owner and runtime for every active or delegated subdomain.
+3. Remove, isolate, or explicitly approve every legacy, vendor hosted, parked, dangling, or third party controlled hostname.
+4. Confirm no untrusted service can read or set parent domain cookies.
+5. Retain the inventory with the release evidence and repeat the review before adding any new sibling service.
+
+The application keeps middleware on the globally distributed Edge runtime. Visitor cookie authentication uses an audited Edge compatible HMAC and HKDF implementation so primary page and API traffic does not inherit a Node middleware latency or invocation cost regression. Static Next.js chunks remain excluded. The primary root favicon and public image assets retain their existing exclusions, while Creator Share sibling hosts pass those assets through the exact tenant policy. Image optimizer requests remain inside the policy on every host to prevent an unapproved origin from consuming optimization capacity. The production build must report Edge middleware with both reviewed matchers. A Vercel preview must prove one exact provisioned tenant hostname, reject one unprovisioned sibling hostname, and prove cookie issuance, duplicate normalization, checkout initiation, and the neutral provider return flow before promotion.
+
+Version one visitor tokens have a 400 day maximum age. If the signing key is suspected compromised before versioned overlap support exists, replace the key immediately, accept that prior anonymous visitor linkage is reset, preserve payment and locked attribution facts, and record the incident. Never delay containment to preserve anonymous analytics. FF-023 adds a version two issue key with version one verification overlap for planned rotation.
 
 ## Phase 1: additive database deployment
 
@@ -75,6 +92,10 @@ The release gate function is deployment evidence. It is not a per request featur
 23. Force provider success followed by an unavailable database settlement. The worker must return 503. After lease expiry, a later attempt must converge from the provider's already terminal state and settle the original local operation once.
 24. Return an unrelated PayPal 422 response containing the words cancelled or expired outside an exact `SUBSCRIPTION_STATUS_INVALID` detail. It must enter manual review and must not be treated as provider cancellation evidence.
 25. Exhaust the bounded cancellation retry count in a protected sandbox. The operation must stop in manual review, and the sponsor and administrator interfaces must not describe it as cancelled.
+26. Confirm a production browse response issues one authenticated `cs_sponsorship_visitor_v1` cookie and a later primary site checkout produces the same visitor digest as the advocate exposure.
+27. Present a forged cookie plus one authentic cookie and two distinct authentic cookies. Confirm the first case preserves the authentic visitor, the second rotates once, and neither case blocks checkout.
+28. Confirm the Edge middleware runtime and matcher in the production build output. Exercise one exact provisioned tenant hostname on the Vercel deployment, then confirm an unprovisioned sibling hostname is rejected.
+29. Attach the approved Creator Share subdomain DNS and hosting inventory to the release evidence.
 
 The generic SMTP path quarantines every provider acceptance ambiguity before a stale lease can retry it. It does not provide exact once delivery. A deterministic message ID supports operator investigation, but it is not an idempotency guarantee. Never describe this worker or its canaries as exact once.
 
@@ -151,4 +172,5 @@ Retain the following with the release record:
 - Stripe US and UK canary object IDs in a protected operator record.
 - Worker batch health and manual review counts.
 - Confirmation that no sponsor email, claim token, receipt, ciphertext, or provider payload appeared in application logs.
+- Production visitor cookie canary, Edge middleware runtime evidence, and approved subdomain trust inventory.
 - Rollback owner and incident contact.

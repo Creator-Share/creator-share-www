@@ -22,6 +22,7 @@ import {
   getApiTypes,
 } from "@/config/beneficiaryTypes"
 import { usePublicSite } from "@/components/advocates/PublicSiteProvider"
+import { notifyPublicPathChange } from "@/lib/advocates/publicPathChanges"
 
 /** Set of pathname values that are "type landing pages" (the modal push uses pushState, not router). */
 const TYPE_ROUTE_PATHS = new Set([
@@ -272,6 +273,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
           "",
           `/sponsorships/${beneficiary.username}`,
         )
+        notifyPublicPathChange()
         bumpUrlSync()
       }
     },
@@ -288,6 +290,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
         currentPath !== "/sponsorships/checkout"
       ) {
         window.history.replaceState({}, "", previousUrlRef.current || "/")
+        notifyPublicPathChange()
       }
       previousUrlRef.current = null
       bumpUrlSync()

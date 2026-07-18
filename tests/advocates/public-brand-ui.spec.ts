@@ -15,6 +15,10 @@ const navbarSource = readFileSync(
   resolve(process.cwd(), "src/components/PageNavbar.tsx"),
   "utf8",
 )
+const rootLayoutSource = readFileSync(
+  resolve(process.cwd(), "src/app/layout.tsx"),
+  "utf8",
+)
 
 test.describe("public advocate brand UI boundary", () => {
   test("preserves the primary site presentation and copy", () => {
@@ -96,6 +100,31 @@ test.describe("public advocate brand UI boundary", () => {
     expect(navbarSource).toContain("with Creator Share")
     expect(navbarSource).toMatch(
       /publicSite\.kind === "advocate" && !isMobile[\s\S]*setIsOpen\(false\)/,
+    )
+  })
+
+  test("keeps primary account and administrator controls off advocate sites", () => {
+    expect(navbarSource).toContain(
+      'if (publicSite.kind === "primary") fetchUser()',
+    )
+    expect(navbarSource).toContain(
+      'if (publicSite.kind === "primary" && user?.id)',
+    )
+    expect(navbarSource).toContain(
+      'mounted && publicSite.kind === "primary" && isOpen',
+    )
+    expect(navbarSource).toContain("mounted && user ? (")
+    expect(navbarSource).not.toMatch(
+      /publicSite\.kind === "advocate"[\s\S]{0,200}(?:Sign In|Logout|Admin Dashboard|My Account)/,
+    )
+  })
+
+  test("does not mount the navigation and authentication wrapper in payment shells", () => {
+    expect(rootLayoutSource).toMatch(
+      /site\.kind === "payment"[\s\S]*?\{children\}[\s\S]*?: \([\s\S]*?<PageWrapper>/,
+    )
+    expect(rootLayoutSource).not.toMatch(
+      /<PageWrapper>\{site\.kind === "payment"/,
     )
   })
 

@@ -41,24 +41,19 @@ import {
   getExternalCheckoutImageUrl,
   type MediaRow,
 } from "@/utils/supabase/media"
-import {
-  createClient,
-  createServiceRoleClient,
-} from "@/utils/supabase/server"
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 
 export const runtime = "nodejs"
 
 const PUBLIC_BASE_URL = "https://creator-share-www.vercel.app"
 const MAXIMUM_REQUEST_BYTES = 16 * 1024
-const ELIGIBLE_FIXED_BENEFICIARY_STATUSES = new Set([
-  "New",
-  "Partially Funded",
-])
+const ELIGIBLE_FIXED_BENEFICIARY_STATUSES = new Set(["New", "Partially Funded"])
 
 const CHECKOUT_RESPONSE_HEADERS = {
   "Cache-Control": "no-store, max-age=0",
   Pragma: "no-cache",
   "Referrer-Policy": "no-referrer",
+  Vary: "Host, Origin, Cookie",
   "X-Content-Type-Options": "nosniff",
 } as const
 
@@ -203,10 +198,7 @@ function nullableInteger(
   return requiredInteger(row, key)
 }
 
-function requiredTimestamp(
-  row: Record<string, unknown>,
-  key: string,
-): string {
+function requiredTimestamp(row: Record<string, unknown>, key: string): string {
   const value = requiredString(row, key)
   const milliseconds = Date.parse(value)
   if (!Number.isFinite(milliseconds)) {
@@ -336,9 +328,7 @@ async function loadAuthoritativeBeneficiary(
 
 async function authorizeCheckoutHost(
   supabase: ServiceRoleClient,
-  host: Parameters<
-    StripeSponsorshipCheckoutV2Dependencies["authorizeHost"]
-  >[0],
+  host: Parameters<StripeSponsorshipCheckoutV2Dependencies["authorizeHost"]>[0],
 ): Promise<void> {
   if (host.source === "primary_site") {
     if (host.advocateHostname !== null) {
@@ -395,20 +385,32 @@ async function recoverCheckoutV2(
     paymentAttemptId: nullableString(row, "payment_attempt_id"),
     sponsorshipIntentId: requiredString(row, "sponsorship_intent_id"),
     paymentQuoteId: nullableString(row, "payment_quote_id"),
-    provider: requiredString(row, "provider") as RecoveredV2Checkout["provider"],
+    provider: requiredString(
+      row,
+      "provider",
+    ) as RecoveredV2Checkout["provider"],
     providerAccountScope: requiredString(row, "provider_account_scope"),
     intentStatus: requiredString(row, "intent_status"),
     attemptStatus: nullableString(row, "attempt_status"),
-    subjectKind: requiredString(row, "subject_kind") as RecoveredV2Checkout["subjectKind"],
+    subjectKind: requiredString(
+      row,
+      "subject_kind",
+    ) as RecoveredV2Checkout["subjectKind"],
     beneficiaryId: nullableString(row, "beneficiary_id"),
-    paymentMode: requiredString(row, "payment_mode") as RecoveredV2Checkout["paymentMode"],
+    paymentMode: requiredString(
+      row,
+      "payment_mode",
+    ) as RecoveredV2Checkout["paymentMode"],
     recurrenceInterval: nullableString(
       row,
       "recurrence_interval",
     ) as RecoveredV2Checkout["recurrenceInterval"],
     baseAmountUsdCents: requiredInteger(row, "base_amount_usd_cents"),
     chargedAmountMinor: requiredInteger(row, "charged_amount_minor"),
-    chargedCurrency: requiredString(row, "charged_currency") as RecoveredV2Checkout["chargedCurrency"],
+    chargedCurrency: requiredString(
+      row,
+      "charged_currency",
+    ) as RecoveredV2Checkout["chargedCurrency"],
     conversionRate: requiredNumber(row, "conversion_rate"),
     currencyQuoteAt: requiredTimestamp(row, "currency_quote_at"),
     quoteIssuedAt: nullableTimestamp(row, "quote_issued_at"),
@@ -482,10 +484,7 @@ async function prepareIntentV2(
 
   const row = oneRpcRow(data)
   return {
-    sponsorshipIntentId: requiredString(
-      row,
-      "resolved_sponsorship_intent_id",
-    ),
+    sponsorshipIntentId: requiredString(row, "resolved_sponsorship_intent_id"),
     intentStatus: requiredString(row, "resolved_intent_status"),
     isReplay: requiredBoolean(row, "replayed"),
   }
@@ -510,8 +509,7 @@ async function issueQuoteV2(
 
   const row = oneRpcRow(data)
   if (
-    requiredString(row, "checkout_operation_id") !==
-    input.checkoutOperationId
+    requiredString(row, "checkout_operation_id") !== input.checkoutOperationId
   ) {
     throw new SponsorshipCheckoutDependencyError()
   }
@@ -522,7 +520,10 @@ async function issueQuoteV2(
     providerAccountScope: requiredString(row, "provider_account_scope"),
     baseAmountUsdCents: requiredInteger(row, "base_amount_usd_cents"),
     chargedAmountMinor: requiredInteger(row, "charged_amount_minor"),
-    chargedCurrency: requiredString(row, "charged_currency") as IssuedQuote["chargedCurrency"],
+    chargedCurrency: requiredString(
+      row,
+      "charged_currency",
+    ) as IssuedQuote["chargedCurrency"],
     conversionRate: requiredNumber(row, "conversion_rate"),
     expiresAt: requiredTimestamp(row, "expires_at"),
   }
@@ -532,34 +533,30 @@ async function beginPaymentV2(
   supabase: ServiceRoleClient,
   input: BeginV2PaymentInput,
 ): Promise<BegunV2Payment> {
-  const { data, error } = await supabase.rpc(
-    "begin_sponsorship_payment_v2",
-    {
-      target_checkout_operation_id: input.checkoutOperationId,
-      target_sponsorship_intent_id: input.sponsorshipIntentId,
-      target_payment_quote_id: input.paymentQuoteId,
-      target_provider: input.provider,
-      target_provider_account_scope: input.providerAccountScope,
-      target_provider_idempotency_key: input.providerIdempotencyKey,
-      target_checkout_receipt_digest: input.checkoutReceiptDigest,
-      target_provider_request_schema_version:
-        input.providerRequest.schemaVersion,
-      target_provider_request_template_claims: input.providerRequestClaims,
-      target_provider_request_fingerprint: input.providerRequest.fingerprint,
-      target_provider_request_expires_at: input.providerRequest.expiresAt,
-      target_provider_request_ciphertext: input.providerRequest.ciphertext,
-      target_provider_request_encryption_key_version:
-        input.providerRequest.encryptionKeyVersion,
-      target_provider_request_ciphertext_sha256:
-        input.providerRequest.ciphertextSha256,
-      target_checkout_receipt_valid_for: "24 hours",
-      target_metadata: { checkout_surface: "hosted" },
-      context_request_id: input.requestContext.requestId,
-      context_trace_id: input.requestContext.traceId,
-      context_client_ip: input.requestContext.clientIp,
-      context_user_agent: input.requestContext.userAgent,
-    },
-  )
+  const { data, error } = await supabase.rpc("begin_sponsorship_payment_v2", {
+    target_checkout_operation_id: input.checkoutOperationId,
+    target_sponsorship_intent_id: input.sponsorshipIntentId,
+    target_payment_quote_id: input.paymentQuoteId,
+    target_provider: input.provider,
+    target_provider_account_scope: input.providerAccountScope,
+    target_provider_idempotency_key: input.providerIdempotencyKey,
+    target_checkout_receipt_digest: input.checkoutReceiptDigest,
+    target_provider_request_schema_version: input.providerRequest.schemaVersion,
+    target_provider_request_template_claims: input.providerRequestClaims,
+    target_provider_request_fingerprint: input.providerRequest.fingerprint,
+    target_provider_request_expires_at: input.providerRequest.expiresAt,
+    target_provider_request_ciphertext: input.providerRequest.ciphertext,
+    target_provider_request_encryption_key_version:
+      input.providerRequest.encryptionKeyVersion,
+    target_provider_request_ciphertext_sha256:
+      input.providerRequest.ciphertextSha256,
+    target_checkout_receipt_valid_for: "24 hours",
+    target_metadata: { checkout_surface: "hosted" },
+    context_request_id: input.requestContext.requestId,
+    context_trace_id: input.requestContext.traceId,
+    context_client_ip: input.requestContext.clientIp,
+    context_user_agent: input.requestContext.userAgent,
+  })
   if (error) rpcFailure(error)
 
   const row = oneRpcRow(data)
@@ -569,10 +566,16 @@ async function beginPaymentV2(
     sponsorshipIntentId: requiredString(row, "sponsorship_intent_id"),
     provider: requiredString(row, "provider") as BegunV2Payment["provider"],
     providerAccountScope: requiredString(row, "provider_account_scope"),
-    paymentMode: requiredString(row, "payment_mode") as BegunV2Payment["paymentMode"],
+    paymentMode: requiredString(
+      row,
+      "payment_mode",
+    ) as BegunV2Payment["paymentMode"],
     baseAmountUsdCents: requiredInteger(row, "base_amount_usd_cents"),
     chargedAmountMinor: requiredInteger(row, "charged_amount_minor"),
-    chargedCurrency: requiredString(row, "charged_currency") as BegunV2Payment["chargedCurrency"],
+    chargedCurrency: requiredString(
+      row,
+      "charged_currency",
+    ) as BegunV2Payment["chargedCurrency"],
     conversionRate: requiredNumber(row, "conversion_rate"),
     providerRequestExpiresAt: requiredTimestamp(
       row,
@@ -606,15 +609,9 @@ async function resumeCheckoutV2(
     paymentAttemptId: requiredString(row, "payment_attempt_id"),
     provider: requiredString(row, "provider") as ResumedV2Checkout["provider"],
     providerAccountScope: requiredString(row, "provider_account_scope"),
-    providerIdempotencyKey: requiredString(
-      row,
-      "provider_idempotency_key",
-    ),
+    providerIdempotencyKey: requiredString(row, "provider_idempotency_key"),
     attemptStatus: requiredString(row, "attempt_status"),
-    providerObjectAttached: requiredBoolean(
-      row,
-      "provider_object_attached",
-    ),
+    providerObjectAttached: requiredBoolean(row, "provider_object_attached"),
     providerRequestSchemaVersion: requiredInteger(
       row,
       "provider_request_schema_version",
@@ -664,8 +661,7 @@ async function settleProviderObjectV2(
         target_provider_object_id: input.providerObjectId,
         target_provider_request_schema_version:
           input.providerRequestSchemaVersion,
-        target_provider_request_fingerprint:
-          input.providerRequestFingerprint,
+        target_provider_request_fingerprint: input.providerRequestFingerprint,
         target_provider_request_expires_at: input.providerRequestExpiresAt,
         target_recovery_lease_token: null,
         context_request_id: input.requestContext.requestId,
@@ -728,11 +724,7 @@ function createCheckoutV2Dependencies(
     crypto: sponsorshipCrypto,
     authorizeHost: (host) => authorizeCheckoutHost(supabase, host),
     loadBeneficiary: (id, allowCurrentlyIneligible) =>
-      loadAuthoritativeBeneficiary(
-        supabase,
-        id,
-        allowCurrentlyIneligible,
-      ),
+      loadAuthoritativeBeneficiary(supabase, id, allowCurrentlyIneligible),
     recoverCheckout: (input) => recoverCheckoutV2(supabase, input),
     prepareIntent: (input) => prepareIntentV2(supabase, input),
     issueQuote: (input) => issueQuoteV2(supabase, input),
@@ -753,8 +745,7 @@ function createCheckoutV2Dependencies(
         expiresAtUnixSeconds: session.expires_at,
       }
     },
-    settleProviderObject: (input) =>
-      settleProviderObjectV2(supabase, input),
+    settleProviderObject: (input) => settleProviderObjectV2(supabase, input),
     now: () => new Date(),
   }
 }
@@ -782,12 +773,7 @@ async function authenticatedCheckoutUser() {
     error,
   } = await supabase.auth.getUser()
 
-  if (
-    error ||
-    !user ||
-    !user.email ||
-    !user.email_confirmed_at
-  ) {
+  if (error || !user || !user.email || !user.email_confirmed_at) {
     return null
   }
   return { id: user.id, email: user.email }
@@ -804,7 +790,7 @@ export async function POST(request: Request) {
   ) {
     return NextResponse.json(
       { error: "Invalid checkout request" },
-      { status: 400 },
+      { status: 400, headers: CHECKOUT_RESPONSE_HEADERS },
     )
   }
 
@@ -812,7 +798,7 @@ export async function POST(request: Request) {
   if (Number.isFinite(contentLength) && contentLength > MAXIMUM_REQUEST_BYTES) {
     return NextResponse.json(
       { error: "Checkout request is too large" },
-      { status: 413 },
+      { status: 413, headers: CHECKOUT_RESPONSE_HEADERS },
     )
   }
 
@@ -822,13 +808,13 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json(
       { error: "Invalid checkout request" },
-      { status: 400 },
+      { status: 400, headers: CHECKOUT_RESPONSE_HEADERS },
     )
   }
   if (Buffer.byteLength(serializedBody, "utf8") > MAXIMUM_REQUEST_BYTES) {
     return NextResponse.json(
       { error: "Checkout request is too large" },
-      { status: 413 },
+      { status: 413, headers: CHECKOUT_RESPONSE_HEADERS },
     )
   }
 
@@ -838,31 +824,28 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json(
       { error: "Invalid checkout request" },
-      { status: 400 },
+      { status: 400, headers: CHECKOUT_RESPONSE_HEADERS },
     )
   }
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return NextResponse.json(
       { error: "Invalid checkout request" },
-      { status: 400 },
+      { status: 400, headers: CHECKOUT_RESPONSE_HEADERS },
     )
   }
 
   try {
-    const host = resolveSponsorshipCheckoutHost(
-      request.headers.get("host"),
-      {
-        allowLocalhostDevelopment: process.env.NODE_ENV !== "production",
-        allowedPrimaryHostnames: allowedPrimaryHostnames(),
-      },
-    )
+    const host = resolveSponsorshipCheckoutHost(request.headers.get("host"), {
+      allowLocalhostDevelopment: process.env.NODE_ENV !== "production",
+      allowedPrimaryHostnames: allowedPrimaryHostnames(),
+    })
     const supabase = createServiceRoleClient()
     const result = await createStripeSponsorshipCheckoutV2(
       {
         body,
         host,
         authenticatedUser: await authenticatedCheckoutUser(),
-        visitorToken: readSponsorshipVisitorCookie(
+        visitorToken: await readSponsorshipVisitorCookie(
           request.headers.get("cookie"),
         ),
         requestContext: context,
@@ -885,7 +868,10 @@ export async function POST(request: Request) {
     })
     return NextResponse.json(
       { error: safeError.message },
-      { status: safeError.httpStatus },
+      {
+        status: safeError.httpStatus,
+        headers: CHECKOUT_RESPONSE_HEADERS,
+      },
     )
   }
 }

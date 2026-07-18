@@ -7,27 +7,39 @@ import {
   getQualifiedExposureContext,
   shouldRejectExposureRequest,
 } from "@/lib/sponsorships/exposure"
-import { SPONSORSHIP_VISITOR_COOKIE_NAME } from "@/lib/sponsorships/visitorCookie"
-import {
-  createClient,
-  createServiceRoleClient,
-} from "@/utils/supabase/server"
+import { readSponsorshipVisitorCookie } from "@/lib/sponsorships/visitorCookie"
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 
 export const runtime = "nodejs"
 
-const NO_CONTENT = { status: 204 } as const
+const NO_CONTENT = {
+  status: 204,
+  headers: {
+    "Cache-Control": "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    "Referrer-Policy": "no-referrer",
+    Vary: "Host, Cookie",
+    "X-Content-Type-Options": "nosniff",
+  },
+} as const
 
 function noContent() {
   return new NextResponse(null, NO_CONTENT)
 }
 
 export async function POST(request: NextRequest) {
-  if (shouldRejectExposureRequest(request.headers)) return noContent()
-
   const host = resolveAdvocateHost(request.headers.get("host"), {
     allowLocalhostDevelopment: process.env.NODE_ENV === "development",
   })
   if (host.kind !== "tenant-candidate") return noContent()
+  const localPort = host.requestPort === null ? "" : `:${host.requestPort}`
+  const expectedOrigin =
+    host.environment === "local-development"
+      ? `http://${host.requestHostname}${localPort}`
+      : `https://${host.requestHostname}`
+  if (shouldRejectExposureRequest(request.headers, expectedOrigin)) {
+    return noContent()
+  }
 
   const context = getQualifiedExposureContext(
     request.headers.get("referer"),
@@ -36,9 +48,9 @@ export async function POST(request: NextRequest) {
   )
   if (!context) return noContent()
 
-  const visitorToken = request.cookies.get(
-    SPONSORSHIP_VISITOR_COOKIE_NAME,
-  )?.value
+  const visitorToken = await readSponsorshipVisitorCookie(
+    request.headers.get("cookie"),
+  )
   if (!visitorToken) return noContent()
 
   try {
@@ -80,10 +92,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error("Qualified advocate exposure request failed", {
-      error:
-        error instanceof Error
-          ? error.name
-          : "UnknownExposureError",
+      error: error instanceof Error ? error.name : "UnknownExposureError",
     })
   }
 

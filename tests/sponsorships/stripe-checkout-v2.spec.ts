@@ -17,6 +17,7 @@ import type {
   SettleV2ProviderObjectInput,
   StripeSponsorshipCheckoutV2Dependencies,
 } from "../../src/lib/sponsorships/checkout/stripeCheckout"
+import type { VerifiedSponsorshipVisitorToken } from "../../src/lib/sponsorships/visitorCookie"
 
 type NodeModuleLoader = (
   request: string,
@@ -76,7 +77,8 @@ const NOW = new Date("2026-07-18T08:00:00.000Z")
 const QUOTE_EXPIRES_AT = "2026-07-18T08:15:00.000Z"
 const REQUEST_EXPIRES_AT = "2026-07-18T08:31:00.000Z"
 const APP_SECRET = Buffer.alloc(48, 11).toString("base64")
-const VISITOR_TOKEN = Buffer.alloc(32, 7).toString("base64url")
+const VISITOR_TOKEN =
+  `v1.${Buffer.alloc(32, 7).toString("base64url")}.${"A".repeat(22)}` as VerifiedSponsorshipVisitorToken
 
 const beneficiary: AuthoritativeBeneficiary = {
   id: BENEFICIARY_ID,

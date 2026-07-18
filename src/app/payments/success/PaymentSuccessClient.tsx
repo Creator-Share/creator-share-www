@@ -17,6 +17,7 @@ import {
   classifyLegacyStripeReturnResponse,
   type LegacyPaymentReturnOutcome,
 } from "@/lib/payments/legacyPaymentReturn"
+import { usePublicSite } from "@/components/advocates/PublicSiteProvider"
 
 // Check if PayPal is enabled
 const isPayPalEnabled = !!process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
@@ -232,13 +233,19 @@ function OpaqueCheckoutResult({
 }
 
 export default function PaymentSuccessClient() {
+  const publicSite = usePublicSite()
   const searchParams = useSearchParams()
   const router = useRouter()
   const [status, setStatus] = useState<PaymentStatus | null>(null)
-  const [opaqueStatus, setOpaqueStatus] =
-    useState<OpaqueCheckoutStatus | null>(null)
+  const [opaqueStatus, setOpaqueStatus] = useState<OpaqueCheckoutStatus | null>(
+    null,
+  )
   const [opaqueProvider, setOpaqueProvider] =
     useState<CheckoutOperationProvider>("stripe")
+  const returnHome = () => {
+    if (publicSite.kind === "payment") window.location.assign("/")
+    else router.push("/")
+  }
 
   useEffect(() => {
     const storedReceipt = readCheckoutReceipt({
@@ -329,7 +336,8 @@ export default function PaymentSuccessClient() {
                 : outcome === "processing"
                   ? "We are still confirming this sponsorship. Please check the email address used at checkout."
                   : "Stripe did not confirm a successful sponsorship.",
-            details: outcome === "success" ? safeStripeDetails(data) : undefined,
+            details:
+              outcome === "success" ? safeStripeDetails(data) : undefined,
           })
         })
         .catch(() => {
@@ -343,7 +351,7 @@ export default function PaymentSuccessClient() {
       fetch(
         `/api/paypal/verify?sponsorship_id=${
           returnMode.subscriptionId || ""
-        }&token=${returnMode.token || ""}`
+        }&token=${returnMode.token || ""}`,
       )
         .then(async (res) => {
           if (!res.ok) throw new Error("Invalid PayPal session")
@@ -358,7 +366,8 @@ export default function PaymentSuccessClient() {
                 : outcome === "processing"
                   ? "We are still confirming this sponsorship. Please check the email address used at checkout."
                   : "PayPal did not confirm an active sponsorship.",
-            details: outcome === "success" ? safePayPalDetails(data) : undefined,
+            details:
+              outcome === "success" ? safePayPalDetails(data) : undefined,
           })
         })
         .catch(() => {
@@ -382,7 +391,7 @@ export default function PaymentSuccessClient() {
       <OpaqueCheckoutResult
         provider={opaqueProvider}
         status={opaqueStatus}
-        onReturnHome={() => router.push("/")}
+        onReturnHome={returnHome}
       />
     )
   }
@@ -398,7 +407,7 @@ export default function PaymentSuccessClient() {
               ? "processing"
               : "failed"
         }
-        onReturnHome={() => router.push("/")}
+        onReturnHome={returnHome}
         messageOverride={status?.message}
       />
     )
@@ -567,8 +576,8 @@ export default function PaymentSuccessClient() {
             Your generous sponsorship payment has been successfully processed.
             <br />
             Because of you,{" "}
-            <span style={{ fontWeight: 600 }}>{getBeneficiaryName()}</span> is one
-            step closer to a brighter future.
+            <span style={{ fontWeight: 600 }}>{getBeneficiaryName()}</span> is
+            one step closer to a brighter future.
           </p>
           <hr style={{ margin: "1.5rem 0" }} />
           <div style={{ marginBottom: "1.5rem" }}>
@@ -624,8 +633,8 @@ export default function PaymentSuccessClient() {
               marginBottom: "1.5rem",
             }}
           >
-            You'll receive updates about {getBeneficiaryName()}'s progress and how
-            your support is making a difference.
+            You'll receive updates about {getBeneficiaryName()}'s progress and
+            how your support is making a difference.
           </div>
           <button
             style={{
@@ -639,7 +648,7 @@ export default function PaymentSuccessClient() {
               fontSize: "1rem",
               cursor: "pointer",
             }}
-            onClick={() => router.push("/")}
+            onClick={returnHome}
           >
             Back to Home
           </button>

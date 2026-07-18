@@ -71,10 +71,23 @@ test.describe("advocate tenant host resolution", () => {
     }
   })
 
-  test("rejects ports on production and unrelated hosts", () => {
+  test("normalizes standard production ports and rejects unexpected ports", () => {
     expect(resolveAdvocateHost("alice.creatorshare.com:443")).toEqual({
-      kind: "invalid",
-      reason: "port-not-allowed",
+      kind: "tenant-candidate",
+      environment: "production",
+      requestHostname: "alice.creatorshare.com",
+      requestPort: null,
+      tenantLabel: "alice",
+      domainLookup: {
+        hostname: "alice.creatorshare.com",
+        requiredStatus: "active",
+      },
+    })
+    expect(resolveAdvocateHost("creatorshare.com:80")).toEqual({
+      kind: "non-tenant",
+      reason: "tenant-root",
+      normalizedHostname: "creatorshare.com",
+      port: null,
     })
     expect(resolveAdvocateHost("example.com:3000")).toEqual({
       kind: "invalid",

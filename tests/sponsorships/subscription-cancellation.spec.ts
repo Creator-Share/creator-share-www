@@ -575,6 +575,8 @@ test("the route has no direct subscription write, bespoke beneficiary mutation, 
   expect(source).toContain("parseSubscriptionCancellationBody")
   expect(source).toContain("cancelSponsorSubscription")
   expect(source).toContain("request.body.getReader()")
+  expect(source).toContain("resolveTrustedPrimaryRequestOrigin")
+  expect(source).not.toContain("resolveTrustedCheckoutRequestOrigin")
 })
 
 test("the sponsor UI sends only the internal subscription UUID", async () => {

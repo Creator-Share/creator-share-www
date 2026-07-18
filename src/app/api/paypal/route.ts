@@ -34,6 +34,7 @@ const RESPONSE_HEADERS = {
   "Cache-Control": "no-store, max-age=0",
   Pragma: "no-cache",
   "Referrer-Policy": "no-referrer",
+  Vary: "Host, Origin, Cookie",
   "X-Content-Type-Options": "nosniff",
 } as const
 
@@ -66,8 +67,9 @@ function requestContext(request: Request): SponsorshipCheckoutRequestContext {
 function configuredHostname(value: string | undefined): string | null {
   if (!value) return null
   try {
-    return new URL(value.includes("://") ? value : `https://${value}`).hostname
-      .toLowerCase()
+    return new URL(
+      value.includes("://") ? value : `https://${value}`,
+    ).hostname.toLowerCase()
   } catch {
     return null
   }
@@ -194,12 +196,16 @@ export async function POST(request: Request) {
   try {
     const body = await readBody(request)
     if (!isRecord(body)) throw checkoutError("invalid-request")
+    const host = resolveSponsorshipCheckoutHost(request.headers.get("host"), {
+      allowLocalhostDevelopment: process.env.NODE_ENV !== "production",
+      allowedPrimaryHostnames: allowedPrimaryHostnames(),
+    })
     const serviceClient = createServiceRoleClient()
 
     if (body.action === "capture") {
       const capture = captureBody(body)
       const result = await capturePayPalSponsorshipCheckoutV2(
-        { ...capture, requestContext: context },
+        { ...capture, host, requestContext: context },
         createCapturePayPalSponsorshipDependencies(serviceClient),
       )
       return NextResponse.json(
@@ -213,19 +219,12 @@ export async function POST(request: Request) {
       )
     }
 
-    const host = resolveSponsorshipCheckoutHost(
-      request.headers.get("host"),
-      {
-        allowLocalhostDevelopment: process.env.NODE_ENV !== "production",
-        allowedPrimaryHostnames: allowedPrimaryHostnames(),
-      },
-    )
     const result = await createPayPalSponsorshipCheckoutV2(
       {
         body,
         host,
         authenticatedUser: await authenticatedCheckoutUser(),
-        visitorToken: readSponsorshipVisitorCookie(
+        visitorToken: await readSponsorshipVisitorCookie(
           request.headers.get("cookie"),
         ),
         requestContext: context,

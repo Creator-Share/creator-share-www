@@ -16,9 +16,8 @@ type NodeModuleLoader = (
 ) => unknown
 type StatusModule = typeof import("../../src/lib/sponsorships/checkout/status")
 type CryptoModule = typeof import("../../src/lib/sponsorships/crypto")
-type RequestSecurityModule = typeof import(
-  "../../src/lib/sponsorships/checkout/requestSecurity"
-)
+type RequestSecurityModule =
+  typeof import("../../src/lib/sponsorships/checkout/requestSecurity")
 
 const nodeModule = Module as unknown as { _load: NodeModuleLoader }
 const originalModuleLoad = nodeModule._load
@@ -40,6 +39,7 @@ const { parseCheckoutStatusBody, readPublicCheckoutStatus } = testRequire(
 const {
   isTrustedCheckoutJsonRequest,
   resolveTrustedCheckoutRequestOrigin,
+  resolveTrustedPrimaryRequestOrigin,
 } = testRequire(
   "../../src/lib/sponsorships/checkout/requestSecurity",
 ) as RequestSecurityModule
@@ -87,6 +87,12 @@ test.describe("checkout request security", () => {
     ).toBe("https://alice.creatorshare.com")
     expect(
       resolveTrustedCheckoutRequestOrigin({
+        rawHost: "alice.creatorshare.com:443",
+        environment: { NODE_ENV: "production" },
+      }),
+    ).toBe("https://alice.creatorshare.com")
+    expect(
+      resolveTrustedCheckoutRequestOrigin({
         rawHost: "alice.localhost:3000",
         environment: { NODE_ENV: "development" },
       }),
@@ -97,12 +103,41 @@ test.describe("checkout request security", () => {
     for (const rawHost of [
       "attacker.example",
       "creatorshare.com.attacker.example",
-      "alice.creatorshare.com:443",
+      "alice.creatorshare.com:444",
       "api.creatorshare.com",
       "localhost:3000",
     ]) {
       expect(
         resolveTrustedCheckoutRequestOrigin({
+          rawHost,
+          environment: { NODE_ENV: "production" },
+        }),
+      ).toBeNull()
+    }
+  })
+
+  test("keeps account payment administration on approved primary origins", () => {
+    expect(
+      resolveTrustedPrimaryRequestOrigin({
+        rawHost: "creatorshare.com",
+        environment: { NODE_ENV: "production" },
+      }),
+    ).toBe("https://creatorshare.com")
+    expect(
+      resolveTrustedPrimaryRequestOrigin({
+        rawHost: "localhost:3000",
+        environment: { NODE_ENV: "development" },
+      }),
+    ).toBe("http://localhost:3000")
+
+    for (const rawHost of [
+      "alice.creatorshare.com",
+      "admin.creatorshare.com",
+      "nested.alice.creatorshare.com",
+      "attacker.example",
+    ]) {
+      expect(
+        resolveTrustedPrimaryRequestOrigin({
           rawHost,
           environment: { NODE_ENV: "production" },
         }),
@@ -147,9 +182,9 @@ test.describe("checkout request security", () => {
 
 test.describe("opaque checkout status", () => {
   test("parses only one canonical receipt field", () => {
-    expect(parseCheckoutStatusBody(JSON.stringify({ receipt: receipt.token }))).toBe(
-      receipt.token,
-    )
+    expect(
+      parseCheckoutStatusBody(JSON.stringify({ receipt: receipt.token })),
+    ).toBe(receipt.token)
     for (const body of [
       "not-json",
       JSON.stringify({}),

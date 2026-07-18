@@ -10,13 +10,17 @@ import {
 import type {
   OpaqueToken,
   SponsorshipCrypto,
-  SupabaseRpcBytea,
   VersionedEmailDigest,
 } from "@/lib/sponsorships/crypto"
 import {
-  isValidSponsorshipVisitorToken,
-  SPONSORSHIP_VISITOR_COOKIE_NAME,
+  toSupabaseRpcBytea,
+  type SupabaseRpcBytea,
+} from "@/lib/sponsorships/crypto"
+import {
+  sponsorshipVisitorDigestFromToken,
+  type VerifiedSponsorshipVisitorToken,
 } from "@/lib/sponsorships/visitorCookie"
+export { readSponsorshipVisitorCookie } from "@/lib/sponsorships/visitorCookie"
 import type { StripeRegion } from "@/lib/stripe/config"
 import { getStripeRegionForPaymentCurrency } from "@/lib/stripe/currencyRouting"
 import {
@@ -38,6 +42,7 @@ export const SPONSORSHIP_CURRENCY_RATE_SOURCE =
   "creator-share-config-rates-2026-05-28"
 
 const MAXIMUM_SPONSORSHIP_USD_CENTS = 2_147_483_647
+const CHECKOUT_RECEIPT_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const CHECKOUT_SESSION_LIFETIME_SECONDS = 31 * 60
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -353,7 +358,7 @@ export interface CreateStripeSponsorshipCheckoutInput {
   body: unknown
   host: ResolvedSponsorshipCheckoutHost
   authenticatedUser: AuthenticatedCheckoutUser | null
-  visitorToken: string | null
+  visitorToken: VerifiedSponsorshipVisitorToken | null
   requestContext: SponsorshipCheckoutRequestContext
 }
 
@@ -780,29 +785,12 @@ export function resolveSponsorshipCheckoutHost(
   }
 }
 
-export function readSponsorshipVisitorCookie(
-  cookieHeader: string | null,
-): string | null {
-  if (!cookieHeader) return null
-
-  const values = cookieHeader
-    .split(";")
-    .map((part) => part.trim())
-    .filter((part) => part.startsWith(`${SPONSORSHIP_VISITOR_COOKIE_NAME}=`))
-    .map((part) => part.slice(SPONSORSHIP_VISITOR_COOKIE_NAME.length + 1))
-  const distinctValues = new Set(values)
-
-  if (distinctValues.size !== 1) return null
-  const value = values[0]
-  return isValidSponsorshipVisitorToken(value) ? value : null
-}
-
 export function sponsorshipVisitorDigest(
-  visitorToken: string | null,
-  crypto: SponsorshipCrypto,
+  visitorToken: VerifiedSponsorshipVisitorToken | null,
 ): SupabaseRpcBytea | null {
-  if (!isValidSponsorshipVisitorToken(visitorToken)) return null
-  return `\\x${crypto.digestOpaqueToken(visitorToken).toString("hex")}`
+  if (visitorToken === null) return null
+  const digest = sponsorshipVisitorDigestFromToken(visitorToken)
+  return digest === null ? null : toSupabaseRpcBytea(digest)
 }
 
 const visitorDigest = sponsorshipVisitorDigest
@@ -922,7 +910,7 @@ function isTrustedStripeCheckoutUrl(value: string): boolean {
 function assertReceipt(receipt: OpaqueToken): void {
   if (
     typeof receipt.token !== "string" ||
-    !isValidSponsorshipVisitorToken(receipt.token) ||
+    !CHECKOUT_RECEIPT_PATTERN.test(receipt.token) ||
     !/^\\x[0-9a-f]{64}$/.test(receipt.digestRpcBytea)
   ) {
     throw checkoutError("checkout-failed")
@@ -989,10 +977,7 @@ export async function createStripeSponsorshipCheckout(
       operationId: requestedOperationId,
       source: input.host.source,
       advocateHostname: input.host.advocateHostname,
-      visitorTokenDigest: visitorDigest(
-        input.visitorToken,
-        dependencies.crypto,
-      ),
+      visitorTokenDigest: visitorDigest(input.visitorToken),
       authUserId: input.authenticatedUser?.id ?? null,
       contactEmailDigest,
       subjectKind,
@@ -1355,7 +1340,7 @@ export async function createStripeSponsorshipCheckoutV2(
     idempotencyKey: `checkout-v2:${operationId}`,
     source: input.host.source,
     advocateHostname: input.host.advocateHostname,
-    visitorTokenDigest: visitorDigest(input.visitorToken, dependencies.crypto),
+    visitorTokenDigest: visitorDigest(input.visitorToken),
     authUserId: input.authenticatedUser?.id ?? null,
     contactEmailDigest,
     subjectKind,

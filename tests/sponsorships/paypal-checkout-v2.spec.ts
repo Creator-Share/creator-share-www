@@ -20,6 +20,7 @@ import type {
   RecoveredV2Checkout,
   ResumeV2CheckoutInput,
 } from "../../src/lib/sponsorships/checkout/stripeCheckout"
+import type { VerifiedSponsorshipVisitorToken } from "../../src/lib/sponsorships/visitorCookie"
 
 type NodeModuleLoader = (
   request: string,
@@ -86,7 +87,8 @@ const NOW = new Date("2026-07-18T08:00:00.000Z")
 const QUOTE_EXPIRES_AT = "2026-07-18T08:15:00.000Z"
 const REQUEST_EXPIRES_AT = "2026-07-18T08:31:00.000Z"
 const APP_SECRET = Buffer.alloc(48, 13).toString("base64")
-const VISITOR_TOKEN = Buffer.alloc(32, 8).toString("base64url")
+const VISITOR_TOKEN =
+  `v1.${Buffer.alloc(32, 8).toString("base64url")}.${"A".repeat(22)}` as VerifiedSponsorshipVisitorToken
 
 const beneficiary: AuthoritativeBeneficiary = {
   id: BENEFICIARY_ID,
@@ -556,6 +558,7 @@ function captureDependencies(options: { succeeded?: boolean } = {}) {
   const ingested: VerifiedPayPalCaptureInput[] = []
   let captureCalls = 0
   let materialCalls = 0
+  let terminalOriginCalls = 0
   const dependencies: CapturePayPalSponsorshipDependencies = {
     crypto,
     async recoverCheckout() {
@@ -568,6 +571,13 @@ function captureDependencies(options: { succeeded?: boolean } = {}) {
     async readCaptureMaterial() {
       materialCalls += 1
       return material
+    },
+    async readTerminalOrigin() {
+      terminalOriginCalls += 1
+      return {
+        source: "advocate_domain",
+        sourceHost: "alice.creatorshare.com",
+      }
     },
     async captureOrder(orderId, request) {
       captureCalls += 1
@@ -594,6 +604,7 @@ function captureDependencies(options: { succeeded?: boolean } = {}) {
     ingested,
     captureCalls: () => captureCalls,
     materialCalls: () => materialCalls,
+    terminalOriginCalls: () => terminalOriginCalls,
   }
 }
 
@@ -604,6 +615,7 @@ test.describe("v2 server owned PayPal capture", () => {
       {
         operationId: OPERATION_ID,
         checkoutReceipt: fixture.receipt.token,
+        host: checkoutInput().host,
         requestContext: checkoutInput().requestContext,
       },
       fixture.dependencies,
@@ -633,6 +645,7 @@ test.describe("v2 server owned PayPal capture", () => {
       {
         operationId: OPERATION_ID,
         checkoutReceipt: fixture.receipt.token,
+        host: checkoutInput().host,
         requestContext: checkoutInput().requestContext,
       },
       fixture.dependencies,
@@ -685,6 +698,7 @@ test.describe("v2 server owned PayPal capture", () => {
         {
           operationId: OPERATION_ID,
           checkoutReceipt: fixture.receipt.token,
+          host: checkoutInput().host,
           requestContext: checkoutInput().requestContext,
         },
         fixture.dependencies,
@@ -694,6 +708,29 @@ test.describe("v2 server owned PayPal capture", () => {
       statusUrl: "/payments/success?provider=paypal",
     })
     expect(fixture.materialCalls()).toBe(0)
+    expect(fixture.terminalOriginCalls()).toBe(1)
+    expect(fixture.captureCalls()).toBe(0)
+  })
+
+  test("binds an already succeeded capture replay to its sealed checkout origin", async () => {
+    const fixture = captureDependencies({ succeeded: true })
+    await expect(
+      capturePayPalSponsorshipCheckoutV2(
+        {
+          operationId: OPERATION_ID,
+          checkoutReceipt: fixture.receipt.token,
+          host: {
+            ...checkoutInput().host,
+            advocateHostname: "other.creatorshare.com",
+            checkoutBaseUrl: "https://other.creatorshare.com",
+          },
+          requestContext: checkoutInput().requestContext,
+        },
+        fixture.dependencies,
+      ),
+    ).rejects.toMatchObject({ code: "invalid-request" })
+    expect(fixture.materialCalls()).toBe(0)
+    expect(fixture.terminalOriginCalls()).toBe(1)
     expect(fixture.captureCalls()).toBe(0)
   })
 
@@ -708,11 +745,56 @@ test.describe("v2 server owned PayPal capture", () => {
         {
           operationId: OPERATION_ID,
           checkoutReceipt: otherReceipt.token,
+          host: checkoutInput().host,
           requestContext: checkoutInput().requestContext,
         },
         fixture.dependencies,
       ),
     ).rejects.toMatchObject({ code: "invalid-request" })
     expect(fixture.captureCalls()).toBe(0)
+  })
+
+  test("rejects capture from a different checkout origin before calling PayPal", async () => {
+    const fixture = captureDependencies()
+    await expect(
+      capturePayPalSponsorshipCheckoutV2(
+        {
+          operationId: OPERATION_ID,
+          checkoutReceipt: fixture.receipt.token,
+          host: {
+            source: "advocate_domain",
+            advocateHostname: "bob.creatorshare.com",
+            checkoutBaseUrl: "https://bob.creatorshare.com",
+          },
+          requestContext: checkoutInput().requestContext,
+        },
+        fixture.dependencies,
+      ),
+    ).rejects.toMatchObject({ code: "invalid-request" })
+    expect(fixture.materialCalls()).toBe(1)
+    expect(fixture.captureCalls()).toBe(0)
+    expect(fixture.ingested).toHaveLength(0)
+  })
+
+  test("rejects advocate capture from the primary site before calling PayPal", async () => {
+    const fixture = captureDependencies()
+    await expect(
+      capturePayPalSponsorshipCheckoutV2(
+        {
+          operationId: OPERATION_ID,
+          checkoutReceipt: fixture.receipt.token,
+          host: {
+            source: "primary_site",
+            advocateHostname: null,
+            checkoutBaseUrl: "https://creatorshare.com",
+          },
+          requestContext: checkoutInput().requestContext,
+        },
+        fixture.dependencies,
+      ),
+    ).rejects.toMatchObject({ code: "invalid-request" })
+    expect(fixture.materialCalls()).toBe(1)
+    expect(fixture.captureCalls()).toBe(0)
+    expect(fixture.ingested).toHaveLength(0)
   })
 })

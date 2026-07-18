@@ -1,23 +1,37 @@
 "use client"
 
 import { useEffect } from "react"
+import { usePathname } from "next/navigation"
 
 import { resolveAdvocateHost } from "@/lib/advocates/host"
+import { isQualifyingAdvocateExposurePagePath } from "@/lib/advocates/publicBrowsePaths"
+import { PUBLIC_PATH_CHANGE_EVENT } from "@/lib/advocates/publicPathChanges"
 
 const EXPOSURE_ENDPOINT = "/api/advocates/exposure"
 
 export function AdvocateExposureTracker() {
+  const pathname = usePathname()
+
   useEffect(() => {
+    if (window.self !== window.top) return
+
     const host = resolveAdvocateHost(window.location.host, {
       allowLocalhostDevelopment: process.env.NODE_ENV === "development",
     })
     if (host.kind !== "tenant-candidate") return
 
-    let recorded = false
+    let recordedPath: string | null = null
 
-    const recordWhenVisible = () => {
-      if (recorded || document.visibilityState !== "visible") return
-      recorded = true
+    const recordCurrentPathWhenVisible = () => {
+      const currentPath = window.location.pathname
+      if (
+        document.visibilityState !== "visible" ||
+        currentPath === recordedPath ||
+        !isQualifyingAdvocateExposurePagePath(currentPath)
+      ) {
+        return
+      }
+      recordedPath = currentPath
       void fetch(EXPOSURE_ENDPOINT, {
         method: "POST",
         cache: "no-store",
@@ -26,12 +40,25 @@ export function AdvocateExposureTracker() {
       }).catch(() => undefined)
     }
 
-    recordWhenVisible()
-    document.addEventListener("visibilitychange", recordWhenVisible)
+    recordCurrentPathWhenVisible()
+    document.addEventListener("visibilitychange", recordCurrentPathWhenVisible)
+    window.addEventListener("popstate", recordCurrentPathWhenVisible)
+    window.addEventListener(
+      PUBLIC_PATH_CHANGE_EVENT,
+      recordCurrentPathWhenVisible,
+    )
     return () => {
-      document.removeEventListener("visibilitychange", recordWhenVisible)
+      document.removeEventListener(
+        "visibilitychange",
+        recordCurrentPathWhenVisible,
+      )
+      window.removeEventListener("popstate", recordCurrentPathWhenVisible)
+      window.removeEventListener(
+        PUBLIC_PATH_CHANGE_EVENT,
+        recordCurrentPathWhenVisible,
+      )
     }
-  }, [])
+  }, [pathname])
 
   return null
 }

@@ -17,16 +17,14 @@ export const dynamic = "force-dynamic"
 
 const MAXIMUM_STATUS_BODY_BYTES = 1024
 
-function response(
-  body: Record<string, unknown>,
-  status = 200,
-): NextResponse {
+function response(body: Record<string, unknown>, status = 200): NextResponse {
   return NextResponse.json(body, {
     status,
     headers: {
       "Cache-Control": "no-store, max-age=0",
       Pragma: "no-cache",
       "Referrer-Policy": "no-referrer",
+      Vary: "Host, Origin",
       "X-Content-Type-Options": "nosniff",
     },
   })

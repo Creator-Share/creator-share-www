@@ -5,6 +5,10 @@ import { resolve } from "node:path"
 import { expect, test } from "@playwright/test"
 
 type ExposureModule = typeof import("../../src/lib/sponsorships/exposure")
+type StripeCheckoutModule =
+  typeof import("../../src/lib/sponsorships/checkout/stripeCheckout")
+type VisitorCookieModule =
+  typeof import("../../src/lib/sponsorships/visitorCookie")
 type NodeModuleLoader = (
   request: string,
   parent: unknown,
@@ -28,6 +32,12 @@ const testRequire = createRequire(
 const exposure = testRequire(
   "../../src/lib/sponsorships/exposure",
 ) as ExposureModule
+const stripeCheckout = testRequire(
+  "../../src/lib/sponsorships/checkout/stripeCheckout",
+) as StripeCheckoutModule
+const visitorCookie = testRequire(
+  "../../src/lib/sponsorships/visitorCookie",
+) as VisitorCookieModule
 nodeModule._load = originalModuleLoad
 
 const {
@@ -36,34 +46,69 @@ const {
   getQualifiedExposureContext,
   shouldRejectExposureRequest,
 } = exposure
+const { sponsorshipVisitorDigest } = stripeCheckout
+const { createSponsorshipVisitorToken } = visitorCookie
 
-const TOKEN = "A".repeat(43)
+let TOKEN: NonNullable<
+  Awaited<ReturnType<typeof createSponsorshipVisitorToken>>
+>
+
+test.beforeAll(async () => {
+  const token = await createSponsorshipVisitorToken({ NODE_ENV: "test" })
+  if (token === null) throw new Error("Visitor test token was not created")
+  TOKEN = token
+})
 
 test("accepts a same-origin browser request and rejects automation hints", () => {
   expect(
     shouldRejectExposureRequest(
       new Headers({
+        origin: "https://hope.creatorshare.com",
         "sec-fetch-site": "same-origin",
         "user-agent": "Mozilla/5.0 Mobile Safari/605.1.15",
       }),
+      "https://hope.creatorshare.com",
     ),
   ).toBe(false)
   expect(
     shouldRejectExposureRequest(
       new Headers({ purpose: "prefetch", "user-agent": "Mozilla/5.0" }),
+      "https://hope.creatorshare.com",
     ),
   ).toBe(true)
   expect(
     shouldRejectExposureRequest(
       new Headers({ "user-agent": "Googlebot/2.1" }),
+      "https://hope.creatorshare.com",
     ),
   ).toBe(true)
   expect(
     shouldRejectExposureRequest(
       new Headers({
+        origin: "https://hope.creatorshare.com",
         "sec-fetch-site": "cross-site",
         "user-agent": "Mozilla/5.0",
       }),
+      "https://hope.creatorshare.com",
+    ),
+  ).toBe(true)
+  expect(
+    shouldRejectExposureRequest(
+      new Headers({
+        origin: "https://other.creatorshare.com",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0",
+      }),
+      "https://hope.creatorshare.com",
+    ),
+  ).toBe(true)
+  expect(
+    shouldRejectExposureRequest(
+      new Headers({
+        origin: "https://hope.creatorshare.com",
+        "user-agent": "Mozilla/5.0",
+      }),
+      "https://hope.creatorshare.com",
     ),
   ).toBe(true)
 })
@@ -90,6 +135,23 @@ test("derives page context only from the exact same host referrer", () => {
       3000,
     ),
   ).toEqual({ pagePath: "/sponsorships/amina", referrerHost: null })
+
+  for (const pathname of [
+    "/sponsorships",
+    "/payments/success",
+    "/payments/failed",
+    "/auth/callback",
+    "/admin",
+    "/api/beneficiaries/get",
+  ]) {
+    expect(
+      getQualifiedExposureContext(
+        `https://hope.creatorshare.com${pathname}`,
+        "hope.creatorshare.com",
+        null,
+      ),
+    ).toBeNull()
+  }
 })
 
 test("hashes the opaque visitor token before database transport", () => {
@@ -98,9 +160,15 @@ test("hashes the opaque visitor token before database transport", () => {
   expect(result.digest).toHaveLength(32)
   expect(result.digestRpcBytea).toMatch(/^\\x[0-9a-f]{64}$/)
   expect(result.digestRpcBytea).not.toContain(TOKEN)
-  expect(() => digestSponsorshipVisitorToken("bad-token")).toThrow(
-    "Invalid sponsorship visitor token",
-  )
+  expect(() =>
+    digestSponsorshipVisitorToken("bad-token" as typeof TOKEN),
+  ).toThrow("Invalid sponsorship visitor token")
+})
+
+test("uses one visitor digest for exposure and checkout attribution", () => {
+  const exposureDigest = digestSponsorshipVisitorToken(TOKEN)
+
+  expect(sponsorshipVisitorDigest(TOKEN)).toBe(exposureDigest.digestRpcBytea)
 })
 
 test("deduplicates identical page views inside one five minute window", () => {

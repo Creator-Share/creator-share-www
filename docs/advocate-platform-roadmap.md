@@ -104,7 +104,7 @@ A qualified advocate page exposure is appended on the server with:
 - Server timestamp.
 - Qualification and exclusion state.
 
-Known bots, prefetches, health checks, hidden frames, staff previews, and advocate administrators are excluded from public conversion metrics.
+Known automation hints, prefetches, health checks, hidden frames, staff previews, and advocate administrators are excluded from conversion metrics. The visitor token proves server issuance, not a human visit. Direct and post visit sponsorship outcomes are payment backed, but raw reach metrics are not abuse resistant until the Cloudflare controls in FF-024 are complete.
 
 At intent creation:
 
@@ -403,6 +403,10 @@ Aggregate SQL is straightforward. Preventing small cohort, complement, export, a
 
 The experience must handle cookies, magic links, OTP entry, return URLs, CSRF, origin validation, session refresh, and mobile email clients across primary and advocate hosts. The plan must not promise cross device attribution for anonymous visits that cannot technically be joined.
 
+### Medium to high: cross-subdomain attribution token
+
+Post visit attribution requires one pseudonymous token to survive an advocate visit and a later primary site checkout. The token must be authenticated, normalized against cookie tossing, hashed identically at exposure and checkout, and handled without blocking payment if analytics cryptography fails. Its parent domain scope also sends it to every Creator Share sibling host, so production release requires a complete DNS and hosting trust inventory. A dedicated signing key keeps middleware separate from payment and contact encryption.
+
 ### Medium: constrained branding
 
 Colors and logos are routine. Rich text sanitation, contrast validation, storage controls, cache invalidation, preview, rollback, and prevention of advocate supplied tracking require engineering discipline.
@@ -417,6 +421,9 @@ No advocate tenant may publish until all of the following are true:
 - Webhooks are authenticated, idempotent, and authoritative.
 - The exact host resolves through an active domain record.
 - Provisioning, TLS, HTTP tenant, and checkout canaries pass.
+- The dedicated visitor signing secret passes a production canary and differs from every payment or contact encryption key.
+- The production build proves Edge middleware selection. A Vercel canary accepts one exact provisioned tenant hostname and rejects an unprovisioned sibling hostname.
+- Every Creator Share sibling hostname has an approved DNS, hosting, and cookie trust inventory entry.
 - Advocate roles cannot read sponsor contact or raw tracking data.
 - Audit redaction and append only protections pass adversarial tests.
 - Retention cleanup jobs are configured.

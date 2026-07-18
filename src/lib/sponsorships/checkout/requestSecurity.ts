@@ -31,6 +31,44 @@ function configuredPrimaryHostnames(
   )
 }
 
+function primaryOrigin(options: {
+  rawHost: string | null
+  environment: CheckoutRequestEnvironment
+}): string | null {
+  const allowLocalhostDevelopment =
+    options.environment.NODE_ENV !== "production"
+  const resolution = resolveAdvocateHost(options.rawHost, {
+    allowLocalhostDevelopment,
+  })
+  if (resolution.kind !== "non-tenant") return null
+
+  const hostname = resolution.normalizedHostname
+  const isLocal =
+    resolution.reason === "localhost-root" ||
+    resolution.reason === "loopback-address"
+  if (
+    !configuredPrimaryHostnames(options.environment).has(hostname) &&
+    !(allowLocalhostDevelopment && isLocal)
+  ) {
+    return null
+  }
+
+  const protocol = allowLocalhostDevelopment && isLocal ? "http" : "https"
+  const port = resolution.port === null ? "" : `:${resolution.port}`
+  return `${protocol}://${hostname}${port}`
+}
+
+/** Resolves only an approved Creator Share primary or local development origin. */
+export function resolveTrustedPrimaryRequestOrigin(options: {
+  rawHost: string | null
+  environment?: CheckoutRequestEnvironment
+}): string | null {
+  return primaryOrigin({
+    rawHost: options.rawHost,
+    environment: options.environment ?? process.env,
+  })
+}
+
 /**
  * Resolves only a Creator Share primary origin or a syntactically valid
  * Creator Share tenant origin. The database still authorizes tenant activity;
@@ -54,23 +92,7 @@ export function resolveTrustedCheckoutRequestOrigin(options: {
       resolution.requestPort === null ? "" : `:${resolution.requestPort}`
     return `${protocol}://${resolution.requestHostname}${port}`
   }
-
-  const hostname = resolution.normalizedHostname
-  if (
-    configuredPrimaryHostnames(environment).has(hostname) ||
-    (allowLocalhostDevelopment &&
-      (resolution.reason === "localhost-root" ||
-        resolution.reason === "loopback-address"))
-  ) {
-    const isLocal =
-      resolution.reason === "localhost-root" ||
-      resolution.reason === "loopback-address"
-    const protocol = allowLocalhostDevelopment && isLocal ? "http" : "https"
-    const port = resolution.port === null ? "" : `:${resolution.port}`
-    return `${protocol}://${hostname}${port}`
-  }
-
-  return null
+  return primaryOrigin({ rawHost: options.rawHost, environment })
 }
 
 export function isTrustedCheckoutJsonRequest(

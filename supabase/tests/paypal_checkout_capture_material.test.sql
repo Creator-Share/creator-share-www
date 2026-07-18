@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(10);
+SELECT extensions.plan(18);
 
 CREATE TEMP TABLE paypal_capture_ids (
   key text PRIMARY KEY,
@@ -203,6 +203,61 @@ SELECT extensions.ok(
   'only the payment service can read PayPal capture material'
 );
 
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_proc function_record
+    JOIN pg_catalog.pg_namespace namespace_record
+      ON namespace_record.oid = function_record.pronamespace
+    WHERE namespace_record.nspname = 'public'
+      AND function_record.proname =
+        'read_paypal_terminal_checkout_origin_v2'
+      AND function_record.prosecdef
+      AND function_record.provolatile = 's'
+  ),
+  'terminal origin boundary is a stable security definer function'
+);
+
+SELECT extensions.ok(
+  NOT has_function_privilege(
+    'anon',
+    'public.read_paypal_terminal_checkout_origin_v2(bytea,uuid)',
+    'EXECUTE'
+  ),
+  'anonymous callers cannot read a terminal PayPal origin'
+);
+
+SELECT extensions.ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'public.read_paypal_terminal_checkout_origin_v2(bytea,uuid)',
+    'EXECUTE'
+  ),
+  'authenticated callers cannot read a terminal PayPal origin'
+);
+
+SELECT extensions.ok(
+  has_function_privilege(
+    'service_role',
+    'public.read_paypal_terminal_checkout_origin_v2(bytea,uuid)',
+    'EXECUTE'
+  ),
+  'only the payment service can read a terminal PayPal origin'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.read_paypal_terminal_checkout_origin_v2(
+      decode(repeat('b1', 32), 'hex'),
+      'b8000000-0000-4000-8000-000000000001'::uuid
+    )
+  $$,
+  '23514',
+  'PayPal terminal checkout origin requires one succeeded attached order',
+  'pending attempts cannot use the terminal origin boundary'
+);
+
 CREATE TEMP TABLE paypal_capture_material ON COMMIT DROP AS
 SELECT material.*
 FROM public.read_paypal_checkout_capture_material_v2(
@@ -273,6 +328,38 @@ SELECT extensions.throws_ok(
   '23514',
   'PayPal checkout capture requires one active attached order',
   'terminal attempts cannot reopen capture material'
+);
+
+CREATE TEMP TABLE paypal_terminal_origin ON COMMIT DROP AS
+SELECT origin.*
+FROM public.read_paypal_terminal_checkout_origin_v2(
+  decode(repeat('b1', 32), 'hex'),
+  'b8000000-0000-4000-8000-000000000001'::uuid
+) origin;
+
+SELECT extensions.is(
+  (SELECT source::text FROM paypal_terminal_origin),
+  'primary_site',
+  'terminal origin returns the immutable intent source'
+);
+
+SELECT extensions.is(
+  (SELECT source_host FROM paypal_terminal_origin),
+  'creatorshare.com',
+  'terminal origin returns the immutable intent source host'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.read_paypal_terminal_checkout_origin_v2(
+      decode(repeat('b2', 32), 'hex'),
+      'b8000000-0000-4000-8000-000000000001'::uuid
+    )
+  $$,
+  '23505',
+  'PayPal terminal checkout origin conflicts with its immutable operation',
+  'terminal origin rejects a mismatched opaque receipt'
 );
 
 SELECT * FROM extensions.finish();

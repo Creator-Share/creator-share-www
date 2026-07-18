@@ -109,11 +109,13 @@ SUBSCRIPTION_CANCELLATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
 # DNS. The CNAME must be DNS only and target Vercel's configured CNAME target.
 ADVOCATE_CLOUDFLARE_API_TOKEN=
 ADVOCATE_CLOUDFLARE_ZONE_ID=
-ADVOCATE_CLOUDFLARE_CNAME_TARGET=cname.vercel-dns.com
+# Discover the project specific target through Vercel's domain configuration
+# API. Do not assume the legacy generic CNAME target.
+ADVOCATE_CLOUDFLARE_CNAME_TARGET=
 ADVOCATE_CLOUDFLARE_TTL_SECONDS=300
 ADVOCATE_VERCEL_API_TOKEN=
-ADVOCATE_VERCEL_PROJECT_ID=prj_sw8gr27A4a1ej6pEUl9J24kQf1lX
-ADVOCATE_VERCEL_TEAM_ID=team_UfUPp9ohc1CvKuuNAsEwzP6O
+ADVOCATE_VERCEL_PROJECT_ID=
+ADVOCATE_VERCEL_TEAM_ID=
 ADVOCATE_PROVISIONING_BATCH_SIZE=3
 ADVOCATE_PROVISIONING_LEASE_SECONDS=300
 ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS=15000
@@ -125,6 +127,10 @@ ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS=15000
 # expose it through a NEXT_PUBLIC variable. Keep prior numbered keys available
 # during rotation.
 SPONSORSHIP_CRYPTO_SECRET_V1=
+# First party visitor cookie signing only. Server only. Generate a different
+# canonical base64 value with at least 32 random bytes in every environment.
+# This value must not equal SPONSORSHIP_CRYPTO_SECRET_V1.
+SPONSORSHIP_VISITOR_COOKIE_SECRET_V1=
 
 
 # AI Proofreading (OpenAI-Compatible API)

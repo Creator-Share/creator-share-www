@@ -628,6 +628,33 @@ async function readCaptureMaterial(
   }
 }
 
+async function readTerminalOrigin(
+  client: PayPalCheckoutServiceClient,
+  input: {
+    checkoutReceiptDigest: SupabaseRpcBytea
+    operationId: string
+  },
+): Promise<{
+  source: "primary_site" | "advocate_domain"
+  sourceHost: string
+}> {
+  const { data, error } = await client.rpc(
+    "read_paypal_terminal_checkout_origin_v2",
+    {
+      target_checkout_receipt_digest: input.checkoutReceiptDigest,
+      target_checkout_operation_id: input.operationId,
+    },
+  )
+  if (error) fail(error)
+  const row = oneRow(data)
+  const source = requiredString(row, "source", 40)
+  if (source !== "primary_site" && source !== "advocate_domain") fail()
+  return {
+    source,
+    sourceHost: requiredString(row, "source_host", 253),
+  }
+}
+
 async function ingestCapture(
   client: PayPalCheckoutServiceClient,
   input: VerifiedPayPalCaptureInput,
@@ -717,6 +744,7 @@ export function createCapturePayPalSponsorshipDependencies(
     crypto: createSponsorshipCryptoFromEnvironment(),
     recoverCheckout: (input) => recoverCheckout(client, input),
     readCaptureMaterial: (input) => readCaptureMaterial(client, input),
+    readTerminalOrigin: (input) => readTerminalOrigin(client, input),
     captureOrder: (orderId, request) =>
       capturePayPalSponsorshipOrder(orderId, request),
     ingestCapture: (input) => ingestCapture(client, input),

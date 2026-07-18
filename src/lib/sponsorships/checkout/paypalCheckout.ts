@@ -50,6 +50,7 @@ import {
   type ResumeV2CheckoutInput,
   type ResumedV2Checkout,
   type SponsorshipCheckoutRequestContext,
+  type SponsorshipIntentSource,
 } from "@/lib/sponsorships/checkout/stripeCheckout"
 import {
   sha256Digest,
@@ -57,6 +58,7 @@ import {
   type SponsorshipCrypto,
   type SupabaseRpcBytea,
 } from "@/lib/sponsorships/crypto"
+import type { VerifiedSponsorshipVisitorToken } from "@/lib/sponsorships/visitorCookie"
 import { convertUsdCentsToCurrency } from "@/utils/currency"
 
 const PROVIDER = "PAYPAL" as const
@@ -67,7 +69,7 @@ export interface CreatePayPalSponsorshipCheckoutInput {
   body: unknown
   host: ResolvedSponsorshipCheckoutHost
   authenticatedUser: AuthenticatedCheckoutUser | null
-  visitorToken: string | null
+  visitorToken: VerifiedSponsorshipVisitorToken | null
   requestContext: SponsorshipCheckoutRequestContext
 }
 
@@ -186,6 +188,13 @@ export interface CapturePayPalSponsorshipDependencies {
     checkoutReceiptDigest: SupabaseRpcBytea
     operationId: string
   }): Promise<PayPalCaptureMaterial>
+  readTerminalOrigin(input: {
+    checkoutReceiptDigest: SupabaseRpcBytea
+    operationId: string
+  }): Promise<{
+    source: SponsorshipIntentSource
+    sourceHost: string
+  }>
   captureOrder(
     orderId: string,
     request: ReturnType<typeof openSealedPayPalProviderRequest>,
@@ -197,6 +206,7 @@ export interface CapturePayPalSponsorshipDependencies {
 export interface CapturePayPalSponsorshipInput {
   operationId: string
   checkoutReceipt: string
+  host: ResolvedSponsorshipCheckoutHost
   requestContext: SponsorshipCheckoutRequestContext
 }
 
@@ -443,10 +453,7 @@ export async function createPayPalSponsorshipCheckoutV2(
     idempotencyKey: `checkout-v2:${operationId}`,
     source: input.host.source,
     advocateHostname: input.host.advocateHostname,
-    visitorTokenDigest: sponsorshipVisitorDigest(
-      input.visitorToken,
-      dependencies.crypto,
-    ),
+    visitorTokenDigest: sponsorshipVisitorDigest(input.visitorToken),
     authUserId: input.authenticatedUser?.id ?? null,
     contactEmailDigest: emailDigest,
     subjectKind,
@@ -798,20 +805,34 @@ export async function capturePayPalSponsorshipCheckoutV2(
   }
   const recovered = await dependencies.recoverCheckout(recoveryScope)
   if (!recovered) throw checkoutError("invalid-request")
+  if (
+    !recovered.paymentAttemptId ||
+    (recovered.attemptStatus !== "pending" &&
+      recovered.attemptStatus !== "succeeded") ||
+    recovered.paymentMode !== "one_time" ||
+    !recovered.providerObjectAttached
+  ) {
+    throw checkoutError("sponsorship-unavailable")
+  }
+
   if (recovered.attemptStatus === "succeeded") {
+    const origin = await dependencies.readTerminalOrigin({
+      checkoutReceiptDigest,
+      operationId,
+    })
+    if (
+      origin.source !== input.host.source ||
+      (origin.source === "advocate_domain" &&
+        origin.sourceHost !== input.host.advocateHostname) ||
+      (origin.source === "primary_site" && input.host.advocateHostname !== null)
+    ) {
+      throw checkoutError("invalid-request")
+    }
     return {
       checkoutReceipt: input.checkoutReceipt,
       statusUrl: "/payments/success?provider=paypal",
       replayed: true,
     }
-  }
-  if (
-    !recovered.paymentAttemptId ||
-    recovered.attemptStatus !== "pending" ||
-    recovered.paymentMode !== "one_time" ||
-    !recovered.providerObjectAttached
-  ) {
-    throw checkoutError("sponsorship-unavailable")
   }
 
   const material = await dependencies.readCaptureMaterial({
@@ -842,6 +863,9 @@ export async function capturePayPalSponsorshipCheckoutV2(
     },
     dependencies.crypto,
   )
+  if (request.checkoutBaseUrl !== input.host.checkoutBaseUrl) {
+    throw checkoutError("invalid-request")
+  }
   const captured = await dependencies.captureOrder(
     material.providerObjectId,
     request,

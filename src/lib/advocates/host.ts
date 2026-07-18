@@ -228,11 +228,16 @@ function parseHostHeader(
     hostname === ADVOCATE_LOCALHOST_ROOT ||
     hostname.endsWith(`.${ADVOCATE_LOCALHOST_ROOT}`)
 
-  if (port !== null && !localhost && !loopback) {
+  if (port !== null && !localhost && !loopback && port !== 80 && port !== 443) {
     return invalid("port-not-allowed")
   }
 
-  return { hostname, port, loopback }
+  return {
+    hostname,
+    port:
+      !localhost && !loopback && (port === 80 || port === 443) ? null : port,
+    loopback,
+  }
 }
 
 function nonTenant(
