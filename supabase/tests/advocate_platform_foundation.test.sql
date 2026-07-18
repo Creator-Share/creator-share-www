@@ -568,37 +568,6 @@ WHERE id = (
   SELECT value FROM test_advocate_context WHERE key = 'advocate'
 );
 
-UPDATE public.advocates
-SET publication_status = 'active'
-WHERE id = (
-  SELECT value FROM test_advocate_context WHERE key = 'advocate'
-);
-
-SELECT extensions.ok(
-  (
-    SELECT advocate.published_at IS NOT NULL
-      AND advocate.suspended_at IS NULL
-      AND advocate.archived_at IS NULL
-    FROM public.advocates advocate
-    JOIN test_advocate_context context
-      ON context.key = 'advocate' AND context.value = advocate.id
-  ),
-  'portal publication derives its lifecycle timestamp on the server'
-);
-
-SELECT extensions.throws_ok(
-  $$
-    UPDATE public.advocates
-    SET published_at = clock_timestamp() + interval '1 day'
-    WHERE id = (
-      SELECT value FROM test_advocate_context WHERE key = 'advocate'
-    )
-  $$,
-  '42501',
-  'Advocate lifecycle timestamps are server managed',
-  'callers cannot forge advocate lifecycle timestamps'
-);
-
 INSERT INTO public.advocates (
   slug,
   display_name,
@@ -743,6 +712,60 @@ WHERE advocate.key = 'advocate'
 SELECT pg_temp.activate_test_advocate_domain(
   (SELECT value FROM test_advocate_context WHERE key = 'domain'),
   'foundation-test-worker'
+);
+
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '3de44111-9900-4f04-815d-aeb42828229a',
+  true
+);
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+
+SELECT public.publish_advocate_portal(
+  (SELECT value FROM test_advocate_context WHERE key = 'advocate'),
+  (
+    SELECT advocate.version
+    FROM public.advocates advocate
+    WHERE advocate.id = (
+      SELECT value FROM test_advocate_context WHERE key = 'advocate'
+    )
+  ),
+  (SELECT value FROM test_advocate_context WHERE key = 'domain'),
+  'foundationtest.creatorshare.com',
+  extensions.digest('foundation-test-publication-canary', 'sha256'),
+  clock_timestamp(),
+  'Publish the foundation fixture after all provider chains settle',
+  'foundation-test-deployment',
+  'foundation-test-publication-request',
+  'foundation-test-publication-trace'
+);
+
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', '', true);
+
+SELECT extensions.ok(
+  (
+    SELECT advocate.published_at IS NOT NULL
+      AND advocate.suspended_at IS NULL
+      AND advocate.archived_at IS NULL
+    FROM public.advocates advocate
+    JOIN test_advocate_context context
+      ON context.key = 'advocate' AND context.value = advocate.id
+  ),
+  'portal publication derives its lifecycle timestamp on the server'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    UPDATE public.advocates
+    SET published_at = clock_timestamp() + interval '1 day'
+    WHERE id = (
+      SELECT value FROM test_advocate_context WHERE key = 'advocate'
+    )
+  $$,
+  '42501',
+  'Advocate lifecycle timestamps are server managed',
+  'callers cannot forge advocate lifecycle timestamps'
 );
 
 SELECT extensions.ok(

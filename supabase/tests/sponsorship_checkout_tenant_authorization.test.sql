@@ -380,12 +380,6 @@ WHERE id = (
   SELECT value FROM checkout_tenant_test_ids WHERE key = 'advocate'
 );
 
-UPDATE public.advocates
-SET publication_status = 'active'
-WHERE id = (
-  SELECT value FROM checkout_tenant_test_ids WHERE key = 'advocate'
-);
-
 WITH inserted AS (
   INSERT INTO public.advocate_domains (
     advocate_id,
@@ -433,6 +427,35 @@ SELECT pg_temp.activate_checkout_tenant_domain(
   ),
   'checkout-tenant-auth-worker'
 );
+
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '3de44111-9900-4f04-815d-aeb42828229a',
+  true
+);
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+
+SELECT public.publish_advocate_portal(
+  (SELECT value FROM checkout_tenant_test_ids WHERE key = 'advocate'),
+  (
+    SELECT advocate.version
+    FROM public.advocates advocate
+    WHERE advocate.id = (
+      SELECT value FROM checkout_tenant_test_ids WHERE key = 'advocate'
+    )
+  ),
+  (SELECT value FROM checkout_tenant_test_ids WHERE key = 'domain'),
+  'checkouttenantauth.creatorshare.com',
+  extensions.digest('checkout-tenant-publication-canary', 'sha256'),
+  clock_timestamp(),
+  'Publish the checkout tenant fixture after all provider chains settle',
+  'checkout-tenant-test-deployment',
+  'checkout-tenant-publication-request',
+  'checkout-tenant-publication-trace'
+);
+
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', '', true);
 
 UPDATE public.payment_provider_accounts
 SET

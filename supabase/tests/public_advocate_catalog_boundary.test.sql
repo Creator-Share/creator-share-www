@@ -763,14 +763,6 @@ WHERE id IN (
   WHERE key LIKE 'advocate:%'
 );
 
-UPDATE public.advocates
-SET publication_status = 'active'
-WHERE id IN (
-  SELECT value
-  FROM catalog_test_ids
-  WHERE key LIKE 'advocate:%'
-);
-
 WITH inserted AS (
   INSERT INTO public.advocate_domains (
     advocate_id,
@@ -920,6 +912,38 @@ SELECT pg_temp.activate_catalog_test_domain(
 FROM catalog_test_ids
 WHERE key LIKE 'domain:%'
 ORDER BY key;
+
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '3de44111-9900-4f04-815d-aeb42828229a',
+  true
+);
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+
+SELECT public.publish_advocate_portal(
+  advocate.value,
+  portal.version,
+  domain.value,
+  portal.slug || '.creatorshare.com',
+  extensions.digest(
+    'catalog-test-publication-canary:' || portal.slug,
+    'sha256'
+  ),
+  clock_timestamp(),
+  'Publish the catalog fixture after all provider chains settle',
+  'catalog-test-deployment',
+  'catalog-test-publication-request:' || portal.slug,
+  'catalog-test-publication-trace:' || portal.slug
+)
+FROM catalog_test_ids advocate
+JOIN public.advocates portal ON portal.id = advocate.value
+JOIN catalog_test_ids domain
+  ON domain.key = replace(advocate.key, 'advocate:', 'domain:')
+WHERE advocate.key LIKE 'advocate:%'
+ORDER BY advocate.key;
+
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', '', true);
 
 INSERT INTO public.advocate_beneficiaries (
   advocate_id,

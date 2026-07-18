@@ -273,12 +273,14 @@ For each advocate, an idempotent provisioner will:
 2. Create the inactive advocate and exact domain record.
 3. Add the exact domain to the Vercel project through its API.
 4. Add an exact DNS only CNAME in Cloudflare through a zone scoped API token.
-5. Poll domain verification and TLS readiness.
-6. Run an HTTP canary that proves the hostname resolves to the expected advocate.
-7. Run checkout initiation canaries for supported providers.
-8. Publish only after all required checks pass.
+5. Reconcile each provider attachment until every required integration reports its bounded API readiness evidence, then leave the domain in `verifying`.
+6. Run independent DNS, TLS, HTTP tenant, rejected sibling, and checkout initiation canaries against the exact hostname.
+7. Preserve the structured canary report in protected release evidence and calculate its SHA256 digest.
+8. Require a Creator Share super administrator to promote the exact domain with the expected advocate version, evidence digest, deployment identity, and reason.
 
-The provisioner stores desired and observed state, external object IDs, configuration version, attempts, timestamps, and sanitized failures. Retries are idempotent. A scheduled reconciler detects drift.
+The provisioner stores desired and observed state, external object IDs, configuration version, attempts, timestamps, and sanitized failures. Retries are idempotent. A scheduled reconciler detects drift. Provider API readiness never publishes a tenant by itself. Cloudflare record creation, Vercel attachment, Stripe account access, and PayPal credential access do not prove that the exact public hostname serves the right tenant over TLS or can safely initiate checkout.
+
+All vendor provisioning and reconciliation remains API driven and requires no manual vendor console work. MVP publication is a separate audited release decision over independently captured canary evidence. This preserves automated infrastructure while preventing a weak provider status from silently opening a money accepting tenant.
 
 Deactivation disables the tenant first, removes DNS before releasing the Vercel domain, and preserves attribution and financial history.
 
@@ -326,6 +328,8 @@ Moving DNS to Vercel would simplify wildcard certificates and remove one provisi
 
 Deletion and anonymization jobs must preserve aggregate and financial integrity while removing expired direct identifiers.
 
+The MVP runs one bounded retention invocation hourly at minute 17. It independently commits checkout contact erasure, welcome email contact redaction, gateway payload redaction, raw audit forensic deletion, and advocate tracking deletion in privacy-first order. Later steps still run after an earlier failure. Sanitized append-only run evidence records failures and remaining backlog, and every nonclean invocation must alert for retry. Operational details live in [the advocate domain publication runbook](./advocate-domain-publication-runbook.md).
+
 ## 9. Delivery sequence
 
 ### Phase 0: Security and schema foundation
@@ -357,6 +361,7 @@ The v2 checkout database functions and application callers use an additive two p
 - Implement Cloudflare and Vercel provisioning jobs and reconciliation.
 - Add host aware provider return URLs.
 - Add tenant, TLS, and checkout canaries.
+- Require audited super-administrator publication after independent exact-host canary evidence. Follow [the advocate domain publication runbook](./advocate-domain-publication-runbook.md).
 
 ### Phase 3: Advocate experiences
 
@@ -419,8 +424,9 @@ No advocate tenant may publish until all of the following are true:
 - Exposed application tables have verified RLS and least privilege grants.
 - Every payment path creates and verifies a server owned intent.
 - Webhooks are authenticated, idempotent, and authoritative.
-- The exact host resolves through an active domain record.
+- The exact host remains nonpublic in `verifying` until the independent canary report is complete.
 - Provisioning, TLS, HTTP tenant, and checkout canaries pass.
+- A Creator Share super administrator promotes the expected advocate version and exact primary domain through the audited publication function using the protected canary report digest.
 - The dedicated visitor signing secret passes a production canary and differs from every payment or contact encryption key.
 - The production build proves Edge middleware selection. A Vercel canary accepts one exact provisioned tenant hostname and rejects an unprovisioned sibling hostname.
 - Every Creator Share sibling hostname has an approved DNS, hosting, and cookie trust inventory entry.

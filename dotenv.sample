@@ -88,6 +88,8 @@ CRON_SECRET=
 # PAYMENT_GATEWAY_EVENT_WORKER_SECRET=
 # SPONSOR_WELCOME_EMAIL_WORKER_SECRET=
 # SUBSCRIPTION_CANCELLATION_WORKER_SECRET=
+# External scheduler only. Leave unset for Vercel Cron, which sends CRON_SECRET.
+# DATA_RETENTION_WORKER_SECRET=
 PAYMENT_GATEWAY_EVENT_BATCH_SIZE=20
 PAYMENT_GATEWAY_EVENT_CONCURRENCY=4
 SPONSOR_WELCOME_EMAIL_BATCH_SIZE=4
@@ -104,6 +106,15 @@ SUBSCRIPTION_CANCELLATION_BATCH_SIZE=4
 SUBSCRIPTION_CANCELLATION_CONCURRENCY=2
 SUBSCRIPTION_CANCELLATION_PROVIDER_TIMEOUT_MILLISECONDS=15000
 SUBSCRIPTION_CANCELLATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+# Hourly bounded cleanup at minute 17 UTC for advocate tracking, encrypted
+# gateway payloads, welcome email contact, checkout contact envelopes, and raw
+# audit forensics. Each run records durable start, step, and final evidence.
+# Five cleanup deadlines, two fixed 2 second control deadlines, and the response
+# reserve must fit within 55 seconds. Checkout contact cleanup remains capped at
+# 500 rows per run even when the general batch is larger.
+DATA_RETENTION_BATCH_SIZE=5000
+DATA_RETENTION_RPC_TIMEOUT_MILLISECONDS=9000
+DATA_RETENTION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
 
 # Automated advocate domain provisioning. Cloudflare remains authoritative
 # DNS. The CNAME must be DNS only and target Vercel's configured CNAME target.

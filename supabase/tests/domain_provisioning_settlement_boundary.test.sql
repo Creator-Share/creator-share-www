@@ -424,17 +424,17 @@ ORDER BY claim.provider;
 SELECT extensions.ok(
   (
     SELECT
-      domain.status = 'active'
-      AND domain.dns_verified_at IS NOT NULL
-      AND domain.tls_ready_at IS NOT NULL
-      AND domain.payments_ready_at IS NOT NULL
-      AND domain.activated_at IS NOT NULL
+      domain.status = 'verifying'
+      AND domain.dns_verified_at IS NULL
+      AND domain.tls_ready_at IS NULL
+      AND domain.payments_ready_at IS NULL
+      AND domain.activated_at IS NULL
     FROM public.advocate_domains domain
     WHERE domain.id = (
       SELECT uuid_value FROM settlement_test_context WHERE key = 'main_domain'
     )
   ),
-  'the domain activates only after DNS, TLS, payments, and every required integration are verified'
+  'provider success stops at nonpublic verification even after every required integration is ready'
 );
 
 SELECT extensions.is(
@@ -455,7 +455,7 @@ SELECT extensions.is(
       AND job.result_payload @> '{"verified":true}'::jsonb
   ),
   5,
-  'every active readiness row traces to the exact successful provider job chain'
+  'every provider readiness row traces to the exact successful provider job chain before publication'
 );
 
 SELECT extensions.throws_ok(

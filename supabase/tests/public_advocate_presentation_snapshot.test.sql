@@ -244,12 +244,6 @@ WHERE id = (
   SELECT value FROM presentation_test_ids WHERE key = 'advocate'
 );
 
-UPDATE public.advocates
-SET publication_status = 'active'
-WHERE id = (
-  SELECT value FROM presentation_test_ids WHERE key = 'advocate'
-);
-
 WITH inserted AS (
   INSERT INTO public.advocate_domains (
     advocate_id,
@@ -304,6 +298,35 @@ SELECT pg_temp.activate_presentation_test_domain(
   (SELECT value FROM presentation_test_ids WHERE key = 'domain'),
   'presentation-test-worker'
 );
+
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '3de44111-9900-4f04-815d-aeb42828229a',
+  true
+);
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+
+SELECT public.publish_advocate_portal(
+  (SELECT value FROM presentation_test_ids WHERE key = 'advocate'),
+  (
+    SELECT advocate.version
+    FROM public.advocates advocate
+    WHERE advocate.id = (
+      SELECT value FROM presentation_test_ids WHERE key = 'advocate'
+    )
+  ),
+  (SELECT value FROM presentation_test_ids WHERE key = 'domain'),
+  'snapshotportal.creatorshare.com',
+  extensions.digest('presentation-test-publication-canary', 'sha256'),
+  clock_timestamp(),
+  'Publish the presentation fixture after all provider chains settle',
+  'presentation-test-deployment',
+  'presentation-test-publication-request',
+  'presentation-test-publication-trace'
+);
+
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', '', true);
 
 INSERT INTO presentation_test_snapshot (value)
 SELECT public.read_public_advocate_presentation_snapshot(

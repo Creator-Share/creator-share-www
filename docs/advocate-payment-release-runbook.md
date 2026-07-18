@@ -25,6 +25,10 @@ Configure and validate these server only values in every target environment:
 - `SUBSCRIPTION_CANCELLATION_CONCURRENCY`, optional, from 1 through 4. The default is 2 and cannot exceed the batch size.
 - `SUBSCRIPTION_CANCELLATION_PROVIDER_TIMEOUT_MILLISECONDS`, optional, from 1000 through 45000. The default is 15000.
 - `SUBSCRIPTION_CANCELLATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS`, optional, from 1000 through 15000. The default is 5000. This value plus the provider timeout must not exceed 55000.
+- `DATA_RETENTION_WORKER_SECRET`, optional. Use only for a non-Vercel scheduler. Vercel Cron sends `CRON_SECRET`, so this dedicated value must remain unset in Vercel.
+- `DATA_RETENTION_BATCH_SIZE`, optional, from 1 through 5000. The default is 5000. Checkout contact erasure remains capped at 500 per invocation even when this value is higher.
+- `DATA_RETENTION_RPC_TIMEOUT_MILLISECONDS`, optional, from 1000 through 10000. The default is 9000.
+- `DATA_RETENTION_INVOCATION_SAFETY_MARGIN_MILLISECONDS`, optional, from 1000 through 5000. The default is 5000. Five cleanup deadlines, two bounded control calls, and this reserve must not exceed 55000.
 - Stripe US and UK API keys, signing secrets, optional previous signing secrets, publishable keys, and portal URLs.
 - `NEXT_PUBLIC_PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, and the exact `PAYPAL_API_URL`. Production should use `https://api-m.paypal.com`. Sandbox must explicitly use `https://api-m.sandbox.paypal.com`. The webhook ID and certificate environment must match this API origin.
 - `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_SECURE`, `EMAIL_USER`, `EMAIL_PASSWORD`, and the Creator Share `EMAIL_FROM` value for the welcome outbox worker.
@@ -35,7 +39,7 @@ Both regional Stripe webhook endpoints must deliver events using API version `20
 
 The PayPal webhook endpoint accepts at most 64 KiB and verifies the exact raw event representation through PayPal's signature verification API. Do not place a body parser, JSON normalizer, or proxy transformation in front of it. Unsupported signed events are acknowledged after durable contact-free quarantine evidence is written. Permanent chain mismatches are also quarantined. Provider lookup outages remain retryable and return a static unavailable response.
 
-The production Vercel project must support one-minute Cron schedules. The repository schedules the payment event worker, sponsor welcome worker, subscription cancellation worker, and advocate provisioner every minute with authenticated GET requests. Vercel does not retry one failed Cron invocation, so durable database leases and the next scheduled invocation provide recovery. Confirm the project plan accepts this frequency before promotion.
+The production Vercel project must support one-minute Cron schedules. The repository schedules the payment event worker, sponsor welcome worker, subscription cancellation worker, and advocate provisioner every minute with authenticated GET requests. It schedules bounded retention hourly at minute 17. Vercel does not retry one failed Cron invocation, so durable database state and the next scheduled invocation provide recovery. Confirm the project plan accepts this frequency before promotion.
 
 ## Visitor attribution release boundary
 
@@ -96,6 +100,8 @@ The release gate function is deployment evidence. It is not a per request featur
 27. Present a forged cookie plus one authentic cookie and two distinct authentic cookies. Confirm the first case preserves the authentic visitor, the second rotates once, and neither case blocks checkout.
 28. Confirm the Edge middleware runtime and matcher in the production build output. Exercise one exact provisioned tenant hostname on the Vercel deployment, then confirm an unprovisioned sibling hostname is rejected.
 29. Attach the approved Creator Share subdomain DNS and hosting inventory to the release evidence.
+30. Confirm the hourly retention worker calls checkout contact, welcome email contact, gateway payload, raw audit forensics, and advocate tracking cleanup in that order. Force one middle step to fail and confirm later steps still run, the route returns a non-success status, and the response exposes only safe run and request identifiers, status values, fixed step names, and aggregate counts.
+31. Follow [the advocate domain publication runbook](./advocate-domain-publication-runbook.md) for every new exact hostname. Provider readiness alone must stop in `verifying` and must not activate the domain.
 
 The generic SMTP path quarantines every provider acceptance ambiguity before a stale lease can retry it. It does not provide exact once delivery. A deterministic message ID supports operator investigation, but it is not an idempotency guarantee. Never describe this worker or its canaries as exact once.
 
@@ -173,4 +179,6 @@ Retain the following with the release record:
 - Worker batch health and manual review counts.
 - Confirmation that no sponsor email, claim token, receipt, ciphertext, or provider payload appeared in application logs.
 - Production visitor cookie canary, Edge middleware runtime evidence, and approved subdomain trust inventory.
+- Hourly retention worker result, durable run evidence, partial-failure and backlog alert paths, and evidence that all five privacy cleanup steps remain scheduled.
+- Advocate domain protected canary report, digest, audited publication result, and post-publication exact-host verification.
 - Rollback owner and incident contact.

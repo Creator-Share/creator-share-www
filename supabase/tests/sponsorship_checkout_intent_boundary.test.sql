@@ -207,14 +207,6 @@ WHERE id = (
   WHERE key = 'advocate'
 );
 
-UPDATE public.advocates
-SET publication_status = 'active'
-WHERE id = (
-  SELECT uuid_value
-  FROM checkout_boundary_test_context
-  WHERE key = 'advocate'
-);
-
 WITH inserted AS (
   INSERT INTO public.advocate_domains (
     advocate_id,
@@ -264,6 +256,45 @@ SELECT pg_temp.activate_test_advocate_domain(
   ),
   'checkout-boundary-test-worker'
 );
+
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '3de44111-9900-4f04-815d-aeb42828229a',
+  true
+);
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+
+SELECT public.publish_advocate_portal(
+  (
+    SELECT uuid_value
+    FROM checkout_boundary_test_context
+    WHERE key = 'advocate'
+  ),
+  (
+    SELECT advocate.version
+    FROM public.advocates advocate
+    WHERE advocate.id = (
+      SELECT uuid_value
+      FROM checkout_boundary_test_context
+      WHERE key = 'advocate'
+    )
+  ),
+  (
+    SELECT uuid_value
+    FROM checkout_boundary_test_context
+    WHERE key = 'domain'
+  ),
+  'checkoutboundary.creatorshare.com',
+  extensions.digest('checkout-boundary-publication-canary', 'sha256'),
+  clock_timestamp(),
+  'Publish the checkout fixture after all provider chains settle',
+  'checkout-boundary-test-deployment',
+  'checkout-boundary-publication-request',
+  'checkout-boundary-publication-trace'
+);
+
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', '', true);
 
 WITH recorded AS MATERIALIZED (
   SELECT *
