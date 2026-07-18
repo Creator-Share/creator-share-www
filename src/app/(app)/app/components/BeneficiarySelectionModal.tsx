@@ -70,7 +70,7 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
 
     // Fetch beneficiaries
     const { data, error } = await supabase
-      .from("beneficiaries")
+      .from("public_beneficiaries")
       .select(`
         id,
         name,
@@ -112,7 +112,7 @@ export const BeneficiarySelectionModal: React.FC<BeneficiarySelectionModalProps>
     if (available.length > 0) {
       const beneficiaryIds = available.map(b => b.id)
       const { data: mediaData, error: mediaError } = await supabase
-        .from("media")
+        .from("public_media")
         .select("id, parent_id, extension, type, weight")
         .in("parent_id", beneficiaryIds)
         .eq("type", "IMAGE")

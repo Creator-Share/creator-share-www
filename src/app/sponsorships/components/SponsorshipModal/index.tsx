@@ -124,9 +124,16 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   // For fixed types the budget_goal IS the sponsorship amount (set at create time).
   // For open types there is no goal. Sponsors choose their own amount.
   const fixedAmountCents = !isOpen ? (beneficiary.budget_goal ?? 0) : 0
+  const birthDateMetadata = beneficiary.metadata as
+    | {
+        birth_date_is_estimate?: boolean
+        birth_date_precision?: "day" | "month" | "year"
+      }
+    | undefined
   const birthDateIsEstimate = Boolean(
-    (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
-      ?.birth_date_is_estimate,
+    birthDateMetadata?.birth_date_is_estimate ||
+      (birthDateMetadata?.birth_date_precision &&
+        birthDateMetadata.birth_date_precision !== "day"),
   )
 
   const [monthlyAmountCents, setMonthlyAmountCents] = useState<number>(

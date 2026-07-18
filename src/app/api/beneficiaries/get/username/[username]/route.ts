@@ -10,7 +10,7 @@ export async function GET(req: Request) {
 
   try {
     const { data, error } = await supabase
-      .from("beneficiaries")
+      .from("public_beneficiaries")
       .select("*")
       .eq("username", username)
       .single()

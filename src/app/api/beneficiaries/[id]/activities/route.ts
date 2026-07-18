@@ -25,10 +25,9 @@ export async function GET(
   const supabase = await createClient()
 
   const { data: activities, error: activitiesError } = await supabase
-    .from("activities")
+    .from("public_activities")
     .select("*")
     .eq("beneficiary_id", id)
-    .eq("is_public", true)
     .order("created_at", { ascending: false })
 
   if (activitiesError) {
@@ -42,7 +41,7 @@ export async function GET(
   const activityIds = safe.map((a) => a.id).filter(Boolean)
 
   const { data: allMedia, error: mediaError } = await supabase
-    .from("media")
+    .from("public_media")
     .select("*")
     .in("parent_id", activityIds)
     .order("created_at", { ascending: true })

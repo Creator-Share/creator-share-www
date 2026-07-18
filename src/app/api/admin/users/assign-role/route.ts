@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import {
+  getCreatorShareRoleIds,
+  replaceCreatorShareRoles,
+  roleChangeReason,
+} from "@/utils/admin/creatorShareRoles"
 
 export async function POST(request: Request) {
   try {
@@ -8,7 +13,7 @@ export async function POST(request: Request) {
     const auth = await requireSuperAdmin(supabase)
     if (!auth.ok) return auth.response
 
-    const { userId, roleId } = await request.json()
+    const { userId, roleId, reason } = await request.json()
 
     if (!userId || !roleId) {
       return NextResponse.json(
@@ -17,35 +22,23 @@ export async function POST(request: Request) {
       )
     }
 
-    // Check if role assignment already exists
-    const { data: existingAssignment } = await supabase
-      .from("role_assignments")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("role_id", roleId)
-      .single()
-
-    if (existingAssignment) {
+    const currentRoleIds = await getCreatorShareRoleIds(supabase, userId)
+    if (currentRoleIds.includes(roleId)) {
       return NextResponse.json(
         { error: "User already has this role" },
         { status: 400 }
       )
     }
 
-    // Assign role to user
-    const { error } = await supabase
-      .from("role_assignments")
-      .insert({
-        user_id: userId,
-        role_id: roleId,
-      })
+    const roles = await replaceCreatorShareRoles(
+      supabase,
+      request,
+      userId,
+      [...currentRoleIds, roleId],
+      roleChangeReason(reason, "Administrator assigned a Creator Share role"),
+    )
 
-    if (error) {
-      console.error("Error assigning role:", error)
-      return NextResponse.json({ error: "Failed to assign role" }, { status: 500 })
-    }
-
-    return NextResponse.json({ message: "Role assigned successfully" })
+    return NextResponse.json({ message: "Role assigned successfully", roles })
   } catch (error) {
     console.error("Unexpected error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

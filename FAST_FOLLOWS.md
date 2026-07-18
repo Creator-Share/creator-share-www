@@ -23,6 +23,8 @@ Status values are `proposed`, `accepted`, `in_progress`, `blocked`, `completed`,
 | FF-015 | accepted | P1       | PayPal Apple Pay                                       | Resolve its domain association and registration process, including automation limits, before enabling it on advocate domains.                                                                                        |
 | FF-016 | accepted | P2       | Public sponsor recognition                             | Design a separate public recognition consent, revocation, privacy, and moderation surface if requested. Private advocate visibility remains separately constrained.                                                  |
 | FF-017 | accepted | P1       | Vercel authoritative DNS evaluation                    | Revisit only after exact-domain provisioning is stable. Require complete record inventory, Cloudflare feature parity, rollback, and incident ownership.                                                              |
+| FF-018 | proposed | P1       | Beneficiary update subscription abuse controls         | Add double opt in, edge rate limits, delivery suppression, unsubscribe management, and abuse monitoring. Complete before update mail volume or public traffic grows beyond manual operational review.               |
+| FF-019 | proposed | P1       | Durable transactional notification outbox              | Move blind match, cancellation, and other post-commit messages into an encrypted transactional outbox with atomic enqueue, idempotent delivery, retry, suppression, and operator visibility. The sponsor welcome and claim email remains the first MVP outbox contract. |
 
 ## Entry requirements
 

@@ -2,6 +2,10 @@ import { NextResponse } from "next/server"
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 import { UserInvitation } from "@/types/admin.types"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import {
+  replaceCreatorShareRoles,
+  roleChangeReason,
+} from "@/utils/admin/creatorShareRoles"
 
 export async function POST(request: Request) {
   try {
@@ -13,6 +17,7 @@ export async function POST(request: Request) {
     const serviceSupabase = createServiceRoleClient()
     const invitation: UserInvitation = await request.json()
     const { email, role_ids } = invitation
+    const reason = (invitation as UserInvitation & { reason?: string }).reason
 
     if (!email || !role_ids || role_ids.length === 0) {
       return NextResponse.json(
@@ -39,21 +44,23 @@ export async function POST(request: Request) {
       }, { status: 500 })
     }
 
-    // Assign roles immediately — don't defer to a client-callable endpoint
-    const newAssignments = role_ids.map((roleId: string) => ({
-      user_id: inviteData.user.id,
-      role_id: roleId
-    }))
-
-    const { error: roleInsertError } = await serviceSupabase
-      .from("role_assignments")
-      .insert(newAssignments)
-
-    if (roleInsertError) {
-      console.error("Error assigning roles to invited user:", roleInsertError)
+    let roles
+    try {
+      roles = await replaceCreatorShareRoles(
+        supabase,
+        request,
+        inviteData.user.id,
+        role_ids,
+        roleChangeReason(
+          reason,
+          "Administrator assigned initial Creator Share roles to an invited user",
+        ),
+      )
+    } catch (roleError) {
+      console.error("Error assigning roles to invited user:", roleError)
       return NextResponse.json({ 
         error: "User invited but roles could not be assigned",
-        details: roleInsertError.message
+        details: roleError instanceof Error ? roleError.message : "Unknown error",
       }, { status: 500 })
     }
 
@@ -61,6 +68,7 @@ export async function POST(request: Request) {
       { 
         message: "User invited and roles assigned successfully", 
         user: inviteData.user,
+        roles,
         invitationSent: true
       },
       { status: 201 }

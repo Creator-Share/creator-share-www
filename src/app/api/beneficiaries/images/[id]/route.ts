@@ -11,7 +11,7 @@ export async function GET(
 
   try {
     const { data, error } = await supabase
-      .from("media")
+      .from("public_media")
       .select("*")
       .eq("parent_id", id)
       .order("weight")

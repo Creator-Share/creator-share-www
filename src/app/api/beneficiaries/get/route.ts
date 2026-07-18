@@ -45,7 +45,7 @@ export async function GET(req: Request) {
 
     // STEP 1: Start with base query — count=exact adds Prefer: count=exact header
     // so PostgREST returns a Content-Range total alongside the page data (no extra round trip).
-    let query = supabase.from("beneficiaries").select("*", { count: "exact" });
+    let query = supabase.from("public_beneficiaries").select("*", { count: "exact" });
 
     if (beneficiaryType && beneficiaryType !== "null" && beneficiaryType !== "undefined") {
       // Support comma-separated types (e.g. "CHILD,CHILD_LABORER")

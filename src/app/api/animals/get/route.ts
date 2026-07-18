@@ -8,7 +8,7 @@ export async function GET() {
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
 
     const { data: people, error } = await supabase
-      .from("beneficiaries")
+      .from("public_beneficiaries")
       .select("*")
       .eq("beneficiary_type", "ANIMAL")
 

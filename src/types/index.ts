@@ -14,6 +14,7 @@ type Geography = {
 
 export interface BeneficiaryMetadata {
   birth_date_is_estimate?: boolean
+  birth_date_precision?: "day" | "month" | "year"
   [key: string]: unknown
 }
 
