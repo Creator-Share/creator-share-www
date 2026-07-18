@@ -13,6 +13,7 @@ import {
 import {
   contrastRatio,
   createPublicSiteCssVariables,
+  deriveAccessibleBrandInkColor,
   deriveAccessibleForegroundColor,
   resolvePublicSiteTheme,
 } from "../../src/lib/advocates/publicSiteTheme"
@@ -155,7 +156,7 @@ test.describe("public site request shell", () => {
         accentColor: "#F6C344",
         logoUrl: null,
         logoAltText: null,
-        openingHeaderHtml: "<h1>Welcome</h1>",
+        openingHeaderHtml: "<h2>Welcome</h2>",
         aboutBiographyHtml: "<p>About Alice.</p>",
         publicMetricKeys: ["children_sponsored"],
       },
@@ -248,6 +249,26 @@ test.describe("public site theme boundary", () => {
     }
   })
 
+  test("derives a minimally darkened primary ink for light surfaces", () => {
+    for (const primaryColor of [
+      "#FFFFFF",
+      "#F6C344",
+      "#00FF00",
+      "#2B7FF9",
+      "#173E8C",
+      "#000000",
+    ]) {
+      const ink = deriveAccessibleBrandInkColor(primaryColor)
+      expect(contrastRatio(ink, "#FFFFFF")).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(ink, "#F9FAFB")).toBeGreaterThanOrEqual(4.5)
+      if (contrastRatio(primaryColor, "#F9FAFB") >= 4.5) {
+        expect(ink).toBe(primaryColor)
+      }
+    }
+
+    expect(deriveAccessibleBrandInkColor("not-a-color")).toBe("#000000")
+  })
+
   test("replaces malformed style input before constructing CSS variables", () => {
     const site = createPrimaryPublicSite("creatorshare.com")
     const malformed = {
@@ -258,12 +279,14 @@ test.describe("public site theme boundary", () => {
 
     expect(resolvePublicSiteTheme(malformed)).toEqual({
       primaryColor: CREATOR_SHARE_PRIMARY_COLOR,
+      primaryInkColor: CREATOR_SHARE_PRIMARY_COLOR,
       primaryForegroundColor: "#FFFFFF",
       accentColor: CREATOR_SHARE_ACCENT_COLOR,
       accentForegroundColor: "#000000",
     })
     expect(createPublicSiteCssVariables(malformed)).toEqual({
       "--public-site-primary": CREATOR_SHARE_PRIMARY_COLOR,
+      "--public-site-primary-ink": CREATOR_SHARE_PRIMARY_COLOR,
       "--public-site-primary-foreground": "#FFFFFF",
       "--public-site-accent": CREATOR_SHARE_ACCENT_COLOR,
       "--public-site-accent-foreground": "#000000",

@@ -35,6 +35,8 @@ const {
   ADVOCATE_RICH_TEXT_ALLOWED_TAGS,
   ADVOCATE_RICH_TEXT_MAX_INPUT_BYTES,
   AdvocateRichTextValidationError,
+  sanitizeAdvocateAboutBiographyRichText,
+  sanitizeAdvocateOpeningHeaderRichText,
   sanitizeAdvocateRichText,
   validateCanonicalAdvocateRichText,
 } = richText
@@ -74,6 +76,25 @@ test.describe("advocate rich text boundary", () => {
     expect(sanitizeAdvocateRichText("<p><strong>Safe</p> text")).toBe(
       "<p><strong>Safe</strong></p> text",
     )
+  })
+
+  test("normalizes headings for the page opening and modal biography contexts", () => {
+    const authoredHeadings =
+      "<h1>First</h1><h2>Second</h2><h3>Third</h3><p>Body</p>"
+
+    const opening = sanitizeAdvocateOpeningHeaderRichText(authoredHeadings)
+    expect(opening).toBe(
+      "<h2>First</h2><h2>Second</h2><h2>Third</h2><p>Body</p>",
+    )
+    expect(opening).not.toMatch(/<h1|<h3/)
+    expect(sanitizeAdvocateOpeningHeaderRichText(opening)).toBe(opening)
+
+    const biography = sanitizeAdvocateAboutBiographyRichText(authoredHeadings)
+    expect(biography).toBe(
+      "<h3>First</h3><h3>Second</h3><h3>Third</h3><p>Body</p>",
+    )
+    expect(biography).not.toMatch(/<h1|<h2/)
+    expect(sanitizeAdvocateAboutBiographyRichText(biography)).toBe(biography)
   })
 
   test("removes every attribute, including styling and tracking surfaces", () => {

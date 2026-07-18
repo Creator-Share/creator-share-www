@@ -86,6 +86,10 @@ WHERE key = 'identity';
 INSERT INTO sponsor_history_times
 VALUES ('currency_quote_at', clock_timestamp());
 
+/* Model a malformed row that predates the public username write guard. */
+ALTER TABLE public.beneficiaries
+DISABLE TRIGGER beneficiary_username_public_shape_guard;
+
 WITH inserted AS (
   INSERT INTO public.beneficiaries (
     name,
@@ -103,6 +107,9 @@ WITH inserted AS (
 )
 INSERT INTO sponsor_history_context
 SELECT 'beneficiary', id FROM inserted;
+
+ALTER TABLE public.beneficiaries
+ENABLE TRIGGER beneficiary_username_public_shape_guard;
 
 WITH inserted AS (
   INSERT INTO public.sponsorship_intents (

@@ -1,10 +1,14 @@
 import { expect, test } from "@playwright/test"
-import { getPlaceholderImageUrl, PERSON_PLACEHOLDER_PATH } from "../src/utils/placeholders"
+import {
+  getPlaceholderImageUrl,
+  PERSON_PLACEHOLDER_PATH,
+} from "../src/utils/placeholders"
 import {
   getBrowserImageSrc,
   getExternalActivityImageUrl,
   getExternalProfileImageUrl,
   getDirectMediaUrl,
+  filterExistingMediaRows,
   type MediaRow,
 } from "../src/utils/supabase/media"
 
@@ -56,14 +60,52 @@ test.describe("media URL policy", () => {
   test("storage path segments are encoded", () => {
     const url = getDirectMediaUrl(media)
 
-    expect(url).toContain(
-      "/parent%20folder/IMAGE/image%2Bid%231.jpg",
-    )
+    expect(url).toContain("/parent%20folder/IMAGE/image%2Bid%231.jpg")
   })
 
   test("placeholder URLs avoid localhost for external services", () => {
     expect(getPlaceholderImageUrl("http://localhost:3000")).toBe(
       `https://creator-share-www.vercel.app${PERSON_PLACEHOLDER_PATH}`,
     )
+  })
+
+  test("checks each storage folder once instead of fanning out per media row", async () => {
+    const rows = [
+      { ...media, id: "one", parent_id: "parent-a" },
+      { ...media, id: "two", parent_id: "parent-a" },
+      { ...media, id: "missing", parent_id: "parent-a" },
+      { ...media, id: "three", parent_id: "parent-b" },
+    ] as MediaRow[]
+    const calls: Array<{ path: string; offset: number | undefined }> = []
+    const client = {
+      storage: {
+        from: () => ({
+          async list(
+            path: string,
+            options?: { limit?: number; offset?: number },
+          ) {
+            calls.push({ path, offset: options?.offset })
+            return {
+              data:
+                path === "parent-a/IMAGE"
+                  ? [{ name: "one.jpg" }, { name: "two.jpg" }]
+                  : [{ name: "three.jpg" }],
+              error: null,
+            }
+          },
+        }),
+      },
+    }
+
+    await expect(filterExistingMediaRows(client, rows)).resolves.toEqual([
+      rows[0],
+      rows[1],
+      rows[3],
+    ])
+    expect(calls).toHaveLength(2)
+    expect(calls.map((call) => call.path).sort()).toEqual([
+      "parent-a/IMAGE",
+      "parent-b/IMAGE",
+    ])
   })
 })

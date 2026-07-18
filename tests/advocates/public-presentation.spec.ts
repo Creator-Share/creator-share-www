@@ -166,7 +166,7 @@ test.describe("public advocate presentation boundary", () => {
         `${LOGO_PUBLIC_ORIGIN}/storage/v1/object/public/` +
         `${PUBLIC_ADVOCATE_LOGO_BUCKET}/${LOGO_STORAGE_PATH}`,
       logoAltText: "Alice Example logo",
-      openingHeaderHtml: "<h1>Welcome</h1>",
+      openingHeaderHtml: "<h2>Welcome</h2>",
       aboutBiographyHtml: "<p>About us.</p>",
       publicMetricKeys: [
         "gross_raised_usd",
@@ -473,15 +473,20 @@ test.describe("public advocate presentation boundary", () => {
   })
 
   test("sanitizes rich text again on read and rejects unsafe shapes", async () => {
-    const safe = await resolveSource(cloneSource())
+    const safeSource = cloneSource()
+    safeSource.branding.about_biography_html =
+      "<h1>About us.</h1><h2>Our work</h2>"
+    const safe = await resolveSource(safeSource)
     expect(safe.result.kind).toBe("active-advocate")
     if (safe.result.kind === "active-advocate") {
       expect(safe.result.presentation.openingHeaderHtml).toBe(
-        "<h1>Welcome</h1>",
+        "<h2>Welcome</h2>",
       )
       expect(safe.result.presentation.aboutBiographyHtml).toBe(
-        "<p>About us.</p>",
+        "<h3>About us.</h3><h3>Our work</h3>",
       )
+      expect(safe.result.presentation.openingHeaderHtml).not.toContain("<h1")
+      expect(safe.result.presentation.aboutBiographyHtml).not.toMatch(/<h1|<h2/)
       expect(JSON.stringify(safe.result.presentation)).not.toMatch(
         /onclick|script|href|https:\/\/tracker|<img/i,
       )

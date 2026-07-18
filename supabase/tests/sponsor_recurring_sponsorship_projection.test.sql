@@ -81,6 +81,10 @@ VALUES
     'active'
   );
 
+/* Model a malformed row that predates the public username write guard. */
+ALTER TABLE public.beneficiaries
+DISABLE TRIGGER beneficiary_username_public_shape_guard;
+
 INSERT INTO public.beneficiaries (
   id,
   name,
@@ -97,6 +101,9 @@ VALUES (
   -1,
   'New'
 );
+
+ALTER TABLE public.beneficiaries
+ENABLE TRIGGER beneficiary_username_public_shape_guard;
 
 INSERT INTO public.subscriptions (
   id,

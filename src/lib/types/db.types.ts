@@ -2609,7 +2609,7 @@ export type Database = {
       activity_source: "admin" | "sponsorship" | "system"
       activity_type: "INFO" | "UPDATE" | "SUBSCRIPTION"
       Gender: "Boy" | "Girl"
-      media_type: "IMAGE" | "VIDEO"
+      media_type: "IMAGE" | "VIDEO" | "DOCUMENT"
       partnership_frequency: "monthly" | "annually"
       payment_currency: "USD" | "AUD" | "GBP" | "EUR"
       PersonStatus:
@@ -2765,7 +2765,7 @@ export const Constants = {
       activity_source: ["admin", "sponsorship", "system"],
       activity_type: ["INFO", "UPDATE", "SUBSCRIPTION"],
       Gender: ["Boy", "Girl"],
-      media_type: ["IMAGE", "VIDEO"],
+      media_type: ["IMAGE", "VIDEO", "DOCUMENT"],
       partnership_frequency: ["monthly", "annually"],
       payment_currency: ["USD", "AUD", "GBP", "EUR"],
       PersonStatus: [

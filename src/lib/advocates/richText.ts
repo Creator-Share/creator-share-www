@@ -22,7 +22,9 @@ export const ADVOCATE_RICH_TEXT_ALLOWED_TAGS = Object.freeze([
 ] as const)
 
 export type AdvocateRichTextValidationCode =
-  "invalid_type" | "input_too_large" | "not_canonical"
+  | "invalid_type"
+  | "input_too_large"
+  | "not_canonical"
 
 export type AdvocateRichTextValidationResult =
   | { ok: true; value: string }
@@ -82,6 +84,24 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = Object.freeze({
   selfClosing: ["br"],
 })
 
+const OPENING_HEADER_SANITIZE_OPTIONS: sanitizeHtml.IOptions = Object.freeze({
+  ...SANITIZE_OPTIONS,
+  transformTags: {
+    h1: "h2",
+    h2: "h2",
+    h3: "h2",
+  },
+})
+
+const ABOUT_BIOGRAPHY_SANITIZE_OPTIONS: sanitizeHtml.IOptions = Object.freeze({
+  ...SANITIZE_OPTIONS,
+  transformTags: {
+    h1: "h3",
+    h2: "h3",
+    h3: "h3",
+  },
+})
+
 function inputValidationCode(
   value: unknown,
 ): Extract<
@@ -121,6 +141,28 @@ export function sanitizeAdvocateRichText(value: unknown): string {
   if (invalidInput) throw new AdvocateRichTextValidationError(invalidInput)
 
   return sanitizeHtml(value as string, SANITIZE_OPTIONS)
+}
+
+/**
+ * The page shell owns its one h1. Tenant-authored opening headings therefore
+ * begin at h2 regardless of which toolbar heading level produced the input.
+ */
+export function sanitizeAdvocateOpeningHeaderRichText(value: unknown): string {
+  const invalidInput = inputValidationCode(value)
+  if (invalidInput) throw new AdvocateRichTextValidationError(invalidInput)
+
+  return sanitizeHtml(value as string, OPENING_HEADER_SANITIZE_OPTIONS)
+}
+
+/**
+ * The dialog title is h2. Biography headings are normalized beneath it so a
+ * tenant cannot introduce another page h1 or skip the dialog hierarchy.
+ */
+export function sanitizeAdvocateAboutBiographyRichText(value: unknown): string {
+  const invalidInput = inputValidationCode(value)
+  if (invalidInput) throw new AdvocateRichTextValidationError(invalidInput)
+
+  return sanitizeHtml(value as string, ABOUT_BIOGRAPHY_SANITIZE_OPTIONS)
 }
 
 export function validateCanonicalAdvocateRichText(

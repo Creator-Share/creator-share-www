@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(72);
+SELECT extensions.plan(73);
 
 SELECT extensions.is(
   (
@@ -1643,12 +1643,43 @@ SELECT extensions.ok(
 );
 
 INSERT INTO public.media (parent_id, extension, type, weight)
-SELECT beneficiary.id, '.jpg', 'IMAGE', 1
+SELECT beneficiary.id, 'jpg', 'IMAGE', 1
 FROM public.beneficiaries beneficiary
 WHERE beneficiary.username IN (
   'foundation-public-beneficiary',
   'foundation-draft-beneficiary'
 );
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('media', 'media', true)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.objects (bucket_id, name)
+SELECT
+  'media',
+  media.parent_id::text
+    || '/'
+    || media.type::text
+    || '/'
+    || media.id::text
+    || '.'
+    || media.extension
+FROM public.media media
+JOIN public.beneficiaries beneficiary
+  ON beneficiary.id = media.parent_id
+WHERE beneficiary.username IN (
+  'foundation-public-beneficiary',
+  'foundation-draft-beneficiary'
+);
+
+SET LOCAL ROLE anon;
+
+SELECT extensions.lives_ok(
+  'SELECT count(*) FROM public.public_media',
+  'anonymous public media reads use the private storage existence check through the view only'
+);
+
+RESET ROLE;
 
 SELECT extensions.is(
   (
@@ -1661,7 +1692,7 @@ SELECT extensions.is(
     )
   ),
   1::bigint,
-  'the public media projection excludes media attached to unpublished beneficiaries'
+  'the public media projection requires stored objects and excludes media attached to unpublished beneficiaries'
 );
 
 SELECT extensions.ok(

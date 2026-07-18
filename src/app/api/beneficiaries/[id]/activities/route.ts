@@ -1,83 +1,101 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
-import {
-  filterExistingMediaRows,
-  getDirectMediaUrl,
-  MediaRow,
-} from "@/utils/supabase/media"
+import { NextResponse } from "next/server"
 
-/**
- * Public endpoint: fetch public activities for a beneficiary, with their
- * associated media URLs pre-resolved server-side to avoid client-side RLS
- * issues when querying the media table directly.
- *
- * GET /api/beneficiaries/[id]/activities
- */
+import {
+  isPublicBeneficiaryId,
+  parsePublicBeneficiaryActivities,
+} from "@/lib/advocates/publicCatalog"
+import { createServiceRolePublicCatalogRepository } from "@/lib/advocates/publicCatalogRepository"
+import { createServiceRolePublicAdvocatePresentationRepository } from "@/lib/advocates/publicPresentationRepository"
+import { resolvePublicSiteRequest } from "@/lib/advocates/publicSiteRequest"
+import { getDirectMediaUrl } from "@/utils/supabase/media"
+import { createServiceRoleClient } from "@/utils/supabase/server"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+const PRIVATE_NO_STORE_HEADERS = {
+  "Cache-Control": "private, no-store, max-age=0",
+  Pragma: "no-cache",
+  Vary: "Host",
+  "X-Content-Type-Options": "nosniff",
+} as const
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: PRIVATE_NO_STORE_HEADERS,
+  })
+}
+
 export async function GET(
-  _req: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params
-  if (!id) {
-    return NextResponse.json({ error: "Missing beneficiary id" }, { status: 400 })
-  }
+  const requestId = crypto.randomUUID()
 
-  const supabase = await createClient()
-
-  const { data: activities, error: activitiesError } = await supabase
-    .from("public_activities")
-    .select("*")
-    .eq("beneficiary_id", id)
-    .order("created_at", { ascending: false })
-
-  if (activitiesError) {
-    return NextResponse.json({ error: activitiesError.message }, { status: 500 })
-  }
-
-  const safe = activities || []
-  if (safe.length === 0) return NextResponse.json({ activities: [] })
-
-  // Batch-fetch all media for these activities in a single query.
-  const activityIds = safe.map((a) => a.id).filter(Boolean)
-
-  const { data: allMedia, error: mediaError } = await supabase
-    .from("public_media")
-    .select("*")
-    .in("parent_id", activityIds)
-    .order("created_at", { ascending: true })
-
-  if (mediaError) {
-    console.error("Failed to fetch activity media:", mediaError)
-    // Return activities without media rather than failing the whole request.
-  }
-
-  // Group media by parent_id for O(n) lookup.
-  const serviceSupabase = createServiceRoleClient()
-  const existingMedia = await filterExistingMediaRows(serviceSupabase, (allMedia || []) as unknown as MediaRow[])
-
-  const mediaByParent: Record<string, MediaRow[]> = {}
-  for (const m of existingMedia) {
-    const key = String(m.parent_id)
-    if (!mediaByParent[key]) mediaByParent[key] = []
-    mediaByParent[key].push(m)
-  }
-
-  const result = safe.map((activity) => {
-    const images_url: string[] = []
-    const videos_url: string[] = []
-
-    for (const m of mediaByParent[String(activity.id)] || []) {
-      try {
-        const url = getDirectMediaUrl(m as unknown as MediaRow)
-        if (m.type === "IMAGE") images_url.push(url)
-        else if (m.type === "VIDEO") videos_url.push(url)
-      } catch {
-        // skip rows missing required fields
-      }
+  try {
+    const serviceClient = createServiceRoleClient()
+    const siteResolution = await resolvePublicSiteRequest({
+      rawHost: request.headers.get("host"),
+      repository:
+        createServiceRolePublicAdvocatePresentationRepository(serviceClient),
+      environment: process.env,
+    })
+    if (siteResolution.kind === "not-found") {
+      return json({ error: "Beneficiary not found" }, 404)
+    }
+    if (siteResolution.kind === "operational-failure") {
+      console.error("Public beneficiary activity site resolution failed", {
+        requestId,
+      })
+      return json(
+        { error: "Beneficiary activities unavailable", requestId },
+        503,
+      )
     }
 
-    return { ...activity, images_url, videos_url }
-  })
+    const site = siteResolution.site
+    const { id } = await params
+    if (!isPublicBeneficiaryId(id)) {
+      return site.kind === "advocate"
+        ? json({ error: "Beneficiary not found" }, 404)
+        : json({ activities: [] })
+    }
 
-  return NextResponse.json({ activities: result })
+    const repository = createServiceRolePublicCatalogRepository(serviceClient)
+    const source =
+      site.kind === "advocate"
+        ? await repository.loadAdvocateBeneficiaryActivitiesById(
+            site.canonicalHostname,
+            id,
+          )
+        : await repository.loadPrimaryBeneficiaryActivitiesById(id)
+    const sourceActivities = parsePublicBeneficiaryActivities(source, id)
+    if (sourceActivities === null) {
+      return site.kind === "advocate"
+        ? json({ error: "Beneficiary not found" }, 404)
+        : json({ activities: [] })
+    }
+
+    const activities = sourceActivities.map((activity) => {
+      const images_url: string[] = []
+      const videos_url: string[] = []
+      for (const media of activity.media) {
+        const url = getDirectMediaUrl(media)
+        if (media.type === "IMAGE") images_url.push(url)
+        if (media.type === "VIDEO") videos_url.push(url)
+      }
+      const { media: _media, ...publicActivity } = activity
+      void _media
+      return { ...publicActivity, images_url, videos_url }
+    })
+
+    return json({ activities })
+  } catch (error) {
+    console.error("Public beneficiary activity request failed", {
+      requestId,
+      errorName: error instanceof Error ? error.name : "UnknownActivityError",
+    })
+    return json({ error: "Beneficiary activities unavailable", requestId }, 503)
+  }
 }

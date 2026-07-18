@@ -61,7 +61,8 @@ export interface Beneficiaries {
   introduction: string
   active_subscriptions: number
   metadata: BeneficiaryMetadata
-  beneficiary_type: BeneficiaryType
+  /** Database reads may retain bounded uppercase legacy values or null. */
+  beneficiary_type: BeneficiaryType | string | null
   image_url?: string
   created_at?: string
   sort_weight?: number
@@ -101,7 +102,7 @@ export interface BeneficiaryMedia {
   id: string
   parent_id: string
   extension: string
-  type: "IMAGE" | "VIDEO"
+  type: "IMAGE" | "VIDEO" | "DOCUMENT"
   weight: number | null
   created_at: string | null
 }

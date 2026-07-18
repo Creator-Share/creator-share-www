@@ -6,7 +6,10 @@ import {
   resolveAdvocateHost,
   type ResolveAdvocateHostOptions,
 } from "./host"
-import { sanitizeAdvocateRichText } from "./richText"
+import {
+  sanitizeAdvocateAboutBiographyRichText,
+  sanitizeAdvocateOpeningHeaderRichText,
+} from "./richText"
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -61,7 +64,8 @@ export interface PublicAdvocateAssetOptions {
 }
 
 export interface ResolvePublicAdvocateRequestOptions
-  extends ResolveAdvocateHostOptions, PublicAdvocateAssetOptions {
+  extends ResolveAdvocateHostOptions,
+    PublicAdvocateAssetOptions {
   /**
    * Extra non-tenant hosts, such as a specific Vercel preview hostname, that
    * a trusted runtime configuration explicitly permits to serve the primary
@@ -366,8 +370,12 @@ function buildPresentation(
   let openingHeaderHtml: string
   let aboutBiographyHtml: string
   try {
-    openingHeaderHtml = sanitizeAdvocateRichText(branding.opening_header_html)
-    aboutBiographyHtml = sanitizeAdvocateRichText(branding.about_biography_html)
+    openingHeaderHtml = sanitizeAdvocateOpeningHeaderRichText(
+      branding.opening_header_html,
+    )
+    aboutBiographyHtml = sanitizeAdvocateAboutBiographyRichText(
+      branding.about_biography_html,
+    )
   } catch {
     return null
   }
