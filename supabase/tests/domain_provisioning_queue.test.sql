@@ -695,7 +695,9 @@ SELECT public.complete_domain_provisioning_job(
   'succeeded',
   NULL,
   jsonb_build_object(
+    'provider_status', 'dns_only_cname_ready',
     'provider_resource_id', 'cloudflare-record-1',
+    'dns_record_id', 'cloudflare-record-1',
     'verified', true
   )
 )

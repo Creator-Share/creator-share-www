@@ -9,6 +9,95 @@ CREATE TEMP TABLE checkout_boundary_test_context (
   uuid_value uuid
 ) ON COMMIT DROP;
 
+CREATE FUNCTION pg_temp.activate_test_advocate_domain(
+  target_domain_id uuid,
+  worker_id text
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_claim record;
+  v_evidence jsonb;
+  v_hostname text;
+  v_completed integer := 0;
+BEGIN
+  SELECT domain.hostname
+  INTO v_hostname
+  FROM public.advocate_domains domain
+  WHERE domain.id = target_domain_id;
+
+  IF v_hostname IS NULL THEN
+    RAISE EXCEPTION 'Test advocate domain is missing';
+  END IF;
+
+  PERFORM public.enqueue_domain_provisioning_job_system(
+    integration.domain_id,
+    integration.id,
+    'provision',
+    clock_timestamp(),
+    worker_id || ':' || integration.provider::text
+  )
+  FROM public.advocate_domain_integrations integration
+  WHERE integration.domain_id = target_domain_id;
+
+  FOR v_claim IN
+    SELECT *
+    FROM public.claim_domain_provisioning_jobs(
+      worker_id,
+      5,
+      interval '10 minutes'
+    )
+  LOOP
+    IF v_claim.domain_id IS DISTINCT FROM target_domain_id THEN
+      RAISE EXCEPTION 'Test worker claimed an unrelated domain job';
+    END IF;
+
+    v_evidence := CASE v_claim.provider
+      WHEN 'cloudflare' THEN jsonb_build_object(
+        'provider_status', 'dns_only_cname_ready',
+        'provider_resource_id', repeat('a', 32),
+        'dns_record_id', repeat('a', 32),
+        'http_status', 200,
+        'verified', true
+      )
+      WHEN 'vercel' THEN jsonb_build_object(
+        'provider_status', 'attached_verified',
+        'provider_resource_id', v_hostname,
+        'deployment_id', worker_id || '_deployment',
+        'http_status', 200,
+        'verified', true
+      )
+      ELSE jsonb_build_object(
+        'provider_status', 'payment_path_ready',
+        'provider_resource_id', v_claim.provider::text || ':hosted_checkout',
+        'http_status', 200,
+        'verified', true
+      )
+    END;
+
+    PERFORM public.record_domain_provisioning_reconciliation(
+      v_claim.job_id,
+      v_claim.lease_token,
+      'matches_intent',
+      v_evidence
+    );
+    PERFORM public.complete_domain_provisioning_job(
+      v_claim.job_id,
+      v_claim.lease_token,
+      'succeeded',
+      NULL,
+      v_evidence
+    );
+    v_completed := v_completed + 1;
+  END LOOP;
+
+  IF v_completed <> 5 THEN
+    RAISE EXCEPTION 'Test domain did not settle all five provider jobs';
+  END IF;
+END;
+$$;
+
 INSERT INTO auth.users (
   id,
   aud,
@@ -167,44 +256,13 @@ CROSS JOIN (
 WHERE advocate.key = 'advocate'
   AND domain.key = 'domain';
 
-UPDATE public.advocate_domain_integrations
-SET status = 'provisioning'
-WHERE domain_id = (
-  SELECT uuid_value
-  FROM checkout_boundary_test_context
-  WHERE key = 'domain'
-);
-
-UPDATE public.advocate_domain_integrations
-SET status = 'ready'
-WHERE domain_id = (
-  SELECT uuid_value
-  FROM checkout_boundary_test_context
-  WHERE key = 'domain'
-);
-
-UPDATE public.advocate_domains
-SET status = 'provisioning'
-WHERE id = (
-  SELECT uuid_value
-  FROM checkout_boundary_test_context
-  WHERE key = 'domain'
-);
-
-UPDATE public.advocate_domains
-SET status = 'verifying'
-WHERE id = (
-  SELECT uuid_value
-  FROM checkout_boundary_test_context
-  WHERE key = 'domain'
-);
-
-UPDATE public.advocate_domains
-SET status = 'active'
-WHERE id = (
-  SELECT uuid_value
-  FROM checkout_boundary_test_context
-  WHERE key = 'domain'
+SELECT pg_temp.activate_test_advocate_domain(
+  (
+    SELECT uuid_value
+    FROM checkout_boundary_test_context
+    WHERE key = 'domain'
+  ),
+  'checkout-boundary-test-worker'
 );
 
 WITH recorded AS MATERIALIZED (
