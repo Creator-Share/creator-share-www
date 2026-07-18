@@ -1,9 +1,49 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { AuthSessionMissingError } from "@supabase/supabase-js"
+import {
+  createSponsorshipVisitorToken,
+  getSponsorshipVisitorCookieOptions,
+  isValidSponsorshipVisitorToken,
+  SPONSORSHIP_VISITOR_COOKIE_NAME,
+} from "@/lib/sponsorships/visitorCookie"
+
+type ResponseCookieMutation = {
+  name: string
+  value: string
+  options?: CookieOptions
+}
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+  const responseCookieMutations: ResponseCookieMutation[] = []
+  const existingVisitorToken = request.cookies.get(
+    SPONSORSHIP_VISITOR_COOKIE_NAME,
+  )?.value
+
+  if (!isValidSponsorshipVisitorToken(existingVisitorToken)) {
+    const visitorToken = createSponsorshipVisitorToken()
+    const visitorCookie = {
+      name: SPONSORSHIP_VISITOR_COOKIE_NAME,
+      value: visitorToken,
+      options: getSponsorshipVisitorCookieOptions(
+        request.headers.get("host"),
+        request.nextUrl.protocol === "https:",
+      ),
+    }
+    request.cookies.set(visitorCookie.name, visitorCookie.value)
+    responseCookieMutations.push(visitorCookie)
+  }
+
+  const applyResponseCookies = (response: NextResponse) => {
+    responseCookieMutations.forEach(({ name, value, options }) =>
+      response.cookies.set(name, value, options),
+    )
+    return response
+  }
+
+  let supabaseResponse = applyResponseCookies(
+    NextResponse.next({ request }),
+  )
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,12 +54,12 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet: { name: string; value: string; options?: CookieOptions }[]) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value),
-          )
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options),
+          cookiesToSet.forEach((cookie) => {
+            request.cookies.set(cookie.name, cookie.value)
+            responseCookieMutations.push(cookie)
+          })
+          supabaseResponse = applyResponseCookies(
+            NextResponse.next({ request }),
           )
         },
       },
@@ -42,12 +82,14 @@ export async function updateSession(request: NextRequest) {
   ) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
-    return NextResponse.redirect(url)
+    return applyResponseCookies(NextResponse.redirect(url))
   }
 
   // API admin routes require authentication (defense-in-depth; routes also check SUPER_ADMIN)
   if (!user && request.nextUrl.pathname.startsWith("/api/admin")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return applyResponseCookies(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    )
   }
 
   return supabaseResponse

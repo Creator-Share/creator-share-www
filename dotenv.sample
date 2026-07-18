@@ -80,6 +80,13 @@ EMAIL_PORT=587
 EMAIL_SECURE=true
 EMAIL_FROM="Creator Share" <noreply@creatorshare.com>
 
+# Sponsor identity HMACs, account-claim tokens, and encrypted email outbox
+# payloads. Server only. Generate one canonical base64 value containing at
+# least 32 random bytes, use a different value in each environment, and never
+# expose it through a NEXT_PUBLIC variable. Keep prior numbered keys available
+# during rotation.
+SPONSORSHIP_CRYPTO_SECRET_V1=
+
 
 # AI Proofreading (OpenAI-Compatible API)
 # Supports: OpenAI, Azure OpenAI, OpenRouter, Anthropic (via proxy), local models (LM Studio, Ollama), etc.

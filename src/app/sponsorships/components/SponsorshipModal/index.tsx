@@ -70,6 +70,7 @@ const OPEN_SPONSORSHIP_RIGHT_PRESETS_USD = [50, 100, 1111] as const
 const OPEN_SPONSORSHIP_DEFAULT_USD = 33
 const OPEN_SPONSORSHIP_DEFAULT_CENTS = OPEN_SPONSORSHIP_DEFAULT_USD * 100
 const SPONSORSHIP_CURRENCY_STORAGE_KEY = "creator-share:sponsorship-currency"
+const SPONSOR_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // PayPal components are optional and loaded only when the env var is set.
 // Using next/dynamic avoids the broken module-level let + fire-and-forget import()
@@ -155,6 +156,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [oneTimeCustomCents, setOneTimeCustomCents] = useState<number>(0)
   const [selectedCurrency, setSelectedCurrency] =
     useState<SupportedCurrency>("USD")
+  const [sponsorEmail, setSponsorEmail] = useState(user?.email || "")
   const [activeColumn, setActiveColumn] = useState<
     "monthly" | "one_time" | null
   >(isOpen ? "monthly" : null)
@@ -306,13 +308,30 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       setBioExpanded(false)
       setFaqOpen(false)
       setVideoUrl(beneficiary.video_url?.trim() || "")
+      setSponsorEmail(user?.email || "")
     }
-  }, [open, isOpen, fixedAmountCents, beneficiary.video_url])
+  }, [open, isOpen, fixedAmountCents, beneficiary.video_url, user?.email])
+
+  useEffect(() => {
+    if (user?.email) setSponsorEmail(user.email)
+  }, [user?.email])
 
   const handleCurrencyChange = (value: string) => {
     const currency = coerceSupportedCurrency(value)
     setSelectedCurrency(currency)
     window.localStorage.setItem(SPONSORSHIP_CURRENCY_STORAGE_KEY, currency)
+  }
+
+  const getValidatedSponsorEmail = () => {
+    const normalized = sponsorEmail.trim()
+    if (SPONSOR_EMAIL_PATTERN.test(normalized)) return normalized
+
+    toaster.create({
+      title: "Email Required",
+      description:
+        "Enter a valid email for your receipt and sponsorship management link.",
+    })
+    return null
   }
 
   const getStatusText = (status: string) => {
@@ -414,6 +433,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const handleStripePayment = async (
     paymentType: SponsorshipFrequency = "subscription",
   ) => {
+    const validatedEmail = getValidatedSponsorEmail()
+    if (!validatedEmail) return
+
     const amountCents =
       paymentType === "subscription" ? monthlyAmountCents : oneTimeAmountCents
     const canPay =
@@ -441,7 +463,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
         location: beneficiary.country,
         userId: user?.id,
         isEmbedded: window.self !== window.top,
-        email: user?.email || undefined,
+        email: validatedEmail,
         type: "sponsorship",
         currency: selectedCurrency,
       }
@@ -529,6 +551,10 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       }
     },
   ) => {
+    if (!getValidatedSponsorEmail()) {
+      throw new Error("A valid email is required")
+    }
+
     const paypalAmountCents =
       selectedOption === "subscription"
         ? monthlyAmountCents
@@ -571,6 +597,9 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   const handlePayPalApproval = async (data: { orderID: string }) => {
     try {
+      const validatedEmail = getValidatedSponsorEmail()
+      if (!validatedEmail) return
+
       if (selectedOption === "subscription") {
         const planRes = await fetch("/api/paypal/plan", {
           method: "POST",
@@ -603,8 +632,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
               ? monthlyAmountCents
               : fixedAmountCents,
             currency_code: selectedCurrency,
-            subscriber_email: user?.email,
-            subscriber_name: user?.email || "",
+            subscriber_email: validatedEmail,
           }),
         })
         const subData = await subRes.json()
@@ -642,7 +670,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
             paymentType: selectedOption,
             location: beneficiary.country,
           userId: user?.id,
-          email: user?.email,
+          email: validatedEmail,
           orderID: data.orderID,
         }),
       })
@@ -1170,6 +1198,48 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
                   </>
                 ) : (
                   <>
+                    <Box
+                      textAlign="left"
+                      mb={{ base: 8, md: 10 }}
+                      maxW={{ base: "100%", md: "520px" }}
+                    >
+                      <Text
+                        fontWeight="semibold"
+                        fontSize="sm"
+                        color="gray.600"
+                        mb={2}
+                      >
+                        Email for receipts and sponsorship management
+                      </Text>
+                      <Input
+                        type="email"
+                        inputMode="email"
+                        autoComplete="email"
+                        value={sponsorEmail}
+                        onChange={(event) => setSponsorEmail(event.target.value)}
+                        readOnly={Boolean(user?.email)}
+                        aria-readonly={Boolean(user?.email)}
+                        placeholder="you@example.com"
+                        h="56px"
+                        borderRadius="xl"
+                        borderColor="gray.300"
+                        bg={user?.email ? "gray.100" : "white"}
+                        px={4}
+                        fontSize="md"
+                        color="gray.700"
+                        boxShadow="sm"
+                        _focusVisible={{
+                          borderColor: "#2b7ff9",
+                          boxShadow: "0 0 0 1px #2b7ff9",
+                          outline: "none",
+                        }}
+                      />
+                      <Text color="gray.600" fontSize="xs" mt={2}>
+                        After your first sponsorship, we will email a secure
+                        link to create or access your account and manage every
+                        sponsorship made with this address.
+                      </Text>
+                    </Box>
                     {/* Amount input, combined chips plus custom field for open types, inline disabled input for fixed types. */}
                     <Box
                       textAlign="left"
