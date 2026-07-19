@@ -7,6 +7,7 @@ import {
   resolveTrustedPrimaryRequestOrigin,
 } from "@/lib/sponsorships/checkout/requestSecurity"
 import {
+  createSubscriptionCancellationRequestContext,
   MAXIMUM_SUBSCRIPTION_CANCELLATION_BODY_BYTES,
   parseSubscriptionCancellationBody,
   SubscriptionCancellationBoundaryError,
@@ -27,32 +28,13 @@ const RESPONSE_HEADERS = {
   "X-Content-Type-Options": "nosniff",
 } as const
 
-function boundedHeader(
-  request: NextRequest,
-  name: string,
-  maximumLength: number,
-): string | null {
-  const value = request.headers.get(name)?.trim()
-  return value ? value.slice(0, maximumLength) : null
-}
-
 function requestContext(
   request: NextRequest,
 ): SubscriptionCancellationRequestContext {
-  return {
+  return createSubscriptionCancellationRequestContext({
     requestId: randomUUID(),
-    traceId:
-      boundedHeader(request, "x-vercel-id", 255) ??
-      boundedHeader(request, "cf-ray", 255) ??
-      boundedHeader(request, "traceparent", 255) ??
-      boundedHeader(request, "x-trace-id", 255),
-    clientIp:
-      boundedHeader(request, "cf-connecting-ip", 256) ??
-      boundedHeader(request, "x-vercel-forwarded-for", 256) ??
-      boundedHeader(request, "x-forwarded-for", 256) ??
-      boundedHeader(request, "x-real-ip", 256),
-    userAgent: boundedHeader(request, "user-agent", 1024),
-  }
+    headers: request.headers,
+  })
 }
 
 function response(body: Record<string, unknown>, status: number) {

@@ -2,7 +2,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { LuArrowUpDown } from "react-icons/lu"
 import { MdCancelPresentation } from "react-icons/md"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import {
   DialogRoot,
   DialogContent,
@@ -17,6 +17,12 @@ import {
   subscriptionCancellationNotice,
 } from "@/lib/sponsorships/cancellation/subscriptionCancellationClient"
 import type { SponsorRecurringSponsorship } from "@/lib/sponsorships/sponsorRecurringSponsorships"
+import {
+  isRecentVerificationRequiredResponse,
+  requestFreshSponsorAuthentication,
+  sponsorReauthenticationMessage,
+} from "@/lib/sponsorships/management/sponsorReauthenticationClient"
+import { ManagePaymentMethodButton } from "./components/ManagePaymentMethodButton"
 
 // Cancel Subscription Button Component with Modal
 const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
@@ -24,6 +30,7 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const actionInFlight = useRef(false)
   const subject = presentSubscriptionSubject({
     subjectKind: subscription.subject_kind,
     partnershipProject: subscription.partnership_project,
@@ -36,6 +43,7 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
   }
 
   const handleConfirmCancel = async () => {
+    if (actionInFlight.current) return
     const subscriptionId = subscription.id
 
     if (!subscriptionId) {
@@ -43,6 +51,7 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
       return
     }
 
+    actionInFlight.current = true
     setIsLoading(true)
 
     try {
@@ -50,29 +59,39 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscriptionId }),
+        cache: "no-store",
+        credentials: "same-origin",
+        redirect: "error",
       })
 
       const body = (await response.json().catch(() => null)) as unknown
+      if (isRecentVerificationRequiredResponse(response.status, body)) {
+        const requestAccepted = await requestFreshSponsorAuthentication()
+        setIsModalOpen(false)
+        alert(
+          sponsorReauthenticationMessage("cancel-sponsorship", requestAccepted),
+        )
+        return
+      }
+
       const result = parseSubscriptionCancellationClientResult(body)
 
-      if (!result) {
-        const error =
-          body && typeof body === "object" && "error" in body
-            ? String((body as { error?: unknown }).error)
-            : "Failed to cancel subscription"
-        throw new Error(error)
+      if (!response.ok || !result) {
+        throw new Error("cancellation-unavailable")
       }
 
       const notice = subscriptionCancellationNotice(result.status)
       alert(`${notice.title}\n\n${notice.description}`)
-      setIsLoading(false)
       setIsModalOpen(false)
       if (result.status === "cancelled") window.location.reload()
-    } catch (error) {
-      console.error("Error canceling subscription:", error)
-      setIsLoading(false)
+    } catch {
       setIsModalOpen(false)
-      alert(`Error canceling subscription: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      alert(
+        "We could not submit the cancellation request. Please try again shortly.",
+      )
+    } finally {
+      actionInFlight.current = false
+      setIsLoading(false)
     }
   }
 
@@ -108,13 +127,29 @@ const CancelSubscriptionButton: React.FC<{ subscription: Subscription }> = ({
             ) : (
               <Flex direction="column" gap={4}>
                 <Text>
-                  Are you sure you want to cancel your {subject.subjectKind === "partnership" ? "partnership" : "sponsorship"}
+                  Are you sure you want to cancel your{" "}
+                  {subject.subjectKind === "partnership"
+                    ? "partnership"
+                    : "sponsorship"}
                   {subject.subjectKind === "partnership" ? (
-                    <> for the <strong>{subject.title}</strong>?</>
+                    <>
+                      {" "}
+                      for the <strong>{subject.title}</strong>?
+                    </>
                   ) : subscription.beneficiary_id ? (
-                    <> for <strong>{subscription.child?.name || "this beneficiary"}</strong>?</>
+                    <>
+                      {" "}
+                      for{" "}
+                      <strong>
+                        {subscription.child?.name || "this beneficiary"}
+                      </strong>
+                      ?
+                    </>
                   ) : (
-                    <>? This sponsorship hasn't been matched to a beneficiary yet.</>
+                    <>
+                      ? This sponsorship hasn't been matched to a beneficiary
+                      yet.
+                    </>
                   )}
                 </Text>
                 <Text fontSize="sm" color="gray.600">
@@ -210,12 +245,12 @@ export const columns: ColumnDef<Subscription>[] = [
           </div>
         )
       }
-      
+
       return (
         <div>
           {child?.name ? (
             <a
-              href={`/sponsorships/${child.username || child.name.toLowerCase().replace(/\s+/g, '-')}`}
+              href={`/sponsorships/${child.username || child.name.toLowerCase().replace(/\s+/g, "-")}`}
               className="text-blue-600 hover:text-blue-800 hover:underline"
             >
               {child.name}
@@ -298,7 +333,10 @@ export const columns: ColumnDef<Subscription>[] = [
     cell: ({ row }) => {
       const subscription = row.original
       return subscription.status !== "cancelled" ? (
-        <CancelSubscriptionButton subscription={subscription} />
+        <Flex gap={2} wrap="wrap">
+          <ManagePaymentMethodButton subscriptionId={subscription.id} />
+          <CancelSubscriptionButton subscription={subscription} />
+        </Flex>
       ) : null
     },
   },

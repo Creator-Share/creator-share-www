@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createHash } from "node:crypto"
+import { isIP } from "node:net"
 
 export const MAXIMUM_SUBSCRIPTION_CANCELLATION_BODY_BYTES = 1024
 export const MAXIMUM_SUBSCRIPTION_CANCELLATION_REASON_CHARACTERS = 500
@@ -26,6 +27,48 @@ export interface SubscriptionCancellationRequestContext {
   traceId: string | null
   clientIp: string | null
   userAgent: string | null
+}
+
+export type SubscriptionCancellationRequestEnvironment = Readonly<
+  Record<string, string | undefined>
+>
+
+function boundedRequestHeader(
+  headers: Pick<Headers, "get">,
+  name: string,
+  maximumLength: number,
+): string | null {
+  const value = headers.get(name)?.trim()
+  return value &&
+    value.length <= maximumLength &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
+    ? value
+    : null
+}
+
+/**
+ * Vercel overwrites these two infrastructure headers at final ingress. Other
+ * proxy headers and every non-Vercel value are browser assertions, not
+ * forensic evidence, so they are deliberately recorded as unavailable.
+ */
+export function createSubscriptionCancellationRequestContext(options: {
+  requestId: string
+  headers: Pick<Headers, "get">
+  environment?: SubscriptionCancellationRequestEnvironment
+}): SubscriptionCancellationRequestContext {
+  const environment = options.environment ?? process.env
+  const onVercel = environment.VERCEL === "1"
+  const source = onVercel
+    ? boundedRequestHeader(options.headers, "x-vercel-forwarded-for", 64)
+    : null
+  return Object.freeze({
+    requestId: options.requestId,
+    traceId: onVercel
+      ? boundedRequestHeader(options.headers, "x-vercel-id", 255)
+      : null,
+    clientIp: source !== null && isIP(source) !== 0 ? source : null,
+    userAgent: boundedRequestHeader(options.headers, "user-agent", 1024),
+  })
 }
 
 export interface SubscriptionCancellationRequest {
@@ -129,8 +172,12 @@ export interface SubscriptionCancellationProviderDependencies {
 
 export class SubscriptionCancellationBoundaryError extends Error {
   readonly code:
-    "invalid-request" | "unauthorized" | "forbidden" | "unavailable"
-  readonly httpStatus: 400 | 401 | 403 | 503
+    | "invalid-request"
+    | "unauthorized"
+    | "forbidden"
+    | "recent-verification-required"
+    | "unavailable"
+  readonly httpStatus: 400 | 401 | 403 | 428 | 503
 
   constructor(
     code: SubscriptionCancellationBoundaryError["code"],
@@ -141,6 +188,33 @@ export class SubscriptionCancellationBoundaryError extends Error {
     this.code = code
     this.httpStatus = httpStatus
   }
+}
+
+export function subscriptionCancellationRpcFailure(
+  error: {
+    code?: string
+    message?: string
+  } | null,
+): never {
+  if (error?.code === "28000") {
+    throw new SubscriptionCancellationBoundaryError("unauthorized", 401)
+  }
+  if (
+    error?.code === "42501" &&
+    error.message?.startsWith("recent-verification-required")
+  ) {
+    throw new SubscriptionCancellationBoundaryError(
+      "recent-verification-required",
+      428,
+    )
+  }
+  if (error?.code === "42501") {
+    throw new SubscriptionCancellationBoundaryError("forbidden", 403)
+  }
+  if (error?.code === "22023" || error?.code === "22P02") {
+    throw new SubscriptionCancellationBoundaryError("invalid-request", 400)
+  }
+  throw new SubscriptionCancellationBoundaryError("unavailable", 503)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

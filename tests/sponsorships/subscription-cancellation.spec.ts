@@ -39,12 +39,14 @@ const {
   cancelClaimedSubscriptionWithProvider,
   cancelPayPalSubscription,
   cancelStripeSubscription,
+  createSubscriptionCancellationRequestContext,
   digestSubscriptionCancellationProviderEvidence,
   executeSubscriptionCancellation,
   parseBegunSubscriptionCancellation,
   parseClaimedSubscriptionCancellation,
   parseSettledSubscriptionCancellation,
   parseSubscriptionCancellationBody,
+  subscriptionCancellationRpcFailure,
 } = cancellation
 
 const SUBSCRIPTION_ID = "11111111-1111-4111-8111-111111111111"
@@ -91,6 +93,82 @@ function successfulOutcome() {
 }
 
 test.describe("subscription cancellation browser boundary", () => {
+  test("records only Vercel-overwritten network forensics", () => {
+    const headers = new Headers({
+      "cf-connecting-ip": "198.51.100.40",
+      "x-forwarded-for": "198.51.100.41",
+      "x-real-ip": "198.51.100.42",
+      "x-trace-id": "browser-selected-trace",
+      "x-vercel-forwarded-for": "203.0.113.9",
+      "x-vercel-id": "sfo1::trusted-request-reference",
+      "user-agent": "Sponsor browser",
+    })
+
+    expect(
+      createSubscriptionCancellationRequestContext({
+        requestId: context.requestId,
+        headers,
+        environment: {},
+      }),
+    ).toEqual({
+      requestId: context.requestId,
+      traceId: null,
+      clientIp: null,
+      userAgent: "Sponsor browser",
+    })
+
+    expect(
+      createSubscriptionCancellationRequestContext({
+        requestId: context.requestId,
+        headers,
+        environment: { VERCEL: "1" },
+      }),
+    ).toEqual({
+      requestId: context.requestId,
+      traceId: "sfo1::trusted-request-reference",
+      clientIp: "203.0.113.9",
+      userAgent: "Sponsor browser",
+    })
+
+    headers.set("x-vercel-forwarded-for", "203.0.113.9, 198.51.100.40")
+    headers.set("x-vercel-id", "x".repeat(256))
+    expect(
+      createSubscriptionCancellationRequestContext({
+        requestId: context.requestId,
+        headers,
+        environment: { VERCEL: "1" },
+      }),
+    ).toMatchObject({ traceId: null, clientIp: null })
+  })
+
+  test("preserves the recent verification precondition without exposing database detail", () => {
+    let recentError: unknown
+    try {
+      subscriptionCancellationRpcFailure({
+        code: "42501",
+        message: "recent-verification-required: stale authentication",
+      })
+    } catch (error) {
+      recentError = error
+    }
+    expect(recentError).toMatchObject({
+      code: "recent-verification-required",
+      httpStatus: 428,
+      message: "Subscription cancellation request could not be completed",
+    })
+
+    let forbiddenError: unknown
+    try {
+      subscriptionCancellationRpcFailure({
+        code: "42501",
+        message: "Subscription cancellation is not authorized",
+      })
+    } catch (error) {
+      forbiddenError = error
+    }
+    expect(forbiddenError).toMatchObject({ code: "forbidden", httpStatus: 403 })
+  })
+
   test("accepts a subscription UUID and an optional bounded plain text reason", () => {
     expect(
       parseSubscriptionCancellationBody(
@@ -383,6 +461,39 @@ test.describe("PayPal cancellation adapter", () => {
 })
 
 test.describe("durable cancellation orchestration", () => {
+  test("does not claim or call a provider before recent verification succeeds", async () => {
+    let claimCount = 0
+    let providerCount = 0
+
+    await expect(
+      executeSubscriptionCancellation(SUBSCRIPTION_ID, null, context, {
+        async begin() {
+          return subscriptionCancellationRpcFailure({
+            code: "42501",
+            message: "recent-verification-required: stale authentication",
+          })
+        },
+        async claim() {
+          claimCount += 1
+          return claimed()
+        },
+        async cancelProvider() {
+          providerCount += 1
+          return successfulOutcome()
+        },
+        async settle() {
+          throw new Error("unreachable")
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "recent-verification-required",
+      httpStatus: 428,
+    })
+
+    expect(claimCount).toBe(0)
+    expect(providerCount).toBe(0)
+  })
+
   test("does not call a provider for an already cancelled operation", async () => {
     let claimCount = 0
     let providerCount = 0
@@ -587,6 +698,11 @@ test("the sponsor UI sends only the internal subscription UUID", async () => {
 
   expect(source).toContain("const subscriptionId = subscription.id")
   expect(source).not.toContain("subscription.sponsorship_id || subscription.id")
+  expect(source).toContain("isRecentVerificationRequiredResponse")
+  expect(source).toContain("requestFreshSponsorAuthentication")
+  expect(source).toContain('"cancel-sponsorship"')
+  expect(source).not.toContain("console.")
+  expect(source).not.toContain("String((body as")
 })
 
 test("the administrator UI collects a bounded internal override reason", async () => {

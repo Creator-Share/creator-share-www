@@ -6,6 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "postbuild": "node scripts/verify-advocate-build.mjs",
+    "audit:stripe-payment-methods": "node scripts/audit-stripe-payment-methods.mjs",
     "start": "next start",
     "update-types-dev": "npx supabase gen types typescript --project-id \"$SUPABASE_PROJECT_ID\" --schema public > src/lib/types/db.types.ts",
     "lint": "next lint",

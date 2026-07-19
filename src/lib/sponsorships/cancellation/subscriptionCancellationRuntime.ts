@@ -7,6 +7,7 @@ import {
   parseBegunSubscriptionCancellation,
   parseClaimedSubscriptionCancellation,
   parseSettledSubscriptionCancellation,
+  subscriptionCancellationRpcFailure,
   SubscriptionCancellationBoundaryError,
   type SafeSubscriptionCancellationResponse,
   type SubscriptionCancellationDependencies,
@@ -18,6 +19,7 @@ import { getStripeClient } from "@/lib/stripe/config"
 
 interface RpcError {
   code?: string
+  message?: string
 }
 
 interface RpcResult {
@@ -30,19 +32,6 @@ export interface SubscriptionCancellationRpcClient {
     functionName: string,
     args: Record<string, unknown>,
   ): PromiseLike<RpcResult>
-}
-
-function databaseFailure(error: RpcError | null): never {
-  if (error?.code === "28000") {
-    throw new SubscriptionCancellationBoundaryError("unauthorized", 401)
-  }
-  if (error?.code === "42501") {
-    throw new SubscriptionCancellationBoundaryError("forbidden", 403)
-  }
-  if (error?.code === "22023" || error?.code === "22P02") {
-    throw new SubscriptionCancellationBoundaryError("invalid-request", 400)
-  }
-  throw new SubscriptionCancellationBoundaryError("unavailable", 503)
 }
 
 function stripeClientForScope(
@@ -72,7 +61,7 @@ export function createSubscriptionCancellationDependencies(
           request_reason: reason,
         },
       )
-      if (error) databaseFailure(error)
+      if (error) subscriptionCancellationRpcFailure(error)
       return parseBegunSubscriptionCancellation(data)
     },
 
@@ -89,7 +78,7 @@ export function createSubscriptionCancellationDependencies(
           context_user_agent: context.userAgent,
         },
       )
-      if (error) databaseFailure(error)
+      if (error) subscriptionCancellationRpcFailure(error)
       return parseClaimedSubscriptionCancellation(data)
     },
 
@@ -119,7 +108,7 @@ export function createSubscriptionCancellationDependencies(
           context_user_agent: context.userAgent,
         },
       )
-      if (error) databaseFailure(error)
+      if (error) subscriptionCancellationRpcFailure(error)
       return parseSettledSubscriptionCancellation(data)
     },
   }
