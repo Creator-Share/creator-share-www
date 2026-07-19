@@ -8,15 +8,16 @@ import {
   isPublicationCanaryJsonContentType,
   MAX_PUBLICATION_CANARY_REQUEST_BODY_BYTES,
   parsePublicationCanaryCompletionResult,
+  parsePublicationCanaryDeploymentCapability,
   parsePublicationCanaryExecutionResult,
   parsePublicationCanaryOperationInput,
+  parsePublicationCanaryOperationSnapshot,
   parsePublicationCanaryPublishResult,
   parsePublicationCanaryStartResult,
   parsePublicationCanaryWorkerClaimResult,
   readBoundedPublicationCanaryBody,
 } from "../../src/lib/advocates/publicationCanary/operation"
 
-const ACTOR_ID = "11111111-1111-4111-8111-111111111111"
 const ADVOCATE_ID = "22222222-2222-4222-8222-222222222222"
 const DOMAIN_ID = "33333333-3333-4333-8333-333333333333"
 const OPERATION_ID = "44444444-4444-4444-8444-444444444444"
@@ -31,6 +32,7 @@ const REVISION = "a".repeat(40)
 const REPORT_SHA256 = "b".repeat(64)
 const START_REQUEST_ID = "99999999-9999-4999-8999-999999999999"
 const LEASE_TOKEN = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab"
+const DEPLOYMENT_CAPABILITY_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 const STARTED_AT = "2026-07-18T18:00:00.123456+00:00"
 const COMPLETED_AT = "2026-07-18T18:01:00.000+00:00"
 const LEASED_UNTIL = "2026-07-18T18:05:00.000+00:00"
@@ -55,6 +57,25 @@ function startRow() {
     stripe_uk_attempt_id: ATTEMPT_IDS.stripeUk,
     paypal_attempt_id: ATTEMPT_IDS.paypal,
     started_at: STARTED_AT,
+  }
+}
+
+function operationSnapshotRow(overrides: Record<string, unknown> = {}) {
+  return {
+    operation_id: OPERATION_ID,
+    run_id: RUN_ID,
+    advocate_id: ADVOCATE_ID,
+    expected_advocate_version: 17,
+    deployment_id: DEPLOYMENT_ID,
+    revision: REVISION,
+    started_at: STARTED_AT,
+    outcome: null,
+    failure_code: null,
+    report_sha256: null,
+    completed_at: null,
+    published_advocate_version: null,
+    created: true,
+    ...overrides,
   }
 }
 
@@ -120,35 +141,31 @@ test.describe("publication canary operation boundary", () => {
     }
   })
 
-  test("derives stable actor, target, deployment, and phase bound identities", () => {
+  test("uses the raw v4 operation UUID independently of actor and deployment context", () => {
     const startInput = {
-      actorUserId: ACTOR_ID,
       advocateId: ADVOCATE_ID,
       expectedVersion: 17,
       operationId: OPERATION_ID,
       adminReason: "Initial advocate publication after release review.",
-      deploymentId: DEPLOYMENT_ID,
-      revision: REVISION,
     }
     const startRequestId = derivePublicationCanaryStartRequestId(startInput)
-    expect(startRequestId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-    )
-    expect(derivePublicationCanaryStartRequestId(startInput)).toBe(
-      startRequestId,
+    expect(startRequestId).toBe(OPERATION_ID)
+
+    const differentRuntimeContext = {
+      ...startInput,
+      actorUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      deploymentId: "dpl_other12345678",
+      revision: "c".repeat(40),
+    }
+    expect(derivePublicationCanaryStartRequestId(differentRuntimeContext)).toBe(
+      OPERATION_ID,
     )
     expect(
       derivePublicationCanaryStartRequestId({
         ...startInput,
-        expectedVersion: 18,
+        operationId: "not-a-v4-uuid",
       }),
-    ).not.toBe(startRequestId)
-    expect(
-      derivePublicationCanaryStartRequestId({
-        ...startInput,
-        adminReason: "Different administrative reason.",
-      }),
-    ).not.toBe(startRequestId)
+    ).toBeNull()
     if (startRequestId === null) throw new Error("Expected start request ID")
 
     const completionRequestId = derivePublicationCanaryCompletionRequestId({
@@ -170,6 +187,148 @@ test.describe("publication canary operation boundary", () => {
         reportSha256: "invalid",
       }),
     ).toBeNull()
+  })
+
+  test("parses exact pending, completed, and published operation snapshots", () => {
+    const expected = {
+      operationId: OPERATION_ID,
+      advocateId: ADVOCATE_ID,
+      expectedVersion: 17,
+    }
+    expect(
+      parsePublicationCanaryOperationSnapshot(
+        [operationSnapshotRow()],
+        expected,
+      ),
+    ).toEqual({
+      operationId: OPERATION_ID,
+      runId: RUN_ID,
+      advocateId: ADVOCATE_ID,
+      expectedAdvocateVersion: 17,
+      deploymentId: DEPLOYMENT_ID,
+      revision: REVISION,
+      startedAt: STARTED_AT,
+      outcome: null,
+      failureCode: null,
+      reportSha256: null,
+      completedAt: null,
+      publishedAdvocateVersion: null,
+      created: true,
+    })
+
+    expect(
+      parsePublicationCanaryOperationSnapshot(
+        [
+          operationSnapshotRow({
+            outcome: "succeeded",
+            report_sha256: `\\x${REPORT_SHA256}`,
+            completed_at: COMPLETED_AT,
+            published_advocate_version: 18,
+            created: false,
+          }),
+        ],
+        expected,
+      ),
+    ).toMatchObject({
+      outcome: "succeeded",
+      reportSha256: REPORT_SHA256,
+      completedAt: COMPLETED_AT,
+      publishedAdvocateVersion: 18,
+      created: false,
+    })
+
+    expect(
+      parsePublicationCanaryOperationSnapshot(
+        [
+          operationSnapshotRow({
+            outcome: "failed",
+            failure_code: "stripe_us_payment_canary_failed",
+            report_sha256: `\\x${REPORT_SHA256}`,
+            completed_at: COMPLETED_AT,
+            created: false,
+          }),
+        ],
+        expected,
+      ),
+    ).toMatchObject({
+      outcome: "failed",
+      failureCode: "stripe_us_payment_canary_failed",
+      reportSha256: REPORT_SHA256,
+      publishedAdvocateVersion: null,
+    })
+
+    for (const invalid of [
+      [],
+      [operationSnapshotRow(), operationSnapshotRow()],
+      [operationSnapshotRow({ operation_id: ATTEMPT_IDS.stripeUs })],
+      [operationSnapshotRow({ advocate_id: DOMAIN_ID })],
+      [operationSnapshotRow({ expected_advocate_version: 18 })],
+      [operationSnapshotRow({ run_id: null })],
+      [operationSnapshotRow({ deployment_id: "invalid" })],
+      [operationSnapshotRow({ revision: "invalid" })],
+      [operationSnapshotRow({ created: "true" })],
+      [operationSnapshotRow({ internal_secret: "must-not-leak" })],
+      [
+        operationSnapshotRow({
+          outcome: null,
+          report_sha256: `\\x${REPORT_SHA256}`,
+        }),
+      ],
+      [
+        operationSnapshotRow({
+          outcome: "succeeded",
+          failure_code: "stripe_us_payment_canary_failed",
+          report_sha256: `\\x${REPORT_SHA256}`,
+          completed_at: COMPLETED_AT,
+        }),
+      ],
+      [
+        operationSnapshotRow({
+          outcome: "failed",
+          failure_code: null,
+          report_sha256: `\\x${REPORT_SHA256}`,
+          completed_at: COMPLETED_AT,
+        }),
+      ],
+      [
+        operationSnapshotRow({
+          outcome: "failed",
+          failure_code: "stripe_us_payment_canary_failed",
+          report_sha256: `\\x${REPORT_SHA256}`,
+          completed_at: COMPLETED_AT,
+          published_advocate_version: 18,
+        }),
+      ],
+    ]) {
+      expect(
+        parsePublicationCanaryOperationSnapshot(invalid, expected),
+      ).toBeNull()
+    }
+  })
+
+  test("parses only an exact short-lived deployment capability", () => {
+    const row = {
+      deployment_capability_id: DEPLOYMENT_CAPABILITY_ID,
+      expires_at: COMPLETED_AT,
+    }
+    expect(parsePublicationCanaryDeploymentCapability([row])).toEqual({
+      capabilityId: DEPLOYMENT_CAPABILITY_ID,
+      expiresAt: COMPLETED_AT,
+    })
+    for (const invalid of [
+      [],
+      [row, row],
+      [
+        {
+          ...row,
+          deployment_capability_id: "55555555-5555-5555-8555-555555555555",
+        },
+      ],
+      [{ ...row, expires_at: "invalid" }],
+      [{ ...row, secret: "must-not-cross" }],
+    ]) {
+      expect(parsePublicationCanaryDeploymentCapability(invalid)).toBeNull()
+    }
   })
 
   test("parses only an exact server-bound start target", () => {

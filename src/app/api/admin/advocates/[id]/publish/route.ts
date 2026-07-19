@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { after, NextResponse } from "next/server"
 
 import {
+  createPublicationCanaryDeploymentAuthorizationDatabase,
   createPublicationCanaryOperationDatabase,
   createPublicationCanaryWorkerDatabase,
   PublicationCanaryDatabaseError,
@@ -29,7 +30,11 @@ import {
   runAfterPublicationCanarySentinel,
 } from "@/lib/advocates/publicationCanary/sentinelBootstrap"
 import { createPublicationCanarySentinelEvidenceRepository } from "@/lib/advocates/publicationCanary/sentinelEvidence"
-import { isTrustedCreatorShareAdvocateControlRequest } from "@/lib/advocates/creatorShareAdmin/routeSecurity"
+import {
+  creatorShareAdvocateControlForensicContext,
+  creatorShareAdvocateControlTraceId,
+  isTrustedCreatorShareAdvocateControlRequest,
+} from "@/lib/advocates/creatorShareAdmin/routeSecurity"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 
@@ -49,6 +54,7 @@ function response(
     status,
     headers: {
       "Cache-Control": "private, no-store, max-age=0",
+      Pragma: "no-cache",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
       ...additionalHeaders,
@@ -56,51 +62,80 @@ function response(
   })
 }
 
-function boundedTraceId(request: Request): string {
-  const value = request.headers.get("x-vercel-id")?.trim()
-  if (value && value.length <= 255 && !/[\u0000-\u001f\u007f]/.test(value)) {
-    return value
-  }
-  return `advocate-publication:${randomUUID()}`
-}
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   if (!isTrustedCreatorShareAdvocateControlRequest(request)) {
-    return response({ ok: false, code: "invalid_request" }, 400)
+    return response(
+      { ok: false, code: "invalid_request", operationId: null },
+      400,
+    )
   }
-
-  const authenticatedClient = await createClient()
-  const auth = await requireSuperAdmin(authenticatedClient)
-  if (!auth.ok) return auth.response
 
   const { id: advocateId } = await params
   if (!UUID_PATTERN.test(advocateId)) {
-    return response({ ok: false, code: "invalid_request" }, 400)
+    return response(
+      { ok: false, code: "invalid_request", operationId: null },
+      400,
+    )
   }
   if (
     !isPublicationCanaryJsonContentType(request.headers.get("content-type"))
   ) {
-    return response({ ok: false, code: "invalid_request" }, 400)
+    return response(
+      { ok: false, code: "invalid_request", operationId: null },
+      400,
+    )
   }
   const rawBody = await readBoundedPublicationCanaryBody(request)
   if (rawBody === null) {
-    return response({ ok: false, code: "invalid_request" }, 400)
+    return response(
+      { ok: false, code: "invalid_request", operationId: null },
+      400,
+    )
   }
   const input = parsePublicationCanaryOperationInput(rawBody)
   if (input === null) {
-    return response({ ok: false, code: "invalid_request" }, 400)
+    return response(
+      { ok: false, code: "invalid_request", operationId: null },
+      400,
+    )
   }
 
-  const traceId = boundedTraceId(request)
+  let authenticatedClient: Awaited<ReturnType<typeof createClient>>
+  try {
+    authenticatedClient = await createClient()
+    const auth = await requireSuperAdmin(authenticatedClient)
+    if (!auth.ok) {
+      const status = auth.response.status === 401 ? 401 : 403
+      return response(
+        {
+          ok: false,
+          code: status === 401 ? "unauthorized" : "forbidden",
+          operationId: input.operationId,
+        },
+        status,
+      )
+    }
+  } catch {
+    console.error("ADVOCATE_PUBLICATION_AUTH_UNAVAILABLE")
+    return response(
+      {
+        ok: false,
+        code: "publication_unavailable",
+        operationId: input.operationId,
+      },
+      503,
+    )
+  }
+
+  const traceId = creatorShareAdvocateControlTraceId(request, input.operationId)
+  const forensicContext = creatorShareAdvocateControlForensicContext(request)
   try {
     const deploymentIdentity = loadPublicationCanaryDeploymentIdentity()
-    const serviceRoleClient = createServiceRoleClient()
     const result = await handlePublicationCanaryOperation(
       {
-        actorUserId: auth.user.id,
         advocateId,
         expectedVersion: input.expectedVersion,
         operationId: input.operationId,
@@ -108,17 +143,23 @@ export async function POST(
         traceId,
         deploymentId: deploymentIdentity.deploymentId,
         revision: deploymentIdentity.revision,
+        clientIp: forensicContext.clientIp,
+        userAgent: forensicContext.userAgent,
       },
       {
         database: createPublicationCanaryOperationDatabase(
           authenticatedClient,
-          serviceRoleClient,
+          () =>
+            createPublicationCanaryDeploymentAuthorizationDatabase(
+              createServiceRoleClient(),
+            ),
         ),
       },
     )
 
     if (result.outcome === "pending") {
       if (result.workerKickoff) {
+        const serviceRoleClient = createServiceRoleClient()
         const workerDatabase =
           createPublicationCanaryWorkerDatabase(serviceRoleClient)
         after(async () => {
@@ -210,6 +251,18 @@ export async function POST(
         409,
       )
     }
+    if (result.outcome === "deployment_changed") {
+      return response(
+        {
+          ok: false,
+          code: "publication_deployment_changed",
+          operationId: input.operationId,
+          runId: result.runId,
+          retryWithNewOperationId: true,
+        },
+        409,
+      )
+    }
     if (result.outcome === "failed") {
       return response(
         {
@@ -217,8 +270,7 @@ export async function POST(
           code: "publication_canary_failed",
           operationId: input.operationId,
           runId: result.runId,
-          reportSha256: result.reportSha256,
-          failureCode: result.failureCode,
+          retryWithNewOperationId: true,
         },
         409,
       )
@@ -226,11 +278,10 @@ export async function POST(
     return response(
       {
         ok: true,
+        code: "publication_committed",
         operationId: input.operationId,
         runId: result.runId,
-        reportSha256: result.reportSha256,
         advocateVersion: result.advocateVersion,
-        publicationStatus: "active",
       },
       200,
     )

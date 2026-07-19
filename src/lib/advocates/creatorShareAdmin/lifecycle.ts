@@ -91,6 +91,7 @@ const SNAPSHOT_ROW_KEYS = Object.freeze([
   "advocate_version",
   "archived_at",
   "can_archive",
+  "can_begin_publication_canary",
   "can_repair",
   "can_resume",
   "can_retry_cleanup",
@@ -170,6 +171,7 @@ export interface CreatorShareAdvocateControlSnapshot extends Omit<
   openDeprovisionJobs: number
   cleanupPhase: CreatorShareAdvocateCleanupPhase
   canRetryCleanup: boolean
+  canBeginPublicationCanary: boolean
   canSuspend: boolean
   canResume: boolean
   canArchive: boolean
@@ -585,6 +587,7 @@ export function parseCreatorShareAdvocateControlSnapshot(
     (common.relationshipStatus === "archived") ===
       (cleanupPhase === "not_requested") ||
     typeof row.can_suspend !== "boolean" ||
+    typeof row.can_begin_publication_canary !== "boolean" ||
     typeof row.can_resume !== "boolean" ||
     typeof row.can_archive !== "boolean" ||
     typeof row.can_repair !== "boolean" ||
@@ -593,6 +596,14 @@ export function parseCreatorShareAdvocateControlSnapshot(
       (common.relationshipStatus !== "archived" ||
         cleanupPhase !== "needs_attention" ||
         openDeprovisionJobs !== 0)) ||
+    (row.can_begin_publication_canary &&
+      (common.relationshipStatus !== "active" ||
+        common.ownershipStatus !== "owner_active" ||
+        common.primaryDomainStatus !== "verifying" ||
+        common.publicationStatus === "suspended" ||
+        common.readyRequiredIntegrations !== 5 ||
+        common.requiredIntegrations !== 5 ||
+        common.openProviderJobs !== 0)) ||
     (common.ownershipStatus === "awaiting_owner_acceptance" &&
       (row.can_suspend ||
         row.can_resume ||
@@ -611,6 +622,7 @@ export function parseCreatorShareAdvocateControlSnapshot(
     cleanupPhase:
       cleanupPhase as CreatorShareAdvocateControlSnapshot["cleanupPhase"],
     canRetryCleanup: row.can_retry_cleanup,
+    canBeginPublicationCanary: row.can_begin_publication_canary,
     canSuspend: row.can_suspend,
     canResume: row.can_resume,
     canArchive: row.can_archive,

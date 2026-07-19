@@ -3,14 +3,13 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
+  parsePublicationCanaryDeploymentCapability,
   parsePublicationCanaryCompletionResult,
-  parsePublicationCanaryExecutionResult,
+  parsePublicationCanaryOperationSnapshot,
   parsePublicationCanaryPublishResult,
-  parsePublicationCanaryStartResult,
   parsePublicationCanaryWorkerClaimResult,
   type PublicationCanaryCompletionResult,
-  type PublicationCanaryExecution,
-  type PublicationCanaryStartResult,
+  type PublicationCanaryOperationSnapshot,
   type PublicationCanaryWorkerClaim,
 } from "./operation"
 import type { PublicationCanaryErrorCode } from "./report"
@@ -20,7 +19,12 @@ interface SupabaseErrorLike {
 }
 
 export class PublicationCanaryDatabaseError extends Error {
-  readonly stage: "lookup" | "begin" | "claim" | "complete" | "publish"
+  readonly stage:
+    | "begin_or_resume"
+    | "authorize_deployment"
+    | "claim"
+    | "complete"
+    | "publish"
   readonly postgresCode?: string
 
   constructor(
@@ -42,27 +46,41 @@ export interface PublicationCanaryExpectedTarget {
 }
 
 export interface PublicationCanaryOperationDatabase {
-  loadExecution(
-    requestId: string,
-    expected: PublicationCanaryExpectedTarget,
-  ): Promise<PublicationCanaryExecution | undefined>
-  begin(input: {
-    requestId: string
+  beginOrResume(input: {
+    operationId: string
     traceId: string
     adminReason: string
+    clientIp: string | null
+    userAgent: string | null
     target: PublicationCanaryExpectedTarget
-  }): Promise<PublicationCanaryStartResult>
+  }): Promise<PublicationCanaryOperationSnapshot>
   publish(input: {
+    operationId: string
     advocateId: string
     expectedVersion: number
     runId: string
     deploymentId: string
+    revision: string
     reportSha256: string
     adminReason: string
     requestId: string
     traceId: string
+    clientIp: string | null
+    userAgent: string | null
   }): Promise<number>
 }
+
+export interface PublicationCanaryDeploymentAuthorizationDatabase {
+  mint(input: {
+    operationId: string
+    runId: string
+    deploymentId: string
+    revision: string
+  }): Promise<string>
+}
+
+export type PublicationCanaryDeploymentAuthorizationDatabaseFactory =
+  () => PublicationCanaryDeploymentAuthorizationDatabase
 
 export interface PublicationCanaryWorkerDatabase {
   claimNext(input: {
@@ -93,51 +111,62 @@ function databaseError(
 
 export function createPublicationCanaryOperationDatabase(
   authenticatedClient: SupabaseClient,
-  serviceRoleClient: SupabaseClient,
+  createDeploymentAuthorizationDatabase: PublicationCanaryDeploymentAuthorizationDatabaseFactory,
 ): PublicationCanaryOperationDatabase {
   return {
-    async loadExecution(requestId, expected) {
-      const { data, error } = await serviceRoleClient.rpc(
-        "get_advocate_publication_canary_execution",
-        { target_request_id: requestId },
-      )
-      if (error) databaseError("lookup", error)
-      const parsed = parsePublicationCanaryExecutionResult(data, expected)
-      if (parsed === null) databaseError("lookup")
-      return parsed
-    },
-
-    async begin(input) {
+    async beginOrResume(input) {
       const { data, error } = await authenticatedClient.rpc(
-        "begin_advocate_publication_canary",
+        "begin_or_resume_advocate_publication_canary",
         {
           target_advocate_id: input.target.advocateId,
           target_expected_advocate_version: input.target.expectedVersion,
-          target_request_id: input.requestId,
+          target_operation_id: input.operationId,
           target_deployment_id: input.target.deploymentId,
           target_git_revision: input.target.revision,
           target_trace_id: input.traceId,
           target_admin_reason: input.adminReason,
+          target_client_ip: input.clientIp,
+          target_user_agent: input.userAgent,
         },
       )
-      if (error) databaseError("begin", error)
-      const parsed = parsePublicationCanaryStartResult(data, input.target)
-      if (parsed === null) databaseError("begin")
+      if (error) databaseError("begin_or_resume", error)
+      const parsed = parsePublicationCanaryOperationSnapshot(data, {
+        operationId: input.operationId,
+        advocateId: input.target.advocateId,
+        expectedVersion: input.target.expectedVersion,
+      })
+      if (parsed === null) databaseError("begin_or_resume")
       return parsed
     },
 
     async publish(input) {
+      let authorizationDatabase: PublicationCanaryDeploymentAuthorizationDatabase
+      try {
+        authorizationDatabase = createDeploymentAuthorizationDatabase()
+      } catch (error) {
+        databaseError("authorize_deployment", error as SupabaseErrorLike)
+      }
+      const deploymentCapabilityId = await authorizationDatabase.mint({
+        operationId: input.operationId,
+        runId: input.runId,
+        deploymentId: input.deploymentId,
+        revision: input.revision,
+      })
       const { data, error } = await authenticatedClient.rpc(
-        "publish_advocate_portal_from_canary",
+        "publish_advocate_portal_from_canary_v2",
         {
           target_advocate_id: input.advocateId,
           target_expected_advocate_version: input.expectedVersion,
+          target_operation_id: input.operationId,
           target_canary_run_id: input.runId,
           target_deployment_id: input.deploymentId,
           target_report_sha256: `\\x${input.reportSha256}`,
           target_admin_reason: input.adminReason,
           target_request_id: input.requestId,
           target_trace_id: input.traceId,
+          target_deployment_capability_id: deploymentCapabilityId,
+          target_client_ip: input.clientIp,
+          target_user_agent: input.userAgent,
         },
       )
       if (error) databaseError("publish", error)
@@ -147,6 +176,28 @@ export function createPublicationCanaryOperationDatabase(
       )
       if (parsed === null) databaseError("publish")
       return parsed
+    },
+  }
+}
+
+export function createPublicationCanaryDeploymentAuthorizationDatabase(
+  serviceRoleClient: SupabaseClient,
+): PublicationCanaryDeploymentAuthorizationDatabase {
+  return {
+    async mint(input) {
+      const { data, error } = await serviceRoleClient.rpc(
+        "mint_advocate_publication_deployment_capability",
+        {
+          target_operation_id: input.operationId,
+          target_canary_run_id: input.runId,
+          target_deployment_id: input.deploymentId,
+          target_git_revision: input.revision,
+        },
+      )
+      if (error) databaseError("authorize_deployment", error)
+      const parsed = parsePublicationCanaryDeploymentCapability(data)
+      if (parsed === null) databaseError("authorize_deployment")
+      return parsed.capabilityId
     },
   }
 }

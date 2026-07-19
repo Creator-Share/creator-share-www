@@ -86,6 +86,7 @@ const SNAPSHOT_ROW = Object.freeze({
   open_deprovision_jobs: 0,
   cleanup_phase: "not_requested",
   can_retry_cleanup: false,
+  can_begin_publication_canary: false,
   can_suspend: true,
   can_resume: false,
   can_archive: true,
@@ -632,6 +633,29 @@ test.describe("Creator Share advocate control projections", () => {
       cleanupPhase: "not_requested",
     })
     expect(JSON.stringify(snapshot)).not.toContain(DOMAIN_ID)
+
+    const publicationReady = lifecycle.parseCreatorShareAdvocateControlSnapshot(
+      [
+        {
+          ...snapshotRow(),
+          publication_status: "provisioning",
+          primary_domain_status: "verifying",
+          can_begin_publication_canary: true,
+        },
+      ],
+    )
+    expect(publicationReady).toMatchObject({
+      canBeginPublicationCanary: true,
+      primaryDomainStatus: "verifying",
+    })
+    expect(
+      lifecycle.parseCreatorShareAdvocateControlSnapshot([
+        {
+          ...snapshotRow(),
+          can_begin_publication_canary: true,
+        },
+      ]),
+    ).toBeNull()
     expect(
       lifecycle.parseCreatorShareAdvocateControlSnapshot([
         { ...snapshotRow(), provider_error: "must-not-cross" },

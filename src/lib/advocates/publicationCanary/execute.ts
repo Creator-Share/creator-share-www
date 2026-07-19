@@ -8,7 +8,7 @@ import {
   derivePublicationCanaryCompletionRequestId,
   derivePublicationCanaryPublishRequestId,
   derivePublicationCanaryStartRequestId,
-  type PublicationCanaryExecution,
+  type PublicationCanaryOperationSnapshot,
   type PublicationCanaryWorkerClaim,
 } from "./operation"
 import type { PublicationCanaryErrorCode } from "./report"
@@ -24,7 +24,6 @@ export const PUBLICATION_CANARY_EVIDENCE_WINDOW_MS = 30 * 60 * 1_000
 export const PUBLICATION_CANARY_POLL_RETRY_SECONDS = 2
 
 export interface PublicationCanaryOperationRequest {
-  actorUserId: string
   advocateId: string
   expectedVersion: number
   operationId: string
@@ -32,6 +31,8 @@ export interface PublicationCanaryOperationRequest {
   traceId: string
   deploymentId: string
   revision: string
+  clientIp: string | null
+  userAgent: string | null
 }
 
 export type PublicationCanaryOperationResult =
@@ -43,6 +44,10 @@ export type PublicationCanaryOperationResult =
     }
   | {
       outcome: "expired"
+      runId: string
+    }
+  | {
+      outcome: "deployment_changed"
       runId: string
     }
   | {
@@ -98,7 +103,7 @@ function inputError(): never {
 }
 
 function runnerTarget(
-  execution: PublicationCanaryExecution | PublicationCanaryWorkerClaim,
+  execution: PublicationCanaryWorkerClaim,
 ): PublicationCanaryRunnerTarget {
   return {
     runId: execution.runId,
@@ -115,7 +120,7 @@ function runnerTarget(
 async function publishSuccessfulExecution(
   input: PublicationCanaryOperationRequest,
   startRequestId: string,
-  execution: PublicationCanaryExecution & {
+  execution: PublicationCanaryOperationSnapshot & {
     outcome: "succeeded"
     reportSha256: string
   },
@@ -129,14 +134,18 @@ async function publishSuccessfulExecution(
   if (publishRequestId === null) inputError()
 
   const advocateVersion = await database.publish({
+    operationId: input.operationId,
     advocateId: input.advocateId,
     expectedVersion: input.expectedVersion,
     runId: execution.runId,
     deploymentId: input.deploymentId,
+    revision: input.revision,
     reportSha256: execution.reportSha256,
     adminReason: input.adminReason,
     requestId: publishRequestId,
     traceId: input.traceId,
+    clientIp: input.clientIp,
+    userAgent: input.userAgent,
   })
   return {
     outcome: "published",
@@ -171,26 +180,25 @@ export async function handlePublicationCanaryOperation(
     deploymentId: input.deploymentId,
     revision: input.revision,
   }
-  let execution = await dependencies.database.loadExecution(
-    startRequestId,
-    expected,
-  )
-  let workerKickoff = false
-  if (execution === undefined) {
-    const start = await dependencies.database.begin({
-      requestId: startRequestId,
-      traceId: input.traceId,
-      adminReason: input.adminReason,
-      target: expected,
-    })
-    execution = {
-      ...start,
-      outcome: null,
-      failureCode: null,
-      reportSha256: null,
-      completedAt: null,
+  const execution = await dependencies.database.beginOrResume({
+    operationId: startRequestId,
+    traceId: input.traceId,
+    adminReason: input.adminReason,
+    clientIp: input.clientIp,
+    userAgent: input.userAgent,
+    target: expected,
+  })
+
+  if (execution.publishedAdvocateVersion !== null) {
+    if (execution.reportSha256 === null || execution.outcome !== "succeeded") {
+      inputError()
     }
-    workerKickoff = true
+    return {
+      outcome: "published",
+      runId: execution.runId,
+      reportSha256: execution.reportSha256,
+      advocateVersion: execution.publishedAdvocateVersion,
+    }
   }
 
   if (execution.outcome === "failed") {
@@ -204,8 +212,20 @@ export async function handlePublicationCanaryOperation(
       failureCode: execution.failureCode,
     }
   }
+
+  const now = readNow(dependencies.now ?? Date.now)
+  if (evidenceWindowExpired(execution.startedAt, now)) {
+    return { outcome: "expired", runId: execution.runId }
+  }
+
   if (execution.outcome === "succeeded") {
     if (execution.reportSha256 === null) inputError()
+    if (
+      execution.deploymentId !== input.deploymentId ||
+      execution.revision !== input.revision
+    ) {
+      return { outcome: "deployment_changed", runId: execution.runId }
+    }
     return publishSuccessfulExecution(
       input,
       startRequestId,
@@ -218,15 +238,13 @@ export async function handlePublicationCanaryOperation(
     )
   }
 
-  const now = readNow(dependencies.now ?? Date.now)
-  if (evidenceWindowExpired(execution.startedAt, now)) {
-    return { outcome: "expired", runId: execution.runId }
-  }
   return {
     outcome: "pending",
     runId: execution.runId,
     retryAfterSeconds: PUBLICATION_CANARY_POLL_RETRY_SECONDS,
-    workerKickoff,
+    workerKickoff:
+      execution.deploymentId === input.deploymentId &&
+      execution.revision === input.revision,
   }
 }
 

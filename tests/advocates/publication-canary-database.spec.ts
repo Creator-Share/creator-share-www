@@ -28,14 +28,12 @@ const testRequire = createRequire(
   resolve(process.cwd(), "tests/advocates/publication-canary-database.spec.ts"),
 )
 const {
+  createPublicationCanaryDeploymentAuthorizationDatabase,
   createPublicationCanaryOperationDatabase,
   createPublicationCanaryWorkerDatabase,
   PublicationCanaryDatabaseError,
 } = testRequire(
-  resolve(
-    process.cwd(),
-    "src/lib/advocates/publicationCanary/database.ts",
-  ),
+  resolve(process.cwd(), "src/lib/advocates/publicationCanary/database.ts"),
 ) as DatabaseModule
 
 const ADVOCATE_ID = "11111111-1111-4111-8111-111111111111"
@@ -44,6 +42,7 @@ const RUN_ID = "33333333-3333-4333-8333-333333333333"
 const START_REQUEST_ID = "44444444-4444-4444-8444-444444444444"
 const LEASE_TOKEN = "55555555-5555-4555-8555-555555555555"
 const REQUEST_ID = "66666666-6666-4666-8666-666666666666"
+const DEPLOYMENT_CAPABILITY_ID = "77777777-7777-4777-8777-777777777777"
 const DEPLOYMENT_ID = "dpl_1234567890abcdef"
 const REVISION = "a".repeat(40)
 const REPORT_SHA256 = "b".repeat(64)
@@ -56,10 +55,7 @@ interface RpcCall {
 }
 
 function client(
-  responses: Record<
-    string,
-    { data: unknown; error: { code?: string } | null }
-  >,
+  responses: Record<string, { data: unknown; error: { code?: string } | null }>,
 ): { value: SupabaseClient; calls: RpcCall[] } {
   const calls: RpcCall[] = []
   return {
@@ -89,21 +85,49 @@ function startRow() {
   }
 }
 
+function operationSnapshotRow() {
+  return {
+    operation_id: START_REQUEST_ID,
+    run_id: RUN_ID,
+    advocate_id: ADVOCATE_ID,
+    expected_advocate_version: 17,
+    deployment_id: DEPLOYMENT_ID,
+    revision: REVISION,
+    started_at: STARTED_AT,
+    outcome: null,
+    failure_code: null,
+    report_sha256: null,
+    completed_at: null,
+    published_advocate_version: null,
+    created: true,
+  }
+}
+
 test.describe("publication canary database authority adapters", () => {
-  test("uses the authenticated client only for begin and publish", async () => {
+  test("uses one authenticated begin-or-resume RPC for creation and status", async () => {
     const authenticated = client({
-      begin_advocate_publication_canary: {
-        data: [startRow()],
+      begin_or_resume_advocate_publication_canary: {
+        data: [operationSnapshotRow()],
         error: null,
       },
-      publish_advocate_portal_from_canary: { data: 18, error: null },
+      publish_advocate_portal_from_canary_v2: { data: 18, error: null },
     })
     const service = client({
-      get_advocate_publication_canary_execution: { data: [], error: null },
+      mint_advocate_publication_deployment_capability: {
+        data: [
+          {
+            deployment_capability_id: DEPLOYMENT_CAPABILITY_ID,
+            expires_at: "2026-07-18T18:03:00.000Z",
+          },
+        ],
+        error: null,
+      },
     })
+    const deploymentAuthorization =
+      createPublicationCanaryDeploymentAuthorizationDatabase(service.value)
     const database = createPublicationCanaryOperationDatabase(
       authenticated.value,
-      service.value,
+      () => deploymentAuthorization,
     )
     const target = {
       advocateId: ADVOCATE_ID,
@@ -112,37 +136,123 @@ test.describe("publication canary database authority adapters", () => {
       revision: REVISION,
     }
 
-    await expect(database.loadExecution(START_REQUEST_ID, target)).resolves
-      .toBeUndefined()
-    await database.begin({
-      requestId: START_REQUEST_ID,
-      traceId: "publication-trace-1",
-      adminReason: "Initial advocate publication after release review.",
-      target,
+    await expect(
+      database.beginOrResume({
+        operationId: START_REQUEST_ID,
+        traceId: "publication-trace-1",
+        adminReason: "Initial advocate publication after release review.",
+        clientIp: "203.0.113.9",
+        userAgent: "Publication test agent/1.0",
+        target,
+      }),
+    ).resolves.toMatchObject({
+      operationId: START_REQUEST_ID,
+      runId: RUN_ID,
+      created: true,
+      outcome: null,
     })
     await expect(
       database.publish({
+        operationId: START_REQUEST_ID,
         advocateId: ADVOCATE_ID,
         expectedVersion: 17,
         runId: RUN_ID,
         deploymentId: DEPLOYMENT_ID,
+        revision: REVISION,
         reportSha256: REPORT_SHA256,
         adminReason: "Initial advocate publication after release review.",
         requestId: REQUEST_ID,
         traceId: "publication-trace-2",
+        clientIp: "203.0.113.9",
+        userAgent: "Publication test agent/1.0",
       }),
     ).resolves.toBe(18)
 
-    expect(service.calls.map((call) => call.name)).toEqual([
-      "get_advocate_publication_canary_execution",
+    expect(authenticated.calls).toEqual([
+      {
+        name: "begin_or_resume_advocate_publication_canary",
+        input: {
+          target_advocate_id: ADVOCATE_ID,
+          target_expected_advocate_version: 17,
+          target_operation_id: START_REQUEST_ID,
+          target_deployment_id: DEPLOYMENT_ID,
+          target_git_revision: REVISION,
+          target_trace_id: "publication-trace-1",
+          target_admin_reason:
+            "Initial advocate publication after release review.",
+          target_client_ip: "203.0.113.9",
+          target_user_agent: "Publication test agent/1.0",
+        },
+      },
+      {
+        name: "publish_advocate_portal_from_canary_v2",
+        input: {
+          target_advocate_id: ADVOCATE_ID,
+          target_expected_advocate_version: 17,
+          target_operation_id: START_REQUEST_ID,
+          target_canary_run_id: RUN_ID,
+          target_deployment_id: DEPLOYMENT_ID,
+          target_report_sha256: `\\x${REPORT_SHA256}`,
+          target_admin_reason:
+            "Initial advocate publication after release review.",
+          target_request_id: REQUEST_ID,
+          target_trace_id: "publication-trace-2",
+          target_deployment_capability_id: DEPLOYMENT_CAPABILITY_ID,
+          target_client_ip: "203.0.113.9",
+          target_user_agent: "Publication test agent/1.0",
+        },
+      },
     ])
-    expect(authenticated.calls.map((call) => call.name)).toEqual([
-      "begin_advocate_publication_canary",
-      "publish_advocate_portal_from_canary",
+    expect(service.calls).toEqual([
+      {
+        name: "mint_advocate_publication_deployment_capability",
+        input: {
+          target_operation_id: START_REQUEST_ID,
+          target_canary_run_id: RUN_ID,
+          target_deployment_id: DEPLOYMENT_ID,
+          target_git_revision: REVISION,
+        },
+      },
     ])
-    expect(authenticated.calls[1]?.input.target_report_sha256).toBe(
-      `\\x${REPORT_SHA256}`,
+    expect(
+      authenticated.calls.some(
+        (call) => call.name === "get_advocate_publication_canary_execution",
+      ),
+    ).toBe(false)
+  })
+
+  test("forwards absent session transport metadata as exact nulls", async () => {
+    const authenticated = client({
+      begin_or_resume_advocate_publication_canary: {
+        data: [operationSnapshotRow()],
+        error: null,
+      },
+    })
+    const database = createPublicationCanaryOperationDatabase(
+      authenticated.value,
+      () => {
+        throw new Error("deployment_authorization_must_not_run")
+      },
     )
+
+    await database.beginOrResume({
+      operationId: START_REQUEST_ID,
+      traceId: "publication-trace-1",
+      adminReason: "Initial advocate publication after release review.",
+      clientIp: null,
+      userAgent: null,
+      target: {
+        advocateId: ADVOCATE_ID,
+        expectedVersion: 17,
+        deploymentId: DEPLOYMENT_ID,
+        revision: REVISION,
+      },
+    })
+
+    expect(authenticated.calls[0]?.input).toMatchObject({
+      target_client_ip: null,
+      target_user_agent: null,
+    })
   })
 
   test("uses service role only for queue claim and lease-fenced completion", async () => {
@@ -226,5 +336,58 @@ test.describe("publication canary database authority adapters", () => {
       .catch((error: unknown) => error)
     expect(failure).toBeInstanceOf(PublicationCanaryDatabaseError)
     expect(failure).toMatchObject({ stage: "claim" })
+
+    const authenticated = client({
+      begin_or_resume_advocate_publication_canary: {
+        data: [{ operation_id: START_REQUEST_ID }],
+        error: null,
+      },
+    })
+    const operationDatabase = createPublicationCanaryOperationDatabase(
+      authenticated.value,
+      () => {
+        throw new Error("deployment_authorization_must_not_run")
+      },
+    )
+    const operationFailure = await operationDatabase
+      .beginOrResume({
+        operationId: START_REQUEST_ID,
+        traceId: "publication-trace-1",
+        adminReason: "Initial advocate publication after release review.",
+        clientIp: null,
+        userAgent: null,
+        target: {
+          advocateId: ADVOCATE_ID,
+          expectedVersion: 17,
+          deploymentId: DEPLOYMENT_ID,
+          revision: REVISION,
+        },
+      })
+      .catch((error: unknown) => error)
+    expect(operationFailure).toBeInstanceOf(PublicationCanaryDatabaseError)
+    expect(operationFailure).toMatchObject({ stage: "begin_or_resume" })
+
+    const malformedAuthorizationClient = client({
+      mint_advocate_publication_deployment_capability: {
+        data: [{ deployment_capability_id: "not-a-capability" }],
+        error: null,
+      },
+    })
+    const authorizationDatabase =
+      createPublicationCanaryDeploymentAuthorizationDatabase(
+        malformedAuthorizationClient.value,
+      )
+    const authorizationFailure = await authorizationDatabase
+      .mint({
+        operationId: START_REQUEST_ID,
+        runId: RUN_ID,
+        deploymentId: DEPLOYMENT_ID,
+        revision: REVISION,
+      })
+      .catch((error: unknown) => error)
+    expect(authorizationFailure).toBeInstanceOf(PublicationCanaryDatabaseError)
+    expect(authorizationFailure).toMatchObject({
+      stage: "authorize_deployment",
+    })
   })
 })

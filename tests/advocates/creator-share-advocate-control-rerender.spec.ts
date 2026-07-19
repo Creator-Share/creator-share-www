@@ -18,6 +18,10 @@ const BETA_ADVOCATE_ID = "22222222-2222-4222-8222-222222222222"
 const ONBOARDING_STORAGE_KEY = "creator-share:advocate-onboarding-operation:v1"
 const INITIAL_OWNER_REISSUE_STORAGE_KEY = `creator-share:initial-owner-reissue-operation:v1:${ALPHA_ADVOCATE_ID}`
 const INITIAL_OWNER_REVOCATION_STORAGE_KEY = `creator-share:initial-owner-revocation-operation:v1:${ALPHA_ADVOCATE_ID}`
+const ALPHA_PUBLICATION_STORAGE_KEY = `creator-share:advocate-publication-operation:v1:${ALPHA_ADVOCATE_ID}`
+const BETA_PUBLICATION_STORAGE_KEY = `creator-share:advocate-publication-operation:v1:${BETA_ADVOCATE_ID}`
+const PUBLICATION_RUN_ID = "33333333-3333-4333-8333-333333333333"
+const OTHER_PUBLICATION_RUN_ID = "44444444-4444-4444-8444-444444444444"
 
 interface SubmittedRequest {
   url: string
@@ -254,6 +258,16 @@ async function fillInitialOwnerRevocationForm(page: Page): Promise<void> {
   await revocation
     .getByLabel(/Type REVOKE OWNER alpha/)
     .fill("REVOKE OWNER alpha")
+}
+
+async function fillPublicationForm(page: Page): Promise<void> {
+  const publication = page.getByRole("region", {
+    name: "Publish advocate portal",
+  })
+  await publication
+    .getByLabel("Administrative reason")
+    .fill("Approve the exact verified production release for this portal.")
+  await publication.getByLabel(/Type PUBLISH alpha/).fill("PUBLISH alpha")
 }
 
 test.beforeAll(async () => {
@@ -953,4 +967,528 @@ test("saved revocation replay outranks newly available reissue after a version-a
   await expect(
     page.getByRole("region", { name: "Reissue initial owner invitation" }),
   ).toBeVisible()
+})
+
+test("publication recovers a lost first response with the exact saved request", async ({
+  page,
+}) => {
+  const submissions: Record<string, unknown>[] = []
+  await page.route(/\/publish$/, async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    submissions.push(body)
+    if (submissions.length === 1) {
+      await route.abort("connectionfailed")
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        code: "publication_committed",
+        operationId: body.operationId,
+        runId: PUBLICATION_RUN_ID,
+        advocateVersion: 8,
+      }),
+    })
+  })
+
+  await fillPublicationForm(page)
+  const publication = page.getByRole("region", {
+    name: "Publish advocate portal",
+  })
+  await publication
+    .getByRole("button", { name: "Start publication check" })
+    .click()
+  await expect(publication.getByRole("alert")).toContainText(
+    "could not be confirmed",
+  )
+
+  const saved = await page.evaluate((key) => {
+    const raw = sessionStorage.getItem(key)
+    return raw === null ? null : JSON.parse(raw)
+  }, ALPHA_PUBLICATION_STORAGE_KEY)
+  expect(saved).toEqual({
+    version: 1,
+    advocateId: ALPHA_ADVOCATE_ID,
+    operationId: submissions[0].operationId,
+    expectedVersion: 7,
+    adminReason:
+      "Approve the exact verified production release for this portal.",
+    runId: null,
+  })
+
+  await page.reload()
+  await expect(publication.getByRole("status")).toContainText(
+    "Publication committed",
+  )
+  expect(submissions).toHaveLength(2)
+  expect(submissions[1]).toEqual(submissions[0])
+  expect(Object.keys(submissions[1]).sort()).toEqual([
+    "adminReason",
+    "expectedVersion",
+    "operationId",
+  ])
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          (key) => sessionStorage.getItem(key),
+          ALPHA_PUBLICATION_STORAGE_KEY,
+        ),
+    )
+    .toBeNull()
+})
+
+test("publication times out after response headers when the body stalls", async ({
+  page,
+}) => {
+  test.setTimeout(45_000)
+
+  await fillPublicationForm(page)
+  const publication = page.getByRole("region", {
+    name: "Publish advocate portal",
+  })
+  await publication
+    .getByRole("button", { name: "Start publication check" })
+    .click()
+
+  await expect(publication.getByRole("alert")).toContainText(
+    "could not be confirmed",
+    { timeout: 25_000 },
+  )
+  expect(
+    await page.evaluate(
+      (key) => sessionStorage.getItem(key),
+      ALPHA_PUBLICATION_STORAGE_KEY,
+    ),
+  ).not.toBeNull()
+})
+
+test("publication binds the first run and polls only the saved operation", async ({
+  page,
+}) => {
+  const submissions: Record<string, unknown>[] = []
+  await page.route(/\/publish$/, async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    submissions.push(body)
+    if (submissions.length === 1) {
+      await route.fulfill({
+        status: 202,
+        headers: { "Retry-After": "1" },
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          code: "publication_canary_pending",
+          operationId: body.operationId,
+          runId: PUBLICATION_RUN_ID,
+          publicationStatus: "verifying",
+          retryAfterSeconds: 1,
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        code: "publication_committed",
+        operationId: body.operationId,
+        runId: PUBLICATION_RUN_ID,
+        advocateVersion: 8,
+      }),
+    })
+  })
+
+  await fillPublicationForm(page)
+  const publication = page.getByRole("region", {
+    name: "Publish advocate portal",
+  })
+  await publication
+    .getByRole("button", { name: "Start publication check" })
+    .click()
+  await expect(publication.getByRole("status")).toContainText("still running")
+  await expect
+    .poll(async () => {
+      return await page.evaluate((key) => {
+        const raw = sessionStorage.getItem(key)
+        return raw === null ? null : JSON.parse(raw).runId
+      }, ALPHA_PUBLICATION_STORAGE_KEY)
+    })
+    .toBe(PUBLICATION_RUN_ID)
+  await expect(publication.getByRole("status")).toContainText(
+    "Publication committed",
+  )
+  expect(submissions).toHaveLength(2)
+  expect(submissions[1]).toEqual(submissions[0])
+})
+
+test("publication retains its operation through authentication loss and reload", async ({
+  page,
+}) => {
+  const submissions: Record<string, unknown>[] = []
+  await page.route(/\/publish$/, async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    submissions.push(body)
+    if (submissions.length === 1) {
+      await route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: false,
+          code: "unauthorized",
+          operationId: body.operationId,
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        code: "publication_committed",
+        operationId: body.operationId,
+        runId: PUBLICATION_RUN_ID,
+        advocateVersion: 8,
+      }),
+    })
+  })
+
+  await fillPublicationForm(page)
+  const publication = page.getByRole("region", {
+    name: "Publish advocate portal",
+  })
+  await publication
+    .getByRole("button", { name: "Start publication check" })
+    .click()
+  await expect(publication.getByRole("alert")).toContainText("session expired")
+  expect(
+    await page.evaluate(
+      (key) => sessionStorage.getItem(key),
+      ALPHA_PUBLICATION_STORAGE_KEY,
+    ),
+  ).not.toBeNull()
+
+  await page.reload()
+  await expect(publication.getByRole("status")).toContainText(
+    "Publication committed",
+  )
+  expect(submissions).toHaveLength(2)
+  expect(submissions[1]).toEqual(submissions[0])
+})
+
+test("publication rejects a changed run identity and retains the authoritative binding", async ({
+  page,
+}) => {
+  const submissions: Record<string, unknown>[] = []
+  await page.route(/\/publish$/, async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    submissions.push(body)
+    if (submissions.length === 1) {
+      await route.fulfill({
+        status: 202,
+        headers: { "Retry-After": "1" },
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          code: "publication_canary_pending",
+          operationId: body.operationId,
+          runId: PUBLICATION_RUN_ID,
+          publicationStatus: "verifying",
+          retryAfterSeconds: 1,
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        code: "publication_committed",
+        operationId: body.operationId,
+        runId: OTHER_PUBLICATION_RUN_ID,
+        advocateVersion: 8,
+      }),
+    })
+  })
+
+  await fillPublicationForm(page)
+  const publication = page.getByRole("region", {
+    name: "Publish advocate portal",
+  })
+  await publication
+    .getByRole("button", { name: "Start publication check" })
+    .click()
+  await expect(publication.getByRole("alert")).toContainText(
+    "could not preserve the exact run binding",
+  )
+  expect(
+    await page.evaluate((key) => {
+      const raw = sessionStorage.getItem(key)
+      return raw === null ? null : JSON.parse(raw).runId
+    }, ALPHA_PUBLICATION_STORAGE_KEY),
+  ).toBe(PUBLICATION_RUN_ID)
+})
+
+test("publication keeps a terminal result until explicit acknowledgment", async ({
+  page,
+}) => {
+  await page.route(/\/publish$/, async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        code: "publication_canary_expired",
+        operationId: body.operationId,
+        runId: PUBLICATION_RUN_ID,
+        retryWithNewOperationId: true,
+      }),
+    })
+  })
+
+  await fillPublicationForm(page)
+  const publication = page.getByRole("region", {
+    name: "Publish advocate portal",
+  })
+  await publication
+    .getByRole("button", { name: "Start publication check" })
+    .click()
+  await expect(publication.getByRole("alert")).toContainText("evidence expired")
+  expect(
+    await page.evaluate(
+      (key) => sessionStorage.getItem(key),
+      ALPHA_PUBLICATION_STORAGE_KEY,
+    ),
+  ).not.toBeNull()
+  await publication
+    .getByRole("button", { name: "Acknowledge terminal result" })
+    .click()
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          (key) => sessionStorage.getItem(key),
+          ALPHA_PUBLICATION_STORAGE_KEY,
+        ),
+    )
+    .toBeNull()
+})
+
+test("publication fails closed when same-tab recovery storage is blocked", async ({
+  page,
+}) => {
+  let publicationRequests = 0
+  await page.route(/\/publish$/, async (route) => {
+    publicationRequests += 1
+    await route.abort()
+  })
+  await page.addInitScript((keyPrefix) => {
+    const originalSetItem = Storage.prototype.setItem
+    Storage.prototype.setItem = function guardedSetItem(key, value) {
+      if (key.startsWith(keyPrefix)) throw new Error("storage_blocked")
+      return originalSetItem.call(this, key, value)
+    }
+  }, "creator-share:advocate-publication-operation:v1:")
+  await page.reload()
+
+  await fillPublicationForm(page)
+  const publication = page.getByRole("region", {
+    name: "Publish advocate portal",
+  })
+  await publication
+    .getByRole("button", { name: "Start publication check" })
+    .click()
+  await expect(publication.getByRole("alert")).toContainText(
+    "No request was sent",
+  )
+  expect(publicationRequests).toBe(0)
+})
+
+test("publication cannot start again when exact success storage cleanup fails", async ({
+  page,
+}) => {
+  await page.addInitScript((keyPrefix) => {
+    const originalRemoveItem = Storage.prototype.removeItem
+    Storage.prototype.removeItem = function guardedRemoveItem(key) {
+      if (key.startsWith(keyPrefix)) throw new Error("storage_cleanup_blocked")
+      return originalRemoveItem.call(this, key)
+    }
+  }, "creator-share:advocate-publication-operation:v1:")
+  await page.reload()
+  await page.route(/\/publish$/, async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        code: "publication_committed",
+        operationId: body.operationId,
+        runId: PUBLICATION_RUN_ID,
+        advocateVersion: 8,
+      }),
+    })
+  })
+
+  await fillPublicationForm(page)
+  const publication = page.getByRole("region", {
+    name: "Publish advocate portal",
+  })
+  await publication
+    .getByRole("button", { name: "Start publication check" })
+    .click()
+  await expect(publication.getByRole("status")).toContainText(
+    "could not clear its saved recovery record",
+  )
+  await expect(
+    publication.getByRole("button", { name: "Start publication check" }),
+  ).toHaveCount(0)
+  expect(
+    await page.evaluate(
+      (key) => sessionStorage.getItem(key),
+      ALPHA_PUBLICATION_STORAGE_KEY,
+    ),
+  ).not.toBeNull()
+})
+
+test("publication never adopts another portal's saved operation", async ({
+  page,
+}) => {
+  const alphaOperationId = "77777777-7777-4777-8777-777777777777"
+  await page.evaluate(
+    ({ key, advocateId, operationId }) => {
+      sessionStorage.setItem(
+        key,
+        JSON.stringify({
+          version: 1,
+          advocateId,
+          operationId,
+          expectedVersion: 7,
+          adminReason: "Recover the original alpha publication operation.",
+          runId: null,
+        }),
+      )
+    },
+    {
+      key: ALPHA_PUBLICATION_STORAGE_KEY,
+      advocateId: ALPHA_ADVOCATE_ID,
+      operationId: alphaOperationId,
+    },
+  )
+  const submissions: SubmittedRequest[] = []
+  await page.route(/\/publish$/, async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    submissions.push({ url: route.request().url(), body })
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        code: "unauthorized",
+        operationId: body.operationId,
+      }),
+    })
+  })
+  await page.reload()
+  await expect.poll(() => submissions.length).toBe(1)
+
+  await page.getByRole("button", { name: "Navigate to beta portal" }).click()
+  const publication = page.getByRole("region", {
+    name: "Publish advocate portal",
+  })
+  await expect(publication.getByLabel(/Type PUBLISH beta/)).toBeVisible()
+  await expect(publication.getByLabel("Administrative reason")).toHaveValue("")
+  expect(submissions.length).toBeGreaterThanOrEqual(1)
+  for (const submission of submissions) {
+    expect(submission.url).toContain(ALPHA_ADVOCATE_ID)
+    expect(submission.body.operationId).toBe(alphaOperationId)
+  }
+  expect(
+    await page.evaluate(
+      (key) => sessionStorage.getItem(key),
+      BETA_PUBLICATION_STORAGE_KEY,
+    ),
+  ).toBeNull()
+})
+
+test("publication ignores a delayed old-portal response after navigation", async ({
+  page,
+}) => {
+  const alphaOperationId = "88888888-8888-4888-8888-888888888888"
+  await page.evaluate(
+    ({ key, advocateId, operationId }) => {
+      sessionStorage.setItem(
+        key,
+        JSON.stringify({
+          version: 1,
+          advocateId,
+          operationId,
+          expectedVersion: 7,
+          adminReason: "Recover the delayed alpha publication operation.",
+          runId: null,
+        }),
+      )
+    },
+    {
+      key: ALPHA_PUBLICATION_STORAGE_KEY,
+      advocateId: ALPHA_ADVOCATE_ID,
+      operationId: alphaOperationId,
+    },
+  )
+
+  let releaseResponse!: () => void
+  const responseGate = new Promise<void>((resolveGate) => {
+    releaseResponse = resolveGate
+  })
+  let requestReceived = false
+  await page.route(/\/publish$/, async (route) => {
+    requestReceived = true
+    await responseGate
+    try {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          code: "publication_committed",
+          operationId: alphaOperationId,
+          runId: PUBLICATION_RUN_ID,
+          advocateVersion: 8,
+        }),
+      })
+    } catch {
+      // The old request may already be canceled by portal navigation.
+    }
+  })
+
+  await page.reload()
+  await expect.poll(() => requestReceived).toBe(true)
+  await page.getByRole("button", { name: "Navigate to beta portal" }).click()
+  releaseResponse()
+
+  const publication = page.getByRole("region", {
+    name: "Publish advocate portal",
+  })
+  await expect(publication.getByLabel(/Type PUBLISH beta/)).toBeVisible()
+  await expect(publication.getByLabel("Administrative reason")).toHaveValue("")
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          (key) => sessionStorage.getItem(key),
+          ALPHA_PUBLICATION_STORAGE_KEY,
+        ),
+    )
+    .not.toBeNull()
+  expect(
+    await page.evaluate(
+      (key) => sessionStorage.getItem(key),
+      BETA_PUBLICATION_STORAGE_KEY,
+    ),
+  ).toBeNull()
 })

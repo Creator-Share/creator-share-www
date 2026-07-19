@@ -1,10 +1,12 @@
 import Link from "next/link"
+import { unstable_noStore as noStore } from "next/cache"
 import { notFound } from "next/navigation"
 
 import { AdvocateCleanupRecovery } from "@/components/advocates/creatorShareAdmin/AdvocateCleanupRecovery"
 import { AdvocateInitialOwnerControls } from "@/components/advocates/creatorShareAdmin/AdvocateInitialOwnerControls"
 import { AdvocateLifecycleControls } from "@/components/advocates/creatorShareAdmin/AdvocateLifecycleControls"
 import { AdvocateOwnershipTransfer } from "@/components/advocates/creatorShareAdmin/AdvocateOwnershipTransfer"
+import { AdvocatePublicationControl } from "@/components/advocates/creatorShareAdmin/AdvocatePublicationControl"
 import type { CreatorShareAdvocateLifecycleAction } from "@/lib/advocates/creatorShareAdmin/lifecycleContracts"
 import {
   createCreatorShareAdvocateControlRepository,
@@ -74,6 +76,7 @@ function ownershipSummaryLabel(
 export default async function CreatorShareAdvocateControlDetailPage({
   params,
 }: Readonly<{ params: Promise<{ id: string }> }>) {
+  noStore()
   const { id: advocateId } = await params
   if (!isCreatorShareAdvocateControlPathId(advocateId)) notFound()
 
@@ -221,6 +224,13 @@ export default async function CreatorShareAdvocateControlDetailPage({
           </div>
         </dl>
       </header>
+
+      <AdvocatePublicationControl
+        advocateId={snapshot.advocateId}
+        slug={snapshot.slug}
+        initialVersion={snapshot.advocateVersion}
+        canBeginPublicationCanary={snapshot.canBeginPublicationCanary}
+      />
 
       {snapshot.cleanupPhase === "needs_attention" ? (
         <section

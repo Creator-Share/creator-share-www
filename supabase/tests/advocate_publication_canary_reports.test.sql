@@ -535,9 +535,14 @@ WHERE context.key = 'advocate'
   AND advocate.id = context.uuid_value;
 
 SELECT extensions.ok(
-  has_function_privilege(
+  NOT has_function_privilege(
     'authenticated',
     'public.begin_advocate_publication_canary(uuid,bigint,uuid,text,text,text,text)',
+    'EXECUTE'
+  )
+  AND has_function_privilege(
+    'authenticated',
+    'public.begin_or_resume_advocate_publication_canary(uuid,bigint,uuid,text,text,text,text,text,text)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
@@ -550,7 +555,7 @@ SELECT extensions.ok(
     'public.begin_advocate_publication_canary(uuid,bigint,uuid,text,text,text,text)',
     'EXECUTE'
   ),
-  'only authenticated callers can reach the canary start boundary'
+  'only the authenticated durable-operation boundary may start or resume a canary'
 );
 
 SELECT extensions.ok(

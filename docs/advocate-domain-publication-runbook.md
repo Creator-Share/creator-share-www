@@ -81,13 +81,13 @@ Both negative-control steps retain the database-compatible terminal code `unprov
 
 ## Asynchronous publication operation
 
-The authenticated publication `POST` is both the start endpoint and the poll endpoint. The caller must keep the same operation ID, expected advocate version, and administrator reason for every retry and poll.
+The authenticated publication `POST` is both the start endpoint and the poll endpoint. The caller must keep the same browser generated v4 operation ID, expected advocate version, and administrator reason for every retry and poll. The database stores that exact operation ID as the immutable canary start request identity. Deployment identity, source revision, administrator identity, and session identity are bindings on that operation, not ingredients that may silently produce another operation.
 
 On the first valid request, the server locks one canary start to the exact advocate, primary domain, hostname, deployment, source revision, and current five-provider evidence chain. It returns `202 Accepted` while the report is pending. The response includes the stable operation and run identifiers plus a retry interval. Returning promptly is required because the Creator Share administrative API is normally behind Cloudflare. A synchronous canary can take roughly 140 seconds in the worst case, while Cloudflare's default Proxy Read Timeout is 120 seconds.
 
 After sending the response, Next.js `after()` attempts the run for low latency. It is an optimization, not a durable queue. A separate Vercel cron calls the internal publication worker once per minute to recover abandoned work. Both paths use the same claim boundary. A durable database lease issues a unique fencing token to one runner. An active lease prevents a second owner from running the same start. An expired lease may be reclaimed with a new token, and the stale owner cannot complete after reclamation.
 
-The worker can only append a terminal report. It cannot publish. A later authenticated `POST` with the same operation inputs reads the immutable report. A failed report returns a terminal failure for that operation. A succeeded report is passed to the database publication boundary, which rechecks current super administrator access, portal version, domain state, deployment binding, evidence freshness, provider topology, and report binding before activation.
+The worker can only append a terminal report. It cannot publish. A later authenticated `POST` with the same operation inputs reads the immutable report through an authenticated database boundary. Every poll requires a currently healthy Creator Share super administrator and an active signed authentication session. The polling administrator may differ from the initiating administrator. A failed report returns a terminal failure for that operation. For a succeeded report, the trusted application server first uses its service credential to mint a database generated capability that lasts no more than 60 seconds and is bound to the exact operation, run, stored deployment, stored source revision, and report digest. The capability never enters the browser, public response, or permanent audit receipt. The authenticated publication transaction independently requires the current administrator and signed session, atomically consumes the capability, and rechecks portal version, domain state, evidence freshness, provider topology, and report binding before activation. The service credential or capability cannot publish alone, and an administrator cannot publish without the current server capability. Once publication commits, an exact authenticated replay returns the immutable approval receipt before inspecting later mutable portal state and does not mint another capability.
 
 Vercel Cron does not retry a failed invocation and may occasionally deliver overlapping or duplicate invocations. The one-minute cadence and database lease are therefore both required. Neither `after()` nor cron is publication authority.
 
@@ -99,12 +99,12 @@ Vercel Cron does not retry a failed invocation and may occasionally deliver over
 4. If delivery fails terminally, correct the external cause and use the audited reissue control. If a sent or ambiguous owner link must be invalidated, use the separate audited revocation control first, observe the new tenant version, then reissue. Never duplicate live authority, create a second tenant, or release the slug to work around delivery state.
 5. After the owner accepts, confirm the portal shows one active owner and exactly five required provisioning tracks. The browser receives only aggregate readiness and fixed states.
 6. Allow automated reconciliation to reach a verifying domain. Use Repair only when the server derives it as eligible. The browser never chooses a provider, integration, or job.
-7. Enter the publication reason once and start publication. The client stores the nonsecret operation ID, expected version, and exact reason in same-tab session storage before sending the request.
+7. Enter the publication reason once and start publication. The client stores the nonsecret operation ID, advocate ID, expected version, exact reason, and optional server bound run ID in same-tab session storage before sending the request. It must write, read, strictly parse, and compare that record before the first request.
 8. Poll the same authenticated endpoint using byte-equivalent semantic inputs and the server retry interval. On timeout or reload, recover the stored operation and resume polling before offering a new operation.
-9. Treat `202 Accepted` as pending, a succeeded response as published, and a terminal failed or expired response as requiring review or a new operation. Never silently replace an operation after an ambiguous response.
+9. Treat `202 Accepted` as pending, a succeeded response as published, and a terminal failed, expired, or deployment changed response as requiring review and explicit acknowledgment before a new operation. Never silently replace an operation after an ambiguous response.
 10. Complete the post-publication verification below and retain the sanitized release evidence.
 
-The client clears recovered operation state only after an exact terminal response. A reload, route transition, tab backgrounding, lost response, or Cloudflare timeout must not cause a second publication start. The server remains authoritative if browser state is missing or malformed and exact replay remains safe.
+The client clears a published operation only after an exact success response and verified storage removal. It retains failed, expired, and deployment changed results until explicit operator acknowledgment. If storage cleanup fails after publication, the client keeps the saved operation and blocks another start. A reload, route transition, tab backgrounding, lost response, authentication loss, or Cloudflare timeout must not cause a second publication start. The server remains authoritative if browser state is missing or malformed and exact replay remains safe.
 
 ## Production platform configuration
 
@@ -156,13 +156,14 @@ The report must contain no sponsor contact, provider secret, bearer token, check
 
 ## Publication approval
 
-The approving caller must be a currently authenticated Creator Share super administrator with a verified, active email account. Read the current advocate version immediately before the first request. Generate one operation ID and keep the exact request inputs stable while polling.
+The initiating and approving callers must each be a currently authenticated Creator Share super administrator with a verified, active email account and an active signed authentication session. They may be different administrators. The immutable start records the initiating user and session. The immutable approval records the actual approving user and session. Read the current advocate version immediately before the first request. Generate one operation ID and keep the exact request inputs stable while polling.
 
 The first request normally returns `202 Accepted`. The client should wait for the returned retry interval and poll the same authenticated endpoint. A pending response is not a failure. Only a later authenticated poll can invoke publication after observing a succeeded immutable report.
 
 The database publication boundary fails closed unless:
 
 - The caller still holds the global `SUPER_ADMIN` assignment throughout the transaction.
+- The first publication consumes one unexpired, single-use server capability bound to the exact operation, run, deployment, source revision, and report digest.
 - The advocate relationship is active and its version exactly matches the reviewed version.
 - The report's domain is the exact primary domain for that advocate.
 - The domain remains in `verifying`.
@@ -172,7 +173,7 @@ The database publication boundary fails closed unless:
 - No provisioning job for the advocate is queued or running.
 - The hostname, report digest, deployment, operation, request, trace, and reason bindings remain valid.
 
-The function records immutable audit metadata, including the report digest, canary completion time, deployment ID, exact hostname, administrator identity, and the database-computed publication binding. It then activates the domain and advocate in one transaction. A replay of the same successful poll returns the recorded approval without reusing the canary for another publication.
+The function records immutable audit metadata, including the report digest, canary completion time, deployment ID, exact hostname, approving administrator and signed session, and the database-computed publication binding. Bounded client IP and user agent enter only the expiring private forensic layer. They do not enter the permanent semantic start or approval receipts. The function then activates the domain and advocate in one transaction. A replay of the same successful poll returns the recorded approval without reusing the canary for another publication, even if later authorized work changes the current portal version or state.
 
 For the MVP, service-role-only report completion plus the authenticated super administrator poll establishes provenance and approval. FF-025 tracks a later signed, single-use runner attestation without transferring publication authority to automation.
 
@@ -186,7 +187,7 @@ For the MVP, service-role-only report completion plus the authenticated super ad
 - A failed report is immutable and terminal for its operation. Fix the reported stage, confirm that any open Stripe canary Session is expired, never approve a PayPal canary, and begin a fresh operation.
 - An incomplete start stops accepting new worker claims when fewer than 300 seconds remain in its 30 minute evidence window, but the original operation remains pending because a final active lease may still complete. A different operation ID for the same portal version is accepted only after the original 30 minute window ends, preventing overlap with that final lease. At that point the old operation reports expired and the administrator may start a new one.
 - A succeeded report remains nonpublic until an authenticated poll. Poll promptly because evidence expires after 30 minutes and any portal, provider, domain, or deployment change can invalidate the binding.
-- A start bound to an older deployment cannot be completed by a newer deployment. After a production redeploy, begin a fresh operation rather than attempting to adopt old work.
+- A pending start bound to an older deployment cannot be claimed by a newer deployment. Keep polling the original operation because an older active worker may still commit its report. If that report succeeds after the deployment changes, the original operation returns the terminal deployment changed result and cannot publish the newer release. No second operation for the same portal version may begin until the original 30 minute evidence window ends.
 - Never edit lifecycle, lease, start, report, or approval rows directly. Never call the publication function manually with a service role. Repair the failed stage and use the authenticated workflow.
 
 ## Post-publication verification
@@ -272,6 +273,7 @@ Retain:
 - Cloudflare API evidence that the exact CNAME uses the project-specific target with `proxied: false`, plus the matching Vercel project domain attachment.
 - Protected canary report and its SHA256 digest.
 - A focused concurrency test proving single ownership, expired lease reclaim, and rejection of stale completion.
+- The true two-session publication authority harness tracked by FF-040, proving one start and one approval under simultaneous operation, deployment, and administrator races.
 - Route evidence for `202 Accepted`, authenticated polling, low-latency `after()` execution, cron recovery, and the rule that background execution cannot publish.
 - Browser evidence for create, terminal-delivery reissue, sent or ambiguous invitation revocation, post-revocation reissue, initial-owner acceptance, provision, verify, publish, timeout recovery, and reload recovery. The evidence must prove exact operation replay, version fencing, contact-free browser storage, and sanitized responses.
 - Provider evidence proving both Stripe Sessions were unpaid and expired, the PayPal Subscription remained unapproved, and no financial or sponsorship state was created.

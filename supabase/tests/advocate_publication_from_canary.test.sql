@@ -1052,9 +1052,14 @@ JOIN audit.advocate_publication_canary_starts start
   ON start.run_id = run.run_id;
 
 SELECT extensions.ok(
-  has_function_privilege(
+  NOT has_function_privilege(
     'authenticated',
     'public.publish_advocate_portal_from_canary(uuid,bigint,uuid,text,bytea,text,uuid,text)',
+    'EXECUTE'
+  )
+  AND has_function_privilege(
+    'authenticated',
+    'public.publish_advocate_portal_from_canary_v2(uuid,bigint,uuid,uuid,text,bytea,text,uuid,text,uuid,text,text)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
@@ -1067,7 +1072,7 @@ SELECT extensions.ok(
     'public.publish_advocate_portal_from_canary(uuid,bigint,uuid,text,bytea,text,uuid,text)',
     'EXECUTE'
   ),
-  'only authenticated callers can reach the canary-bound publication RPC'
+  'only the authenticated operation-bound v2 RPC may publish from a canary'
 );
 
 SELECT extensions.ok(
@@ -1085,7 +1090,7 @@ SELECT extensions.ok(
 );
 
 SELECT extensions.ok(
-  has_function_privilege(
+  NOT has_function_privilege(
     'service_role',
     'public.get_advocate_publication_canary_execution(uuid)',
     'EXECUTE'
@@ -1100,7 +1105,7 @@ SELECT extensions.ok(
     'public.get_advocate_publication_canary_execution(uuid)',
     'EXECUTE'
   ),
-  'only the service role can reach the canary transport recovery lookup'
+  'the superseded service-role canary recovery lookup has no runtime caller'
 );
 
 SELECT extensions.ok(

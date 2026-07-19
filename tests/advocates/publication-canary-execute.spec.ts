@@ -9,7 +9,7 @@ import type {
   PublicationCanaryWorkerDatabase,
 } from "../../src/lib/advocates/publicationCanary/database"
 import type {
-  PublicationCanaryExecution,
+  PublicationCanaryOperationSnapshot,
   PublicationCanaryWorkerClaim,
 } from "../../src/lib/advocates/publicationCanary/operation"
 import type {
@@ -44,13 +44,9 @@ const {
   processNextPublicationCanaryExecution,
   PUBLICATION_CANARY_WORKER_LEASE_SECONDS,
 } = testRequire(
-  resolve(
-    process.cwd(),
-    "src/lib/advocates/publicationCanary/execute.ts",
-  ),
+  resolve(process.cwd(), "src/lib/advocates/publicationCanary/execute.ts"),
 ) as ExecuteModule
 
-const ACTOR_ID = "11111111-1111-4111-8111-111111111111"
 const ADVOCATE_ID = "22222222-2222-4222-8222-222222222222"
 const DOMAIN_ID = "33333333-3333-4333-8333-333333333333"
 const OPERATION_ID = "44444444-4444-4444-8444-444444444444"
@@ -64,7 +60,6 @@ const STARTED_AT = "2026-07-18T18:00:00.000Z"
 const COMPLETED_AT = "2026-07-18T18:02:00.000Z"
 
 const request = Object.freeze({
-  actorUserId: ACTOR_ID,
   advocateId: ADVOCATE_ID,
   expectedVersion: 17,
   operationId: OPERATION_ID,
@@ -72,11 +67,62 @@ const request = Object.freeze({
   traceId: "publication-trace-1",
   deploymentId: DEPLOYMENT_ID,
   revision: REVISION,
+  clientIp: "203.0.113.9",
+  userAgent: "Publication test agent/1.0",
 })
 
-function execution(
-  outcome: PublicationCanaryExecution["outcome"] = null,
-): PublicationCanaryExecution {
+function operationSnapshot(
+  overrides: Partial<PublicationCanaryOperationSnapshot> = {},
+): PublicationCanaryOperationSnapshot {
+  const outcome = overrides.outcome ?? null
+  return {
+    operationId: OPERATION_ID,
+    runId: RUN_ID,
+    advocateId: ADVOCATE_ID,
+    expectedAdvocateVersion: 17,
+    deploymentId: DEPLOYMENT_ID,
+    revision: REVISION,
+    startedAt: STARTED_AT,
+    outcome,
+    failureCode:
+      outcome === "failed" ? "stripe_us_payment_canary_failed" : null,
+    reportSha256: outcome === null ? null : REPORT_SHA256,
+    completedAt: outcome === null ? null : COMPLETED_AT,
+    publishedAdvocateVersion: null,
+    created: false,
+    ...overrides,
+  }
+}
+
+function operationDatabase(
+  snapshots:
+    PublicationCanaryOperationSnapshot | PublicationCanaryOperationSnapshot[],
+): PublicationCanaryOperationDatabase & {
+  beginOrResumeInputs: unknown[]
+  publishInputs: unknown[]
+} {
+  const beginOrResumeInputs: unknown[] = []
+  const publishInputs: unknown[] = []
+  const values = Array.isArray(snapshots) ? snapshots : [snapshots]
+  let index = 0
+  return {
+    beginOrResumeInputs,
+    publishInputs,
+    async beginOrResume(input) {
+      beginOrResumeInputs.push(input)
+      const value = values[Math.min(index, values.length - 1)]
+      index += 1
+      if (value === undefined) throw new Error("Missing operation snapshot")
+      return value
+    },
+    async publish(input) {
+      publishInputs.push(input)
+      return 18
+    },
+  }
+}
+
+function workerClaim(): PublicationCanaryWorkerClaim {
   return {
     runId: RUN_ID,
     advocateId: ADVOCATE_ID,
@@ -91,62 +137,6 @@ function execution(
       paypal: "80000000-0000-4000-8000-000000000003",
     },
     startedAt: STARTED_AT,
-    outcome,
-    failureCode:
-      outcome === "failed" ? "stripe_us_payment_canary_failed" : null,
-    reportSha256: outcome === null ? null : REPORT_SHA256,
-    completedAt: outcome === null ? null : COMPLETED_AT,
-  }
-}
-
-function operationDatabase(
-  loaded: PublicationCanaryExecution | undefined,
-): PublicationCanaryOperationDatabase & {
-  beginInputs: unknown[]
-  publishInputs: unknown[]
-} {
-  const beginInputs: unknown[] = []
-  const publishInputs: unknown[] = []
-  return {
-    beginInputs,
-    publishInputs,
-    async loadExecution() {
-      return loaded
-    },
-    async begin(input) {
-      beginInputs.push(input)
-      const value = execution()
-      return {
-        runId: value.runId,
-        advocateId: value.advocateId,
-        domainId: value.domainId,
-        hostname: value.hostname,
-        expectedAdvocateVersion: value.expectedAdvocateVersion,
-        deploymentId: value.deploymentId,
-        revision: value.revision,
-        paymentAttemptIds: value.paymentAttemptIds,
-        startedAt: value.startedAt,
-      }
-    },
-    async publish(input) {
-      publishInputs.push(input)
-      return 18
-    },
-  }
-}
-
-function workerClaim(): PublicationCanaryWorkerClaim {
-  const value = execution()
-  return {
-    runId: value.runId,
-    advocateId: value.advocateId,
-    domainId: value.domainId,
-    hostname: value.hostname,
-    expectedAdvocateVersion: value.expectedAdvocateVersion,
-    deploymentId: value.deploymentId,
-    revision: value.revision,
-    paymentAttemptIds: value.paymentAttemptIds,
-    startedAt: value.startedAt,
     startRequestId: START_REQUEST_ID,
     traceId: request.traceId,
     adminReason: request.adminReason,
@@ -171,8 +161,8 @@ function runnerResult(
 }
 
 test.describe("publication canary asynchronous execution", () => {
-  test("starts once and returns before any network runner executes", async () => {
-    const database = operationDatabase(undefined)
+  test("returns a bounded pending retry and schedules same-deployment work", async () => {
+    const database = operationDatabase(operationSnapshot({ created: true }))
     const result = await handlePublicationCanaryOperation(request, {
       database,
       now: () => Date.parse("2026-07-18T18:00:01.000Z"),
@@ -184,12 +174,26 @@ test.describe("publication canary asynchronous execution", () => {
       retryAfterSeconds: 2,
       workerKickoff: true,
     })
-    expect(database.beginInputs).toHaveLength(1)
+    expect(database.beginOrResumeInputs).toEqual([
+      {
+        operationId: OPERATION_ID,
+        traceId: request.traceId,
+        adminReason: request.adminReason,
+        clientIp: request.clientIp,
+        userAgent: request.userAgent,
+        target: {
+          advocateId: ADVOCATE_ID,
+          expectedVersion: 17,
+          deploymentId: DEPLOYMENT_ID,
+          revision: REVISION,
+        },
+      },
+    ])
     expect(database.publishInputs).toHaveLength(0)
   })
 
-  test("polls existing work without scheduling another immediate worker", async () => {
-    const database = operationDatabase(execution())
+  test("retries pending same-deployment work without creating another identity", async () => {
+    const database = operationDatabase(operationSnapshot())
     await expect(
       handlePublicationCanaryOperation(request, {
         database,
@@ -197,23 +201,60 @@ test.describe("publication canary asynchronous execution", () => {
       }),
     ).resolves.toMatchObject({
       outcome: "pending",
-      workerKickoff: false,
+      runId: RUN_ID,
+      retryAfterSeconds: 2,
+      workerKickoff: true,
     })
-    expect(database.beginInputs).toHaveLength(0)
+    expect(database.beginOrResumeInputs).toHaveLength(1)
+    expect(database.beginOrResumeInputs[0]).toMatchObject({
+      operationId: OPERATION_ID,
+    })
+    expect(database.publishInputs).toHaveLength(0)
   })
 
-  test("keeps a final lease pollable and expires only at 30 minutes", async () => {
-    const database = operationDatabase(execution())
+  test("keeps old-deployment work pending and reports a deployment change only after success", async () => {
+    const oldDeploymentId = "dpl_old1234567890"
+    const oldRevision = "c".repeat(40)
+    const database = operationDatabase([
+      operationSnapshot({
+        deploymentId: oldDeploymentId,
+        revision: oldRevision,
+      }),
+      operationSnapshot({
+        deploymentId: oldDeploymentId,
+        revision: oldRevision,
+        outcome: "succeeded",
+      }),
+    ])
+
     await expect(
       handlePublicationCanaryOperation(request, {
         database,
-        now: () => Date.parse("2026-07-18T18:25:00.000Z"),
+        now: () => Date.parse("2026-07-18T18:05:00.000Z"),
       }),
-    ).resolves.toMatchObject({
+    ).resolves.toEqual({
       outcome: "pending",
       runId: RUN_ID,
+      retryAfterSeconds: 2,
       workerKickoff: false,
     })
+
+    await expect(
+      handlePublicationCanaryOperation(request, {
+        database,
+        now: () => Date.parse("2026-07-18T18:06:00.000Z"),
+      }),
+    ).resolves.toEqual({
+      outcome: "deployment_changed",
+      runId: RUN_ID,
+    })
+    expect(database.publishInputs).toHaveLength(0)
+  })
+
+  test("expires successful evidence at the same 30 minute boundary", async () => {
+    const database = operationDatabase(
+      operationSnapshot({ outcome: "succeeded" }),
+    )
     await expect(
       handlePublicationCanaryOperation(request, {
         database,
@@ -223,12 +264,18 @@ test.describe("publication canary asynchronous execution", () => {
       outcome: "expired",
       runId: RUN_ID,
     })
+    expect(database.publishInputs).toHaveLength(0)
   })
 
-  test("publishes only from an immutable successful report", async () => {
-    const database = operationDatabase(execution("succeeded"))
+  test("publishes only current-deployment immutable success and forwards forensic context", async () => {
+    const database = operationDatabase(
+      operationSnapshot({ outcome: "succeeded" }),
+    )
     await expect(
-      handlePublicationCanaryOperation(request, { database }),
+      handlePublicationCanaryOperation(request, {
+        database,
+        now: () => Date.parse("2026-07-18T18:03:00.000Z"),
+      }),
     ).resolves.toEqual({
       outcome: "published",
       runId: RUN_ID,
@@ -237,15 +284,22 @@ test.describe("publication canary asynchronous execution", () => {
     })
     expect(database.publishInputs).toHaveLength(1)
     expect(database.publishInputs[0]).toMatchObject({
+      operationId: OPERATION_ID,
       advocateId: ADVOCATE_ID,
+      expectedVersion: 17,
       runId: RUN_ID,
+      deploymentId: DEPLOYMENT_ID,
+      revision: REVISION,
       reportSha256: REPORT_SHA256,
       adminReason: request.adminReason,
+      traceId: request.traceId,
+      clientIp: request.clientIp,
+      userAgent: request.userAgent,
     })
   })
 
   test("keeps a failed report terminal and never publishes it", async () => {
-    const database = operationDatabase(execution("failed"))
+    const database = operationDatabase(operationSnapshot({ outcome: "failed" }))
     await expect(
       handlePublicationCanaryOperation(request, { database }),
     ).resolves.toEqual({
@@ -254,6 +308,30 @@ test.describe("publication canary asynchronous execution", () => {
       reportSha256: REPORT_SHA256,
       failureCode: "stripe_us_payment_canary_failed",
     })
+    expect(database.publishInputs).toHaveLength(0)
+  })
+
+  test("replays an immutable published result without publishing twice", async () => {
+    const database = operationDatabase(
+      operationSnapshot({
+        outcome: "succeeded",
+        publishedAdvocateVersion: 18,
+        created: false,
+      }),
+    )
+
+    await expect(
+      handlePublicationCanaryOperation(request, {
+        database,
+        now: () => Date.parse("2026-07-18T19:30:00.000Z"),
+      }),
+    ).resolves.toEqual({
+      outcome: "published",
+      runId: RUN_ID,
+      reportSha256: REPORT_SHA256,
+      advocateVersion: 18,
+    })
+    expect(database.beginOrResumeInputs).toHaveLength(1)
     expect(database.publishInputs).toHaveLength(0)
   })
 

@@ -7,6 +7,7 @@ import { AdvocateInitialOwnerControls } from "@/components/advocates/creatorShar
 import { AdvocateLifecycleControls } from "@/components/advocates/creatorShareAdmin/AdvocateLifecycleControls"
 import { AdvocateOnboarding } from "@/components/advocates/creatorShareAdmin/AdvocateOnboarding"
 import { AdvocateOwnershipTransfer } from "@/components/advocates/creatorShareAdmin/AdvocateOwnershipTransfer"
+import { AdvocatePublicationControl } from "@/components/advocates/creatorShareAdmin/AdvocatePublicationControl"
 
 const PORTALS = Object.freeze({
   alpha: Object.freeze({
@@ -166,6 +167,13 @@ export default function AdvocateControlRerenderHarness() {
         slug={portal.slug}
         initialVersion={7 + snapshotRevision}
         availableActions={["suspend", "archive"]}
+      />
+
+      <AdvocatePublicationControl
+        advocateId={portal.advocateId}
+        slug={portal.slug}
+        initialVersion={7 + snapshotRevision}
+        canBeginPublicationCanary
       />
 
       <AdvocateOnboarding />

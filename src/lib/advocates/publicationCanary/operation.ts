@@ -22,8 +22,6 @@ const PUBLICATION_CANARY_FAILURE_CODES = new Set<PublicationCanaryErrorCode>([
   "stripe_uk_payment_canary_failed",
   "paypal_payment_canary_failed",
 ])
-const PUBLICATION_CANARY_START_NAMESPACE =
-  "2e5a2dd3-7067-5d3d-8e4d-5dc6aa10df64"
 const PUBLICATION_CANARY_COMPLETE_NAMESPACE =
   "c5277791-8b06-526d-8f0d-d687078d7646"
 const PUBLICATION_CANARY_PUBLISH_NAMESPACE =
@@ -60,8 +58,28 @@ export interface PublicationCanaryExecution extends PublicationCanaryStartResult
   completedAt: string | null
 }
 
-export interface PublicationCanaryWorkerClaim
-  extends PublicationCanaryStartResult {
+export interface PublicationCanaryOperationSnapshot {
+  operationId: string
+  runId: string
+  advocateId: string
+  expectedAdvocateVersion: number
+  deploymentId: string
+  revision: string
+  startedAt: string
+  outcome: "succeeded" | "failed" | null
+  failureCode: PublicationCanaryErrorCode | null
+  reportSha256: string | null
+  completedAt: string | null
+  publishedAdvocateVersion: number | null
+  created: boolean
+}
+
+export interface PublicationCanaryDeploymentCapability {
+  capabilityId: string
+  expiresAt: string
+}
+
+export interface PublicationCanaryWorkerClaim extends PublicationCanaryStartResult {
   startRequestId: string
   traceId: string
   adminReason: string
@@ -78,13 +96,14 @@ export interface PublicationCanaryCompletionResult {
 
 export type PublicationCanaryPublicFailureCode =
   | "invalid_request"
+  | "unauthorized"
   | "forbidden"
   | "portal_not_found"
   | "publication_conflict"
   | "publication_failed"
 
 export interface PublicationCanaryPublicFailure {
-  status: 400 | 403 | 404 | 409 | 500
+  status: 400 | 401 | 403 | 404 | 409 | 500
   code: PublicationCanaryPublicFailureCode
 }
 
@@ -329,38 +348,149 @@ export function parsePublicationCanaryOperationInput(
 }
 
 export function derivePublicationCanaryStartRequestId(input: {
-  actorUserId: string
   advocateId: string
   expectedVersion: number
   operationId: string
   adminReason: string
-  deploymentId: string
-  revision: string
 }): string | null {
   if (
-    !UUID_PATTERN.test(input.actorUserId) ||
     !UUID_PATTERN.test(input.advocateId) ||
     !validPositiveVersion(input.expectedVersion) ||
     !UUID_V4_PATTERN.test(input.operationId) ||
-    !validReason(input.adminReason) ||
-    !DEPLOYMENT_ID_PATTERN.test(input.deploymentId) ||
-    !REVISION_PATTERN.test(input.revision)
+    !validReason(input.adminReason)
   ) {
     return null
   }
-  return uuidV5(
-    PUBLICATION_CANARY_START_NAMESPACE,
-    [
-      "creator-share-advocate-publication-canary-start-v1",
-      input.actorUserId,
-      input.advocateId,
-      String(input.expectedVersion),
-      input.operationId,
-      input.adminReason,
-      input.deploymentId,
-      input.revision,
-    ].join("\n"),
-  )
+  return input.operationId
+}
+
+export function parsePublicationCanaryOperationSnapshot(
+  value: unknown,
+  expected: {
+    operationId: string
+    advocateId: string
+    expectedVersion: number
+  },
+): PublicationCanaryOperationSnapshot | null {
+  const row = oneRow(value)
+  if (
+    row === null ||
+    !exactKeys(row, [
+      "operation_id",
+      "run_id",
+      "advocate_id",
+      "expected_advocate_version",
+      "deployment_id",
+      "revision",
+      "started_at",
+      "outcome",
+      "failure_code",
+      "report_sha256",
+      "completed_at",
+      "published_advocate_version",
+      "created",
+    ]) ||
+    row.operation_id !== expected.operationId ||
+    !UUID_V4_PATTERN.test(String(row.operation_id)) ||
+    row.run_id === null ||
+    !UUID_PATTERN.test(String(row.run_id)) ||
+    row.advocate_id !== expected.advocateId ||
+    !UUID_PATTERN.test(String(row.advocate_id)) ||
+    row.expected_advocate_version !== expected.expectedVersion ||
+    !validPositiveVersion(row.expected_advocate_version) ||
+    typeof row.deployment_id !== "string" ||
+    !DEPLOYMENT_ID_PATTERN.test(row.deployment_id) ||
+    typeof row.revision !== "string" ||
+    !REVISION_PATTERN.test(row.revision) ||
+    !validTimestamp(row.started_at) ||
+    typeof row.created !== "boolean"
+  ) {
+    return null
+  }
+
+  const publishedAdvocateVersion = row.published_advocate_version
+  if (
+    publishedAdvocateVersion !== null &&
+    (!validPositiveVersion(publishedAdvocateVersion) ||
+      (publishedAdvocateVersion !== expected.expectedVersion + 1 &&
+        publishedAdvocateVersion !== expected.expectedVersion + 2))
+  ) {
+    return null
+  }
+
+  if (
+    row.outcome === null &&
+    row.failure_code === null &&
+    row.report_sha256 === null &&
+    row.completed_at === null &&
+    publishedAdvocateVersion === null
+  ) {
+    return {
+      operationId: row.operation_id as string,
+      runId: row.run_id as string,
+      advocateId: row.advocate_id as string,
+      expectedAdvocateVersion: row.expected_advocate_version,
+      deploymentId: row.deployment_id,
+      revision: row.revision,
+      startedAt: row.started_at,
+      outcome: null,
+      failureCode: null,
+      reportSha256: null,
+      completedAt: null,
+      publishedAdvocateVersion: null,
+      created: row.created,
+    }
+  }
+
+  if (
+    (row.outcome !== "succeeded" && row.outcome !== "failed") ||
+    (row.outcome === "succeeded" && row.failure_code !== null) ||
+    (row.outcome === "failed" && !validFailureCode(row.failure_code)) ||
+    typeof row.report_sha256 !== "string" ||
+    !BYTEA_SHA256_PATTERN.test(row.report_sha256) ||
+    !validTimestamp(row.completed_at) ||
+    (publishedAdvocateVersion !== null && row.outcome !== "succeeded")
+  ) {
+    return null
+  }
+
+  return {
+    operationId: row.operation_id as string,
+    runId: row.run_id as string,
+    advocateId: row.advocate_id as string,
+    expectedAdvocateVersion: row.expected_advocate_version,
+    deploymentId: row.deployment_id,
+    revision: row.revision,
+    startedAt: row.started_at,
+    outcome: row.outcome,
+    failureCode:
+      row.outcome === "failed"
+        ? (row.failure_code as PublicationCanaryErrorCode)
+        : null,
+    reportSha256: row.report_sha256.slice(2),
+    completedAt: row.completed_at,
+    publishedAdvocateVersion,
+    created: row.created,
+  }
+}
+
+export function parsePublicationCanaryDeploymentCapability(
+  value: unknown,
+): PublicationCanaryDeploymentCapability | null {
+  const row = oneRow(value)
+  if (
+    row === null ||
+    !exactKeys(row, ["deployment_capability_id", "expires_at"]) ||
+    typeof row.deployment_capability_id !== "string" ||
+    !UUID_V4_PATTERN.test(row.deployment_capability_id) ||
+    !validTimestamp(row.expires_at)
+  ) {
+    return null
+  }
+  return Object.freeze({
+    capabilityId: row.deployment_capability_id,
+    expiresAt: row.expires_at,
+  })
 }
 
 export function derivePublicationCanaryCompletionRequestId(input: {
@@ -605,11 +735,13 @@ export function classifyPublicationCanaryDatabaseFailure(
     case "22023":
       return { status: 400, code: "invalid_request" }
     case "28000":
+      return { status: 401, code: "unauthorized" }
     case "42501":
       return { status: 403, code: "forbidden" }
     case "23503":
       return { status: 404, code: "portal_not_found" }
     case "23514":
+    case "23505":
     case "40001":
     case "55000":
     case "55P03":

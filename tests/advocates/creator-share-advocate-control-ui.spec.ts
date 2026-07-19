@@ -195,6 +195,48 @@ test.describe("Creator Share advocate control plane UI", () => {
     )
   })
 
+  test("renders publication from server eligibility with exact same-tab recovery", () => {
+    const detailPage = source("src/app/(admin)/admin/advocates/[id]/page.tsx")
+    const publication = source(
+      "src/components/advocates/creatorShareAdmin/AdvocatePublicationControl.tsx",
+    )
+    const clientOperation = source(
+      "src/lib/advocates/publicationCanary/clientOperation.ts",
+    )
+
+    expect(detailPage).toContain("noStore()")
+    expect(detailPage).toContain("<AdvocatePublicationControl")
+    expect(detailPage).toContain("snapshot.canBeginPublicationCanary")
+    expect(detailPage).not.toMatch(
+      /readyIntegrationCount\s*===\s*requiredIntegrationCount/,
+    )
+    expect(publication).toContain("sessionStorage.setItem")
+    expect(publication).toContain("sessionStorage.getItem")
+    expect(publication).toContain(
+      "persistExactOperation(storageKey, candidate)",
+    )
+    expect(publication).toMatch(
+      /persistExactOperation\(storageKey, candidate\)[\s\S]{0,500}setOperation\(candidate\)/,
+    )
+    expect(publication).toContain('credentials: "same-origin"')
+    expect(publication).toContain('redirect: "error"')
+    expect(publication).toContain("PUBLISH ${slug}")
+    expect(publication).toContain("Acknowledge terminal result")
+    expect(publication).toContain("operation === null")
+    expect(publication).toContain("canBeginPublicationCanary")
+    expect(publication).not.toContain("localStorage")
+    expect(publication).not.toMatch(
+      /reportSha256|providerId|paymentAttemptId|stripeUs|stripeUk|paypal/,
+    )
+    expect(clientOperation).toContain(
+      "creator-share:advocate-publication-operation:v1:",
+    )
+    expect(clientOperation).toContain("adminReason")
+    expect(clientOperation).toContain("runId")
+    expect(clientOperation).toContain("hasExactKeys")
+    expect(clientOperation).not.toContain("localStorage")
+  })
+
   test("keeps the application cleanup phases aligned with the database snapshot", () => {
     const migration = source(
       "supabase/migrations/20260718154000_creator_share_advocate_lifecycle_controls.sql",

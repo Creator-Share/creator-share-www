@@ -23,20 +23,29 @@ const ACTOR_ID = "22222222-2222-4222-8222-222222222222"
 const OWNER_MEMBERSHIP_ID = "33333333-3333-4333-8333-333333333333"
 const TARGET_MEMBERSHIP_ID = "44444444-4444-4444-8444-444444444444"
 const OPERATION_ID = "55555555-5555-4555-8555-555555555555"
+const CANARY_RUN_ID = "66666666-6666-4666-8666-666666666666"
+const DEPLOYMENT_CAPABILITY_ID = "77777777-7777-4777-8777-777777777777"
 const ORIGIN = "https://creatorshare.com"
+const DEPLOYMENT_ID = "dpl_1234567890abcdef"
+const REVISION = "a".repeat(40)
 
 let authStatus: "ok" | "unauthorized" | "forbidden" = "ok"
 let createClientCalls = 0
+let createServiceRoleClientCalls = 0
 let rpcResult: { data: unknown; error: { code?: string } | null } = {
   data: null,
   error: null,
 }
 const rpcCalls: Array<{ name: string; args: unknown }> = []
+const rpcResultsByName = new Map<
+  string,
+  { data: unknown; error: { code?: string } | null }
+>()
 
 const client = {
   async rpc(name: string, args: unknown) {
     rpcCalls.push({ name, args })
-    return rpcResult
+    return rpcResultsByName.get(name) ?? rpcResult
   },
 }
 
@@ -53,6 +62,10 @@ nodeModule._load = function mockedModuleLoad(
     return {
       async createClient() {
         createClientCalls += 1
+        return client
+      },
+      createServiceRoleClient() {
+        createServiceRoleClientCalls += 1
         return client
       },
     }
@@ -127,8 +140,17 @@ function cleanupRecoveryBody(overrides: Record<string, unknown> = {}): string {
   })
 }
 
+function publicationBody(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    expectedVersion: 7,
+    operationId: OPERATION_ID,
+    adminReason: "Approve the verified production release for this portal.",
+    ...overrides,
+  })
+}
+
 function request(
-  path: "cleanup-recovery" | "lifecycle" | "ownership",
+  path: "cleanup-recovery" | "lifecycle" | "ownership" | "publish",
   body: string,
   overrides: Record<string, string | null> = {},
 ): Request {
@@ -159,7 +181,9 @@ async function json(response: Response): Promise<Record<string, unknown>> {
 test.beforeEach(() => {
   authStatus = "ok"
   createClientCalls = 0
+  createServiceRoleClientCalls = 0
   rpcCalls.length = 0
+  rpcResultsByName.clear()
   rpcResult = { data: null, error: null }
 })
 
@@ -201,9 +225,262 @@ test.describe("Creator Share advocate publication route", () => {
       expect(await json(response)).toEqual({
         ok: false,
         code: "invalid_request",
+        operationId: null,
       })
     }
     expect(createClientCalls).toBe(0)
+  })
+
+  test("normalizes authentication failures without losing operation correlation", async () => {
+    authStatus = "unauthorized"
+    const unauthorized = await publicationRoute.POST(
+      request("publish", publicationBody()),
+      { params: Promise.resolve({ id: ADVOCATE_ID }) },
+    )
+    expect(unauthorized.status).toBe(401)
+    expect(unauthorized.headers.get("cache-control")).toContain("no-store")
+    expect(unauthorized.headers.get("pragma")).toBe("no-cache")
+    expect(await json(unauthorized)).toEqual({
+      ok: false,
+      code: "unauthorized",
+      operationId: OPERATION_ID,
+    })
+
+    authStatus = "forbidden"
+    const forbidden = await publicationRoute.POST(
+      request("publish", publicationBody()),
+      { params: Promise.resolve({ id: ADVOCATE_ID }) },
+    )
+    expect(forbidden.status).toBe(403)
+    expect(forbidden.headers.get("cache-control")).toContain("no-store")
+    expect(forbidden.headers.get("pragma")).toBe("no-cache")
+    expect(await json(forbidden)).toEqual({
+      ok: false,
+      code: "forbidden",
+      operationId: OPERATION_ID,
+    })
+    expect(rpcCalls).toHaveLength(0)
+    expect(createServiceRoleClientCalls).toBe(0)
+  })
+
+  test("recovers an immutable published receipt through the authenticated database boundary", async () => {
+    const priorEnvironment = {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL: process.env.VERCEL,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      VERCEL_DEPLOYMENT_ID: process.env.VERCEL_DEPLOYMENT_ID,
+      VERCEL_GIT_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA,
+    }
+    Object.assign(process.env, {
+      NODE_ENV: "production",
+      VERCEL: "1",
+      VERCEL_ENV: "production",
+      VERCEL_DEPLOYMENT_ID: DEPLOYMENT_ID,
+      VERCEL_GIT_COMMIT_SHA: REVISION,
+    })
+    rpcResult = {
+      data: [
+        {
+          operation_id: OPERATION_ID,
+          run_id: CANARY_RUN_ID,
+          advocate_id: ADVOCATE_ID,
+          expected_advocate_version: 7,
+          deployment_id: "dpl_original123456",
+          revision: "b".repeat(40),
+          started_at: "2026-07-19T18:00:00.000Z",
+          outcome: "succeeded",
+          failure_code: null,
+          report_sha256: `\\x${"c".repeat(64)}`,
+          completed_at: "2026-07-19T18:01:00.000Z",
+          published_advocate_version: 8,
+          created: false,
+        },
+      ],
+      error: null,
+    }
+
+    try {
+      const published = await publicationRoute.POST(
+        request("publish", publicationBody()),
+        { params: Promise.resolve({ id: ADVOCATE_ID }) },
+      )
+      expect(published.status).toBe(200)
+      expect(published.headers.get("cache-control")).toContain("no-store")
+      expect(published.headers.get("pragma")).toBe("no-cache")
+      expect(await json(published)).toEqual({
+        ok: true,
+        code: "publication_committed",
+        operationId: OPERATION_ID,
+        runId: CANARY_RUN_ID,
+        advocateVersion: 8,
+      })
+      expect(rpcCalls).toEqual([
+        {
+          name: "begin_or_resume_advocate_publication_canary",
+          args: {
+            target_advocate_id: ADVOCATE_ID,
+            target_expected_advocate_version: 7,
+            target_operation_id: OPERATION_ID,
+            target_deployment_id: DEPLOYMENT_ID,
+            target_git_revision: REVISION,
+            target_trace_id: "trace-123",
+            target_admin_reason:
+              "Approve the verified production release for this portal.",
+            target_client_ip: "203.0.113.42",
+            target_user_agent: "Creator Share Admin Test/1.0",
+          },
+        },
+      ])
+      expect(createServiceRoleClientCalls).toBe(0)
+    } finally {
+      for (const [name, value] of Object.entries(priorEnvironment)) {
+        if (value === undefined) delete process.env[name]
+        else process.env[name] = value
+      }
+    }
+  })
+
+  test("returns a fixed terminal result without scheduling another worker", async () => {
+    const priorEnvironment = {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL: process.env.VERCEL,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      VERCEL_DEPLOYMENT_ID: process.env.VERCEL_DEPLOYMENT_ID,
+      VERCEL_GIT_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA,
+    }
+    Object.assign(process.env, {
+      NODE_ENV: "production",
+      VERCEL: "1",
+      VERCEL_ENV: "production",
+      VERCEL_DEPLOYMENT_ID: DEPLOYMENT_ID,
+      VERCEL_GIT_COMMIT_SHA: REVISION,
+    })
+    rpcResult = {
+      data: [
+        {
+          operation_id: OPERATION_ID,
+          run_id: CANARY_RUN_ID,
+          advocate_id: ADVOCATE_ID,
+          expected_advocate_version: 7,
+          deployment_id: DEPLOYMENT_ID,
+          revision: REVISION,
+          started_at: new Date(Date.now() - 60_000).toISOString(),
+          outcome: "failed",
+          failure_code: "tls_exact_host_failed",
+          report_sha256: `\\x${"d".repeat(64)}`,
+          completed_at: new Date().toISOString(),
+          published_advocate_version: null,
+          created: false,
+        },
+      ],
+      error: null,
+    }
+
+    try {
+      const failed = await publicationRoute.POST(
+        request("publish", publicationBody()),
+        { params: Promise.resolve({ id: ADVOCATE_ID }) },
+      )
+      expect(failed.status).toBe(409)
+      expect(await json(failed)).toEqual({
+        ok: false,
+        code: "publication_canary_failed",
+        operationId: OPERATION_ID,
+        runId: CANARY_RUN_ID,
+        retryWithNewOperationId: true,
+      })
+      expect(createServiceRoleClientCalls).toBe(0)
+    } finally {
+      for (const [name, value] of Object.entries(priorEnvironment)) {
+        if (value === undefined) delete process.env[name]
+        else process.env[name] = value
+      }
+    }
+  })
+
+  test("requires server deployment authority plus the authenticated administrator to publish", async () => {
+    const priorEnvironment = {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL: process.env.VERCEL,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      VERCEL_DEPLOYMENT_ID: process.env.VERCEL_DEPLOYMENT_ID,
+      VERCEL_GIT_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA,
+    }
+    Object.assign(process.env, {
+      NODE_ENV: "production",
+      VERCEL: "1",
+      VERCEL_ENV: "production",
+      VERCEL_DEPLOYMENT_ID: DEPLOYMENT_ID,
+      VERCEL_GIT_COMMIT_SHA: REVISION,
+    })
+    const reportSha256 = "e".repeat(64)
+    rpcResultsByName.set("begin_or_resume_advocate_publication_canary", {
+      data: [
+        {
+          operation_id: OPERATION_ID,
+          run_id: CANARY_RUN_ID,
+          advocate_id: ADVOCATE_ID,
+          expected_advocate_version: 7,
+          deployment_id: DEPLOYMENT_ID,
+          revision: REVISION,
+          started_at: new Date(Date.now() - 60_000).toISOString(),
+          outcome: "succeeded",
+          failure_code: null,
+          report_sha256: `\\x${reportSha256}`,
+          completed_at: new Date().toISOString(),
+          published_advocate_version: null,
+          created: false,
+        },
+      ],
+      error: null,
+    })
+    rpcResultsByName.set("mint_advocate_publication_deployment_capability", {
+      data: [
+        {
+          deployment_capability_id: DEPLOYMENT_CAPABILITY_ID,
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+        },
+      ],
+      error: null,
+    })
+    rpcResultsByName.set("publish_advocate_portal_from_canary_v2", {
+      data: 8,
+      error: null,
+    })
+
+    try {
+      const published = await publicationRoute.POST(
+        request("publish", publicationBody()),
+        { params: Promise.resolve({ id: ADVOCATE_ID }) },
+      )
+      expect(published.status).toBe(200)
+      const payload = await json(published)
+      expect(payload).toEqual({
+        ok: true,
+        code: "publication_committed",
+        operationId: OPERATION_ID,
+        runId: CANARY_RUN_ID,
+        advocateVersion: 8,
+      })
+      expect(JSON.stringify(payload)).not.toContain(DEPLOYMENT_CAPABILITY_ID)
+      expect(rpcCalls.map((call) => call.name)).toEqual([
+        "begin_or_resume_advocate_publication_canary",
+        "mint_advocate_publication_deployment_capability",
+        "publish_advocate_portal_from_canary_v2",
+      ])
+      expect(rpcCalls[2]?.args).toMatchObject({
+        target_operation_id: OPERATION_ID,
+        target_canary_run_id: CANARY_RUN_ID,
+        target_deployment_id: DEPLOYMENT_ID,
+        target_deployment_capability_id: DEPLOYMENT_CAPABILITY_ID,
+      })
+      expect(createServiceRoleClientCalls).toBe(1)
+    } finally {
+      for (const [name, value] of Object.entries(priorEnvironment)) {
+        if (value === undefined) delete process.env[name]
+        else process.env[name] = value
+      }
+    }
   })
 })
 
