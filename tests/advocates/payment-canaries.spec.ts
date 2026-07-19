@@ -164,8 +164,7 @@ function paypalSubscription(
     create_time: PROVIDER_CREATED_AT,
     links: [
       {
-        href:
-          "https://www.paypal.com/webapps/billing/subscriptions?ba_token=BA-2M539689T3856352J",
+        href: "https://www.paypal.com/webapps/billing/subscriptions?ba_token=BA-2M539689T3856352J",
         rel: "approve",
         method: "GET",
       },
@@ -594,7 +593,9 @@ test.describe("publication payment canaries", () => {
     for (const invalid of [
       paypalSubscription({ links: [] }),
       paypalSubscription({ status: "ACTIVE" }),
-      paypalSubscription({ subscriber: { email_address: "somebody@example.com" } }),
+      paypalSubscription({
+        subscriber: { email_address: "somebody@example.com" },
+      }),
       paypalSubscription({ billing_info: { next_billing_time: "2026-08-18" } }),
       paypalSubscription({ custom_id: "another-attempt" }),
     ]) {
@@ -675,6 +676,13 @@ test.describe("publication payment canary configuration", () => {
       recurringPriceId,
       requestTimeoutMs: 15_000,
     })
+    expect(
+      loadPublicationPaymentCanaryConfig("stripe_us", {
+        ...stripeEnvironment,
+        ADVOCATE_STRIPE_CANARY_RECURRING_PRICE_ID_US: recurringPriceId,
+        ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS: "60000",
+      }).requestTimeoutMs,
+    ).toBe(15_000)
   })
 
   test("requires an existing recurring PayPal Plan only for publication", () => {

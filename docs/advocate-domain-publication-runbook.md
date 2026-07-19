@@ -2,20 +2,19 @@
 
 This runbook controls the transition from automated provider readiness to a publicly available advocate portal. Provider provisioning remains fully automated. Public activation is a separate, audited release decision because a successful Cloudflare, Vercel, Stripe, or PayPal API response does not prove that the exact public hostname serves the intended tenant or can safely initiate checkout.
 
-## Implementation status and prerequisites
+## Production prerequisites
 
-The database publication boundary and the scheduled retention boundary are implemented. The lifecycle below is the required production contract, not a claim that every caller already exists.
+Do not enable advocate publication until all of these surfaces are deployed and validated together:
 
-Do not publish an advocate portal until these remaining application surfaces are deployed and validated:
+- Atomic provisioning start for the exact primary hostname and exactly five required integrations.
+- Scheduled provisioning reconciliation and the fail-closed active drift transition.
+- Protected exact-host challenge, report canonicalization, and safe live payment canaries.
+- The authenticated publication start and poll route.
+- The one-minute internal publication recovery cron.
+- Durable database execution leases and immutable report completion.
+- Post-publication drift canaries, alerts, and named operator ownership.
 
-- Atomic provisioning start that derives the exact hostname, creates the primary domain and exactly five required integrations, and enqueues all initial work in one transaction.
-- Bounded scheduled reconciliation plus the fail-closed active-drift transition described below.
-- Protected exact-host challenge route and canary runner.
-- Protected report evidence storage and deterministic report hashing.
-- Authenticated super-administrator publication caller using the caller's user session.
-- Post-publication drift canaries and alert ownership.
-
-The existing `create_advocate_portal` function creates the advocate, branding, owner membership, and audit evidence. It does not yet create the domain topology or provisioning jobs. The current provisioner processes work that already exists. No operator should infer production readiness from the presence of the publication RPC alone.
+The presence of a publication function or a provider `ready` status is not production readiness. The release gate is the complete asynchronous flow described below.
 
 ## Lifecycle contract
 
@@ -25,11 +24,14 @@ The domain lifecycle is deliberately asymmetric:
 2. The provisioner reconciles Cloudflare DNS, Vercel attachment, Stripe US live access, Stripe UK live access, and PayPal live access.
 3. Each successful provider reconciliation stores a bounded evidence digest and advances the integration to `ready`.
 4. A domain with exactly the five required ready integrations advances only to `verifying`.
-5. An independent protected canary runner exercises the exact hostname and deployment.
-6. A Creator Share super administrator reviews the result and calls the publication boundary with the expected portal version and evidence digest.
-7. The database atomically activates the exact primary domain and advocate portal.
+5. A Creator Share super administrator sends an authenticated publication request with the expected portal version, one stable operation ID, and an audit reason.
+6. The request creates or polls one immutable canary start and returns `202 Accepted` while work is pending. An `after()` callback attempts low-latency execution after the response.
+7. A one-minute internal cron recovers starts that were not completed by the callback. A durable database fencing lease allows only one current runner to complete a run.
+8. The runner exercises the exact hostname and deployment, then stores one immutable succeeded or failed report. It cannot publish the portal.
+9. A later authenticated poll by a currently authorized Creator Share super administrator observes the succeeded report and invokes the publication boundary.
+10. The database reauthorizes the administrator and atomically activates the exact primary domain and advocate portal.
 
-No provider worker, service role client, or ordinary advocate administrator may activate a portal. A domain in `verifying` remains unavailable to ordinary public browsing and checkout.
+No `after()` callback, cron invocation, provider worker, service role client, or ordinary advocate administrator may activate a portal. A succeeded report remains nonpublic until an authenticated poll completes publication. A domain in `verifying` remains unavailable to ordinary public browsing and checkout.
 
 ## Required provider topology
 
@@ -47,6 +49,37 @@ Every tuple must reference a succeeded `provision` or `reconcile` job with a 32 
 
 Provider readiness is necessary, but it is not sufficient. It proves control plane access. It does not prove public DNS propagation, TLS, tenant selection, deployment identity, return URL construction, or provider checkout object creation through the exact host.
 
+## Asynchronous publication operation
+
+The authenticated publication `POST` is both the start endpoint and the poll endpoint. The caller must keep the same operation ID, expected advocate version, and administrator reason for every retry and poll.
+
+On the first valid request, the server locks one canary start to the exact advocate, primary domain, hostname, deployment, source revision, and current five-provider evidence chain. It returns `202 Accepted` while the report is pending. The response includes the stable operation and run identifiers plus a retry interval. Returning promptly is required because the Creator Share administrative API is normally behind Cloudflare. A synchronous canary can take roughly 140 seconds in the worst case, while Cloudflare's default Proxy Read Timeout is 120 seconds.
+
+After sending the response, Next.js `after()` attempts the run for low latency. It is an optimization, not a durable queue. A separate Vercel cron calls the internal publication worker once per minute to recover abandoned work. Both paths use the same claim boundary. A durable database lease issues a unique fencing token to one runner. An active lease prevents a second owner from running the same start. An expired lease may be reclaimed with a new token, and the stale owner cannot complete after reclamation.
+
+The worker can only append a terminal report. It cannot publish. A later authenticated `POST` with the same operation inputs reads the immutable report. A failed report returns a terminal failure for that operation. A succeeded report is passed to the database publication boundary, which rechecks current super administrator access, portal version, domain state, deployment binding, evidence freshness, provider topology, and report binding before activation.
+
+Vercel Cron does not retry a failed invocation and may occasionally deliver overlapping or duplicate invocations. The one-minute cadence and database lease are therefore both required. Neither `after()` nor cron is publication authority.
+
+## Production platform configuration
+
+Use Vercel Pro or Enterprise for production. This release does not support Hobby because the recovery contract requires a once-per-minute cron. Configure the authenticated publication route and internal publication worker for a 300 second maximum function duration. Confirm that the deployed project and its Fluid Compute setting honor that value.
+
+In Vercel Project Settings, under Environment Variables, enable Automatically expose System Environment Variables. Confirm that both `VERCEL_DEPLOYMENT_ID` and `VERCEL_GIT_COMMIT_SHA` are present at runtime. Publication starts and reports bind to these values so an old deployment cannot supply evidence for a new release.
+
+Cloudflare remains authoritative DNS for the MVP. Each advocate hostname must have one exact CNAME whose content equals the project-specific `ADVOCATE_CLOUDFLARE_CNAME_TARGET`. The record must be DNS only, represented as `proxied: false` through the Cloudflare API. Do not substitute the legacy generic Vercel target. The same hostname must also be attached to the configured Vercel project before it can become ready.
+
+Required server secrets and protected identifiers are:
+
+- Supabase: `NEXT_SERVICE_ROLE_KEY`, plus the configured Supabase URL and anonymous key.
+- Publication execution: `CRON_SECRET` and `ADVOCATE_PUBLICATION_CANARY_SECRET_V1`. The challenge secret must be the canonical base64 encoding of exactly 32 random bytes and must be unique to the environment.
+- Cloudflare: `ADVOCATE_CLOUDFLARE_API_TOKEN`, `ADVOCATE_CLOUDFLARE_ZONE_ID`, and `ADVOCATE_CLOUDFLARE_CNAME_TARGET`.
+- Vercel: `ADVOCATE_VERCEL_API_TOKEN`, `ADVOCATE_VERCEL_PROJECT_ID`, and `ADVOCATE_VERCEL_TEAM_ID` when the project belongs to a team.
+- Stripe US and UK: each account's secret key, publishable key, webhook secret, and dedicated live recurring publication canary Price ID.
+- PayPal: the live client ID, client secret, webhook ID, and dedicated live recurring publication canary Plan ID. In production, leave `PAYPAL_API_URL` unset or set it exactly to `https://api-m.paypal.com`.
+
+Vercel sends `CRON_SECRET` as a bearer token to the internal cron route. Store every secret only in the intended Vercel environment. Release evidence may record that a variable is configured, but never its value.
+
 ## Protected canary report
 
 The canary runner must execute after the latest provider readiness timestamp and against the exact production hostname. It must not temporarily publish the tenant. Use a short lived, single-purpose server challenge that can resolve only the expected `verifying` domain through the protected canary route. Ordinary requests to the same hostname must continue to receive the neutral default-deny response.
@@ -57,7 +90,7 @@ The report must include:
 - Advocate ID, primary domain ID, exact lowercase hostname, and expected advocate version.
 - Deployment ID and source revision.
 - Canary start and completion timestamps in UTC.
-- DNS answers and the expected Vercel target.
+- The exact DNS only CNAME target, independently resolved public A and AAAA answers, and the expected Vercel target.
 - TLS certificate hostname coverage, validity window, and issuer metadata.
 - Exact-host protected tenant response, including the expected advocate ID and deployment ID.
 - Ordinary public response proving the verifying tenant remains unpublished.
@@ -66,32 +99,49 @@ The report must include:
 - Sanitized provider object references required for later operator investigation.
 - A pass or fail result for every check and one overall result.
 
-The checkout canaries must use the production provider accounts without collecting money. Each provider-specific canary must create a nonapproved or otherwise nonchargeable object through the same configuration and return URL construction code used by sponsorship checkout. The runner must verify that success, cancel, and return destinations use the exact expected hostname. Any created object must be immediately terminalized when the provider supports that operation, or left unapproved to expire under a documented provider lifecycle. Never create a fake paid sponsorship, synthetic ledger movement, account claim, welcome email, or advocate attribution decision for a publication canary.
+The checkout canaries must use the production provider accounts without collecting money:
 
-Report payment checks with literal evidence names. At minimum, distinguish live account authentication from `stripe_us_checkout_session_created_and_expired`, `stripe_uk_checkout_session_created_and_expired`, and `paypal_order_created_unapproved`. Also record `financial_charge_attempted`, `provider_capture_attempted`, `sponsorship_state_created`, and `webhook_delivery_verified` as explicit booleans. Do not collapse those facts into one ambiguous `payments_ready` result.
+- Stripe US and Stripe UK each create one live Checkout Session in subscription mode with the dedicated recurring canary Price and exact advocate success and cancel URLs. Verify `livemode: true`, unpaid state, no created subscription, and an open or expired session. If it is open, expire it immediately. Use stable idempotency keys derived from the server-issued attempt identity for both creation and expiration. Never expose the Checkout URL.
+- PayPal creates one live recurring Subscription with a stable `PayPal-Request-Id`, a server-issued custom ID, no subscriber, and the exact advocate return and cancel URLs. Verify `APPROVAL_PENDING`, validate the approval destination, and then discard it. Never expose or approve the URL.
 
-The report must contain no sponsor contact, provider secret, bearer token, checkout contact envelope, or full provider response. Store the exact report bytes in the protected release evidence system. Calculate SHA256 over those exact bytes and pass the 32 byte digest to the database. The ordinary application database stores the digest and an additional binding digest, not the report contents.
+Report payment checks with the exact step names `stripe_us_payment_canary`, `stripe_uk_payment_canary`, and `paypal_payment_canary`. The Stripe evidence status is `checkout_session_expired_unpaid`. The PayPal evidence status is `subscription_approval_pending`. Record `financial_charge_attempted`, `provider_capture_attempted`, `sponsorship_state_created`, and `webhook_delivery_verified` as explicit `false` values. Do not collapse those facts into one ambiguous `payments_ready` result.
+
+The report must contain no sponsor contact, provider secret, bearer token, checkout contact envelope, approval URL, or full provider response. Store the exact canonical UTF8 report bytes and their SHA256 digest in the protected append-only audit schema. The publication boundary also computes a binding digest over the report and ordered provider evidence. Release evidence may contain the sanitized report and provider object references needed for investigation.
 
 ## Publication approval
 
-The approving caller must be a currently authenticated Creator Share super administrator with a verified, active email account. Read the current advocate version immediately before approval. Then call:
+The approving caller must be a currently authenticated Creator Share super administrator with a verified, active email account. Read the current advocate version immediately before the first request. Generate one operation ID and keep the exact request inputs stable while polling.
 
-`publish_advocate_portal(target_advocate_id, expected_advocate_version, target_primary_domain_id, expected_primary_hostname, evidence_sha256, canary_completed_at, change_reason, deployment_id, request_id, trace_id)`
+The first request normally returns `202 Accepted`. The client should wait for the returned retry interval and poll the same authenticated endpoint. A pending response is not a failure. Only a later authenticated poll can invoke publication after observing a succeeded immutable report.
 
-The function fails closed unless:
+The database publication boundary fails closed unless:
 
 - The caller still holds the global `SUPER_ADMIN` assignment throughout the transaction.
 - The advocate relationship is active and its version exactly matches the reviewed version.
-- The supplied domain is the exact primary domain for that advocate.
+- The report's domain is the exact primary domain for that advocate.
 - The domain remains in `verifying`.
+- The start and report are bound to the current deployment identity and source revision.
 - The canary completed no more than 30 minutes ago and no earlier than the latest provider readiness evidence.
 - Exactly the five required provider tuples are ready with succeeded evidence-bearing jobs.
 - No provisioning job for the advocate is queued or running.
-- The hostname, evidence digest, deployment, request, trace, and reason inputs are valid.
+- The hostname, report digest, deployment, operation, request, trace, and reason bindings remain valid.
 
-The function records immutable audit metadata, including the report digest, canary completion time, deployment ID, exact hostname, and a database-computed binding digest over the report digest and ordered provider evidence. It then activates the domain and advocate in one transaction. An optimistic version failure requires a fresh review and a new canary if the existing report has become stale.
+The function records immutable audit metadata, including the report digest, canary completion time, deployment ID, exact hostname, administrator identity, and the database-computed publication binding. It then activates the domain and advocate in one transaction. A replay of the same successful poll returns the recorded approval without reusing the canary for another publication.
 
-For the MVP, the authenticated super administrator is the attesting authority for the protected report digest. The database proves who approved which digest for which domain, deployment, provider evidence, and time. It does not independently prove that a particular runner produced the report. FF-025 tracks a later single-use signed runner attestation without transferring publication authority to automation.
+For the MVP, service-role-only report completion plus the authenticated super administrator poll establishes provenance and approval. FF-025 tracks a later signed, single-use runner attestation without transferring publication authority to automation.
+
+## Retry, reclaim, and operator failure handling
+
+- If the client receives `202 Accepted`, follow the retry interval and poll with the same operation ID, expected version, and reason.
+- If the client sees a timeout, a Cloudflare `524`, or an ambiguous connection failure, poll the same operation before creating another one. The server may have committed the start or publication despite losing the response.
+- `after()` and cron may race. The database lease chooses the owner. A worker that cannot acquire the lease exits without running provider canaries.
+- If a worker stops before appending a report, the active lease temporarily blocks another owner. After lease expiry, cron may reclaim the same start with a new fencing token. Completion from the stale token is rejected.
+- Provider creation retries reuse the server-issued attempt identity and provider idempotency key. Stripe creation and expiration calls are safe to replay with the same keys. PayPal creation reuses the same `PayPal-Request-Id`.
+- A failed report is immutable and terminal for its operation. Fix the reported stage, confirm that any open Stripe canary Session is expired, never approve a PayPal canary, and begin a fresh operation.
+- An incomplete start stops accepting new worker claims when fewer than 300 seconds remain in its 30 minute evidence window, but the original operation remains pending because a final active lease may still complete. A different operation ID for the same portal version is accepted only after the original 30 minute window ends, preventing overlap with that final lease. At that point the old operation reports expired and the administrator may start a new one.
+- A succeeded report remains nonpublic until an authenticated poll. Poll promptly because evidence expires after 30 minutes and any portal, provider, domain, or deployment change can invalidate the binding.
+- A start bound to an older deployment cannot be completed by a newer deployment. After a production redeploy, begin a fresh operation rather than attempting to adopt old work.
+- Never edit lifecycle, lease, start, report, or approval rows directly. Never call the publication function manually with a service role. Repair the failed stage and use the authenticated workflow.
 
 ## Post-publication verification
 
@@ -108,7 +158,7 @@ If any post-publication check fails, suspend public tenant resolution before inv
 
 ## Reconciliation and drift
 
-The scheduled provisioner processes queued jobs every minute. A separate reconciliation scheduler must periodically enqueue one idempotent reconcile job per required integration that is due for observation. A provider status regression must never be treated as a successful publication decision.
+The scheduled provisioner processes queued jobs every minute. The publication recovery cron is a separate worker with a separate database claim boundary. It may complete a pending report, but it must never publish. A separate reconciliation scheduler periodically enqueues one idempotent reconcile job per required integration that is due for observation. A provider status regression must never be treated as a successful publication decision.
 
 Do not enable scheduled reconciliation for active domains until the active-drift settlement boundary is deployed. That boundary must atomically move an active advocate publication, domain, and affected required integration into their fail-closed states when verified provider drift becomes terminal. Repair may return failed state through provisioning to `verifying`, but automation must never reactivate the portal directly.
 
@@ -116,6 +166,7 @@ Alert on:
 
 - A required integration entering `failed` or remaining nonready past its retry objective.
 - A domain remaining in `provisioning` or `verifying` beyond its operational objective.
+- A pending publication start older than one cron interval, repeated lease reclaim, or a publication cron cadence breach.
 - Provider evidence that no longer matches desired state.
 - An active domain whose DNS, Vercel attachment, TLS, or checkout canary later fails.
 - Repeated publication failures, optimistic version conflicts, or evidence freshness failures.
@@ -147,11 +198,32 @@ Retain:
 
 - Database migration identity and complete pgTAP result.
 - Application typecheck, focused route tests, production build result, and Edge middleware matcher evidence.
+- Vercel Pro or Enterprise plan confirmation, effective 300 second function limits, one-minute publication cron inventory, and recent authorized worker evidence.
+- Runtime evidence that System Environment Variables expose `VERCEL_DEPLOYMENT_ID` and `VERCEL_GIT_COMMIT_SHA` without recording secret values.
+- Configuration presence for every required Cloudflare, Vercel, payment, Supabase, cron, and challenge value.
 - Exact five provider readiness records and their succeeded job references.
+- Cloudflare API evidence that the exact CNAME uses the project-specific target with `proxied: false`, plus the matching Vercel project domain attachment.
 - Protected canary report and its SHA256 digest.
+- A focused concurrency test proving single ownership, expired lease reclaim, and rejection of stale completion.
+- Route evidence for `202 Accepted`, authenticated polling, low-latency `after()` execution, cron recovery, and the rule that background execution cannot publish.
+- Provider evidence proving both Stripe Sessions were unpaid and expired, the PayPal Subscription remained unapproved, and no financial or sponsorship state was created.
 - Super administrator publication result and immutable audit event references.
 - Post-publication exact-host and rejected-sibling observations.
 - Active scheduler inventory, recent successful worker runs, and alert ownership.
 - Suspension, deprovisioning, and incident owners.
 
 The release record may reference protected provider object IDs. It must not contain credentials, sponsor contact, account claim secrets, visitor tokens, encrypted contact material, or raw provider payloads.
+
+## Official platform references
+
+- [Cloudflare Error 524 and the 120 second default Proxy Read Timeout](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-524/)
+- [Cloudflare DNS record types and DNS only CNAME configuration](https://developers.cloudflare.com/dns/manage-dns-records/reference/dns-record-types/)
+- [Vercel Cron usage and plan cadence](https://vercel.com/docs/cron-jobs/usage-and-pricing)
+- [Vercel Cron delivery, overlap, and retry behavior](https://vercel.com/docs/cron-jobs/manage-cron-jobs)
+- [Vercel function maximum duration](https://vercel.com/docs/functions/configuring-functions/duration)
+- [Vercel System Environment Variables](https://vercel.com/docs/environment-variables/system-environment-variables)
+- [Next.js post-response `after()` guidance](https://nextjs.org/docs/app/api-reference/functions/after)
+- [Stripe Checkout Session expiration](https://docs.stripe.com/api/checkout/sessions/expire)
+- [Stripe idempotent requests](https://docs.stripe.com/api/idempotent_requests)
+- [PayPal Subscriptions API](https://developer.paypal.com/docs/api/subscriptions/v1/)
+- [PayPal idempotency guidance](https://developer.paypal.com/reference/guidelines/idempotency/)

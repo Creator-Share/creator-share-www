@@ -1,0 +1,230 @@
+import { createRequire } from "node:module"
+import Module from "node:module"
+import { resolve } from "node:path"
+
+import { expect, test } from "@playwright/test"
+import type { SupabaseClient } from "@supabase/supabase-js"
+
+type DatabaseModule =
+  typeof import("../../src/lib/advocates/publicationCanary/database")
+type NodeModuleLoader = (
+  request: string,
+  parent: unknown,
+  isMain: boolean,
+) => unknown
+
+const nodeModule = Module as unknown as { _load: NodeModuleLoader }
+const originalModuleLoad = nodeModule._load
+nodeModule._load = function mockedModuleLoad(
+  this: unknown,
+  request: string,
+  parent: unknown,
+  isMain: boolean,
+) {
+  if (request === "server-only") return {}
+  return originalModuleLoad.call(this, request, parent, isMain)
+}
+const testRequire = createRequire(
+  resolve(process.cwd(), "tests/advocates/publication-canary-database.spec.ts"),
+)
+const {
+  createPublicationCanaryOperationDatabase,
+  createPublicationCanaryWorkerDatabase,
+  PublicationCanaryDatabaseError,
+} = testRequire(
+  resolve(
+    process.cwd(),
+    "src/lib/advocates/publicationCanary/database.ts",
+  ),
+) as DatabaseModule
+
+const ADVOCATE_ID = "11111111-1111-4111-8111-111111111111"
+const DOMAIN_ID = "22222222-2222-4222-8222-222222222222"
+const RUN_ID = "33333333-3333-4333-8333-333333333333"
+const START_REQUEST_ID = "44444444-4444-4444-8444-444444444444"
+const LEASE_TOKEN = "55555555-5555-4555-8555-555555555555"
+const REQUEST_ID = "66666666-6666-4666-8666-666666666666"
+const DEPLOYMENT_ID = "dpl_1234567890abcdef"
+const REVISION = "a".repeat(40)
+const REPORT_SHA256 = "b".repeat(64)
+const STARTED_AT = "2026-07-18T18:00:00.000Z"
+const COMPLETED_AT = "2026-07-18T18:02:00.000Z"
+
+interface RpcCall {
+  name: string
+  input: Record<string, unknown>
+}
+
+function client(
+  responses: Record<
+    string,
+    { data: unknown; error: { code?: string } | null }
+  >,
+): { value: SupabaseClient; calls: RpcCall[] } {
+  const calls: RpcCall[] = []
+  return {
+    calls,
+    value: {
+      async rpc(name: string, input: Record<string, unknown>) {
+        calls.push({ name, input })
+        return responses[name] ?? { data: null, error: { code: "XX000" } }
+      },
+    } as unknown as SupabaseClient,
+  }
+}
+
+function startRow() {
+  return {
+    run_id: RUN_ID,
+    advocate_id: ADVOCATE_ID,
+    domain_id: DOMAIN_ID,
+    hostname: "hope.creatorshare.com",
+    expected_advocate_version: 17,
+    deployment_id: DEPLOYMENT_ID,
+    revision: REVISION,
+    stripe_us_attempt_id: "70000000-0000-4000-8000-000000000001",
+    stripe_uk_attempt_id: "70000000-0000-4000-8000-000000000002",
+    paypal_attempt_id: "70000000-0000-4000-8000-000000000003",
+    started_at: STARTED_AT,
+  }
+}
+
+test.describe("publication canary database authority adapters", () => {
+  test("uses the authenticated client only for begin and publish", async () => {
+    const authenticated = client({
+      begin_advocate_publication_canary: {
+        data: [startRow()],
+        error: null,
+      },
+      publish_advocate_portal_from_canary: { data: 18, error: null },
+    })
+    const service = client({
+      get_advocate_publication_canary_execution: { data: [], error: null },
+    })
+    const database = createPublicationCanaryOperationDatabase(
+      authenticated.value,
+      service.value,
+    )
+    const target = {
+      advocateId: ADVOCATE_ID,
+      expectedVersion: 17,
+      deploymentId: DEPLOYMENT_ID,
+      revision: REVISION,
+    }
+
+    await expect(database.loadExecution(START_REQUEST_ID, target)).resolves
+      .toBeUndefined()
+    await database.begin({
+      requestId: START_REQUEST_ID,
+      traceId: "publication-trace-1",
+      adminReason: "Initial advocate publication after release review.",
+      target,
+    })
+    await expect(
+      database.publish({
+        advocateId: ADVOCATE_ID,
+        expectedVersion: 17,
+        runId: RUN_ID,
+        deploymentId: DEPLOYMENT_ID,
+        reportSha256: REPORT_SHA256,
+        adminReason: "Initial advocate publication after release review.",
+        requestId: REQUEST_ID,
+        traceId: "publication-trace-2",
+      }),
+    ).resolves.toBe(18)
+
+    expect(service.calls.map((call) => call.name)).toEqual([
+      "get_advocate_publication_canary_execution",
+    ])
+    expect(authenticated.calls.map((call) => call.name)).toEqual([
+      "begin_advocate_publication_canary",
+      "publish_advocate_portal_from_canary",
+    ])
+    expect(authenticated.calls[1]?.input.target_report_sha256).toBe(
+      `\\x${REPORT_SHA256}`,
+    )
+  })
+
+  test("uses service role only for queue claim and lease-fenced completion", async () => {
+    const claim = {
+      ...startRow(),
+      start_request_id: START_REQUEST_ID,
+      trace_id: "publication-trace-1",
+      admin_reason: "Initial advocate publication after release review.",
+      lease_token: LEASE_TOKEN,
+      leased_until: "2026-07-18T18:05:00.000Z",
+    }
+    const service = client({
+      claim_next_advocate_publication_canary_execution: {
+        data: [claim],
+        error: null,
+      },
+      complete_claimed_advocate_publication_canary: {
+        data: [
+          {
+            run_id: RUN_ID,
+            outcome: "succeeded",
+            report_sha256: `\\x${REPORT_SHA256}`,
+            completed_at: COMPLETED_AT,
+          },
+        ],
+        error: null,
+      },
+    })
+    const database = createPublicationCanaryWorkerDatabase(service.value)
+
+    await expect(
+      database.claimNext({
+        deploymentId: DEPLOYMENT_ID,
+        revision: REVISION,
+        leaseSeconds: 300,
+      }),
+    ).resolves.toMatchObject({ runId: RUN_ID, leaseToken: LEASE_TOKEN })
+    await database.completeClaimed({
+      runId: RUN_ID,
+      canonicalReport: '{"outcome":"succeeded"}',
+      reportSha256: REPORT_SHA256,
+      outcome: "succeeded",
+      failureCode: null,
+      completedAt: COMPLETED_AT,
+      requestId: REQUEST_ID,
+      traceId: "publication-trace-1",
+      adminReason: "Initial advocate publication after release review.",
+      leaseToken: LEASE_TOKEN,
+    })
+
+    expect(service.calls.map((call) => call.name)).toEqual([
+      "claim_next_advocate_publication_canary_execution",
+      "complete_claimed_advocate_publication_canary",
+    ])
+    expect(service.calls[0]?.input).toEqual({
+      target_deployment_id: DEPLOYMENT_ID,
+      target_git_revision: REVISION,
+      target_lease_seconds: 300,
+    })
+    expect(service.calls[1]?.input).toMatchObject({
+      target_run_id: RUN_ID,
+      target_lease_token: LEASE_TOKEN,
+      target_report_sha256: `\\x${REPORT_SHA256}`,
+    })
+  })
+
+  test("fails closed on malformed rows and preserves the database stage", async () => {
+    const service = client({
+      claim_next_advocate_publication_canary_execution: {
+        data: [{ lease_token: LEASE_TOKEN }],
+        error: null,
+      },
+    })
+    const database = createPublicationCanaryWorkerDatabase(service.value)
+    const failure = await database
+      .claimNext({
+        deploymentId: DEPLOYMENT_ID,
+        revision: REVISION,
+        leaseSeconds: 300,
+      })
+      .catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(PublicationCanaryDatabaseError)
+    expect(failure).toMatchObject({ stage: "claim" })
+  })
+})

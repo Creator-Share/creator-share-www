@@ -63,6 +63,7 @@ export type ProvisioningEnvironment = Readonly<
 
 const DNS_HOSTNAME_PATTERN =
   /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
+const PUBLICATION_PAYMENT_CANARY_MAX_TIMEOUT_MS = 15_000
 
 function configurationError(cause?: unknown): DomainProvisioningError {
   return new DomainProvisioningError({
@@ -119,7 +120,10 @@ function parseBoundedInteger(
 function normalizeDnsHostname(value: string | undefined): string {
   if (!value) throw configurationError()
   const normalized = value.toLowerCase().replace(/\.$/, "")
-  if (normalized !== value.toLowerCase() || !DNS_HOSTNAME_PATTERN.test(normalized)) {
+  if (
+    normalized !== value.toLowerCase() ||
+    !DNS_HOSTNAME_PATTERN.test(normalized)
+  ) {
     throw configurationError()
   }
   return normalized
@@ -136,9 +140,7 @@ export function loadCloudflareProvisioningConfig(
   return {
     apiToken: requireSecret(env, "ADVOCATE_CLOUDFLARE_API_TOKEN"),
     zoneId,
-    cnameTarget: normalizeDnsHostname(
-      env.ADVOCATE_CLOUDFLARE_CNAME_TARGET,
-    ),
+    cnameTarget: normalizeDnsHostname(env.ADVOCATE_CLOUDFLARE_CNAME_TARGET),
     ttl: parseBoundedInteger(
       env.ADVOCATE_CLOUDFLARE_TTL_SECONDS,
       300,
@@ -278,7 +280,10 @@ export function loadPublicationPaymentCanaryConfig(
         /^P-[A-Z0-9]{24}$/,
         26,
       ),
-      requestTimeoutMs: paymentPath.requestTimeoutMs,
+      requestTimeoutMs: Math.min(
+        paymentPath.requestTimeoutMs,
+        PUBLICATION_PAYMENT_CANARY_MAX_TIMEOUT_MS,
+      ),
     }
   }
 
@@ -292,7 +297,10 @@ export function loadPublicationPaymentCanaryConfig(
       `ADVOCATE_STRIPE_CANARY_RECURRING_PRICE_ID_${suffix}`,
       /^price_[A-Za-z0-9]+$/,
     ),
-    requestTimeoutMs: paymentPath.requestTimeoutMs,
+    requestTimeoutMs: Math.min(
+      paymentPath.requestTimeoutMs,
+      PUBLICATION_PAYMENT_CANARY_MAX_TIMEOUT_MS,
+    ),
   }
 }
 
@@ -325,9 +333,8 @@ export function loadWorkerRouteSecret(
   env: ProvisioningEnvironment = process.env,
 ): string {
   const dedicated = env.ADVOCATE_PROVISIONING_WORKER_SECRET
-  const selected = dedicated === undefined || dedicated === ""
-    ? env.CRON_SECRET
-    : dedicated
+  const selected =
+    dedicated === undefined || dedicated === "" ? env.CRON_SECRET : dedicated
 
   return requireSecret(
     { ADVOCATE_PROVISIONING_WORKER_SECRET: selected },

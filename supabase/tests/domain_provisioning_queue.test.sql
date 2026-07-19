@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(48);
+SELECT extensions.plan(49);
 
 CREATE TEMP TABLE queue_test_context (
   key text PRIMARY KEY,
@@ -1052,20 +1052,44 @@ SELECT extensions.ok(
 
 SELECT set_config('request.jwt.claim.sub', '', true);
 
+SELECT extensions.throws_ok(
+  $$
+    SELECT public.enqueue_domain_provisioning_job_system(
+      (SELECT uuid_value FROM queue_test_context WHERE key = 'domain'),
+      (SELECT uuid_value FROM queue_test_context WHERE key = 'integration'),
+      'provision',
+      now(),
+      'queue-stale-lease-system-blocked'
+    )
+  $$,
+  '55000',
+  'Domain integration work is administratively suppressed',
+  'administrator cancellation durably blocks automatic job recreation'
+);
+
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '91000000-0000-4000-8000-000000000001',
+  true
+);
+
 INSERT INTO queue_test_context (key, uuid_value)
 SELECT
   'stale_job',
-  public.enqueue_domain_provisioning_job_system(
+  public.enqueue_domain_provisioning_job(
     domain.uuid_value,
     integration.uuid_value,
     'provision',
+    'Resume provisioning for stale lease recovery validation',
     now(),
-    'queue-stale-lease'
+    'queue-stale-lease-admin-resume'
   )
 FROM queue_test_context domain
 CROSS JOIN queue_test_context integration
 WHERE domain.key = 'domain'
   AND integration.key = 'integration';
+
+SELECT set_config('request.jwt.claim.sub', '', true);
 
 INSERT INTO queue_test_claims (
   label,

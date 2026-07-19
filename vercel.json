@@ -10,6 +10,9 @@
     "src/app/api/internal/advocates/provisioning/route.ts": {
       "maxDuration": 60
     },
+    "src/app/api/internal/advocates/publication-canaries/route.ts": {
+      "maxDuration": 300
+    },
     "src/app/api/internal/sponsorships/welcome-emails/route.ts": {
       "maxDuration": 60
     },
@@ -23,6 +26,10 @@
   "crons": [
     {
       "path": "/api/internal/advocates/provisioning",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/advocates/publication-canaries",
       "schedule": "* * * * *"
     },
     {

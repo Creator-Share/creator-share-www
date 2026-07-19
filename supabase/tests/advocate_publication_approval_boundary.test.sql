@@ -168,7 +168,7 @@ WHERE advocate.key = 'advocate'
   AND domain.key = 'domain';
 
 SELECT extensions.ok(
-  has_function_privilege(
+  NOT has_function_privilege(
     'authenticated',
     'public.publish_advocate_portal(uuid,bigint,uuid,text,bytea,timestamp with time zone,text,text,text,text)',
     'EXECUTE'
@@ -183,7 +183,7 @@ SELECT extensions.ok(
     'public.publish_advocate_portal(uuid,bigint,uuid,text,bytea,timestamp with time zone,text,text,text,text)',
     'EXECUTE'
   ),
-  'only authenticated callers can reach the super administrator publication boundary'
+  'no runtime role can reach the superseded administrator-attested publication boundary'
 );
 
 SELECT extensions.ok(
