@@ -33,8 +33,27 @@ export interface PayPalPaymentPathConfig {
   requestTimeoutMs: number
 }
 
+export interface StripePublicationPaymentCanaryConfig {
+  provider: StripePaymentPathProvider
+  secretKey: string
+  recurringPriceId: string
+  requestTimeoutMs: number
+}
+
+export interface PayPalPublicationPaymentCanaryConfig {
+  provider: "paypal"
+  clientId: string
+  clientSecret: string
+  recurringPlanId: string
+  requestTimeoutMs: number
+}
+
+export type PublicationPaymentCanaryConfig =
+  StripePublicationPaymentCanaryConfig | PayPalPublicationPaymentCanaryConfig
+
 export interface DomainWorkerConfig {
   batchSize: number
+  reconciliationBatchSize: number
   leaseSeconds: number
 }
 
@@ -235,6 +254,48 @@ export function loadPayPalPaymentPathConfig(
   }
 }
 
+export function loadPublicationPaymentCanaryConfig(
+  provider: StripePaymentPathProvider,
+  env?: ProvisioningEnvironment,
+): StripePublicationPaymentCanaryConfig
+export function loadPublicationPaymentCanaryConfig(
+  provider: "paypal",
+  env?: ProvisioningEnvironment,
+): PayPalPublicationPaymentCanaryConfig
+export function loadPublicationPaymentCanaryConfig(
+  provider: StripePaymentPathProvider | "paypal",
+  env: ProvisioningEnvironment = process.env,
+): PublicationPaymentCanaryConfig {
+  if (provider === "paypal") {
+    const paymentPath = loadPayPalPaymentPathConfig(env)
+    return {
+      provider,
+      clientId: paymentPath.clientId,
+      clientSecret: paymentPath.clientSecret,
+      recurringPlanId: requireCredential(
+        env,
+        "ADVOCATE_PAYPAL_CANARY_RECURRING_PLAN_ID",
+        /^P-[A-Z0-9]{24}$/,
+        26,
+      ),
+      requestTimeoutMs: paymentPath.requestTimeoutMs,
+    }
+  }
+
+  const paymentPath = loadStripePaymentPathConfig(provider, env)
+  const suffix = provider === "stripe_us" ? "US" : "UK"
+  return {
+    provider,
+    secretKey: paymentPath.secretKey,
+    recurringPriceId: requireCredential(
+      env,
+      `ADVOCATE_STRIPE_CANARY_RECURRING_PRICE_ID_${suffix}`,
+      /^price_[A-Za-z0-9]+$/,
+    ),
+    requestTimeoutMs: paymentPath.requestTimeoutMs,
+  }
+}
+
 export function loadDomainWorkerConfig(
   env: ProvisioningEnvironment = process.env,
 ): DomainWorkerConfig {
@@ -244,6 +305,12 @@ export function loadDomainWorkerConfig(
       3,
       1,
       10,
+    ),
+    reconciliationBatchSize: parseBoundedInteger(
+      env.ADVOCATE_RECONCILIATION_BATCH_SIZE,
+      20,
+      1,
+      100,
     ),
     leaseSeconds: parseBoundedInteger(
       env.ADVOCATE_PROVISIONING_LEASE_SECONDS,

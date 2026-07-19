@@ -49,6 +49,7 @@ export interface DomainProvisioningContext {
   domainStatus: string
   integrationId: string
   integrationProvider: DomainProvisioningProvider
+  integrationIsRequired: boolean
   integrationStatus: string
   integrationExternalIdentifier: string | null
 }

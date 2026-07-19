@@ -136,6 +136,34 @@ test.describe("advocate tenant route policy", () => {
     })
   })
 
+  test("allows only the exact protected publication canary POST without a visitor session", () => {
+    const path = "/.well-known/creator-share/advocate-publication-canary"
+
+    expect(decide(path, "POST")).toEqual({
+      kind: "allow",
+      routeId: "advocate-publication-canary",
+      neutralPaymentShell: false,
+      visitorSession: false,
+    })
+    expect(decide(path, "GET")).toEqual({
+      kind: "deny",
+      status: 404,
+      allow: null,
+    })
+    for (const lookalike of [
+      `${path}/`,
+      `${path}/extra`,
+      `${path}-evil`,
+      "/.well-known/creator-share",
+    ]) {
+      expect(decide(lookalike, "POST")).toEqual({
+        kind: "deny",
+        status: 404,
+        allow: null,
+      })
+    }
+  })
+
   test("denies every administrative, identity, and unrelated primary surface", () => {
     for (const pathname of [
       "/admin",

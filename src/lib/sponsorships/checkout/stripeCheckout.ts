@@ -36,6 +36,7 @@ import {
   type SealedStripeProviderRequest,
   type StripeProviderRequestTemplateClaims,
 } from "@/lib/sponsorships/checkout/stripeProviderRequest"
+import { stripeCheckoutReturnUrls } from "@/lib/sponsorships/checkout/providerReturnUrls"
 
 export const BLIND_SPONSORSHIP_AMOUNT_USD_CENTS = 3333
 export const SPONSORSHIP_CURRENCY_RATE_SOURCE =
@@ -676,6 +677,7 @@ export function buildHostedStripeSessionParams(
   input: HostedStripeSessionInput,
 ): Stripe.Checkout.SessionCreateParams {
   const metadata = checkoutMetadata(input)
+  const returnUrls = stripeCheckoutReturnUrls(input.checkoutBaseUrl)
 
   const priceData: Stripe.Checkout.SessionCreateParams.LineItem.PriceData = {
     currency: input.chargedCurrency.toLowerCase(),
@@ -704,8 +706,8 @@ export function buildHostedStripeSessionParams(
     ...(input.paymentMode === "recurring"
       ? { subscription_data: { metadata } }
       : { payment_intent_data: { metadata } }),
-    success_url: `${input.checkoutBaseUrl}/payments/success`,
-    cancel_url: `${input.checkoutBaseUrl}/payments/failed`,
+    success_url: returnUrls.successUrl,
+    cancel_url: returnUrls.cancelUrl,
     expires_at: input.expiresAtUnixSeconds,
   }
 }

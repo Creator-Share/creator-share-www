@@ -12,6 +12,7 @@ import {
   type VersionedEmailDigest,
 } from "@/lib/sponsorships/crypto"
 import type { SupportedCurrency } from "@/utils/currency"
+import { paypalCheckoutReturnUrls } from "@/lib/sponsorships/checkout/providerReturnUrls"
 
 export const PAYPAL_PROVIDER_REQUEST_SCHEMA_VERSION = 1 as const
 export const PAYPAL_PROVIDER_REQUEST_SCHEMA =
@@ -438,6 +439,7 @@ export function buildPayPalProviderRequestTemplateClaims(
   emailDigest: VersionedEmailDigest,
 ): PayPalProviderRequestTemplateClaims {
   const template = validateTemplate(templateInput)
+  const returnUrls = paypalCheckoutReturnUrls(template.checkoutBaseUrl)
   const expectedFingerprint = toSupabaseRpcBytea(
     sha256Digest(Buffer.from(canonicalJson(template), "utf8")),
   )
@@ -484,8 +486,8 @@ export function buildPayPalProviderRequestTemplateClaims(
       product_name: template.productName,
     }),
     return_urls_sha256: canonicalDigestHex({
-      cancel_url: `${template.checkoutBaseUrl}/payments/failed?provider=paypal`,
-      success_url: `${template.checkoutBaseUrl}/payments/success?provider=paypal`,
+      cancel_url: returnUrls.cancelUrl,
+      success_url: returnUrls.successUrl,
     }),
     provider_request_expires_at_epoch_microseconds: epochMicroseconds(
       template.providerRequestExpiresAt,

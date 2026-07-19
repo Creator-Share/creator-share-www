@@ -5,4 +5,7 @@ export {
   loadWorkerRouteSecret,
 } from "./config"
 export { createSupabaseDomainProvisioningRepository } from "./repository"
-export { runDomainProvisioningBatch } from "./worker"
+export {
+  runDomainProvisioningBatch,
+  runScheduledDomainProvisioningBatch,
+} from "./worker"

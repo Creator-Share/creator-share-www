@@ -37,6 +37,7 @@ type RouteAction =
 type RouteRule = Readonly<{
   id: string
   action: RouteAction
+  hideMethodMismatch?: boolean
   methods: readonly string[]
   qualifiesAsExposure?: boolean
   neutralPaymentShell?: boolean
@@ -68,6 +69,17 @@ const PAYMENT_PAGE_RULE = Object.freeze({
 } satisfies RouteRule)
 
 const STATIC_RULES = new Map<string, RouteRule>([
+  [
+    "/.well-known/creator-share/advocate-publication-canary",
+    Object.freeze({
+      id: "advocate-publication-canary",
+      action: "allow",
+      hideMethodMismatch: true,
+      methods: POST_METHOD,
+      tenantAllowed: true,
+      visitorSession: false,
+    } satisfies RouteRule),
+  ],
   ["/payments/success", PAYMENT_PAGE_RULE],
   ["/payments/failed", PAYMENT_PAGE_RULE],
   [
@@ -471,7 +483,9 @@ export function resolveTenantRoutePolicy(options: {
     return { kind: "deny", status: 404, allow: null }
   }
   if (!methodAllowed(rule, method)) {
-    return { kind: "deny", status: 405, allow: allowHeader(rule) }
+    return rule.hideMethodMismatch
+      ? { kind: "deny", status: 404, allow: null }
+      : { kind: "deny", status: 405, allow: allowHeader(rule) }
   }
 
   switch (rule.action) {

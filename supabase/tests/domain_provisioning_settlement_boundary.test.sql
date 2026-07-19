@@ -116,14 +116,14 @@ WHERE advocate.key = 'main_advocate'
 
 SELECT extensions.ok(
   has_table_privilege('service_role', 'public.advocate_domains', 'SELECT')
-  AND has_table_privilege('service_role', 'public.advocate_domains', 'INSERT')
+  AND NOT has_table_privilege('service_role', 'public.advocate_domains', 'INSERT')
   AND NOT has_table_privilege('service_role', 'public.advocate_domains', 'UPDATE')
   AND NOT has_table_privilege('service_role', 'public.advocate_domains', 'DELETE')
   AND has_table_privilege('service_role', 'public.advocate_domain_integrations', 'SELECT')
-  AND has_table_privilege('service_role', 'public.advocate_domain_integrations', 'INSERT')
+  AND NOT has_table_privilege('service_role', 'public.advocate_domain_integrations', 'INSERT')
   AND NOT has_table_privilege('service_role', 'public.advocate_domain_integrations', 'UPDATE')
   AND NOT has_table_privilege('service_role', 'public.advocate_domain_integrations', 'DELETE'),
-  'the service role cannot bypass lifecycle RPCs with direct domain state mutation'
+  'the service role cannot bypass lifecycle RPCs with direct domain topology or state mutation'
 );
 
 SELECT extensions.ok(

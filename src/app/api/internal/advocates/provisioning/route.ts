@@ -8,7 +8,7 @@ import {
   isAuthorizedDomainWorkerRequest,
   loadDomainWorkerConfig,
   loadWorkerRouteSecret,
-  runDomainProvisioningBatch,
+  runScheduledDomainProvisioningBatch,
 } from "@/lib/advocates/provisioning"
 import { createServiceRoleClient } from "@/utils/supabase/server"
 
@@ -23,11 +23,15 @@ function response(body: Record<string, unknown>, status: number) {
 }
 
 async function handle(request: NextRequest) {
+  const requestId = randomUUID()
   let expectedSecret: string
   try {
     expectedSecret = loadWorkerRouteSecret()
   } catch {
-    return response({ ok: false, code: "worker_unavailable" }, 503)
+    return response(
+      { ok: false, code: "worker_unavailable", requestId },
+      503,
+    )
   }
 
   if (
@@ -36,7 +40,7 @@ async function handle(request: NextRequest) {
       expectedSecret,
     )
   ) {
-    return response({ ok: false, code: "unauthorized" }, 401)
+    return response({ ok: false, code: "unauthorized", requestId }, 401)
   }
 
   try {
@@ -44,27 +48,63 @@ async function handle(request: NextRequest) {
     const repository = createSupabaseDomainProvisioningRepository(
       createServiceRoleClient(),
     )
-    const batch = await runDomainProvisioningBatch({
+    const batch = await runScheduledDomainProvisioningBatch({
       repository,
       adapterFactory: createDomainProviderAdapterFactory(),
       config,
-      workerId: `advocate-domain-worker:${randomUUID()}`,
+      workerId: `advocate-domain-worker:${requestId}`,
+      correlationId: `advocate-domain-reconciliation:${requestId}`,
     })
+
+    const requiresAttention =
+      batch.schedulingFailed ||
+      batch.quarantinedDomains > 0 ||
+      batch.failed > 0 ||
+      batch.settlementUnknown > 0 ||
+      batch.withdrawnPublications > 0
+    if (requiresAttention) {
+      console.error("ADVOCATE_DOMAIN_PROVISIONING_REQUIRES_ATTENTION", {
+        requestId,
+        code: "worker_partial_failure",
+        schedulingFailed: batch.schedulingFailed,
+        quarantinedDomains: batch.quarantinedDomains,
+        failed: batch.failed,
+        settlementUnknown: batch.settlementUnknown,
+        withdrawnPublications: batch.withdrawnPublications,
+      })
+    }
 
     return response(
       {
-        ok: true,
+        ok: !requiresAttention,
+        ...(requiresAttention ? { code: "worker_partial_failure" } : {}),
+        requestId,
+        scheduledDomains: batch.scheduledDomains,
+        enqueuedReconciliations: batch.enqueuedReconciliations,
+        quarantinedDomains: batch.quarantinedDomains,
+        schedulingFailed: batch.schedulingFailed,
+        ...(batch.schedulingFailureCode
+          ? { schedulingFailureCode: batch.schedulingFailureCode }
+          : {}),
         claimed: batch.claimed,
         succeeded: batch.succeeded,
         retried: batch.retried,
         failed: batch.failed,
         leaseLost: batch.leaseLost,
         settlementUnknown: batch.settlementUnknown,
+        withdrawnPublications: batch.withdrawnPublications,
       },
-      200,
+      requiresAttention ? 503 : 200,
     )
   } catch {
-    return response({ ok: false, code: "worker_execution_failed" }, 503)
+    console.error("ADVOCATE_DOMAIN_PROVISIONING_REQUIRES_ATTENTION", {
+      requestId,
+      code: "worker_execution_failed",
+    })
+    return response(
+      { ok: false, code: "worker_execution_failed", requestId },
+      503,
+    )
   }
 }
 

@@ -127,6 +127,7 @@ export function assertContextMatchesJob(
     context.domainId !== job.domainId ||
     context.integrationId !== job.integrationId ||
     context.integrationProvider !== job.provider ||
+    typeof context.integrationIsRequired !== "boolean" ||
     !exactProductionHost
   ) {
     throw new DomainProvisioningError({

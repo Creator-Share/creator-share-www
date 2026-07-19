@@ -13,8 +13,16 @@ import {
 } from "../../src/lib/advocates/provisioning/config"
 import { PaymentPathReadinessAdapter } from "../../src/lib/advocates/provisioning/paymentPaths"
 import { VercelDomainAdapter } from "../../src/lib/advocates/provisioning/vercel"
-import { processDomainProvisioningJob } from "../../src/lib/advocates/provisioning/worker"
-import type { DomainProvisioningRepository } from "../../src/lib/advocates/provisioning/repository"
+import {
+  processDomainProvisioningJob,
+  runScheduledDomainProvisioningBatch,
+} from "../../src/lib/advocates/provisioning/worker"
+import {
+  createSupabaseDomainProvisioningRepository,
+  DomainProvisioningRepositoryError,
+  type DomainProvisioningRepository,
+} from "../../src/lib/advocates/provisioning/repository"
+import { DomainProvisioningError } from "../../src/lib/advocates/provisioning/types"
 import type {
   ClaimedDomainProvisioningJob,
   DomainProviderAdapter,
@@ -51,6 +59,7 @@ const context: DomainProvisioningContext = {
   domainStatus: "provisioning",
   integrationId: job.integrationId,
   integrationProvider: "cloudflare",
+  integrationIsRequired: true,
   integrationStatus: "provisioning",
   integrationExternalIdentifier: null,
 }
@@ -690,11 +699,177 @@ test.describe("payment path readiness adapters", () => {
   })
 })
 
+test.describe("domain provisioning repository", () => {
+  test("maps the bounded reconciliation scheduler RPC without leaking topology details", async () => {
+    const rpcCalls: Array<{ name: string; args: unknown }> = []
+    const repository = createSupabaseDomainProvisioningRepository({
+      async rpc(name: string, args: unknown) {
+        rpcCalls.push({ name, args })
+        return {
+          data: [
+            {
+              domain_id: job.domainId,
+              enqueued_job_count: 5,
+              quarantined: false,
+            },
+          ],
+          error: null,
+        }
+      },
+    } as never)
+
+    await expect(
+      repository.enqueueDueReconciliations({
+        batchSize: 20,
+        correlationId:
+          "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
+      }),
+    ).resolves.toEqual([
+      {
+        domainId: job.domainId,
+        enqueuedJobCount: 5,
+        quarantined: false,
+      },
+    ])
+    expect(rpcCalls).toEqual([
+      {
+        name: "enqueue_due_advocate_domain_reconciliations",
+        args: {
+          batch_size: 20,
+          correlation_id:
+            "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
+        },
+      },
+    ])
+  })
+
+  test("rejects malformed reconciliation scheduler rows", async () => {
+    const repository = createSupabaseDomainProvisioningRepository({
+      async rpc() {
+        return {
+          data: [
+            {
+              domain_id: job.domainId,
+              enqueued_job_count: 6,
+              quarantined: false,
+            },
+          ],
+          error: null,
+        }
+      },
+    } as never)
+
+    await expect(
+      repository.enqueueDueReconciliations({
+        batchSize: 20,
+        correlationId: "invalid-shape-test",
+      }),
+    ).rejects.toMatchObject({
+      stage: "enqueue_reconciliations_shape",
+    })
+  })
+
+  test("maps quarantined topology without pretending provider work was enqueued", async () => {
+    const repository = createSupabaseDomainProvisioningRepository({
+      async rpc() {
+        return {
+          data: [
+            {
+              domain_id: job.domainId,
+              enqueued_job_count: 0,
+              quarantined: true,
+            },
+          ],
+          error: null,
+        }
+      },
+    } as never)
+
+    await expect(
+      repository.enqueueDueReconciliations({
+        batchSize: 20,
+        correlationId: "invalid-topology-test",
+      }),
+    ).resolves.toEqual([
+      {
+        domainId: job.domainId,
+        enqueuedJobCount: 0,
+        quarantined: true,
+      },
+    ])
+  })
+
+  test("rejects inconsistent scheduler quarantine shapes", async () => {
+    const repository = createSupabaseDomainProvisioningRepository({
+      async rpc() {
+        return {
+          data: [
+            {
+              domain_id: job.domainId,
+              enqueued_job_count: 1,
+              quarantined: true,
+            },
+          ],
+          error: null,
+        }
+      },
+    } as never)
+
+    await expect(
+      repository.enqueueDueReconciliations({
+        batchSize: 20,
+        correlationId: "invalid-quarantine-shape-test",
+      }),
+    ).rejects.toMatchObject({ stage: "enqueue_reconciliations_shape" })
+  })
+
+  test("rejects duplicate or overbroad scheduler result contracts", async () => {
+    for (const data of [
+      [
+        {
+          domain_id: job.domainId,
+          enqueued_job_count: 1,
+          quarantined: false,
+        },
+        {
+          domain_id: job.domainId,
+          enqueued_job_count: 1,
+          quarantined: false,
+        },
+      ],
+      [
+        {
+          domain_id: job.domainId,
+          enqueued_job_count: 1,
+          quarantined: false,
+          hostname: "must-not-leak.creatorshare.com",
+        },
+      ],
+    ]) {
+      const repository = createSupabaseDomainProvisioningRepository({
+        async rpc() {
+          return { data, error: null }
+        },
+      } as never)
+
+      await expect(
+        repository.enqueueDueReconciliations({
+          batchSize: 20,
+          correlationId: "strict-result-contract-test",
+        }),
+      ).rejects.toMatchObject({ stage: "enqueue_reconciliations_shape" })
+    }
+  })
+})
+
 function fakeRepository(
   events: string[],
   overrides: Partial<DomainProvisioningRepository> = {},
 ): DomainProvisioningRepository {
   return {
+    async enqueueDueReconciliations() {
+      return []
+    },
     async claimJobs() {
       return [job]
     },
@@ -707,6 +882,7 @@ function fakeRepository(
     },
     async recordReconciliation() {
       events.push("record_reconciliation")
+      return true
     },
     async complete(_job, status) {
       events.push(`complete_${status}`)
@@ -751,7 +927,11 @@ test.describe("domain provisioning worker", () => {
           calls,
         ),
       }),
-      config: { batchSize: 3, leaseSeconds: 300 },
+      config: {
+        batchSize: 3,
+        reconciliationBatchSize: 20,
+        leaseSeconds: 300,
+      },
       job: stripeJob,
     })
 
@@ -799,7 +979,11 @@ test.describe("domain provisioning worker", () => {
     const result = await processDomainProvisioningJob({
       repository: fakeRepository(events),
       adapterFactory: () => adapter,
-      config: { batchSize: 3, leaseSeconds: 300 },
+      config: {
+        batchSize: 3,
+        reconciliationBatchSize: 20,
+        leaseSeconds: 300,
+      },
       job,
     })
 
@@ -813,6 +997,242 @@ test.describe("domain provisioning worker", () => {
       "renew_lease",
       "provider_reconcile",
       "complete_succeeded",
+    ])
+  })
+
+  test("terminally settles an atomic active publication withdrawal before provider repair", async () => {
+    const events: string[] = []
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        events.push("provider_reconcile")
+        return {
+          outcome: "needs_apply",
+          desiredStateVerified: false,
+          evidence: { provider_status: "drifted", verified: false },
+        }
+      },
+      async apply() {
+        events.push("provider_apply")
+        return { provider_status: "repair_accepted", verified: false }
+      },
+    }
+    const repository = fakeRepository(events, {
+      async recordReconciliation() {
+        events.push("record_reconciliation_withdrawn")
+        return false
+      },
+    })
+
+    const result = await processDomainProvisioningJob({
+      repository,
+      adapterFactory: () => adapter,
+      config: {
+        batchSize: 3,
+        reconciliationBatchSize: 20,
+        leaseSeconds: 300,
+      },
+      job: { ...job, kind: "reconcile" },
+    })
+
+    expect(result).toEqual({
+      jobId: job.jobId,
+      status: "failed",
+      code: "provider_state_drift_detected",
+      publicationWithdrawn: true,
+    })
+    expect(events).toEqual([
+      "load_context",
+      "provider_reconcile",
+      "record_reconciliation_withdrawn",
+      "complete_failed",
+    ])
+  })
+
+  test("records an internally unverified match as nonready evidence", async () => {
+    const events: string[] = []
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        events.push("provider_reconcile")
+        return {
+          outcome: "matches_intent",
+          desiredStateVerified: false,
+          evidence: { provider_status: "pending", verified: true },
+        }
+      },
+      async apply() {
+        throw new Error("An unverified match must never enter provider mutation")
+      },
+    }
+    const repository = fakeRepository(events, {
+      async recordReconciliation(_job, _outcome, evidence) {
+        events.push("record_reconciliation_nonready")
+        expect(evidence.verified).toBe(false)
+        return false
+      },
+    })
+
+    await expect(
+      processDomainProvisioningJob({
+        repository,
+        adapterFactory: () => adapter,
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        job: { ...job, kind: "reconcile" },
+      }),
+    ).resolves.toEqual({
+      jobId: job.jobId,
+      status: "failed",
+      code: "provider_state_drift_detected",
+      publicationWithdrawn: true,
+    })
+    expect(events).toEqual([
+      "load_context",
+      "provider_reconcile",
+      "record_reconciliation_nonready",
+      "complete_failed",
+    ])
+  })
+
+  test("never retries provider work after committed drift withdrawal when terminal settlement is uncertain", async () => {
+    for (const scenario of [
+      {
+        error: new DomainProvisioningRepositoryError("complete", {
+          code: "42501",
+        }),
+        expectedStatus: "lease_lost" as const,
+      },
+      {
+        error: new Error("database response unavailable"),
+        expectedStatus: "settlement_unknown" as const,
+      },
+    ]) {
+      const events: string[] = []
+      const repository = fakeRepository(events, {
+        async recordReconciliation() {
+          events.push("record_reconciliation_withdrawn")
+          return false
+        },
+        async complete() {
+          events.push("complete_failed_unknown")
+          throw scenario.error
+        },
+        async retry() {
+          events.push("retry_must_not_run")
+          return "queued"
+        },
+      })
+      const adapter: DomainProviderAdapter = {
+        provider: "cloudflare",
+        async reconcile() {
+          events.push("provider_reconcile")
+          return {
+            outcome: "conflict",
+            desiredStateVerified: false,
+            evidence: { provider_status: "conflict", verified: false },
+          }
+        },
+        async apply() {
+          events.push("provider_apply_must_not_run")
+          return {}
+        },
+      }
+
+      await expect(
+        processDomainProvisioningJob({
+          repository,
+          adapterFactory: () => adapter,
+          config: {
+            batchSize: 3,
+            reconciliationBatchSize: 20,
+            leaseSeconds: 300,
+          },
+          job: { ...job, kind: "reconcile" },
+        }),
+      ).resolves.toEqual({
+        jobId: job.jobId,
+        status: scenario.expectedStatus,
+        code: "provider_state_drift_detected",
+        publicationWithdrawn: true,
+      })
+      expect(events).toEqual([
+        "load_context",
+        "provider_reconcile",
+        "record_reconciliation_withdrawn",
+        "complete_failed_unknown",
+      ])
+    }
+  })
+
+  test("attempts terminal fail-closed settlement when recording confirmed active drift fails", async () => {
+    const events: string[] = []
+    const repository = fakeRepository(events, {
+      async loadContext() {
+        events.push("load_active_context")
+        return {
+          ...context,
+          advocatePublicationStatus: "active",
+          domainStatus: "active",
+          integrationStatus: "ready",
+        }
+      },
+      async recordReconciliation() {
+        events.push("record_reconciliation_failed")
+        throw new DomainProvisioningRepositoryError("reconcile", {
+          code: "XX000",
+        })
+      },
+      async complete(_job, status, code) {
+        events.push(`complete_${status}_${code}`)
+        return status
+      },
+      async retry() {
+        events.push("retry_must_not_run")
+        return "queued"
+      },
+    })
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        events.push("provider_reconcile")
+        return {
+          outcome: "not_found",
+          desiredStateVerified: false,
+          evidence: { provider_status: "not_found", verified: false },
+        }
+      },
+      async apply() {
+        events.push("provider_apply_must_not_run")
+        return {}
+      },
+    }
+
+    await expect(
+      processDomainProvisioningJob({
+        repository,
+        adapterFactory: () => adapter,
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        job: { ...job, kind: "reconcile" },
+      }),
+    ).resolves.toEqual({
+      jobId: job.jobId,
+      status: "failed",
+      code: "provider_state_drift_detected",
+      publicationWithdrawn: true,
+    })
+    expect(events).toEqual([
+      "load_active_context",
+      "provider_reconcile",
+      "record_reconciliation_failed",
+      "complete_failed_provider_state_drift_detected",
     ])
   })
 
@@ -837,7 +1257,11 @@ test.describe("domain provisioning worker", () => {
     const result = await processDomainProvisioningJob({
       repository: fakeRepository(events),
       adapterFactory: () => adapter,
-      config: { batchSize: 3, leaseSeconds: 300 },
+      config: {
+        batchSize: 3,
+        reconciliationBatchSize: 20,
+        leaseSeconds: 300,
+      },
       job,
     })
 
@@ -851,6 +1275,43 @@ test.describe("domain provisioning worker", () => {
       "record_reconciliation",
       "retry",
     ])
+  })
+
+  test("terminally settles thrown unsafe provider evidence without crashing the batch", async () => {
+    const events: string[] = []
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        throw new DomainProvisioningError({
+          code: "provider_rejected",
+          retryable: true,
+          evidence: {
+            authorization: "Bearer forbidden",
+          } as unknown as SafeProviderEvidence,
+        })
+      },
+      async apply() {
+        throw new Error("Provider mutation must not run")
+      },
+    }
+
+    await expect(
+      processDomainProvisioningJob({
+        repository: fakeRepository(events),
+        adapterFactory: () => adapter,
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        job,
+      }),
+    ).resolves.toEqual({
+      jobId: job.jobId,
+      status: "failed",
+      code: "worker_unsafe_provider_evidence",
+    })
+    expect(events).toEqual(["load_context", "complete_failed"])
   })
 
   test("rejects work that became ineligible after enqueue", async () => {
@@ -879,7 +1340,11 @@ test.describe("domain provisioning worker", () => {
     const result = await processDomainProvisioningJob({
       repository,
       adapterFactory: () => adapter,
-      config: { batchSize: 3, leaseSeconds: 300 },
+      config: {
+        batchSize: 3,
+        reconciliationBatchSize: 20,
+        leaseSeconds: 300,
+      },
       job,
     })
 
@@ -888,6 +1353,131 @@ test.describe("domain provisioning worker", () => {
       code: "worker_job_no_longer_eligible",
     })
     expect(events).toEqual(["load_context", "complete_failed"])
+  })
+
+  test("enqueues due reconciliation before claiming the bounded worker batch", async () => {
+    const events: string[] = []
+    const repository = fakeRepository(events, {
+      async enqueueDueReconciliations(options) {
+        events.push("enqueue_due_reconciliations")
+        expect(options).toEqual({
+          batchSize: 20,
+          correlationId:
+            "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
+        })
+        return [
+          {
+            domainId: job.domainId,
+            enqueuedJobCount: 3,
+            quarantined: false,
+          },
+          {
+            domainId: "77777777-7777-4777-8777-777777777777",
+            enqueuedJobCount: 2,
+            quarantined: false,
+          },
+          {
+            domainId: "88888888-8888-4888-8888-888888888888",
+            enqueuedJobCount: 0,
+            quarantined: true,
+          },
+        ]
+      },
+      async claimJobs() {
+        events.push("claim_jobs")
+        return []
+      },
+    })
+
+    const result = await runScheduledDomainProvisioningBatch({
+      repository,
+      adapterFactory: () => {
+        throw new Error("No claimed job may create an adapter")
+      },
+      config: {
+        batchSize: 3,
+        reconciliationBatchSize: 20,
+        leaseSeconds: 300,
+      },
+      workerId:
+        "advocate-domain-worker:66666666-6666-4666-8666-666666666666",
+      correlationId:
+        "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
+    })
+
+    expect(events).toEqual(["enqueue_due_reconciliations", "claim_jobs"])
+    expect(result).toMatchObject({
+      scheduledDomains: 2,
+      enqueuedReconciliations: 5,
+      quarantinedDomains: 1,
+      schedulingFailed: false,
+      claimed: 0,
+      succeeded: 0,
+      retried: 0,
+      failed: 0,
+      leaseLost: 0,
+      settlementUnknown: 0,
+      withdrawnPublications: 0,
+      results: [],
+    })
+  })
+
+  test("claims durable work even when reconciliation scheduling fails", async () => {
+    const events: string[] = []
+    const repository = fakeRepository(events, {
+      async enqueueDueReconciliations() {
+        events.push("enqueue_due_reconciliations_failed")
+        throw new DomainProvisioningRepositoryError("enqueue_reconciliations", {
+          code: "XX000",
+        })
+      },
+    })
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        events.push("provider_reconcile")
+        return {
+          outcome: "matches_intent",
+          desiredStateVerified: true,
+          evidence: { provider_status: "ready", verified: true },
+        }
+      },
+      async apply() {
+        throw new Error("Verified durable work must not mutate the provider")
+      },
+    }
+
+    const result = await runScheduledDomainProvisioningBatch({
+      repository,
+      adapterFactory: () => adapter,
+      config: {
+        batchSize: 3,
+        reconciliationBatchSize: 20,
+        leaseSeconds: 300,
+      },
+      workerId:
+        "advocate-domain-worker:66666666-6666-4666-8666-666666666666",
+      correlationId:
+        "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
+    })
+
+    expect(events).toEqual([
+      "enqueue_due_reconciliations_failed",
+      "load_context",
+      "provider_reconcile",
+      "record_reconciliation",
+      "complete_succeeded",
+    ])
+    expect(result).toMatchObject({
+      scheduledDomains: 0,
+      enqueuedReconciliations: 0,
+      quarantinedDomains: 0,
+      schedulingFailed: true,
+      schedulingFailureCode: "repository_error",
+      claimed: 1,
+      succeeded: 1,
+      withdrawnPublications: 0,
+    })
   })
 })
 
@@ -937,6 +1527,7 @@ test.describe("domain provisioning configuration", () => {
       ADVOCATE_VERCEL_PROJECT_ID: vercelConfig.projectId,
       ADVOCATE_VERCEL_TEAM_ID: vercelConfig.teamId,
       ADVOCATE_PROVISIONING_BATCH_SIZE: "4",
+      ADVOCATE_RECONCILIATION_BATCH_SIZE: "25",
       ADVOCATE_PROVISIONING_LEASE_SECONDS: "240",
     }
 
@@ -951,6 +1542,7 @@ test.describe("domain provisioning configuration", () => {
     })
     expect(loadDomainWorkerConfig(env)).toEqual({
       batchSize: 4,
+      reconciliationBatchSize: 25,
       leaseSeconds: 240,
     })
   })
@@ -973,6 +1565,11 @@ test.describe("domain provisioning configuration", () => {
 
     expect(() =>
       loadDomainWorkerConfig({ ADVOCATE_PROVISIONING_BATCH_SIZE: "100" }),
+    ).toThrow("worker_configuration_invalid")
+    expect(() =>
+      loadDomainWorkerConfig({
+        ADVOCATE_RECONCILIATION_BATCH_SIZE: "101",
+      }),
     ).toThrow("worker_configuration_invalid")
   })
 

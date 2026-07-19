@@ -8,6 +8,10 @@ import type {
 } from "./types"
 
 export interface DomainProvisioningRepository {
+  enqueueDueReconciliations(options: {
+    batchSize: number
+    correlationId: string
+  }): Promise<DomainReconciliationEnqueueResult[]>
   claimJobs(options: {
     workerId: string
     batchSize: number
@@ -24,7 +28,7 @@ export interface DomainProvisioningRepository {
     job: ClaimedDomainProvisioningJob,
     outcome: ReconciliationOutcome,
     evidence: SafeProviderEvidence,
-  ): Promise<void>
+  ): Promise<boolean>
   complete(
     job: ClaimedDomainProvisioningJob,
     status: "succeeded" | "failed",
@@ -37,6 +41,12 @@ export interface DomainProvisioningRepository {
     code: string,
     evidence: SafeProviderEvidence,
   ): Promise<"queued" | "failed">
+}
+
+export interface DomainReconciliationEnqueueResult {
+  domainId: string
+  enqueuedJobCount: number
+  quarantined: boolean
 }
 
 interface SupabaseErrorLike {
@@ -65,6 +75,40 @@ function throwRepositoryError(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+function parseReconciliationEnqueueResult(
+  value: unknown,
+): DomainReconciliationEnqueueResult | null {
+  if (
+    !isRecord(value) ||
+    Object.keys(value).sort().join(",") !==
+      "domain_id,enqueued_job_count,quarantined"
+  ) {
+    return null
+  }
+
+  const domainId = value.domain_id
+  const enqueuedJobCount = value.enqueued_job_count
+  const quarantined = value.quarantined
+  if (
+    typeof domainId !== "string" ||
+    !UUID_PATTERN.test(domainId) ||
+    typeof enqueuedJobCount !== "number" ||
+    !Number.isSafeInteger(enqueuedJobCount) ||
+    enqueuedJobCount < 0 ||
+    enqueuedJobCount > 5 ||
+    typeof quarantined !== "boolean" ||
+    (quarantined && enqueuedJobCount !== 0) ||
+    (!quarantined && enqueuedJobCount < 1)
+  ) {
+    return null
+  }
+
+  return { domainId, enqueuedJobCount, quarantined }
 }
 
 function parseClaimedJob(value: unknown): ClaimedDomainProvisioningJob | null {
@@ -111,6 +155,33 @@ export function createSupabaseDomainProvisioningRepository(
   client: SupabaseClient,
 ): DomainProvisioningRepository {
   return {
+    async enqueueDueReconciliations({ batchSize, correlationId }) {
+      const { data, error } = await client.rpc(
+        "enqueue_due_advocate_domain_reconciliations",
+        {
+          batch_size: batchSize,
+          correlation_id: correlationId,
+        },
+      )
+      if (error) throwRepositoryError("enqueue_reconciliations", error)
+      if (!Array.isArray(data) || data.length > batchSize) {
+        throwRepositoryError("enqueue_reconciliations_shape", null)
+      }
+
+      const results = data.map(parseReconciliationEnqueueResult)
+      if (
+        results.some((result) => result === null) ||
+        new Set(
+          results.map((result) =>
+            result === null ? "invalid" : result.domainId,
+          ),
+        ).size !== results.length
+      ) {
+        throwRepositoryError("enqueue_reconciliations_shape", null)
+      }
+      return results as DomainReconciliationEnqueueResult[]
+    },
+
     async claimJobs({ workerId, batchSize, leaseSeconds }) {
       const { data, error } = await client.rpc(
         "claim_domain_provisioning_jobs",
@@ -150,7 +221,9 @@ export function createSupabaseDomainProvisioningRepository(
 
       const { data: integration, error: integrationError } = await client
         .from("advocate_domain_integrations")
-        .select("id, advocate_id, domain_id, provider, status, external_identifier")
+        .select(
+          "id, advocate_id, domain_id, provider, is_required, status, external_identifier",
+        )
         .eq("id", job.integrationId)
         .eq("domain_id", job.domainId)
         .eq("advocate_id", job.advocateId)
@@ -170,6 +243,7 @@ export function createSupabaseDomainProvisioningRepository(
         integrationId: String(integration.id),
         integrationProvider:
           integration.provider as DomainProvisioningContext["integrationProvider"],
+        integrationIsRequired: integration.is_required === true,
         integrationStatus: String(integration.status),
         integrationExternalIdentifier:
           typeof integration.external_identifier === "string"
@@ -191,7 +265,7 @@ export function createSupabaseDomainProvisioningRepository(
     },
 
     async recordReconciliation(job, outcome, evidence) {
-      const { error } = await client.rpc(
+      const { data, error } = await client.rpc(
         "record_domain_provisioning_reconciliation",
         {
           target_job_id: job.jobId,
@@ -201,6 +275,10 @@ export function createSupabaseDomainProvisioningRepository(
         },
       )
       if (error) throwRepositoryError("reconcile", error)
+      if (typeof data !== "boolean") {
+        throwRepositoryError("reconcile_shape", null)
+      }
+      return data
     },
 
     async complete(job, status, code, evidence) {

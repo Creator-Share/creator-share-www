@@ -1,6 +1,7 @@
 import "server-only"
 
 import { getPayPalApiUrl, paypalFetch } from "@/lib/paypal/client"
+import { paypalCheckoutReturnUrls } from "@/lib/sponsorships/checkout/providerReturnUrls"
 import type { MaterializedPayPalProviderRequest } from "@/lib/sponsorships/checkout/paypalProviderRequest"
 
 const PAYPAL_ORDER_ID_PATTERN = /^[A-Z0-9]{17}$/
@@ -101,14 +102,6 @@ function moneyValue(amountMinor: number): string {
   return `${Math.floor(amountMinor / 100)}.${String(amountMinor % 100).padStart(2, "0")}`
 }
 
-function successUrl(baseUrl: string): string {
-  return `${baseUrl}/payments/success?provider=paypal`
-}
-
-function cancelUrl(baseUrl: string): string {
-  return `${baseUrl}/payments/failed?provider=paypal`
-}
-
 export function buildPayPalOrderCreatePayload(
   request: MaterializedPayPalProviderRequest,
 ): PayPalOrderCreatePayload {
@@ -147,6 +140,7 @@ export function buildPayPalSubscriptionCreatePayload(
   ) {
     fail("invalid-request")
   }
+  const returnUrls = paypalCheckoutReturnUrls(request.checkoutBaseUrl)
   return {
     plan_id: request.paypalPlanId,
     custom_id: request.paymentAttemptId,
@@ -155,8 +149,8 @@ export function buildPayPalSubscriptionCreatePayload(
       brand_name: "Creator Share",
       shipping_preference: "NO_SHIPPING",
       user_action: "SUBSCRIBE_NOW",
-      return_url: successUrl(request.checkoutBaseUrl),
-      cancel_url: cancelUrl(request.checkoutBaseUrl),
+      return_url: returnUrls.successUrl,
+      cancel_url: returnUrls.cancelUrl,
     },
   }
 }

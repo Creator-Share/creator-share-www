@@ -1,6 +1,7 @@
 import "server-only"
 
 import type { StripeRegion } from "@/lib/stripe/config"
+import { stripeCheckoutReturnUrls } from "@/lib/sponsorships/checkout/providerReturnUrls"
 import {
   constantTimeDigestEqual,
   fromSupabaseRpcBytea,
@@ -434,6 +435,7 @@ export function buildStripeProviderRequestTemplateClaims(
   emailDigest: VersionedEmailDigest,
 ): StripeProviderRequestTemplateClaims {
   const template = validateTemplate(templateInput)
+  const returnUrls = stripeCheckoutReturnUrls(template.checkoutBaseUrl)
   const expectedFingerprint = toSupabaseRpcBytea(
     sha256Digest(Buffer.from(canonicalJson(template), "utf8")),
   )
@@ -480,8 +482,8 @@ export function buildStripeProviderRequestTemplateClaims(
       product_name: template.productName,
     }),
     return_urls_sha256: canonicalDigestHex({
-      cancel_url: `${template.checkoutBaseUrl}/payments/failed`,
-      success_url: `${template.checkoutBaseUrl}/payments/success`,
+      cancel_url: returnUrls.cancelUrl,
+      success_url: returnUrls.successUrl,
     }),
     provider_request_expires_at_epoch_microseconds: epochMicroseconds(
       template.providerRequestExpiresAt,

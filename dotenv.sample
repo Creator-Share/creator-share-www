@@ -23,11 +23,14 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US=
 STRIPE_WEBHOOK_SECRET_US=
 STRIPE_WEBHOOK_SECRET_US_PREVIOUS=
 NEXT_PUBLIC_STRIPE_PORTAL_URL_US=
+ADVOCATE_STRIPE_CANARY_RECURRING_PRICE_ID_US=
 STRIPE_SECRET_KEY_UK=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK=
 STRIPE_WEBHOOK_SECRET_UK=
 STRIPE_WEBHOOK_SECRET_UK_PREVIOUS=
 NEXT_PUBLIC_STRIPE_PORTAL_URL_UK=
+ADVOCATE_STRIPE_CANARY_RECURRING_PRICE_ID_UK=
+ADVOCATE_PAYPAL_CANARY_RECURRING_PLAN_ID=
 #
 # NEXT_PUBLIC_STRIPE_PORTAL_URL_* powers the public Footer / FAQ / About
 # "Manage Subscription" links and server-rendered email template links.
@@ -128,9 +131,19 @@ ADVOCATE_VERCEL_API_TOKEN=
 ADVOCATE_VERCEL_PROJECT_ID=
 ADVOCATE_VERCEL_TEAM_ID=
 ADVOCATE_PROVISIONING_BATCH_SIZE=3
+ADVOCATE_RECONCILIATION_BATCH_SIZE=20
 ADVOCATE_PROVISIONING_LEASE_SECONDS=300
 ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS=15000
 # ADVOCATE_PROVISIONING_WORKER_SECRET=
+# Protected exact-host publication challenge only. Generate exactly 32 random
+# bytes and store their canonical base64 encoding. This key must be unique to
+# each environment and must not be reused by any worker or sponsorship system.
+ADVOCATE_PUBLICATION_CANARY_SECRET_V1=
+# Publication checks create one live hosted Stripe subscription Session with
+# the regional recurring Price above, never expose its URL, and expire it
+# immediately. PayPal publication checks create one unapproved live recurring
+# Subscription with the branded return URLs and discard its approval URL.
+# Routine reconciliation does not run these canaries.
 
 # Sponsor identity HMACs, account-claim tokens, and encrypted email outbox
 # payloads. Server only. Generate one canonical base64 value containing at
