@@ -308,6 +308,7 @@ INSERT INTO invitation_test_ids (key, value)
 SELECT 'advocate', id FROM created;
 
 SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
 
 WITH issued AS (
   SELECT *
@@ -821,6 +822,8 @@ SELECT extensions.ok(
   'redemption redacts retryable contact and capability ciphertext while retaining sent delivery evidence'
 );
 
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
 SELECT extensions.is(
   (
     SELECT created
@@ -843,6 +846,8 @@ SELECT extensions.is(
   false,
   'an exact lost-response retry remains idempotent after the original invitation has been accepted'
 );
+
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
 
 SELECT extensions.throws_ok(
   $$
@@ -1329,6 +1334,7 @@ SELECT extensions.is(
 );
 
 SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
 
 WITH issued AS (
   SELECT *
@@ -1353,6 +1359,7 @@ SELECT 'invitation_f', invitation_id FROM issued
 UNION ALL
 SELECT 'outbox_f', outbox_id FROM issued;
 
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
 SELECT set_config(
   'request.jwt.claim.sub',
   '95000000-0000-4000-8000-000000000101',

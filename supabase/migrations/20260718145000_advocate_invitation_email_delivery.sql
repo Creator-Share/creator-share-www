@@ -259,13 +259,14 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_jwt_role text := nullif(
-    pg_catalog.current_setting('request.jwt.claim.role', true),
-    ''
-  );
+  v_jwt_role text := nullif(auth.role(), '');
 BEGIN
-  IF v_jwt_role IS DISTINCT FROM 'service_role'
-     AND session_user NOT IN ('postgres', 'service_role') THEN
+  IF v_jwt_role IS NOT NULL THEN
+    IF v_jwt_role IS DISTINCT FROM 'service_role' THEN
+      RAISE EXCEPTION 'Advocate invitation service role is required'
+        USING ERRCODE = '42501';
+    END IF;
+  ELSIF session_user NOT IN ('postgres', 'service_role') THEN
     RAISE EXCEPTION 'Advocate invitation service role is required'
       USING ERRCODE = '42501';
   END IF;
@@ -2158,8 +2159,7 @@ DECLARE
   v_role_count integer;
   v_valid_role_count integer;
 BEGIN
-  IF pg_catalog.current_setting('request.jwt.claim.role', true)
-       IS DISTINCT FROM 'authenticated'
+  IF auth.role() IS DISTINCT FROM 'authenticated'
      OR v_user_id IS NULL THEN
     RAISE EXCEPTION 'Authentication is required'
       USING ERRCODE = '28000';

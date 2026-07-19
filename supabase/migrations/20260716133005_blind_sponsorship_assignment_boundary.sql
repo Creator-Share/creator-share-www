@@ -617,8 +617,7 @@ AS $$
 DECLARE
   v_actor_user_id uuid := auth.uid();
 BEGIN
-  IF pg_catalog.current_setting('request.jwt.claim.role', true)
-       IS DISTINCT FROM 'authenticated'
+  IF auth.role() IS DISTINCT FROM 'authenticated'
      OR v_actor_user_id IS NULL THEN
     RAISE EXCEPTION 'Blind sponsorship assignment requires an authenticated account'
       USING ERRCODE = '42501';
@@ -679,8 +678,7 @@ AS $$
 DECLARE
   v_actor_user_id uuid := auth.uid();
 BEGIN
-  IF pg_catalog.current_setting('request.jwt.claim.role', true)
-       IS DISTINCT FROM 'authenticated'
+  IF auth.role() IS DISTINCT FROM 'authenticated'
      OR v_actor_user_id IS NULL
      OR NOT private.is_creator_share_super_admin() THEN
     RAISE EXCEPTION 'Blind sponsorship administration requires a Creator Share super administrator'

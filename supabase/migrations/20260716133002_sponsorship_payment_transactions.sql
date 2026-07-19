@@ -975,13 +975,14 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_jwt_role text := nullif(
-    pg_catalog.current_setting('request.jwt.claim.role', true),
-    ''
-  );
+  v_jwt_role text := nullif(auth.role(), '');
 BEGIN
-  IF v_jwt_role IS DISTINCT FROM 'service_role'
-     AND session_user NOT IN ('postgres', 'service_role') THEN
+  IF v_jwt_role IS NOT NULL THEN
+    IF v_jwt_role IS DISTINCT FROM 'service_role' THEN
+      RAISE EXCEPTION 'Payment transaction RPCs require the service role'
+        USING ERRCODE = '42501';
+    END IF;
+  ELSIF session_user NOT IN ('postgres', 'service_role') THEN
     RAISE EXCEPTION 'Payment transaction RPCs require the service role'
       USING ERRCODE = '42501';
   END IF;
@@ -4748,7 +4749,7 @@ DECLARE
   v_target_auth_user_id uuid := auth.uid();
   v_linked_count integer := 0;
 BEGIN
-  IF pg_catalog.current_setting('request.jwt.claim.role', true) IS DISTINCT FROM 'authenticated'
+  IF auth.role() IS DISTINCT FROM 'authenticated'
      OR v_target_auth_user_id IS NULL THEN
     RAISE EXCEPTION 'Account claim consumption requires the authenticated account'
       USING ERRCODE = '42501';

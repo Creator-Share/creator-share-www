@@ -1126,7 +1126,7 @@ DECLARE
   v_attach_result jsonb;
   v_requires_fresh_proof boolean := false;
 BEGIN
-  IF pg_catalog.current_setting('request.jwt.claim.role', true) IS DISTINCT FROM 'authenticated'
+  IF auth.role() IS DISTINCT FROM 'authenticated'
      OR v_auth_user_id IS NULL THEN
     RAISE EXCEPTION 'Legacy subscription claims require the authenticated account'
       USING ERRCODE = '42501';

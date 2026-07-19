@@ -13,13 +13,14 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_jwt_role text := nullif(
-    pg_catalog.current_setting('request.jwt.claim.role', true),
-    ''
-  );
+  v_jwt_role text := nullif(auth.role(), '');
 BEGIN
-  IF v_jwt_role IS DISTINCT FROM 'service_role'
-     AND session_user NOT IN ('postgres', 'service_role') THEN
+  IF v_jwt_role IS NOT NULL THEN
+    IF v_jwt_role IS DISTINCT FROM 'service_role' THEN
+      RAISE EXCEPTION 'Data retention RPCs require the service role'
+        USING ERRCODE = '42501';
+    END IF;
+  ELSIF session_user NOT IN ('postgres', 'service_role') THEN
     RAISE EXCEPTION 'Data retention RPCs require the service role'
       USING ERRCODE = '42501';
   END IF;

@@ -426,10 +426,7 @@ AS $$
 DECLARE
   v_now timestamptz := clock_timestamp();
   v_actor_user_id uuid := auth.uid();
-  v_jwt_role text := nullif(
-    pg_catalog.current_setting('request.jwt.claim.role', true),
-    ''
-  );
+  v_jwt_role text := nullif(auth.role(), '');
   v_subscription public.subscriptions%ROWTYPE;
   v_operation public.sponsorship_subscription_cancellations%ROWTYPE;
   v_identity_auth_user_id uuid;

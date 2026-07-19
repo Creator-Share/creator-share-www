@@ -322,27 +322,11 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_claim_role text := NULLIF(
-    current_setting('request.jwt.claim.role', true),
-    ''
-  );
-  v_claims jsonb := '{}'::jsonb;
+  v_claim_role text := NULLIF(auth.role(), '');
 BEGIN
   IF NEW.publication_status <> 'active'
      OR OLD.publication_status = 'active' THEN
     RETURN NEW;
-  END IF;
-
-  IF v_claim_role IS NULL THEN
-    BEGIN
-      v_claims := COALESCE(
-        NULLIF(current_setting('request.jwt.claims', true), '')::jsonb,
-        '{}'::jsonb
-      );
-      v_claim_role := NULLIF(v_claims ->> 'role', '');
-    EXCEPTION WHEN others THEN
-      v_claim_role := '__malformed__';
-    END;
   END IF;
 
   IF (session_user <> 'postgres' OR v_claim_role IS NOT NULL)
@@ -368,26 +352,10 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_claim_role text := NULLIF(
-    current_setting('request.jwt.claim.role', true),
-    ''
-  );
-  v_claims jsonb := '{}'::jsonb;
+  v_claim_role text := NULLIF(auth.role(), '');
 BEGIN
   IF NEW.status <> 'active' OR OLD.status = 'active' THEN
     RETURN NEW;
-  END IF;
-
-  IF v_claim_role IS NULL THEN
-    BEGIN
-      v_claims := COALESCE(
-        NULLIF(current_setting('request.jwt.claims', true), '')::jsonb,
-        '{}'::jsonb
-      );
-      v_claim_role := NULLIF(v_claims ->> 'role', '');
-    EXCEPTION WHEN others THEN
-      v_claim_role := '__malformed__';
-    END;
   END IF;
 
   IF (session_user <> 'postgres' OR v_claim_role IS NOT NULL)

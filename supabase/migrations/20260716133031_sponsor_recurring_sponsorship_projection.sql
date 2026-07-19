@@ -40,8 +40,7 @@ AS $$
 DECLARE
   v_auth_user_id uuid := auth.uid();
 BEGIN
-  IF pg_catalog.current_setting('request.jwt.claim.role', true)
-       IS DISTINCT FROM 'authenticated'
+  IF auth.role() IS DISTINCT FROM 'authenticated'
      OR v_auth_user_id IS NULL THEN
     RAISE EXCEPTION 'Recurring sponsorships require an authenticated account'
       USING ERRCODE = '42501';
@@ -145,8 +144,7 @@ AS $$
 DECLARE
   v_auth_user_id uuid := auth.uid();
 BEGIN
-  IF pg_catalog.current_setting('request.jwt.claim.role', true)
-       IS DISTINCT FROM 'authenticated'
+  IF auth.role() IS DISTINCT FROM 'authenticated'
      OR v_auth_user_id IS NULL THEN
     RAISE EXCEPTION 'PayPal subscription presentation requires an authenticated account'
       USING ERRCODE = '42501';

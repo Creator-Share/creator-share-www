@@ -35,13 +35,14 @@ DECLARE
   v_operation public.sponsorship_checkout_operations%ROWTYPE;
   v_attempt public.sponsorship_payment_attempts%ROWTYPE;
   v_recovery public.sponsorship_checkout_recovery_states%ROWTYPE;
-  v_jwt_role text := nullif(
-    pg_catalog.current_setting('request.jwt.claim.role', true),
-    ''
-  );
+  v_jwt_role text := nullif(auth.role(), '');
 BEGIN
-  IF v_jwt_role IS DISTINCT FROM 'service_role'
-     AND session_user NOT IN ('postgres', 'service_role') THEN
+  IF v_jwt_role IS NOT NULL THEN
+    IF v_jwt_role IS DISTINCT FROM 'service_role' THEN
+      RAISE EXCEPTION 'PayPal checkout capture material requires the service role'
+        USING ERRCODE = '42501';
+    END IF;
+  ELSIF session_user NOT IN ('postgres', 'service_role') THEN
     RAISE EXCEPTION 'PayPal checkout capture material requires the service role'
       USING ERRCODE = '42501';
   END IF;

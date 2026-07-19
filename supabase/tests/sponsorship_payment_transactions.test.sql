@@ -1070,11 +1070,15 @@ SELECT extensions.throws_ok(
   'another authenticated account cannot consume the sponsor claim'
 );
 
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
 SELECT count(*)
 FROM public.issue_sponsor_account_email_verification(
   target_auth_user_id => '91000000-0000-4000-8000-000000000001'::uuid,
   target_email_hmac => decode(repeat('ab', 32), 'hex')
 );
+
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
 
 SELECT set_config(
   'request.jwt.claim.sub',
