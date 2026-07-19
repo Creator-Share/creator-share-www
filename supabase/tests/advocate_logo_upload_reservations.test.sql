@@ -245,9 +245,12 @@ SELECT extensions.ok(
 
 SELECT extensions.ok(
   pg_get_functiondef(
-    'public.get_advocate_audit_events(uuid,bigint,integer)'::regprocedure
-  ) LIKE '%advocate_logo_upload_reservations%',
-  'the sanitized advocate audit reader allowlists logo reservation lifecycle events'
+    'public.get_advocate_audit_history_page(uuid,uuid,integer)'::regprocedure
+  ) NOT LIKE '%advocate_logo_upload_reservations%'
+  AND to_regprocedure(
+    'public.get_advocate_audit_events(uuid,bigint,integer)'
+  ) IS NULL,
+  'portal audit history excludes internal logo reservation lifecycle rows'
 );
 
 INSERT INTO auth.users (
@@ -928,20 +931,16 @@ SELECT set_config(
 );
 
 SELECT extensions.ok(
-  EXISTS (
-    SELECT 1
-    FROM public.get_advocate_audit_events(
-      'b0000000-0000-4000-8000-000000000001'
-    ) event
-    WHERE event.table_name = 'advocate_logo_upload_reservations'
-      AND event.actor_user_id =
-        'b1000000-0000-4000-8000-000000000002'
-      AND event.tool IN (
-        'advocate-portal-logo',
-        'advocate-portal-branding'
-      )
+  public.get_advocate_audit_history_page(
+    'b0000000-0000-4000-8000-000000000001'
+  ) -> 'entries' @> jsonb_build_array(
+    jsonb_build_object(
+      'event_key', 'branding.updated',
+      'actor_kind', 'portal_member',
+      'actor_display_name', 'Logo E.'
+    )
   ),
-  'a tenant audit viewer receives the sanitized logo reservation lifecycle entry'
+  'a real branding command commits and snapshots a privacy-safe named actor'
 );
 
 RESET ROLE;

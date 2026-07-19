@@ -251,9 +251,12 @@ SELECT extensions.ok(
 
 SELECT extensions.ok(
   pg_get_functiondef(
-    'public.get_advocate_audit_events(uuid,bigint,integer)'::regprocedure
-  ) LIKE '%advocate_logo_reconciliation_jobs%',
-  'the sanitized advocate audit reader allowlists reconciliation lifecycle events'
+    'public.get_advocate_audit_history_page(uuid,uuid,integer)'::regprocedure
+  ) NOT LIKE '%advocate_logo_reconciliation_jobs%'
+  AND to_regprocedure(
+    'public.get_advocate_audit_events(uuid,bigint,integer)'
+  ) IS NULL,
+  'portal audit history excludes internal logo reconciliation lifecycle rows'
 );
 
 INSERT INTO auth.users (

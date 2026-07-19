@@ -208,9 +208,12 @@ SELECT extensions.is(
 
 SELECT extensions.ok(
   pg_get_functiondef(
-    'public.get_advocate_audit_events(uuid,bigint,integer)'::regprocedure
-  ) LIKE '%advocate_invitation_email_outbox%',
-  'the sanitized advocate audit reader includes invitation delivery lifecycle events'
+    'public.get_advocate_audit_history_page(uuid,uuid,integer)'::regprocedure
+  ) NOT LIKE '%advocate_invitation_email_outbox%'
+  AND to_regprocedure(
+    'public.get_advocate_audit_events(uuid,bigint,integer)'
+  ) IS NULL,
+  'portal audit history excludes invitation delivery internals'
 );
 
 CREATE TEMP TABLE invitation_test_ids (
@@ -557,7 +560,7 @@ SELECT extensions.throws_ok(
 
 SELECT extensions.throws_ok(
   format(
-    'SELECT * FROM public.get_advocate_audit_events(%L::uuid)',
+    'SELECT public.get_advocate_audit_history_page(%L::uuid)',
     (SELECT value FROM invitation_test_ids WHERE key = 'advocate')
   ),
   '42501',
@@ -1075,6 +1078,79 @@ SELECT extensions.ok(
       AND event.metadata ->> 'operation' = 'revoke_invitation'
   ),
   'revocation preserves complete manager and target audit provenance without exposing contact material'
+);
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = 'request-invitation-issue'
+      AND disclosed.event_key = 'team.invitation.issued'
+      AND disclosed.areas = ARRAY['invitation']::text[]
+      AND disclosed.actor_kind = 'portal_member'
+      AND disclosed.actor_display_name = 'Iris O.'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = 'request-invitation-redeem'
+      AND disclosed.event_key = 'team.invitation.accepted'
+      AND disclosed.areas = ARRAY['invitation']::text[]
+      AND disclosed.actor_kind = 'portal_member'
+      AND disclosed.actor_display_name = 'Tess T.'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = 'request-invitation-revoke'
+      AND disclosed.event_key = 'team.invitation.revoked'
+      AND disclosed.areas = ARRAY['invitation']::text[]
+      AND disclosed.actor_kind = 'portal_member'
+      AND disclosed.actor_display_name = 'Iris O.'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  ),
+  'real invitation issue, redemption, and revocation commands emit exact privacy-safe team events'
 );
 
 WITH issued AS (

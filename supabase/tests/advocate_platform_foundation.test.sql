@@ -1330,16 +1330,13 @@ SELECT extensions.ok(
 );
 
 SELECT extensions.ok(
-  pg_get_function_result(
-    'public.get_advocate_audit_events(uuid,bigint,integer)'::regprocedure
-  ) LIKE '%actor_user_id uuid%'
+  to_regprocedure(
+    'public.get_advocate_audit_events(uuid,bigint,integer)'
+  ) IS NULL
   AND pg_get_function_result(
-    'public.get_advocate_audit_events(uuid,bigint,integer)'::regprocedure
-  ) LIKE '%actor_display_name text%'
-  AND pg_get_function_result(
-    'public.get_advocate_audit_events(uuid,bigint,integer)'::regprocedure
-  ) LIKE '%system_actor text%',
-  'portal audit readers receive safe actor identity and system provenance'
+    'public.get_advocate_audit_history_page(uuid,uuid,integer)'::regprocedure
+  ) = 'jsonb',
+  'the raw row audit reader is removed in favor of one fixed JSON history page'
 );
 
 SELECT extensions.ok(

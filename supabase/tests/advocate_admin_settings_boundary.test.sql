@@ -1697,6 +1697,88 @@ SELECT extensions.ok(
 SELECT extensions.ok(
   EXISTS (
     SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = 'settings-branding-success'
+      AND disclosed.event_key = 'branding.updated'
+      AND disclosed.areas = ARRAY[
+        'about',
+        'colors',
+        'logo',
+        'opening_header'
+      ]::text[]
+      AND disclosed.actor_kind = 'portal_member'
+      AND disclosed.actor_display_name = 'Settings B.'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = 'settings-metrics-success'
+      AND disclosed.event_key = 'public_metrics.updated'
+      AND disclosed.areas = ARRAY['public_metric_selection']::text[]
+      AND disclosed.actor_kind = 'portal_member'
+      AND disclosed.actor_display_name = 'Settings B.'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = 'settings-catalog-success'
+      AND disclosed.event_key = 'catalog.updated'
+      AND disclosed.areas = ARRAY[
+        'catalog_mode',
+        'catalog_order',
+        'catalog_selection'
+      ]::text[]
+      AND disclosed.actor_kind = 'portal_member'
+      AND disclosed.actor_display_name = 'Settings C.'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  ),
+  'real branding, public metric, and catalog commands emit exact privacy-safe configuration events'
+);
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
     FROM audit.audit_events event
     WHERE event.advocate_id =
         'a0000000-0000-4000-8000-000000000001'

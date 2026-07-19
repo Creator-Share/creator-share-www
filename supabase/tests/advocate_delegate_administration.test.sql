@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(46);
+SELECT extensions.plan(47);
 
 SELECT extensions.ok(
   EXISTS (
@@ -940,6 +940,56 @@ SELECT extensions.ok(
       ]::text[]
   ),
   'membership lifecycle audit evidence is complete, scoped, and columns only'
+);
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = 'request-delegate-role-change'
+      AND disclosed.event_key = 'team.member.roles_updated'
+      AND disclosed.areas = ARRAY['member_roles']::text[]
+      AND disclosed.actor_kind = 'portal_member'
+      AND disclosed.actor_display_name = 'Amir M.'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = 'request-delegate-suspend'
+      AND disclosed.event_key = 'team.member.access_updated'
+      AND disclosed.areas = ARRAY['member_access']::text[]
+      AND disclosed.actor_kind = 'portal_member'
+      AND disclosed.actor_display_name = 'Olivia A.'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  ),
+  'real delegate role and status commands emit exact privacy-safe membership events'
 );
 
 SELECT extensions.ok(

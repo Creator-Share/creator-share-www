@@ -93,7 +93,9 @@ export function buildAdvocatePortalNavigation(
           ? `/portal/${portal.slug}/analytics`
           : section.section === "team"
             ? `/portal/${portal.slug}/team`
-            : null
+            : section.section === "audit"
+              ? `/portal/${portal.slug}/audit`
+              : null
     items.push({
       section: section.section,
       label: section.label,

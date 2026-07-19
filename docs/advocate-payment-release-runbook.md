@@ -254,4 +254,5 @@ Retain the following with the release record:
 - Advocate analytics persona, exact timing boundary, late-record exclusion, lifecycle reconstruction, self-exclusion, per-measure suppression, complementary reconstruction, currency-family suppression, and response redaction evidence.
 - Public metric weekly worker evidence, overlap and replay result, five-contact delta gates, seven day embargo, bucket advancement tests, approved selection enforcement, and browser payload redaction evidence.
 - PostgREST role boundary evidence for both service key formats, a real authenticated user, anonymous and ordinary-user deny controls, and the exact downstream validation reached by every authorized canary.
+- Advocate audit disclosure evidence for exact business event mapping, near match exclusion, append only enforcement, no historical backfill, tenant cursor isolation, fixed page size, permission personas, actor label fallback, and browser payload redaction.
 - Rollback owner and incident contact.

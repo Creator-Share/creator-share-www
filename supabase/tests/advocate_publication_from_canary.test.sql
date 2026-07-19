@@ -4,7 +4,7 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SET LOCAL statement_timeout = '60s';
 
-SELECT extensions.plan(66);
+SELECT extensions.plan(67);
 
 CREATE TEMP TABLE publication_test_context (
   key text PRIMARY KEY,
@@ -2499,6 +2499,41 @@ SELECT extensions.ok(
       )
   ),
   'the general audit ledger carries the complete bounded publication provenance'
+);
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = '9e600000-0000-4000-8000-000000000012'
+      AND source.table_name = 'advocate_domains'
+      AND source.metadata ->> 'operation' = 'publish_portal_from_canary'
+      AND disclosed.event_key = 'domain.publication.completed'
+      AND disclosed.areas = ARRAY[
+        'dns',
+        'payment_readiness',
+        'provider_readiness',
+        'publication',
+        'tls'
+      ]::text[]
+      AND disclosed.actor_kind = 'creator_share_staff'
+      AND disclosed.actor_display_name = 'Creator Share staff'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  ),
+  'real canary publication emits the exact privacy-safe completion event'
 );
 
 SELECT extensions.is(

@@ -233,6 +233,10 @@ Each event can record:
 
 Raw row copying is forbidden because it would create a second sponsor PII database.
 
+The forensic row audit is not an advocate delegate presentation model. Advocate users with `portal.audit.view` receive a separate append only, policy versioned disclosure ledger populated at business change write time. It has no historical backfill. Each disclosed entry contains only an opaque tenant cursor, a timestamp rounded to the second, one fixed event key, one fixed actor kind, one privacy limited actor label, and the exact fixed area keys for that event. Portal member labels may contain a validated first name and last initial. Creator Share staff and automation use fixed generic labels.
+
+The delegate ledger contains only disclosure fields plus private, ungranted transaction and source sequence links for deduplication and forensic correlation. Its reader never exposes sponsor facts, contact data, money, global sequences, source audit identifiers, account identifiers, row keys, changed column names, reasons, request metadata, network forensics, provider identifiers, or free form text. The reader is tenant scoped, permission checked, ordered by newest recorded ledger entry, and limited to fixed pages of 50 entries using opaque cursors. Unknown event shapes and near matches are omitted instead of being guessed into public history.
+
 Database and provider logs corroborate DDL, direct SQL, policy changes, disabled triggers, and managed service actions that row triggers cannot reliably identify. Unified ingestion of every external log into one interface is a fast follow.
 
 ## 5. Privacy boundaries
@@ -363,7 +367,7 @@ Moving DNS to Vercel would simplify wildcard certificates and remove one provisi
 | Raw exposure and visitor linkage            | About 400 days.                                           |
 | Raw IP address and user agent forensic data | 90 days.                                                  |
 | Encrypted checkout contact material         | Until terminal settlement and welcome materialization.    |
-| Sanitized audit metadata                    | Indefinite.                                               |
+| Policy versioned advocate delegate events   | Indefinite, with no historical backfill.                  |
 | Provider and infrastructure logs            | Longest practical retention supported by plan and budget. |
 
 Deletion and anonymization jobs must preserve aggregate and financial integrity while removing expired direct identifiers.
@@ -408,7 +412,7 @@ The v2 checkout database functions and application callers use an additive two p
 - Build the branded public browsing and sponsorship experience.
 - Build branding, catalog, public metric, membership, and invitation administration.
 - Build privacy safe direct and post visit analytics.
-- Build the sanitized advocate audit view.
+- Build the policy versioned advocate audit disclosure ledger and sanitized view.
 - Build Creator Share approval and override tools.
 
 ### Phase 4: Release validation
@@ -421,6 +425,7 @@ The v2 checkout database functions and application callers use an additive two p
 - Live PostgREST role claim canaries for both service key formats, authenticated sponsor calls, and anonymous and ordinary-user deny controls.
 - Provisioning failure and drift exercises.
 - Privacy reconstruction review and audit redaction review.
+- Audit persona, cursor isolation, exact event mapping, near match exclusion, append only, and no backfill review.
 - Operational runbooks, metrics, alerts, rollback, and support training.
 
 ## 10. Substantive engineering callouts

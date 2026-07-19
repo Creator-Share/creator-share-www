@@ -4,7 +4,7 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SET LOCAL statement_timeout = '30s';
 
-SELECT extensions.plan(89);
+SELECT extensions.plan(92);
 
 CREATE TEMP TABLE provisioning_test_context (
   key text PRIMARY KEY,
@@ -2637,6 +2637,109 @@ SELECT extensions.ok(
       AND event.metadata ->> 'outcome' = 'failed_closed'
   ),
   'each invalid topology quarantine emits a correlated auditable alert'
+);
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = 'a1000000-0000-4000-8000-000000000001'
+      AND source.trace_id = 'atomic-start-trace-001'
+      AND disclosed.event_key = 'domain.provisioning.requested'
+      AND disclosed.areas = ARRAY[
+        'dns',
+        'payment_readiness',
+        'provider_readiness',
+        'tls'
+      ]::text[]
+      AND disclosed.actor_kind = 'creator_share_staff'
+      AND disclosed.actor_display_name = 'Creator Share staff'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  ),
+  'the real provisioning start command emits the exact privacy-safe requested event'
+);
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.tool = 'domain-provisioning-reconcile'
+      AND source.metadata ->> 'outcome' = 'public_eligibility_withdrawn'
+      AND disclosed.event_key = 'domain.publication.needs_attention'
+      AND disclosed.areas = ARRAY[
+        'dns',
+        'payment_readiness',
+        'provider_readiness',
+        'publication',
+        'tls'
+      ]::text[]
+      AND disclosed.actor_kind = 'automation'
+      AND disclosed.actor_display_name = 'Creator Share automation'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  ),
+  'the real active-drift worker emits the exact privacy-safe attention event'
+);
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.tool = 'advocate-domain-topology-quarantine'
+      AND source.table_name = 'advocates'
+      AND source.metadata ->> 'manual_review_code' =
+        'invalid_required_provider_topology'
+      AND disclosed.event_key = 'domain.publication.needs_attention'
+      AND disclosed.areas = ARRAY[
+        'dns',
+        'payment_readiness',
+        'provider_readiness',
+        'publication',
+        'tls'
+      ]::text[]
+      AND disclosed.actor_kind = 'automation'
+      AND disclosed.actor_display_name = 'Creator Share automation'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  ),
+  'the real topology quarantine worker emits the exact privacy-safe attention event'
 );
 
 SELECT * FROM extensions.finish();

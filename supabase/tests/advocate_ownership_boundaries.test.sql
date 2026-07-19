@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(29);
+SELECT extensions.plan(30);
 
 SELECT extensions.ok(
   (
@@ -776,6 +776,60 @@ SELECT extensions.ok(
       AND event.reason = 'Recover ownership for the suspended tenant'
   ),
   'administrator recovery is distinctly identified in the audit ledger'
+);
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = 'request-ownership-create-a'
+      AND disclosed.event_key = 'portal.created'
+      AND disclosed.areas = ARRAY[
+        'ownership',
+        'portal_lifecycle',
+        'portal_profile'
+      ]::text[]
+      AND disclosed.actor_kind = 'creator_share_staff'
+      AND disclosed.actor_display_name = 'Creator Share staff'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM audit.advocate_delegate_events disclosed
+    JOIN audit.audit_events source
+      ON source.sequence_id = disclosed.source_audit_sequence
+    WHERE source.request_id = 'request-ownership-transfer-admin'
+      AND disclosed.event_key = 'portal.ownership.transferred'
+      AND disclosed.areas = ARRAY['ownership']::text[]
+      AND disclosed.actor_kind = 'creator_share_staff'
+      AND disclosed.actor_display_name = 'Creator Share staff'
+      AND NOT (to_jsonb(disclosed) ?| ARRAY[
+        'reason',
+        'metadata',
+        'before_data',
+        'after_data',
+        'changed_columns',
+        'actor_user_id',
+        'effective_user_id',
+        'system_actor',
+        'client_ip',
+        'user_agent'
+      ]::text[])
+  ),
+  'real create and administrator transfer commands emit exact privacy-safe ownership events'
 );
 
 SELECT set_config('request.jwt.claim.sub', '', true);
