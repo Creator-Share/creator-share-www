@@ -134,7 +134,9 @@ Account creation is encouraged, not mandatory. After a first successful sponsors
 1. The existing branded provider confirmation or receipt.
 2. One Creator Share welcome email with a prominent account claim and management link.
 
-Passwordless email OTP or magic link is the default. A password is optional. Guest sponsorship remains available.
+An email magic link is the default account entry. A password is optional. Guest sponsorship remains available. Generic sign in and recent-action reauthentication never create an account. Account creation is allowed only through a validated, unconsumed initial sponsorship claim for its exact verified email or the explicit bounded password registration surface. Both paths require exact email confirmation, and neither path reveals account existence or delivery outcome.
+
+Every sponsor email proof returns through the exact canonical primary host. The token hash travels only in the URL fragment, is removed from browser history before any request or analytics can run, and is verified only after the person deliberately selects Continue. The stateless flow works when the requesting browser and the consuming browser are different. Known accounts, unknown accounts, throttled requests, and email-provider failures receive the same public accepted response so the route cannot enumerate accounts or delivery policy.
 
 After verifying an email, an account can claim historical subscriptions associated with that email across Stripe US, Stripe UK, and PayPal. Claims attach records to a stable sponsor identity. Subsequent access uses that stable identity instead of repeating an email query.
 
@@ -149,6 +151,12 @@ An authenticated sponsor can:
 - View every claimed sponsorship and subscription.
 - Open the correct provider flow to update a payment method.
 - Cancel future billing after recent verification.
+
+Payment-method management and cancellation both require a server-recorded email-authentication receipt no more than 15 minutes old. The receipt is bound to the exact healthy Supabase Auth user and exact live session. A recently issued or refreshed JWT, password login, or ambiguous authentication-method claim is not sufficient by itself.
+
+Stripe management uses a short-lived regional Billing Portal `payment_method_update` session only after exact sponsor ownership, provider-chain, customer-exclusivity, live-subscription, supported collection-mode, and recent-authentication checks. The runtime must fail closed when a live subscription has its own `default_payment_method` or `default_source`, because those values override the customer default changed by the Billing Portal. Before promotion, both live Stripe accounts require a complete override inventory. An empty inventory plus the runtime guard permits the customer-level portal flow. Any existing override blocks release until it is reconciled or a durable exact-subscription update flow is implemented. The returned Stripe URL is a bearer destination. It must never enter application-controlled logs, analytics, databases, persistent web storage, or outbound referrers. Browser navigation history is controlled by the browser and provider and cannot be represented as application persistence.
+
+PayPal management sends the sponsor to PayPal Automatic Payments only after a clear confirmation that they must select Creator Share. Provider customer IDs, subscription IDs, configuration IDs, and provider responses never cross the authenticated browser RPC boundary.
 
 Cancellation stops future billing. It does not automatically refund prior payments. Provider webhooks remain authoritative.
 
@@ -210,6 +218,9 @@ Creator Share super administrators remain separate from advocate membership. Dom
 - `payment_attempts`
 - `gateway_events`
 - `account_claims`
+- `private.sponsor_email_authentication_receipts`
+- `private.sponsor_passwordless_email_delivery_reservations`
+- `private.sponsor_passwordless_email_verification_attempts`
 - A durable email outbox.
 
 Provider identifiers are scoped to their provider account. Stripe US and Stripe UK customer IDs are separate namespaces.
@@ -382,6 +393,9 @@ Moving DNS to Vercel would simplify wildcard certificates and remove one provisi
 | Raw exposure and visitor linkage            | About 400 days.                                           |
 | Raw IP address and user agent forensic data | 90 days.                                                  |
 | Encrypted checkout contact material         | Until terminal settlement and welcome materialization.    |
+| Recent sponsor email-authentication receipt | Fifteen-minute authority, removed by the next hourly run. |
+| Passwordless delivery reservation           | Twenty-four-hour quota window plus the next hourly run.   |
+| Passwordless verification attempt           | Twenty-four-hour quota window plus the next hourly run.   |
 | Policy versioned advocate delegate events   | Indefinite, with no historical backfill.                  |
 | Provider and infrastructure logs            | Longest practical retention supported by plan and budget. |
 
@@ -389,7 +403,7 @@ Deletion and anonymization jobs must preserve aggregate and financial integrity 
 
 Browser client IP and user agent values captured during Creator Share ownership, lifecycle, and cleanup recovery actions live solely in `audit.audit_event_forensics` under the 90 day row above. Their deletion does not alter the indefinitely retained semantic decision receipt or redacted business audit event.
 
-The MVP runs one bounded retention invocation hourly at minute 17. It independently commits checkout contact erasure, welcome email contact redaction, gateway payload redaction, raw audit forensic deletion, and advocate tracking deletion in privacy-first order. Later steps still run after an earlier failure. Sanitized append-only run evidence records failures and remaining backlog, and every nonclean invocation must alert for retry. Operational details live in [the advocate domain publication runbook](./advocate-domain-publication-runbook.md).
+The MVP runs one bounded retention invocation hourly at minute 17. It independently commits checkout contact erasure, welcome email contact redaction, gateway payload redaction, raw audit forensic deletion, sponsor authentication evidence deletion, and advocate tracking deletion in privacy-first order. Expired recent-authentication receipts are removed by the next healthy run, for a maximum healthy lifetime of about 75 minutes from authentication. Passwordless reservations remain for the complete 24-hour quota window and are removed by the next healthy run, for a maximum healthy lifetime of about 25 hours. Later steps still run after an earlier failure. Sanitized append-only run evidence records failures and remaining backlog, and every nonclean invocation must alert for retry. Operational details live in [the advocate domain publication runbook](./advocate-domain-publication-runbook.md).
 
 ## 9. Delivery sequence
 
@@ -410,6 +424,7 @@ This phase is a release gate. The current invitation flow cannot be extended bec
 - Make provider webhooks idempotent and authoritative.
 - Add refund, reversal, dispute, and renewal ledger parity.
 - Add passwordless account claim and sponsorship management.
+- Add stateless cross-device magic-link sign in and recent-action authentication with privacy-safe atomic delivery limits.
 - Add the durable welcome email sequence.
 - Cryptographically erase sealed checkout contact material after terminal settlement and welcome materialization while retaining noncontact fingerprints and audit evidence.
 
@@ -420,6 +435,7 @@ The v2 checkout database functions and application callers use an additive two p
 - Resolve every host through exact active domain records.
 - Add qualified exposure capture and the latest touch resolver.
 - Implement Cloudflare and Vercel provisioning jobs and reconciliation.
+- Add the authenticated Creator Share onboarding surface that reserves each tenant and starts the exact provider workflow.
 - Add host aware provider return URLs.
 - Add tenant, TLS, strict random sibling DNS absence, persistent negative sentinel, and checkout canaries.
 - Require audited super-administrator publication after independent exact-host canary evidence. Follow [the advocate domain publication runbook](./advocate-domain-publication-runbook.md).
@@ -431,6 +447,7 @@ The v2 checkout database functions and application callers use an additive two p
 - Build privacy safe direct and post visit analytics.
 - Build the policy versioned advocate audit disclosure ledger and sanitized view.
 - Build Creator Share approval and exact replay tools for ownership, suspension, resume, repair, irreversible archive, and terminal cleanup recovery.
+- Build usable provisioning-status and publication controls that preserve their stable operation identity across timeouts and page reloads.
 - Enforce 20 minute archive quiescence, strict five-provider cleanup order, one-minute coordination, and browser-independent recovery targeting.
 
 Catalog administration uses optimistic advocate version fencing, exact ordered child selections, and unsaved-change protection. Chromium and other reliable Navigation API engines synchronously confirm browser history traversal. Apple WebKit uses a session draft because its current traversal cancellation and replay behavior cannot safely support a delayed custom decision. The versioned draft key and payload bind the authenticated account, immutable advocate ID, and portal slug. The stored payload contains only canonical catalog choices and the single-line change note, binds the saved catalog fingerprint, rejects unknown children and noncanonical shapes, and rebinds to the current aggregate advocate version only when the saved catalog itself is unchanged. Draft writes flush on ordinary updates, page hiding, and document visibility loss. A storage failure is visible to the administrator, and WebKit falls back to a native traversal prompt when its Navigation API is available. Save, explicit reset, and a confirmed discard leave a deliberately clean form even when another browser listener later cancels navigation.
@@ -445,6 +462,7 @@ Catalog eligibility is introduced through a forward-only migration so an existin
 - RLS tests for anonymous, sponsor, advocate member, advocate nonmember, and Creator Share administrator personas.
 - Unit tests for host, attribution, pricing, identity, and permission decisions.
 - Integration tests for all gateways, currencies, modes, retries, renewals, refunds, disputes, and cancellations.
+- Production-equivalent canaries for passwordless account enumeration, delivery limits, custom templates, mail scanners, cross-device completion, token leakage, live-session recent authentication, and Stripe US, Stripe UK, and PayPal payment management.
 - Browser tests for primary, advocate, mobile, and provider return flows, including automated Playwright WebKit emulation and a separate manual current iOS catalog draft recovery smoke check.
 - Live PostgREST role claim canaries for both service key formats, authenticated sponsor calls, and anonymous and ordinary-user deny controls.
 - Provisioning failure and drift exercises.
@@ -498,9 +516,14 @@ No advocate tenant may publish until all of the following are true:
 
 - Legacy invitation privilege escalation is removed or isolated from all advocate access.
 - Advocate invitation redemption proves a fresh email authentication event, remains single use under concurrency, and passes the provider proof supersession canary for overlapping advocate and sponsor account links.
+- Sponsor magic links use the exact hosted template and redirect allowlist, require explicit continuation, create no session on page load or scanner fetch, work across browser cookie jars, and leak no token into request URLs, referrers, storage, analytics, history, or logs.
+- Generic sponsor sign in and recent-action authentication never create accounts. Account creation is limited to a validated unconsumed initial sponsorship claim or the explicit bounded password registration surface, both with exact email confirmation and uniform public delivery responses.
+- Sponsor cancellation and payment-method management require an unexpired server receipt bound to the exact healthy user and exact live authentication session.
+- The passwordless delivery limiter atomically partitions public sign-in and registration capacity from protected reauthentication and validated claim capacity inside hard provider ceilings. Token verification has a separate purpose-separated source and global limiter, stores no token-derived material, and runs before the provider call.
 - Exposed application tables have verified RLS and least privilege grants.
 - Every payment path creates and verifies a server owned intent.
 - Webhooks are authenticated, idempotent, and authoritative.
+- Both regional Stripe Billing Portal configurations are enabled, the live subscription override inventory is empty or explicitly reconciled, and runtime checks fail closed on subscription-level payment-method overrides or unsupported collection modes.
 - The exact host remains nonpublic in `verifying` until the independent canary report is complete.
 - Provisioning, TLS, HTTP tenant, and checkout canaries pass.
 - A random sibling proves exact DNS absence, while the separately resolved and pinned `publication-sentinel.creatorshare.com` proves automated provider readiness, normal TLS, hostname verification, and the byte-identical neutral 404.
@@ -513,7 +536,7 @@ No advocate tenant may publish until all of the following are true:
 - Creator Share ownership and lifecycle controls prove staff reauthorization, optimistic state fencing, required reasons, exact replay, append-only receipts, and transaction-bound mutation guards.
 - Archive exercises prove immediate suppression, 20 minute quiescence, one-minute coordination, strict Cloudflare, Vercel, Stripe US, Stripe UK, and PayPal cleanup order, terminal `needs_attention`, and exact super administrator recovery without browser-selected provider or job input.
 - Browser lifecycle forensics remain private, are absent from advocate delegate responses, and are removed after 90 days without deleting semantic audit history.
-- Retention cleanup jobs are configured.
+- Retention cleanup jobs are configured, including hourly removal of expired sponsor authentication receipts, passwordless delivery reservations, and passwordless verification attempts after their complete quota windows.
 - Sealed checkout contact ciphertext is erased after its recovery and welcome duties end.
 - Rollback and suspension procedures are exercised.
 
@@ -536,4 +559,6 @@ The following are intentionally excluded from the first release and tracked in t
 
 ## 13. Decision log
 
-All architecture questions required to begin implementation are closed. Any change to attribution windows, guest checkout, payment presentation, public identity exposure, DNS authority, tenant boundaries, or financial semantics requires an explicit architecture amendment in this document and an audit friendly migration or configuration version where applicable.
+The MVP initial-owner bootstrap uses an email-first, single-use invitation. A Creator Share super administrator submits the exact reserved slug, display name, advocate type, owner email, reason, and stable operation ID. One transaction creates an ownerless `invited` and `draft` tenant, default branding, and encrypted initial-owner delivery authority. Successful redemption verifies the exact healthy email account and capability, creates the sole Owner membership atomically, activates the advocate relationship, and only then starts the exact five-provider provisioning topology. Abandoned, expired, or revoked invitations perform no provider work and keep the slug reserved for audited reissue. Creator Share staff never become temporary portal owners.
+
+Any change to attribution windows, guest checkout, payment presentation, public identity exposure, DNS authority, tenant boundaries, owner bootstrap, or financial semantics requires an explicit architecture amendment in this document and an audit friendly migration or configuration version where applicable.

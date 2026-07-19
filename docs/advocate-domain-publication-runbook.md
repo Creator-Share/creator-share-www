@@ -7,10 +7,12 @@ This runbook controls the transition from automated provider readiness to a publ
 Do not enable advocate publication until all of these surfaces are deployed and validated together:
 
 - Atomic provisioning start for the exact primary hostname and exactly five required integrations.
+- An authenticated Creator Share onboarding surface that creates or resumes an email-first initial-owner invitation without exposing contact or provider material.
+- A Creator Share portal detail surface that shows sanitized provisioning progress, terminal repair eligibility, and publication eligibility.
 - Scheduled provisioning reconciliation and the fail-closed active drift transition.
 - Protected exact-host challenge, report canonicalization, and safe live payment canaries.
 - The reserved `publication-sentinel` label and automated shared Cloudflare and Vercel negative-control reconciliation.
-- The authenticated publication start and poll route.
+- The authenticated publication start and poll route plus a client that preserves and recovers its exact operation identity across timeouts and page reloads.
 - The one-minute internal publication recovery cron.
 - Durable database execution leases and immutable report completion.
 - Post-publication drift canaries, alerts, and named operator ownership.
@@ -21,22 +23,25 @@ The presence of a publication function or a provider `ready` status is not produ
 
 The domain lifecycle is deliberately asymmetric:
 
-1. Portal creation reserves the slug and creates the inactive advocate foundation. The separate atomic provisioning-start boundary derives its exact primary domain, creates five required provider integrations, and enqueues idempotent provisioning work.
-2. The provisioner reconciles Cloudflare DNS, Vercel attachment, Stripe US live access, Stripe UK live access, and PayPal live access.
-3. Each successful provider reconciliation stores a bounded evidence digest and advances the integration to `ready`.
-4. A domain with exactly the five required ready integrations advances only to `verifying`.
-5. A Creator Share super administrator sends an authenticated publication request with the expected portal version, one stable operation ID, and an audit reason.
-6. The request creates or polls one immutable canary start and returns `202 Accepted` while work is pending. An `after()` callback attempts low-latency execution after the response.
-7. A one-minute internal cron recovers starts that were not completed by the callback. A durable database fencing lease allows only one current runner to complete a run.
-8. The runner exercises the exact hostname and deployment, then stores one immutable succeeded or failed report. It cannot publish the portal.
-9. A later authenticated poll by a currently authorized Creator Share super administrator observes the succeeded report and invokes the publication boundary.
-10. The database reauthorizes the administrator and atomically activates the exact primary domain and advocate portal.
+1. Portal onboarding atomically reserves the slug, creates the inactive ownerless advocate foundation, and issues one single-use initial-owner invitation. No provider work begins for an unaccepted invitation.
+2. Exact initial-owner redemption creates the sole Owner membership, activates the relationship, derives its primary domain, creates exactly five required provider integrations, and enqueues idempotent provisioning work in one transaction.
+3. The provisioner reconciles Cloudflare DNS, Vercel attachment, Stripe US live access, Stripe UK live access, and PayPal live access.
+4. Each successful provider reconciliation stores a bounded evidence digest and advances the integration to `ready`.
+5. A domain with exactly the five required ready integrations advances only to `verifying`.
+6. A Creator Share super administrator sends an authenticated publication request with the expected portal version, one stable operation ID, and an audit reason.
+7. The request creates or polls one immutable canary start and returns `202 Accepted` while work is pending. An `after()` callback attempts low-latency execution after the response.
+8. A one-minute internal cron recovers starts that were not completed by the callback. A durable database fencing lease allows only one current runner to complete a run.
+9. The runner exercises the exact hostname and deployment, then stores one immutable succeeded or failed report. It cannot publish the portal.
+10. A later authenticated poll by a currently authorized Creator Share super administrator observes the succeeded report and invokes the publication boundary.
+11. The database reauthorizes the administrator and atomically activates the exact primary domain and advocate portal.
 
 No `after()` callback, cron invocation, provider worker, service role client, or ordinary advocate administrator may activate a portal. A succeeded report remains nonpublic until an authenticated poll completes publication. A domain in `verifying` remains unavailable to ordinary public browsing and checkout.
 
 ## Creator Share administrative control boundary
 
 Domain, ownership, and tenant lifecycle changes require Creator Share approval. The browser boundary accepts these decisions only from a currently authorized Creator Share super administrator with a verified, active email account. Publication, lifecycle actions, and cleanup recovery bind the reviewed advocate version. Ownership transfer instead binds the expected current owner membership and an eligible target membership. Every mutation also requires a stable operation ID and reason, then writes an append-only exact replay receipt. Each high risk database function derives the signed authentication session from the verified Supabase JWT. The browser cannot supply or override session identity. Advocate owners and delegates cannot directly transfer ownership, publish, suspend, resume, repair, archive, or recover provider cleanup. A tenant-initiated ownership transfer request and approval workflow is deferred to FF-036.
+
+Every Creator Share control route requires exact primary-host same-origin JSON before authentication, then reauthorizes the healthy super administrator. It accepts bounded route forensics only after the semantic command is valid. The database derives the signed session identity and binds optimistic versions, stable operation IDs, and reasons. Responses expose only sanitized aggregate state and fixed outcome codes. They never expose recipient contact, provider object identifiers, job identifiers, provider payloads, credentials, or encrypted delivery material.
 
 Suspension and archive are intentionally different decisions. Suspension immediately disables public tenant resolution and provider reconciliation without deleting provider attachments. It is reversible through an audited resume or repair action. Archive also disables tenant resolution immediately, but it is irreversible and begins the controlled provider cleanup described below. Neither action deletes attribution, sponsorship, financial, membership, or audit history, and neither releases the slug for reuse.
 
@@ -85,6 +90,21 @@ After sending the response, Next.js `after()` attempts the run for low latency. 
 The worker can only append a terminal report. It cannot publish. A later authenticated `POST` with the same operation inputs reads the immutable report. A failed report returns a terminal failure for that operation. A succeeded report is passed to the database publication boundary, which rechecks current super administrator access, portal version, domain state, deployment binding, evidence freshness, provider topology, and report binding before activation.
 
 Vercel Cron does not retry a failed invocation and may occasionally deliver overlapping or duplicate invocations. The one-minute cadence and database lease are therefore both required. Neither `after()` nor cron is publication authority.
+
+## Creator Share operator workflow
+
+1. Open the authenticated Advocate portals administration surface and choose Create portal.
+2. Enter the canonical lowercase slug, display name, advocate type, initial owner email, and a specific administrative reason. The client creates one stable operation ID and reuses it for every ambiguous retry.
+3. Confirm the result shows an invited, draft portal with a reserved hostname and pending initial-owner delivery, but no provider topology or provider work.
+4. If delivery fails terminally, correct the external cause and use the audited reissue control. Never create a second tenant or release the slug to work around delivery state.
+5. After the owner accepts, confirm the portal shows one active owner and exactly five required provisioning tracks. The browser receives only aggregate readiness and fixed states.
+6. Allow automated reconciliation to reach a verifying domain. Use Repair only when the server derives it as eligible. The browser never chooses a provider, integration, or job.
+7. Enter the publication reason once and start publication. The client stores the nonsecret operation ID, expected version, and exact reason in same-tab session storage before sending the request.
+8. Poll the same authenticated endpoint using byte-equivalent semantic inputs and the server retry interval. On timeout or reload, recover the stored operation and resume polling before offering a new operation.
+9. Treat `202 Accepted` as pending, a succeeded response as published, and a terminal failed or expired response as requiring review or a new operation. Never silently replace an operation after an ambiguous response.
+10. Complete the post-publication verification below and retain the sanitized release evidence.
+
+The client clears recovered operation state only after an exact terminal response. A reload, route transition, tab backgrounding, lost response, or Cloudflare timeout must not cause a second publication start. The server remains authoritative if browser state is missing or malformed and exact replay remains safe.
 
 ## Production platform configuration
 
@@ -228,13 +248,14 @@ Never release a slug automatically for reuse. Never remove provider objects whil
 
 ## Retention worker dependency
 
-The retention worker runs hourly at minute 17 and invokes five independently committed, idempotent cleanup transactions in privacy-first order:
+The retention worker runs hourly at minute 17 and invokes six independently committed, idempotent cleanup transactions in privacy-first order:
 
 1. Erase eligible terminal checkout contact envelopes.
 2. Redact expired or no-longer-deliverable welcome email contact.
 3. Redact expired encrypted gateway payloads.
 4. Delete expired raw audit IP and user-agent forensics.
-5. Delete expired advocate exposures and then unreferenced browser visitors.
+5. Delete expired sponsor recent-authentication receipts, passwordless delivery reservations, and passwordless verification attempts after their complete quota windows.
+6. Delete expired advocate exposures and then unreferenced browser visitors.
 
 Each step has a bounded timeout and the worker attempts later steps after an earlier failure. Every accepted run writes an immutable sanitized header. Successful steps append bounded counts and backlog evidence, while finish or later stale-run abandonment appends terminal evidence correlated to the request and optional trace identifier. Authorization, configuration, or start rejection does not claim a new durable run. A partial result or remaining backlog returns a non-success status. It emits a static structured error signal containing safe run and request identifiers, state flags, and fixed step names. Aggregate counts remain in the no-store HTTP response and durable step outcomes. Configure production alerts for those signals and for stale unterminated runs. The next hourly invocation retries the idempotent work. The minute payment, welcome email, cancellation, and domain provisioner workers remain separate dependencies and must not be removed when enabling retention.
 
@@ -252,12 +273,14 @@ Retain:
 - Protected canary report and its SHA256 digest.
 - A focused concurrency test proving single ownership, expired lease reclaim, and rejection of stale completion.
 - Route evidence for `202 Accepted`, authenticated polling, low-latency `after()` execution, cron recovery, and the rule that background execution cannot publish.
+- Browser evidence for the complete create, initial-owner acceptance, provision, verify, publish, timeout recovery, and reload recovery path with exact operation replay and sanitized responses.
 - Provider evidence proving both Stripe Sessions were unpaid and expired, the PayPal Subscription remained unapproved, and no financial or sponsorship state was created.
 - Super administrator publication result and immutable audit event references.
 - Super administrator lifecycle and ownership results, append-only exact replay receipts, and private browser forensic capture with 90 day deletion evidence.
 - Archive exercises proving immediate tenant suppression, 20 minute quiescence, strict Cloudflare, Vercel, Stripe US, Stripe UK, and PayPal cleanup order, terminal `needs_attention`, and exact recovery without browser-selected provider or job input.
 - Post-publication exact-host, random sibling DNS absence, and fixed sentinel observations.
 - Active scheduler inventory, recent successful worker runs, and alert ownership.
+- Hourly evidence for all six retention steps, including the roughly 75-minute recent-authentication bound and roughly 25-hour passwordless delivery and verification reservation bounds.
 - Suspension, deprovisioning, and incident owners.
 
 The release record may reference protected provider object IDs. It must not contain credentials, sponsor contact, account claim secrets, visitor tokens, encrypted contact material, or raw provider payloads.
