@@ -430,6 +430,17 @@ VALUES
     NULL
   ),
   (
+    '10000000-0000-4000-8000-000000000031',
+    '2025-12-29 12:00:00+00',
+    'Advocate Type Boundary Animal',
+    'advocate-type-boundary-animal',
+    '2021-01-01',
+    -1,
+    'New',
+    'ANIMAL',
+    NULL
+  ),
+  (
     '10000000-0000-4000-8000-000000000012',
     '2025-12-29 00:00:00+00',
     NULL,
@@ -979,13 +990,13 @@ VALUES
   (
     (SELECT value FROM catalog_test_ids WHERE key = 'advocate:catalogselected'),
     '10000000-0000-4000-8000-000000000003',
-    true,
+    false,
     0
   ),
   (
     (SELECT value FROM catalog_test_ids WHERE key = 'advocate:catalogselected'),
     '10000000-0000-4000-8000-000000000001',
-    false,
+    true,
     2
   ),
   (
@@ -1005,6 +1016,12 @@ VALUES
     '10000000-0000-4000-8000-000000000008',
     true,
     5
+  ),
+  (
+    (SELECT value FROM catalog_test_ids WHERE key = 'advocate:catalogselected'),
+    '10000000-0000-4000-8000-000000000031',
+    true,
+    6
   );
 
 SELECT extensions.ok(
@@ -1035,6 +1052,52 @@ SELECT extensions.ok(
   ),
   'canonical checkout eligibility accepts open sponsorships and fixed goals at or above the five dollar floor'
 );
+
+SELECT extensions.ok(
+  private.is_advocate_child_beneficiary_type('CHILD')
+  AND private.is_advocate_child_beneficiary_type('CHILD_LABORER')
+  AND private.is_advocate_child_beneficiary_type('SPECIAL_NEEDS')
+  AND private.is_advocate_child_beneficiary_type('IN_OUR_CARE')
+  AND NOT private.is_advocate_child_beneficiary_type('ANIMAL')
+  AND NOT private.is_advocate_child_beneficiary_type('FAMILY')
+  AND NOT private.is_advocate_child_beneficiary_type(NULL),
+  'the advocate child boundary accepts only the four approved child sponsorship types'
+);
+
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.prepare_sponsorship_checkout_intent(
+      target_idempotency_key => 'advocate-animal-reject-0001',
+      target_source => 'advocate_domain',
+      target_advocate_hostname => 'catalogselected.creatorshare.com',
+      target_visitor_token_digest => NULL,
+      target_auth_user_id => NULL,
+      target_contact_email_hmac => decode(repeat('31', 32), 'hex'),
+      target_contact_email_normalization_version => 1::smallint,
+      target_contact_email_hmac_key_version => 1::smallint,
+      target_subject_kind => 'standard',
+      target_beneficiary_id => '10000000-0000-4000-8000-000000000031',
+      target_partnership_project => NULL,
+      target_payment_mode => 'recurring',
+      target_recurrence_interval => 'month',
+      target_base_amount_usd_cents => 500,
+      target_charged_amount_minor => 500,
+      target_charged_currency => 'USD',
+      target_conversion_rate => 1,
+      target_currency_quote_at => now(),
+      target_currency_rate_source => 'advocate-catalog-boundary-test',
+      context_request_id => 'advocate-animal-reject-request'
+    )
+  $$,
+  '23514',
+  'Beneficiary is not eligible for an advocate child catalog',
+  'final server-owned intent validation rejects an animal selected in legacy advocate data'
+);
+
+SELECT set_config('request.jwt.claim.role', '', true);
 
 SELECT extensions.ok(
   (
@@ -1262,8 +1325,31 @@ SELECT extensions.is(
       target_page_size => 60
     ) result
   ),
-  2,
-  'the advocate all mode retains canonically eligible legacy and null type records'
+  0,
+  'the advocate all mode excludes canonically sponsorable rows outside the explicit child type boundary'
+);
+
+SELECT extensions.ok(
+  public.read_primary_public_beneficiary_by_username(
+    'advocate-type-boundary-animal'
+  ) IS NOT NULL
+  AND (
+    SELECT jsonb_array_length(result -> 'items')
+    FROM public.read_public_advocate_beneficiary_catalog_page(
+      'catalogall.creatorshare.com',
+      target_search => 'Advocate Type Boundary Animal',
+      target_page_size => 60
+    ) result
+  ) = 0
+  AND public.read_public_advocate_beneficiary_by_username(
+    'catalogall.creatorshare.com',
+    'advocate-type-boundary-animal'
+  ) IS NULL
+  AND public.read_public_advocate_beneficiary_by_username(
+    'catalogselected.creatorshare.com',
+    'advocate-type-boundary-animal'
+  ) IS NULL,
+  'advocate list and direct reads exclude an animal even when it is canonically sponsorable and selected in legacy data'
 );
 
 SELECT extensions.lives_ok(
@@ -1357,13 +1443,15 @@ SELECT extensions.ok(
         '10000000-0000-4000-8000-000000000003',
         '10000000-0000-4000-8000-000000000001'
       ]::text[]
+      AND (result #>> '{items,0,is_featured}')::boolean IS FALSE
+      AND (result #>> '{items,1,is_featured}')::boolean IS TRUE
     FROM public.read_public_advocate_beneficiary_catalog_page(
       'catalogselected.creatorshare.com',
       target_search => 'Catalog Fixture',
       target_page_size => 60
     ) result
   ),
-  'selected mode returns only this tenant selections in feature and display order'
+  'selected mode preserves exact configured order even when a later child is featured'
 );
 
 SELECT extensions.ok(

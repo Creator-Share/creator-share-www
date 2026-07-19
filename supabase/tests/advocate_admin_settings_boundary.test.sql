@@ -141,6 +141,71 @@ EXCEPTION WHEN others THEN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION pg_temp.call_service_replace_advocate_beneficiaries(
+  target_advocate_id uuid,
+  acting_user_id uuid,
+  expected_advocate_version bigint,
+  target_beneficiary_mode public.advocate_beneficiary_mode,
+  target_beneficiary_ids uuid[],
+  target_featured_beneficiary_ids uuid[],
+  change_reason text,
+  request_id text,
+  trace_id text DEFAULT NULL,
+  session_id text DEFAULT NULL
+)
+RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_prior_role text := pg_catalog.current_setting(
+    'request.jwt.claim.role',
+    true
+  );
+  v_result bigint;
+BEGIN
+  IF auth.uid() IS DISTINCT FROM acting_user_id THEN
+    RAISE EXCEPTION 'Test service bridge actor mismatch'
+      USING ERRCODE = '42501';
+  END IF;
+
+  PERFORM pg_catalog.set_config(
+    'request.jwt.claim.role',
+    'service_role',
+    true
+  );
+
+  v_result := public.replace_advocate_beneficiary_configuration(
+    target_advocate_id,
+    acting_user_id,
+    expected_advocate_version,
+    target_beneficiary_mode,
+    target_beneficiary_ids,
+    target_featured_beneficiary_ids,
+    change_reason,
+    request_id,
+    trace_id,
+    session_id
+  );
+
+  PERFORM pg_catalog.set_config(
+    'request.jwt.claim.role',
+    COALESCE(v_prior_role, ''),
+    true
+  );
+
+  RETURN v_result;
+EXCEPTION WHEN others THEN
+  PERFORM pg_catalog.set_config(
+    'request.jwt.claim.role',
+    COALESCE(v_prior_role, ''),
+    true
+  );
+  RAISE;
+END;
+$$;
+
 SELECT extensions.ok(
   (
     SELECT function_definition.prosecdef
@@ -180,7 +245,7 @@ SELECT extensions.ok(
         'search_path=""'
     FROM pg_proc function_definition
     WHERE function_definition.oid =
-      'public.replace_advocate_beneficiary_configuration(uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text)'::regprocedure
+      'public.replace_advocate_beneficiary_configuration(uuid,uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text,text,text)'::regprocedure
   ),
   'every advocate settings RPC uses fixed definer authority'
 );
@@ -188,7 +253,7 @@ SELECT extensions.ok(
 SELECT extensions.ok(
   position(
     'FOR SHARE' IN pg_get_functiondef(
-      'public.replace_advocate_beneficiary_configuration(uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text)'::regprocedure
+      'public.replace_advocate_beneficiary_configuration(uuid,uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text,text,text)'::regprocedure
     )
   ) > 0,
   'beneficiary replacement holds eligible child rows stable through commit'
@@ -225,9 +290,14 @@ SELECT extensions.ok(
     'public.replace_advocate_public_metrics(uuid,uuid,bigint,public.advocate_public_metric_key[],text,text,text,text)',
     'EXECUTE'
   )
-  AND has_function_privilege(
+  AND NOT has_function_privilege(
     'authenticated',
-    'public.replace_advocate_beneficiary_configuration(uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text)',
+    'public.replace_advocate_beneficiary_configuration(uuid,uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text,text,text)',
+    'EXECUTE'
+  )
+  AND has_function_privilege(
+    'service_role',
+    'public.replace_advocate_beneficiary_configuration(uuid,uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text,text,text)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
@@ -262,15 +332,10 @@ SELECT extensions.ok(
   )
   AND NOT has_function_privilege(
     'anon',
-    'public.replace_advocate_beneficiary_configuration(uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text)',
-    'EXECUTE'
-  )
-  AND NOT has_function_privilege(
-    'service_role',
-    'public.replace_advocate_beneficiary_configuration(uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text)',
+    'public.replace_advocate_beneficiary_configuration(uuid,uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text,text,text)',
     'EXECUTE'
   ),
-  'authenticated sessions retain reads while only the service role can execute actor aware branding and public metric mutations'
+  'authenticated sessions retain reads while only the service role can execute actor aware settings mutations'
 );
 
 SELECT extensions.is(
@@ -1278,8 +1343,9 @@ SELECT extensions.throws_ok(
       FROM public.get_my_advocate_portal_access()
       WHERE advocate_id = 'a0000000-0000-4000-8000-000000000001'
     )
-    SELECT public.replace_advocate_beneficiary_configuration(
+    SELECT pg_temp.call_service_replace_advocate_beneficiaries(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000003',
       current_access.advocate_version,
       'selected',
       ARRAY['a3000000-0000-4000-8000-000000000001']::uuid[],
@@ -1328,8 +1394,9 @@ SELECT extensions.throws_ok(
       SELECT advocate_version
       FROM public.get_my_advocate_portal_access()
     )
-    SELECT public.replace_advocate_beneficiary_configuration(
+    SELECT pg_temp.call_service_replace_advocate_beneficiaries(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000004',
       current_access.advocate_version,
       'selected',
       ARRAY[
@@ -1343,7 +1410,7 @@ SELECT extensions.throws_ok(
     FROM current_access
   $$,
   '22023',
-  'Beneficiary configuration requires ordered unique nonnull arrays',
+  'Beneficiary configuration requires at most 1000 ordered unique nonnull IDs',
   'beneficiary replacement rejects duplicate chosen IDs'
 );
 
@@ -1353,8 +1420,9 @@ SELECT extensions.throws_ok(
       SELECT advocate_version
       FROM public.get_my_advocate_portal_access()
     )
-    SELECT public.replace_advocate_beneficiary_configuration(
+    SELECT pg_temp.call_service_replace_advocate_beneficiaries(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000004',
       current_access.advocate_version,
       'selected',
       ARRAY['a3000000-0000-4000-8000-000000000001']::uuid[],
@@ -1375,8 +1443,9 @@ SELECT extensions.throws_ok(
       SELECT advocate_version
       FROM public.get_my_advocate_portal_access()
     )
-    SELECT public.replace_advocate_beneficiary_configuration(
+    SELECT pg_temp.call_service_replace_advocate_beneficiaries(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000004',
       current_access.advocate_version,
       'all',
       ARRAY['a3000000-0000-4000-8000-000000000001']::uuid[],
@@ -1397,8 +1466,9 @@ SELECT extensions.throws_ok(
       SELECT advocate_version
       FROM public.get_my_advocate_portal_access()
     )
-    SELECT public.replace_advocate_beneficiary_configuration(
+    SELECT pg_temp.call_service_replace_advocate_beneficiaries(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000004',
       current_access.advocate_version,
       'all_featured',
       ARRAY[
@@ -1422,8 +1492,9 @@ SELECT extensions.throws_ok(
       SELECT advocate_version
       FROM public.get_my_advocate_portal_access()
     )
-    SELECT public.replace_advocate_beneficiary_configuration(
+    SELECT pg_temp.call_service_replace_advocate_beneficiaries(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000004',
       current_access.advocate_version,
       'selected',
       ARRAY[]::uuid[],
@@ -1444,8 +1515,9 @@ SELECT extensions.throws_ok(
       SELECT advocate_version
       FROM public.get_my_advocate_portal_access()
     )
-    SELECT public.replace_advocate_beneficiary_configuration(
+    SELECT pg_temp.call_service_replace_advocate_beneficiaries(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000004',
       current_access.advocate_version,
       'selected',
       ARRAY['a3000000-0000-4000-8000-000000000004']::uuid[],
@@ -1456,8 +1528,8 @@ SELECT extensions.throws_ok(
     FROM current_access
   $$,
   '23514',
-  'Every configured beneficiary must currently be canonically eligible for sponsorship',
-  'beneficiary replacement rejects a canonically ineligible child'
+  'Every configured beneficiary must currently be eligible for the advocate child catalog',
+  'beneficiary replacement rejects a child outside the shared advocate eligibility boundary'
 );
 
 SELECT extensions.is(
@@ -1466,8 +1538,9 @@ SELECT extensions.is(
       SELECT advocate_version
       FROM public.get_my_advocate_portal_access()
     )
-    SELECT public.replace_advocate_beneficiary_configuration(
+    SELECT pg_temp.call_service_replace_advocate_beneficiaries(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000004',
       current_access.advocate_version,
       'selected',
       ARRAY[

@@ -150,12 +150,20 @@ SELECT extensions.ok(
     'public.replace_advocate_public_metrics(uuid,uuid,bigint,public.advocate_public_metric_key[],text,text,text,text)',
     'EXECUTE'
   )
-  AND has_function_privilege(
+  AND to_regprocedure(
+    'public.replace_advocate_beneficiary_configuration(uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text)'
+  ) IS NULL
+  AND NOT has_function_privilege(
     'authenticated',
-    'public.replace_advocate_beneficiary_configuration(uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text)',
+    'public.replace_advocate_beneficiary_configuration(uuid,uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text,text,text)',
+    'EXECUTE'
+  )
+  AND has_function_privilege(
+    'service_role',
+    'public.replace_advocate_beneficiary_configuration(uuid,uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text,text,text)',
     'EXECUTE'
   ),
-  'public metrics use a service only actor aware contract while beneficiary configuration remains authenticated'
+  'public metrics and beneficiary configuration use service only actor aware contracts'
 );
 
 SELECT extensions.is(

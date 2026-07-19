@@ -1,0 +1,42 @@
+name: Advocate WebKit gate
+
+on:
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - "src/components/advocates/admin/CatalogSettingsClient.tsx"
+      - "src/lib/advocates/admin/catalogForm.ts"
+      - "tests/advocates/portal-catalog-browser.spec.ts"
+      - "tests/fixtures/advocate-catalog-harness/**"
+      - "package.json"
+      - "yarn.lock"
+      - ".github/workflows/advocate-webkit-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-recovery:
+    name: Catalog recovery in WebKit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install WebKit runtime
+        run: yarn playwright install --with-deps webkit
+
+      - name: Verify catalog recovery
+        run: yarn test:advocate:webkit

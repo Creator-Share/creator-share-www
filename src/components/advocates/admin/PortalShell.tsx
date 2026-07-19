@@ -87,15 +87,17 @@ export function buildAdvocatePortalNavigation(
   for (const section of FUTURE_SECTIONS) {
     if (!permissions.has(section.permission)) continue
     const href =
-      section.section === "public-metrics"
-        ? `/portal/${portal.slug}/public-metrics`
-        : section.section === "analytics"
-          ? `/portal/${portal.slug}/analytics`
-          : section.section === "team"
-            ? `/portal/${portal.slug}/team`
-            : section.section === "audit"
-              ? `/portal/${portal.slug}/audit`
-              : null
+      section.section === "catalog"
+        ? `/portal/${portal.slug}/catalog`
+        : section.section === "public-metrics"
+          ? `/portal/${portal.slug}/public-metrics`
+          : section.section === "analytics"
+            ? `/portal/${portal.slug}/analytics`
+            : section.section === "team"
+              ? `/portal/${portal.slug}/team`
+              : section.section === "audit"
+                ? `/portal/${portal.slug}/audit`
+                : null
     items.push({
       section: section.section,
       label: section.label,
