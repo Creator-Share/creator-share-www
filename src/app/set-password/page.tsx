@@ -7,6 +7,9 @@ import { toaster } from "@/components/ui/toaster"
 import Image from "next/image"
 import { validatePassword } from "@/utils/passwordValidation"
 import { PasswordStrengthIndicator } from "@/components/ui/PasswordStrengthIndicator"
+import {
+    completeAdvocateAttributionIdentitySignal,
+} from "@/lib/advocates/attributionIdentityCompletion"
 
 export default function SetPasswordPage() {
     const [password, setPassword] = useState("")
@@ -34,6 +37,16 @@ export default function SetPasswordPage() {
 
                 if (error) {
                     setError("Invalid invitation link")
+                    return
+                }
+
+                const identityCompleted =
+                    await completeAdvocateAttributionIdentitySignal()
+                if (!identityCompleted) {
+                    await supabase.auth.signOut()
+                    setError(
+                        "Unable to complete secure sign-in. Please try the invitation link again.",
+                    )
                     return
                 }
 

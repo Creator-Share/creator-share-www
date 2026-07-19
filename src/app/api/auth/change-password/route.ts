@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server"
+import {
+  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  getAdvocateAttributionIdentityCookieOptions,
+} from "@/lib/advocates/attributionIdentityCookie"
 import { createClient } from "@/utils/supabase/server"
 
 export async function POST(request: Request) {
@@ -35,10 +39,19 @@ export async function POST(request: Request) {
       )
     }
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       { message: "Password reset successful! User has been logged out." },
       { status: 200 },
     )
+    response.cookies.set(ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME, "", {
+      ...getAdvocateAttributionIdentityCookieOptions(
+        request.headers.get("host"),
+        new URL(request.url).protocol === "https:",
+      ),
+      expires: new Date(0),
+      maxAge: 0,
+    })
+    return response
   } catch (err: unknown) {
     const errorMessage =
       err instanceof Error ? err.message : "Unexpected error occurred."

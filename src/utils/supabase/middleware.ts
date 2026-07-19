@@ -1,6 +1,13 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { AuthSessionMissingError } from "@supabase/supabase-js"
+import { ADVOCATE_TENANT_ROOT, resolveAdvocateHost } from "@/lib/advocates/host"
+import {
+  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  createAdvocateAttributionIdentityCookieValue,
+  getAdvocateAttributionIdentityCookieOptions,
+  resolveAdvocateAttributionIdentityCookie,
+} from "@/lib/advocates/attributionIdentityCookie"
 import {
   createSponsorshipVisitorToken,
   getSponsorshipVisitorCookieOptions,
@@ -16,12 +23,54 @@ type ResponseCookieMutation = {
 
 type ResponseCookiePlan = {
   mutations: ResponseCookieMutation[]
-  deleteHostOnlyVisitorCookie: boolean
-  visitorCookieIsSecure: boolean
+  hostOnlyDeletions: Array<{
+    name: string
+    secure: boolean
+  }>
 }
 
 export interface MiddlewareRequestForwardingOptions {
   requestHeaderOverrides?: Readonly<Record<string, string | null>>
+}
+
+const AUTHENTICATED_PAGE_PREFIXES = Object.freeze(["/app", "/admin", "/portal"])
+const AUTHENTICATED_API_PREFIXES = Object.freeze(["/api/admin", "/api/portal"])
+
+function shouldDeleteHostOnlyCookie(
+  request: NextRequest,
+  sharedDomain: string | undefined,
+): boolean {
+  if (sharedDomain === undefined) return false
+
+  const host = resolveAdvocateHost(request.headers.get("host"), {
+    allowLocalhostDevelopment: true,
+  })
+  if (host.kind === "invalid") return false
+  const hostname =
+    host.kind === "tenant-candidate"
+      ? host.requestHostname
+      : host.normalizedHostname
+
+  // On the apex, host-only and Domain cookies have the same name, domain,
+  // and path tuple. The new shared cookie replaces the host-only cookie by
+  // itself. A later deletion header would delete the new cookie as well.
+  return hostname !== ADVOCATE_TENANT_ROOT
+}
+
+function matchesPathPrefix(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`)
+}
+
+export function requiresAuthenticatedPagePath(pathname: string): boolean {
+  return AUTHENTICATED_PAGE_PREFIXES.some((prefix) =>
+    matchesPathPrefix(pathname, prefix),
+  )
+}
+
+export function requiresAuthenticatedApiPath(pathname: string): boolean {
+  return AUTHENTICATED_API_PREFIXES.some((prefix) =>
+    matchesPathPrefix(pathname, prefix),
+  )
 }
 
 function forwardedRequestHeaders(
@@ -55,8 +104,7 @@ async function ensureSponsorshipVisitor(
 ): Promise<ResponseCookiePlan> {
   const plan: ResponseCookiePlan = {
     mutations: [],
-    deleteHostOnlyVisitorCookie: false,
-    visitorCookieIsSecure: false,
+    hostOnlyDeletions: [],
   }
   const resolution = await resolveSponsorshipVisitorCookie(
     request.headers.get("cookie"),
@@ -77,17 +125,23 @@ async function ensureSponsorshipVisitor(
     }
     request.cookies.set(visitorCookie.name, visitorCookie.value)
     plan.mutations.push(visitorCookie)
-    plan.deleteHostOnlyVisitorCookie =
-      resolution.requiresNormalization && options.domain !== undefined
-    plan.visitorCookieIsSecure = options.secure
+    if (
+      resolution.requiresNormalization &&
+      shouldDeleteHostOnlyCookie(request, options.domain)
+    ) {
+      plan.hostOnlyDeletions.push({
+        name: SPONSORSHIP_VISITOR_COOKIE_NAME,
+        secure: options.secure,
+      })
+    }
   }
 
   return plan
 }
 
-function hostOnlyVisitorDeletionCookie(secure: boolean): string {
+function hostOnlyDeletionCookie(name: string, secure: boolean): string {
   return [
-    `${SPONSORSHIP_VISITOR_COOKIE_NAME}=`,
+    `${name}=`,
     "Path=/",
     "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
     "Max-Age=0",
@@ -106,13 +160,55 @@ function applyResponseCookies(
   plan.mutations.forEach(({ name, value, options }) =>
     response.cookies.set(name, value, options),
   )
-  if (plan.deleteHostOnlyVisitorCookie) {
+  for (const deletion of plan.hostOnlyDeletions) {
     response.headers.append(
       "Set-Cookie",
-      hostOnlyVisitorDeletionCookie(plan.visitorCookieIsSecure),
+      hostOnlyDeletionCookie(deletion.name, deletion.secure),
     )
   }
   return response
+}
+
+function ensureAdvocateAttributionIdentity(
+  request: NextRequest,
+  plan: ResponseCookiePlan,
+  authUserId: string,
+): void {
+  const resolution = resolveAdvocateAttributionIdentityCookie(
+    request.headers.get("cookie"),
+  )
+  if (
+    resolution.signal?.authUserId === authUserId &&
+    !resolution.requiresNormalization &&
+    !resolution.requiresRefresh
+  ) {
+    return
+  }
+
+  const value = createAdvocateAttributionIdentityCookieValue({ authUserId })
+  if (value === null) return
+
+  const options = getAdvocateAttributionIdentityCookieOptions(
+    request.headers.get("host"),
+    request.nextUrl.protocol === "https:",
+  )
+  const mutation = {
+    name: ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+    value,
+    options,
+  }
+  request.cookies.set(mutation.name, mutation.value)
+  plan.mutations.push(mutation)
+
+  if (
+    resolution.hadCandidates &&
+    shouldDeleteHostOnlyCookie(request, options.domain)
+  ) {
+    plan.hostOnlyDeletions.push({
+      name: ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+      secure: options.secure,
+    })
+  }
 }
 
 export async function updateSponsorshipVisitor(
@@ -168,18 +264,18 @@ export async function updateSession(
     }
     user = null
   }
-  if (
-    !user &&
-    (request.nextUrl.pathname.startsWith("/app") ||
-      request.nextUrl.pathname.startsWith("/admin"))
-  ) {
+  if (user) {
+    ensureAdvocateAttributionIdentity(request, cookiePlan, user.id)
+    supabaseResponse = applyCookies(nextResponse(request, options))
+  }
+  if (!user && requiresAuthenticatedPagePath(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return applyCookies(NextResponse.redirect(url))
   }
 
-  // API admin routes require authentication (defense-in-depth; routes also check SUPER_ADMIN)
-  if (!user && request.nextUrl.pathname.startsWith("/api/admin")) {
+  // Protected APIs also enforce their exact authorization inside each route.
+  if (!user && requiresAuthenticatedApiPath(request.nextUrl.pathname)) {
     return applyCookies(
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     )

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import {
+  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  createAdvocateAttributionIdentityCookieValue,
+  getAdvocateAttributionIdentityCookieOptions,
+} from "@/lib/advocates/attributionIdentityCookie"
+import {
   isTrustedCheckoutJsonRequest,
   resolveTrustedCheckoutRequestOrigin,
 } from "@/lib/sponsorships/checkout/requestSecurity"
@@ -134,12 +139,32 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = await createClient()
-    const { error } = await supabase.auth.verifyOtp(verificationRequest)
+    const { data, error } = await supabase.auth.verifyOtp(verificationRequest)
     if (error) {
       return response({ error: "verification-failed" }, 400)
     }
 
-    return response({ message: "OTP verified successfully." }, 200)
+    const verificationResponse = response(
+      { message: "OTP verified successfully." },
+      200,
+    )
+    const authUserId = data.user?.id
+    if (authUserId) {
+      const identitySignal = createAdvocateAttributionIdentityCookieValue({
+        authUserId,
+      })
+      if (identitySignal) {
+        verificationResponse.cookies.set(
+          ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+          identitySignal,
+          getAdvocateAttributionIdentityCookieOptions(
+            request.headers.get("host"),
+            request.nextUrl.protocol === "https:",
+          ),
+        )
+      }
+    }
+    return verificationResponse
   } catch {
     return response({ error: "verification-unavailable" }, 503)
   }

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server"
+import {
+  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  getAdvocateAttributionIdentityCookieOptions,
+} from "@/lib/advocates/attributionIdentityCookie"
 import { createClient } from "@/utils/supabase/server"
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient()
 
   try {
@@ -11,7 +15,19 @@ export async function POST() {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    return NextResponse.json({ message: "Logout successful" }, { status: 200 })
+    const response = NextResponse.json(
+      { message: "Logout successful" },
+      { status: 200 },
+    )
+    response.cookies.set(ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME, "", {
+      ...getAdvocateAttributionIdentityCookieOptions(
+        request.headers.get("host"),
+        new URL(request.url).protocol === "https:",
+      ),
+      expires: new Date(0),
+      maxAge: 0,
+    })
+    return response
   } catch (err: unknown) {
     const errorMessage =
       err instanceof Error ? err.message : "Unexpected error occurred"

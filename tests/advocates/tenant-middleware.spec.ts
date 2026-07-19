@@ -61,23 +61,37 @@ function request(
 }
 
 test.describe("advocate tenant middleware", () => {
-  test("denies unknown tenant paths before issuing cookies or continuing", async () => {
-    const response = await middleware(request("/admin"))
+  test("denies primary administrative paths on tenant hosts before continuing", async () => {
+    for (const [pathname, method] of [
+      ["/admin", "GET"],
+      ["/portal", "GET"],
+      ["/portal/hope/branding", "GET"],
+      ["/api/portal/hope/branding", "POST"],
+      ["/api/portal/hope/logo", "POST"],
+    ] as const) {
+      const response = await middleware(request(pathname, { method }))
 
-    expect(response.status).toBe(404)
-    expect(response.headers.get("set-cookie")).toBeNull()
-    expect(response.headers.get("x-middleware-next")).toBeNull()
-    expect(response.headers.get("cache-control")).toBe(
-      "private, no-store, max-age=0",
-    )
-    expect(response.headers.get("vary")).toBe("Host")
-    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
-    expect(response.headers.get("content-security-policy")).toBe(
-      "frame-ancestors 'none'",
-    )
-    expect(response.headers.get("x-frame-options")).toBe("DENY")
-    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow")
-    await expect(response.text()).resolves.toBe("Not Found")
+      expect(response.status).toBe(404)
+      expect(response.headers.get("set-cookie")).toBeNull()
+      expect(response.headers.get("x-middleware-next")).toBeNull()
+      expect(response.headers.get("cache-control")).toBe(
+        "private, no-store, max-age=0",
+      )
+      expect(response.headers.get("vary")).toBe("Host")
+      expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+      expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow")
+      if (pathname.startsWith("/api/")) {
+        expect(response.headers.get("content-security-policy")).toBeNull()
+        expect(response.headers.get("x-frame-options")).toBeNull()
+        await expect(response.json()).resolves.toEqual({ error: "not-found" })
+      } else {
+        expect(response.headers.get("content-security-policy")).toBe(
+          "frame-ancestors 'none'",
+        )
+        expect(response.headers.get("x-frame-options")).toBe("DENY")
+        await expect(response.text()).resolves.toBe("Not Found")
+      }
+    }
   })
 
   test("uses a neutral API response and exact Allow header for method failures", async () => {

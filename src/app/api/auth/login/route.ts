@@ -1,4 +1,10 @@
 import { NextResponse } from "next/server"
+
+import {
+  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  createAdvocateAttributionIdentityCookieValue,
+  getAdvocateAttributionIdentityCookieOptions,
+} from "@/lib/advocates/attributionIdentityCookie"
 import { createClient } from "@/utils/supabase/server"
 
 export async function POST(request: Request) {
@@ -9,7 +15,7 @@ export async function POST(request: Request) {
   if (!email || !password) {
     return NextResponse.json(
       { error: "Email and password are required." },
-      { status: 400 }
+      { status: 400 },
     )
   }
 
@@ -23,7 +29,7 @@ export async function POST(request: Request) {
     if (signInError) {
       return NextResponse.json(
         { error: signInError.message || "Invalid credentials." },
-        { status: 401 }
+        { status: 401 },
       )
     }
 
@@ -32,7 +38,7 @@ export async function POST(request: Request) {
     if (!userId) {
       return NextResponse.json(
         { error: "User ID not found after login." },
-        { status: 500 }
+        { status: 500 },
       )
     }
     // Verify user has role assignments
@@ -41,19 +47,30 @@ export async function POST(request: Request) {
       .select(
         `
         roles:roles!role_assignments_role_id_fkey(name)
-      `
+      `,
       )
       .eq("user_id", userId)
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       { message: "Login successful.", redirect: "/" },
-      { status: 200 }
+      { status: 200 },
     )
+    const identitySignal = createAdvocateAttributionIdentityCookieValue({
+      authUserId: userId,
+    })
+    if (identitySignal) {
+      response.cookies.set(
+        ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+        identitySignal,
+        getAdvocateAttributionIdentityCookieOptions(
+          request.headers.get("host"),
+          new URL(request.url).protocol === "https:",
+        ),
+      )
+    }
+    return response
   } catch (error) {
     console.error("Error logging in:", error)
-    return NextResponse.json(
-      { error: "Failed to login." },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to login." }, { status: 500 })
   }
 }

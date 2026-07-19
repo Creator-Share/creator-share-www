@@ -155,6 +155,13 @@ SPONSORSHIP_CRYPTO_SECRET_V1=
 # canonical base64 value with at least 32 random bytes in every environment.
 # This value must not equal SPONSORSHIP_CRYPTO_SECRET_V1.
 SPONSORSHIP_VISITOR_COOKIE_SECRET_V1=
+# Cross-subdomain attribution self-exclusion only. Server only. Generate a
+# different canonical base64 value with at least 32 random bytes in every
+# environment. It must not equal either sponsorship secret above. During a
+# planned rotation, move the former current value to the optional previous
+# slot until every 400-day signal has been refreshed or expired.
+ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1=
+ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1_PREVIOUS=
 
 
 # AI Proofreading (OpenAI-Compatible API)

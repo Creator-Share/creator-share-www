@@ -2,6 +2,11 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextRequest, NextResponse } from "next/server"
 
 import {
+  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  createAdvocateAttributionIdentityCookieValue,
+  getAdvocateAttributionIdentityCookieOptions,
+} from "@/lib/advocates/attributionIdentityCookie"
+import {
   buildSponsorClaimPageRedirect,
   getSponsorClaimCanonicalOrigin,
   isValidSupabaseAuthCode,
@@ -71,8 +76,27 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    const { error } = await supabase.auth.exchangeCodeForSession(codes[0])
-    return error ? redirectResponse(failureRedirect) : successResponse
+    const { data, error } = await supabase.auth.exchangeCodeForSession(codes[0])
+    if (error) return redirectResponse(failureRedirect)
+
+    const authUserId = data.user?.id
+    if (authUserId) {
+      const attributionIdentity = createAdvocateAttributionIdentityCookieValue({
+        authUserId,
+      })
+      if (attributionIdentity) {
+        successResponse.cookies.set(
+          ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+          attributionIdentity,
+          getAdvocateAttributionIdentityCookieOptions(
+            request.headers.get("host"),
+            request.nextUrl.protocol === "https:",
+          ),
+        )
+      }
+    }
+
+    return successResponse
   } catch {
     return redirectResponse(failureRedirect)
   }

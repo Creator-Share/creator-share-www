@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { resolveAdvocateHost } from "@/lib/advocates/host"
+import { readAdvocateAttributionIdentityCookie } from "@/lib/advocates/attributionIdentityCookie"
 import {
   createQualifiedExposureEventKey,
   digestSponsorshipVisitorToken,
@@ -59,11 +60,22 @@ export async function POST(request: NextRequest) {
     const {
       data: { user },
     } = await authClient.auth.getUser()
+    const identitySignal = readAdvocateAttributionIdentityCookie(
+      request.headers.get("cookie"),
+    )
+    if (
+      user?.id &&
+      identitySignal?.authUserId &&
+      user.id !== identitySignal.authUserId
+    ) {
+      return noContent()
+    }
+    const attributionAuthUserId = user?.id ?? identitySignal?.authUserId ?? null
     const eventKey = createQualifiedExposureEventKey({
       visitorDigest: visitor.digest,
       advocateHostname: host.domainLookup.hostname,
       pagePath: context.pagePath,
-      authUserId: user?.id || null,
+      authUserId: attributionAuthUserId,
       observedAt: new Date(),
     })
     const requestId = crypto.randomUUID()
@@ -78,7 +90,7 @@ export async function POST(request: NextRequest) {
         target_consent_state: "not_required",
         target_page_path: context.pagePath,
         target_referrer_host: context.referrerHost,
-        target_auth_user_id: user?.id || null,
+        target_auth_user_id: attributionAuthUserId,
         context_request_id: requestId,
         context_trace_id: null,
       },

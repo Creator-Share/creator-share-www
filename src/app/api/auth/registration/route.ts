@@ -1,4 +1,10 @@
 import { NextResponse } from "next/server"
+
+import {
+  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  createAdvocateAttributionIdentityCookieValue,
+  getAdvocateAttributionIdentityCookieOptions,
+} from "@/lib/advocates/attributionIdentityCookie"
 import { createClient } from "@/utils/supabase/server"
 
 export async function POST(request: Request) {
@@ -52,13 +58,29 @@ export async function POST(request: Request) {
       )
     }
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         message:
           "Registration successful! Please check your email for confirmation.",
       },
       { status: 201 },
     )
+    if (signUpData.session && signUpData.user?.id) {
+      const identitySignal = createAdvocateAttributionIdentityCookieValue({
+        authUserId: signUpData.user.id,
+      })
+      if (identitySignal) {
+        response.cookies.set(
+          ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+          identitySignal,
+          getAdvocateAttributionIdentityCookieOptions(
+            request.headers.get("host"),
+            new URL(request.url).protocol === "https:",
+          ),
+        )
+      }
+    }
+    return response
   } catch (err: unknown) {
     const errorMessage =
       err instanceof Error ? err.message : "Unexpected error occurred"

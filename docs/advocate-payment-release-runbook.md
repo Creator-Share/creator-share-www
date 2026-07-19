@@ -10,6 +10,8 @@ Configure and validate these server only values in every target environment:
 
 - `SPONSORSHIP_CRYPTO_SECRET_V1`, one canonical base64 value containing at least 32 random bytes. Never rotate it by replacing the current value. Introduce a new numbered key and migration plan.
 - `SPONSORSHIP_VISITOR_COOKIE_SECRET_V1`, a separate canonical base64 value containing at least 32 random bytes. It signs only the first party visitor token and must never equal `SPONSORSHIP_CRYPTO_SECRET_V1`. An absent or malformed production value disables anonymous attribution without blocking sponsorship payment. Generate it with a cryptographically secure random source, store it as a server only value, and run the visitor cookie canary before promotion.
+- `ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1`, a third and distinct canonical base64 value containing at least 32 random bytes. This server only key signs the 400-day cross-subdomain signal used solely to exclude authenticated Creator Share staff and advocate portal members from attribution analytics. It is not a session, authentication credential, or authorization input. It must never equal `SPONSORSHIP_CRYPTO_SECRET_V1`, `SPONSORSHIP_VISITOR_COOKIE_SECRET_V1`, or any other environment secret.
+- `ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1_PREVIOUS`, optional. During a planned key rotation, set it to the former current attribution identity key so existing valid signals can be verified and refreshed. It must be distinct from the current key and every sponsorship secret. Retain it until every valid 400-day signal has been refreshed or expired, unless an incident requires immediate invalidation. Never use this slot as a second current signing key.
 - `CRON_SECRET`, a random secret of at least 32 characters. Vercel sends this value as a Bearer token to each scheduled worker route.
 - `PAYMENT_GATEWAY_EVENT_WORKER_SECRET`, optional. Use only for a non-Vercel scheduler. When present, its caller must send this value instead of `CRON_SECRET`.
 - `SPONSOR_WELCOME_EMAIL_WORKER_SECRET`, optional, with the same external-scheduler rule.
@@ -57,6 +59,10 @@ The application keeps middleware on the globally distributed Edge runtime. Visit
 
 Version one visitor tokens have a 400 day maximum age. If the signing key is suspected compromised before versioned overlap support exists, replace the key immediately, accept that prior anonymous visitor linkage is reset, preserve payment and locked attribution facts, and record the incident. Never delay containment to preserve anonymous analytics. FF-023 adds a version two issue key with version one verification overlap for planned rotation.
 
+The separate advocate attribution identity signal also has a 400 day maximum age and travels across Creator Share subdomains. A successful authentication completion refreshes it, while explicit logout and password-reset signout remove it using the same parent-domain cookie scope. The application may use a verified signal only as a candidate user ID for database-enforced staff and same-portal member exclusion. It must never grant account, portal, payment, or administrative access. Missing or invalid signals leave ordinary guest attribution behavior unchanged.
+
+Before promotion, complete the cross-subdomain self-exclusion canary. Authenticate on `creatorshare.com`, record that the response sets one `HttpOnly`, `Secure`, `SameSite=Lax`, parent-domain attribution identity cookie without exposing its value, and then browse one exact active advocate hostname in the same browser. Confirm the exposure endpoint forwards the authenticated user binding and the database creates no visitor or exposure for a global staff user and for a member of that same advocate portal. Repeat issuance through password login, magic-link callback, recovery OTP, any registration mode that creates an immediate session, and the client-side invitation session flow. The invitation flow must call the same-origin authenticated completion endpoint before it treats the session as usable. Log out on `creatorshare.com`, confirm the response expires the exact parent-domain cookie, and then confirm an ordinary anonymous browser can still create an eligible exposure. Repeat the cookie issuance step while the previous rotation key is configured, confirm the application accepts and refreshes an old valid signal, and retain only redacted pass or fail evidence.
+
 ## Phase 1: additive database deployment
 
 1. Back up the target database and record the restore point.
@@ -102,6 +108,7 @@ The release gate function is deployment evidence. It is not a per request featur
 29. Attach the approved Creator Share subdomain DNS and hosting inventory to the release evidence.
 30. Confirm the hourly retention worker calls checkout contact, welcome email contact, gateway payload, raw audit forensics, and advocate tracking cleanup in that order. Force one middle step to fail and confirm later steps still run, the route returns a non-success status, and the response exposes only safe run and request identifiers, status values, fixed step names, and aggregate counts.
 31. Follow [the advocate domain publication runbook](./advocate-domain-publication-runbook.md) for every new exact hostname. Provider readiness alone must stop in `verifying` and must not activate the domain.
+32. Run the cross-subdomain attribution self-exclusion canary. Confirm authentication issues the parent-domain exclusion signal, an advocate-host exposure excludes staff and same-portal members through a fresh database check, explicit signout expires the signal, and the signal never authorizes a protected surface.
 
 The generic SMTP path quarantines every provider acceptance ambiguity before a stale lease can retry it. It does not provide exact once delivery. A deterministic message ID supports operator investigation, but it is not an idempotency guarantee. Never describe this worker or its canaries as exact once.
 
@@ -179,6 +186,7 @@ Retain the following with the release record:
 - Worker batch health and manual review counts.
 - Confirmation that no sponsor email, claim token, receipt, ciphertext, or provider payload appeared in application logs.
 - Production visitor cookie canary, Edge middleware runtime evidence, and approved subdomain trust inventory.
+- Cross-subdomain attribution self-exclusion canary with redacted issuance, staff exclusion, same-portal member exclusion, explicit signout, and authorization nonuse results.
 - Hourly retention worker result, durable run evidence, partial-failure and backlog alert paths, and evidence that all five privacy cleanup steps remain scheduled.
 - Advocate domain protected canary report, digest, audited publication result, and post-publication exact-host verification.
 - Rollback owner and incident contact.
