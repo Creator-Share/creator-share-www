@@ -7,6 +7,7 @@ export const DATA_RETENTION_STEPS = [
   { key: "email_outbox_contact" },
   { key: "gateway_event_payloads" },
   { key: "audit_forensics" },
+  { key: "sponsor_authentication" },
   { key: "advocate_tracking" },
 ] as const
 
@@ -57,6 +58,9 @@ export interface DataRetentionCounts {
   checkoutContactEnvelopesCancelled: number
   checkoutContactEnvelopesExpired: number
   auditForensicsDeleted: number
+  sponsorRecentAuthenticationReceiptsDeleted: number
+  sponsorPasswordlessReservationsDeleted: number
+  sponsorPasswordlessVerificationAttemptsDeleted: number
 }
 
 export interface DataRetentionWorkerResult {
@@ -190,6 +194,21 @@ function applyStepCounts(
     counts.auditForensicsDeleted = boundedCount(row.deleted_count, batchSize)
     return
   }
+  if (stepKey === "sponsor_authentication") {
+    counts.sponsorRecentAuthenticationReceiptsDeleted = boundedCount(
+      row.recent_auth_receipts_deleted,
+      batchSize,
+    )
+    counts.sponsorPasswordlessReservationsDeleted = boundedCount(
+      row.passwordless_reservations_deleted,
+      batchSize,
+    )
+    counts.sponsorPasswordlessVerificationAttemptsDeleted = boundedCount(
+      row.passwordless_verification_attempts_deleted,
+      batchSize,
+    )
+    return
+  }
   const exposuresDeleted = boundedCount(row.exposures_deleted, batchSize)
   const visitorsDeleted = boundedCount(row.visitors_deleted, batchSize)
   counts.advocateExposuresDeleted = exposuresDeleted
@@ -298,6 +317,9 @@ export function createEmptyDataRetentionCounts(): DataRetentionCounts {
     checkoutContactEnvelopesCancelled: 0,
     checkoutContactEnvelopesExpired: 0,
     auditForensicsDeleted: 0,
+    sponsorRecentAuthenticationReceiptsDeleted: 0,
+    sponsorPasswordlessReservationsDeleted: 0,
+    sponsorPasswordlessVerificationAttemptsDeleted: 0,
   }
 }
 

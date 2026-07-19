@@ -43,8 +43,6 @@ const worker = testRequire(
 ) as typeof import("../../src/lib/retention/dataRetentionWorker")
 nodeModule._load = originalModuleLoad
 
-type DataRetentionRpcExecutor =
-  import("../../src/lib/retention/dataRetentionWorker").DataRetentionRpcExecutor
 type DataRetentionStepKey =
   import("../../src/lib/retention/dataRetentionWorker").DataRetentionStepKey
 
@@ -55,7 +53,7 @@ const NOW = Date.parse("2026-07-18T12:00:00.000Z")
 const OLDEST_EXPIRED_AT = "2026-07-17T12:00:00.000Z"
 const workerConfig = {
   batchSize: 5000,
-  rpcTimeoutMilliseconds: 9_000,
+  rpcTimeoutMilliseconds: 7_500,
   invocationSafetyMarginMilliseconds: 5_000,
 }
 const retentionContext = {
@@ -90,6 +88,13 @@ function stepCounts(stepKey: DataRetentionStepKey) {
   if (stepKey === "email_outbox_contact") return { redacted_count: 4 }
   if (stepKey === "gateway_event_payloads") return { redacted_count: 5 }
   if (stepKey === "audit_forensics") return { deleted_count: 2 }
+  if (stepKey === "sponsor_authentication") {
+    return {
+      recent_auth_receipts_deleted: 3,
+      passwordless_reservations_deleted: 6,
+      passwordless_verification_attempts_deleted: 8,
+    }
+  }
   return { exposures_deleted: 7, visitors_deleted: 3 }
 }
 
@@ -189,7 +194,7 @@ test.describe("data retention worker authentication and configuration", () => {
 })
 
 test.describe("data retention worker execution", () => {
-  test("uses two control calls around five privacy ordered cleanup calls", async () => {
+  test("uses two control calls around six privacy ordered cleanup calls", async () => {
     const calls: Array<Record<string, unknown>> = []
     const timeouts: number[] = []
     const result = await worker.runDataRetentionWorker({
@@ -253,6 +258,12 @@ test.describe("data retention worker execution", () => {
       },
       {
         operation: "step",
+        stepKey: "sponsor_authentication",
+        batchSize: 5000,
+        context: retentionContext,
+      },
+      {
+        operation: "step",
         stepKey: "advocate_tracking",
         batchSize: 5000,
         context: retentionContext,
@@ -263,7 +274,9 @@ test.describe("data retention worker execution", () => {
         context: retentionContext,
       },
     ])
-    expect(timeouts).toEqual([2_000, 9_000, 9_000, 9_000, 9_000, 9_000, 2_000])
+    expect(timeouts).toEqual([
+      2_000, 7_500, 7_500, 7_500, 7_500, 7_500, 7_500, 2_000,
+    ])
     expect(result).toEqual({
       ok: true,
       status: "completed",
@@ -272,6 +285,7 @@ test.describe("data retention worker execution", () => {
         "email_outbox_contact",
         "gateway_event_payloads",
         "audit_forensics",
+        "sponsor_authentication",
         "advocate_tracking",
       ],
       failedSteps: [],
@@ -287,6 +301,9 @@ test.describe("data retention worker execution", () => {
         checkoutContactEnvelopesCancelled: 1,
         checkoutContactEnvelopesExpired: 2,
         auditForensicsDeleted: 2,
+        sponsorRecentAuthenticationReceiptsDeleted: 3,
+        sponsorPasswordlessReservationsDeleted: 6,
+        sponsorPasswordlessVerificationAttemptsDeleted: 8,
       },
       startFailed: false,
       finalizeFailed: false,
@@ -312,16 +329,16 @@ test.describe("data retention worker execution", () => {
           },
           async executeStep(stepKey) {
             calls.push(stepKey)
-            if (stepKey === "gateway_event_payloads") {
+            if (stepKey === "sponsor_authentication") {
               throw new Error(`private database failure ${SECRET}`)
             }
             return stepResult(stepKey, stepKey === "advocate_tracking")
           },
           async finishRun(reportedFailedSteps) {
             calls.push("finish")
-            expect(reportedFailedSteps).toEqual(["gateway_event_payloads"])
+            expect(reportedFailedSteps).toEqual(["sponsor_authentication"])
             return finishResult(
-              ["gateway_event_payloads"],
+              ["sponsor_authentication"],
               ["advocate_tracking"],
             )
           },
@@ -334,6 +351,7 @@ test.describe("data retention worker execution", () => {
         "email_outbox_contact",
         "gateway_event_payloads",
         "audit_forensics",
+        "sponsor_authentication",
         "advocate_tracking",
         "finish",
       ])
@@ -343,10 +361,11 @@ test.describe("data retention worker execution", () => {
         completedSteps: [
           "checkout_contact_envelopes",
           "email_outbox_contact",
+          "gateway_event_payloads",
           "audit_forensics",
           "advocate_tracking",
         ],
-        failedSteps: ["gateway_event_payloads"],
+        failedSteps: ["sponsor_authentication"],
         backlogSteps: ["advocate_tracking"],
         startFailed: false,
         finalizeFailed: false,
@@ -359,7 +378,7 @@ test.describe("data retention worker execution", () => {
             requestId: REQUEST_ID,
             startFailed: false,
             finalizeFailed: false,
-            failedSteps: ["gateway_event_payloads"],
+            failedSteps: ["sponsor_authentication"],
             backlogSteps: ["advocate_tracking"],
           },
         ],
@@ -502,6 +521,7 @@ test.describe("data retention worker execution", () => {
           "email_outbox_contact",
           "gateway_event_payloads",
           "audit_forensics",
+          "sponsor_authentication",
           "advocate_tracking",
         ],
         startFailed: true,
@@ -520,6 +540,7 @@ test.describe("data retention worker execution", () => {
               "email_outbox_contact",
               "gateway_event_payloads",
               "audit_forensics",
+              "sponsor_authentication",
               "advocate_tracking",
             ],
             backlogSteps: [],
@@ -662,6 +683,7 @@ test.describe("data retention worker execution", () => {
           "checkout_contact_envelopes",
           "email_outbox_contact",
           "audit_forensics",
+          "sponsor_authentication",
           "advocate_tracking",
         ],
         failedSteps: ["gateway_event_payloads"],
@@ -713,6 +735,7 @@ test.describe("data retention worker execution", () => {
           "email_outbox_contact",
           "gateway_event_payloads",
           "audit_forensics",
+          "sponsor_authentication",
           "advocate_tracking",
         ],
       })
@@ -858,6 +881,7 @@ test.describe("data retention route and scheduler", () => {
           "checkout_contact_envelopes",
           "email_outbox_contact",
           "audit_forensics",
+          "sponsor_authentication",
           "advocate_tracking",
         ],
         failedSteps: ["gateway_event_payloads"],
@@ -872,6 +896,9 @@ test.describe("data retention route and scheduler", () => {
         checkoutContactEnvelopesCancelled: 1,
         checkoutContactEnvelopesExpired: 2,
         auditForensicsDeleted: 2,
+        sponsorRecentAuthenticationReceiptsDeleted: 3,
+        sponsorPasswordlessReservationsDeleted: 6,
+        sponsorPasswordlessVerificationAttemptsDeleted: 8,
       })
       expect(bodyText).not.toContain(SECRET)
       expect(bodyText).not.toContain("upstream included")

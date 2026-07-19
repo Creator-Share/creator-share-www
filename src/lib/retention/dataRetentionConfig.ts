@@ -41,7 +41,7 @@ export function loadDataRetentionWorkerConfig(
     ),
     rpcTimeoutMilliseconds: boundedInteger(
       environment.DATA_RETENTION_RPC_TIMEOUT_MILLISECONDS,
-      9_000,
+      7_500,
       1_000,
       10_000,
     ),

@@ -251,8 +251,8 @@ SELECT extensions.throws_ok(
 SELECT extensions.throws_ok(
   $$SELECT * FROM public.begin_sponsorship_subscription_cancellation(NULL)$$,
   '42501',
-  'Subscription cancellation is not authorized',
-  'a consolidated authenticated claim crosses the cancellation role gate'
+  'recent-verification-required: verify your email again to continue',
+  'a consolidated authenticated claim crosses the cancellation role gate into recent verification'
 );
 
 SELECT extensions.throws_ok(

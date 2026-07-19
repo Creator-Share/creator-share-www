@@ -243,6 +243,118 @@ SELECT
 FROM public.roles role
 WHERE role.name = 'SUPER_ADMIN';
 
+INSERT INTO auth.sessions (
+  id,
+  user_id,
+  created_at,
+  updated_at,
+  aal,
+  not_after
+)
+VALUES
+  (
+    '9d000000-0000-4000-8000-000000000001'::uuid,
+    '9a000000-0000-4000-8000-000000000001'::uuid,
+    clock_timestamp(),
+    clock_timestamp(),
+    'aal1',
+    clock_timestamp() + interval '1 hour'
+  ),
+  (
+    '9d000000-0000-4000-8000-000000000002'::uuid,
+    '9a000000-0000-4000-8000-000000000002'::uuid,
+    clock_timestamp(),
+    clock_timestamp(),
+    'aal1',
+    clock_timestamp() + interval '1 hour'
+  ),
+  (
+    '9d000000-0000-4000-8000-000000000003'::uuid,
+    '9a000000-0000-4000-8000-000000000003'::uuid,
+    clock_timestamp(),
+    clock_timestamp(),
+    'aal1',
+    clock_timestamp() + interval '1 hour'
+  );
+
+WITH receipt_times AS (
+  SELECT clock_timestamp() AS authenticated_at
+)
+INSERT INTO private.sponsor_email_authentication_receipts (
+  auth_session_id,
+  auth_user_id,
+  authenticated_at,
+  expires_at,
+  created_at,
+  updated_at
+)
+SELECT
+  receipt.auth_session_id,
+  receipt.auth_user_id,
+  receipt_times.authenticated_at,
+  receipt_times.authenticated_at + interval '15 minutes',
+  receipt_times.authenticated_at,
+  receipt_times.authenticated_at
+FROM receipt_times
+CROSS JOIN (
+  VALUES
+    (
+      '9d000000-0000-4000-8000-000000000001'::uuid,
+      '9a000000-0000-4000-8000-000000000001'::uuid
+    ),
+    (
+      '9d000000-0000-4000-8000-000000000002'::uuid,
+      '9a000000-0000-4000-8000-000000000002'::uuid
+    )
+) AS receipt(auth_session_id, auth_user_id);
+
+CREATE FUNCTION pg_temp.set_cancellation_authenticated_jwt(
+  target_user_id uuid,
+  target_session_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_now_epoch bigint := extract(epoch FROM clock_timestamp())::bigint;
+BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claim.sub', target_user_id::text, true);
+  PERFORM set_config(
+    'request.jwt.claims',
+    jsonb_build_object(
+      'role', 'authenticated',
+      'sub', target_user_id::text,
+      'iat', v_now_epoch,
+      'aal', 'aal1',
+      'session_id', target_session_id::text,
+      'amr', jsonb_build_array(
+        jsonb_build_object(
+          'method', 'token_refresh',
+          'timestamp', v_now_epoch
+        )
+      )
+    )::text,
+    true
+  );
+END;
+$$;
+
+CREATE FUNCTION pg_temp.set_cancellation_service_jwt()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config(
+    'request.jwt.claims',
+    '{"role":"service_role"}',
+    true
+  );
+END;
+$$;
+
 INSERT INTO public.sponsor_identities (
   id,
   auth_user_id
@@ -408,11 +520,9 @@ SELECT extensions.ok(
   'the fixture proves the existing subscription trigger owns derived funding totals'
 );
 
-SELECT set_config('request.jwt.claim.role', 'authenticated', true);
-SELECT set_config(
-  'request.jwt.claim.sub',
-  '9a000000-0000-4000-8000-000000000002',
-  true
+SELECT pg_temp.set_cancellation_authenticated_jwt(
+  '9a000000-0000-4000-8000-000000000002'::uuid,
+  '9d000000-0000-4000-8000-000000000002'::uuid
 );
 
 SELECT extensions.throws_ok(
@@ -439,10 +549,9 @@ SELECT extensions.throws_ok(
   'an identity owner cannot cancel a row with conflicting direct ownership'
 );
 
-SELECT set_config(
-  'request.jwt.claim.sub',
-  '9a000000-0000-4000-8000-000000000001',
-  true
+SELECT pg_temp.set_cancellation_authenticated_jwt(
+  '9a000000-0000-4000-8000-000000000001'::uuid,
+  '9d000000-0000-4000-8000-000000000001'::uuid
 );
 
 SELECT extensions.throws_ok(
@@ -546,8 +655,7 @@ SELECT extensions.ok(
   'the user operation is audited without provider row images or identifiers'
 );
 
-SELECT set_config('request.jwt.claim.role', 'service_role', true);
-SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT pg_temp.set_cancellation_service_jwt();
 
 SELECT extensions.ok(
   (
@@ -781,11 +889,9 @@ SELECT extensions.ok(
   'atomic settlement audits the operation, subscription, and derived beneficiary totals'
 );
 
-SELECT set_config('request.jwt.claim.role', 'authenticated', true);
-SELECT set_config(
-  'request.jwt.claim.sub',
-  '9a000000-0000-4000-8000-000000000001',
-  true
+SELECT pg_temp.set_cancellation_authenticated_jwt(
+  '9a000000-0000-4000-8000-000000000001'::uuid,
+  '9d000000-0000-4000-8000-000000000001'::uuid
 );
 
 CREATE TEMP TABLE already_cancelled_cancellation_begin
@@ -872,8 +978,7 @@ FROM public.begin_sponsorship_subscription_cancellation(
   '9b000000-0000-4000-8000-000000000005'::uuid
 ) begun;
 
-SELECT set_config('request.jwt.claim.role', 'service_role', true);
-SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT pg_temp.set_cancellation_service_jwt();
 
 CREATE TEMP TABLE paypal_cancellation_claim
 ON COMMIT DROP
@@ -921,11 +1026,9 @@ SELECT extensions.ok(
   'authoritative provider absence stops future billing locally'
 );
 
-SELECT set_config('request.jwt.claim.role', 'authenticated', true);
-SELECT set_config(
-  'request.jwt.claim.sub',
-  '9a000000-0000-4000-8000-000000000003',
-  true
+SELECT pg_temp.set_cancellation_authenticated_jwt(
+  '9a000000-0000-4000-8000-000000000003'::uuid,
+  '9d000000-0000-4000-8000-000000000003'::uuid
 );
 
 SELECT extensions.throws_ok(
@@ -1030,10 +1133,9 @@ SELECT extensions.ok(
   'an administrator override records ownership conflict without choosing an effective owner'
 );
 
-SELECT set_config(
-  'request.jwt.claim.sub',
-  '9a000000-0000-4000-8000-000000000001',
-  true
+SELECT pg_temp.set_cancellation_authenticated_jwt(
+  '9a000000-0000-4000-8000-000000000001'::uuid,
+  '9d000000-0000-4000-8000-000000000001'::uuid
 );
 
 CREATE TEMP TABLE retry_cancellation_begin
@@ -1044,8 +1146,7 @@ FROM public.begin_sponsorship_subscription_cancellation(
   '9b000000-0000-4000-8000-000000000007'::uuid
 ) begun;
 
-SELECT set_config('request.jwt.claim.role', 'service_role', true);
-SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT pg_temp.set_cancellation_service_jwt();
 
 CREATE TEMP TABLE retry_cancellation_claim_one
 ON COMMIT DROP
@@ -1095,11 +1196,9 @@ SELECT extensions.ok(
   'a retryable provider failure preserves the active subscription and durable evidence'
 );
 
-SELECT set_config('request.jwt.claim.role', 'authenticated', true);
-SELECT set_config(
-  'request.jwt.claim.sub',
-  '9a000000-0000-4000-8000-000000000001',
-  true
+SELECT pg_temp.set_cancellation_authenticated_jwt(
+  '9a000000-0000-4000-8000-000000000001'::uuid,
+  '9d000000-0000-4000-8000-000000000001'::uuid
 );
 
 SELECT extensions.ok(
@@ -1116,8 +1215,7 @@ SELECT extensions.ok(
   'a sponsor retry recovers the original failed operation'
 );
 
-SELECT set_config('request.jwt.claim.role', 'service_role', true);
-SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT pg_temp.set_cancellation_service_jwt();
 
 SELECT extensions.ok(
   (

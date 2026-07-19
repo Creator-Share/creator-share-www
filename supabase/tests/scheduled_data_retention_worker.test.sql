@@ -30,6 +30,11 @@ SELECT extensions.ok(
     'public.purge_sponsorship_checkout_contact_envelopes(integer,text,text)',
     'EXECUTE'
   )
+  AND has_function_privilege(
+    'service_role',
+    'public.purge_expired_sponsor_authentication_evidence(integer)',
+    'EXECUTE'
+  )
   AND NOT has_function_privilege(
     'anon',
     'public.purge_expired_advocate_tracking(integer)',
@@ -53,6 +58,11 @@ SELECT extensions.ok(
   AND NOT has_function_privilege(
     'authenticated',
     'public.purge_sponsorship_checkout_contact_envelopes(integer,text,text)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated',
+    'public.purge_expired_sponsor_authentication_evidence(integer)',
     'EXECUTE'
   ),
   'only the service role can execute the scheduled retention RPCs'
@@ -86,6 +96,7 @@ SELECT extensions.is(
       'public.purge_expired_gateway_event_payloads(integer)'::regprocedure,
       'public.purge_expired_audit_forensics(integer)'::regprocedure,
       'public.purge_expired_email_outbox_contact(integer)'::regprocedure,
+      'public.purge_expired_sponsor_authentication_evidence(integer)'::regprocedure,
       'public.purge_sponsorship_checkout_contact_envelopes(integer,text,text)'::regprocedure
     )
       AND routine.prosecdef
@@ -95,7 +106,7 @@ SELECT extensions.is(
         WHERE setting LIKE 'search_path=%'
       )
   ),
-  5,
+  6,
   'all scheduled retention RPCs use a locked security definer boundary'
 );
 
@@ -869,6 +880,7 @@ FROM unnest(ARRAY[
   'email_outbox_contact',
   'gateway_event_payloads',
   'audit_forensics',
+  'sponsor_authentication',
   'advocate_tracking'
 ]::text[]) WITH ORDINALITY step(step_key, ordinality)
 ORDER BY step.ordinality;
@@ -932,15 +944,25 @@ SELECT extensions.ok(
       AND result ->> 'step_key' = 'advocate_tracking'
     FROM retention_run_one_steps
     WHERE step_key = 'advocate_tracking'
+  )
+  AND (
+    SELECT result -> 'counts' = '{
+      "recent_auth_receipts_deleted": 0,
+      "passwordless_reservations_deleted": 0,
+      "passwordless_verification_attempts_deleted": 0
+    }'::jsonb
+      AND result ->> 'step_key' = 'sponsor_authentication'
+    FROM retention_run_one_steps
+    WHERE step_key = 'sponsor_authentication'
   ),
-  'advocate tracking retention returns its exact safe count contract'
+  'sponsor authentication and advocate tracking return exact safe count contracts'
 );
 
 RESET ROLE;
 
 SELECT extensions.ok(
   (
-    SELECT count(*) = 5
+    SELECT count(*) = 6
       AND bool_and(status = 'completed')
       AND bool_and(request_id = 'retention-run-one')
       AND bool_and(trace_id IS NULL)
@@ -970,6 +992,7 @@ SELECT extensions.ok(
         "email_outbox_contact",
         "gateway_event_payloads",
         "audit_forensics",
+        "sponsor_authentication",
         "advocate_tracking"
       ]'::jsonb
       AND result -> 'failed_steps' = '[]'::jsonb
@@ -1062,6 +1085,7 @@ SELECT step.step_key, public.run_data_retention_step(
 FROM unnest(ARRAY[
   'checkout_contact_envelopes',
   'email_outbox_contact',
+  'gateway_event_payloads',
   'audit_forensics',
   'advocate_tracking'
 ]::text[]) WITH ORDINALITY step(step_key, ordinality)
@@ -1069,7 +1093,7 @@ ORDER BY step.ordinality;
 
 SELECT extensions.is(
   (SELECT count(*)::integer FROM retention_run_two_steps),
-  4,
+  5,
   'the second run durably completes every nonfailing step'
 );
 
@@ -1090,7 +1114,7 @@ SELECT extensions.throws_ok(
 CREATE TEMP TABLE retention_run_two_finish AS
 SELECT public.finish_data_retention_run(
   '84444444-4444-4444-8444-444444444444',
-  ARRAY['gateway_event_payloads']::text[],
+  ARRAY['sponsor_authentication']::text[],
   'retention-run-two',
   'trace-run-two'
 ) AS result;
@@ -1098,11 +1122,11 @@ SELECT public.finish_data_retention_run(
 SELECT extensions.ok(
   (
     SELECT result ->> 'status' = 'completed_with_failures'
-      AND result -> 'failed_steps' = '["gateway_event_payloads"]'::jsonb
+      AND result -> 'failed_steps' = '["sponsor_authentication"]'::jsonb
       AND result -> 'backlog_steps' = '[]'::jsonb
     FROM retention_run_two_finish
   ),
-  'reported failure terminalizes without requerying the failed relation'
+  'sponsor authentication failure terminalizes without blocking later retention steps'
 );
 
 RESET ROLE;
@@ -1110,7 +1134,11 @@ RESET ROLE;
 SELECT extensions.ok(
   (
     SELECT status = 'failed'
-      AND counts = '{"redacted_count": 0}'::jsonb
+      AND counts = '{
+        "recent_auth_receipts_deleted": 0,
+        "passwordless_reservations_deleted": 0,
+        "passwordless_verification_attempts_deleted": 0
+      }'::jsonb
       AND has_more IS NULL
       AND oldest_expired_at IS NULL
       AND request_id = 'retention-run-two'
@@ -1118,7 +1146,7 @@ SELECT extensions.ok(
     FROM audit.data_retention_run_events
     WHERE run_id = '84444444-4444-4444-8444-444444444444'
       AND event_kind = 'step_outcome'
-      AND step_key = 'gateway_event_payloads'
+      AND step_key = 'sponsor_authentication'
   ),
   'failed-step evidence is sanitized, correlated, and records backlog as unknown'
 );
@@ -1236,7 +1264,7 @@ SELECT set_config('request.jwt.claim.role', 'service_role', true);
 SELECT extensions.ok(
   (
     SELECT result ->> 'status' = 'completed_with_failures'
-      AND jsonb_array_length(result -> 'failed_steps') = 5
+      AND jsonb_array_length(result -> 'failed_steps') = 6
     FROM (
       SELECT public.finish_data_retention_run(
         '87777777-7777-4777-8777-777777777777',
@@ -1245,6 +1273,7 @@ SELECT extensions.ok(
           'email_outbox_contact',
           'gateway_event_payloads',
           'audit_forensics',
+          'sponsor_authentication',
           'advocate_tracking'
         ]::text[],
         'retention-run-three',
