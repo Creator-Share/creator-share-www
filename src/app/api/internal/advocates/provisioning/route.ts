@@ -47,7 +47,9 @@ async function handle(request: NextRequest) {
   try {
     const config = loadDomainWorkerConfig()
     const repository = createSupabaseDomainProvisioningRepository(
-      createServiceRoleClient(),
+      createServiceRoleClient({
+        requestTimeoutMilliseconds: DOMAIN_WORKER_INVOCATION_BUDGET_MS - 5_000,
+      }),
     )
     const batch = await runScheduledDomainProvisioningBatch({
       repository,

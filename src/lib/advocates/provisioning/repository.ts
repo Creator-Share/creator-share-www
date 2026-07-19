@@ -11,35 +11,42 @@ export interface DomainProvisioningRepository {
   enqueueDueReconciliations(options: {
     batchSize: number
     correlationId: string
+    signal: AbortSignal
   }): Promise<DomainReconciliationEnqueueResult[]>
   claimJobs(options: {
     workerId: string
     batchSize: number
     leaseSeconds: number
+    signal: AbortSignal
   }): Promise<ClaimedDomainProvisioningJob[]>
   loadContext(
     job: ClaimedDomainProvisioningJob,
+    signal: AbortSignal,
   ): Promise<DomainProvisioningContext>
   renewLease(
     job: ClaimedDomainProvisioningJob,
     leaseSeconds: number,
+    signal: AbortSignal,
   ): Promise<void>
   recordReconciliation(
     job: ClaimedDomainProvisioningJob,
     outcome: ReconciliationOutcome,
     evidence: SafeProviderEvidence,
+    signal: AbortSignal,
   ): Promise<boolean>
   complete(
     job: ClaimedDomainProvisioningJob,
     status: "succeeded" | "failed",
     code: string | null,
     evidence: SafeProviderEvidence,
+    signal: AbortSignal,
   ): Promise<"succeeded" | "failed">
   retry(
     job: ClaimedDomainProvisioningJob,
     delaySeconds: number,
     code: string,
     evidence: SafeProviderEvidence,
+    signal: AbortSignal,
   ): Promise<"queued" | "failed">
 }
 
@@ -52,6 +59,16 @@ export interface DomainReconciliationEnqueueResult {
 interface SupabaseErrorLike {
   code?: string
   message?: string
+}
+
+async function executeRpc(
+  client: SupabaseClient,
+  name: string,
+  args: Record<string, unknown>,
+  signal: AbortSignal,
+): Promise<{ data: unknown; error: SupabaseErrorLike | null }> {
+  const { data, error } = await client.rpc(name, args).abortSignal(signal)
+  return { data, error }
 }
 
 export class DomainProvisioningRepositoryError extends Error {
@@ -116,11 +133,7 @@ function parseClaimedJob(value: unknown): ClaimedDomainProvisioningJob | null {
 
   const kind = value.kind
   const provider = value.provider
-  if (
-    kind !== "provision" &&
-    kind !== "reconcile" &&
-    kind !== "deprovision"
-  ) {
+  if (kind !== "provision" && kind !== "reconcile" && kind !== "deprovision") {
     return null
   }
   if (
@@ -144,7 +157,8 @@ function parseClaimedJob(value: unknown): ClaimedDomainProvisioningJob | null {
     attemptCount: Number(value.attempt_count),
     maxAttempts: Number(value.max_attempts),
     providerIdempotencyKey: String(value.provider_idempotency_key ?? ""),
-    requestPayload: value.request_payload as ClaimedDomainProvisioningJob["requestPayload"],
+    requestPayload:
+      value.request_payload as ClaimedDomainProvisioningJob["requestPayload"],
     leaseToken: String(value.lease_token ?? ""),
     leaseExpiresAt: String(value.lease_expires_at ?? ""),
     reconciliationRequired: value.reconciliation_required === true,
@@ -155,13 +169,15 @@ export function createSupabaseDomainProvisioningRepository(
   client: SupabaseClient,
 ): DomainProvisioningRepository {
   return {
-    async enqueueDueReconciliations({ batchSize, correlationId }) {
-      const { data, error } = await client.rpc(
+    async enqueueDueReconciliations({ batchSize, correlationId, signal }) {
+      const { data, error } = await executeRpc(
+        client,
         "enqueue_due_advocate_domain_reconciliations",
         {
           batch_size: batchSize,
           correlation_id: correlationId,
         },
+        signal,
       )
       if (error) throwRepositoryError("enqueue_reconciliations", error)
       if (!Array.isArray(data) || data.length > batchSize) {
@@ -182,14 +198,16 @@ export function createSupabaseDomainProvisioningRepository(
       return results as DomainReconciliationEnqueueResult[]
     },
 
-    async claimJobs({ workerId, batchSize, leaseSeconds }) {
-      const { data, error } = await client.rpc(
+    async claimJobs({ workerId, batchSize, leaseSeconds, signal }) {
+      const { data, error } = await executeRpc(
+        client,
         "claim_domain_provisioning_jobs",
         {
           worker_id: workerId,
           batch_size: batchSize,
           lease_duration: `${leaseSeconds} seconds`,
         },
+        signal,
       )
       if (error) throwRepositoryError("claim", error)
       if (!Array.isArray(data)) throwRepositoryError("claim_shape", null)
@@ -201,11 +219,12 @@ export function createSupabaseDomainProvisioningRepository(
       return jobs as ClaimedDomainProvisioningJob[]
     },
 
-    async loadContext(job) {
+    async loadContext(job, signal) {
       const { data: advocate, error: advocateError } = await client
         .from("advocates")
         .select("id, relationship_status, publication_status")
         .eq("id", job.advocateId)
+        .abortSignal(signal)
         .maybeSingle()
       if (advocateError) throwRepositoryError("load_advocate", advocateError)
       if (!advocate) throwRepositoryError("advocate_missing", null)
@@ -215,6 +234,7 @@ export function createSupabaseDomainProvisioningRepository(
         .select("id, advocate_id, hostname, status")
         .eq("id", job.domainId)
         .eq("advocate_id", job.advocateId)
+        .abortSignal(signal)
         .maybeSingle()
       if (domainError) throwRepositoryError("load_domain", domainError)
       if (!domain) throwRepositoryError("domain_missing", null)
@@ -227,6 +247,7 @@ export function createSupabaseDomainProvisioningRepository(
         .eq("id", job.integrationId)
         .eq("domain_id", job.domainId)
         .eq("advocate_id", job.advocateId)
+        .abortSignal(signal)
         .maybeSingle()
       if (integrationError) {
         throwRepositoryError("load_integration", integrationError)
@@ -252,20 +273,23 @@ export function createSupabaseDomainProvisioningRepository(
       }
     },
 
-    async renewLease(job, leaseSeconds) {
-      const { error } = await client.rpc(
+    async renewLease(job, leaseSeconds, signal) {
+      const { error } = await executeRpc(
+        client,
         "renew_domain_provisioning_job_lease",
         {
           target_job_id: job.jobId,
           target_lease_token: job.leaseToken,
           lease_duration: `${leaseSeconds} seconds`,
         },
+        signal,
       )
       if (error) throwRepositoryError("renew", error)
     },
 
-    async recordReconciliation(job, outcome, evidence) {
-      const { data, error } = await client.rpc(
+    async recordReconciliation(job, outcome, evidence, signal) {
+      const { data, error } = await executeRpc(
+        client,
         "record_domain_provisioning_reconciliation",
         {
           target_job_id: job.jobId,
@@ -273,6 +297,7 @@ export function createSupabaseDomainProvisioningRepository(
           reconciliation_result: outcome,
           evidence_payload: evidence,
         },
+        signal,
       )
       if (error) throwRepositoryError("reconcile", error)
       if (typeof data !== "boolean") {
@@ -281,8 +306,9 @@ export function createSupabaseDomainProvisioningRepository(
       return data
     },
 
-    async complete(job, status, code, evidence) {
-      const { data, error } = await client.rpc(
+    async complete(job, status, code, evidence, signal) {
+      const { data, error } = await executeRpc(
+        client,
         "complete_domain_provisioning_job",
         {
           target_job_id: job.jobId,
@@ -291,6 +317,7 @@ export function createSupabaseDomainProvisioningRepository(
           completion_code: code,
           provider_result: evidence,
         },
+        signal,
       )
       if (error) throwRepositoryError("complete", error)
       if (data !== "succeeded" && data !== "failed") {
@@ -299,8 +326,9 @@ export function createSupabaseDomainProvisioningRepository(
       return data
     },
 
-    async retry(job, delaySeconds, code, evidence) {
-      const { data, error } = await client.rpc(
+    async retry(job, delaySeconds, code, evidence, signal) {
+      const { data, error } = await executeRpc(
+        client,
         "retry_domain_provisioning_job",
         {
           target_job_id: job.jobId,
@@ -309,6 +337,7 @@ export function createSupabaseDomainProvisioningRepository(
           retry_code: code,
           provider_result: evidence,
         },
+        signal,
       )
       if (error) throwRepositoryError("retry", error)
       if (data !== "queued" && data !== "failed") {

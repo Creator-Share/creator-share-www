@@ -24,11 +24,7 @@ import {
 } from "./validation"
 
 export type DomainJobProcessStatus =
-  | "succeeded"
-  | "retried"
-  | "failed"
-  | "lease_lost"
-  | "settlement_unknown"
+  "succeeded" | "retried" | "failed" | "lease_lost" | "settlement_unknown"
 
 export interface DomainJobProcessResult {
   jobId: string
@@ -48,13 +44,64 @@ export interface DomainWorkerBatchResult {
   results: DomainJobProcessResult[]
 }
 
-export interface ScheduledDomainWorkerBatchResult
-  extends DomainWorkerBatchResult {
+export interface ScheduledDomainWorkerBatchResult extends DomainWorkerBatchResult {
   scheduledDomains: number
   enqueuedReconciliations: number
   quarantinedDomains: number
   schedulingFailed: boolean
   schedulingFailureCode?: "repository_error" | "unexpected_error"
+}
+
+export type DomainProvisioningTimeoutSignalFactory = (
+  milliseconds: number,
+) => AbortSignal
+
+interface DomainProvisioningDatabaseSignals {
+  work: AbortSignal
+  settlement: AbortSignal
+}
+
+function defaultTimeoutSignal(milliseconds: number): AbortSignal {
+  return AbortSignal.timeout(milliseconds)
+}
+
+function deadlineSignal(
+  remainingMilliseconds: number,
+  timeoutSignal: DomainProvisioningTimeoutSignalFactory,
+): AbortSignal {
+  const boundedMilliseconds = Math.floor(remainingMilliseconds)
+  return boundedMilliseconds > 0
+    ? timeoutSignal(boundedMilliseconds)
+    : AbortSignal.abort()
+}
+
+function databaseSignals(options: {
+  deadlineAtMilliseconds: number
+  monotonicNow: () => number
+  timeoutSignal: DomainProvisioningTimeoutSignalFactory
+}): DomainProvisioningDatabaseSignals {
+  const remainingMilliseconds =
+    options.deadlineAtMilliseconds - options.monotonicNow()
+  return {
+    work: deadlineSignal(
+      remainingMilliseconds - DOMAIN_WORKER_SETTLEMENT_RESERVE_MS,
+      options.timeoutSignal,
+    ),
+    settlement: deadlineSignal(remainingMilliseconds, options.timeoutSignal),
+  }
+}
+
+function databaseWorkSignal(options: {
+  deadlineAtMilliseconds: number
+  monotonicNow: () => number
+  timeoutSignal: DomainProvisioningTimeoutSignalFactory
+}): AbortSignal {
+  return deadlineSignal(
+    options.deadlineAtMilliseconds -
+      options.monotonicNow() -
+      DOMAIN_WORKER_SETTLEMENT_RESERVE_MS,
+    options.timeoutSignal,
+  )
 }
 
 function repositoryFailure(
@@ -114,8 +161,9 @@ async function settleFailure(options: {
   job: ClaimedDomainProvisioningJob
   error: DomainProvisioningError
   publicationWithdrawn: boolean
+  settlementSignal: AbortSignal
 }): Promise<DomainJobProcessResult> {
-  const { repository, job, publicationWithdrawn } = options
+  const { repository, job, publicationWithdrawn, settlementSignal } = options
   let error = options.error
   let evidence: SafeProviderEvidence
   try {
@@ -135,6 +183,7 @@ async function settleFailure(options: {
         calculateRetryDelaySeconds(job, error.retryAfterSeconds),
         error.code,
         evidence,
+        settlementSignal,
       )
       return {
         jobId: job.jobId,
@@ -146,7 +195,13 @@ async function settleFailure(options: {
       }
     }
 
-    await repository.complete(job, "failed", error.code, evidence)
+    await repository.complete(
+      job,
+      "failed",
+      error.code,
+      evidence,
+      settlementSignal,
+    )
     return {
       jobId: job.jobId,
       status: "failed",
@@ -182,6 +237,7 @@ async function settleConfirmedActiveDrift(options: {
   job: ClaimedDomainProvisioningJob
   evidence: SafeProviderEvidence
   withdrawalAlreadyCommitted: boolean
+  settlementSignal: AbortSignal
 }): Promise<DomainJobProcessResult> {
   const code = "provider_state_drift_detected"
   try {
@@ -190,6 +246,7 @@ async function settleConfirmedActiveDrift(options: {
       "failed",
       code,
       options.evidence,
+      options.settlementSignal,
     )
     return {
       jobId: options.job.jobId,
@@ -220,17 +277,23 @@ export async function processDomainProvisioningJob(options: {
   job: ClaimedDomainProvisioningJob
   deadlineAtMilliseconds?: number
   monotonicNow?: () => number
+  timeoutSignal?: DomainProvisioningTimeoutSignalFactory
 }): Promise<DomainJobProcessResult> {
   const { repository, adapterFactory, config, job } = options
   const monotonicNow = options.monotonicNow ?? (() => performance.now())
   const deadlineAtMilliseconds =
     options.deadlineAtMilliseconds ??
     monotonicNow() + DOMAIN_WORKER_INVOCATION_BUDGET_MS
+  const signals = databaseSignals({
+    deadlineAtMilliseconds,
+    monotonicNow,
+    timeoutSignal: options.timeoutSignal ?? defaultTimeoutSignal,
+  })
   let publicationWithdrawn = false
 
   try {
     assertClaimedJob(job)
-    const context = await repository.loadContext(job)
+    const context = await repository.loadContext(job, signals.work)
     assertContextMatchesJob(job, context)
     const initialAdapter = adapterFactory(
       job.provider,
@@ -264,6 +327,7 @@ export async function processDomainProvisioningJob(options: {
         job,
         initial.outcome,
         initialEvidence,
+        signals.work,
       )
     } catch (error) {
       if (activeRequiredReconciliation && !initialStateVerified) {
@@ -272,6 +336,7 @@ export async function processDomainProvisioningJob(options: {
           job,
           evidence: initialEvidence,
           withdrawalAlreadyCommitted: false,
+          settlementSignal: signals.settlement,
         })
       }
       throw error
@@ -284,6 +349,7 @@ export async function processDomainProvisioningJob(options: {
         job,
         evidence: initialEvidence,
         withdrawalAlreadyCommitted: true,
+        settlementSignal: signals.settlement,
       })
     }
 
@@ -303,7 +369,13 @@ export async function processDomainProvisioningJob(options: {
     }
 
     if (initialStateVerified) {
-      await repository.complete(job, "succeeded", null, initialEvidence)
+      await repository.complete(
+        job,
+        "succeeded",
+        null,
+        initialEvidence,
+        signals.settlement,
+      )
       return {
         jobId: job.jobId,
         status: "succeeded",
@@ -321,7 +393,7 @@ export async function processDomainProvisioningJob(options: {
       })
     }
 
-    await repository.renewLease(job, config.leaseSeconds)
+    await repository.renewLease(job, config.leaseSeconds, signals.work)
     const applyAdapter = adapterFactory(
       job.provider,
       providerRequestTimeoutMilliseconds({
@@ -364,7 +436,13 @@ export async function processDomainProvisioningJob(options: {
       })
     }
 
-    await repository.complete(job, "succeeded", null, combinedEvidence)
+    await repository.complete(
+      job,
+      "succeeded",
+      null,
+      combinedEvidence,
+      signals.settlement,
+    )
     return {
       jobId: job.jobId,
       status: "succeeded",
@@ -385,6 +463,7 @@ export async function processDomainProvisioningJob(options: {
       job,
       error: normalized,
       publicationWithdrawn,
+      settlementSignal: signals.settlement,
     })
   }
 }
@@ -396,15 +475,22 @@ export async function runDomainProvisioningBatch(options: {
   workerId: string
   deadlineAtMilliseconds?: number
   monotonicNow?: () => number
+  timeoutSignal?: DomainProvisioningTimeoutSignalFactory
 }): Promise<DomainWorkerBatchResult> {
   const monotonicNow = options.monotonicNow ?? (() => performance.now())
   const deadlineAtMilliseconds =
     options.deadlineAtMilliseconds ??
     monotonicNow() + DOMAIN_WORKER_INVOCATION_BUDGET_MS
+  const claimSignal = databaseWorkSignal({
+    deadlineAtMilliseconds,
+    monotonicNow,
+    timeoutSignal: options.timeoutSignal ?? defaultTimeoutSignal,
+  })
   const jobs = await options.repository.claimJobs({
     workerId: options.workerId,
     batchSize: options.config.batchSize,
     leaseSeconds: options.config.leaseSeconds,
+    signal: claimSignal,
   })
 
   const results = await Promise.all(
@@ -416,6 +502,7 @@ export async function runDomainProvisioningBatch(options: {
         job,
         deadlineAtMilliseconds,
         monotonicNow,
+        timeoutSignal: options.timeoutSignal,
       }),
     ),
   )
@@ -445,21 +532,27 @@ export async function runScheduledDomainProvisioningBatch(options: {
   correlationId: string
   deadlineAtMilliseconds?: number
   monotonicNow?: () => number
+  timeoutSignal?: DomainProvisioningTimeoutSignalFactory
 }): Promise<ScheduledDomainWorkerBatchResult> {
   const monotonicNow = options.monotonicNow ?? (() => performance.now())
   const deadlineAtMilliseconds =
     options.deadlineAtMilliseconds ??
     monotonicNow() + DOMAIN_WORKER_INVOCATION_BUDGET_MS
+  const schedulingSignal = databaseWorkSignal({
+    deadlineAtMilliseconds,
+    monotonicNow,
+    timeoutSignal: options.timeoutSignal ?? defaultTimeoutSignal,
+  })
   let enqueued: Awaited<
     ReturnType<DomainProvisioningRepository["enqueueDueReconciliations"]>
   > = []
   let schedulingFailureCode:
-    | ScheduledDomainWorkerBatchResult["schedulingFailureCode"]
-    | undefined
+    ScheduledDomainWorkerBatchResult["schedulingFailureCode"] | undefined
   try {
     enqueued = await options.repository.enqueueDueReconciliations({
       batchSize: options.config.reconciliationBatchSize,
       correlationId: options.correlationId,
+      signal: schedulingSignal,
     })
   } catch (error) {
     schedulingFailureCode =

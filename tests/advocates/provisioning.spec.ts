@@ -695,22 +695,39 @@ test.describe("payment path readiness adapters", () => {
   })
 })
 
+function abortableSupabaseResult(
+  result: { data: unknown; error: unknown },
+  observedSignals: AbortSignal[] = [],
+) {
+  return {
+    abortSignal(signal: AbortSignal) {
+      observedSignals.push(signal)
+      return Promise.resolve(result)
+    },
+  }
+}
+
 test.describe("domain provisioning repository", () => {
   test("maps the bounded reconciliation scheduler RPC without leaking topology details", async () => {
     const rpcCalls: Array<{ name: string; args: unknown }> = []
+    const observedSignals: AbortSignal[] = []
+    const signal = new AbortController().signal
     const repository = createSupabaseDomainProvisioningRepository({
-      async rpc(name: string, args: unknown) {
+      rpc(name: string, args: unknown) {
         rpcCalls.push({ name, args })
-        return {
-          data: [
-            {
-              domain_id: job.domainId,
-              enqueued_job_count: 5,
-              quarantined: false,
-            },
-          ],
-          error: null,
-        }
+        return abortableSupabaseResult(
+          {
+            data: [
+              {
+                domain_id: job.domainId,
+                enqueued_job_count: 5,
+                quarantined: false,
+              },
+            ],
+            error: null,
+          },
+          observedSignals,
+        )
       },
     } as never)
 
@@ -719,6 +736,7 @@ test.describe("domain provisioning repository", () => {
         batchSize: 20,
         correlationId:
           "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
+        signal,
       }),
     ).resolves.toEqual([
       {
@@ -737,12 +755,13 @@ test.describe("domain provisioning repository", () => {
         },
       },
     ])
+    expect(observedSignals).toEqual([signal])
   })
 
   test("rejects malformed reconciliation scheduler rows", async () => {
     const repository = createSupabaseDomainProvisioningRepository({
-      async rpc() {
-        return {
+      rpc() {
+        return abortableSupabaseResult({
           data: [
             {
               domain_id: job.domainId,
@@ -751,7 +770,7 @@ test.describe("domain provisioning repository", () => {
             },
           ],
           error: null,
-        }
+        })
       },
     } as never)
 
@@ -759,6 +778,7 @@ test.describe("domain provisioning repository", () => {
       repository.enqueueDueReconciliations({
         batchSize: 20,
         correlationId: "invalid-shape-test",
+        signal: new AbortController().signal,
       }),
     ).rejects.toMatchObject({
       stage: "enqueue_reconciliations_shape",
@@ -767,8 +787,8 @@ test.describe("domain provisioning repository", () => {
 
   test("maps quarantined topology without pretending provider work was enqueued", async () => {
     const repository = createSupabaseDomainProvisioningRepository({
-      async rpc() {
-        return {
+      rpc() {
+        return abortableSupabaseResult({
           data: [
             {
               domain_id: job.domainId,
@@ -777,7 +797,7 @@ test.describe("domain provisioning repository", () => {
             },
           ],
           error: null,
-        }
+        })
       },
     } as never)
 
@@ -785,6 +805,7 @@ test.describe("domain provisioning repository", () => {
       repository.enqueueDueReconciliations({
         batchSize: 20,
         correlationId: "invalid-topology-test",
+        signal: new AbortController().signal,
       }),
     ).resolves.toEqual([
       {
@@ -797,8 +818,8 @@ test.describe("domain provisioning repository", () => {
 
   test("rejects inconsistent scheduler quarantine shapes", async () => {
     const repository = createSupabaseDomainProvisioningRepository({
-      async rpc() {
-        return {
+      rpc() {
+        return abortableSupabaseResult({
           data: [
             {
               domain_id: job.domainId,
@@ -807,7 +828,7 @@ test.describe("domain provisioning repository", () => {
             },
           ],
           error: null,
-        }
+        })
       },
     } as never)
 
@@ -815,6 +836,7 @@ test.describe("domain provisioning repository", () => {
       repository.enqueueDueReconciliations({
         batchSize: 20,
         correlationId: "invalid-quarantine-shape-test",
+        signal: new AbortController().signal,
       }),
     ).rejects.toMatchObject({ stage: "enqueue_reconciliations_shape" })
   })
@@ -843,8 +865,8 @@ test.describe("domain provisioning repository", () => {
       ],
     ]) {
       const repository = createSupabaseDomainProvisioningRepository({
-        async rpc() {
-          return { data, error: null }
+        rpc() {
+          return abortableSupabaseResult({ data, error: null })
         },
       } as never)
 
@@ -852,9 +874,133 @@ test.describe("domain provisioning repository", () => {
         repository.enqueueDueReconciliations({
           batchSize: 20,
           correlationId: "strict-result-contract-test",
+          signal: new AbortController().signal,
         }),
       ).rejects.toMatchObject({ stage: "enqueue_reconciliations_shape" })
     }
+  })
+
+  test("threads the caller deadline signal through every claimed-job database operation", async () => {
+    const workSignal = new AbortController().signal
+    const settlementSignal = new AbortController().signal
+    const rpcSignals: Array<{ name: string; signal: AbortSignal }> = []
+    const querySignals: Array<{ table: string; signal: AbortSignal }> = []
+    const queryRows: Record<string, Record<string, unknown>> = {
+      advocates: {
+        id: job.advocateId,
+        relationship_status: "active",
+        publication_status: "draft",
+      },
+      advocate_domains: {
+        id: job.domainId,
+        advocate_id: job.advocateId,
+        hostname: context.hostname,
+        status: "provisioning",
+      },
+      advocate_domain_integrations: {
+        id: job.integrationId,
+        advocate_id: job.advocateId,
+        domain_id: job.domainId,
+        provider: job.provider,
+        is_required: true,
+        status: "provisioning",
+        external_identifier: null,
+      },
+    }
+    const rpcData: Record<string, unknown> = {
+      claim_domain_provisioning_jobs: [
+        {
+          job_id: job.jobId,
+          advocate_id: job.advocateId,
+          domain_id: job.domainId,
+          integration_id: job.integrationId,
+          kind: job.kind,
+          provider: job.provider,
+          attempt_count: job.attemptCount,
+          max_attempts: job.maxAttempts,
+          provider_idempotency_key: job.providerIdempotencyKey,
+          request_payload: job.requestPayload,
+          lease_token: job.leaseToken,
+          lease_expires_at: job.leaseExpiresAt,
+          reconciliation_required: job.reconciliationRequired,
+        },
+      ],
+      renew_domain_provisioning_job_lease: null,
+      record_domain_provisioning_reconciliation: true,
+      complete_domain_provisioning_job: "succeeded",
+      retry_domain_provisioning_job: "queued",
+    }
+    const repository = createSupabaseDomainProvisioningRepository({
+      rpc(name: string) {
+        return {
+          abortSignal(signal: AbortSignal) {
+            rpcSignals.push({ name, signal })
+            return Promise.resolve({ data: rpcData[name], error: null })
+          },
+        }
+      },
+      from(table: string) {
+        const builder = {
+          select() {
+            return builder
+          },
+          eq() {
+            return builder
+          },
+          abortSignal(signal: AbortSignal) {
+            querySignals.push({ table, signal })
+            return builder
+          },
+          maybeSingle() {
+            return Promise.resolve({ data: queryRows[table], error: null })
+          },
+        }
+        return builder
+      },
+    } as never)
+
+    await expect(
+      repository.claimJobs({
+        workerId: "advocate-domain-worker:66666666-6666-4666-8666-666666666666",
+        batchSize: 3,
+        leaseSeconds: 300,
+        signal: workSignal,
+      }),
+    ).resolves.toEqual([job])
+    await expect(repository.loadContext(job, workSignal)).resolves.toEqual(
+      context,
+    )
+    await expect(
+      repository.renewLease(job, 300, workSignal),
+    ).resolves.toBeUndefined()
+    await expect(
+      repository.recordReconciliation(job, "not_found", {}, workSignal),
+    ).resolves.toBe(true)
+    await expect(
+      repository.complete(job, "succeeded", null, {}, settlementSignal),
+    ).resolves.toBe("succeeded")
+    await expect(
+      repository.retry(job, 15, "network_error", {}, settlementSignal),
+    ).resolves.toBe("queued")
+
+    expect(querySignals).toEqual([
+      { table: "advocates", signal: workSignal },
+      { table: "advocate_domains", signal: workSignal },
+      { table: "advocate_domain_integrations", signal: workSignal },
+    ])
+    expect(rpcSignals).toEqual([
+      { name: "claim_domain_provisioning_jobs", signal: workSignal },
+      { name: "renew_domain_provisioning_job_lease", signal: workSignal },
+      {
+        name: "record_domain_provisioning_reconciliation",
+        signal: workSignal,
+      },
+      {
+        name: "complete_domain_provisioning_job",
+        signal: settlementSignal,
+      },
+      { name: "retry_domain_provisioning_job", signal: settlementSignal },
+    ])
   })
 })
 
@@ -890,6 +1036,26 @@ function fakeRepository(
     },
     ...overrides,
   }
+}
+
+function rejectWhenAborted(signal: AbortSignal, stage: string): Promise<never> {
+  return new Promise((_, reject) => {
+    const fail = () =>
+      reject(
+        new DomainProvisioningRepositoryError(stage, {
+          code: "",
+        }),
+      )
+    if (signal.aborted) {
+      fail()
+      return
+    }
+    signal.addEventListener("abort", fail, { once: true })
+  })
+}
+
+function acceleratedTimeoutSignal(milliseconds: number): AbortSignal {
+  return AbortSignal.timeout(milliseconds >= 10_000 ? 250 : 10)
 }
 
 test.describe("domain provisioning worker", () => {
@@ -1057,6 +1223,237 @@ test.describe("domain provisioning worker", () => {
     ).resolves.toMatchObject({ status: "succeeded" })
     expect(requestedTimeouts).toEqual([10_000, 8_666, 10_000])
     expect(now).toBe(32_666)
+  })
+
+  test("abandons hung reconciliation scheduling and refuses a new claim after the work deadline", async () => {
+    const events: string[] = []
+    let now = 0
+    const repository = fakeRepository(events, {
+      enqueueDueReconciliations({ signal }) {
+        events.push("enqueue_waiting")
+        return rejectWhenAborted(signal, "enqueue_reconciliations").catch(
+          (error) => {
+            now = 10
+            throw error
+          },
+        )
+      },
+      claimJobs({ signal }) {
+        events.push("claim_rejected_after_scheduler_abort")
+        expect(signal.aborted).toBe(true)
+        throw new DomainProvisioningRepositoryError("claim", { code: "" })
+      },
+    })
+
+    await expect(
+      runScheduledDomainProvisioningBatch({
+        repository,
+        adapterFactory: () => {
+          throw new Error("No provider work should be claimed")
+        },
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        workerId: "advocate-domain-worker:66666666-6666-4666-8666-666666666666",
+        correlationId:
+          "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
+        deadlineAtMilliseconds: 10_010,
+        monotonicNow: () => now,
+        timeoutSignal: acceleratedTimeoutSignal,
+      }),
+    ).rejects.toMatchObject({ stage: "claim" })
+
+    expect(events).toEqual([
+      "enqueue_waiting",
+      "claim_rejected_after_scheduler_abort",
+    ])
+  })
+
+  test("aborts a hung claim at the work deadline instead of crossing the route hard stop", async () => {
+    const events: string[] = []
+    const repository = fakeRepository(events, {
+      async enqueueDueReconciliations() {
+        events.push("enqueue_complete")
+        return []
+      },
+      claimJobs({ signal }) {
+        events.push("claim_waiting")
+        return rejectWhenAborted(signal, "claim")
+      },
+    })
+
+    await expect(
+      runScheduledDomainProvisioningBatch({
+        repository,
+        adapterFactory: () => {
+          throw new Error("A hung claim cannot create an adapter")
+        },
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        workerId: "advocate-domain-worker:66666666-6666-4666-8666-666666666666",
+        correlationId:
+          "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
+        deadlineAtMilliseconds: 14_000,
+        monotonicNow: () => 0,
+        timeoutSignal: acceleratedTimeoutSignal,
+      }),
+    ).rejects.toMatchObject({ stage: "claim" })
+    expect(events).toEqual(["enqueue_complete", "claim_waiting"])
+  })
+
+  test("uses the settlement reserve to retry after a hung context read is aborted", async () => {
+    const events: string[] = []
+    const repository = fakeRepository(events, {
+      loadContext(_job, signal) {
+        events.push("context_waiting")
+        return rejectWhenAborted(signal, "load_advocate")
+      },
+      async retry(_job, _delaySeconds, _code, _evidence, signal) {
+        events.push("retry_in_reserve")
+        expect(signal.aborted).toBe(false)
+        return "queued"
+      },
+    })
+
+    await expect(
+      processDomainProvisioningJob({
+        repository,
+        adapterFactory: () => {
+          throw new Error("Context timeout must precede provider access")
+        },
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        job,
+        deadlineAtMilliseconds: 10_010,
+        monotonicNow: () => 0,
+        timeoutSignal: acceleratedTimeoutSignal,
+      }),
+    ).resolves.toEqual({
+      jobId: job.jobId,
+      status: "retried",
+      code: "worker_repository_error",
+    })
+    expect(events).toEqual(["context_waiting", "retry_in_reserve"])
+  })
+
+  test("uses the settlement reserve after aborting a hung pre-mutation lease renewal", async () => {
+    const events: string[] = []
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        events.push("provider_reconcile")
+        return {
+          outcome: "not_found",
+          desiredStateVerified: false,
+          evidence: { provider_status: "not_found", verified: false },
+        }
+      },
+      async apply() {
+        events.push("provider_apply_must_not_run")
+        return {}
+      },
+    }
+    const repository = fakeRepository(events, {
+      renewLease(_job, _leaseSeconds, signal) {
+        events.push("renew_waiting")
+        return rejectWhenAborted(signal, "renew")
+      },
+      async retry(_job, _delaySeconds, _code, _evidence, signal) {
+        events.push("retry_in_reserve")
+        expect(signal.aborted).toBe(false)
+        return "queued"
+      },
+    })
+
+    await expect(
+      processDomainProvisioningJob({
+        repository,
+        adapterFactory: () => adapter,
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        job,
+        deadlineAtMilliseconds: 14_000,
+        monotonicNow: () => 0,
+        timeoutSignal: acceleratedTimeoutSignal,
+      }),
+    ).resolves.toEqual({
+      jobId: job.jobId,
+      status: "retried",
+      code: "worker_repository_error",
+    })
+    expect(events).toEqual([
+      "load_context",
+      "provider_reconcile",
+      "record_reconciliation",
+      "renew_waiting",
+      "retry_in_reserve",
+    ])
+  })
+
+  test("reports unknown settlement when the absolute route deadline aborts completion and retry", async () => {
+    const events: string[] = []
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        events.push("provider_reconcile")
+        return {
+          outcome: "matches_intent",
+          desiredStateVerified: true,
+          evidence: { provider_status: "ready", verified: true },
+        }
+      },
+      async apply() {
+        throw new Error("Verified state must not be mutated")
+      },
+    }
+    const repository = fakeRepository(events, {
+      complete(_job, _status, _code, _evidence, signal) {
+        events.push("completion_waiting")
+        return rejectWhenAborted(signal, "complete")
+      },
+      retry(_job, _delaySeconds, _code, _evidence, signal) {
+        events.push("retry_after_deadline")
+        return rejectWhenAborted(signal, "retry")
+      },
+    })
+
+    await expect(
+      processDomainProvisioningJob({
+        repository,
+        adapterFactory: () => adapter,
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        job,
+        deadlineAtMilliseconds: 14_000,
+        monotonicNow: () => 0,
+        timeoutSignal: acceleratedTimeoutSignal,
+      }),
+    ).resolves.toEqual({
+      jobId: job.jobId,
+      status: "settlement_unknown",
+      code: "worker_repository_error",
+    })
+    expect(events).toEqual([
+      "load_context",
+      "provider_reconcile",
+      "record_reconciliation",
+      "completion_waiting",
+      "retry_after_deadline",
+    ])
   })
 
   test("refuses provider mutation when database work consumes its remaining budget", async () => {
@@ -1583,11 +1980,12 @@ test.describe("domain provisioning worker", () => {
     const repository = fakeRepository(events, {
       async enqueueDueReconciliations(options) {
         events.push("enqueue_due_reconciliations")
-        expect(options).toEqual({
+        expect(options).toMatchObject({
           batchSize: 20,
           correlationId:
             "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
         })
+        expect(options.signal).toBeInstanceOf(AbortSignal)
         return [
           {
             domainId: job.domainId,
