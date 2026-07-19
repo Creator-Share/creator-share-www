@@ -97,6 +97,10 @@ CRON_SECRET=
 # Weekly public metric releases. External schedulers may use this dedicated
 # value. Leave it unset for Vercel Cron, which sends CRON_SECRET.
 # ADVOCATE_PUBLIC_METRIC_RELEASE_WORKER_SECRET=
+# Archived advocate domain cleanup coordinates durable provider jobs only.
+# External schedulers may use this dedicated value. Leave it unset for Vercel
+# Cron, which sends CRON_SECRET.
+# ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_WORKER_SECRET=
 # External scheduler only. Leave unset for Vercel Cron, which sends CRON_SECRET.
 # DATA_RETENTION_WORKER_SECRET=
 PAYMENT_GATEWAY_EVENT_BATCH_SIZE=20
@@ -119,6 +123,11 @@ SUBSCRIPTION_CANCELLATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
 # invocation. The database owns cadence, embargo, and idempotency decisions.
 ADVOCATE_PUBLIC_METRIC_RELEASE_BATCH_SIZE=100
 ADVOCATE_PUBLIC_METRIC_RELEASE_RPC_TIMEOUT_MILLISECONDS=45000
+# Each invocation coordinates at most this many archived domains. After the
+# database-owned quiescence interval, Cloudflare DNS removal must be durably
+# verified before Vercel and hosted payment-path cleanup proceeds in sequence.
+ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_BATCH_SIZE=25
+ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_RPC_TIMEOUT_MILLISECONDS=45000
 # Hourly bounded cleanup at minute 17 UTC for advocate tracking, encrypted
 # gateway payloads, welcome email contact, checkout contact envelopes, and raw
 # audit forensics. Each run records durable start, step, and final evidence.
@@ -152,6 +161,8 @@ ADVOCATE_VERCEL_TEAM_ID=
 ADVOCATE_PROVISIONING_BATCH_SIZE=3
 ADVOCATE_RECONCILIATION_BATCH_SIZE=20
 ADVOCATE_PROVISIONING_LEASE_SECONDS=300
+# Provider configuration ceiling. The one-minute worker further clamps each
+# request to its shared invocation deadline and a hard 10 second call limit.
 ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS=15000
 # ADVOCATE_PROVISIONING_WORKER_SECRET=
 # Protected exact-host publication challenge only. Generate exactly 32 random

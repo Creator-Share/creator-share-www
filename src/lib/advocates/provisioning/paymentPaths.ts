@@ -63,7 +63,8 @@ function isExactReconciliationEvidence(
   return (
     reconciliation.outcome === "matches_intent" &&
     reconciliation.desiredStateVerified &&
-    Object.keys(reconciliation.evidence).length === Object.keys(expected).length &&
+    Object.keys(reconciliation.evidence).length ===
+      Object.keys(expected).length &&
     Object.entries(expected).every(
       ([key, value]) =>
         reconciliation.evidence[key as keyof SafeProviderEvidence] === value,
@@ -194,7 +195,9 @@ async function probeStripe(
         isRecord(result.payload) && result.payload.livemode === false
           ? `${config.provider}_account_not_live`
           : `${config.provider}_probe_invalid_response`,
-      retryable: !(isRecord(result.payload) && result.payload.livemode === false),
+      retryable: !(
+        isRecord(result.payload) && result.payload.livemode === false
+      ),
       evidence: { http_status: result.response.status },
     })
   }
@@ -255,14 +258,23 @@ export class PaymentPathReadinessAdapter implements DomainProviderAdapter {
     provider: PaymentPathProvider,
     private readonly env: ProvisioningEnvironment = process.env,
     private readonly fetchImplementation: FetchImplementation = fetch,
+    private readonly requestTimeoutCapMs = Number.POSITIVE_INFINITY,
   ) {
     this.provider = provider
   }
 
   private loadConfig(): PaymentPathConfig {
-    return this.provider === "paypal"
-      ? loadPayPalPaymentPathConfig(this.env)
-      : loadStripePaymentPathConfig(this.provider, this.env)
+    const config =
+      this.provider === "paypal"
+        ? loadPayPalPaymentPathConfig(this.env)
+        : loadStripePaymentPathConfig(this.provider, this.env)
+    return {
+      ...config,
+      requestTimeoutMs: Math.min(
+        config.requestTimeoutMs,
+        this.requestTimeoutCapMs,
+      ),
+    }
   }
 
   private assertProviderScope(
@@ -327,6 +339,8 @@ export function isPaymentPathProvider(
   provider: DomainProvisioningProvider,
 ): provider is PaymentPathProvider {
   return (
-    provider === "stripe_us" || provider === "stripe_uk" || provider === "paypal"
+    provider === "stripe_us" ||
+    provider === "stripe_uk" ||
+    provider === "paypal"
   )
 }

@@ -30,9 +30,14 @@ SELECT extensions.ok(
     'public.create_advocate_portal(uuid,text,text,text,text,text,text,text)',
     'EXECUTE'
   )
-  AND has_function_privilege(
+  AND NOT has_function_privilege(
     'authenticated',
     'public.transfer_advocate_ownership(uuid,uuid,uuid,text,text,text,text)',
+    'EXECUTE'
+  )
+  AND has_function_privilege(
+    'authenticated',
+    'public.transfer_creator_share_advocate_ownership(uuid,uuid,uuid,text,uuid,text,text,text)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
@@ -49,8 +54,13 @@ SELECT extensions.ok(
     'service_role',
     'public.transfer_advocate_ownership(uuid,uuid,uuid,text,text,text,text)',
     'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'service_role',
+    'public.transfer_creator_share_advocate_ownership(uuid,uuid,uuid,text,uuid,text,text,text)',
+    'EXECUTE'
   ),
-  'only authenticated user sessions can enter the ownership boundaries'
+  'authenticated administration uses the exact-replay wrapper while the compatibility mutation is private'
 );
 
 SELECT extensions.ok(
@@ -463,7 +473,7 @@ WHERE advocate.key = 'advocate_a';
 
 SELECT set_config(
   'request.jwt.claim.sub',
-  '91000000-0000-4000-8000-000000000102',
+  '91000000-0000-4000-8000-000000000101',
   true
 );
 
@@ -473,17 +483,17 @@ SELECT extensions.throws_ok(
       (SELECT value FROM ownership_test_ids WHERE key = 'advocate_a'),
       '91000000-0000-4000-8000-000000000101'::uuid,
       '91000000-0000-4000-8000-000000000104'::uuid,
-      'A portal administrator is not the owner'
+      'A portal owner cannot transfer ownership directly'
     )
   $$,
   '42501',
-  'Only the current active owner or a Creator Share super administrator can transfer ownership',
-  'a nonowner delegate cannot transfer portal ownership'
+  'Creator Share super administrator access is required',
+  'a portal owner cannot call the internal ownership mutation contract'
 );
 
 SELECT set_config(
   'request.jwt.claim.sub',
-  '91000000-0000-4000-8000-000000000101',
+  '3de44111-9900-4f04-815d-aeb42828229a',
   true
 );
 
@@ -539,7 +549,7 @@ SELECT extensions.throws_ok(
     )
   $$,
   '22023',
-  'An ownership transfer reason between 1 and 2000 characters is required',
+  'Advocate ownership transfer input is invalid',
   'ownership transfer requires a substantive audit reason'
 );
 
@@ -549,12 +559,12 @@ SELECT extensions.is(
     '91000000-0000-4000-8000-000000000101'::uuid,
     '91000000-0000-4000-8000-000000000102'::uuid,
     'Transfer the active portal to its administrator',
-    'request-ownership-transfer-user',
-    'trace-ownership-transfer-user',
-    'session-ownership-transfer-user'
+    'request-ownership-transfer-initial-admin',
+    'trace-ownership-transfer-initial-admin',
+    'session-ownership-transfer-initial-admin'
   ),
   (SELECT value FROM ownership_test_ids WHERE key = 'advocate_a'),
-  'the current active owner can transfer to an active same tenant member'
+  'a healthy Creator Share administrator transfers to an active same-tenant member'
 );
 
 SELECT extensions.ok(
@@ -620,19 +630,25 @@ SELECT extensions.ok(
     JOIN ownership_test_ids context
       ON context.key = 'advocate_a'
      AND context.value = event.advocate_id
-    WHERE event.request_id = 'request-ownership-transfer-user'
-      AND event.actor_type = 'user'
+    WHERE event.request_id = 'request-ownership-transfer-initial-admin'
+      AND event.actor_type = 'creator_share_admin'
       AND event.actor_user_id =
-        '91000000-0000-4000-8000-000000000101'::uuid
+        '3de44111-9900-4f04-815d-aeb42828229a'::uuid
       AND event.effective_user_id =
         '91000000-0000-4000-8000-000000000102'::uuid
-      AND event.tool = 'advocate-portal-ownership'
-      AND event.trace_id = 'trace-ownership-transfer-user'
-      AND event.session_id = 'session-ownership-transfer-user'
+      AND event.tool = 'creator-share-admin-advocates'
+      AND event.trace_id = 'trace-ownership-transfer-initial-admin'
+      AND event.session_id = 'session-ownership-transfer-initial-admin'
       AND event.reason = 'Transfer the active portal to its administrator'
       AND event.metadata ->> 'operation' = 'transfer_ownership'
   ),
-  'owner initiated transfer records the actor, target, reason, and request context'
+  'administrator transfer records the exact staff actor, target, reason, and request context'
+);
+
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '91000000-0000-4000-8000-000000000101',
+  true
 );
 
 SELECT extensions.throws_ok(
@@ -645,8 +661,8 @@ SELECT extensions.throws_ok(
     )
   $$,
   '42501',
-  'Only the current active owner or a Creator Share super administrator can transfer ownership',
-  'a stale former owner loses transfer authority after the serialized change'
+  'Creator Share super administrator access is required',
+  'a stale former owner has no direct transfer authority after the serialized change'
 );
 
 SELECT set_config(
@@ -709,7 +725,7 @@ SELECT extensions.throws_ok(
     )
   $$,
   '42501',
-  'Only the current active owner or a Creator Share super administrator can transfer ownership',
+  'Creator Share super administrator access is required',
   'portal owners cannot transfer ownership while the tenant is suspended'
 );
 
@@ -811,7 +827,7 @@ SELECT extensions.ok(
     FROM audit.advocate_delegate_events disclosed
     JOIN audit.audit_events source
       ON source.sequence_id = disclosed.source_audit_sequence
-    WHERE source.request_id = 'request-ownership-transfer-admin'
+    WHERE source.request_id = 'request-ownership-transfer-initial-admin'
       AND disclosed.event_key = 'portal.ownership.transferred'
       AND disclosed.areas = ARRAY['ownership']::text[]
       AND disclosed.actor_kind = 'creator_share_staff'

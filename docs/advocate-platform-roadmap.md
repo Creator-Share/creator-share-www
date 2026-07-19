@@ -62,6 +62,8 @@ An advocate contains tenant identity and lifecycle state:
 
 Domains, branding, public metrics, child selections, memberships, invitations, and provisioning state live in related tables. This keeps the tenant root legible without turning one row into a junk drawer with excellent posture.
 
+Tenant lifecycle is asymmetric. Suspension is an audited, reversible operational stop that disables public tenant resolution and reconciliation while preserving provider attachments. Archive is an audited, irreversible relationship decision that disables the tenant immediately and requests strictly ordered provider cleanup after a 20 minute quiescence period. Neither action deletes sponsorship, attribution, financial, membership, or audit history, and slugs are never released automatically for reuse.
+
 ### 3.2 Server owned sponsorship intent
 
 Every supported Stripe or PayPal flow must begin with a local, server created `sponsorship_intent`.
@@ -195,7 +197,7 @@ Invitations use at least 256 bits of randomness. The invitation authority stores
 
 Redemption requires a freshly verified, provider signed `magiclink` authentication method reference and exact binding to the invitation target. A refreshed access token is not proof of a fresh email authentication event. Before release, a production equivalent canary must establish whether generating another Supabase email proof for the same account supersedes an earlier unconsumed proof. The release policy must follow measured provider behavior, not folklore in a nicer jacket.
 
-Creator Share super administrators remain separate from advocate membership. Domain, ownership, and tenant lifecycle changes require Creator Share approval. An override requires a reason and an audit event.
+Creator Share super administrators remain separate from advocate membership. Domain, ownership, and tenant lifecycle changes require Creator Share approval. The browser boundary reauthorizes a healthy Creator Share super administrator. Publication, lifecycle actions, and cleanup recovery bind the reviewed advocate version. Ownership transfer instead binds the expected current owner membership and an eligible target membership. Every mutation also requires a stable operation ID and reason, then stores an append-only exact replay receipt. Advocate owners and delegates cannot directly perform those changes. Tenant-initiated ownership transfer requests with a later Creator Share approval step are deferred to FF-036.
 
 ### 4.3 Identity and attribution
 
@@ -238,6 +240,10 @@ The forensic row audit is not an advocate delegate presentation model. Advocate 
 The delegate ledger contains only disclosure fields plus private, ungranted transaction and source sequence links for deduplication and forensic correlation. Its reader never exposes sponsor facts, contact data, money, global sequences, source audit identifiers, account identifiers, row keys, changed column names, reasons, request metadata, network forensics, provider identifiers, or free form text. The reader is tenant scoped, permission checked, ordered by newest recorded ledger entry, and limited to fixed pages of 50 entries using opaque cursors. Unknown event shapes and near matches are omitted instead of being guessed into public history.
 
 Database and provider logs corroborate DDL, direct SQL, policy changes, disabled triggers, and managed service actions that row triggers cannot reliably identify. Unified ingestion of every external log into one interface is a fast follow.
+
+Creator Share ownership, lifecycle, and cleanup recovery decisions also write protected append-only semantic receipts. The receipts bind command semantics plus trace and signed authentication session only, without copying provider payloads, contact data, or transport metadata. Each high risk database function derives session identity from the verified Supabase JWT. The browser cannot supply or override it. A repeated operation succeeds only when its semantic request binding matches exactly. Browser routes capture bounded client IP and user agent values solely in `audit.audit_event_forensics` for 90 days. These fields never affect replay equality or enter advocate delegate history.
+
+Exceptional lifecycle transitions use private transaction-bound mutation guards keyed to the current transaction and exact advocate. Runtime principals cannot forge those guards through browser input, service role calls, or session configuration. The same functions reauthorize the actor and lock the affected tenant and descendants before mutation.
 
 ## 5. Privacy boundaries
 
@@ -326,7 +332,11 @@ The provisioner stores desired and observed state, external object IDs, configur
 
 All vendor provisioning and reconciliation remains API driven and requires no manual vendor console work. MVP publication is a separate audited release decision over independently captured canary evidence. This preserves automated infrastructure while preventing a weak provider status from silently opening a money accepting tenant.
 
-Deactivation disables the tenant first, removes DNS before releasing the Vercel domain, and preserves attribution and financial history.
+Deactivation separates reversible suspension from irreversible archive. Suspension disables public tenant resolution and reconciliation but leaves provider attachments intact. Archive disables the tenant immediately, suppresses reconciliation, and waits through a 20 minute quiescence period before provider cleanup. The archive coordinator runs once per minute and permits at most one current provider job for the tenant.
+
+Archive cleanup is serial and strictly ordered: Cloudflare, Vercel, Stripe US, Stripe UK, then PayPal. Each phase advances only after verified success for the preceding provider. A failed or cancelled current job produces the terminal `needs_attention` state. Automation does not skip, reorder, or invent retries. After the provider issue is corrected, a Creator Share super administrator may submit one exact recovery request with the current version, stable operation ID, and reason. The database derives the only eligible terminal job and provider phase. The browser cannot select the provider, integration, job, phase, or retry order.
+
+All suspension, archive, cleanup, recovery, and ownership changes preserve attribution, sponsorship, financial, membership, and append-only audit history. Provider cleanup does not release the slug for reuse.
 
 Production tenant hosts are exactly one label below `creatorshare.com`. The apex, `www`, and every reserved label are non-tenant.
 
@@ -372,6 +382,8 @@ Moving DNS to Vercel would simplify wildcard certificates and remove one provisi
 
 Deletion and anonymization jobs must preserve aggregate and financial integrity while removing expired direct identifiers.
 
+Browser client IP and user agent values captured during Creator Share ownership, lifecycle, and cleanup recovery actions live solely in `audit.audit_event_forensics` under the 90 day row above. Their deletion does not alter the indefinitely retained semantic decision receipt or redacted business audit event.
+
 The MVP runs one bounded retention invocation hourly at minute 17. It independently commits checkout contact erasure, welcome email contact redaction, gateway payload redaction, raw audit forensic deletion, and advocate tracking deletion in privacy-first order. Later steps still run after an earlier failure. Sanitized append-only run evidence records failures and remaining backlog, and every nonclean invocation must alert for retry. Operational details live in [the advocate domain publication runbook](./advocate-domain-publication-runbook.md).
 
 ## 9. Delivery sequence
@@ -413,7 +425,8 @@ The v2 checkout database functions and application callers use an additive two p
 - Build branding, catalog, public metric, membership, and invitation administration.
 - Build privacy safe direct and post visit analytics.
 - Build the policy versioned advocate audit disclosure ledger and sanitized view.
-- Build Creator Share approval and override tools.
+- Build Creator Share approval and exact replay tools for ownership, suspension, resume, repair, irreversible archive, and terminal cleanup recovery.
+- Enforce 20 minute archive quiescence, strict five-provider cleanup order, one-minute coordination, and browser-independent recovery targeting.
 
 ### Phase 4: Release validation
 
@@ -440,7 +453,7 @@ Migration history currently contains broad grants and a later RLS disablement on
 
 ### High: automated domain lifecycle
 
-Creating one DNS record is easy. A reliable state machine across Cloudflare, Vercel, TLS, publication, retry, rename, suspension, deletion, drift detection, and takeover prevention is real infrastructure work.
+Creating one DNS record is easy. A reliable state machine across Cloudflare, Vercel, Stripe US, Stripe UK, PayPal, TLS, publication, retry, repair, reversible suspension, irreversible archive, drift detection, and takeover prevention is real infrastructure work. Archive adds a 20 minute quiescence boundary, a strict serial cleanup coordinator, terminal intervention state, and exact recovery that must not let a browser choose or reorder provider work.
 
 ### High: identity claims across historic providers
 
@@ -483,6 +496,9 @@ No advocate tenant may publish until all of the following are true:
 - Every Creator Share sibling hostname has an approved DNS, hosting, and cookie trust inventory entry.
 - Advocate roles cannot read sponsor contact or raw tracking data.
 - Audit redaction and append only protections pass adversarial tests.
+- Creator Share ownership and lifecycle controls prove staff reauthorization, optimistic state fencing, required reasons, exact replay, append-only receipts, and transaction-bound mutation guards.
+- Archive exercises prove immediate suppression, 20 minute quiescence, one-minute coordination, strict Cloudflare, Vercel, Stripe US, Stripe UK, and PayPal cleanup order, terminal `needs_attention`, and exact super administrator recovery without browser-selected provider or job input.
+- Browser lifecycle forensics remain private, are absent from advocate delegate responses, and are removed after 90 days without deleting semantic audit history.
 - Retention cleanup jobs are configured.
 - Sealed checkout contact ciphertext is erased after its recovery and welcome duties end.
 - Rollback and suspension procedures are exercised.
@@ -501,6 +517,8 @@ The following are intentionally excluded from the first release and tracked in t
 - Unified external forensic log ingestion.
 - Team support tooling for identity merges and missing subscription inquiries.
 - Existing sponsor outreach before approved reconciliation.
+- Tenant-initiated ownership transfer requests and Creator Share approval workflow.
+- A richer Creator Share lifecycle operations console beyond the bounded MVP controls and generic attention state.
 
 ## 13. Decision log
 

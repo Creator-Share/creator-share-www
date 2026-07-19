@@ -49,7 +49,8 @@ export interface PayPalPublicationPaymentCanaryConfig {
 }
 
 export type PublicationPaymentCanaryConfig =
-  StripePublicationPaymentCanaryConfig | PayPalPublicationPaymentCanaryConfig
+  | StripePublicationPaymentCanaryConfig
+  | PayPalPublicationPaymentCanaryConfig
 
 export interface DomainWorkerConfig {
   batchSize: number
@@ -64,6 +65,12 @@ export type ProvisioningEnvironment = Readonly<
 const DNS_HOSTNAME_PATTERN =
   /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
 const PUBLICATION_PAYMENT_CANARY_MAX_TIMEOUT_MS = 15_000
+const PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_DEFAULT_MS = 15_000
+const PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_MAX_MS = 60_000
+export const DOMAIN_PROVIDER_REQUEST_TIMEOUT_MIN_MS = 1_000
+export const DOMAIN_PROVIDER_REQUEST_TIMEOUT_MAX_MS = 10_000
+export const DOMAIN_WORKER_INVOCATION_BUDGET_MS = 50_000
+export const DOMAIN_WORKER_SETTLEMENT_RESERVE_MS = 10_000
 
 function configurationError(cause?: unknown): DomainProvisioningError {
   return new DomainProvisioningError({
@@ -149,9 +156,9 @@ export function loadCloudflareProvisioningConfig(
     ),
     requestTimeoutMs: parseBoundedInteger(
       env.ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS,
-      15_000,
-      1_000,
-      60_000,
+      PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_DEFAULT_MS,
+      DOMAIN_PROVIDER_REQUEST_TIMEOUT_MIN_MS,
+      PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_MAX_MS,
     ),
   }
 }
@@ -175,9 +182,9 @@ export function loadVercelProvisioningConfig(
     ...(teamId ? { teamId } : {}),
     requestTimeoutMs: parseBoundedInteger(
       env.ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS,
-      15_000,
-      1_000,
-      60_000,
+      PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_DEFAULT_MS,
+      DOMAIN_PROVIDER_REQUEST_TIMEOUT_MIN_MS,
+      PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_MAX_MS,
     ),
   }
 }
@@ -207,9 +214,9 @@ export function loadStripePaymentPathConfig(
     ),
     requestTimeoutMs: parseBoundedInteger(
       env.ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS,
-      15_000,
-      1_000,
-      60_000,
+      PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_DEFAULT_MS,
+      DOMAIN_PROVIDER_REQUEST_TIMEOUT_MIN_MS,
+      PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_MAX_MS,
     ),
   }
 }
@@ -249,9 +256,9 @@ export function loadPayPalPaymentPathConfig(
     ),
     requestTimeoutMs: parseBoundedInteger(
       env.ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS,
-      15_000,
-      1_000,
-      60_000,
+      PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_DEFAULT_MS,
+      DOMAIN_PROVIDER_REQUEST_TIMEOUT_MIN_MS,
+      PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_MAX_MS,
     ),
   }
 }
@@ -323,7 +330,7 @@ export function loadDomainWorkerConfig(
     leaseSeconds: parseBoundedInteger(
       env.ADVOCATE_PROVISIONING_LEASE_SECONDS,
       300,
-      30,
+      60,
       900,
     ),
   }

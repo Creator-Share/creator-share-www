@@ -33,6 +33,16 @@ The domain lifecycle is deliberately asymmetric:
 
 No `after()` callback, cron invocation, provider worker, service role client, or ordinary advocate administrator may activate a portal. A succeeded report remains nonpublic until an authenticated poll completes publication. A domain in `verifying` remains unavailable to ordinary public browsing and checkout.
 
+## Creator Share administrative control boundary
+
+Domain, ownership, and tenant lifecycle changes require Creator Share approval. The browser boundary accepts these decisions only from a currently authorized Creator Share super administrator with a verified, active email account. Publication, lifecycle actions, and cleanup recovery bind the reviewed advocate version. Ownership transfer instead binds the expected current owner membership and an eligible target membership. Every mutation also requires a stable operation ID and reason, then writes an append-only exact replay receipt. Each high risk database function derives the signed authentication session from the verified Supabase JWT. The browser cannot supply or override session identity. Advocate owners and delegates cannot directly transfer ownership, publish, suspend, resume, repair, archive, or recover provider cleanup. A tenant-initiated ownership transfer request and approval workflow is deferred to FF-036.
+
+Suspension and archive are intentionally different decisions. Suspension immediately disables public tenant resolution and provider reconciliation without deleting provider attachments. It is reversible through an audited resume or repair action. Archive also disables tenant resolution immediately, but it is irreversible and begins the controlled provider cleanup described below. Neither action deletes attribution, sponsorship, financial, membership, or audit history, and neither releases the slug for reuse.
+
+Lifecycle and ownership transitions write both the private row audit and append-only semantic decision receipts. Exceptional transitions, including repair from an active publication back into provisioning, require a private mutation guard bound to the current database transaction and exact advocate. Runtime callers cannot forge the guard through a session setting or a browser request. Direct row edits and service role shortcuts are not supported recovery procedures.
+
+The browser control routes capture bounded, sanitized client IP and user agent metadata solely in `audit.audit_event_forensics`. Transport metadata is not part of exact replay equality. These fields never appear in semantic decision receipts, advocate delegate history, public responses, or ordinary administrative response bodies. The retention worker removes them after 90 days. Redacted business audit history and semantic decision receipts remain append-only and are retained indefinitely.
+
 ## Required provider topology
 
 Publication requires exactly these required integration tuples for the primary domain:
@@ -176,9 +186,25 @@ Publication evidence is not permanent evidence of health. Active domains require
 
 ## Suspension and deprovisioning
 
-Suspension disables tenant resolution before provider cleanup. Preserve advocate, attribution, sponsorship, financial, and audit history. Deprovisioning then removes Cloudflare DNS before releasing the Vercel domain and records provider evidence for every transition.
+Suspension disables tenant resolution and reconciliation without scheduling provider cleanup. Use it for a reversible operational stop. Archive is the irreversible relationship decision that requests provider cleanup. Both actions fail closed before any external provider mutation and preserve advocate, attribution, sponsorship, financial, membership, and audit history.
 
-Never release a slug automatically for reuse. Never remove provider objects first while the hostname can still route public traffic. Never describe a partially deprovisioned domain as deleted when historical financial and attribution records remain intentionally retained.
+After archive, the coordinator enforces a 20 minute quiescence period. This exceeds the maximum 15 minute provisioning lease and 60 second provider request horizon with an operational buffer, so work accepted before archive can settle before cleanup begins. The lifecycle cleanup coordinator runs once per minute and creates at most one current deprovisioning job for each archived advocate.
+
+Cleanup proceeds in this strict order:
+
+1. Remove the Cloudflare DNS record and verify absence.
+2. Release the exact domain from Vercel and verify absence.
+3. Remove or retire the Stripe US domain integration and verify the expected terminal state.
+4. Remove or retire the Stripe UK domain integration and verify the expected terminal state.
+5. Remove or retire the PayPal domain integration and verify the expected terminal state.
+
+The coordinator advances only after the preceding provider job succeeds. It never skips, reorders, or runs provider cleanup in parallel. A failed or cancelled current job moves the archive cleanup projection to `needs_attention`. Automation does not guess at a replacement job after a terminal result.
+
+Any selected batch containing `needs_attention` returns a persistent nonclean worker result and must alert until an administrator corrects the cause. Deduplicate repeated alerts by the static outcome code and the protected advocate or incident correlation, not by the per-invocation request ID. At MVP scale, blocked tenants are considered after runnable, open, and quiescing cleanup. Reserved alert scan capacity for sustained higher volume is tracked in FF-037.
+
+After the underlying provider or configuration issue is corrected, a Creator Share super administrator may request exact cleanup recovery with the current advocate version, one stable operation ID, and a required reason. The database derives the only eligible terminal job and current provider phase under lock, appends an immutable recovery receipt, and creates one replacement job for that exact phase. The browser cannot select a provider, integration, job, phase, or retry order. Replaying the exact successful request returns the recorded outcome. Changing any request binding requires a new operation and current version.
+
+Never release a slug automatically for reuse. Never remove provider objects while the hostname can still route public traffic. Never describe a partially deprovisioned domain as deleted when historical financial and attribution records remain intentionally retained. Never edit lifecycle, integration, job, or cleanup rows directly to bypass `needs_attention`.
 
 ## Retention worker dependency
 
@@ -208,6 +234,8 @@ Retain:
 - Route evidence for `202 Accepted`, authenticated polling, low-latency `after()` execution, cron recovery, and the rule that background execution cannot publish.
 - Provider evidence proving both Stripe Sessions were unpaid and expired, the PayPal Subscription remained unapproved, and no financial or sponsorship state was created.
 - Super administrator publication result and immutable audit event references.
+- Super administrator lifecycle and ownership results, append-only exact replay receipts, and private browser forensic capture with 90 day deletion evidence.
+- Archive exercises proving immediate tenant suppression, 20 minute quiescence, strict Cloudflare, Vercel, Stripe US, Stripe UK, and PayPal cleanup order, terminal `needs_attention`, and exact recovery without browser-selected provider or job input.
 - Post-publication exact-host and rejected-sibling observations.
 - Active scheduler inventory, recent successful worker runs, and alert ownership.
 - Suspension, deprovisioning, and incident owners.

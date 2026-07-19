@@ -447,9 +447,7 @@ test.describe("payment path readiness adapters", () => {
       expect(calls[0].url).toBe("https://api.stripe.com/v1/balance")
       expect(calls[0].init?.method).toBe("GET")
       const headers = new Headers(calls[0].init?.headers)
-      expect(headers.get("Authorization")).toBe(
-        `Bearer ${stripeCase.secret}`,
-      )
+      expect(headers.get("Authorization")).toBe(`Bearer ${stripeCase.secret}`)
       expect(JSON.stringify(reconciliation)).not.toContain(stripeCase.secret)
     })
   }
@@ -515,11 +513,9 @@ test.describe("payment path readiness adapters", () => {
       stripeUsEnvironment,
       queuedFetch(
         [
-          jsonResponse(
-            { error: { message: responseSecret } },
-            401,
-            { "request-id": "request_with_no_persistence_need" },
-          ),
+          jsonResponse({ error: { message: responseSecret } }, 401, {
+            "request-id": "request_with_no_persistence_need",
+          }),
         ],
         [],
       ),
@@ -994,9 +990,234 @@ test.describe("domain provisioning worker", () => {
       "record_reconciliation",
       "renew_lease",
       "provider_apply",
-      "renew_lease",
       "provider_reconcile",
       "complete_succeeded",
+    ])
+  })
+
+  test("fits every provider call inside one invocation budget with settlement reserve", async () => {
+    const events: string[] = []
+    const requestedTimeouts: number[] = []
+    let now = 0
+    let reconciliationCount = 0
+    let currentRequestTimeout = 0
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        events.push("provider_reconcile")
+        reconciliationCount += 1
+        now += currentRequestTimeout
+        return reconciliationCount === 1
+          ? {
+              outcome: "not_found",
+              desiredStateVerified: false,
+              evidence: { provider_status: "not_found", verified: false },
+            }
+          : {
+              outcome: "matches_intent",
+              desiredStateVerified: true,
+              evidence: { provider_status: "ready", verified: true },
+            }
+      },
+      async apply() {
+        events.push("provider_apply")
+        now += currentRequestTimeout
+        return { provider_status: "create_accepted", verified: false }
+      },
+    }
+    const repository = fakeRepository(events, {
+      async recordReconciliation() {
+        events.push("record_reconciliation")
+        now += 2_000
+        return true
+      },
+      async renewLease() {
+        events.push("renew_lease")
+        now += 2_000
+      },
+    })
+
+    await expect(
+      processDomainProvisioningJob({
+        repository,
+        adapterFactory(_provider, requestTimeoutMs) {
+          currentRequestTimeout = requestTimeoutMs ?? -1
+          requestedTimeouts.push(currentRequestTimeout)
+          return adapter
+        },
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        job,
+        deadlineAtMilliseconds: 50_000,
+        monotonicNow: () => now,
+      }),
+    ).resolves.toMatchObject({ status: "succeeded" })
+    expect(requestedTimeouts).toEqual([10_000, 8_666, 10_000])
+    expect(now).toBe(32_666)
+  })
+
+  test("refuses provider mutation when database work consumes its remaining budget", async () => {
+    const events: string[] = []
+    let now = 0
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        events.push("provider_reconcile")
+        now += 10_000
+        return {
+          outcome: "not_found",
+          desiredStateVerified: false,
+          evidence: { provider_status: "not_found", verified: false },
+        }
+      },
+      async apply() {
+        events.push("provider_apply_must_not_run")
+        return {}
+      },
+    }
+    const repository = fakeRepository(events, {
+      async recordReconciliation() {
+        events.push("record_reconciliation")
+        now += 20_000
+        return true
+      },
+      async renewLease() {
+        events.push("renew_lease")
+        now += 9_000
+      },
+    })
+
+    await expect(
+      processDomainProvisioningJob({
+        repository,
+        adapterFactory: () => adapter,
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        job,
+        deadlineAtMilliseconds: 50_000,
+        monotonicNow: () => now,
+      }),
+    ).resolves.toEqual({
+      jobId: job.jobId,
+      status: "retried",
+      code: "worker_invocation_budget_exhausted",
+    })
+    expect(events).toEqual([
+      "load_context",
+      "provider_reconcile",
+      "record_reconciliation",
+      "renew_lease",
+      "retry",
+    ])
+  })
+
+  test("durably retries after an accepted apply when final verification times out", async () => {
+    const events: string[] = []
+    let now = 0
+    let reconciliationCount = 0
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        events.push("provider_reconcile")
+        reconciliationCount += 1
+        now += reconciliationCount === 1 ? 1_000 : 10_000
+        if (reconciliationCount > 1) {
+          throw new DomainProvisioningError({
+            code: "cloudflare_network_error",
+            retryable: true,
+          })
+        }
+        return {
+          outcome: "not_found",
+          desiredStateVerified: false,
+          evidence: { provider_status: "not_found", verified: false },
+        }
+      },
+      async apply() {
+        events.push("provider_apply_accepted")
+        now += 10_000
+        return { provider_status: "create_accepted", verified: false }
+      },
+    }
+
+    await expect(
+      processDomainProvisioningJob({
+        repository: fakeRepository(events),
+        adapterFactory: () => adapter,
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        job,
+        deadlineAtMilliseconds: 50_000,
+        monotonicNow: () => now,
+      }),
+    ).resolves.toEqual({
+      jobId: job.jobId,
+      status: "retried",
+      code: "cloudflare_network_error",
+    })
+    expect(events).toEqual([
+      "load_context",
+      "provider_reconcile",
+      "record_reconciliation",
+      "renew_lease",
+      "provider_apply_accepted",
+      "provider_reconcile",
+      "retry",
+    ])
+  })
+
+  test("does not mutate a provider when the pre-apply lifecycle fence is withdrawn", async () => {
+    const events: string[] = []
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        events.push("provider_reconcile")
+        return {
+          outcome: "not_found",
+          desiredStateVerified: false,
+          evidence: { provider_status: "not_found", verified: false },
+        }
+      },
+      async apply() {
+        events.push("provider_apply_must_not_run")
+        return { provider_status: "create_accepted", verified: false }
+      },
+    }
+    const repository = fakeRepository(events, {
+      async renewLease() {
+        events.push("renew_lease_rejected")
+        throw new DomainProvisioningRepositoryError("renew", {
+          code: "42501",
+        })
+      },
+    })
+
+    await expect(
+      processDomainProvisioningJob({
+        repository,
+        adapterFactory: () => adapter,
+        config: {
+          batchSize: 3,
+          reconciliationBatchSize: 20,
+          leaseSeconds: 300,
+        },
+        job,
+      }),
+    ).resolves.toEqual({ jobId: job.jobId, status: "lease_lost" })
+    expect(events).toEqual([
+      "load_context",
+      "provider_reconcile",
+      "record_reconciliation",
+      "renew_lease_rejected",
     ])
   })
 
@@ -1062,7 +1283,9 @@ test.describe("domain provisioning worker", () => {
         }
       },
       async apply() {
-        throw new Error("An unverified match must never enter provider mutation")
+        throw new Error(
+          "An unverified match must never enter provider mutation",
+        )
       },
     }
     const repository = fakeRepository(events, {
@@ -1399,8 +1622,7 @@ test.describe("domain provisioning worker", () => {
         reconciliationBatchSize: 20,
         leaseSeconds: 300,
       },
-      workerId:
-        "advocate-domain-worker:66666666-6666-4666-8666-666666666666",
+      workerId: "advocate-domain-worker:66666666-6666-4666-8666-666666666666",
       correlationId:
         "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
     })
@@ -1420,6 +1642,56 @@ test.describe("domain provisioning worker", () => {
       withdrawnPublications: 0,
       results: [],
     })
+  })
+
+  test("shares the route-entry deadline across every concurrent claimed job", async () => {
+    const events: string[] = []
+    const requestedTimeouts: number[] = []
+    let now = 0
+    const adapter: DomainProviderAdapter = {
+      provider: "cloudflare",
+      async reconcile() {
+        return {
+          outcome: "matches_intent",
+          desiredStateVerified: true,
+          evidence: { provider_status: "ready", verified: true },
+        }
+      },
+      async apply() {
+        throw new Error("Verified jobs must not mutate the provider")
+      },
+    }
+    const repository = fakeRepository(events, {
+      async enqueueDueReconciliations() {
+        now += 10_000
+        return []
+      },
+      async claimJobs() {
+        now += 10_000
+        return [job, { ...job, jobId: "99999999-9999-4999-8999-999999999999" }]
+      },
+    })
+
+    const result = await runScheduledDomainProvisioningBatch({
+      repository,
+      adapterFactory(_provider, requestTimeoutMs) {
+        requestedTimeouts.push(requestTimeoutMs ?? -1)
+        return adapter
+      },
+      config: {
+        batchSize: 3,
+        reconciliationBatchSize: 20,
+        leaseSeconds: 300,
+      },
+      workerId: "advocate-domain-worker:66666666-6666-4666-8666-666666666666",
+      correlationId:
+        "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
+      deadlineAtMilliseconds: 50_000,
+      monotonicNow: () => now,
+    })
+
+    expect(result.succeeded).toBe(2)
+    expect(requestedTimeouts).toEqual([5_000, 5_000])
   })
 
   test("claims durable work even when reconciliation scheduling fails", async () => {
@@ -1455,8 +1727,7 @@ test.describe("domain provisioning worker", () => {
         reconciliationBatchSize: 20,
         leaseSeconds: 300,
       },
-      workerId:
-        "advocate-domain-worker:66666666-6666-4666-8666-666666666666",
+      workerId: "advocate-domain-worker:66666666-6666-4666-8666-666666666666",
       correlationId:
         "advocate-domain-reconciliation:66666666-6666-4666-8666-666666666666",
     })
@@ -1484,7 +1755,9 @@ test.describe("domain provisioning worker", () => {
 test("worker route bearer comparison is exact", () => {
   const secret = "a_secure_worker_secret_with_32_chars"
   expect(isAuthorizedDomainWorkerRequest(`Bearer ${secret}`, secret)).toBe(true)
-  expect(isAuthorizedDomainWorkerRequest(`Bearer ${secret}x`, secret)).toBe(false)
+  expect(isAuthorizedDomainWorkerRequest(`Bearer ${secret}x`, secret)).toBe(
+    false,
+  )
   expect(isAuthorizedDomainWorkerRequest(secret, secret)).toBe(false)
   expect(isAuthorizedDomainWorkerRequest(null, secret)).toBe(false)
 })
@@ -1494,9 +1767,7 @@ test.describe("domain provisioning configuration", () => {
     const cronSecret = "c".repeat(48)
     const dedicatedSecret = "d".repeat(48)
 
-    expect(loadWorkerRouteSecret({ CRON_SECRET: cronSecret })).toBe(
-      cronSecret,
-    )
+    expect(loadWorkerRouteSecret({ CRON_SECRET: cronSecret })).toBe(cronSecret)
     expect(
       loadWorkerRouteSecret({
         ADVOCATE_PROVISIONING_WORKER_SECRET: "",
@@ -1545,6 +1816,17 @@ test.describe("domain provisioning configuration", () => {
       reconciliationBatchSize: 25,
       leaseSeconds: 240,
     })
+    expect(
+      loadDomainWorkerConfig({
+        ADVOCATE_PROVISIONING_LEASE_SECONDS: "900",
+      }).leaseSeconds,
+    ).toBe(900)
+    expect(
+      loadCloudflareProvisioningConfig({
+        ...env,
+        ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS: "60000",
+      }).requestTimeoutMs,
+    ).toBe(60_000)
   })
 
   test("fails closed on malformed identifiers and unsafe bounds", () => {
@@ -1571,14 +1853,33 @@ test.describe("domain provisioning configuration", () => {
         ADVOCATE_RECONCILIATION_BATCH_SIZE: "101",
       }),
     ).toThrow("worker_configuration_invalid")
+    expect(() =>
+      loadDomainWorkerConfig({
+        ADVOCATE_PROVISIONING_LEASE_SECONDS: "59",
+      }),
+    ).toThrow("worker_configuration_invalid")
+    expect(() =>
+      loadDomainWorkerConfig({
+        ADVOCATE_PROVISIONING_LEASE_SECONDS: "901",
+      }),
+    ).toThrow("worker_configuration_invalid")
+    expect(() =>
+      loadCloudflareProvisioningConfig({
+        ADVOCATE_CLOUDFLARE_API_TOKEN: cloudflareConfig.apiToken,
+        ADVOCATE_CLOUDFLARE_ZONE_ID: cloudflareConfig.zoneId,
+        ADVOCATE_CLOUDFLARE_CNAME_TARGET: cloudflareConfig.cnameTarget,
+        ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS: "60001",
+      }),
+    ).toThrow("worker_configuration_invalid")
   })
 
   test("requires live payment checkout and webhook configuration", () => {
-    expect(loadStripePaymentPathConfig("stripe_us", stripeUsEnvironment)).toMatchObject({
+    expect(
+      loadStripePaymentPathConfig("stripe_us", stripeUsEnvironment),
+    ).toMatchObject({
       provider: "stripe_us",
       secretKey: stripeUsEnvironment.STRIPE_SECRET_KEY_US,
-      publishableKey:
-        stripeUsEnvironment.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US,
+      publishableKey: stripeUsEnvironment.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US,
       webhookSecret: stripeUsEnvironment.STRIPE_WEBHOOK_SECRET_US,
     })
     expect(loadPayPalPaymentPathConfig(paypalEnvironment)).toMatchObject({

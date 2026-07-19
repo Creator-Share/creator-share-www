@@ -1,5 +1,11 @@
 import type { DomainProviderAdapterFactory } from "./adapters"
-import type { DomainWorkerConfig } from "./config"
+import {
+  DOMAIN_PROVIDER_REQUEST_TIMEOUT_MAX_MS,
+  DOMAIN_PROVIDER_REQUEST_TIMEOUT_MIN_MS,
+  DOMAIN_WORKER_INVOCATION_BUDGET_MS,
+  DOMAIN_WORKER_SETTLEMENT_RESERVE_MS,
+  type DomainWorkerConfig,
+} from "./config"
 import {
   DomainProvisioningRepositoryError,
   type DomainProvisioningRepository,
@@ -81,6 +87,28 @@ function calculateRetryDelaySeconds(
   return Math.min(3_600, exponential)
 }
 
+function providerRequestTimeoutMilliseconds(options: {
+  deadlineAtMilliseconds: number
+  monotonicNow: () => number
+  remainingProviderCalls: 1 | 2 | 3 | 4
+}): number {
+  const availableMilliseconds =
+    options.deadlineAtMilliseconds -
+    options.monotonicNow() -
+    DOMAIN_WORKER_SETTLEMENT_RESERVE_MS
+  const requestTimeoutMilliseconds = Math.min(
+    DOMAIN_PROVIDER_REQUEST_TIMEOUT_MAX_MS,
+    Math.floor(availableMilliseconds / options.remainingProviderCalls),
+  )
+  if (requestTimeoutMilliseconds < DOMAIN_PROVIDER_REQUEST_TIMEOUT_MIN_MS) {
+    throw new DomainProvisioningError({
+      code: "worker_invocation_budget_exhausted",
+      retryable: true,
+    })
+  }
+  return requestTimeoutMilliseconds
+}
+
 async function settleFailure(options: {
   repository: DomainProvisioningRepository
   job: ClaimedDomainProvisioningJob
@@ -112,7 +140,9 @@ async function settleFailure(options: {
         jobId: job.jobId,
         status: status === "queued" ? "retried" : "failed",
         code: error.code,
-        ...(publicationWithdrawn ? { publicationWithdrawn: true as const } : {}),
+        ...(publicationWithdrawn
+          ? { publicationWithdrawn: true as const }
+          : {}),
       }
     }
 
@@ -188,17 +218,30 @@ export async function processDomainProvisioningJob(options: {
   adapterFactory: DomainProviderAdapterFactory
   config: DomainWorkerConfig
   job: ClaimedDomainProvisioningJob
+  deadlineAtMilliseconds?: number
+  monotonicNow?: () => number
 }): Promise<DomainJobProcessResult> {
   const { repository, adapterFactory, config, job } = options
+  const monotonicNow = options.monotonicNow ?? (() => performance.now())
+  const deadlineAtMilliseconds =
+    options.deadlineAtMilliseconds ??
+    monotonicNow() + DOMAIN_WORKER_INVOCATION_BUDGET_MS
   let publicationWithdrawn = false
 
   try {
     assertClaimedJob(job)
     const context = await repository.loadContext(job)
     assertContextMatchesJob(job, context)
-    const adapter = adapterFactory(job.provider)
+    const initialAdapter = adapterFactory(
+      job.provider,
+      providerRequestTimeoutMilliseconds({
+        deadlineAtMilliseconds,
+        monotonicNow,
+        remainingProviderCalls: 4,
+      }),
+    )
 
-    const initial = await adapter.reconcile(job, context)
+    const initial = await initialAdapter.reconcile(job, context)
     const initialEvidence = assertSafeProviderEvidence({
       ...initial.evidence,
       verified:
@@ -259,9 +302,7 @@ export async function processDomainProvisioningJob(options: {
       })
     }
 
-    if (
-      initialStateVerified
-    ) {
+    if (initialStateVerified) {
       await repository.complete(job, "succeeded", null, initialEvidence)
       return {
         jobId: job.jobId,
@@ -281,12 +322,27 @@ export async function processDomainProvisioningJob(options: {
     }
 
     await repository.renewLease(job, config.leaseSeconds)
+    const applyAdapter = adapterFactory(
+      job.provider,
+      providerRequestTimeoutMilliseconds({
+        deadlineAtMilliseconds,
+        monotonicNow,
+        remainingProviderCalls: 3,
+      }),
+    )
     const applyEvidence = assertSafeProviderEvidence(
-      await adapter.apply(job, context, initial),
+      await applyAdapter.apply(job, context, initial),
     )
 
-    await repository.renewLease(job, config.leaseSeconds)
-    const finalState = await adapter.reconcile(job, context)
+    const finalAdapter = adapterFactory(
+      job.provider,
+      providerRequestTimeoutMilliseconds({
+        deadlineAtMilliseconds,
+        monotonicNow,
+        remainingProviderCalls: 1,
+      }),
+    )
+    const finalState = await finalAdapter.reconcile(job, context)
     const finalEvidence = assertSafeProviderEvidence(finalState.evidence)
     const combinedEvidence: SafeProviderEvidence = mergeProviderEvidence(
       applyEvidence,
@@ -315,10 +371,7 @@ export async function processDomainProvisioningJob(options: {
       ...(publicationWithdrawn ? { publicationWithdrawn: true as const } : {}),
     }
   } catch (error) {
-    if (
-      error instanceof DomainProvisioningRepositoryError &&
-      error.leaseLost
-    ) {
+    if (error instanceof DomainProvisioningRepositoryError && error.leaseLost) {
       return { jobId: job.jobId, status: "lease_lost" }
     }
 
@@ -341,7 +394,13 @@ export async function runDomainProvisioningBatch(options: {
   adapterFactory: DomainProviderAdapterFactory
   config: DomainWorkerConfig
   workerId: string
+  deadlineAtMilliseconds?: number
+  monotonicNow?: () => number
 }): Promise<DomainWorkerBatchResult> {
+  const monotonicNow = options.monotonicNow ?? (() => performance.now())
+  const deadlineAtMilliseconds =
+    options.deadlineAtMilliseconds ??
+    monotonicNow() + DOMAIN_WORKER_INVOCATION_BUDGET_MS
   const jobs = await options.repository.claimJobs({
     workerId: options.workerId,
     batchSize: options.config.batchSize,
@@ -355,6 +414,8 @@ export async function runDomainProvisioningBatch(options: {
         adapterFactory: options.adapterFactory,
         config: options.config,
         job,
+        deadlineAtMilliseconds,
+        monotonicNow,
       }),
     ),
   )
@@ -364,7 +425,8 @@ export async function runDomainProvisioningBatch(options: {
     succeeded: results.filter((result) => result.status === "succeeded").length,
     retried: results.filter((result) => result.status === "retried").length,
     failed: results.filter((result) => result.status === "failed").length,
-    leaseLost: results.filter((result) => result.status === "lease_lost").length,
+    leaseLost: results.filter((result) => result.status === "lease_lost")
+      .length,
     settlementUnknown: results.filter(
       (result) => result.status === "settlement_unknown",
     ).length,
@@ -381,7 +443,13 @@ export async function runScheduledDomainProvisioningBatch(options: {
   config: DomainWorkerConfig
   workerId: string
   correlationId: string
+  deadlineAtMilliseconds?: number
+  monotonicNow?: () => number
 }): Promise<ScheduledDomainWorkerBatchResult> {
+  const monotonicNow = options.monotonicNow ?? (() => performance.now())
+  const deadlineAtMilliseconds =
+    options.deadlineAtMilliseconds ??
+    monotonicNow() + DOMAIN_WORKER_INVOCATION_BUDGET_MS
   let enqueued: Awaited<
     ReturnType<DomainProvisioningRepository["enqueueDueReconciliations"]>
   > = []
@@ -399,7 +467,11 @@ export async function runScheduledDomainProvisioningBatch(options: {
         ? "repository_error"
         : "unexpected_error"
   }
-  const batch = await runDomainProvisioningBatch(options)
+  const batch = await runDomainProvisioningBatch({
+    ...options,
+    deadlineAtMilliseconds,
+    monotonicNow,
+  })
   const scheduled = enqueued.filter((result) => !result.quarantined)
   const quarantined = enqueued.filter((result) => result.quarantined)
 

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import {
   createDomainProviderAdapterFactory,
   createSupabaseDomainProvisioningRepository,
+  DOMAIN_WORKER_INVOCATION_BUDGET_MS,
   isAuthorizedDomainWorkerRequest,
   loadDomainWorkerConfig,
   loadWorkerRouteSecret,
@@ -14,6 +15,7 @@ import { createServiceRoleClient } from "@/utils/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+export const maxDuration = 60
 
 function response(body: Record<string, unknown>, status: number) {
   return NextResponse.json(body, {
@@ -23,15 +25,14 @@ function response(body: Record<string, unknown>, status: number) {
 }
 
 async function handle(request: NextRequest) {
+  const deadlineAtMilliseconds =
+    performance.now() + DOMAIN_WORKER_INVOCATION_BUDGET_MS
   const requestId = randomUUID()
   let expectedSecret: string
   try {
     expectedSecret = loadWorkerRouteSecret()
   } catch {
-    return response(
-      { ok: false, code: "worker_unavailable", requestId },
-      503,
-    )
+    return response({ ok: false, code: "worker_unavailable", requestId }, 503)
   }
 
   if (
@@ -54,6 +55,7 @@ async function handle(request: NextRequest) {
       config,
       workerId: `advocate-domain-worker:${requestId}`,
       correlationId: `advocate-domain-reconciliation:${requestId}`,
+      deadlineAtMilliseconds,
     })
 
     const requiresAttention =
