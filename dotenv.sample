@@ -23,12 +23,14 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US=
 STRIPE_WEBHOOK_SECRET_US=
 STRIPE_WEBHOOK_SECRET_US_PREVIOUS=
 NEXT_PUBLIC_STRIPE_PORTAL_URL_US=
+STRIPE_BILLING_PORTAL_CONFIGURATION_ID_US=
 ADVOCATE_STRIPE_CANARY_RECURRING_PRICE_ID_US=
 STRIPE_SECRET_KEY_UK=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK=
 STRIPE_WEBHOOK_SECRET_UK=
 STRIPE_WEBHOOK_SECRET_UK_PREVIOUS=
 NEXT_PUBLIC_STRIPE_PORTAL_URL_UK=
+STRIPE_BILLING_PORTAL_CONFIGURATION_ID_UK=
 ADVOCATE_STRIPE_CANARY_RECURRING_PRICE_ID_UK=
 ADVOCATE_PAYPAL_CANARY_RECURRING_PLAN_ID=
 #
@@ -36,6 +38,10 @@ ADVOCATE_PAYPAL_CANARY_RECURRING_PLAN_ID=
 # "Manage Subscription" links and server-rendered email template links.
 # These URLs are not secrets, so use the same NEXT_PUBLIC values for both
 # browser and server surfaces.
+#
+# STRIPE_BILLING_PORTAL_CONFIGURATION_ID_* must identify an enabled Customer
+# Portal configuration in that same regional Stripe account. Sponsor account
+# management uses it only for short lived payment_method_update sessions.
 #
 # Webhook endpoint:
 #   /api/webhooks/stripe              shared by both regional Stripe accounts.
@@ -135,7 +141,7 @@ ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_RPC_TIMEOUT_MILLISECONDS=45000
 # reserve must fit within 55 seconds. Checkout contact cleanup remains capped at
 # 500 rows per run even when the general batch is larger.
 DATA_RETENTION_BATCH_SIZE=5000
-DATA_RETENTION_RPC_TIMEOUT_MILLISECONDS=9000
+DATA_RETENTION_RPC_TIMEOUT_MILLISECONDS=7500
 DATA_RETENTION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
 
 # Durable cleanup of unattached advocate logo uploads. The one-minute schedule
@@ -184,6 +190,12 @@ ADVOCATE_PUBLICATION_CANARY_SECRET_V1=
 # expose it through a NEXT_PUBLIC variable. Keep prior numbered keys available
 # during rotation.
 SPONSORSHIP_CRYPTO_SECRET_V1=
+# Passwordless email delivery throttling only. Server only. Generate a
+# different canonical base64 value with at least 32 random bytes in every
+# environment. It HMACs purpose-separated trusted ingress source signals for
+# passwordless delivery and verification limits. It must not equal any
+# sponsorship, visitor, attribution, worker, or provider secret.
+SPONSOR_PASSWORDLESS_RATE_LIMIT_SECRET_V1=
 # First party visitor cookie signing only. Server only. Generate a different
 # canonical base64 value with at least 32 random bytes in every environment.
 # This value must not equal SPONSORSHIP_CRYPTO_SECRET_V1.

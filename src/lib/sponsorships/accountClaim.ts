@@ -11,7 +11,9 @@ export const SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME =
   "creator_share_sponsor_claim_v1"
 export const SPONSOR_ACCOUNT_CLAIM_COOKIE_MAX_AGE_SECONDS = 30 * 60
 export const SPONSOR_ACCOUNT_CLAIM_CALLBACK_PATH = "/auth/callback"
+export const SPONSOR_ACCOUNT_EMAIL_CONFIRMATION_PATH = "/auth/confirm"
 export const SPONSOR_ACCOUNT_CLAIM_PAGE_PATH = "/sponsor/claim"
+export const SPONSOR_ACCOUNT_MANAGEMENT_PAGE_PATH = "/app"
 export const SPONSOR_ACCOUNT_EMAIL_PROOF_VALID_FOR = "10 minutes"
 
 const PRODUCTION_SITE_ORIGIN = "https://creatorshare.com"
@@ -21,10 +23,7 @@ const MAXIMUM_AUTH_CODE_LENGTH = 2048
 const SUPABASE_AUTH_CODE_PATTERN = /^[A-Za-z0-9._~-]+$/
 
 export type SponsorClaimPageState =
-  | "ready"
-  | "auth-error"
-  | "check-email"
-  | "complete"
+  "ready" | "auth-error" | "check-email" | "complete"
 
 export type SponsorAccountClaimErrorCode =
   | "unauthenticated"
@@ -172,9 +171,7 @@ function configuredOriginValue(
 
 function isLoopbackHostname(hostname: string): boolean {
   return (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "[::1]"
+    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
   )
 }
 
@@ -271,7 +268,10 @@ export function parseSponsorClaimStartBody(
 export function buildSponsorClaimMagicLinkCallback(
   canonicalOrigin: string,
 ): string {
-  const callback = new URL(SPONSOR_ACCOUNT_CLAIM_CALLBACK_PATH, canonicalOrigin)
+  const callback = new URL(
+    SPONSOR_ACCOUNT_EMAIL_CONFIRMATION_PATH,
+    canonicalOrigin,
+  )
   callback.searchParams.set("next", SPONSOR_ACCOUNT_CLAIM_PAGE_PATH)
   return callback.toString()
 }
@@ -383,10 +383,16 @@ export function isValidSupabaseAuthCode(value: unknown): value is string {
 
 export function getAllowedSponsorClaimCallbackTarget(
   requestedPath: string | null | undefined,
-): typeof SPONSOR_ACCOUNT_CLAIM_PAGE_PATH {
-  return requestedPath === SPONSOR_ACCOUNT_CLAIM_PAGE_PATH
-    ? requestedPath
-    : SPONSOR_ACCOUNT_CLAIM_PAGE_PATH
+):
+  | typeof SPONSOR_ACCOUNT_CLAIM_PAGE_PATH
+  | typeof SPONSOR_ACCOUNT_MANAGEMENT_PAGE_PATH {
+  if (
+    requestedPath === SPONSOR_ACCOUNT_CLAIM_PAGE_PATH ||
+    requestedPath === SPONSOR_ACCOUNT_MANAGEMENT_PAGE_PATH
+  ) {
+    return requestedPath
+  }
+  return SPONSOR_ACCOUNT_CLAIM_PAGE_PATH
 }
 
 export function buildSponsorClaimPageRedirect(
@@ -407,8 +413,7 @@ export function classifySponsorClaimDatabaseFailure(
 ): SponsorAccountClaimError {
   const candidate = isRecord(failure) ? (failure as DatabaseFailure) : {}
   const code = typeof candidate.code === "string" ? candidate.code : ""
-  const message =
-    typeof candidate.message === "string" ? candidate.message : ""
+  const message = typeof candidate.message === "string" ? candidate.message : ""
 
   if (code === "42501") return claimError("unauthenticated")
   if (
@@ -441,9 +446,9 @@ export function classifySponsorClaimDatabaseFailure(
  * Keep that transport detail at the server boundary and reject every other
  * response shape before it reaches the account claim workflow.
  */
-export function parseSponsorAccountClaimRpcResult(
-  data: unknown,
-): { linkedSubscriptionCount: number } {
+export function parseSponsorAccountClaimRpcResult(data: unknown): {
+  linkedSubscriptionCount: number
+} {
   const row = Array.isArray(data) ? (data.length === 1 ? data[0] : null) : data
   if (!isRecord(row)) throw claimError("unavailable")
 

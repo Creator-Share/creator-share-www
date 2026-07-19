@@ -6,7 +6,8 @@ import { expect, test } from "@playwright/test"
 
 import { parseSponsorClaimFragment } from "../../src/app/sponsor/claim/claimFragment"
 
-type AccountClaimModule = typeof import("../../src/lib/sponsorships/accountClaim")
+type AccountClaimModule =
+  typeof import("../../src/lib/sponsorships/accountClaim")
 type CryptoModule = typeof import("../../src/lib/sponsorships/crypto")
 type NodeModuleLoader = (
   request: string,
@@ -51,9 +52,9 @@ const {
   parseSponsorAccountClaimRpcResult,
   parseSponsorClaimStartBody,
   SponsorAccountClaimError,
-  SPONSOR_ACCOUNT_CLAIM_CALLBACK_PATH,
   SPONSOR_ACCOUNT_CLAIM_COOKIE_MAX_AGE_SECONDS,
   SPONSOR_ACCOUNT_CLAIM_PAGE_PATH,
+  SPONSOR_ACCOUNT_EMAIL_CONFIRMATION_PATH,
 } = accountClaim
 const { createSponsorshipCrypto } = sponsorshipCryptoModule
 
@@ -103,7 +104,7 @@ test.describe("sponsor claim welcome and callback URLs", () => {
     )
 
     expect(callback.origin).toBe(CANONICAL_ORIGIN)
-    expect(callback.pathname).toBe(SPONSOR_ACCOUNT_CLAIM_CALLBACK_PATH)
+    expect(callback.pathname).toBe(SPONSOR_ACCOUNT_EMAIL_CONFIRMATION_PATH)
     expect(callback.searchParams.get("next")).toBe(
       SPONSOR_ACCOUNT_CLAIM_PAGE_PATH,
     )
@@ -139,9 +140,9 @@ test.describe("sponsor claim canonical origin and cookie", () => {
         NEXT_PUBLIC_BASE_URL: "https://www.creatorshare.com/a/path?ignored=1",
       }),
     ).toBe("https://www.creatorshare.com")
-    expect(
-      getSponsorClaimCanonicalOrigin({ NODE_ENV: "production" }),
-    ).toBe(CANONICAL_ORIGIN)
+    expect(getSponsorClaimCanonicalOrigin({ NODE_ENV: "production" })).toBe(
+      CANONICAL_ORIGIN,
+    )
     expect(
       getSponsorClaimCanonicalOrigin({
         NODE_ENV: "development",
@@ -213,9 +214,7 @@ test.describe("sponsor claim start boundary", () => {
     const prepared = preparedClaim()
 
     expect(prepared.claimToken).toBe(CLAIM_TOKEN)
-    expect(prepared.email.normalizedEmail).toBe(
-      "sponsor+family@example.com",
-    )
+    expect(prepared.email.normalizedEmail).toBe("sponsor+family@example.com")
     expect(prepared.claimTokenDigest).toMatch(/^\\x[0-9a-f]{64}$/)
     expect(prepared.email.digestRpcBytea).toMatch(/^\\x[0-9a-f]{64}$/)
     expect(prepared.claimTokenDigest).not.toContain(CLAIM_TOKEN)
@@ -313,7 +312,7 @@ test.describe("sponsor claim start boundary", () => {
       {
         email: "sponsor+family@example.com",
         emailRedirectTo:
-          "https://creatorshare.com/auth/callback?next=%2Fsponsor%2Fclaim",
+          "https://creatorshare.com/auth/confirm?next=%2Fsponsor%2Fclaim",
         shouldCreateUser: true,
       },
     ])
@@ -375,9 +374,7 @@ test.describe("sponsor claim start boundary", () => {
 test.describe("authenticated sponsor claim completion", () => {
   test("normalizes bounded PostgreSQL integer transport values", () => {
     expect(
-      parseSponsorAccountClaimRpcResult([
-        { linked_subscription_count: "3" },
-      ]),
+      parseSponsorAccountClaimRpcResult([{ linked_subscription_count: "3" }]),
     ).toEqual({ linkedSubscriptionCount: 3 })
     expect(
       parseSponsorAccountClaimRpcResult({ linked_subscription_count: 0 }),
@@ -565,10 +562,7 @@ test.describe("claim fragment parser", () => {
         "utf8",
       ),
       readFile(
-        resolve(
-          process.cwd(),
-          "src/app/api/sponsor-account/complete/route.ts",
-        ),
+        resolve(process.cwd(), "src/app/api/sponsor-account/complete/route.ts"),
         "utf8",
       ),
       readFile(

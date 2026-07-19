@@ -19,6 +19,10 @@ const MAX_PATHNAME_LENGTH = 2_048
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+const PRODUCTION_PRIMARY_ALIAS_HOSTNAMES = new Set<string>([
+  "www.creatorshare.com",
+  "creator-share-www.vercel.app",
+])
 
 const READ_METHODS = Object.freeze(["GET", "HEAD"] as const)
 const GET_METHOD = Object.freeze(["GET"] as const)
@@ -417,6 +421,18 @@ export function isRestrictedAdvocateHost(options: {
   environment?: TenantRoutePolicyEnvironment
 }): boolean {
   return classifyRequestHost(options) === "restricted-tenant"
+}
+
+export function isProductionPrimaryAliasHost(
+  rawHost: string | null | undefined,
+): boolean {
+  const resolution = resolveAdvocateHost(rawHost, {
+    allowLocalhostDevelopment: false,
+  })
+  return (
+    resolution.kind === "non-tenant" &&
+    PRODUCTION_PRIMARY_ALIAS_HOSTNAMES.has(resolution.normalizedHostname)
+  )
 }
 
 export type TenantRoutePolicyDecision =

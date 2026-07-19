@@ -6,15 +6,21 @@ import {
   decideSponsorClaimStart,
   getSponsorClaimCanonicalOrigin,
   getSponsorClaimCookieOptions,
-  isTrustedSponsorClaimRequest,
   parseSponsorClaimStartBody,
   SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
 } from "@/lib/sponsorships/accountClaim"
+import {
+  isTrustedCheckoutJsonRequest,
+  resolveTrustedPrimaryRequestOrigin,
+} from "@/lib/sponsorships/checkout/requestSecurity"
 import { createSponsorshipCryptoFromEnvironment } from "@/lib/sponsorships/crypto"
 import {
-  createClient,
-  createServiceRoleClient,
-} from "@/utils/supabase/server"
+  createSponsorPasswordlessDeliverySignals,
+  reserveSponsorPasswordlessDelivery,
+  sponsorPasswordlessDeliveryContext,
+} from "@/lib/sponsorships/management/passwordlessRateLimit"
+import { createStatelessSponsorEmailAuthClient } from "@/lib/sponsorships/management/statelessAuth"
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 
 export const runtime = "nodejs"
 
@@ -76,9 +82,13 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  const expectedOrigin = resolveTrustedPrimaryRequestOrigin({
+    rawHost: request.headers.get("host"),
+  })
   if (
-    !isTrustedSponsorClaimRequest(request.headers, canonicalOrigin) ||
-    !request.headers.get("content-type")?.startsWith("application/json")
+    expectedOrigin === null ||
+    expectedOrigin !== canonicalOrigin ||
+    !isTrustedCheckoutJsonRequest(request.headers, expectedOrigin)
   ) {
     return genericResponse()
   }
@@ -115,8 +125,7 @@ export async function POST(request: NextRequest) {
           {
             target_claim_token_digest: input.claimTokenDigest,
             target_email_hmac: input.emailDigest,
-            target_email_normalization_version:
-              input.emailNormalizationVersion,
+            target_email_normalization_version: input.emailNormalizationVersion,
             target_email_hmac_key_version: input.emailHmacKeyVersion,
             context_request_id: randomUUID(),
             context_trace_id: requestTraceId(request),
@@ -141,13 +150,26 @@ export async function POST(request: NextRequest) {
         }
       },
       async sendMagicLink(input) {
-        const { error } = await authClient.auth.signInWithOtp({
+        const signals = createSponsorPasswordlessDeliverySignals({
           email: input.email,
-          options: {
-            emailRedirectTo: input.emailRedirectTo,
-            shouldCreateUser: input.shouldCreateUser,
-          },
+          headers: request.headers,
         })
+        const allowed = await reserveSponsorPasswordlessDelivery({
+          flow: input.shouldCreateUser ? "initial-claim" : "account-claim",
+          signals,
+          context: sponsorPasswordlessDeliveryContext(request),
+          serviceClient,
+        })
+        if (!allowed) return
+
+        const { error } =
+          await createStatelessSponsorEmailAuthClient().auth.signInWithOtp({
+            email: input.email,
+            options: {
+              emailRedirectTo: input.emailRedirectTo,
+              shouldCreateUser: input.shouldCreateUser,
+            },
+          })
         if (error) throw error
       },
     },

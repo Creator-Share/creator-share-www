@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 
 import {
   INTERNAL_ROUTE_SHELL_HEADER,
+  isProductionPrimaryAliasHost,
   isAllowedTenantImageOptimizerRequest,
   resolveCanonicalPrimaryOrigin,
   resolveTenantRoutePolicy,
@@ -145,6 +146,22 @@ function tenantVaryValues(
 }
 
 export async function middleware(request: NextRequest) {
+  if (
+    (request.method === "GET" || request.method === "HEAD") &&
+    isProductionPrimaryAliasHost(request.headers.get("host"))
+  ) {
+    const destination = request.nextUrl.clone()
+    destination.protocol = "https:"
+    destination.hostname = "creatorshare.com"
+    destination.port = ""
+    const response = NextResponse.redirect(destination, 308)
+    return hardenTenantResponse(response, {
+      denyFraming: true,
+      noReferrer: true,
+      vary: ["Host"],
+    })
+  }
+
   const decision = resolveTenantRoutePolicy({
     rawHost: request.headers.get("host"),
     pathname: request.nextUrl.pathname,

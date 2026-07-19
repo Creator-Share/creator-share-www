@@ -5,6 +5,7 @@ import { expect, test } from "@playwright/test"
 
 import {
   isAllowedTenantImageOptimizerRequest,
+  isProductionPrimaryAliasHost,
   isRestrictedAdvocateHost,
   resolveCanonicalPrimaryOrigin,
   resolveTenantRoutePolicy,
@@ -38,6 +39,22 @@ function decide(
 }
 
 test.describe("advocate tenant route policy", () => {
+  test("recognizes only the two hard-coded production aliases", () => {
+    expect(isProductionPrimaryAliasHost("www.creatorshare.com")).toBe(true)
+    expect(
+      isProductionPrimaryAliasHost("creator-share-www.vercel.app:443"),
+    ).toBe(true)
+    for (const host of [
+      "creatorshare.com",
+      "hope.creatorshare.com",
+      "creator-share-www-git-dev.example.vercel.app",
+      "www.creatorshare.com.attacker.example",
+      null,
+    ]) {
+      expect(isProductionPrimaryAliasHost(host)).toBe(false)
+    }
+  })
+
   test("allows only the exact public browse pages", () => {
     for (const pathname of [
       "/",

@@ -112,10 +112,7 @@ export type RoleAssignmentResponse = RoleAssignment[]
 
 export interface AuthState {
   user: User | null
-  registrationEmail: string | null
   logout: () => Promise<void>
-  setRegistrationEmail: (email: string) => void
-  clearRegistrationEmail: () => void
   fetchUser: () => Promise<void>
 }
 

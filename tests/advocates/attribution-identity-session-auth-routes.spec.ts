@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import Module from "node:module"
 import { resolve } from "node:path"
@@ -25,8 +26,10 @@ interface AuthUser {
 
 const AUTH_USER_ID = "11111111-1111-4111-8111-111111111111"
 const CURRENT_SECRET = Buffer.alloc(32, 13).toString("base64")
+const CANONICAL_ORIGIN = "https://creatorshare.com"
 const PREVIOUS_IDENTITY_SECRET =
   process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1
+const PREVIOUS_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL
 
 let passwordLoginData: { user: AuthUser | null } = {
   user: { id: AUTH_USER_ID },
@@ -44,6 +47,9 @@ let registrationData: {
   user: { id: AUTH_USER_ID, identities: [{}] },
 }
 let registrationError: { message: string } | null = null
+const registrationCalls: Array<Record<string, unknown>> = []
+const registrationReservations: Array<Record<string, unknown>> = []
+let registrationDeliveryAllowed = true
 
 const nodeModule = Module as unknown as { _load: NodeModuleLoader }
 const originalModuleLoad = nodeModule._load
@@ -69,12 +75,6 @@ nodeModule._load = function mockedModuleLoad(
               return {
                 data: verificationData,
                 error: verificationError,
-              }
-            },
-            async signUp() {
-              return {
-                data: registrationData,
-                error: registrationError,
               }
             },
           },
@@ -106,6 +106,37 @@ nodeModule._load = function mockedModuleLoad(
             }
           },
         }
+      },
+    }
+  }
+  if (request === "@/lib/sponsorships/management/statelessAuth") {
+    return {
+      createStatelessSponsorEmailAuthClient() {
+        return {
+          auth: {
+            async signUp(input: Record<string, unknown>) {
+              registrationCalls.push(input)
+              return {
+                data: registrationData,
+                error: registrationError,
+              }
+            },
+          },
+        }
+      },
+    }
+  }
+  if (request === "@/lib/sponsorships/management/passwordlessRateLimit") {
+    return {
+      createSponsorPasswordlessDeliverySignals(input: Record<string, unknown>) {
+        return { recipient: input.email, source: "opaque-source" }
+      },
+      sponsorPasswordlessDeliveryContext() {
+        return { requestId: "registration-request", traceId: null }
+      },
+      async reserveSponsorPasswordlessDelivery(input: Record<string, unknown>) {
+        registrationReservations.push(input)
+        return registrationDeliveryAllowed
       },
     }
   }
@@ -179,6 +210,8 @@ function jsonRequest(path: string, body: Record<string, unknown>): Request {
     method: "POST",
     headers: {
       host: "creatorshare.com",
+      origin: "https://creatorshare.com",
+      "sec-fetch-site": "same-origin",
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
@@ -212,7 +245,7 @@ function loginRequest(): Request {
 function registrationRequest(): Request {
   return jsonRequest("/api/auth/registration", {
     email: "sponsor@example.com",
-    password: "correct horse battery staple",
+    password: "CorrectHorse1!",
     first_name: "Sponsor",
     last_name: "Family",
   })
@@ -220,6 +253,7 @@ function registrationRequest(): Request {
 
 test.beforeEach(() => {
   process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1 = CURRENT_SECRET
+  process.env.NEXT_PUBLIC_BASE_URL = CANONICAL_ORIGIN
   passwordLoginData = { user: { id: AUTH_USER_ID } }
   passwordLoginError = null
   verificationData = { user: { id: AUTH_USER_ID } }
@@ -229,6 +263,9 @@ test.beforeEach(() => {
     user: { id: AUTH_USER_ID, identities: [{}] },
   }
   registrationError = null
+  registrationCalls.length = 0
+  registrationReservations.length = 0
+  registrationDeliveryAllowed = true
 })
 
 test.afterAll(() => {
@@ -237,6 +274,11 @@ test.afterAll(() => {
   } else {
     process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1 =
       PREVIOUS_IDENTITY_SECRET
+  }
+  if (PREVIOUS_BASE_URL === undefined) {
+    delete process.env.NEXT_PUBLIC_BASE_URL
+  } else {
+    process.env.NEXT_PUBLIC_BASE_URL = PREVIOUS_BASE_URL
   }
 })
 
@@ -278,27 +320,104 @@ test("failed or userless recovery verification does not issue an identity signal
   expect(identityCookie(userlessResponse)).toBeUndefined()
 })
 
-test("registration with an immediate session and user issues a verified parent-domain identity signal", async () => {
+test("registration reserves delivery and never releases an unconfirmed provider session", async () => {
   const response = await register(registrationRequest())
 
-  expect(response.status).toBe(201)
-  expectVerifiedParentDomainIdentity(response, AUTH_USER_ID)
+  expect(response.status).toBe(202)
+  await expect(response.json()).resolves.toEqual({ status: "check-email" })
+  expect(identityCookie(response)).toBeUndefined()
+  expect(registrationReservations).toHaveLength(1)
+  expect(registrationReservations[0]).toMatchObject({
+    flow: "registration",
+    signals: {
+      recipient: "sponsor@example.com",
+      source: "opaque-source",
+    },
+  })
+  expect(registrationCalls).toEqual([
+    {
+      email: "sponsor@example.com",
+      password: "CorrectHorse1!",
+      options: {
+        data: {
+          first_name: "Sponsor",
+          last_name: "Family",
+        },
+        emailRedirectTo:
+          "https://creatorshare.com/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding",
+      },
+    },
+  ])
 })
 
-test("registration awaiting confirmation or missing a user does not issue an identity signal", async () => {
-  registrationData = {
-    session: null,
-    user: { id: AUTH_USER_ID, identities: [{}] },
-  }
-  const confirmationPendingResponse = await register(registrationRequest())
-  expect(confirmationPendingResponse.status).toBe(201)
-  expect(identityCookie(confirmationPendingResponse)).toBeUndefined()
+test("registration issues confirmation mail only from the exact canonical origin", async () => {
+  const body = JSON.stringify({
+    email: "sponsor@example.com",
+    password: "correct horse battery staple",
+    first_name: "Sponsor",
+    last_name: "Family",
+  })
+  const requests = [
+    new Request("https://www.creatorshare.com/api/auth/registration", {
+      method: "POST",
+      headers: {
+        host: "www.creatorshare.com",
+        origin: "https://www.creatorshare.com",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json",
+      },
+      body,
+    }),
+    new Request("https://creatorshare.com/api/auth/registration", {
+      method: "POST",
+      headers: {
+        host: "creatorshare.com",
+        origin: "https://attacker.example",
+        "sec-fetch-site": "cross-site",
+        "content-type": "application/json",
+      },
+      body,
+    }),
+  ]
 
-  registrationData = {
-    session: { access_token: "opaque-session" },
-    user: null,
+  for (const request of requests) {
+    const response = await register(request)
+    expect(response.status).toBe(400)
   }
-  const userlessResponse = await register(registrationRequest())
-  expect(userlessResponse.status).toBe(201)
-  expect(identityCookie(userlessResponse)).toBeUndefined()
+  expect(registrationCalls).toHaveLength(0)
+})
+
+test("registration hides existing accounts, provider failures, and delivery denial", async () => {
+  registrationData = { session: null, user: null }
+  registrationError = { message: "User already registered: provider secret" }
+  const providerFailure = await register(registrationRequest())
+  expect(providerFailure.status).toBe(202)
+  await expect(providerFailure.json()).resolves.toEqual({
+    status: "check-email",
+  })
+  expect(identityCookie(providerFailure)).toBeUndefined()
+
+  registrationCalls.length = 0
+  registrationDeliveryAllowed = false
+  const denied = await register(registrationRequest())
+  expect(denied.status).toBe(202)
+  await expect(denied.json()).resolves.toEqual({ status: "check-email" })
+  expect(registrationCalls).toHaveLength(0)
+})
+
+test("registration confirmation uses a fixed contact-free route", () => {
+  const registrationPage = readFileSync(
+    resolve(process.cwd(), "src/app/register/page.tsx"),
+    "utf8",
+  )
+  const confirmationPage = readFileSync(
+    resolve(process.cwd(), "src/app/verifyAccount/page.tsx"),
+    "utf8",
+  )
+
+  expect(registrationPage).toContain('router.push("/verifyAccount")')
+  expect(registrationPage).not.toContain("encodeURIComponent(email)")
+  expect(registrationPage).not.toContain("/verifyAccount/${")
+  expect(confirmationPage).not.toContain("registrationEmail")
+  expect(confirmationPage).not.toContain("params")
 })

@@ -61,6 +61,32 @@ function request(
 }
 
 test.describe("advocate tenant middleware", () => {
+  test("permanently canonicalizes production aliases for document requests only", async () => {
+    for (const host of [
+      "www.creatorshare.com",
+      "creator-share-www.vercel.app",
+    ]) {
+      for (const method of ["GET", "HEAD"] as const) {
+        const response = await middleware(
+          request("/auth/confirm?next=%2Fapp", { host, method }),
+        )
+        expect(response.status).toBe(308)
+        expect(response.headers.get("location")).toBe(
+          "https://creatorshare.com/auth/confirm?next=%2Fapp",
+        )
+        expect(response.headers.get("set-cookie")).toBeNull()
+        expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+        expect(response.headers.get("vary")).toBe("Host")
+      }
+
+      const post = await middleware(
+        request("/api/webhooks/stripe", { host, method: "POST" }),
+      )
+      expect(post.status).not.toBe(308)
+      expect(post.headers.get("location")).toBeNull()
+    }
+  })
+
   test("denies primary administrative paths on tenant hosts before continuing", async () => {
     for (const [pathname, method] of [
       ["/admin", "GET"],
