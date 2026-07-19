@@ -21,7 +21,7 @@ Creator Share is a modern sponsorship platform connecting compassionate individu
 
 ### Prerequisites
 
-- **Node.js**: v20.17.0 (specified in `.nvmrc`)
+- **Node.js**: v20.19.4 (specified in `.nvmrc`)
 - **Package Manager**: npm or yarn
 - **Database**: Supabase account
 - **Payment Processor**: Stripe account (PayPal optional)

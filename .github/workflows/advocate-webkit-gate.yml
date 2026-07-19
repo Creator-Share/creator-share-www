@@ -9,6 +9,7 @@ on:
       - "src/lib/advocates/admin/catalogForm.ts"
       - "tests/advocates/portal-catalog-browser.spec.ts"
       - "tests/fixtures/advocate-catalog-harness/**"
+      - ".nvmrc"
       - "package.json"
       - "yarn.lock"
       - ".github/workflows/advocate-webkit-gate.yml"
