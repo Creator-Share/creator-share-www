@@ -86,12 +86,14 @@ export function buildAdvocatePortalNavigation(
 
   for (const section of FUTURE_SECTIONS) {
     if (!permissions.has(section.permission)) continue
+    const href =
+      section.section === "team" ? `/portal/${portal.slug}/team` : null
     items.push({
       section: section.section,
       label: section.label,
-      href: null,
+      href,
       current: currentSection === section.section,
-      availability: "coming-soon",
+      availability: href === null ? "coming-soon" : "available",
     })
   }
   return Object.freeze(items)

@@ -190,7 +190,9 @@ MVP roles are Owner, Administrator, Brand editor, Catalog curator, Analytics vie
 
 Application code checks permissions, not display names. Memberships are database backed so revocation takes effect immediately.
 
-Invitations use at least 256 bits of randomness. Only a digest is stored. Invitations are email bound, expire after seven days, can be revoked, are single use, and redeem atomically. User editable authentication metadata must never grant authorization.
+Invitations use at least 256 bits of randomness. The invitation authority stores only a digest. A separate forced row security delivery outbox may temporarily retain the recipient and capability in authenticated encryption envelopes so a durable worker can send the invitation. That transport material is unavailable to browser roles and ordinary administrators, and it is never returned by an application route. Invitations are email bound, expire after seven days, can be revoked, are single use, and redeem atomically. The emailed capability and Supabase magic link proof travel only in the URL fragment. The neutral interstitial removes that fragment from browser history before parsing it and requires a deliberate Continue action before redemption. User editable authentication metadata must never grant authorization.
+
+Redemption requires a freshly verified, provider signed `magiclink` authentication method reference and exact binding to the invitation target. A refreshed access token is not proof of a fresh email authentication event. Before release, a production equivalent canary must establish whether generating another Supabase email proof for the same account supersedes an earlier unconsumed proof. The release policy must follow measured provider behavior, not folklore in a nicer jacket.
 
 Creator Share super administrators remain separate from advocate membership. Domain, ownership, and tenant lifecycle changes require Creator Share approval. An override requires a reason and an audit event.
 
@@ -421,6 +423,7 @@ Colors and logos are routine. Rich text sanitation, contrast validation, storage
 No advocate tenant may publish until all of the following are true:
 
 - Legacy invitation privilege escalation is removed or isolated from all advocate access.
+- Advocate invitation redemption proves a fresh email authentication event, remains single use under concurrency, and passes the provider proof supersession canary for overlapping advocate and sponsor account links.
 - Exposed application tables have verified RLS and least privilege grants.
 - Every payment path creates and verifies a server owned intent.
 - Webhooks are authenticated, idempotent, and authoritative.

@@ -211,6 +211,18 @@ test.describe("advocate portal navigation", () => {
       expect.objectContaining({ availability: "coming-soon", href: null }),
     )
 
+    const teamManager = buildAdvocatePortalNavigation({
+      slug: "hope",
+      permissions: ["portal.members.view", "portal.view"],
+    })
+    expect(teamManager.at(-1)).toEqual(
+      expect.objectContaining({
+        section: "team",
+        href: "/portal/hope/team",
+        availability: "available",
+      }),
+    )
+
     const branding = buildAdvocatePortalNavigation(
       { slug: "hope", permissions: ["portal.view"] },
       "branding",
