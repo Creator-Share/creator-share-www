@@ -223,6 +223,18 @@ test.describe("advocate portal navigation", () => {
       }),
     )
 
+    const analyticsViewer = buildAdvocatePortalNavigation({
+      slug: "hope",
+      permissions: ["portal.analytics.view", "portal.view"],
+    })
+    expect(analyticsViewer.at(-1)).toEqual(
+      expect.objectContaining({
+        section: "analytics",
+        href: "/portal/hope/analytics",
+        availability: "available",
+      }),
+    )
+
     const branding = buildAdvocatePortalNavigation(
       { slug: "hope", permissions: ["portal.view"] },
       "branding",

@@ -20,7 +20,9 @@ CREATE TEMP TABLE attribution_freeze_test_snapshots (
   decision_context jsonb NOT NULL,
   decided_at timestamptz NOT NULL,
   finalized_at timestamptz,
-  conversion_occurred_at timestamptz
+  conversion_occurred_at timestamptz,
+  analytics_eligible boolean NOT NULL,
+  analytics_exclusion_reason text
 ) ON COMMIT DROP;
 
 CREATE FUNCTION pg_temp.activate_attribution_test_domain(
@@ -563,6 +565,121 @@ SELECT extensions.is(
   'the same user is excluded when viewing the portal where they are a member'
 );
 
+INSERT INTO public.browser_visitors (
+  token_digest,
+  consent_state
+)
+SELECT
+  decode(repeat(fixture.digest_pair, 32), 'hex'),
+  'not_required'::public.visitor_consent_state
+FROM (
+  VALUES ('c1'), ('c2'), ('c3')
+) AS fixture(digest_pair);
+
+WITH prepared AS MATERIALIZED (
+  SELECT
+    fixture.label,
+    checkout.resolved_sponsorship_intent_id
+  FROM (
+    VALUES
+      (
+        'staff',
+        '97000000-0000-4000-8000-000000000003'::uuid,
+        'c1',
+        'd1'
+      ),
+      (
+        'same_advocate_member',
+        '97000000-0000-4000-8000-000000000005'::uuid,
+        'c2',
+        'd2'
+      ),
+      (
+        'unrelated_sponsor',
+        '97000000-0000-4000-8000-000000000008'::uuid,
+        'c3',
+        'd3'
+      )
+  ) AS fixture(label, auth_user_id, visitor_digest_pair, contact_digest_pair)
+  CROSS JOIN LATERAL public.prepare_sponsorship_checkout_intent(
+    target_idempotency_key =>
+      'attribution-analytics-eligibility-' || fixture.label,
+    target_source => 'advocate_domain',
+    target_advocate_hostname => 'attributionfreeze.creatorshare.com',
+    target_visitor_token_digest =>
+      decode(repeat(fixture.visitor_digest_pair, 32), 'hex'),
+    target_auth_user_id => fixture.auth_user_id,
+    target_contact_email_hmac =>
+      decode(repeat(fixture.contact_digest_pair, 32), 'hex'),
+    target_contact_email_normalization_version => 1::smallint,
+    target_contact_email_hmac_key_version => 1::smallint,
+    target_subject_kind => 'blind',
+    target_beneficiary_id => NULL,
+    target_partnership_project => NULL,
+    target_payment_mode => 'one_time',
+    target_recurrence_interval => NULL,
+    target_base_amount_usd_cents => 2800,
+    target_charged_amount_minor => 2800,
+    target_charged_currency => 'USD',
+    target_conversion_rate => 1,
+    target_currency_quote_at => clock_timestamp(),
+    target_currency_rate_source => 'attribution-freeze-test',
+    context_request_id =>
+      'attribution-analytics-eligibility-' || fixture.label
+  ) checkout
+)
+INSERT INTO attribution_freeze_test_context (key, uuid_value)
+SELECT 'analytics_eligibility_' || prepared.label, prepared.resolved_sponsorship_intent_id
+FROM prepared;
+
+SELECT extensions.ok(
+  (
+    SELECT bool_and(
+      attribution.kind = 'direct'
+      AND attribution.advocate_id = advocate.uuid_value
+    )
+    FROM attribution_freeze_test_context intent
+    JOIN public.sponsorship_attributions attribution
+      ON attribution.sponsorship_intent_id = intent.uuid_value
+    JOIN attribution_freeze_test_context advocate
+      ON advocate.key = 'main_advocate'
+    WHERE intent.key LIKE 'analytics_eligibility_%'
+  ),
+  'analytics eligibility never rewrites factual direct attribution provenance'
+);
+
+SELECT extensions.ok(
+  (
+    SELECT bool_and(
+      NOT attribution.analytics_eligible
+      AND attribution.analytics_exclusion_reason = CASE intent.key
+        WHEN 'analytics_eligibility_staff' THEN 'creator_share_staff'
+        ELSE 'same_advocate_member'
+      END
+    )
+    FROM attribution_freeze_test_context intent
+    JOIN public.sponsorship_attributions attribution
+      ON attribution.sponsorship_intent_id = intent.uuid_value
+    WHERE intent.key IN (
+      'analytics_eligibility_staff',
+      'analytics_eligibility_same_advocate_member'
+    )
+  ),
+  'staff and same-advocate sponsorships receive immutable noncontact exclusion reasons'
+);
+
+SELECT extensions.ok(
+  (
+    SELECT attribution.analytics_eligible
+      AND attribution.analytics_exclusion_reason IS NULL
+    FROM attribution_freeze_test_context intent
+    JOIN public.sponsorship_attributions attribution
+      ON attribution.sponsorship_intent_id = intent.uuid_value
+    WHERE intent.key = 'analytics_eligibility_unrelated_sponsor'
+  ),
+  'an unrelated authenticated sponsor remains eligible for advocate analytics'
+);
+
 WITH first_touch AS MATERIALIZED (
   SELECT *
   FROM public.record_qualified_advocate_exposure(
@@ -639,7 +756,9 @@ SELECT
   attribution.decision_context,
   attribution.decided_at,
   attribution.finalized_at,
-  attribution.conversion_occurred_at
+  attribution.conversion_occurred_at,
+  attribution.analytics_eligible,
+  attribution.analytics_exclusion_reason
 FROM public.sponsorship_attributions attribution
 JOIN attribution_freeze_test_context context
   ON context.key = 'frozen_intent'
@@ -670,6 +789,24 @@ FROM public.record_qualified_advocate_exposure(
   context_request_id => 'attribution-post-intent-touch'
 );
 
+SELECT extensions.throws_ok(
+  $$
+    UPDATE public.sponsorship_attributions
+    SET
+      finalized_at = clock_timestamp(),
+      conversion_occurred_at = clock_timestamp(),
+      analytics_eligible = NOT analytics_eligible
+    WHERE sponsorship_intent_id = (
+      SELECT uuid_value
+      FROM attribution_freeze_test_context
+      WHERE key = 'frozen_intent'
+    )
+  $$,
+  '42501',
+  'Final sponsorship attribution decisions are immutable',
+  'a finalization shaped update cannot rewrite frozen analytics eligibility'
+);
+
 SELECT private.finalize_sponsorship_attribution(
   (
     SELECT uuid_value
@@ -687,6 +824,10 @@ SELECT extensions.ok(
       AND attribution.exposure_lag IS NOT DISTINCT FROM snapshot.exposure_lag
       AND attribution.policy_version = snapshot.policy_version
       AND attribution.decided_at = snapshot.decided_at
+      AND attribution.analytics_eligible IS NOT DISTINCT FROM
+        snapshot.analytics_eligible
+      AND attribution.analytics_exclusion_reason IS NOT DISTINCT FROM
+        snapshot.analytics_exclusion_reason
       AND attribution.finalized_at IS NOT NULL
       AND attribution.conversion_occurred_at IS NOT NULL
     FROM public.sponsorship_attributions attribution
@@ -773,7 +914,9 @@ SELECT
   attribution.decision_context,
   attribution.decided_at,
   attribution.finalized_at,
-  attribution.conversion_occurred_at
+  attribution.conversion_occurred_at,
+  attribution.analytics_eligible,
+  attribution.analytics_exclusion_reason
 FROM public.sponsorship_attributions attribution
 JOIN attribution_freeze_test_context context
   ON context.key = 'unattributed_intent'
@@ -884,7 +1027,9 @@ SELECT
   attribution.decision_context,
   attribution.decided_at,
   attribution.finalized_at,
-  attribution.conversion_occurred_at
+  attribution.conversion_occurred_at,
+  attribution.analytics_eligible,
+  attribution.analytics_exclusion_reason
 FROM public.sponsorship_attributions attribution
 JOIN attribution_freeze_test_context context
   ON context.key = 'direct_intent'

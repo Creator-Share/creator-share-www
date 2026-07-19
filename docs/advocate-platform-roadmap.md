@@ -246,6 +246,22 @@ Segmented behavioral cells with fewer than five sponsors are suppressed. Complem
 
 Public metric selections come from a fixed allowlist of privacy safe metrics. Advocates cannot publish arbitrary queries.
 
+### 5.1 MVP private analytics boundary
+
+The private advocate dashboard reads one fixed database projection. It does not accept arbitrary filters, date ranges, groupings, exports, or raw identifiers. The projection uses the preceding complete UTC day as its exclusive cutoff and includes only finalized attribution records with at least one recorded sponsorship payment before that cutoff.
+
+Official outcomes combine direct sponsorships with post visit attributed sponsorships no more than 30 days after exposure. Observed outcomes from more than 30 days through 365 days remain separate. The five timing bands are mutually exclusive. Renewals add to collected funds but never add sponsorships or sponsor contacts.
+
+Every visible cell requires at least five distinct normalized sponsor contact keys. A timing breakdown is withheld in full if any nonempty timing cell is below that threshold. Original currency detail is likewise withheld in full if any represented currency is below the threshold. A renewal, account, adjustment, or commitment measure also requires five contributing contacts. When one measure is withheld, complementary gross or net values are withheld wherever subtraction could recover it. Timing and currency measures are suppressed across their entire family when another cell could reveal a small subgroup. Suppressed responses carry no hidden values. Zero cells may be shown as zero.
+
+Financial values come from the immutable sponsorship movement ledger. Initial payments, renewals, completed refunds and reversals, dispute debits, and dispute credits remain separate. Net collected funds use the signed ledger result. Monthly and annual active commitments are reported separately because their periodic amounts are not interchangeable. The annualized projection multiplies monthly commitments by twelve and leaves annual commitments unchanged. Subscription state is reconstructed from applied lifecycle evidence and settled cancellation operations before the cutoff, and its latest verified paid period must cover the cutoff.
+
+Creator Share staff and members of the attributed advocate portal are excluded through an immutable eligibility decision written when the attribution row is created. The rollout classifies any preexisting attribution exactly once under an exclusive lock, using only global role and same-portal membership evidence that existed when its server-owned intent was created. The column has no permissive default, so a missing trigger fails closed. Later membership changes and replayed backfills do not rewrite historical eligibility. If an environment has hard-deleted historical role or membership evidence, deployment requires an explicit reconciliation decision because current tables cannot reconstruct that lost history. Anonymous checkout cannot infer an identity it does not possess.
+
+The dashboard may report verified sponsor accounts and normalized sponsor contacts as different concepts. Neither is presented as an exact count of people. Contact count comparability across a future HMAC key rotation is deferred to FF-032. Pending provider adjustments are not inferred from gateway payloads and are deferred to FF-033 until a provider-neutral state exists.
+
+The MVP exposes no date filters, exports, recognition joins, or arbitrary cohorts. FF-034 tracks stronger protection against temporal differencing across repeated cumulative snapshots before any of those surfaces are added.
+
 ## 6. Financial reporting
 
 Store both original currency details and normalized USD values using the conversion evidence applicable at transaction time.

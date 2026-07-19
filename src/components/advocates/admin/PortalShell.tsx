@@ -87,7 +87,11 @@ export function buildAdvocatePortalNavigation(
   for (const section of FUTURE_SECTIONS) {
     if (!permissions.has(section.permission)) continue
     const href =
-      section.section === "team" ? `/portal/${portal.slug}/team` : null
+      section.section === "analytics"
+        ? `/portal/${portal.slug}/analytics`
+        : section.section === "team"
+          ? `/portal/${portal.slug}/team`
+          : null
     items.push({
       section: section.section,
       label: section.label,
