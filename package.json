@@ -11,7 +11,7 @@
     "lint": "next lint",
     "format": "npx prettier --write .",
     "test": "playwright test",
-    "test:advocate:webkit": "RUN_WEBKIT_BROWSER_INTEGRATION=1 playwright test tests/advocates/portal-catalog-browser.spec.ts --grep \"recovers version-bound drafts after mobile WebKit\" --workers=1 --retries=0",
+    "test:advocate:webkit": "PW_NO_WEBSERVER=1 RUN_WEBKIT_BROWSER_INTEGRATION=1 playwright test tests/advocates/portal-catalog-browser.spec.ts --grep \"recovers version-bound drafts after mobile WebKit\" --workers=1 --retries=0",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed"
   },

@@ -242,19 +242,50 @@ export function CatalogSettingsClient({
     normalizedReason.length <= 500 &&
     !saving &&
     !staleLocked
-  const serializedDraft = dirty
-    ? JSON.stringify({
-        schemaVersion: 2,
-        advocateId: settings.advocateId,
-        actorUserId: settings.actorUserId,
-        advocateVersion,
-        savedFingerprint,
-        mode,
-        selections: canonicalSelections,
-        changeReason,
-      })
-    : null
+  function serializeDraft(
+    nextMode: AdvocateCatalogMode,
+    nextSelections: readonly AdvocateCatalogSelection[],
+    nextChangeReason: string,
+  ): string | null {
+    const nextCanonicalSelections = selectionsForAdvocateCatalogMode(
+      nextMode,
+      nextSelections,
+    )
+    if (
+      advocateCatalogFingerprint(nextMode, nextCanonicalSelections) ===
+      savedFingerprint
+    ) {
+      return null
+    }
+    return JSON.stringify({
+      schemaVersion: 2,
+      advocateId: settings.advocateId,
+      actorUserId: settings.actorUserId,
+      advocateVersion,
+      savedFingerprint,
+      mode: nextMode,
+      selections: nextCanonicalSelections,
+      changeReason: nextChangeReason,
+    })
+  }
+  const serializedDraft = serializeDraft(mode, selections, changeReason)
   latestSerializedDraft.current = serializedDraft
+
+  function persistLatestCatalogDraft(
+    nextMode: AdvocateCatalogMode,
+    nextSelections: readonly AdvocateCatalogSelection[],
+    nextChangeReason: string,
+  ) {
+    const nextSerializedDraft = serializeDraft(
+      nextMode,
+      nextSelections,
+      nextChangeReason,
+    )
+    latestSerializedDraft.current = nextSerializedDraft
+    if (!persistCatalogDraft(draftStorageKey, nextSerializedDraft)) {
+      setDraftPersistenceAvailable(false)
+    }
+  }
 
   const clearCatalogDraft = useCallback(() => {
     latestSerializedDraft.current = null
@@ -488,12 +519,14 @@ export function CatalogSettingsClient({
 
   function chooseMode(value: AdvocateCatalogMode) {
     allowPageUnload.current = false
+    persistLatestCatalogDraft(value, selections, changeReason)
     setMode(value)
     setMessage(null)
   }
 
   function updateChangeReason(value: string) {
     allowPageUnload.current = false
+    persistLatestCatalogDraft(mode, selections, value)
     setChangeReason(value)
   }
 
@@ -528,15 +561,15 @@ export function CatalogSettingsClient({
       return
     }
     allowPageUnload.current = false
-    setSelections((current) =>
-      freezeSelections([
-        ...current,
-        {
-          beneficiaryId: choice.id,
-          isFeatured: mode === "all_featured",
-        },
-      ]),
-    )
+    const nextSelections = freezeSelections([
+      ...selections,
+      {
+        beneficiaryId: choice.id,
+        isFeatured: mode === "all_featured",
+      },
+    ])
+    persistLatestCatalogDraft(mode, nextSelections, changeReason)
+    setSelections(nextSelections)
     announceCatalogChange(
       `${advocateCatalogChoiceLabel(choice)} added. ${selections.length + 1} of ${settings.selectionLimit} selected.`,
     )
@@ -559,7 +592,9 @@ export function CatalogSettingsClient({
       ] ?? null
     const choice = choiceById.get(beneficiaryId)
 
-    setSelections(freezeSelections(remainingSelections))
+    const nextSelections = freezeSelections(remainingSelections)
+    persistLatestCatalogDraft(mode, nextSelections, changeReason)
+    setSelections(nextSelections)
     announceCatalogChange(
       `${choice ? advocateCatalogChoiceLabel(choice) : "Child"} removed. ${remainingSelections.length} of ${settings.selectionLimit} selected.`,
     )
@@ -580,6 +615,7 @@ export function CatalogSettingsClient({
       beneficiaryId,
       direction,
     )
+    persistLatestCatalogDraft(mode, moved, changeReason)
     setSelections(moved)
     const nextIndex = moved.findIndex(
       (selection) => selection.beneficiaryId === beneficiaryId,
@@ -626,15 +662,15 @@ export function CatalogSettingsClient({
 
   function toggleFeatured(beneficiaryId: string, isFeatured: boolean) {
     allowPageUnload.current = false
-    setSelections((current) =>
-      freezeSelections(
-        current.map((selection) =>
-          selection.beneficiaryId === beneficiaryId
-            ? { ...selection, isFeatured }
-            : selection,
-        ),
+    const nextSelections = freezeSelections(
+      selections.map((selection) =>
+        selection.beneficiaryId === beneficiaryId
+          ? { ...selection, isFeatured }
+          : selection,
       ),
     )
+    persistLatestCatalogDraft(mode, nextSelections, changeReason)
+    setSelections(nextSelections)
     setMessage(null)
   }
 
