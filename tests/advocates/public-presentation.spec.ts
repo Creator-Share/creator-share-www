@@ -49,6 +49,7 @@ const LOGO_OBJECT_ID = "31111111-1111-4111-8111-111111111111"
 const LOGO_STORAGE_PATH = `logos/alice/${LOGO_OBJECT_ID}.webp`
 const LOGO_PUBLIC_ORIGIN = "https://project.supabase.co"
 const READY_AT = "2026-07-18T13:00:00.000Z"
+const METRIC_AS_OF = "2026-07-06T00:00:00Z"
 
 const BASE_SOURCE = {
   domain: {
@@ -84,19 +85,31 @@ const BASE_SOURCE = {
   },
   metricSelections: [
     {
-      advocate_id: ADVOCATE_ID,
-      metric_key: "children_sponsored",
+      key: "children_sponsored",
       display_order: 2,
+      status: "published",
+      value: "25",
+      unit: "count",
+      qualifier: "at_least",
+      as_of: METRIC_AS_OF,
     },
     {
-      advocate_id: ADVOCATE_ID,
-      metric_key: "gross_raised_usd",
+      key: "gross_raised_usd",
       display_order: 0,
+      status: "published",
+      value: "120000",
+      unit: "usd_cents",
+      qualifier: "at_least",
+      as_of: METRIC_AS_OF,
     },
     {
-      advocate_id: ADVOCATE_ID,
-      metric_key: "direct_sponsorships",
+      key: "direct_sponsorships",
       display_order: 1,
+      status: "pending",
+      value: null,
+      unit: null,
+      qualifier: null,
+      as_of: null,
     },
   ],
   beneficiarySelections: Array.from({ length: 5_000 }, (_, index) => ({
@@ -168,10 +181,31 @@ test.describe("public advocate presentation boundary", () => {
       logoAltText: "Alice Example logo",
       openingHeaderHtml: "<h2>Welcome</h2>",
       aboutBiographyHtml: "<p>About us.</p>",
-      publicMetricKeys: [
-        "gross_raised_usd",
-        "direct_sponsorships",
-        "children_sponsored",
+      publicMetrics: [
+        {
+          key: "gross_raised_usd",
+          status: "published",
+          value: "120000",
+          unit: "usd_cents",
+          qualifier: "at_least",
+          asOf: METRIC_AS_OF,
+        },
+        {
+          key: "direct_sponsorships",
+          status: "pending",
+          value: null,
+          unit: null,
+          qualifier: null,
+          asOf: null,
+        },
+        {
+          key: "children_sponsored",
+          status: "published",
+          value: "25",
+          unit: "count",
+          qualifier: "at_least",
+          asOf: METRIC_AS_OF,
+        },
       ],
     })
 
@@ -198,7 +232,7 @@ test.describe("public advocate presentation boundary", () => {
         "logoUrl",
         "openingHeaderHtml",
         "primaryColor",
-        "publicMetricKeys",
+        "publicMetrics",
         "slug",
       ].sort(),
     )
@@ -350,9 +384,6 @@ test.describe("public advocate presentation boundary", () => {
         source.branding.advocate_id = OTHER_ADVOCATE_ID
       },
       (source) => {
-        source.metricSelections[0].advocate_id = OTHER_ADVOCATE_ID
-      },
-      (source) => {
         source.domain.advocate_id = "not-a-uuid"
       },
       (source) => {
@@ -501,21 +532,29 @@ test.describe("public advocate presentation boundary", () => {
     })
   })
 
-  test("rejects duplicate, invalid, or ambiguously ordered public metrics", async () => {
-    expect(PUBLIC_ADVOCATE_METRIC_KEYS).toHaveLength(9)
+  test("accepts only the four privacy-safe public metric keys in contiguous order", async () => {
+    expect(PUBLIC_ADVOCATE_METRIC_KEYS).toEqual([
+      "children_sponsored",
+      "gross_raised_usd",
+      "direct_sponsorships",
+      "post_visit_attributed_sponsorships",
+    ])
 
     const cases: Array<(source: typeof BASE_SOURCE) => void> = [
       (source) => {
-        source.metricSelections[1].metric_key = "children_sponsored"
+        source.metricSelections[1].key = "children_sponsored"
       },
       (source) => {
-        source.metricSelections[0].metric_key = "private_exact_revenue"
+        source.metricSelections[0].key = "private_exact_revenue"
       },
       (source) => {
         source.metricSelections[1].display_order = 2
       },
       (source) => {
         source.metricSelections[0].display_order = -1
+      },
+      (source) => {
+        source.metricSelections[0].display_order = 3
       },
     ]
 
@@ -524,6 +563,89 @@ test.describe("public advocate presentation boundary", () => {
       mutate(source)
       const { result } = await resolveSource(source)
       expect(result).toMatchObject({
+        kind: "unavailable-tenant",
+        reason: "invalid-presentation",
+      })
+    }
+  })
+
+  test("requires exact pending and published public metric shapes", async () => {
+    const cases: Array<(source: typeof BASE_SOURCE) => void> = [
+      (source) => {
+        source.metricSelections[0].status = "private"
+      },
+      (source) => {
+        source.metricSelections[2].value = "5"
+      },
+      (source) => {
+        source.metricSelections[2].as_of = METRIC_AS_OF
+      },
+      (source) => {
+        source.metricSelections[0].unit = "usd_cents"
+      },
+      (source) => {
+        source.metricSelections[1].unit = "count"
+      },
+      (source) => {
+        source.metricSelections[0].qualifier = "exact"
+      },
+      (source) => {
+        source.metricSelections[0].as_of = "not-a-timestamp"
+      },
+      (source) => {
+        source.metricSelections[0].as_of = "2026-07-07T00:00:00Z"
+      },
+      (source) => {
+        source.metricSelections[0].as_of = "2026-07-06T00:00:00+00:00"
+      },
+      (source) => {
+        source.metricSelections[0].as_of = "2026-07-06T00:00:01Z"
+      },
+      (source) => {
+        source.metricSelections[0].as_of = "2026-07-06T00:00:00.000Z"
+      },
+      (source) => {
+        Object.assign(source.metricSelections[0], {
+          exact_private_value: "27",
+        })
+      },
+    ]
+
+    for (const mutate of cases) {
+      const source = cloneSource()
+      mutate(source)
+      const { result } = await resolveSource(source)
+      expect(result).toMatchObject({
+        kind: "unavailable-tenant",
+        reason: "invalid-presentation",
+      })
+    }
+  })
+
+  test("rejects exact, malformed, nonpositive, and out-of-range metric values", async () => {
+    for (const invalidCount of [
+      "0",
+      "1",
+      "24",
+      "025",
+      "25.0",
+      "-25",
+      "9223372036854775810",
+    ]) {
+      const source = cloneSource()
+      source.metricSelections[0].value = invalidCount
+      const { result } = await resolveSource(source)
+      expect(result, invalidCount).toMatchObject({
+        kind: "unavailable-tenant",
+        reason: "invalid-presentation",
+      })
+    }
+
+    for (const invalidUsdCents of ["100", "9999", "120001"]) {
+      const source = cloneSource()
+      source.metricSelections[1].value = invalidUsdCents
+      const { result } = await resolveSource(source)
+      expect(result, invalidUsdCents).toMatchObject({
         kind: "unavailable-tenant",
         reason: "invalid-presentation",
       })

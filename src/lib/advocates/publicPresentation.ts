@@ -21,6 +21,7 @@ const HOSTNAME_PATTERN =
 const COLOR_PATTERN = /^#[0-9a-f]{6}$/i
 const RFC3339_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/
+const PUBLIC_METRIC_RELEASE_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T00:00:00Z$/
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/
 const MAX_LOGO_ALT_TEXT_LENGTH = 300
 const MAX_DISPLAY_ORDER = 2_147_483_647
@@ -34,20 +35,28 @@ export const DEFAULT_PRIMARY_HOSTNAMES = Object.freeze([
 
 export const PUBLIC_ADVOCATE_METRIC_KEYS = Object.freeze([
   "children_sponsored",
-  "active_sponsorships",
-  "verified_sponsor_accounts",
-  "unique_sponsor_contacts",
   "gross_raised_usd",
-  "net_raised_usd",
   "direct_sponsorships",
   "post_visit_attributed_sponsorships",
-  "post_visit_observed_sponsorships",
 ] as const)
 
 export type PublicAdvocateMetricKey =
   (typeof PUBLIC_ADVOCATE_METRIC_KEYS)[number]
 
 const PUBLIC_METRIC_KEY_SET = new Set<string>(PUBLIC_ADVOCATE_METRIC_KEYS)
+const PUBLIC_METRIC_SOURCE_FIELDS = Object.freeze([
+  "as_of",
+  "display_order",
+  "key",
+  "qualifier",
+  "status",
+  "unit",
+  "value",
+] as const)
+const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n
+const COUNT_PRIVACY_BUCKET = 5n
+const USD_CENTS_PRIVACY_BUCKET = 10_000n
+const POSITIVE_DECIMAL_PATTERN = /^[1-9][0-9]{0,18}$/
 
 export interface PublicAdvocatePresentationRepository {
   loadByCanonicalHostname(hostname: string): Promise<unknown | null>
@@ -64,8 +73,7 @@ export interface PublicAdvocateAssetOptions {
 }
 
 export interface ResolvePublicAdvocateRequestOptions
-  extends ResolveAdvocateHostOptions,
-    PublicAdvocateAssetOptions {
+  extends ResolveAdvocateHostOptions, PublicAdvocateAssetOptions {
   /**
    * Extra non-tenant hosts, such as a specific Vercel preview hostname, that
    * a trusted runtime configuration explicitly permits to serve the primary
@@ -85,8 +93,28 @@ export interface PublicAdvocatePresentation {
   logoAltText: string | null
   openingHeaderHtml: string
   aboutBiographyHtml: string
-  publicMetricKeys: readonly PublicAdvocateMetricKey[]
+  publicMetrics: readonly PublicAdvocateMetric[]
 }
+
+export type PublicAdvocateMetricUnit = "count" | "usd_cents"
+
+export type PublicAdvocateMetric =
+  | Readonly<{
+      key: PublicAdvocateMetricKey
+      status: "published"
+      value: string
+      unit: PublicAdvocateMetricUnit
+      qualifier: "at_least"
+      asOf: string
+    }>
+  | Readonly<{
+      key: PublicAdvocateMetricKey
+      status: "pending"
+      value: null
+      unit: null
+      qualifier: null
+      asOf: null
+    }>
 
 export type PublicAdvocateRequestResolution =
   | {
@@ -114,8 +142,8 @@ export type PublicAdvocateRequestResolution =
     }
 
 type MetricSelection = {
-  key: PublicAdvocateMetricKey
   displayOrder: number
+  metric: PublicAdvocateMetric
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -152,6 +180,22 @@ function readinessTimestamp(value: unknown): boolean {
   )
 }
 
+function publicMetricReleaseTimestamp(value: unknown): boolean {
+  if (
+    typeof value !== "string" ||
+    !PUBLIC_METRIC_RELEASE_TIMESTAMP_PATTERN.test(value)
+  ) {
+    return false
+  }
+
+  const parsed = new Date(value)
+  return (
+    Number.isFinite(parsed.getTime()) &&
+    parsed.getUTCDay() === 1 &&
+    parsed.toISOString() === value.replace("Z", ".000Z")
+  )
+}
+
 function displayOrder(value: unknown): number | null {
   return typeof value === "number" &&
     Number.isSafeInteger(value) &&
@@ -159,6 +203,85 @@ function displayOrder(value: unknown): number | null {
     value <= MAX_DISPLAY_ORDER
     ? value
     : null
+}
+
+function hasExactFields(
+  value: Record<string, unknown>,
+  expectedFields: readonly string[],
+): boolean {
+  const actualFields = Object.keys(value).sort()
+  return (
+    actualFields.length === expectedFields.length &&
+    actualFields.every((field, index) => field === expectedFields[index])
+  )
+}
+
+function metricUnitForKey(
+  key: PublicAdvocateMetricKey,
+): PublicAdvocateMetricUnit {
+  return key === "gross_raised_usd" ? "usd_cents" : "count"
+}
+
+function privacyBucketForUnit(unit: PublicAdvocateMetricUnit): bigint {
+  return unit === "usd_cents" ? USD_CENTS_PRIVACY_BUCKET : COUNT_PRIVACY_BUCKET
+}
+
+function validBucketedValue(value: unknown, unit: PublicAdvocateMetricUnit) {
+  if (typeof value !== "string" || !POSITIVE_DECIMAL_PATTERN.test(value)) {
+    return false
+  }
+
+  const parsed = BigInt(value)
+  return (
+    parsed <= POSTGRES_BIGINT_MAX && parsed % privacyBucketForUnit(unit) === 0n
+  )
+}
+
+function parseMetric(
+  item: Record<string, unknown>,
+  key: PublicAdvocateMetricKey,
+): PublicAdvocateMetric | null {
+  if (!hasExactFields(item, PUBLIC_METRIC_SOURCE_FIELDS)) return null
+
+  if (item.status === "pending") {
+    if (
+      item.value !== null ||
+      item.unit !== null ||
+      item.qualifier !== null ||
+      item.as_of !== null
+    ) {
+      return null
+    }
+
+    return Object.freeze({
+      key,
+      status: "pending",
+      value: null,
+      unit: null,
+      qualifier: null,
+      asOf: null,
+    })
+  }
+
+  const expectedUnit = metricUnitForKey(key)
+  if (
+    item.status !== "published" ||
+    item.unit !== expectedUnit ||
+    item.qualifier !== "at_least" ||
+    !validBucketedValue(item.value, expectedUnit) ||
+    !publicMetricReleaseTimestamp(item.as_of)
+  ) {
+    return null
+  }
+
+  return Object.freeze({
+    key,
+    status: "published",
+    value: item.value as string,
+    unit: expectedUnit,
+    qualifier: "at_least",
+    asOf: item.as_of as string,
+  })
 }
 
 function exactLogoStoragePath(
@@ -247,8 +370,7 @@ function safeLogoUrl(
 
 function parseMetricSelections(
   value: unknown,
-  advocateId: string,
-): readonly PublicAdvocateMetricKey[] | null {
+): readonly PublicAdvocateMetric[] | null {
   if (
     !Array.isArray(value) ||
     value.length > PUBLIC_ADVOCATE_METRIC_KEYS.length
@@ -261,9 +383,9 @@ function parseMetricSelections(
   const seenOrders = new Set<number>()
 
   for (const item of value) {
-    if (!isRecord(item) || item.advocate_id !== advocateId) return null
+    if (!isRecord(item)) return null
 
-    const key = item.metric_key
+    const key = item.key
     const order = displayOrder(item.display_order)
     if (
       typeof key !== "string" ||
@@ -275,23 +397,23 @@ function parseMetricSelections(
       return null
     }
 
+    const metric = parseMetric(item, key as PublicAdvocateMetricKey)
+    if (metric === null) return null
+
     seenKeys.add(key)
     seenOrders.add(order)
     selections.push({
-      key: key as PublicAdvocateMetricKey,
       displayOrder: order,
+      metric,
     })
   }
 
-  return Object.freeze(
-    selections
-      .sort(
-        (left, right) =>
-          left.displayOrder - right.displayOrder ||
-          left.key.localeCompare(right.key),
-      )
-      .map((selection) => selection.key),
-  )
+  selections.sort((left, right) => left.displayOrder - right.displayOrder)
+  if (selections.some((selection, index) => selection.displayOrder !== index)) {
+    return null
+  }
+
+  return Object.freeze(selections.map((selection) => selection.metric))
 }
 
 function buildPresentation(
@@ -361,11 +483,8 @@ function buildPresentation(
     return null
   }
 
-  const publicMetricKeys = parseMetricSelections(
-    source.metricSelections,
-    advocateId,
-  )
-  if (publicMetricKeys === null) return null
+  const publicMetrics = parseMetricSelections(source.metricSelections)
+  if (publicMetrics === null) return null
 
   let openingHeaderHtml: string
   let aboutBiographyHtml: string
@@ -392,7 +511,7 @@ function buildPresentation(
       logoUrl === null ? null : configuredLogoAltText || `${displayName} logo`,
     openingHeaderHtml,
     aboutBiographyHtml,
-    publicMetricKeys,
+    publicMetrics,
   })
 }
 

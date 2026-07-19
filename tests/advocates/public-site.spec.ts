@@ -8,7 +8,12 @@ import { expect, test } from "@playwright/test"
 import {
   CREATOR_SHARE_ACCENT_COLOR,
   CREATOR_SHARE_PRIMARY_COLOR,
+  createAdvocatePublicSite,
+  createPaymentPublicSite,
   createPrimaryPublicSite,
+  formatPublicSiteMetricAsOf,
+  formatPublicSiteMetricValue,
+  type PublicSiteMetric,
 } from "../../src/lib/advocates/publicSite"
 import {
   contrastRatio,
@@ -51,6 +56,7 @@ const { configuredPrimaryHostnames, resolvePublicSiteRequest } =
 
 const ADVOCATE_ID = "11111111-1111-4111-8111-111111111111"
 const READY_AT = "2026-07-18T13:00:00.000Z"
+const METRIC_AS_OF = "2026-07-06T00:00:00Z"
 const PRODUCTION_ENVIRONMENT = {
   NODE_ENV: "production",
   NEXT_PUBLIC_BASE_URL: "https://dev.creatorshare.com",
@@ -88,9 +94,13 @@ const ACTIVE_PRESENTATION_SOURCE = {
   },
   metricSelections: [
     {
-      advocate_id: ADVOCATE_ID,
-      metric_key: "children_sponsored",
+      key: "children_sponsored",
       display_order: 0,
+      status: "published",
+      value: "25",
+      unit: "count",
+      qualifier: "at_least",
+      as_of: METRIC_AS_OF,
     },
   ],
 }
@@ -158,7 +168,16 @@ test.describe("public site request shell", () => {
         logoAltText: null,
         openingHeaderHtml: "<h2>Welcome</h2>",
         aboutBiographyHtml: "<p>About Alice.</p>",
-        publicMetricKeys: ["children_sponsored"],
+        publicMetrics: [
+          {
+            key: "children_sponsored",
+            status: "published",
+            value: "25",
+            unit: "count",
+            qualifier: "at_least",
+            asOf: METRIC_AS_OF,
+          },
+        ],
       },
     })
 
@@ -228,6 +247,76 @@ test.describe("public site request shell", () => {
         VERCEL_URL: " example.com",
       }),
     ).toEqual([])
+  })
+})
+
+test.describe("public impact metric DTO", () => {
+  const COUNT_METRIC: PublicSiteMetric = {
+    key: "children_sponsored",
+    status: "published",
+    value: "9223372036854775805",
+    unit: "count",
+    qualifier: "at_least",
+    asOf: METRIC_AS_OF,
+  }
+  const USD_METRIC: PublicSiteMetric = {
+    key: "gross_raised_usd",
+    status: "published",
+    value: "120000",
+    unit: "usd_cents",
+    qualifier: "at_least",
+    asOf: METRIC_AS_OF,
+  }
+  const PENDING_METRIC: PublicSiteMetric = {
+    key: "direct_sponsorships",
+    status: "pending",
+    value: null,
+    unit: null,
+    qualifier: null,
+    asOf: null,
+  }
+
+  test("formats bigint milestones without lossy number conversion", () => {
+    expect(formatPublicSiteMetricValue(COUNT_METRIC)).toBe(
+      "9,223,372,036,854,775,805+",
+    )
+    expect(formatPublicSiteMetricValue(USD_METRIC)).toBe("$1,200+")
+    expect(formatPublicSiteMetricAsOf(USD_METRIC)).toBe("As of Jul 6, 2026")
+  })
+
+  test("uses a neutral message for a pending privacy milestone", () => {
+    expect(formatPublicSiteMetricValue(PENDING_METRIC)).toBe(
+      "Not available yet",
+    )
+    expect(formatPublicSiteMetricAsOf(PENDING_METRIC)).toBeNull()
+  })
+
+  test("keeps primary and payment shells free of public advocate metrics", () => {
+    expect(createPrimaryPublicSite("creatorshare.com").publicMetrics).toEqual(
+      [],
+    )
+    expect(createPaymentPublicSite().publicMetrics).toEqual([])
+  })
+
+  test("copies the ordered metric projection into the advocate client DTO", () => {
+    const sourceMetrics = [USD_METRIC, PENDING_METRIC]
+    const site = createAdvocatePublicSite({
+      canonicalHostname: "alice.creatorshare.com",
+      slug: "alice",
+      displayName: "Alice Example",
+      beneficiaryMode: "all",
+      primaryColor: "#173E8C",
+      accentColor: "#F6C344",
+      logoUrl: null,
+      logoAltText: null,
+      openingHeaderHtml: "",
+      aboutBiographyHtml: "",
+      publicMetrics: sourceMetrics,
+    })
+
+    expect(site.publicMetrics).toEqual([USD_METRIC, PENDING_METRIC])
+    expect(site.publicMetrics).not.toBe(sourceMetrics)
+    expect(site.publicMetrics[0]).not.toBe(USD_METRIC)
   })
 })
 

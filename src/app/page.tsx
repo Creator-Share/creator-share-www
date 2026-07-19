@@ -7,6 +7,7 @@ import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
 import { TYPE_TO_ROUTE } from "@/config/beneficiaryTypes"
 import { HomeBgPicker } from "@/components/HomeBg"
 import { notifyPublicPathChange } from "@/lib/advocates/publicPathChanges"
+import { AdvocateImpactMetrics } from "@/components/advocates/AdvocateImpactMetrics"
 
 export default function Home() {
   const [activeType, setActiveType] = useState<BeneficiaryTabType | null>(null)
@@ -31,6 +32,7 @@ export default function Home() {
       <HomeBgPicker />
       <div style={{ position: "relative", zIndex: 1 }}>
         <HomeHero activeType={activeType} onTypeChange={handleTypeChange} />
+        <AdvocateImpactMetrics />
         <SponsorshipsContainer
           activeType={activeType}
           onTypeChange={handleTypeChange}

@@ -206,9 +206,12 @@ test.describe("advocate portal navigation", () => {
       "branding",
       "public-metrics",
     ])
-    expect(brandEditor.filter((item) => item.href !== null)).toHaveLength(2)
+    expect(brandEditor.filter((item) => item.href !== null)).toHaveLength(3)
     expect(brandEditor.at(-1)).toEqual(
-      expect.objectContaining({ availability: "coming-soon", href: null }),
+      expect.objectContaining({
+        availability: "available",
+        href: "/portal/hope/public-metrics",
+      }),
     )
 
     const teamManager = buildAdvocatePortalNavigation({

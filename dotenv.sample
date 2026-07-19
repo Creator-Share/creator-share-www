@@ -94,6 +94,9 @@ CRON_SECRET=
 # Advocate logo cleanup only. External schedulers may use this dedicated value.
 # Leave it unset for Vercel Cron, which sends CRON_SECRET.
 # ADVOCATE_LOGO_RECONCILIATION_WORKER_SECRET=
+# Weekly public metric releases. External schedulers may use this dedicated
+# value. Leave it unset for Vercel Cron, which sends CRON_SECRET.
+# ADVOCATE_PUBLIC_METRIC_RELEASE_WORKER_SECRET=
 # External scheduler only. Leave unset for Vercel Cron, which sends CRON_SECRET.
 # DATA_RETENTION_WORKER_SECRET=
 PAYMENT_GATEWAY_EVENT_BATCH_SIZE=20
@@ -112,6 +115,10 @@ SUBSCRIPTION_CANCELLATION_BATCH_SIZE=4
 SUBSCRIPTION_CANCELLATION_CONCURRENCY=2
 SUBSCRIPTION_CANCELLATION_PROVIDER_TIMEOUT_MILLISECONDS=15000
 SUBSCRIPTION_CANCELLATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+# Privacy releases process at most this many active advocate portals per weekly
+# invocation. The database owns cadence, embargo, and idempotency decisions.
+ADVOCATE_PUBLIC_METRIC_RELEASE_BATCH_SIZE=100
+ADVOCATE_PUBLIC_METRIC_RELEASE_RPC_TIMEOUT_MILLISECONDS=45000
 # Hourly bounded cleanup at minute 17 UTC for advocate tracking, encrypted
 # gateway payloads, welcome email contact, checkout contact envelopes, and raw
 # audit forensics. Each run records durable start, step, and final evidence.

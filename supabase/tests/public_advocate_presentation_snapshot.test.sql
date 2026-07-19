@@ -34,7 +34,7 @@ SELECT extensions.ok(
 
 SELECT extensions.ok(
   (
-    SELECT NOT function_definition.prosecdef
+    SELECT function_definition.prosecdef
       AND function_definition.provolatile = 's'
       AND coalesce(array_to_string(function_definition.proconfig, ','), '') =
         'search_path=""'
@@ -42,7 +42,7 @@ SELECT extensions.ok(
     WHERE function_definition.oid =
       'public.read_public_advocate_presentation_snapshot(text)'::regprocedure
   ),
-  'the snapshot is a stable security invoker function with an empty search path'
+  'the snapshot is a stable service only security definer with an empty search path'
 );
 
 SELECT extensions.ok(
@@ -370,25 +370,34 @@ SELECT extensions.is(
   ),
   jsonb_build_array(
     jsonb_build_object(
-      'advocate_id',
-      (SELECT value FROM presentation_test_ids WHERE key = 'advocate'),
-      'metric_key', 'gross_raised_usd',
-      'display_order', 0
+      'key', 'gross_raised_usd',
+      'display_order', 0,
+      'status', 'pending',
+      'value', NULL,
+      'unit', NULL,
+      'qualifier', NULL,
+      'as_of', NULL
     ),
     jsonb_build_object(
-      'advocate_id',
-      (SELECT value FROM presentation_test_ids WHERE key = 'advocate'),
-      'metric_key', 'direct_sponsorships',
-      'display_order', 1
+      'key', 'direct_sponsorships',
+      'display_order', 1,
+      'status', 'pending',
+      'value', NULL,
+      'unit', NULL,
+      'qualifier', NULL,
+      'as_of', NULL
     ),
     jsonb_build_object(
-      'advocate_id',
-      (SELECT value FROM presentation_test_ids WHERE key = 'advocate'),
-      'metric_key', 'children_sponsored',
-      'display_order', 2
+      'key', 'children_sponsored',
+      'display_order', 2,
+      'status', 'pending',
+      'value', NULL,
+      'unit', NULL,
+      'qualifier', NULL,
+      'as_of', NULL
     )
   ),
-  'public metric selections are captured in deterministic display order'
+  'public metric selections expose deterministic generic pending states before a privacy release'
 );
 
 SELECT extensions.ok(

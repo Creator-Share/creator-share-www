@@ -80,6 +80,67 @@ EXCEPTION WHEN others THEN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION pg_temp.call_service_replace_advocate_public_metrics(
+  target_advocate_id uuid,
+  acting_user_id uuid,
+  expected_advocate_version bigint,
+  target_metric_keys public.advocate_public_metric_key[],
+  change_reason text,
+  request_id text,
+  trace_id text DEFAULT NULL,
+  session_id text DEFAULT NULL
+)
+RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_prior_role text := pg_catalog.current_setting(
+    'request.jwt.claim.role',
+    true
+  );
+  v_result bigint;
+BEGIN
+  IF auth.uid() IS DISTINCT FROM acting_user_id THEN
+    RAISE EXCEPTION 'Test service bridge actor mismatch'
+      USING ERRCODE = '42501';
+  END IF;
+
+  PERFORM pg_catalog.set_config(
+    'request.jwt.claim.role',
+    'service_role',
+    true
+  );
+
+  v_result := public.replace_advocate_public_metrics(
+    target_advocate_id,
+    acting_user_id,
+    expected_advocate_version,
+    target_metric_keys,
+    change_reason,
+    request_id,
+    trace_id,
+    session_id
+  );
+
+  PERFORM pg_catalog.set_config(
+    'request.jwt.claim.role',
+    COALESCE(v_prior_role, ''),
+    true
+  );
+
+  RETURN v_result;
+EXCEPTION WHEN others THEN
+  PERFORM pg_catalog.set_config(
+    'request.jwt.claim.role',
+    COALESCE(v_prior_role, ''),
+    true
+  );
+  RAISE;
+END;
+$$;
+
 SELECT extensions.ok(
   (
     SELECT function_definition.prosecdef
@@ -111,7 +172,7 @@ SELECT extensions.ok(
         'search_path=""'
     FROM pg_proc function_definition
     WHERE function_definition.oid =
-      'public.replace_advocate_public_metrics(uuid,bigint,public.advocate_public_metric_key[],text,text,text,text)'::regprocedure
+      'public.replace_advocate_public_metrics(uuid,uuid,bigint,public.advocate_public_metric_key[],text,text,text,text)'::regprocedure
   )
   AND (
     SELECT function_definition.prosecdef
@@ -154,9 +215,14 @@ SELECT extensions.ok(
     'public.update_advocate_branding(uuid,uuid,bigint,text,text,text,uuid,text,text,text,text,text,text,text)',
     'EXECUTE'
   )
-  AND has_function_privilege(
+  AND NOT has_function_privilege(
     'authenticated',
-    'public.replace_advocate_public_metrics(uuid,bigint,public.advocate_public_metric_key[],text,text,text,text)',
+    'public.replace_advocate_public_metrics(uuid,uuid,bigint,public.advocate_public_metric_key[],text,text,text,text)',
+    'EXECUTE'
+  )
+  AND has_function_privilege(
+    'service_role',
+    'public.replace_advocate_public_metrics(uuid,uuid,bigint,public.advocate_public_metric_key[],text,text,text,text)',
     'EXECUTE'
   )
   AND has_function_privilege(
@@ -191,12 +257,7 @@ SELECT extensions.ok(
   )
   AND NOT has_function_privilege(
     'anon',
-    'public.replace_advocate_public_metrics(uuid,bigint,public.advocate_public_metric_key[],text,text,text,text)',
-    'EXECUTE'
-  )
-  AND NOT has_function_privilege(
-    'service_role',
-    'public.replace_advocate_public_metrics(uuid,bigint,public.advocate_public_metric_key[],text,text,text,text)',
+    'public.replace_advocate_public_metrics(uuid,uuid,bigint,public.advocate_public_metric_key[],text,text,text,text)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
@@ -209,7 +270,7 @@ SELECT extensions.ok(
     'public.replace_advocate_beneficiary_configuration(uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text)',
     'EXECUTE'
   ),
-  'authenticated sessions retain reads and normalized settings writes while only the service role can execute the sanitized branding mutation'
+  'authenticated sessions retain reads while only the service role can execute actor aware branding and public metric mutations'
 );
 
 SELECT extensions.is(
@@ -1069,8 +1130,9 @@ SELECT extensions.throws_ok(
       FROM public.get_my_advocate_portal_access()
       WHERE advocate_id = 'a0000000-0000-4000-8000-000000000001'
     )
-    SELECT public.replace_advocate_public_metrics(
+    SELECT pg_temp.call_service_replace_advocate_public_metrics(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000003',
       current_access.advocate_version,
       ARRAY[
         'gross_raised_usd',
@@ -1093,8 +1155,9 @@ SELECT extensions.throws_ok(
       FROM public.get_my_advocate_portal_access()
       WHERE advocate_id = 'a0000000-0000-4000-8000-000000000001'
     )
-    SELECT public.replace_advocate_public_metrics(
+    SELECT pg_temp.call_service_replace_advocate_public_metrics(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000003',
       current_access.advocate_version,
       ARRAY[
         'gross_raised_usd'::public.advocate_public_metric_key,
@@ -1110,6 +1173,30 @@ SELECT extensions.throws_ok(
   'public metric replacement rejects null keys'
 );
 
+SELECT extensions.throws_ok(
+  $$
+    WITH current_access AS MATERIALIZED (
+      SELECT advocate_version
+      FROM public.get_my_advocate_portal_access()
+      WHERE advocate_id = 'a0000000-0000-4000-8000-000000000001'
+    )
+    SELECT pg_temp.call_service_replace_advocate_public_metrics(
+      'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000003',
+      current_access.advocate_version,
+      ARRAY[
+        'verified_sponsor_accounts'
+      ]::public.advocate_public_metric_key[],
+      'Attempt to publish a private analytics metric',
+      'settings-metrics-private-key'
+    )
+    FROM current_access
+  $$,
+  '22023',
+  'Public metric keys must be an ordered unique allowlisted array',
+  'public metric replacement rejects enum values reserved for private analytics'
+);
+
 SELECT extensions.is(
   (
     WITH current_access AS MATERIALIZED (
@@ -1117,8 +1204,9 @@ SELECT extensions.is(
       FROM public.get_my_advocate_portal_access()
       WHERE advocate_id = 'a0000000-0000-4000-8000-000000000001'
     )
-    SELECT public.replace_advocate_public_metrics(
+    SELECT pg_temp.call_service_replace_advocate_public_metrics(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000003',
       current_access.advocate_version,
       ARRAY[
         'gross_raised_usd',
@@ -1155,6 +1243,32 @@ SELECT extensions.is(
     )
   ),
   'the settings snapshot returns public metrics in the exact submitted order'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    WITH current_access AS MATERIALIZED (
+      SELECT advocate_version
+      FROM public.get_my_advocate_portal_access()
+      WHERE advocate_id = 'a0000000-0000-4000-8000-000000000001'
+    )
+    SELECT pg_temp.call_service_replace_advocate_public_metrics(
+      'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000003',
+      current_access.advocate_version,
+      ARRAY[
+        'gross_raised_usd',
+        'direct_sponsorships',
+        'children_sponsored'
+      ]::public.advocate_public_metric_key[],
+      'Attempt to save an unchanged public metric selection',
+      'settings-metrics-no-op'
+    )
+    FROM current_access
+  $$,
+  '22023',
+  'Public metric selection is unchanged',
+  'public metric replacement rejects an exact no-op without advancing the aggregate version'
 );
 
 SELECT extensions.throws_ok(
@@ -1447,8 +1561,9 @@ SELECT extensions.throws_ok(
       SELECT advocate_version
       FROM public.get_my_advocate_portal_access()
     )
-    SELECT public.replace_advocate_public_metrics(
+    SELECT pg_temp.call_service_replace_advocate_public_metrics(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000005',
       current_access.advocate_version,
       ARRAY[]::public.advocate_public_metric_key[],
       'Analytics viewers cannot configure public metrics',
@@ -1473,8 +1588,9 @@ SELECT extensions.throws_ok(
       SELECT advocate_version
       FROM public.get_my_advocate_portal_access()
     )
-    SELECT public.replace_advocate_public_metrics(
+    SELECT pg_temp.call_service_replace_advocate_public_metrics(
       'a0000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000006',
       current_access.advocate_version,
       ARRAY[]::public.advocate_public_metric_key[],
       'Audit viewers cannot configure public metrics',

@@ -19,6 +19,9 @@
     "src/app/api/internal/advocates/invitations/route.ts": {
       "maxDuration": 60
     },
+    "src/app/api/internal/advocates/public-metrics/route.ts": {
+      "maxDuration": 60
+    },
     "src/app/api/portal/[slug]/logo/route.ts": {
       "maxDuration": 60
     },
@@ -48,6 +51,10 @@
     {
       "path": "/api/internal/advocates/invitations",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/advocates/public-metrics",
+      "schedule": "13 1 * * *"
     },
     {
       "path": "/api/internal/payments/gateway-events",

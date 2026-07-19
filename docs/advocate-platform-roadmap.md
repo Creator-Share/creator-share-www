@@ -164,6 +164,7 @@ The exact migration is authoritative. The intended bounded contexts are:
 - `domain_provisioning_jobs`
 - `advocate_branding`
 - `advocate_public_metric_selections`
+- `private.advocate_public_metric_releases`
 - `advocate_beneficiaries`
 
 Branding is intentionally constrained. Rich text is sanitized against a strict allowlist. No advocate supplied script, style sheet, raw HTML, iframe, tracking pixel, or arbitrary URL execution is permitted.
@@ -261,6 +262,27 @@ Creator Share staff and members of the attributed advocate portal are excluded t
 The dashboard may report verified sponsor accounts and normalized sponsor contacts as different concepts. Neither is presented as an exact count of people. Contact count comparability across a future HMAC key rotation is deferred to FF-032. Pending provider adjustments are not inferred from gateway payloads and are deferred to FF-033 until a provider-neutral state exists.
 
 The MVP exposes no date filters, exports, recognition joins, or arbitrary cohorts. FF-034 tracks stronger protection against temporal differencing across repeated cumulative snapshots before any of those surfaces are added.
+
+### 5.2 MVP public metric release boundary
+
+Anonymous public metrics use a stricter boundary than the private dashboard because anyone can save successive responses and compare them. The page request never calculates a live total. A daily recovery worker may create append only releases only from one fixed source cutoff per week, one full week behind the current Monday at 00:00 UTC. Repeated invocations against that cutoff are idempotent and do not increase the public cadence.
+
+The public allowlist contains only monotonic outcomes:
+
+- Distinct children supported through canonical beneficiary evidence.
+- Gross successful sponsorship payments normalized to USD.
+- Direct sponsorships.
+- Official post visit attributed sponsorships no more than 30 days after exposure.
+
+Active sponsorships, net funds, verified accounts, normalized contacts, and 30 to 365 day observed association remain private. Their changes can expose a cancellation, refund, account claim, contact count, or nonofficial attribution outcome.
+
+Each public metric advances independently only after at least five distinct eligible normalized sponsor contacts changed that metric since its prior released cutoff. Count values round down to multiples of five. Gross funds round down to multiples of 100 USD. Public copy presents every released value as a lower bound. If the contact threshold is not met or the rounded bucket does not advance, the prior release and cutoff remain unchanged. An initial metric remains generically unavailable until both requirements are met.
+
+Releases are calculated for all four approved metrics regardless of current advocate selection. An advocate may choose visibility and order, but changing a selection cannot calculate, accelerate, reset, or distinguish a privacy decision. The browser receives only the key, public order, released or pending state, rounded value and unit, lower bound qualifier, and released cutoff. It never receives a raw total, contributor count, candidate value, threshold result, release identifier, sponsor fact, or suppression reason.
+
+Children supported means distinct historical beneficiaries reached by an eligible official paid intent. A standard sponsorship uses its immutable intent beneficiary. A blind subscription uses its immutable assignment row only after that assignment predates the release cutoff. Unassigned blind sponsorships and partnership sponsorships do not count. One beneficiary counts once even when several sponsors provide support.
+
+The release table is system written, append only, and audited. Its worker uses one fixed database projection with a server-derived cutoff and an overlap-safe transaction lock. It accepts no caller-selected advocate, metric, cutoff, threshold, or bucket. FF-034 retains advanced privacy work before any finer cohorts, exports, public recognition, arbitrary queries, or exact values are introduced.
 
 ## 6. Financial reporting
 
@@ -396,6 +418,7 @@ The v2 checkout database functions and application callers use an additive two p
 - Unit tests for host, attribution, pricing, identity, and permission decisions.
 - Integration tests for all gateways, currencies, modes, retries, renewals, refunds, disputes, and cancellations.
 - Browser tests for primary, advocate, mobile, and provider return flows.
+- Live PostgREST role claim canaries for both service key formats, authenticated sponsor calls, and anonymous and ordinary-user deny controls.
 - Provisioning failure and drift exercises.
 - Privacy reconstruction review and audit redaction review.
 - Operational runbooks, metrics, alerts, rollback, and support training.
