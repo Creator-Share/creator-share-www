@@ -1,0 +1,96 @@
+name: Advocate publication database gate
+
+on:
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - "supabase/migrations/*.sql"
+      - "supabase/tests/*publication*.sql"
+      - "supabase/tests/**/*publication*"
+      - "tests/database/**/*publication*"
+      - "tests/database/support/*.mjs"
+      - "supabase/config.toml"
+      - "supabase/seed.sql"
+      - ".nvmrc"
+      - "package.json"
+      - "package-lock.json"
+      - "yarn.lock"
+      - ".github/workflows/advocate-publication-db-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ADVOCATE_PUBLICATION_DOCKER_NETWORK: advocate-publication-gate-${{ github.run_id }}
+
+concurrency:
+  group: advocate-publication-db-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publication-authority:
+    name: Publication authority database tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Create loopback-only Docker network
+        run: >-
+          docker network create
+          --driver bridge
+          --opt com.docker.network.bridge.host_binding_ipv4=127.0.0.1
+          "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+
+      - name: Start local Supabase
+        run: >-
+          yarn supabase start
+          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+
+      - name: Run focused publication database tests
+        run: |
+          yarn supabase test db \
+            --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK" \
+            supabase/tests/advocate_publication_approval_boundary.test.sql \
+            supabase/tests/advocate_publication_canary_reports.test.sql \
+            supabase/tests/advocate_publication_from_canary.test.sql \
+            supabase/tests/advocate_publication_operation_recovery.test.sql \
+            supabase/tests/advocate_publication_sentinel_reservation.test.sql
+
+      - name: Run publication concurrency harness
+        env:
+          ADVOCATE_PUBLICATION_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-publication-concurrency-evidence.json
+        run: yarn test:advocate:publication-concurrency
+
+      - name: Upload sanitized concurrency evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: advocate-publication-concurrency-evidence
+          path: ${{ runner.temp }}/advocate-publication-concurrency-evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Stop local Supabase
+        if: ${{ always() }}
+        run: yarn supabase stop --no-backup
+
+      - name: Remove loopback-only Docker network
+        if: ${{ always() }}
+        run: |
+          if docker network inspect "$ADVOCATE_PUBLICATION_DOCKER_NETWORK" >/dev/null 2>&1; then
+            docker network rm "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+          fi

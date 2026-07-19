@@ -13,6 +13,7 @@
     "format": "npx prettier --write .",
     "test": "playwright test",
     "test:advocate:webkit": "PW_NO_WEBSERVER=1 RUN_WEBKIT_BROWSER_INTEGRATION=1 playwright test tests/advocates/portal-catalog-browser.spec.ts --grep \"recovers version-bound drafts after mobile WebKit\" --workers=1 --retries=0",
+    "test:advocate:publication-concurrency": "node tests/database/advocate-publication-concurrency.mjs",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed"
   },
@@ -75,6 +76,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.4.7",
     "msw": "^2.7.0",
+    "pg": "8.20.0",
     "postcss": "^8",
     "supabase": "^2.62.5",
     "tailwindcss": "^3.4.1",
