@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import Module from "node:module"
 import { resolve } from "node:path"
@@ -46,9 +47,12 @@ let inspectResult: { data: unknown; error: { code?: string } | null } = {
 }
 let storageUploadError: { message: string } | null = null
 let storageRemoveError: { message: string } | null = null
+let storageUploadThrows = false
+let storageRemoveThrows = false
 let createClientCalls = 0
 let serviceClientCalls = 0
 let portalAccess = accessRow()
+const serviceClientOptionsCalls: unknown[] = []
 const rpcCalls: Array<{ name: string; input: Record<string, unknown> }> = []
 const uploadCalls: Array<{
   bucket: string
@@ -101,8 +105,9 @@ nodeModule._load = function mockedModuleLoad(
           },
         }
       },
-      createServiceRoleClient() {
+      createServiceRoleClient(options?: unknown) {
         serviceClientCalls += 1
+        serviceClientOptionsCalls.push(options)
         return {
           async rpc(name: string, input?: Record<string, unknown>) {
             rpcCalls.push({ name, input: input ?? {} })
@@ -130,6 +135,9 @@ nodeModule._load = function mockedModuleLoad(
                   options: Record<string, unknown>,
                 ) {
                   uploadCalls.push({ bucket, path, bytes, options })
+                  if (storageUploadThrows) {
+                    throw new DOMException("request timed out", "TimeoutError")
+                  }
                   return {
                     data: storageUploadError ? null : { path },
                     error: storageUploadError,
@@ -137,6 +145,9 @@ nodeModule._load = function mockedModuleLoad(
                 },
                 async remove(paths: string[]) {
                   removeCalls.push({ bucket, paths })
+                  if (storageRemoveThrows) {
+                    throw new DOMException("request timed out", "TimeoutError")
+                  }
                   return { data: [], error: storageRemoveError }
                 },
               }
@@ -152,9 +163,10 @@ nodeModule._load = function mockedModuleLoad(
 const testRequire = createRequire(
   resolve(process.cwd(), "tests/advocates/portal-logo-route.spec.ts"),
 )
-const { POST } = testRequire(
+const routeModule = testRequire(
   resolve(process.cwd(), "src/app/api/portal/[slug]/logo/route.ts"),
 ) as RouteModule
+const { POST } = routeModule
 nodeModule._load = originalModuleLoad
 
 async function validLogo(): Promise<Uint8Array> {
@@ -237,15 +249,32 @@ test.beforeEach(() => {
   }
   storageUploadError = null
   storageRemoveError = null
+  storageUploadThrows = false
+  storageRemoveThrows = false
   createClientCalls = 0
   serviceClientCalls = 0
   portalAccess = accessRow()
+  serviceClientOptionsCalls.length = 0
   rpcCalls.length = 0
   uploadCalls.length = 0
   removeCalls.length = 0
 })
 
 test.describe("advocate portal logo route", () => {
+  test("declares matching foreground execution limits", () => {
+    const vercel = JSON.parse(
+      readFileSync(resolve(process.cwd(), "vercel.json"), "utf8"),
+    ) as {
+      functions?: Record<string, { maxDuration?: number }>
+    }
+
+    expect(routeModule.maxDuration).toBe(60)
+    expect(
+      vercel.functions?.["src/app/api/portal/[slug]/logo/route.ts"]
+        ?.maxDuration,
+    ).toBe(60)
+  })
+
   test("rejects cross-origin multipart before authentication or decoding", async () => {
     for (const options of [
       { origin: "https://attacker.example" },
@@ -327,6 +356,9 @@ test.describe("advocate portal logo route", () => {
       advocateVersion: 8,
     })
     expect(uploadCalls).toHaveLength(1)
+    expect(serviceClientOptionsCalls).toEqual([
+      { requestTimeoutMilliseconds: 15_000 },
+    ])
     expect(uploadCalls[0].bucket).toBe("advocate-assets")
     expect(uploadCalls[0].path).toBe(RESERVATION_PATH)
     expect(uploadCalls[0].options).toEqual({
@@ -387,6 +419,51 @@ test.describe("advocate portal logo route", () => {
       )?.input,
     ).toMatchObject({
       target_status: "cancelled",
+      failure_code: "storage_upload_failed",
+    })
+  })
+
+  test("compensates after a storage upload timeout", async () => {
+    storageUploadThrows = true
+    const response = await post(await request())
+
+    expect(response.status).toBe(500)
+    expect(await json(response)).toMatchObject({
+      ok: false,
+      code: "logo_upload_failed",
+    })
+    expect(removeCalls).toEqual([
+      { bucket: "advocate-assets", paths: [RESERVATION_PATH] },
+    ])
+    expect(
+      rpcCalls.find(
+        (call) => call.name === "settle_advocate_logo_upload_reservation",
+      )?.input,
+    ).toMatchObject({
+      target_status: "cancelled",
+      failure_code: "storage_upload_failed",
+    })
+  })
+
+  test("preserves timed-out storage cleanup for durable reconciliation", async () => {
+    storageUploadThrows = true
+    storageRemoveThrows = true
+    const response = await post(await request())
+
+    expect(response.status).toBe(500)
+    expect(await json(response)).toMatchObject({
+      ok: false,
+      code: "logo_upload_failed",
+    })
+    expect(removeCalls).toEqual([
+      { bucket: "advocate-assets", paths: [RESERVATION_PATH] },
+    ])
+    expect(
+      rpcCalls.find(
+        (call) => call.name === "settle_advocate_logo_upload_reservation",
+      )?.input,
+    ).toMatchObject({
+      target_status: "cleanup_required",
       failure_code: "storage_upload_failed",
     })
   })

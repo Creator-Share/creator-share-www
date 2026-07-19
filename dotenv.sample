@@ -91,6 +91,9 @@ CRON_SECRET=
 # PAYMENT_GATEWAY_EVENT_WORKER_SECRET=
 # SPONSOR_WELCOME_EMAIL_WORKER_SECRET=
 # SUBSCRIPTION_CANCELLATION_WORKER_SECRET=
+# Advocate logo cleanup only. External schedulers may use this dedicated value.
+# Leave it unset for Vercel Cron, which sends CRON_SECRET.
+# ADVOCATE_LOGO_RECONCILIATION_WORKER_SECRET=
 # External scheduler only. Leave unset for Vercel Cron, which sends CRON_SECRET.
 # DATA_RETENTION_WORKER_SECRET=
 PAYMENT_GATEWAY_EVENT_BATCH_SIZE=20
@@ -118,6 +121,15 @@ SUBSCRIPTION_CANCELLATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
 DATA_RETENTION_BATCH_SIZE=5000
 DATA_RETENTION_RPC_TIMEOUT_MILLISECONDS=9000
 DATA_RETENTION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+
+# Durable cleanup of unattached advocate logo uploads. The one-minute schedule
+# is declared in vercel.json but must not be promoted until its operational
+# canary passes. Concurrency cannot exceed the batch size. The Storage timeout
+# plus response reserve must not exceed 55 seconds.
+ADVOCATE_LOGO_RECONCILIATION_BATCH_SIZE=4
+ADVOCATE_LOGO_RECONCILIATION_CONCURRENCY=2
+ADVOCATE_LOGO_RECONCILIATION_STORAGE_TIMEOUT_MILLISECONDS=15000
+ADVOCATE_LOGO_RECONCILIATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
 
 # Automated advocate domain provisioning. Cloudflare remains authoritative
 # DNS. The CNAME must be DNS only and target Vercel's configured CNAME target.

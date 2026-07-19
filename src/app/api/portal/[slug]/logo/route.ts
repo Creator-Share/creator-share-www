@@ -32,8 +32,10 @@ import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+export const maxDuration = 60
 
 const LOGO_BUCKET = "advocate-assets"
+const STORAGE_REQUEST_TIMEOUT_MILLISECONDS = 15_000
 
 function response(body: Record<string, unknown>, status: number): NextResponse {
   return NextResponse.json(body, {
@@ -230,7 +232,9 @@ export async function POST(
   }
 
   const traceId = boundedTraceId(request)
-  const serviceClient = createServiceRoleClient()
+  const serviceClient = createServiceRoleClient({
+    requestTimeoutMilliseconds: STORAGE_REQUEST_TIMEOUT_MILLISECONDS,
+  })
   let reservation: AdvocateLogoUploadReservation
   try {
     reservation = await reserveAdvocateLogoUpload(serviceClient, {
