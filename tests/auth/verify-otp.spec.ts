@@ -37,7 +37,7 @@ nodeModule._load = function mockedModuleLoad(
             async verifyOtp(input: Record<string, unknown>) {
               verifyOtpCalls.push(input)
               if (providerFailure) throw providerFailure
-              return { error: providerError }
+              return { data: { user: null }, error: providerError }
             },
           },
         }
@@ -49,9 +49,12 @@ nodeModule._load = function mockedModuleLoad(
 const testRequire = createRequire(
   resolve(process.cwd(), "tests/auth/verify-otp.spec.ts"),
 )
-const { POST } = testRequire(
+const verifyOtpRoutePath = testRequire.resolve(
   "../../src/app/api/auth/verify-otp/route",
-) as VerifyOtpRouteModule
+)
+delete testRequire.cache[verifyOtpRoutePath]
+const { POST } = testRequire(verifyOtpRoutePath) as VerifyOtpRouteModule
+delete testRequire.cache[verifyOtpRoutePath]
 nodeModule._load = originalModuleLoad
 
 const ORIGIN = "https://creatorshare.com"

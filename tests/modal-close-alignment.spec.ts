@@ -8,7 +8,10 @@ test.describe("Modal close control alignment", () => {
   test("Sign In modal: close icon vertically centered in button", async ({
     page,
   }) => {
-    await page.goto("/#signin")
+    const response = await page.goto("/signin", {
+      waitUntil: "domcontentloaded",
+    })
+    expect(response?.status()).toBe(200)
 
     const dialog = page.getByRole("dialog")
     await expect(dialog).toBeVisible({ timeout: 20_000 })
@@ -38,7 +41,10 @@ test.describe("Modal close control alignment", () => {
   test("FAQ modal: close icon vertically centered in button", async ({
     page,
   }) => {
-    await page.goto("/#faq")
+    const response = await page.goto("/faq", {
+      waitUntil: "domcontentloaded",
+    })
+    expect(response?.status()).toBe(200)
 
     const dialog = page.getByRole("dialog")
     await expect(dialog).toBeVisible({ timeout: 20_000 })
