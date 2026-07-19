@@ -402,6 +402,10 @@ Creating one DNS record is easy. A reliable state machine across Cloudflare, Ver
 
 Email verification is low friction. Correctly linking historic subscriptions across two Stripe accounts and PayPal, avoiding collisions, preserving email change semantics, and providing reversible support operations requires careful reconciliation.
 
+### High: delegate invitation authentication and delivery
+
+The invitation is both an authorization grant and a cross-device email flow. It must bind a specific account and email, keep capability and provider proof out of request targets and browser storage, distinguish a fresh email authentication event from a refreshed session, survive mobile email clients, and remain single use under concurrency. Supabase proof supersession and SMTP acceptance ambiguity are provider behaviors with security and delivery consequences. They require production equivalent canaries, durable quarantine, and explicit operator policy.
+
 ### High: privacy safe analytics
 
 Aggregate SQL is straightforward. Preventing small cohort, complement, export, audit, and recognition surfaces from reconstructing sponsor behavior requires a deliberate query boundary and adversarial tests.
