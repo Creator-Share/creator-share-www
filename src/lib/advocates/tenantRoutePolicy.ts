@@ -3,8 +3,10 @@ import { isValidBeneficiaryUsername } from "@/config/beneficiaryValidation"
 import {
   ADVOCATE_LOCALHOST_ROOT,
   ADVOCATE_TENANT_ROOT,
+  isReservedNonPrimaryHostname,
   resolveAdvocateHost,
 } from "./host"
+import { PUBLICATION_CANARY_SENTINEL_HOSTNAME } from "./publicationCanary/topology"
 import { resolvePublicAdvocateBrowseRoute } from "./publicBrowsePaths"
 
 export { isQualifyingAdvocateExposurePagePath } from "./publicBrowsePaths"
@@ -367,6 +369,7 @@ function approvedPrimaryHostnames(
   ]) {
     const hostname = configuredHostname(configured)
     if (hostname === null) continue
+    if (isReservedNonPrimaryHostname(hostname)) continue
     const creatorShareSubdomain = hostname.endsWith(`.${ADVOCATE_TENANT_ROOT}`)
     const localSubdomain = hostname.endsWith(`.${ADVOCATE_LOCALHOST_ROOT}`)
     if (creatorShareSubdomain || localSubdomain) continue
@@ -383,7 +386,8 @@ function approvedPrimaryHostnames(
   return hostnames
 }
 
-type RequestHostScope = "approved-primary" | "restricted-tenant" | "rejected"
+type RequestHostScope =
+  "approved-primary" | "restricted-tenant" | "negative-sentinel" | "rejected"
 
 function classifyRequestHost(options: {
   rawHost: string | null | undefined
@@ -399,6 +403,9 @@ function classifyRequestHost(options: {
   if (resolution.kind === "tenant-candidate") return "restricted-tenant"
 
   const hostname = resolution.normalizedHostname
+  if (hostname === PUBLICATION_CANARY_SENTINEL_HOSTNAME) {
+    return "negative-sentinel"
+  }
   if (approvedPrimaryHostnames(environment).has(hostname)) {
     return "approved-primary"
   }
@@ -453,6 +460,18 @@ export function resolveTenantRoutePolicy(options: {
 
   if (hostScope === "rejected") {
     return { kind: "deny", status: 404, allow: null }
+  }
+
+  if (hostScope === "negative-sentinel") {
+    return options.pathname === "/" &&
+      READ_METHODS.includes(method as "GET" | "HEAD")
+      ? {
+          kind: "allow",
+          routeId: "publication-negative-sentinel",
+          neutralPaymentShell: false,
+          visitorSession: false,
+        }
+      : { kind: "deny", status: 404, allow: null }
   }
 
   if (hostScope === "approved-primary") {

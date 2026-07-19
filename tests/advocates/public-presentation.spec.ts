@@ -273,6 +273,36 @@ test.describe("public advocate presentation boundary", () => {
     expect(primary.calls).toEqual([])
   })
 
+  test("never promotes the reserved publication sentinel to primary", async () => {
+    const { repository, calls } = repositoryFor(cloneSource())
+
+    for (const configuredHostname of [
+      "publication-sentinel.creatorshare.com",
+      "PUBLICATION-SENTINEL.CREATORSHARE.COM",
+      "publication-sentinel.creatorshare.com.",
+    ]) {
+      await expect(
+        resolvePublicAdvocateRequest(
+          "publication-sentinel.creatorshare.com",
+          repository,
+          {
+            approvedPrimaryHostnames: [
+              "creatorshare.com",
+              "www.creatorshare.com",
+              configuredHostname,
+            ],
+          },
+        ),
+      ).resolves.toMatchObject({
+        kind: "rejected-host",
+        reason: "reserved-subdomain",
+        hostname: "publication-sentinel.creatorshare.com",
+      })
+    }
+
+    expect(calls).toEqual([])
+  })
+
   test("rejects invalid, reserved, nested, and outside hosts without a lookup", async () => {
     const { repository, calls } = repositoryFor(cloneSource())
 

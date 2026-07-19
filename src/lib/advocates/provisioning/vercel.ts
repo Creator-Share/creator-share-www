@@ -20,6 +20,10 @@ interface VercelProjectDomain {
   name: string
   projectId: string
   verified: boolean
+  redirect: string | null
+  redirectStatusCode: number | null
+  gitBranch: string | null
+  customEnvironmentId: string | null
 }
 
 const VERCEL_API_ORIGIN = "https://api.vercel.com"
@@ -37,7 +41,22 @@ function parseProjectDomain(value: unknown): VercelProjectDomain | null {
     !isRecord(value) ||
     typeof value.name !== "string" ||
     typeof value.projectId !== "string" ||
-    typeof value.verified !== "boolean"
+    typeof value.verified !== "boolean" ||
+    (value.redirect !== undefined &&
+      value.redirect !== null &&
+      typeof value.redirect !== "string") ||
+    (value.gitBranch !== undefined &&
+      value.gitBranch !== null &&
+      typeof value.gitBranch !== "string") ||
+    (value.customEnvironmentId !== undefined &&
+      value.customEnvironmentId !== null &&
+      typeof value.customEnvironmentId !== "string") ||
+    !(
+      value.redirectStatusCode === undefined ||
+      value.redirectStatusCode === null ||
+      (typeof value.redirectStatusCode === "number" &&
+        Number.isSafeInteger(value.redirectStatusCode))
+    )
   ) {
     return null
   }
@@ -46,6 +65,16 @@ function parseProjectDomain(value: unknown): VercelProjectDomain | null {
     name: value.name.toLowerCase().replace(/\.$/, ""),
     projectId: value.projectId,
     verified: value.verified,
+    redirect: typeof value.redirect === "string" ? value.redirect : null,
+    redirectStatusCode:
+      typeof value.redirectStatusCode === "number"
+        ? value.redirectStatusCode
+        : null,
+    gitBranch: typeof value.gitBranch === "string" ? value.gitBranch : null,
+    customEnvironmentId:
+      typeof value.customEnvironmentId === "string"
+        ? value.customEnvironmentId
+        : null,
   }
 }
 
@@ -64,6 +93,10 @@ export class VercelDomainAdapter implements DomainProviderAdapter {
 
   private projectDomainPath(hostname: string): string {
     return `/v9/projects/${encodeURIComponent(this.config.projectId)}/domains/${encodeURIComponent(hostname)}${this.teamQuery()}`
+  }
+
+  private projectDomainVerificationPath(hostname: string): string {
+    return `/v9/projects/${encodeURIComponent(this.config.projectId)}/domains/${encodeURIComponent(hostname)}/verify${this.teamQuery()}`
   }
 
   private async rawRequest(
@@ -110,9 +143,7 @@ export class VercelDomainAdapter implements DomainProviderAdapter {
     })
   }
 
-  private async lookup(
-    hostname: string,
-  ): Promise<{
+  private async lookup(hostname: string): Promise<{
     domain: VercelProjectDomain | null
     evidence: SafeProviderEvidence
   }> {
@@ -136,6 +167,127 @@ export class VercelDomainAdapter implements DomainProviderAdapter {
     }
 
     return { domain, evidence: response.evidence }
+  }
+
+  private isExactProjectDomain(
+    domain: VercelProjectDomain,
+    hostname: string,
+  ): boolean {
+    return (
+      domain.name === hostname && domain.projectId === this.config.projectId
+    )
+  }
+
+  private hasNeutralProductionRouting(domain: VercelProjectDomain): boolean {
+    return (
+      domain.redirect === null &&
+      domain.redirectStatusCode === null &&
+      domain.gitBranch === null &&
+      domain.customEnvironmentId === null
+    )
+  }
+
+  private verificationIdentityMismatch(
+    evidence: SafeProviderEvidence,
+  ): DomainProvisioningError {
+    return new DomainProvisioningError({
+      code: "vercel_verification_identity_mismatch",
+      retryable: true,
+      evidence: {
+        ...evidence,
+        message_code: "vercel_project_domain_conflict",
+      },
+    })
+  }
+
+  private async verifyAttachedDomain(
+    context: DomainProvisioningContext,
+    reconciliation: ProviderReconciliation,
+  ): Promise<SafeProviderEvidence> {
+    const exactOwnedAttachment =
+      reconciliation.outcome === "needs_apply" &&
+      reconciliation.desiredStateVerified === false &&
+      reconciliation.resourceId === context.hostname &&
+      reconciliation.ownedResource === true &&
+      reconciliation.evidence.provider_resource_id === context.hostname &&
+      reconciliation.evidence.deployment_id === this.config.projectId &&
+      reconciliation.evidence.provider_status ===
+        "attached_pending_verification" &&
+      reconciliation.evidence.verified === false
+
+    if (!exactOwnedAttachment) {
+      throw new DomainProvisioningError({
+        code: "vercel_verification_attachment_not_owned",
+        retryable: false,
+      })
+    }
+
+    const response = await this.rawRequest(
+      "POST",
+      this.projectDomainVerificationPath(context.hostname),
+    )
+    const verificationMayBePendingOrRaced = [400, 404, 409].includes(
+      response.response.status,
+    )
+
+    if (!response.response.ok && !verificationMayBePendingOrRaced) {
+      this.throwForResponse(response)
+    }
+
+    if (response.response.ok) {
+      const verifiedDomain = parseProjectDomain(response.payload)
+      if (!verifiedDomain) {
+        throw new DomainProvisioningError({
+          code: "vercel_invalid_response",
+          retryable: true,
+          evidence: response.evidence,
+        })
+      }
+      if (
+        !this.isExactProjectDomain(verifiedDomain, context.hostname) ||
+        !this.hasNeutralProductionRouting(verifiedDomain)
+      ) {
+        throw this.verificationIdentityMismatch(response.evidence)
+      }
+    }
+
+    // The verification mutation response is never readiness authority. A
+    // second exact project-domain lookup closes success and provider races.
+    const authoritative = await this.lookup(context.hostname)
+    if (!authoritative.domain) {
+      throw new DomainProvisioningError({
+        code: "vercel_verification_attachment_missing",
+        retryable: true,
+        evidence: {
+          ...authoritative.evidence,
+          ...(vercelErrorCode(response.payload)
+            ? { message_code: vercelErrorCode(response.payload) }
+            : {}),
+        },
+      })
+    }
+    if (
+      !this.isExactProjectDomain(authoritative.domain, context.hostname) ||
+      !this.hasNeutralProductionRouting(authoritative.domain)
+    ) {
+      throw this.verificationIdentityMismatch(authoritative.evidence)
+    }
+
+    const verified = authoritative.domain.verified
+    return {
+      ...authoritative.evidence,
+      provider_operation_id: context.hostname,
+      provider_resource_id: authoritative.domain.name,
+      deployment_id: authoritative.domain.projectId,
+      provider_status: verified
+        ? "verification_completed"
+        : "verification_pending",
+      already_applied: verified,
+      verified,
+      ...(!verified && vercelErrorCode(response.payload)
+        ? { message_code: vercelErrorCode(response.payload) }
+        : {}),
+    }
   }
 
   async reconcile(
@@ -170,10 +322,7 @@ export class VercelDomainAdapter implements DomainProviderAdapter {
       }
     }
 
-    if (
-      lookup.domain.name !== context.hostname ||
-      lookup.domain.projectId !== this.config.projectId
-    ) {
+    if (!this.isExactProjectDomain(lookup.domain, context.hostname)) {
       return {
         outcome: "conflict",
         desiredStateVerified: false,
@@ -182,6 +331,19 @@ export class VercelDomainAdapter implements DomainProviderAdapter {
           provider_status: "conflict",
           verified: false,
           message_code: "vercel_project_domain_conflict",
+        },
+      }
+    }
+
+    if (!this.hasNeutralProductionRouting(lookup.domain)) {
+      return {
+        outcome: "conflict",
+        desiredStateVerified: false,
+        evidence: {
+          ...lookup.evidence,
+          provider_status: "routing_conflict",
+          verified: false,
+          message_code: "vercel_project_domain_routing_conflict",
         },
       }
     }
@@ -200,9 +362,12 @@ export class VercelDomainAdapter implements DomainProviderAdapter {
 
     if (!desiredAbsent) {
       return {
-        outcome: "matches_intent",
+        outcome: lookup.domain.verified ? "matches_intent" : "needs_apply",
         desiredStateVerified: lookup.domain.verified,
-        evidence,
+        evidence: {
+          ...evidence,
+          already_applied: lookup.domain.verified,
+        },
         resourceId: lookup.domain.name,
         ownedResource: true,
       }
@@ -257,6 +422,22 @@ export class VercelDomainAdapter implements DomainProviderAdapter {
       }
     }
 
+    if (reconciliation.outcome === "needs_apply") {
+      return this.verifyAttachedDomain(context, reconciliation)
+    }
+
+    if (
+      reconciliation.outcome !== "not_found" ||
+      reconciliation.desiredStateVerified !== false ||
+      reconciliation.resourceId !== undefined ||
+      reconciliation.ownedResource !== undefined
+    ) {
+      throw new DomainProvisioningError({
+        code: "vercel_attach_state_not_absent",
+        retryable: false,
+      })
+    }
+
     const query = this.teamQuery()
     const response = await this.rawRequest(
       "POST",
@@ -269,7 +450,8 @@ export class VercelDomainAdapter implements DomainProviderAdapter {
         const racedLookup = await this.lookup(context.hostname)
         if (
           racedLookup.domain?.name === context.hostname &&
-          racedLookup.domain.projectId === this.config.projectId
+          racedLookup.domain.projectId === this.config.projectId &&
+          this.hasNeutralProductionRouting(racedLookup.domain)
         ) {
           return {
             ...response.evidence,
@@ -289,7 +471,8 @@ export class VercelDomainAdapter implements DomainProviderAdapter {
     if (
       !domain ||
       domain.name !== context.hostname ||
-      domain.projectId !== this.config.projectId
+      domain.projectId !== this.config.projectId ||
+      !this.hasNeutralProductionRouting(domain)
     ) {
       throw new DomainProvisioningError({
         code: "vercel_invalid_response",

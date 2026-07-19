@@ -20,17 +20,20 @@ import {
   type PublicationCanaryDnsRecordType,
   type PublicationCanaryErrorCode,
   type PublicationCanaryGenericNotFoundEvidence,
+  type PublicationCanaryNegativeSentinelEvidence,
   type PublicationCanaryPaymentEvidence,
   type PublicationCanaryReport,
   type PublicationCanaryReportStep,
   type PublicationCanarySafetyClaims,
-  type PublicationCanarySiblingNotFoundEvidence,
+  type PublicationCanarySiblingDnsAbsenceEvidence,
   type PublicationCanaryStepName,
   type PublicationCanarySucceededEvidence,
   type PublicationCanaryTlsEvidence,
   type PublicationCanaryChallengeEvidence,
   serializeCanonicalPublicationCanaryReport,
 } from "./report"
+import type { PublicationCanarySentinelReadiness } from "./sentinel"
+import { PUBLICATION_CANARY_SENTINEL_HOSTNAME } from "./topology"
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -101,11 +104,19 @@ export interface PublicationCanaryTlsObservation {
   observedAt: string
 }
 
+export interface PublicationCanarySiblingDnsAbsenceObservation {
+  hostname: string
+  resolved: false
+  recordTypes: readonly []
+  answerCount: 0
+  observedAt: string
+}
+
 export interface PublicationCanaryHttpRequest {
   kind:
     | "protected_exact_host_challenge"
     | "verifying_tenant_root"
-    | "unprovisioned_sibling_root"
+    | "negative_sentinel_root"
   method: "GET" | "POST"
   url: string
   hostname: string
@@ -138,6 +149,10 @@ export interface PublicationCanaryRunnerDependencies {
     hostname: string
     timeoutMs: number
   }): Promise<PublicationCanaryDnsObservation>
+  observeUnprovisionedSiblingDnsAbsence(input: {
+    hostname: string
+    timeoutMs: number
+  }): Promise<PublicationCanarySiblingDnsAbsenceObservation>
   inspectTls(input: {
     hostname: string
     serverName: string
@@ -155,6 +170,7 @@ export interface PublicationCanaryRunnerDependencies {
     expectedClaims: PublicationCanaryClaims,
   ): PublicationCanaryResponseBody | null
   isHostnameProvisioned(hostname: string): Promise<boolean>
+  inspectNegativeSentinel(): Promise<PublicationCanarySentinelReadiness>
   runStripeUsPaymentCanary(
     input: PublicationPaymentCanaryInput,
   ): Promise<StripePublicationPaymentCanaryEvidence>
@@ -406,6 +422,32 @@ function validateTlsObservation(
     protocol: observation.protocol,
     certificate_not_before: observation.certificateNotBefore,
     certificate_not_after: observation.certificateNotAfter,
+    observed_at: observation.observedAt,
+  }
+}
+
+function validateSiblingDnsAbsenceObservation(
+  observation: PublicationCanarySiblingDnsAbsenceObservation,
+  hostname: string,
+): PublicationCanarySiblingDnsAbsenceEvidence {
+  if (
+    !isRecord(observation) ||
+    observation.hostname !== hostname ||
+    observation.resolved !== false ||
+    !Array.isArray(observation.recordTypes) ||
+    observation.recordTypes.length !== 0 ||
+    observation.answerCount !== 0 ||
+    !isTimestamp(observation.observedAt)
+  ) {
+    throw new Error("publication_canary_sibling_dns_observation_invalid")
+  }
+
+  return {
+    hostname,
+    unprovisioned: true,
+    resolved: false,
+    record_types: [],
+    answer_count: 0,
     observed_at: observation.observedAt,
   }
 }
@@ -891,7 +933,7 @@ export async function runPublicationCanary(
   }
 
   if (
-    !(await executeStep("unprovisioned_sibling_hidden", async () => {
+    !(await executeStep("unprovisioned_sibling_dns_absent", async () => {
       const sibling = generateSiblingHostname(
         dependencies.randomBytes ?? systemRandomBytes,
         target.hostname,
@@ -900,13 +942,53 @@ export async function runPublicationCanary(
         throw new Error("publication_canary_sibling_is_provisioned")
       }
 
-      const url = `https://${sibling}/`
+      return validateSiblingDnsAbsenceObservation(
+        await dependencies.observeUnprovisionedSiblingDnsAbsence({
+          hostname: sibling,
+          timeoutMs: PUBLICATION_CANARY_NETWORK_TIMEOUT_MS,
+        }),
+        sibling,
+      )
+    }))
+  ) {
+    return finalize()
+  }
+
+  if (
+    !(await executeStep("negative_sentinel_hidden", async () => {
+      const readiness = await dependencies.inspectNegativeSentinel()
+      if (
+        !isRecord(readiness) ||
+        readiness.hostname !== PUBLICATION_CANARY_SENTINEL_HOSTNAME ||
+        readiness.cloudflareReady !== true ||
+        readiness.vercelReady !== true
+      ) {
+        throw new Error("publication_canary_sentinel_not_ready")
+      }
+
+      const dns = validateDnsObservation(
+        await dependencies.observeDns({
+          hostname: PUBLICATION_CANARY_SENTINEL_HOSTNAME,
+          timeoutMs: PUBLICATION_CANARY_NETWORK_TIMEOUT_MS,
+        }),
+        PUBLICATION_CANARY_SENTINEL_HOSTNAME,
+      )
+      const tls = validateTlsObservation(
+        await dependencies.inspectTls({
+          hostname: PUBLICATION_CANARY_SENTINEL_HOSTNAME,
+          serverName: PUBLICATION_CANARY_SENTINEL_HOSTNAME,
+          rejectUnauthorized: true,
+          timeoutMs: PUBLICATION_CANARY_NETWORK_TIMEOUT_MS,
+        }),
+        PUBLICATION_CANARY_SENTINEL_HOSTNAME,
+      )
+      const url = `https://${PUBLICATION_CANARY_SENTINEL_HOSTNAME}/`
       const result = validateGenericNotFound({
         response: await dependencies.requestHttp({
-          kind: "unprovisioned_sibling_root",
+          kind: "negative_sentinel_root",
           method: "GET",
           url,
-          hostname: sibling,
+          hostname: PUBLICATION_CANARY_SENTINEL_HOSTNAME,
           headers: Object.freeze({ Accept: "text/html, text/plain;q=0.9" }),
           redirect: "error",
           credentials: "omit",
@@ -914,7 +996,7 @@ export async function runPublicationCanary(
           timeoutMs: PUBLICATION_CANARY_NETWORK_TIMEOUT_MS,
           maxResponseBytes: MAX_GENERIC_NOT_FOUND_BODY_BYTES,
         }),
-        hostname: sibling,
+        hostname: PUBLICATION_CANARY_SENTINEL_HOSTNAME,
         url,
       })
       if (
@@ -928,10 +1010,25 @@ export async function runPublicationCanary(
       }
 
       return {
-        ...result.evidence,
-        unprovisioned: true,
+        schema_version: 1,
+        hostname: PUBLICATION_CANARY_SENTINEL_HOSTNAME,
+        cloudflare_ready: true,
+        vercel_ready: true,
+        dns_target_matched: dns.provider_target_matched,
+        tls_certificate_verified: tls.certificate_verified,
+        tls_hostname_match: tls.hostname_match,
+        tls_normal_certificate_verification:
+          tls.normal_certificate_verification,
+        tls_protocol: tls.protocol,
+        http_status: result.evidence.http_status,
+        content_type: result.evidence.content_type,
+        body_bytes: result.evidence.body_bytes,
+        body_sha256: result.evidence.body_sha256,
+        redirected: result.evidence.redirected,
+        generic_not_found: result.evidence.generic_not_found,
         identical_to_tenant_root: true,
-      } satisfies PublicationCanarySiblingNotFoundEvidence
+        observed_at: clock.safeTimestamp(),
+      } satisfies PublicationCanaryNegativeSentinelEvidence
     }))
   ) {
     return finalize()

@@ -153,6 +153,9 @@ ADVOCATE_CLOUDFLARE_API_TOKEN=
 ADVOCATE_CLOUDFLARE_ZONE_ID=
 # Discover the project specific target through Vercel's domain configuration
 # API. Do not assume the legacy generic CNAME target.
+# The publication runner also uses these same scoped credentials to reconcile
+# the fixed reserved publication-sentinel.creatorshare.com negative control.
+# That hostname is intentionally fixed and has no environment override.
 ADVOCATE_CLOUDFLARE_CNAME_TARGET=
 ADVOCATE_CLOUDFLARE_TTL_SECONDS=300
 ADVOCATE_VERCEL_API_TOKEN=

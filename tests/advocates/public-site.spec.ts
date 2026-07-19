@@ -248,6 +248,39 @@ test.describe("public site request shell", () => {
       }),
     ).toEqual([])
   })
+
+  test("drops the publication sentinel from every configured primary URL", async () => {
+    const sentinel = "publication-sentinel.creatorshare.com"
+
+    for (const [variable, configured] of [
+      ["NEXT_PUBLIC_BASE_URL", `https://${sentinel}`],
+      [
+        "NEXT_PUBLIC_SITE_URL",
+        "https://PUBLICATION-SENTINEL.CREATORSHARE.COM.",
+      ],
+      ["VERCEL_URL", sentinel],
+    ] as const) {
+      const environment = {
+        ...PRODUCTION_ENVIRONMENT,
+        [variable]: configured,
+      }
+      expect(configuredPrimaryHostnames(environment)).not.toContain(sentinel)
+
+      const { repository, calls } = repositoryFor(ACTIVE_PRESENTATION_SOURCE)
+      await expect(
+        resolvePublicSiteRequest({
+          rawHost: sentinel,
+          repository,
+          environment,
+        }),
+      ).resolves.toEqual({
+        kind: "not-found",
+        reason: "rejected-host",
+        hostname: sentinel,
+      })
+      expect(calls).toEqual([])
+    }
+  })
 })
 
 test.describe("public impact metric DTO", () => {

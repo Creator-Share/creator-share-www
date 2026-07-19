@@ -80,6 +80,7 @@ export const RESERVED_ADVOCATE_SUBDOMAINS = [
   "press",
   "preview",
   "privacy",
+  "publication-sentinel",
   "qa",
   "register",
   "sandbox",
@@ -110,6 +111,9 @@ export const RESERVED_ADVOCATE_SUBDOMAINS = [
 ] as const
 
 const RESERVED_SUBDOMAIN_SET = new Set<string>(RESERVED_ADVOCATE_SUBDOMAINS)
+const RESERVED_NON_PRIMARY_HOSTNAME_SET = new Set<string>([
+  `publication-sentinel.${ADVOCATE_TENANT_ROOT}`,
+])
 
 const MAX_HOSTNAME_LENGTH = 253
 const HOSTNAME_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
@@ -162,6 +166,19 @@ export interface ResolveAdvocateHostOptions {
    * trusted runtime condition, such as NODE_ENV, never from request input.
    */
   allowLocalhostDevelopment?: boolean
+}
+
+/**
+ * Shared fail-closed boundary for fixed infrastructure hosts that may never
+ * become a primary product host through runtime URL configuration. The apex
+ * and www hosts remain governed by their existing explicit allowlists.
+ */
+export function isReservedNonPrimaryHostname(hostname: string): boolean {
+  const lowerHostname = hostname.toLowerCase()
+  const normalizedHostname = lowerHostname.endsWith(".")
+    ? lowerHostname.slice(0, -1)
+    : lowerHostname
+  return RESERVED_NON_PRIMARY_HOSTNAME_SET.has(normalizedHostname)
 }
 
 type ParsedHost = {

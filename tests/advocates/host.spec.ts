@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test"
 
 import {
   ADVOCATE_TENANT_ROOT,
+  isReservedNonPrimaryHostname,
   RESERVED_ADVOCATE_SUBDOMAINS,
   resolveAdvocateHost,
 } from "../../src/lib/advocates/host"
@@ -31,6 +32,7 @@ test.describe("advocate tenant host resolution", () => {
   })
 
   test("keeps platform and infrastructure subdomains out of tenant lookup", () => {
+    expect(RESERVED_ADVOCATE_SUBDOMAINS).toContain("publication-sentinel")
     expect(new Set(RESERVED_ADVOCATE_SUBDOMAINS).size).toBe(
       RESERVED_ADVOCATE_SUBDOMAINS.length,
     )
@@ -42,6 +44,25 @@ test.describe("advocate tenant host resolution", () => {
         normalizedHostname: `${label}.creatorshare.com`,
         port: null,
       })
+    }
+  })
+
+  test("reserves the publication sentinel from primary host configuration", () => {
+    for (const hostname of [
+      "publication-sentinel.creatorshare.com",
+      "PUBLICATION-SENTINEL.CREATORSHARE.COM",
+      "publication-sentinel.creatorshare.com.",
+    ]) {
+      expect(isReservedNonPrimaryHostname(hostname)).toBe(true)
+    }
+
+    for (const hostname of [
+      "creatorshare.com",
+      "www.creatorshare.com",
+      "dev.creatorshare.com",
+      "publication-sentinel.creatorshare.com.example",
+    ]) {
+      expect(isReservedNonPrimaryHostname(hostname)).toBe(false)
     }
   })
 

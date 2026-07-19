@@ -238,6 +238,106 @@ test.describe("Cloudflare advocate domain adapter", () => {
     })
   })
 
+  test("settles only an exact owned duplicate create race after authoritative lookup", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const recordId = "f".repeat(32)
+    const exactOwnedRecord = {
+      id: recordId,
+      type: "CNAME",
+      name: context.hostname,
+      content: cloudflareConfig.cnameTarget,
+      proxied: false,
+      comment: `creator-share:advocate-domain-integration:${job.integrationId}`,
+    }
+    const adapter = new CloudflareDomainAdapter(
+      cloudflareConfig,
+      queuedFetch(
+        [
+          jsonResponse(cloudflareEnvelope([])),
+          jsonResponse(
+            {
+              success: false,
+              result: null,
+              errors: [{ code: 81053, message: "duplicate" }],
+            },
+            400,
+          ),
+          jsonResponse(cloudflareEnvelope([exactOwnedRecord])),
+        ],
+        calls,
+      ),
+    )
+
+    const reconciliation = await adapter.reconcile(job, context)
+    await expect(
+      adapter.apply(job, context, reconciliation),
+    ).resolves.toMatchObject({
+      provider_operation_id: recordId,
+      provider_resource_id: recordId,
+      dns_record_id: recordId,
+      provider_status: "already_created",
+      already_applied: true,
+      verified: false,
+    })
+    expect(calls.map((call) => call.init?.method)).toEqual([
+      "GET",
+      "POST",
+      "GET",
+    ])
+  })
+
+  test("keeps duplicate create races terminal when the resulting record is unowned or drifted", async () => {
+    for (const conflictingRecord of [
+      {
+        id: "1".repeat(32),
+        type: "CNAME",
+        name: context.hostname,
+        content: cloudflareConfig.cnameTarget,
+        proxied: false,
+      },
+      {
+        id: "2".repeat(32),
+        type: "CNAME",
+        name: context.hostname,
+        content: "wrong-target.example",
+        proxied: false,
+        comment: `creator-share:advocate-domain-integration:${job.integrationId}`,
+      },
+    ]) {
+      const adapter = new CloudflareDomainAdapter(
+        cloudflareConfig,
+        queuedFetch(
+          [
+            jsonResponse(cloudflareEnvelope([])),
+            jsonResponse(
+              {
+                success: false,
+                result: null,
+                errors: [{ code: 81053, message: "duplicate" }],
+              },
+              400,
+            ),
+            jsonResponse(cloudflareEnvelope([conflictingRecord])),
+          ],
+          [],
+        ),
+      )
+
+      const reconciliation = await adapter.reconcile(job, context)
+      await expect(
+        adapter.apply(job, context, reconciliation),
+      ).rejects.toMatchObject({
+        code: "cloudflare_create_race_not_owned",
+        retryable: false,
+        evidence: {
+          provider_status: "conflict",
+          verified: false,
+          message_code: "cloudflare_duplicate_create_conflict",
+        },
+      })
+    }
+  })
+
   test("deletes only the integration owned record", async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = []
     const recordId = "e".repeat(32)
@@ -300,12 +400,14 @@ test.describe("Vercel advocate domain adapter", () => {
 
     const result = await adapter.reconcile(vercelJob, vercelContext)
     expect(result).toMatchObject({
-      outcome: "matches_intent",
+      outcome: "needs_apply",
       desiredStateVerified: false,
+      resourceId: context.hostname,
+      ownedResource: true,
       evidence: {
         provider_status: "attached_pending_verification",
         verified: false,
-        already_applied: true,
+        already_applied: false,
       },
     })
     expect(calls[0].url).toContain("/v9/projects/")
@@ -338,6 +440,321 @@ test.describe("Vercel advocate domain adapter", () => {
         already_applied: true,
       },
     })
+  })
+
+  test("fails closed when an exact hostname is redirected or pinned away from production", async () => {
+    for (const routingDrift of [
+      { redirect: "elsewhere.example", redirectStatusCode: 308 },
+      { gitBranch: "preview-branch" },
+      { customEnvironmentId: "env_preview_123" },
+    ]) {
+      const adapter = new VercelDomainAdapter(
+        vercelConfig,
+        queuedFetch(
+          [
+            jsonResponse({
+              name: context.hostname,
+              projectId: vercelConfig.projectId,
+              verified: true,
+              ...routingDrift,
+            }),
+          ],
+          [],
+        ),
+      )
+
+      await expect(
+        adapter.reconcile(vercelJob, vercelContext),
+      ).resolves.toMatchObject({
+        outcome: "conflict",
+        desiredStateVerified: false,
+        evidence: {
+          provider_status: "routing_conflict",
+          verified: false,
+          message_code: "vercel_project_domain_routing_conflict",
+        },
+      })
+    }
+  })
+
+  test("rejects malformed Vercel routing fields instead of treating them as neutral", async () => {
+    const adapter = new VercelDomainAdapter(
+      vercelConfig,
+      queuedFetch(
+        [
+          jsonResponse({
+            name: context.hostname,
+            projectId: vercelConfig.projectId,
+            verified: true,
+            redirectStatusCode: "308",
+          }),
+        ],
+        [],
+      ),
+    )
+
+    await expect(
+      adapter.reconcile(vercelJob, vercelContext),
+    ).rejects.toMatchObject({
+      code: "vercel_invalid_response",
+      retryable: true,
+    })
+  })
+
+  test("verifies an exact owned attachment and trusts only the authoritative relookup", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const pendingDomain = {
+      name: context.hostname,
+      projectId: vercelConfig.projectId,
+      verified: false,
+    }
+    const verifiedDomain = { ...pendingDomain, verified: true }
+    const adapter = new VercelDomainAdapter(
+      vercelConfig,
+      queuedFetch(
+        [
+          jsonResponse(pendingDomain),
+          jsonResponse(verifiedDomain),
+          jsonResponse(verifiedDomain),
+        ],
+        calls,
+      ),
+    )
+    const reconciliationJob = { ...vercelJob, kind: "reconcile" as const }
+
+    const reconciliation = await adapter.reconcile(
+      reconciliationJob,
+      vercelContext,
+    )
+    const evidence = await adapter.apply(
+      reconciliationJob,
+      vercelContext,
+      reconciliation,
+    )
+
+    expect(evidence).toMatchObject({
+      provider_operation_id: context.hostname,
+      provider_resource_id: context.hostname,
+      deployment_id: vercelConfig.projectId,
+      provider_status: "verification_completed",
+      already_applied: true,
+      verified: true,
+    })
+    expect(calls).toHaveLength(3)
+    expect(calls[1].url).toBe(
+      `https://api.vercel.com/v9/projects/${vercelConfig.projectId}/domains/${context.hostname}/verify?teamId=${vercelConfig.teamId}`,
+    )
+    expect(calls[1].init?.method).toBe("POST")
+    expect(calls[1].init?.body).toBeUndefined()
+    expect(calls[2].url).toBe(
+      `https://api.vercel.com/v9/projects/${vercelConfig.projectId}/domains/${context.hostname}?teamId=${vercelConfig.teamId}`,
+    )
+    expect(calls[2].init?.method).toBe("GET")
+  })
+
+  test("keeps verification pending when the authoritative relookup remains unverified", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const pendingDomain = {
+      name: context.hostname,
+      projectId: vercelConfig.projectId,
+      verified: false,
+    }
+    const adapter = new VercelDomainAdapter(
+      vercelConfig,
+      queuedFetch(
+        [
+          jsonResponse(pendingDomain),
+          jsonResponse({ ...pendingDomain, verified: true }),
+          jsonResponse(pendingDomain),
+        ],
+        calls,
+      ),
+    )
+
+    const reconciliation = await adapter.reconcile(vercelJob, vercelContext)
+    await expect(
+      adapter.apply(vercelJob, vercelContext, reconciliation),
+    ).resolves.toMatchObject({
+      provider_status: "verification_pending",
+      already_applied: false,
+      verified: false,
+    })
+    expect(calls).toHaveLength(3)
+  })
+
+  test("fails closed on malformed verification success payloads", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const pendingDomain = {
+      name: context.hostname,
+      projectId: vercelConfig.projectId,
+      verified: false,
+    }
+    const adapter = new VercelDomainAdapter(
+      vercelConfig,
+      queuedFetch(
+        [
+          jsonResponse(pendingDomain),
+          jsonResponse({ ...pendingDomain, verified: "true" }),
+        ],
+        calls,
+      ),
+    )
+
+    const reconciliation = await adapter.reconcile(vercelJob, vercelContext)
+    await expect(
+      adapter.apply(vercelJob, vercelContext, reconciliation),
+    ).rejects.toMatchObject({
+      code: "vercel_invalid_response",
+      retryable: true,
+    })
+    expect(calls).toHaveLength(2)
+  })
+
+  test("refuses verification responses bound to another hostname, project, or routing target", async () => {
+    for (const mismatchedDomain of [
+      {
+        name: "mallory.creatorshare.com",
+        projectId: vercelConfig.projectId,
+        verified: true,
+      },
+      {
+        name: context.hostname,
+        projectId: "prj_DifferentProject1234",
+        verified: true,
+      },
+      {
+        name: context.hostname,
+        projectId: vercelConfig.projectId,
+        verified: true,
+        redirect: "elsewhere.example",
+        redirectStatusCode: 308,
+      },
+      {
+        name: context.hostname,
+        projectId: vercelConfig.projectId,
+        verified: true,
+        gitBranch: "preview-branch",
+      },
+      {
+        name: context.hostname,
+        projectId: vercelConfig.projectId,
+        verified: true,
+        customEnvironmentId: "env_preview_123",
+      },
+    ]) {
+      const calls: Array<{ url: string; init?: RequestInit }> = []
+      const pendingDomain = {
+        name: context.hostname,
+        projectId: vercelConfig.projectId,
+        verified: false,
+      }
+      const adapter = new VercelDomainAdapter(
+        vercelConfig,
+        queuedFetch(
+          [jsonResponse(pendingDomain), jsonResponse(mismatchedDomain)],
+          calls,
+        ),
+      )
+
+      const reconciliation = await adapter.reconcile(vercelJob, vercelContext)
+      await expect(
+        adapter.apply(vercelJob, vercelContext, reconciliation),
+      ).rejects.toMatchObject({
+        code: "vercel_verification_identity_mismatch",
+        retryable: true,
+        evidence: { message_code: "vercel_project_domain_conflict" },
+      })
+      expect(calls).toHaveLength(2)
+    }
+  })
+
+  test("surfaces verification authorization failures without a speculative relookup", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const pendingDomain = {
+      name: context.hostname,
+      projectId: vercelConfig.projectId,
+      verified: false,
+    }
+    const adapter = new VercelDomainAdapter(
+      vercelConfig,
+      queuedFetch(
+        [
+          jsonResponse(pendingDomain),
+          jsonResponse({ error: { code: "forbidden" } }, 403),
+        ],
+        calls,
+      ),
+    )
+
+    const reconciliation = await adapter.reconcile(vercelJob, vercelContext)
+    await expect(
+      adapter.apply(vercelJob, vercelContext, reconciliation),
+    ).rejects.toMatchObject({
+      code: "vercel_authorization_failed",
+      retryable: false,
+      evidence: {
+        http_status: 403,
+        message_code: "vercel_forbidden",
+      },
+    })
+    expect(calls).toHaveLength(2)
+  })
+
+  test("converges when another verifier wins the mutation race", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const pendingDomain = {
+      name: context.hostname,
+      projectId: vercelConfig.projectId,
+      verified: false,
+    }
+    const adapter = new VercelDomainAdapter(
+      vercelConfig,
+      queuedFetch(
+        [
+          jsonResponse(pendingDomain),
+          jsonResponse({ error: { code: "not_modified" } }, 400),
+          jsonResponse({ ...pendingDomain, verified: true }),
+        ],
+        calls,
+      ),
+    )
+
+    const reconciliation = await adapter.reconcile(vercelJob, vercelContext)
+    await expect(
+      adapter.apply(vercelJob, vercelContext, reconciliation),
+    ).resolves.toMatchObject({
+      provider_status: "verification_completed",
+      already_applied: true,
+      verified: true,
+    })
+    expect(calls).toHaveLength(3)
+  })
+
+  test("never verifies a caller supplied attachment without exact reconciliation proof", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const adapter = new VercelDomainAdapter(
+      vercelConfig,
+      queuedFetch([], calls),
+    )
+
+    await expect(
+      adapter.apply(vercelJob, vercelContext, {
+        outcome: "needs_apply",
+        desiredStateVerified: false,
+        resourceId: context.hostname,
+        ownedResource: true,
+        evidence: {
+          provider_resource_id: context.hostname,
+          deployment_id: "prj_DifferentProject1234",
+          provider_status: "attached_pending_verification",
+          verified: false,
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "vercel_verification_attachment_not_owned",
+      retryable: false,
+    })
+    expect(calls).toHaveLength(0)
   })
 
   test("attaches only the claimed hostname to the configured project", async () => {

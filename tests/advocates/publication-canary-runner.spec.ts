@@ -73,6 +73,7 @@ const RESPONSE_MAC = "m".repeat(43)
 const TOKEN = `v1.payload.${"t".repeat(43)}`
 const GENERIC_NOT_FOUND = new TextEncoder().encode("Not Found")
 const SIBLING_HOSTNAME = `canary-${"ab".repeat(16)}.creatorshare.com`
+const SENTINEL_HOSTNAME = "publication-sentinel.creatorshare.com"
 
 const TARGET: PublicationCanaryRunnerTarget = Object.freeze({
   runId: RUN_ID,
@@ -220,10 +221,14 @@ function createDependencies(
       return new Uint8Array(size).fill(0xab)
     },
     async observeDns(input) {
-      calls.push("dns")
-      expect(input).toEqual({ hostname: HOSTNAME, timeoutMs: 10_000 })
+      const sentinel = input.hostname === SENTINEL_HOSTNAME
+      calls.push(sentinel ? "dns:sentinel" : "dns")
+      expect(input).toEqual({
+        hostname: sentinel ? SENTINEL_HOSTNAME : HOSTNAME,
+        timeoutMs: 10_000,
+      })
       return {
-        hostname: HOSTNAME,
+        hostname: sentinel ? SENTINEL_HOSTNAME : HOSTNAME,
         resolved: true,
         providerTargetMatched: true,
         recordTypes: ["CNAME", "A"],
@@ -231,17 +236,32 @@ function createDependencies(
         observedAt: OBSERVED_AT,
       }
     },
-    async inspectTls(input) {
-      calls.push("tls")
+    async observeUnprovisionedSiblingDnsAbsence(input) {
+      calls.push("sibling:dns")
       expect(input).toEqual({
-        hostname: HOSTNAME,
-        serverName: HOSTNAME,
+        hostname: SIBLING_HOSTNAME,
+        timeoutMs: 10_000,
+      })
+      return {
+        hostname: SIBLING_HOSTNAME,
+        resolved: false,
+        recordTypes: [],
+        answerCount: 0,
+        observedAt: OBSERVED_AT,
+      }
+    },
+    async inspectTls(input) {
+      const sentinel = input.hostname === SENTINEL_HOSTNAME
+      calls.push(sentinel ? "tls:sentinel" : "tls")
+      expect(input).toEqual({
+        hostname: sentinel ? SENTINEL_HOSTNAME : HOSTNAME,
+        serverName: sentinel ? SENTINEL_HOSTNAME : HOSTNAME,
         rejectUnauthorized: true,
         timeoutMs: 10_000,
       })
       return {
-        hostname: HOSTNAME,
-        serverName: HOSTNAME,
+        hostname: sentinel ? SENTINEL_HOSTNAME : HOSTNAME,
+        serverName: sentinel ? SENTINEL_HOSTNAME : HOSTNAME,
         certificateVerified: true,
         hostnameMatched: true,
         normalCertificateVerification: true,
@@ -311,6 +331,14 @@ function createDependencies(
       expect(hostname).toBe(SIBLING_HOSTNAME)
       return false
     },
+    async inspectNegativeSentinel() {
+      calls.push("sentinel:inspect")
+      return {
+        hostname: SENTINEL_HOSTNAME,
+        cloudflareReady: true,
+        vercelReady: true,
+      }
+    },
     async runStripeUsPaymentCanary(input) {
       calls.push("payment:stripe_us")
       expect(input).toEqual({
@@ -374,7 +402,11 @@ test.describe("advocate publication canary runner", () => {
       "http:verifying_tenant_root",
       "random:16",
       "sibling:lookup",
-      "http:unprovisioned_sibling_root",
+      "sibling:dns",
+      "sentinel:inspect",
+      "dns:sentinel",
+      "tls:sentinel",
+      "http:negative_sentinel_root",
       "payment:stripe_us",
       "payment:stripe_uk",
       "payment:paypal",
@@ -426,9 +458,19 @@ test.describe("advocate publication canary runner", () => {
     expect(result.report.steps[4].evidence).toMatchObject({
       hostname: SIBLING_HOSTNAME,
       unprovisioned: true,
+      resolved: false,
+      record_types: [],
+      answer_count: 0,
+    })
+    expect(result.report.steps[5].evidence).toMatchObject({
+      hostname: SENTINEL_HOSTNAME,
+      cloudflare_ready: true,
+      vercel_ready: true,
+      dns_target_matched: true,
+      tls_hostname_match: true,
       identical_to_tenant_root: true,
     })
-    expect(result.report.steps.slice(5).map((step) => step.evidence)).toEqual(
+    expect(result.report.steps.slice(6).map((step) => step.evidence)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ provider: "stripe_us" }),
         expect.objectContaining({ provider: "stripe_uk" }),
@@ -477,6 +519,42 @@ test.describe("advocate publication canary runner", () => {
         token: "must-not-be-accepted",
       } as PublicationCanaryReport),
     ).toThrow(reportContract.PublicationCanaryReportContractError)
+
+    const siblingExtra = structuredClone(result.report) as unknown as {
+      steps: Array<{ evidence: Record<string, unknown> }>
+    }
+    siblingExtra.steps[4].evidence.provider_detail = "must-not-be-accepted"
+    expect(() =>
+      reportContract.serializeCanonicalPublicationCanaryReport(
+        siblingExtra as unknown as PublicationCanaryReport,
+      ),
+    ).toThrow(reportContract.PublicationCanaryReportContractError)
+
+    const sentinelExtra = structuredClone(result.report) as unknown as {
+      steps: Array<{ evidence: Record<string, unknown> }>
+    }
+    sentinelExtra.steps[5].evidence.provider_resource_id =
+      "must-not-be-accepted"
+    expect(() =>
+      reportContract.serializeCanonicalPublicationCanaryReport(
+        sentinelExtra as unknown as PublicationCanaryReport,
+      ),
+    ).toThrow(reportContract.PublicationCanaryReportContractError)
+
+    const wrongOrder = structuredClone(result.report) as unknown as {
+      steps: PublicationCanaryReport["steps"]
+    }
+    wrongOrder.steps = [
+      ...wrongOrder.steps.slice(0, 4),
+      wrongOrder.steps[5],
+      wrongOrder.steps[4],
+      ...wrongOrder.steps.slice(6),
+    ]
+    expect(() =>
+      reportContract.serializeCanonicalPublicationCanaryReport(
+        wrongOrder as unknown as PublicationCanaryReport,
+      ),
+    ).toThrow(reportContract.PublicationCanaryReportContractError)
   })
 
   test("binds DNS, TLS, challenge, and HTTP observations to the exact tenant hostname", async () => {
@@ -506,7 +584,7 @@ test.describe("advocate publication canary runner", () => {
     expect(calls).toEqual(["dns"])
   })
 
-  test("generates a high-entropy valid sibling and proves it has no provisioned row before HTTP", async () => {
+  test("generates a high-entropy sibling and proves no domain or reservation before strict DNS absence", async () => {
     const calls: string[] = []
     const result = await runner.runPublicationCanary(
       TARGET,
@@ -523,11 +601,12 @@ test.describe("advocate publication canary runner", () => {
       error_code: "unprovisioned_sibling_not_hidden",
     })
     expect(calls).toContain(`sibling:lookup:${SIBLING_HOSTNAME}`)
-    expect(calls).not.toContain("http:unprovisioned_sibling_root")
+    expect(calls).not.toContain("sibling:dns")
+    expect(calls).not.toContain("sentinel:inspect")
     expect(calls).not.toContain("payment:stripe_us")
   })
 
-  test("requires byte-identical generic 404s and stores only their digest", async () => {
+  test("requires byte-identical tenant and sentinel 404s and stores only their digest", async () => {
     const calls: string[] = []
     const result = await runner.runPublicationCanary(
       TARGET,
@@ -676,12 +755,27 @@ test.describe("advocate publication canary runner", () => {
       forbiddenLaterCall: "random:16",
     },
     {
-      step: "unprovisioned_sibling_hidden",
+      step: "unprovisioned_sibling_dns_absent",
       errorCode: "unprovisioned_sibling_not_hidden",
       overrides: (calls) => ({
         async isHostnameProvisioned() {
           calls.push("sibling:lookup:failed")
           throw new Error("database secret detail")
+        },
+      }),
+      forbiddenLaterCall: "sentinel:inspect",
+    },
+    {
+      step: "negative_sentinel_hidden",
+      errorCode: "unprovisioned_sibling_not_hidden",
+      overrides: (calls) => ({
+        async inspectNegativeSentinel() {
+          calls.push("sentinel:inspect:failed")
+          return {
+            hostname: SENTINEL_HOSTNAME,
+            cloudflareReady: true,
+            vercelReady: false,
+          }
         },
       }),
       forbiddenLaterCall: "payment:stripe_us",

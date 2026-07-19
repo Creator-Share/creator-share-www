@@ -4,6 +4,7 @@ import {
   isRecord,
   retryAfterSeconds,
   type FetchImplementation,
+  type ProviderHttpResponse,
 } from "./providerHttp"
 import {
   DomainProvisioningError,
@@ -57,7 +58,9 @@ function parseRecord(value: unknown): CloudflareDnsRecord | null {
     typeof value.name !== "string" ||
     typeof value.content !== "string" ||
     typeof value.proxied !== "boolean" ||
-    (value.comment !== undefined && value.comment !== null && typeof value.comment !== "string")
+    (value.comment !== undefined &&
+      value.comment !== null &&
+      typeof value.comment !== "string")
   ) {
     return null
   }
@@ -136,7 +139,10 @@ export class CloudflareDomainAdapter implements DomainProviderAdapter {
       `/client/v4/zones/${encodeURIComponent(this.config.zoneId)}/dns_records?${query.toString()}`,
     )
 
-    if (!isRecord(response.payload) || !Array.isArray(response.payload.result)) {
+    if (
+      !isRecord(response.payload) ||
+      !Array.isArray(response.payload.result)
+    ) {
       throw new DomainProvisioningError({
         code: "cloudflare_invalid_response",
         retryable: true,
@@ -169,6 +175,48 @@ export class CloudflareDomainAdapter implements DomainProviderAdapter {
       record.comment === ownerComment(context.integrationId) ||
       context.integrationExternalIdentifier === record.id
     )
+  }
+
+  private isDesiredRecord(record: CloudflareDnsRecord): boolean {
+    return (
+      record.type === "CNAME" &&
+      record.content === this.config.cnameTarget &&
+      record.proxied === false
+    )
+  }
+
+  private async settleDuplicateCreateRace(
+    context: DomainProvisioningContext,
+  ): Promise<SafeProviderEvidence> {
+    const racedLookup = await this.lookup(context.hostname)
+    const record = racedLookup.records[0]
+    if (
+      racedLookup.records.length !== 1 ||
+      record === undefined ||
+      !this.isOwned(record, context) ||
+      !this.isDesiredRecord(record)
+    ) {
+      throw new DomainProvisioningError({
+        code: "cloudflare_create_race_not_owned",
+        retryable: false,
+        evidence: {
+          ...racedLookup.requestEvidence,
+          provider_status: "conflict",
+          verified: false,
+          message_code: "cloudflare_duplicate_create_conflict",
+        },
+      })
+    }
+
+    return {
+      ...racedLookup.requestEvidence,
+      provider_operation_id: record.id,
+      provider_resource_id: record.id,
+      dns_record_id: record.id,
+      provider_status: "already_created",
+      already_applied: true,
+      verified: false,
+    }
   }
 
   async reconcile(
@@ -218,10 +266,7 @@ export class CloudflareDomainAdapter implements DomainProviderAdapter {
 
     const record = lookup.records[0]
     const owned = this.isOwned(record, context)
-    const desiredRecord =
-      record.type === "CNAME" &&
-      record.content === this.config.cnameTarget &&
-      record.proxied === false
+    const desiredRecord = this.isDesiredRecord(record)
 
     const recordEvidence: SafeProviderEvidence = {
       ...lookup.requestEvidence,
@@ -308,7 +353,20 @@ export class CloudflareDomainAdapter implements DomainProviderAdapter {
     const path = reconciliation.resourceId
       ? `${basePath}/${encodeURIComponent(reconciliation.resourceId)}`
       : basePath
-    const response = await this.request(method, path, body)
+    let response: ProviderHttpResponse
+    try {
+      response = await this.request(method, path, body)
+    } catch (error) {
+      if (
+        method === "POST" &&
+        error instanceof DomainProvisioningError &&
+        error.code === "cloudflare_request_rejected" &&
+        error.evidence.message_code === "cloudflare_error_81053"
+      ) {
+        return await this.settleDuplicateCreateRace(context)
+      }
+      throw error
+    }
     const record = isRecord(response.payload)
       ? parseRecord(response.payload.result)
       : null
@@ -326,7 +384,8 @@ export class CloudflareDomainAdapter implements DomainProviderAdapter {
       provider_operation_id: record.id,
       provider_resource_id: record.id,
       dns_record_id: record.id,
-      provider_status: method === "POST" ? "create_accepted" : "update_accepted",
+      provider_status:
+        method === "POST" ? "create_accepted" : "update_accepted",
       verified: false,
     }
   }

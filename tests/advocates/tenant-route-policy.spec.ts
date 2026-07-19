@@ -433,6 +433,68 @@ test.describe("advocate tenant route policy", () => {
     }
   })
 
+  test("opens only the fixed negative sentinel root to the application 404", () => {
+    const sentinel = "publication-sentinel.creatorshare.com"
+    expect(
+      isRestrictedAdvocateHost({
+        rawHost: sentinel,
+        environment: PRODUCTION_ENVIRONMENT,
+      }),
+    ).toBe(false)
+
+    for (const method of ["GET", "HEAD"] as const) {
+      expect(decide("/", method, sentinel)).toEqual({
+        kind: "allow",
+        routeId: "publication-negative-sentinel",
+        neutralPaymentShell: false,
+        visitorSession: false,
+      })
+    }
+    for (const [pathname, method] of [
+      ["/", "POST"],
+      ["/about", "GET"],
+      ["/payments/success", "GET"],
+      ["/api/beneficiaries/get", "GET"],
+      ["/_next/static/chunks/app.js", "GET"],
+      ["/favicon.ico", "GET"],
+      ["/logo.png", "GET"],
+      ["/.well-known/creator-share/advocate-publication-canary", "POST"],
+    ] as const) {
+      expect(decide(pathname, method, sentinel)).toEqual({
+        kind: "deny",
+        status: 404,
+        allow: null,
+      })
+    }
+  })
+
+  test("keeps the negative sentinel isolated under hostile primary URL configuration", () => {
+    const sentinel = "publication-sentinel.creatorshare.com"
+
+    for (const [variable, configured] of [
+      ["NEXT_PUBLIC_BASE_URL", `https://${sentinel}`],
+      [
+        "NEXT_PUBLIC_SITE_URL",
+        "https://PUBLICATION-SENTINEL.CREATORSHARE.COM.",
+      ],
+      ["VERCEL_URL", sentinel],
+    ] as const) {
+      const environment = {
+        ...PRODUCTION_ENVIRONMENT,
+        [variable]: configured,
+      }
+      expect(decide("/", "GET", sentinel, environment)).toEqual({
+        kind: "allow",
+        routeId: "publication-negative-sentinel",
+        neutralPaymentShell: false,
+        visitorSession: false,
+      })
+      expect(
+        decide("/api/webhooks/stripe", "POST", sentinel, environment),
+      ).toEqual({ kind: "deny", status: 404, allow: null })
+    }
+  })
+
   test("does not let configured URLs promote a tenant or reserved host to primary", () => {
     for (const variable of [
       "NEXT_PUBLIC_BASE_URL",

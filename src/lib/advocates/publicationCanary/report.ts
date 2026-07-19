@@ -3,6 +3,7 @@ import "server-only"
 import { createHash } from "node:crypto"
 
 import { resolveAdvocateHost } from "../host"
+import { PUBLICATION_CANARY_SENTINEL_HOSTNAME } from "./topology"
 
 export const PUBLICATION_CANARY_REPORT_SCHEMA_VERSION = 1 as const
 export const PUBLICATION_CANARY_REPORT_CANONICALIZATION_VERSION = 1 as const
@@ -13,7 +14,8 @@ export const PUBLICATION_CANARY_STEP_ORDER = Object.freeze([
   "tls_exact_host",
   "protected_exact_host_challenge",
   "verifying_tenant_root_hidden",
-  "unprovisioned_sibling_hidden",
+  "unprovisioned_sibling_dns_absent",
+  "negative_sentinel_hidden",
   "stripe_us_payment_canary",
   "stripe_uk_payment_canary",
   "paypal_payment_canary",
@@ -41,7 +43,8 @@ export const PUBLICATION_CANARY_STEP_ERROR_CODE = Object.freeze({
   tls_exact_host: "tls_exact_host_failed",
   protected_exact_host_challenge: "protected_exact_host_challenge_failed",
   verifying_tenant_root_hidden: "verifying_tenant_root_not_hidden",
-  unprovisioned_sibling_hidden: "unprovisioned_sibling_not_hidden",
+  unprovisioned_sibling_dns_absent: "unprovisioned_sibling_not_hidden",
+  negative_sentinel_hidden: "unprovisioned_sibling_not_hidden",
   stripe_us_payment_canary: "stripe_us_payment_canary_failed",
   stripe_uk_payment_canary: "stripe_uk_payment_canary_failed",
   paypal_payment_canary: "paypal_payment_canary_failed",
@@ -115,9 +118,33 @@ export interface PublicationCanaryGenericNotFoundEvidence {
   generic_not_found: true
 }
 
-export interface PublicationCanarySiblingNotFoundEvidence extends PublicationCanaryGenericNotFoundEvidence {
+export interface PublicationCanarySiblingDnsAbsenceEvidence {
+  hostname: string
   unprovisioned: true
+  resolved: false
+  record_types: readonly []
+  answer_count: 0
+  observed_at: string
+}
+
+export interface PublicationCanaryNegativeSentinelEvidence {
+  schema_version: 1
+  hostname: typeof PUBLICATION_CANARY_SENTINEL_HOSTNAME
+  cloudflare_ready: true
+  vercel_ready: true
+  dns_target_matched: true
+  tls_certificate_verified: true
+  tls_hostname_match: true
+  tls_normal_certificate_verification: true
+  tls_protocol: "TLSv1.2" | "TLSv1.3"
+  http_status: 404
+  content_type: string
+  body_bytes: number
+  body_sha256: string
+  redirected: false
+  generic_not_found: true
   identical_to_tenant_root: true
+  observed_at: string
 }
 
 export type PublicationPaymentCanaryProvider =
@@ -154,7 +181,8 @@ export type PublicationCanarySucceededEvidence =
   | PublicationCanaryTlsEvidence
   | PublicationCanaryChallengeEvidence
   | PublicationCanaryGenericNotFoundEvidence
-  | PublicationCanarySiblingNotFoundEvidence
+  | PublicationCanarySiblingDnsAbsenceEvidence
+  | PublicationCanaryNegativeSentinelEvidence
   | PublicationCanaryPaymentEvidence
 
 export type PublicationCanaryReportStep = Readonly<{
@@ -293,10 +321,32 @@ const NOT_FOUND_EVIDENCE_KEYS = Object.freeze([
   "redirected",
   "generic_not_found",
 ])
-const SIBLING_NOT_FOUND_EVIDENCE_KEYS = Object.freeze([
-  ...NOT_FOUND_EVIDENCE_KEYS,
+const SIBLING_DNS_ABSENCE_EVIDENCE_KEYS = Object.freeze([
+  "hostname",
   "unprovisioned",
+  "resolved",
+  "record_types",
+  "answer_count",
+  "observed_at",
+])
+const NEGATIVE_SENTINEL_EVIDENCE_KEYS = Object.freeze([
+  "schema_version",
+  "hostname",
+  "cloudflare_ready",
+  "vercel_ready",
+  "dns_target_matched",
+  "tls_certificate_verified",
+  "tls_hostname_match",
+  "tls_normal_certificate_verification",
+  "tls_protocol",
+  "http_status",
+  "content_type",
+  "body_bytes",
+  "body_sha256",
+  "redirected",
+  "generic_not_found",
   "identical_to_tenant_root",
+  "observed_at",
 ])
 const PAYMENT_EVIDENCE_KEYS = Object.freeze([
   "schema_version",
@@ -490,13 +540,9 @@ function validChallengeEvidence(
 function validNotFoundEvidence(
   value: Record<string, unknown>,
   hostname: string,
-  sibling: boolean,
 ): boolean {
   return (
-    exactKeys(
-      value,
-      sibling ? SIBLING_NOT_FOUND_EVIDENCE_KEYS : NOT_FOUND_EVIDENCE_KEYS,
-    ) &&
+    exactKeys(value, NOT_FOUND_EVIDENCE_KEYS) &&
     value.schema_version === 1 &&
     value.hostname === hostname &&
     value.http_status === 404 &&
@@ -509,9 +555,55 @@ function validNotFoundEvidence(
     typeof value.body_sha256 === "string" &&
     SHA256_PATTERN.test(value.body_sha256) &&
     value.redirected === false &&
+    value.generic_not_found === true
+  )
+}
+
+function validSiblingDnsAbsenceEvidence(
+  value: Record<string, unknown>,
+  tenantHostname: string,
+): boolean {
+  return (
+    exactKeys(value, SIBLING_DNS_ABSENCE_EVIDENCE_KEYS) &&
+    isExactAdvocateHostname(value.hostname) &&
+    value.hostname !== tenantHostname &&
+    value.hostname !== PUBLICATION_CANARY_SENTINEL_HOSTNAME &&
+    value.unprovisioned === true &&
+    value.resolved === false &&
+    Array.isArray(value.record_types) &&
+    value.record_types.length === 0 &&
+    value.answer_count === 0 &&
+    isTimestamp(value.observed_at)
+  )
+}
+
+function validNegativeSentinelEvidence(
+  value: Record<string, unknown>,
+): boolean {
+  return (
+    exactKeys(value, NEGATIVE_SENTINEL_EVIDENCE_KEYS) &&
+    value.schema_version === 1 &&
+    value.hostname === PUBLICATION_CANARY_SENTINEL_HOSTNAME &&
+    value.cloudflare_ready === true &&
+    value.vercel_ready === true &&
+    value.dns_target_matched === true &&
+    value.tls_certificate_verified === true &&
+    value.tls_hostname_match === true &&
+    value.tls_normal_certificate_verification === true &&
+    (value.tls_protocol === "TLSv1.2" || value.tls_protocol === "TLSv1.3") &&
+    value.http_status === 404 &&
+    typeof value.content_type === "string" &&
+    SAFE_CONTENT_TYPE_PATTERN.test(value.content_type) &&
+    typeof value.body_bytes === "number" &&
+    Number.isSafeInteger(value.body_bytes) &&
+    value.body_bytes >= 1 &&
+    value.body_bytes <= 32_768 &&
+    typeof value.body_sha256 === "string" &&
+    SHA256_PATTERN.test(value.body_sha256) &&
+    value.redirected === false &&
     value.generic_not_found === true &&
-    (!sibling ||
-      (value.unprovisioned === true && value.identical_to_tenant_root === true))
+    value.identical_to_tenant_root === true &&
+    isTimestamp(value.observed_at)
   )
 }
 
@@ -590,13 +682,11 @@ function validSucceededEvidence(
     case "protected_exact_host_challenge":
       return validChallengeEvidence(value, report.target.hostname)
     case "verifying_tenant_root_hidden":
-      return validNotFoundEvidence(value, report.target.hostname, false)
-    case "unprovisioned_sibling_hidden":
-      return (
-        isExactAdvocateHostname(value.hostname) &&
-        value.hostname !== report.target.hostname &&
-        validNotFoundEvidence(value, value.hostname, true)
-      )
+      return validNotFoundEvidence(value, report.target.hostname)
+    case "unprovisioned_sibling_dns_absent":
+      return validSiblingDnsAbsenceEvidence(value, report.target.hostname)
+    case "negative_sentinel_hidden":
+      return validNegativeSentinelEvidence(value)
     case "stripe_us_payment_canary":
       return validPaymentEvidence(value, "stripe_us")
     case "stripe_uk_payment_canary":

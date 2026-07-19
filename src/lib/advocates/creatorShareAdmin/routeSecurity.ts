@@ -1,5 +1,7 @@
 import "server-only"
 
+import { isIP } from "node:net"
+
 import {
   isTrustedCheckoutJsonRequest,
   resolveTrustedPrimaryRequestOrigin,
@@ -55,15 +57,9 @@ export function creatorShareAdvocateControlTraceId(
   request: Request,
   operationId: string,
 ): string {
-  for (const header of ["traceparent", "x-trace-id", "x-vercel-id"]) {
-    const value = request.headers.get(header)?.trim()
-    if (
-      value &&
-      value.length <= 255 &&
-      !CONTROL_CHARACTER_PATTERN.test(value)
-    ) {
-      return value
-    }
+  const value = request.headers.get("x-vercel-id")?.trim()
+  if (value && value.length <= 255 && !CONTROL_CHARACTER_PATTERN.test(value)) {
+    return value
   }
   return `creator-share-advocate-control:${operationId}`
 }
@@ -71,14 +67,16 @@ export function creatorShareAdvocateControlTraceId(
 export function creatorShareAdvocateControlForensicContext(
   request: Request,
 ): CreatorShareAdvocateControlForensicContext {
+  const vercelForwardedFor = boundedHeader(
+    request,
+    "x-vercel-forwarded-for",
+    256,
+  )
   return Object.freeze({
-    // Vercel overwrites this platform header to prevent caller spoofing. The
-    // Cloudflare header is only a fallback because advocate DNS is unproxied.
     clientIp:
-      boundedHeader(request, "x-vercel-forwarded-for", 256) ??
-      boundedHeader(request, "x-forwarded-for", 256) ??
-      boundedHeader(request, "x-real-ip", 256) ??
-      boundedHeader(request, "cf-connecting-ip", 256),
+      vercelForwardedFor !== null && isIP(vercelForwardedFor) !== 0
+        ? vercelForwardedFor
+        : null,
     userAgent: boundedHeader(request, "user-agent", 1_024),
   })
 }

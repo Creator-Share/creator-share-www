@@ -321,10 +321,10 @@ For each advocate, an idempotent provisioner will:
 
 1. Reserve and validate the slug against the database backed reserved registry.
 2. Create the inactive advocate and exact domain record.
-3. Add the exact domain to the Vercel project through its API.
+3. Add the exact domain to the Vercel project through its API, then require provider verification with no redirect, Git branch, or custom environment binding.
 4. Add an exact DNS only CNAME in Cloudflare through a zone scoped API token.
 5. Reconcile each provider attachment until every required integration reports its bounded API readiness evidence, then leave the domain in `verifying`.
-6. Run independent DNS, TLS, HTTP tenant, rejected sibling, and checkout initiation canaries against the exact hostname.
+6. Prove strict DNS absence for one random unprovisioned sibling, then reconcile and independently resolve the fixed reserved negative sentinel before comparing its verified HTTPS 404 byte for byte with the hidden tenant root.
 7. Preserve the structured canary report in protected release evidence and calculate its SHA256 digest.
 8. Require a Creator Share super administrator to promote the exact domain with the expected advocate version, evidence digest, deployment identity, and reason.
 
@@ -337,6 +337,8 @@ All vendor provisioning and reconciliation remains API driven and requires no ma
 Deactivation separates reversible suspension from irreversible archive. Suspension disables public tenant resolution and reconciliation but leaves provider attachments intact. Archive disables the tenant immediately, suppresses reconciliation, and waits through a 20 minute quiescence period before provider cleanup. The archive coordinator runs once per minute and permits at most one current provider job for the tenant.
 
 Archive cleanup is serial and strictly ordered: Cloudflare, Vercel, Stripe US, Stripe UK, then PayPal. Each phase advances only after verified success for the preceding provider. A failed or cancelled current job produces the terminal `needs_attention` state. Automation does not skip, reorder, or invent retries. After the provider issue is corrected, a Creator Share super administrator may submit one exact recovery request with the current version, stable operation ID, and reason. The database derives the only eligible terminal job and provider phase. The browser cannot select the provider, integration, job, phase, or retry order.
+
+Cloudflare cleanup removes the exact tenant DNS record, and Vercel cleanup releases the exact tenant project domain. The later Stripe US, Stripe UK, and PayPal phases retire only Creator Share's local hosted-checkout integration projections. They do not delete payment-provider accounts, catalog objects, customers, or subscriptions.
 
 All suspension, archive, cleanup, recovery, and ownership changes preserve attribution, sponsorship, financial, membership, and append-only audit history. Provider cleanup does not release the slug for reuse.
 
@@ -351,6 +353,7 @@ Initial reserved labels should include:
 - `stripe`, `paypal`, `payments`, `checkout`, `billing`, and `webhooks`.
 - `security`, `legal`, `privacy`, `terms`, `abuse`, and `postmaster`.
 - `advocate`, `advocates`, `creator`, `creators`, `campaign`, and `campaigns`.
+- `publication-sentinel`, reserved permanently for shared negative-control infrastructure.
 
 The registry is extensible. Slugs are never released automatically for reuse.
 
@@ -418,7 +421,7 @@ The v2 checkout database functions and application callers use an additive two p
 - Add qualified exposure capture and the latest touch resolver.
 - Implement Cloudflare and Vercel provisioning jobs and reconciliation.
 - Add host aware provider return URLs.
-- Add tenant, TLS, and checkout canaries.
+- Add tenant, TLS, strict random sibling DNS absence, persistent negative sentinel, and checkout canaries.
 - Require audited super-administrator publication after independent exact-host canary evidence. Follow [the advocate domain publication runbook](./advocate-domain-publication-runbook.md).
 
 ### Phase 3: Advocate experiences
@@ -430,13 +433,19 @@ The v2 checkout database functions and application callers use an additive two p
 - Build Creator Share approval and exact replay tools for ownership, suspension, resume, repair, irreversible archive, and terminal cleanup recovery.
 - Enforce 20 minute archive quiescence, strict five-provider cleanup order, one-minute coordination, and browser-independent recovery targeting.
 
+Catalog administration uses optimistic advocate version fencing, exact ordered child selections, and unsaved-change protection. Chromium and other reliable Navigation API engines synchronously confirm browser history traversal. Apple WebKit uses a session draft because its current traversal cancellation and replay behavior cannot safely support a delayed custom decision. The versioned draft key and payload bind the authenticated account, immutable advocate ID, and portal slug. The stored payload contains only canonical catalog choices and the single-line change note, binds the saved catalog fingerprint, rejects unknown children and noncanonical shapes, and rebinds to the current aggregate advocate version only when the saved catalog itself is unchanged. Draft writes flush on ordinary updates, page hiding, and document visibility loss. A storage failure is visible to the administrator, and WebKit falls back to a native traversal prompt when its Navigation API is available. Save, explicit reset, and a confirmed discard leave a deliberately clean form even when another browser listener later cancels navigation.
+
+Catalog eligibility is introduced through a forward-only migration so an existing database and a fresh reset execute the same transition. Previously recorded migrations remain byte stable. Administration exposes a child's presentation fields only while that child is currently eligible for the public advocate catalog. A selected child that becomes ineligible remains available for removal by opaque identifier, but its name, username, status, and reason for exclusion do not cross the portal boundary.
+
+`yarn test:advocate:webkit` is the required automated release gate. The matching GitHub workflow installs Playwright WebKit and exercises back and forward recovery with an iPhone viewport and device profile. This is browser-engine emulation, not evidence from Mobile Safari on physical iOS hardware. Release evidence must therefore also include a manual current-iOS smoke check covering back navigation, forward navigation, tab backgrounding, and return after process eviction. Neither automated nor manual evidence may place sponsor, contact, or payment data in browser storage.
+
 ### Phase 4: Release validation
 
 - Database reset and migration validation.
 - RLS tests for anonymous, sponsor, advocate member, advocate nonmember, and Creator Share administrator personas.
 - Unit tests for host, attribution, pricing, identity, and permission decisions.
 - Integration tests for all gateways, currencies, modes, retries, renewals, refunds, disputes, and cancellations.
-- Browser tests for primary, advocate, mobile, and provider return flows.
+- Browser tests for primary, advocate, mobile, and provider return flows, including automated Playwright WebKit emulation and a separate manual current iOS catalog draft recovery smoke check.
 - Live PostgREST role claim canaries for both service key formats, authenticated sponsor calls, and anonymous and ordinary-user deny controls.
 - Provisioning failure and drift exercises.
 - Privacy reconstruction review and audit redaction review.
@@ -456,6 +465,8 @@ Migration history currently contains broad grants and a later RLS disablement on
 ### High: automated domain lifecycle
 
 Creating one DNS record is easy. A reliable state machine across Cloudflare, Vercel, Stripe US, Stripe UK, PayPal, TLS, publication, retry, repair, reversible suspension, irreversible archive, drift detection, and takeover prevention is real infrastructure work. Archive adds a 20 minute quiescence boundary, a strict serial cleanup coordinator, terminal intervention state, and exact recovery that must not let a browser choose or reorder provider work.
+
+The publication negative control is shared infrastructure, not a disposable fake tenant. It requires a permanently reserved label, a dedicated scheduled reconciler, exact API reconciliation in both providers, provider verification convergence, independent DNS pinning, normal TLS verification, and a byte-identical application rejection. Routine provider, DNS, certificate, and transport propagation remains nonterminal. No tenant canary is claimed until the shared preflight is ready. The final canary then repeats a read-only provider inspection and every network observation independently. A truly absent random sibling cannot also provide an HTTPS rejection because it has neither DNS nor a certificate, which is why the proof deliberately separates five-type DNS absence from the hosted sentinel. Scheduled attempts retain only append-only fixed stage and outcome codes plus a hashed request reference in the protected audit schema.
 
 ### High: identity claims across historic providers
 
@@ -492,6 +503,7 @@ No advocate tenant may publish until all of the following are true:
 - Webhooks are authenticated, idempotent, and authoritative.
 - The exact host remains nonpublic in `verifying` until the independent canary report is complete.
 - Provisioning, TLS, HTTP tenant, and checkout canaries pass.
+- A random sibling proves exact DNS absence, while the separately resolved and pinned `publication-sentinel.creatorshare.com` proves automated provider readiness, normal TLS, hostname verification, and the byte-identical neutral 404.
 - A Creator Share super administrator promotes the expected advocate version and exact primary domain through the audited publication function using the protected canary report digest.
 - The dedicated visitor signing secret passes a production canary and differs from every payment or contact encryption key.
 - The production build proves Edge middleware selection. A Vercel canary accepts one exact provisioned tenant hostname and rejects an unprovisioned sibling hostname.

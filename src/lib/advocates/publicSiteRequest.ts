@@ -4,6 +4,7 @@ import {
   resolvePublicAdvocateRequest,
   type PublicAdvocatePresentationRepository,
 } from "./publicPresentation"
+import { isReservedNonPrimaryHostname } from "./host"
 import {
   createAdvocatePublicSite,
   createPrimaryPublicSite,
@@ -71,7 +72,10 @@ export function configuredPrimaryHostnames(
       hostnameFromConfiguredUrl(environment.NEXT_PUBLIC_BASE_URL),
       hostnameFromConfiguredUrl(environment.NEXT_PUBLIC_SITE_URL),
       hostnameFromConfiguredUrl(environment.VERCEL_URL),
-    ].filter((hostname): hostname is string => hostname !== null),
+    ].filter(
+      (hostname): hostname is string =>
+        hostname !== null && !isReservedNonPrimaryHostname(hostname),
+    ),
   )
 }
 

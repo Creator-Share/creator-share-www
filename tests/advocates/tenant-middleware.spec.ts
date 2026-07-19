@@ -328,6 +328,71 @@ test.describe("advocate tenant middleware", () => {
     }
   })
 
+  test("passes only the negative sentinel root to the neutral application 404", async () => {
+    const host = "publication-sentinel.creatorshare.com"
+    const root = await middleware(request("/", { host, method: "GET" }))
+    expect(root.status).toBe(200)
+    expect(root.headers.get("x-middleware-next")).toBe("1")
+    expect(root.headers.get("set-cookie")).toBeNull()
+    expect(root.headers.get("vary")).toContain("Host")
+
+    for (const [pathname, method] of [
+      ["/", "POST"],
+      ["/about", "GET"],
+      ["/payments/success", "GET"],
+      ["/api/beneficiaries/get", "GET"],
+      ["/_next/static/chunks/app.js", "GET"],
+      ["/favicon.ico", "GET"],
+      ["/logo.png", "GET"],
+      ["/.well-known/creator-share/advocate-publication-canary", "POST"],
+    ] as const) {
+      const response = await middleware(request(pathname, { host, method }))
+      expect(response.status).toBe(404)
+      expect(response.headers.get("set-cookie")).toBeNull()
+      expect(response.headers.get("x-middleware-next")).toBeNull()
+    }
+  })
+
+  test("keeps the sentinel neutral when runtime URLs try to promote it", async () => {
+    const host = "publication-sentinel.creatorshare.com"
+    const attempts = [
+      ["NEXT_PUBLIC_BASE_URL", `https://${host}`],
+      [
+        "NEXT_PUBLIC_SITE_URL",
+        "https://PUBLICATION-SENTINEL.CREATORSHARE.COM.",
+      ],
+      ["VERCEL_URL", host],
+    ] as const
+    const variables = attempts.map(([variable]) => variable)
+    const previous = Object.fromEntries(
+      variables.map((variable) => [variable, process.env[variable]]),
+    )
+
+    try {
+      for (const [variable, configured] of attempts) {
+        process.env[variable] = configured
+
+        const root = await middleware(request("/", { host }))
+        expect(root.status).toBe(200)
+        expect(root.headers.get("x-middleware-next")).toBe("1")
+        expect(root.headers.get("set-cookie")).toBeNull()
+
+        const webhook = await middleware(
+          request("/api/webhooks/stripe", { host, method: "POST" }),
+        )
+        expect(webhook.status).toBe(404)
+        expect(webhook.headers.get("x-middleware-next")).toBeNull()
+        expect(webhook.headers.get("set-cookie")).toBeNull()
+      }
+    } finally {
+      for (const variable of variables) {
+        const value = previous[variable]
+        if (value === undefined) delete process.env[variable]
+        else process.env[variable] = value
+      }
+    }
+  })
+
   test("canonicalizes a tenant auth callback before exchanging its code", async () => {
     const previousBaseUrl = process.env.NEXT_PUBLIC_BASE_URL
     process.env.NEXT_PUBLIC_BASE_URL = "https://creatorshare.com"

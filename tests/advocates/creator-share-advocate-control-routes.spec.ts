@@ -10,6 +10,8 @@ type CleanupRecoveryRouteModule =
   typeof import("../../src/app/api/admin/advocates/[id]/cleanup-recovery/route")
 type OwnershipRouteModule =
   typeof import("../../src/app/api/admin/advocates/[id]/ownership/route")
+type PublicationRouteModule =
+  typeof import("../../src/app/api/admin/advocates/[id]/publish/route")
 type NodeModuleLoader = (
   request: string,
   parent: unknown,
@@ -88,6 +90,9 @@ const cleanupRecoveryRoute = testRequire(
 const ownershipRoute = testRequire(
   resolve(process.cwd(), "src/app/api/admin/advocates/[id]/ownership/route.ts"),
 ) as OwnershipRouteModule
+const publicationRoute = testRequire(
+  resolve(process.cwd(), "src/app/api/admin/advocates/[id]/publish/route.ts"),
+) as PublicationRouteModule
 nodeModule._load = originalModuleLoad
 
 function lifecycleBody(overrides: Record<string, unknown> = {}): string {
@@ -132,7 +137,7 @@ function request(
     origin: ORIGIN,
     "sec-fetch-site": "same-origin",
     "content-type": "application/json; charset=utf-8",
-    "x-trace-id": "trace-123",
+    "x-vercel-id": "trace-123",
     "x-vercel-forwarded-for": "203.0.113.42",
     "user-agent": "Creator Share Admin Test/1.0",
   })
@@ -156,6 +161,50 @@ test.beforeEach(() => {
   createClientCalls = 0
   rpcCalls.length = 0
   rpcResult = { data: null, error: null }
+})
+
+test.describe("Creator Share advocate publication route", () => {
+  test("rejects untrusted requests before authentication", async () => {
+    const invalidHeaders: Array<Record<string, string | null>> = [
+      { host: "attacker.example" },
+      { origin: "https://attacker.example" },
+      {
+        host: "hope.creatorshare.com",
+        origin: "https://hope.creatorshare.com",
+      },
+      { "sec-fetch-site": "cross-site" },
+      { "content-type": "text/plain" },
+      { origin: null },
+    ]
+
+    for (const overrides of invalidHeaders) {
+      const headers = new Headers({
+        host: "creatorshare.com",
+        origin: ORIGIN,
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json; charset=utf-8",
+      })
+      for (const [name, value] of Object.entries(overrides)) {
+        if (value === null) headers.delete(name)
+        else headers.set(name, value)
+      }
+      const response = await publicationRoute.POST(
+        new Request(`${ORIGIN}/api/admin/advocates/${ADVOCATE_ID}/publish`, {
+          method: "POST",
+          headers,
+          body: "{}",
+        }),
+        { params: Promise.resolve({ id: ADVOCATE_ID }) },
+      )
+
+      expect(response.status).toBe(400)
+      expect(await json(response)).toEqual({
+        ok: false,
+        code: "invalid_request",
+      })
+    }
+    expect(createClientCalls).toBe(0)
+  })
 })
 
 test.describe("Creator Share advocate lifecycle route", () => {

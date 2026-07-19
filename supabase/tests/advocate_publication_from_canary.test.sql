@@ -222,21 +222,42 @@ AS $$
           )
         ),
         jsonb_build_object(
-          'name', 'unprovisioned_sibling_hidden',
+          'name', 'unprovisioned_sibling_dns_absent',
+          'outcome', 'succeeded',
+          'started_at', source.started_at_text,
+          'completed_at', source.started_at_text,
+          'evidence', jsonb_build_object(
+            'hostname', 'unused-publicationgate.creatorshare.com',
+            'unprovisioned', true,
+            'resolved', false,
+            'record_types', jsonb_build_array(),
+            'answer_count', 0,
+            'observed_at', source.started_at_text
+          )
+        ),
+        jsonb_build_object(
+          'name', 'negative_sentinel_hidden',
           'outcome', 'succeeded',
           'started_at', source.started_at_text,
           'completed_at', source.started_at_text,
           'evidence', jsonb_build_object(
             'schema_version', 1,
-            'hostname', 'unused-publicationgate.creatorshare.com',
+            'hostname', 'publication-sentinel.creatorshare.com',
+            'cloudflare_ready', true,
+            'vercel_ready', true,
+            'dns_target_matched', true,
+            'tls_certificate_verified', true,
+            'tls_hostname_match', true,
+            'tls_normal_certificate_verification', true,
+            'tls_protocol', 'TLSv1.3',
             'http_status', 404,
             'content_type', 'text/html; charset=utf-8',
             'body_bytes', 64,
             'body_sha256', repeat('2', 64),
             'redirected', false,
             'generic_not_found', true,
-            'unprovisioned', true,
-            'identical_to_tenant_root', true
+            'identical_to_tenant_root', true,
+            'observed_at', source.started_at_text
           )
         ),
         jsonb_build_object(

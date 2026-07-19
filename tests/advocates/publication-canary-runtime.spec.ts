@@ -37,6 +37,8 @@ nodeModule._load = originalModuleLoad
 
 const NOW = Date.parse("2026-07-18T18:00:00.000Z")
 const HOSTNAME = "hope.creatorshare.com"
+const SENTINEL_HOSTNAME = "publication-sentinel.creatorshare.com"
+const SIBLING_HOSTNAME = "canary-0123456789abcdef.creatorshare.com"
 const TARGET = "cname.vercel-dns.com"
 const PINNED_ADDRESSES = Object.freeze([
   Object.freeze({ address: "76.76.21.21", family: 4 as const }),
@@ -66,6 +68,10 @@ function dnsResolver(options: {
       this.cancelled = true
     },
   }
+}
+
+function dnsError(code: string): Error & { code: string } {
+  return Object.assign(new Error(code), { code })
 }
 
 function httpInput(
@@ -248,6 +254,224 @@ test.describe("publication canary production runtime", () => {
     }
   })
 
+  test("proves random sibling DNS absence only from empty answers or exact absence codes", async () => {
+    const aliasQueries: string[] = []
+    const resolver: PublicationCanaryDnsResolver = {
+      async resolveCname() {
+        throw dnsError("ENODATA")
+      },
+      async resolve4() {
+        return []
+      },
+      async resolve6() {
+        throw dnsError("ENOTFOUND")
+      },
+      cancel() {},
+    }
+    await expect(
+      runtime.observeUnprovisionedSiblingDnsAbsence(
+        { hostname: SIBLING_HOSTNAME, timeoutMs: 10_000 },
+        {
+          resolverFactory: () => resolver,
+          async aliasAbsenceResolver(input) {
+            aliasQueries.push(input.recordType)
+            return true
+          },
+          now: () => NOW,
+        },
+      ),
+    ).resolves.toEqual({
+      hostname: SIBLING_HOSTNAME,
+      resolved: false,
+      recordTypes: [],
+      answerCount: 0,
+      observedAt: "2026-07-18T18:00:00.000Z",
+    })
+    expect(aliasQueries.sort()).toEqual(["HTTPS", "SVCB"])
+  })
+
+  test("fails strict sibling absence when HTTPS or SVCB records exist", async () => {
+    for (const presentType of ["HTTPS", "SVCB"] as const) {
+      await expect(
+        runtime.observeUnprovisionedSiblingDnsAbsence(
+          { hostname: SIBLING_HOSTNAME, timeoutMs: 10_000 },
+          {
+            resolverFactory: () => ({
+              async resolveCname() {
+                return []
+              },
+              async resolve4() {
+                return []
+              },
+              async resolve6() {
+                return []
+              },
+              cancel() {},
+            }),
+            async aliasAbsenceResolver(input) {
+              return input.recordType !== presentType
+            },
+          },
+        ),
+      ).rejects.toThrow("publication_canary_sibling_dns_absence_inconclusive")
+    }
+  })
+
+  test("validates exact HTTPS and SVCB DNS-over-HTTPS absence responses", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const fetchImplementation = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const url = new URL(String(input))
+      calls.push({ url: url.toString(), init })
+      const type = Number(url.searchParams.get("type"))
+      return new Response(
+        JSON.stringify({
+          Status: 0,
+          TC: false,
+          Question: [{ name: `${SIBLING_HOSTNAME}.`, type }],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+        },
+      )
+    }) as typeof fetch
+
+    for (const recordType of ["SVCB", "HTTPS"] as const) {
+      await expect(
+        runtime.queryPublicationCanaryDnsAliasAbsence(
+          { hostname: SIBLING_HOSTNAME, recordType, timeoutMs: 10_000 },
+          { fetchImplementation },
+        ),
+      ).resolves.toBe(true)
+    }
+    expect(
+      calls.map(({ url }) => new URL(url).searchParams.get("type")),
+    ).toEqual(["64", "65"])
+    for (const call of calls) {
+      expect(call.init).toMatchObject({
+        method: "GET",
+        redirect: "error",
+        credentials: "omit",
+        cache: "no-store",
+      })
+      expect((call.init?.headers as Record<string, string>).Accept).toBe(
+        "application/dns-json",
+      )
+    }
+  })
+
+  test("reserves settlement time and refuses late sentinel network work", async () => {
+    const dependencies =
+      runtime.createPublicationCanarySentinelBootstrapRuntimeDependencies({
+        deadlineAtMilliseconds: 50_000,
+        monotonicNow: () => 40_001,
+      })
+
+    await expect(dependencies.observeDns()).rejects.toThrow(
+      "publication_canary_sentinel_deadline_exhausted",
+    )
+  })
+
+  test("treats records, resolver faults, malformed answers, and timeouts as inconclusive absence", async () => {
+    const scenarios: Array<() => PublicationCanaryDnsResolver> = [
+      () => ({
+        async resolveCname() {
+          return [TARGET]
+        },
+        async resolve4() {
+          return []
+        },
+        async resolve6() {
+          return []
+        },
+        cancel() {},
+      }),
+      () => ({
+        async resolveCname() {
+          throw dnsError("SERVFAIL")
+        },
+        async resolve4() {
+          return []
+        },
+        async resolve6() {
+          return []
+        },
+        cancel() {},
+      }),
+      () => ({
+        async resolveCname() {
+          return []
+        },
+        async resolve4() {
+          throw dnsError("REFUSED")
+        },
+        async resolve6() {
+          return []
+        },
+        cancel() {},
+      }),
+      () => ({
+        async resolveCname() {
+          throw new Error("ENODATA")
+        },
+        async resolve4() {
+          return []
+        },
+        async resolve6() {
+          return []
+        },
+        cancel() {},
+      }),
+      () => ({
+        async resolveCname() {
+          return []
+        },
+        async resolve4() {
+          return ["not-an-ip"]
+        },
+        async resolve6() {
+          return []
+        },
+        cancel() {},
+      }),
+    ]
+
+    for (const resolverFactory of scenarios) {
+      await expect(
+        runtime.observeUnprovisionedSiblingDnsAbsence(
+          { hostname: SIBLING_HOSTNAME, timeoutMs: 10_000 },
+          {
+            resolverFactory,
+            aliasAbsenceResolver: async () => true,
+          },
+        ),
+      ).rejects.toThrow()
+    }
+
+    let cancelled = false
+    const never = new Promise<string[]>(() => {})
+    await expect(
+      runtime.observeUnprovisionedSiblingDnsAbsence(
+        { hostname: SIBLING_HOSTNAME, timeoutMs: 100 },
+        {
+          resolverFactory: () => ({
+            resolveCname: () => never,
+            resolve4: () => never,
+            resolve6: () => never,
+            cancel() {
+              cancelled = true
+            },
+          }),
+          aliasAbsenceResolver: async () => true,
+        },
+      ),
+    ).rejects.toThrow("publication_canary_dns_timeout")
+    expect(cancelled).toBe(true)
+  })
+
   test("requires normal authorized TLS and a matching live certificate", async () => {
     const input = {
       hostname: HOSTNAME,
@@ -325,6 +549,88 @@ test.describe("publication canary production runtime", () => {
     })
     expect(new TextDecoder().decode(result.body)).toBe("generic not found")
     expect(calls).toEqual([{ input, addresses: PINNED_ADDRESSES }])
+  })
+
+  test("keeps tenant and sentinel DNS pins independent for TLS and HTTPS", async () => {
+    const addresses = new Map([
+      [HOSTNAME, "76.76.21.21"],
+      [SENTINEL_HOSTNAME, "76.76.21.22"],
+    ])
+    const tlsPins: Array<{ hostname: string; address: string }> = []
+    const httpPins: Array<{ hostname: string; address: string }> = []
+    const environment = {
+      NODE_ENV: "production",
+      VERCEL: "1",
+      VERCEL_ENV: "production",
+      VERCEL_DEPLOYMENT_ID: "dpl_1234567890abcdef",
+      VERCEL_GIT_COMMIT_SHA: "a".repeat(40),
+      ADVOCATE_CLOUDFLARE_API_TOKEN: "cloudflare-token-value-1234567890",
+      ADVOCATE_CLOUDFLARE_ZONE_ID: "b".repeat(32),
+      ADVOCATE_CLOUDFLARE_CNAME_TARGET: TARGET,
+    }
+    const dependencies = runtime.createPublicationCanaryRuntimeDependencies({
+      serviceRoleClient: {} as never,
+      environment,
+      deploymentIdentity: {
+        deploymentId: environment.VERCEL_DEPLOYMENT_ID,
+        revision: environment.VERCEL_GIT_COMMIT_SHA,
+      },
+      now: () => NOW,
+      resolverFactory: () => ({
+        async resolveCname() {
+          return [TARGET]
+        },
+        async resolve4(hostname) {
+          return [addresses.get(hostname) ?? "10.0.0.1"]
+        },
+        async resolve6() {
+          return []
+        },
+        cancel() {},
+      }),
+      async connectPinnedTls(input, pins) {
+        tlsPins.push({ hostname: input.hostname, address: pins[0].address })
+        return {
+          authorized: true,
+          authorizationErrorPresent: false,
+          hostnameMatched: true,
+          protocol: "TLSv1.3",
+          certificateNotBefore: "2026-07-01T00:00:00.000Z",
+          certificateNotAfter: "2026-08-01T00:00:00.000Z",
+        }
+      },
+      async httpTransport(input, pins) {
+        httpPins.push({ hostname: input.hostname, address: pins[0].address })
+        return httpResponse(input)
+      },
+    })
+
+    for (const hostname of [HOSTNAME, SENTINEL_HOSTNAME]) {
+      await dependencies.observeDns({ hostname, timeoutMs: 10_000 })
+      await dependencies.inspectTls({
+        hostname,
+        serverName: hostname,
+        rejectUnauthorized: true,
+        timeoutMs: 10_000,
+      })
+      await dependencies.requestHttp(
+        httpInput(
+          hostname === SENTINEL_HOSTNAME
+            ? {
+                kind: "negative_sentinel_root",
+                hostname,
+                url: `https://${hostname}/`,
+              }
+            : {},
+        ),
+      )
+    }
+
+    expect(tlsPins).toEqual([
+      { hostname: HOSTNAME, address: "76.76.21.21" },
+      { hostname: SENTINEL_HOSTNAME, address: "76.76.21.22" },
+    ])
+    expect(httpPins).toEqual(tlsPins)
   })
 
   test("rejects request mutation, redirects, and oversized response bodies", async () => {

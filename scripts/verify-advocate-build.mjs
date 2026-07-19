@@ -3,7 +3,7 @@ import { resolve } from "node:path"
 
 const EXPECTED_MATCHERS = [
   "/((?!_next/static|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  "/((?!_next/static(?:/|$)).*)",
+  "/:path*",
 ]
 const EXPECTED_SIBLING_HOST_MATCHER =
   "(?:(?:[a-z0-9-]+\\.)+creatorshare\\.com\\.?|(?:[a-z0-9-]+\\.)+localhost)(?::[0-9]+)?"

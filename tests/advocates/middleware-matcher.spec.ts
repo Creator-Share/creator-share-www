@@ -38,13 +38,22 @@ test.describe("advocate middleware build matcher", () => {
     }
   })
 
-  test("never invokes middleware for immutable Next chunks", () => {
+  test("keeps primary chunks fast while enforcing sibling Host policy", () => {
+    expect(matches("/_next/static/chunks/app.js", "creatorshare.com")).toBe(
+      false,
+    )
+    expect(matches("/_next/static/chunks/app.js", "unapproved.example")).toBe(
+      false,
+    )
+
     for (const host of [
-      "creatorshare.com",
       "hope.creatorshare.com",
-      "unapproved.example",
+      "publication-sentinel.creatorshare.com",
+      "admin.creatorshare.com",
+      "nested.hope.creatorshare.com",
+      "hope.localhost:3000",
     ]) {
-      expect(matches("/_next/static/chunks/app.js", host)).toBe(false)
+      expect(matches("/_next/static/chunks/app.js", host)).toBe(true)
     }
   })
 })

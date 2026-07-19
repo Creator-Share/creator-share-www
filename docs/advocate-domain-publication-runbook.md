@@ -9,6 +9,7 @@ Do not enable advocate publication until all of these surfaces are deployed and 
 - Atomic provisioning start for the exact primary hostname and exactly five required integrations.
 - Scheduled provisioning reconciliation and the fail-closed active drift transition.
 - Protected exact-host challenge, report canonicalization, and safe live payment canaries.
+- The reserved `publication-sentinel` label and automated shared Cloudflare and Vercel negative-control reconciliation.
 - The authenticated publication start and poll route.
 - The one-minute internal publication recovery cron.
 - Durable database execution leases and immutable report completion.
@@ -47,17 +48,31 @@ The browser control routes capture bounded, sanitized client IP and user agent m
 
 Publication requires exactly these required integration tuples for the primary domain:
 
-| Provider   | Environment  | Readiness evidence                                               |
-| ---------- | ------------ | ---------------------------------------------------------------- |
-| Cloudflare | `production` | Exact DNS only CNAME record observed through the provider API    |
-| Vercel     | `production` | Exact project domain attached and provider verification complete |
-| Stripe US  | `live`       | Expected live account scope is authenticated                     |
-| Stripe UK  | `live`       | Expected live account scope is authenticated                     |
-| PayPal     | `live`       | Expected live API origin and credentials are authenticated       |
+| Provider   | Environment  | Readiness evidence                                                                    |
+| ---------- | ------------ | ------------------------------------------------------------------------------------- |
+| Cloudflare | `production` | Exact DNS only CNAME record observed through the provider API                         |
+| Vercel     | `production` | Exact verified project domain with no redirect, branch, or custom environment binding |
+| Stripe US  | `live`       | Expected live account scope is authenticated                                          |
+| Stripe UK  | `live`       | Expected live account scope is authenticated                                          |
+| PayPal     | `live`       | Expected live API origin and credentials are authenticated                            |
 
 Every tuple must reference a succeeded `provision` or `reconcile` job with a 32 byte evidence digest observed within the 30 minute publication window. Any extra required tuple, missing tuple, nonready tuple, stale tuple, or queued or running job blocks publication.
 
 Provider readiness is necessary, but it is not sufficient. It proves control plane access. It does not prove public DNS propagation, TLS, tenant selection, deployment identity, return URL construction, or provider checkout object creation through the exact host.
+
+## Negative-control topology
+
+The publication proof uses two different negative controls because DNS absence and safe application rejection prove different claims.
+
+First, the runner generates a high-entropy sibling beneath `creatorshare.com`. It proves that no exact advocate domain row or reserved-label row exists before making any network observation. It then queries CNAME, A, AAAA, HTTPS, and SVCB independently. HTTPS and SVCB use authenticated exact-type DNS over HTTPS queries because the Node resolver does not expose those record types. Every query must either return zero records or reject with an exact DNS absence result. A timeout, truncation, `SERVFAIL`, `REFUSED`, malformed response, record answer, or arbitrary resolver exception is inconclusive and fails the `unprovisioned_sibling_dns_absent` step. The successful evidence contains only the hostname, `unprovisioned: true`, `resolved: false`, empty record types, zero answers, and the observation time. The runner never attempts TLS or HTTP against this intentionally absent hostname.
+
+Second, `publication-sentinel.creatorshare.com` is persistent shared negative-control infrastructure. Its label is migration owned and cannot be assigned to an advocate. A dedicated one-minute worker uses the existing exact Cloudflare and Vercel adapters to reconcile one DNS-only CNAME and one exact project-domain attachment. Reconciliation always performs provider lookup before mutation, uses deterministic synthetic integration ownership identities, and rechecks after any create race. Ordinary provider, DNS, certificate, and network propagation is recorded as `converging`, not as a terminal tenant canary failure. The tenant canary worker runs the same bounded preflight before claiming work, so a canary cannot begin until the shared sentinel is ready. Tenant archive and deprovisioning never remove this shared sentinel.
+
+After the canary is claimed, the terminal runner independently inspects provider state without mutation, resolves the sentinel again, pins only addresses from that sentinel observation, performs normal certificate and hostname verification, and makes a fresh pinned HTTPS root request. The sentinel must return the same bounded byte-identical neutral 404 as the still-verifying tenant root. Tenant, sentinel, and sibling checks never reuse another hostname's DNS observation or pinned-address set. Separate Vercel hostnames may legitimately resolve to the same public anycast address. The `negative_sentinel_hidden` report evidence contains only safe provider readiness booleans, DNS target match, TLS verification facts, bounded 404 facts and digest, equality with the tenant root, hostname, and observation time. It never contains provider identifiers, raw response bodies, credentials, or tokens.
+
+Each scheduled reconciliation writes one atomic append-only audit record. It contains a one-way request reference, ordered fixed stage codes, and the terminal `ready`, `converging`, or `failed` outcome. Application roles have no direct table access. Provider identifiers, hostnames, responses, raw errors, payloads, tokens, and credentials are structurally absent from this evidence schema.
+
+Both negative-control steps retain the database-compatible terminal code `unprovisioned_sibling_not_hidden`. The exact failed report step distinguishes DNS absence failure from sentinel readiness, TLS, or HTTP failure.
 
 ## Asynchronous publication operation
 
@@ -77,7 +92,7 @@ Use Vercel Pro or Enterprise for production. This release does not support Hobby
 
 In Vercel Project Settings, under Environment Variables, enable Automatically expose System Environment Variables. Confirm that both `VERCEL_DEPLOYMENT_ID` and `VERCEL_GIT_COMMIT_SHA` are present at runtime. Publication starts and reports bind to these values so an old deployment cannot supply evidence for a new release.
 
-Cloudflare remains authoritative DNS for the MVP. Each advocate hostname must have one exact CNAME whose content equals the project-specific `ADVOCATE_CLOUDFLARE_CNAME_TARGET`. The record must be DNS only, represented as `proxied: false` through the Cloudflare API. Do not substitute the legacy generic Vercel target. The same hostname must also be attached to the configured Vercel project before it can become ready.
+Cloudflare remains authoritative DNS for the MVP. Each advocate hostname must have one exact CNAME whose content equals the project-specific `ADVOCATE_CLOUDFLARE_CNAME_TARGET`. The record must be DNS only, represented as `proxied: false` through the Cloudflare API. Do not substitute the legacy generic Vercel target. The same hostname must also be verified on the configured Vercel project with no redirect, Git branch, or custom environment binding before it can become ready.
 
 Required server secrets and protected identifiers are:
 
@@ -101,10 +116,11 @@ The report must include:
 - Deployment ID and source revision.
 - Canary start and completion timestamps in UTC.
 - The exact DNS only CNAME target, independently resolved public A and AAAA answers, and the expected Vercel target.
-- TLS certificate hostname coverage, validity window, and issuer metadata.
+- TLS certificate hostname coverage, validity window, and normal chain verification.
 - Exact-host protected tenant response, including the expected advocate ID and deployment ID.
 - Ordinary public response proving the verifying tenant remains unpublished.
-- A generated, unprovisioned sibling hostname and its neutral rejection result.
+- A generated unprovisioned sibling and strict CNAME, A, AAAA, HTTPS, and SVCB absence evidence.
+- The fixed reserved negative sentinel, independently resolved and pinned, with automated Cloudflare and Vercel readiness plus a byte-identical neutral 404.
 - Stripe US, Stripe UK, and PayPal checkout initiation results.
 - Sanitized provider object references required for later operator investigation.
 - A pass or fail result for every check and one overall result.
@@ -160,7 +176,7 @@ Immediately after approval:
 1. Load the public root from the exact advocate hostname and confirm the expected logo, colors, opening header, and eligible child catalog.
 2. Load one deep child route and confirm every internal browse, sponsorship, success, cancel, and account link stays on the exact advocate hostname where intended.
 3. Initiate one production-safe operator checkout canary for every supported provider and region. Do not complete payment unless the release plan explicitly includes a live transaction.
-4. Confirm the primary Creator Share hostname remains primary and an unprovisioned sibling remains neutral.
+4. Confirm the primary Creator Share hostname remains primary, a random unprovisioned sibling has no DNS records, and the fixed negative sentinel still serves the neutral 404.
 5. Confirm the publication audit events contain the expected actor, portal, domain, deployment, request, trace, reason, report digest, and binding digest.
 6. Attach the canary report, database result, build identity, and post-publication observations to the release record.
 
@@ -172,7 +188,7 @@ The scheduled provisioner processes queued jobs every minute. The publication re
 
 Each provisioner invocation has one 50 second monotonic budget inside the 60 second Vercel function limit. Scheduling, claim, context reads, reconciliation recording, and lease renewal share an absolute database abort deadline that ends 10 seconds before the invocation deadline. Provider request timeouts are calculated from that same remaining work budget. Completion and retry use a separate signal that ends at the absolute invocation deadline, so a slow control call cannot consume the durable settlement reserve. If final settlement also times out, the worker returns a nonclean `settlement_unknown` result and leaves the exact fenced lease for normal expiry and recovery. A fixed per-request database timeout is not an acceptable substitute because several serial calls could still cross the route deadline.
 
-Do not enable scheduled reconciliation for active domains until the active-drift settlement boundary is deployed. That boundary must atomically move an active advocate publication, domain, and affected required integration into their fail-closed states when verified provider drift becomes terminal. Repair may return failed state through provisioning to `verifying`, but automation must never reactivate the portal directly.
+Enable scheduled reconciliation for active domains only after the active-drift settlement migration in this release is applied. That boundary atomically moves an active advocate publication, domain, and affected required integration into their fail-closed states when verified provider drift becomes terminal. For Vercel, a redirect, Git branch binding, or custom environment binding is terminal drift even when the hostname remains verified on the expected project. Repair may return failed state through provisioning to `verifying`, but automation must never reactivate the portal directly.
 
 Alert on:
 
@@ -196,9 +212,11 @@ Cleanup proceeds in this strict order:
 
 1. Remove the Cloudflare DNS record and verify absence.
 2. Release the exact domain from Vercel and verify absence.
-3. Remove or retire the Stripe US domain integration and verify the expected terminal state.
-4. Remove or retire the Stripe UK domain integration and verify the expected terminal state.
-5. Remove or retire the PayPal domain integration and verify the expected terminal state.
+3. Retire the local Stripe US hosted-checkout integration projection and verify its expected terminal state.
+4. Retire the local Stripe UK hosted-checkout integration projection and verify its expected terminal state.
+5. Retire the local PayPal hosted-checkout integration projection and verify its expected terminal state.
+
+The Stripe and PayPal phases are local hosted-checkout integration retirement. They do not delete Stripe accounts, Prices, Customers, Subscriptions, PayPal plans, or other provider objects. Cloudflare DNS removal and exact Vercel domain release are the only external infrastructure deletions in the MVP archive sequence.
 
 The coordinator advances only after the preceding provider job succeeds. It never skips, reorders, or runs provider cleanup in parallel. A failed or cancelled current job moves the archive cleanup projection to `needs_attention`. Automation does not guess at a replacement job after a terminal result.
 
@@ -238,7 +256,7 @@ Retain:
 - Super administrator publication result and immutable audit event references.
 - Super administrator lifecycle and ownership results, append-only exact replay receipts, and private browser forensic capture with 90 day deletion evidence.
 - Archive exercises proving immediate tenant suppression, 20 minute quiescence, strict Cloudflare, Vercel, Stripe US, Stripe UK, and PayPal cleanup order, terminal `needs_attention`, and exact recovery without browser-selected provider or job input.
-- Post-publication exact-host and rejected-sibling observations.
+- Post-publication exact-host, random sibling DNS absence, and fixed sentinel observations.
 - Active scheduler inventory, recent successful worker runs, and alert ownership.
 - Suspension, deprovisioning, and incident owners.
 

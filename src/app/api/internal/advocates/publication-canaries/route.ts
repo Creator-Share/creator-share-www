@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 
 import { NextResponse } from "next/server"
 
@@ -9,9 +9,15 @@ import {
 import { processNextPublicationCanaryExecution } from "@/lib/advocates/publicationCanary/execute"
 import {
   createPublicationCanaryRuntimeDependencies,
+  createPublicationCanarySentinelBootstrapRuntimeDependencies,
   loadPublicationCanaryDeploymentIdentity,
   PublicationCanaryRuntimeConfigurationError,
 } from "@/lib/advocates/publicationCanary/runtime"
+import {
+  PUBLICATION_CANARY_SENTINEL_INVOCATION_BUDGET_MS,
+  runAfterPublicationCanarySentinel,
+} from "@/lib/advocates/publicationCanary/sentinelBootstrap"
+import { createPublicationCanarySentinelEvidenceRepository } from "@/lib/advocates/publicationCanary/sentinelEvidence"
 import {
   isAuthorizedPublicationCanaryWorkerRequest,
   loadPublicationCanaryWorkerSecret,
@@ -34,6 +40,9 @@ function response(body: Record<string, unknown>, status: number): NextResponse {
 }
 
 async function handle(request: Request): Promise<NextResponse> {
+  const monotonicNow = () => performance.now()
+  const sentinelDeadlineAtMilliseconds =
+    monotonicNow() + PUBLICATION_CANARY_SENTINEL_INVOCATION_BUDGET_MS
   const requestId = randomUUID()
   let expectedSecret: string
   try {
@@ -52,17 +61,55 @@ async function handle(request: Request): Promise<NextResponse> {
 
   try {
     const deploymentIdentity = loadPublicationCanaryDeploymentIdentity()
-    const serviceRoleClient = createServiceRoleClient()
-    const result = await processNextPublicationCanaryExecution(
-      deploymentIdentity,
+    const serviceRoleClient = createServiceRoleClient({
+      requestTimeoutMilliseconds: 8_000,
+    })
+    const requestReferenceSha256 = createHash("sha256")
+      .update(requestId)
+      .digest("hex")
+    const sentinel = await runAfterPublicationCanarySentinel(
       {
-        database: createPublicationCanaryWorkerDatabase(serviceRoleClient),
-        runnerDependencies: createPublicationCanaryRuntimeDependencies({
-          serviceRoleClient,
-          deploymentIdentity,
-        }),
+        runId: randomUUID(),
+        requestReferenceSha256,
       },
+      {
+        ...createPublicationCanarySentinelBootstrapRuntimeDependencies({
+          deadlineAtMilliseconds: sentinelDeadlineAtMilliseconds,
+          monotonicNow,
+        }),
+        evidence:
+          createPublicationCanarySentinelEvidenceRepository(serviceRoleClient),
+      },
+      () =>
+        processNextPublicationCanaryExecution(deploymentIdentity, {
+          database: createPublicationCanaryWorkerDatabase(serviceRoleClient),
+          runnerDependencies: createPublicationCanaryRuntimeDependencies({
+            serviceRoleClient,
+            deploymentIdentity,
+          }),
+        }),
     )
+    if (!sentinel.ready) {
+      if (sentinel.outcome === "failed") {
+        console.error("ADVOCATE_PUBLICATION_SENTINEL_REQUIRES_ATTENTION", {
+          requestReferenceSha256,
+          code: "sentinel_reconciliation_failed",
+        })
+      }
+      return response(
+        {
+          ok: sentinel.outcome !== "failed",
+          code:
+            sentinel.outcome === "failed"
+              ? "worker_dependency_unavailable"
+              : "worker_dependency_converging",
+          requestId,
+          outcome: "idle",
+        },
+        sentinel.outcome === "failed" ? 503 : 202,
+      )
+    }
+    const result = sentinel.execution
     if (result.outcome === "failed") {
       console.error("ADVOCATE_PUBLICATION_CANARY_REQUIRES_ATTENTION", {
         requestId,

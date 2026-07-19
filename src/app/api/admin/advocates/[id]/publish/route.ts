@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 
 import { after, NextResponse } from "next/server"
 
@@ -20,9 +20,16 @@ import {
 } from "@/lib/advocates/publicationCanary/operation"
 import {
   createPublicationCanaryRuntimeDependencies,
+  createPublicationCanarySentinelBootstrapRuntimeDependencies,
   loadPublicationCanaryDeploymentIdentity,
   PublicationCanaryRuntimeConfigurationError,
 } from "@/lib/advocates/publicationCanary/runtime"
+import {
+  PUBLICATION_CANARY_SENTINEL_INVOCATION_BUDGET_MS,
+  runAfterPublicationCanarySentinel,
+} from "@/lib/advocates/publicationCanary/sentinelBootstrap"
+import { createPublicationCanarySentinelEvidenceRepository } from "@/lib/advocates/publicationCanary/sentinelEvidence"
+import { isTrustedCreatorShareAdvocateControlRequest } from "@/lib/advocates/creatorShareAdmin/routeSecurity"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 
@@ -50,11 +57,9 @@ function response(
 }
 
 function boundedTraceId(request: Request): string {
-  for (const name of ["traceparent", "x-trace-id", "x-vercel-id"]) {
-    const value = request.headers.get(name)?.trim()
-    if (value && value.length <= 255 && !/[\u0000-\u001f\u007f]/.test(value)) {
-      return value
-    }
+  const value = request.headers.get("x-vercel-id")?.trim()
+  if (value && value.length <= 255 && !/[\u0000-\u001f\u007f]/.test(value)) {
+    return value
   }
   return `advocate-publication:${randomUUID()}`
 }
@@ -63,6 +68,10 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
+  if (!isTrustedCreatorShareAdvocateControlRequest(request)) {
+    return response({ ok: false, code: "invalid_request" }, 400)
+  }
+
   const authenticatedClient = await createClient()
   const auth = await requireSuperAdmin(authenticatedClient)
   if (!auth.ok) return auth.response
@@ -109,20 +118,62 @@ export async function POST(
     )
 
     if (result.outcome === "pending") {
-      const runnerDependencies = createPublicationCanaryRuntimeDependencies({
-        serviceRoleClient,
-        deploymentIdentity,
-      })
       if (result.workerKickoff) {
-        const workerDatabase = createPublicationCanaryWorkerDatabase(
-          serviceRoleClient,
-        )
+        const workerDatabase =
+          createPublicationCanaryWorkerDatabase(serviceRoleClient)
         after(async () => {
           try {
-            await processNextPublicationCanaryExecution(deploymentIdentity, {
-              database: workerDatabase,
-              runnerDependencies,
-            })
+            const monotonicNow = () => performance.now()
+            const deadlineAtMilliseconds =
+              monotonicNow() + PUBLICATION_CANARY_SENTINEL_INVOCATION_BUDGET_MS
+            const requestReferenceSha256 = createHash("sha256")
+              .update(randomUUID())
+              .digest("hex")
+            const gated = await runAfterPublicationCanarySentinel(
+              {
+                runId: randomUUID(),
+                requestReferenceSha256,
+              },
+              {
+                ...createPublicationCanarySentinelBootstrapRuntimeDependencies({
+                  deadlineAtMilliseconds,
+                  monotonicNow,
+                }),
+                evidence: createPublicationCanarySentinelEvidenceRepository(
+                  createServiceRoleClient({
+                    requestTimeoutMilliseconds: 8_000,
+                  }),
+                ),
+              },
+              () =>
+                processNextPublicationCanaryExecution(deploymentIdentity, {
+                  database: workerDatabase,
+                  runnerDependencies:
+                    createPublicationCanaryRuntimeDependencies({
+                      serviceRoleClient,
+                      deploymentIdentity,
+                    }),
+                }),
+            )
+            if (!gated.ready) {
+              if (gated.outcome === "failed") {
+                console.error(
+                  "ADVOCATE_PUBLICATION_SENTINEL_REQUIRES_ATTENTION",
+                  {
+                    requestReferenceSha256,
+                    code: "sentinel_reconciliation_failed",
+                  },
+                )
+              }
+              return
+            }
+            if (gated.execution.outcome === "failed") {
+              console.error("ADVOCATE_PUBLICATION_CANARY_REQUIRES_ATTENTION", {
+                operationId: input.operationId,
+                runId: gated.execution.runId,
+                failureCode: gated.execution.failureCode,
+              })
+            }
           } catch (error) {
             console.error("ADVOCATE_PUBLICATION_WORKER_FAILED", {
               operationId: input.operationId,

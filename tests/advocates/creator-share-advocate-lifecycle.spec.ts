@@ -128,6 +128,18 @@ test.describe("Creator Share advocate lifecycle contracts", () => {
       userAgent: "a".repeat(1_024),
     })
     expect(Object.isFrozen(context)).toBe(true)
+
+    const spoofed = routeSecurity.creatorShareAdvocateControlForensicContext(
+      new Request("https://creatorshare.com/admin/advocates", {
+        headers: {
+          "cf-connecting-ip": "198.51.100.9",
+          "x-forwarded-for": "198.51.100.10",
+          "x-real-ip": "198.51.100.11",
+          "x-vercel-forwarded-for": "not-an-ip",
+        },
+      }),
+    )
+    expect(spoofed.clientIp).toBeNull()
   })
 
   test("accepts only exact versioned lifecycle requests with archive confirmation", () => {

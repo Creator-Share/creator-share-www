@@ -12,6 +12,12 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
+  createDomainProviderAdapterFactory,
+  type DomainProviderAdapterFactory,
+} from "../provisioning/adapters"
+import {
+  DOMAIN_PROVIDER_REQUEST_TIMEOUT_MAX_MS,
+  DOMAIN_PROVIDER_REQUEST_TIMEOUT_MIN_MS,
   loadCloudflareProvisioningConfig,
   loadPublicationPaymentCanaryConfig,
   type ProvisioningEnvironment,
@@ -32,8 +38,20 @@ import type {
   PublicationCanaryHttpRequest,
   PublicationCanaryHttpResponse,
   PublicationCanaryRunnerDependencies,
+  PublicationCanarySiblingDnsAbsenceObservation,
   PublicationCanaryTlsObservation,
 } from "./runner"
+import {
+  PublicationCanaryReachableHttpResponseError,
+  PUBLICATION_CANARY_SENTINEL_INVOCATION_BUDGET_MS,
+  PUBLICATION_CANARY_SENTINEL_SETTLEMENT_RESERVE_MS,
+  type PublicationCanarySentinelBootstrapDependencies,
+} from "./sentinelBootstrap"
+import {
+  inspectPublicationCanarySentinel,
+  reconcilePublicationCanarySentinelProviders,
+} from "./sentinel"
+import { PUBLICATION_CANARY_SENTINEL_HOSTNAME } from "./topology"
 
 const DEPLOYMENT_ID_PATTERN = /^dpl_[A-Za-z0-9]{8,128}$/
 const REVISION_PATTERN = /^[0-9a-f]{40}$/
@@ -45,6 +63,9 @@ const MAXIMUM_NETWORK_TIMEOUT_MS = 60_000
 const MINIMUM_NETWORK_TIMEOUT_MS = 100
 const MAXIMUM_HTTP_RESPONSE_BYTES = 65_536
 const MAXIMUM_HTTP_RESPONSE_HEADERS_BYTES = 16_384
+const MAXIMUM_DNS_OVER_HTTPS_RESPONSE_BYTES = 65_536
+const DNS_OVER_HTTPS_ENDPOINT = "https://dns.google/resolve"
+const PUBLICATION_SENTINEL_NETWORK_TIMEOUT_MS = 10_000
 
 const UNSAFE_IPV4_RANGES = new BlockList()
 for (const [network, prefix] of [
@@ -83,7 +104,8 @@ function configurationError(): never {
   throw new PublicationCanaryRuntimeConfigurationError()
 }
 
-function isExactProductionAdvocateHostname(value: string): boolean {
+function isExactProductionCanaryHostname(value: string): boolean {
+  if (value === PUBLICATION_CANARY_SENTINEL_HOSTNAME) return true
   const resolution = resolveAdvocateHost(value)
   return (
     resolution.kind === "tenant-candidate" &&
@@ -141,6 +163,14 @@ export interface PublicationCanaryDnsResolver {
 export type PublicationCanaryDnsResolverFactory =
   () => PublicationCanaryDnsResolver
 
+export type PublicationCanaryDnsAliasRecordType = "HTTPS" | "SVCB"
+
+export type PublicationCanaryDnsAliasAbsenceResolver = (input: {
+  hostname: string
+  recordType: PublicationCanaryDnsAliasRecordType
+  timeoutMs: number
+}) => Promise<boolean>
+
 export interface PublicationCanaryPinnedAddress {
   address: string
   family: 4 | 6
@@ -151,6 +181,12 @@ interface DnsQueryResult {
   hostIpv4: string[]
   hostIpv6: string[]
 }
+
+type DnsQuerySettlements = readonly [
+  PromiseSettledResult<string[]>,
+  PromiseSettledResult<string[]>,
+  PromiseSettledResult<string[]>,
+]
 
 function normalizeDnsHostname(value: string): string | null {
   const normalized = value.toLowerCase().replace(/\.$/, "")
@@ -185,11 +221,11 @@ function fulfilledStrings(
   return [...new Set(normalized)].sort()
 }
 
-async function runDnsQueries(
+async function settleDnsQueries(
   resolver: PublicationCanaryDnsResolver,
   hostname: string,
   timeoutMs: number,
-): Promise<DnsQueryResult> {
+): Promise<DnsQuerySettlements> {
   let timeout: ReturnType<typeof setTimeout> | undefined
   const queries = Promise.allSettled([
     resolver.resolveCname(hostname),
@@ -209,15 +245,41 @@ async function runDnsQueries(
   })
 
   try {
-    const results = await Promise.race([queries, timedOut])
-    return {
-      hostCnames: fulfilledStrings(results[0], "cname"),
-      hostIpv4: fulfilledStrings(results[1], "ipv4"),
-      hostIpv6: fulfilledStrings(results[2], "ipv6"),
-    }
+    return (await Promise.race([queries, timedOut])) as DnsQuerySettlements
   } finally {
     if (timeout !== undefined) clearTimeout(timeout)
   }
+}
+
+async function runDnsQueries(
+  resolver: PublicationCanaryDnsResolver,
+  hostname: string,
+  timeoutMs: number,
+): Promise<DnsQueryResult> {
+  const results = await settleDnsQueries(resolver, hostname, timeoutMs)
+  return {
+    hostCnames: fulfilledStrings(results[0], "cname"),
+    hostIpv4: fulfilledStrings(results[1], "ipv4"),
+    hostIpv6: fulfilledStrings(results[2], "ipv6"),
+  }
+}
+
+const EXACT_DNS_ABSENCE_CODES = new Set(["ENODATA", "ENOTFOUND"])
+
+function exactDnsAbsence(
+  result: PromiseSettledResult<string[]>,
+  kind: "cname" | "ipv4" | "ipv6",
+): boolean {
+  if (result.status === "fulfilled") {
+    return fulfilledStrings(result, kind).length === 0
+  }
+  return (
+    typeof result.reason === "object" &&
+    result.reason !== null &&
+    "code" in result.reason &&
+    typeof result.reason.code === "string" &&
+    EXACT_DNS_ABSENCE_CODES.has(result.reason.code)
+  )
 }
 
 function isAllowedPublicAddress(address: string, family: 4 | 6): boolean {
@@ -246,7 +308,7 @@ export async function observePublicationCanaryDns(
   },
 ): Promise<PublicationCanaryDnsObservation> {
   assertNetworkTimeout(input.timeoutMs)
-  if (!isExactProductionAdvocateHostname(input.hostname)) {
+  if (!isExactProductionCanaryHostname(input.hostname)) {
     throw new Error("publication_canary_dns_input_invalid")
   }
   const expectedTarget = normalizeDnsHostname(options.expectedCnameTarget)
@@ -292,6 +354,57 @@ export async function observePublicationCanaryDns(
     providerTargetMatched: true,
     recordTypes,
     answerCount,
+    observedAt: currentTimestamp(options.now ?? Date.now),
+  }
+}
+
+export async function observeUnprovisionedSiblingDnsAbsence(
+  input: { hostname: string; timeoutMs: number },
+  options: {
+    resolverFactory?: PublicationCanaryDnsResolverFactory
+    aliasAbsenceResolver?: PublicationCanaryDnsAliasAbsenceResolver
+    now?: () => number
+  } = {},
+): Promise<PublicationCanarySiblingDnsAbsenceObservation> {
+  assertNetworkTimeout(input.timeoutMs)
+  if (
+    !isExactProductionCanaryHostname(input.hostname) ||
+    input.hostname === PUBLICATION_CANARY_SENTINEL_HOSTNAME
+  ) {
+    throw new Error("publication_canary_dns_input_invalid")
+  }
+
+  const resolver = (options.resolverFactory ?? (() => new Resolver()))()
+  const resolveAliasAbsence =
+    options.aliasAbsenceResolver ?? queryPublicationCanaryDnsAliasAbsence
+  const [results, httpsAbsent, svcbAbsent] = await Promise.all([
+    settleDnsQueries(resolver, input.hostname, input.timeoutMs),
+    resolveAliasAbsence({
+      hostname: input.hostname,
+      recordType: "HTTPS",
+      timeoutMs: input.timeoutMs,
+    }),
+    resolveAliasAbsence({
+      hostname: input.hostname,
+      recordType: "SVCB",
+      timeoutMs: input.timeoutMs,
+    }),
+  ])
+  if (
+    !exactDnsAbsence(results[0], "cname") ||
+    !exactDnsAbsence(results[1], "ipv4") ||
+    !exactDnsAbsence(results[2], "ipv6") ||
+    httpsAbsent !== true ||
+    svcbAbsent !== true
+  ) {
+    throw new Error("publication_canary_sibling_dns_absence_inconclusive")
+  }
+
+  return {
+    hostname: input.hostname,
+    resolved: false,
+    recordTypes: [],
+    answerCount: 0,
     observedAt: currentTimestamp(options.now ?? Date.now),
   }
 }
@@ -420,7 +533,7 @@ export async function inspectPublicationCanaryTls(
 ): Promise<PublicationCanaryTlsObservation> {
   assertNetworkTimeout(input.timeoutMs)
   if (
-    !isExactProductionAdvocateHostname(input.hostname) ||
+    !isExactProductionCanaryHostname(input.hostname) ||
     input.serverName !== input.hostname ||
     input.rejectUnauthorized !== true
   ) {
@@ -463,6 +576,146 @@ export type PublicationCanaryFetchImplementation = (
   init?: RequestInit,
 ) => Promise<Response>
 
+async function readBoundedDnsOverHttpsBody(
+  response: Response,
+): Promise<string> {
+  if (response.body === null) {
+    throw new Error("publication_canary_dns_alias_response_invalid")
+  }
+
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let totalBytes = 0
+  try {
+    while (true) {
+      const result = await reader.read()
+      if (result.done) break
+      totalBytes += result.value.byteLength
+      if (totalBytes > MAXIMUM_DNS_OVER_HTTPS_RESPONSE_BYTES) {
+        throw new Error("publication_canary_dns_alias_response_invalid")
+      }
+      chunks.push(result.value)
+    }
+  } finally {
+    try {
+      await reader.cancel()
+    } catch {
+      // The bounded reader may already be closed.
+    }
+  }
+
+  const body = new Uint8Array(totalBytes)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(body)
+  } catch {
+    throw new Error("publication_canary_dns_alias_response_invalid")
+  }
+}
+
+function dnsAliasRecordTypeNumber(
+  recordType: PublicationCanaryDnsAliasRecordType,
+): 64 | 65 {
+  return recordType === "SVCB" ? 64 : 65
+}
+
+/**
+ * Node's resolver does not expose SVCB or HTTPS queries. Use one exact,
+ * authenticated DNS-over-HTTPS query per type and require a complete NOERROR
+ * empty answer or NXDOMAIN response. ANY responses are deliberately rejected
+ * as proof because authoritative servers may omit records from them.
+ */
+export async function queryPublicationCanaryDnsAliasAbsence(
+  input: {
+    hostname: string
+    recordType: PublicationCanaryDnsAliasRecordType
+    timeoutMs: number
+  },
+  options: { fetchImplementation?: PublicationCanaryFetchImplementation } = {},
+): Promise<boolean> {
+  assertNetworkTimeout(input.timeoutMs)
+  if (!isExactProductionCanaryHostname(input.hostname)) {
+    throw new Error("publication_canary_dns_input_invalid")
+  }
+
+  const typeNumber = dnsAliasRecordTypeNumber(input.recordType)
+  const url = new URL(DNS_OVER_HTTPS_ENDPOINT)
+  url.searchParams.set("name", input.hostname)
+  url.searchParams.set("type", String(typeNumber))
+  url.searchParams.set("cd", "false")
+  url.searchParams.set("do", "true")
+
+  const response = await (options.fetchImplementation ?? fetch)(url, {
+    method: "GET",
+    headers: { Accept: "application/dns-json" },
+    redirect: "error",
+    credentials: "omit",
+    cache: "no-store",
+    signal: AbortSignal.timeout(input.timeoutMs),
+  })
+  if (
+    response.status !== 200 ||
+    !/^application\/json(?:\s*;|$)/i.test(
+      response.headers.get("content-type") ?? "",
+    )
+  ) {
+    throw new Error("publication_canary_dns_alias_response_invalid")
+  }
+
+  let payload: unknown
+  try {
+    payload = JSON.parse(await readBoundedDnsOverHttpsBody(response))
+  } catch {
+    throw new Error("publication_canary_dns_alias_response_invalid")
+  }
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    Array.isArray(payload)
+  ) {
+    throw new Error("publication_canary_dns_alias_response_invalid")
+  }
+  const record = payload as Record<string, unknown>
+  if (
+    (record.Status !== 0 && record.Status !== 3) ||
+    record.TC !== false ||
+    !Array.isArray(record.Question) ||
+    record.Question.length !== 1
+  ) {
+    throw new Error("publication_canary_dns_alias_response_invalid")
+  }
+  const question = record.Question[0]
+  const questionName =
+    typeof question === "object" &&
+    question !== null &&
+    !Array.isArray(question)
+      ? (question as Record<string, unknown>).name
+      : undefined
+  if (
+    typeof question !== "object" ||
+    question === null ||
+    Array.isArray(question) ||
+    typeof questionName !== "string" ||
+    normalizeDnsHostname(questionName) !== input.hostname ||
+    (question as Record<string, unknown>).type !== typeNumber
+  ) {
+    throw new Error("publication_canary_dns_alias_response_invalid")
+  }
+
+  const answers = record.Answer
+  if (answers !== undefined && !Array.isArray(answers)) {
+    throw new Error("publication_canary_dns_alias_response_invalid")
+  }
+  if (record.Status === 3 && Array.isArray(answers) && answers.length > 0) {
+    throw new Error("publication_canary_dns_alias_response_invalid")
+  }
+  return !Array.isArray(answers) || answers.length === 0
+}
+
 function expectedHttpRequest(input: PublicationCanaryHttpRequest): boolean {
   const expectedPath =
     input.kind === "protected_exact_host_challenge"
@@ -471,7 +724,11 @@ function expectedHttpRequest(input: PublicationCanaryHttpRequest): boolean {
   const expectedMethod =
     input.kind === "protected_exact_host_challenge" ? "POST" : "GET"
   if (
-    !isExactProductionAdvocateHostname(input.hostname) ||
+    !isExactProductionCanaryHostname(input.hostname) ||
+    (input.kind === "negative_sentinel_root" &&
+      input.hostname !== PUBLICATION_CANARY_SENTINEL_HOSTNAME) ||
+    (input.kind !== "negative_sentinel_root" &&
+      input.hostname === PUBLICATION_CANARY_SENTINEL_HOSTNAME) ||
     input.url !== `https://${input.hostname}${expectedPath}` ||
     input.method !== expectedMethod ||
     input.redirect !== "error" ||
@@ -586,7 +843,7 @@ function requestPublicationCanaryPinnedAddress(
         !SAFE_CONTENT_TYPE_PATTERN.test(contentType)
       ) {
         response.destroy()
-        fail(new Error("publication_canary_http_response_invalid"))
+        fail(new PublicationCanaryReachableHttpResponseError())
         return
       }
 
@@ -598,7 +855,7 @@ function requestPublicationCanaryPinnedAddress(
         totalBytes += bytes.byteLength
         if (totalBytes > input.maxResponseBytes) {
           response.destroy()
-          fail(new Error("publication_canary_http_response_too_large"))
+          fail(new PublicationCanaryReachableHttpResponseError())
           return
         }
         chunks.push(bytes)
@@ -606,6 +863,10 @@ function requestPublicationCanaryPinnedAddress(
       response.once("error", fail)
       response.once("end", async () => {
         if (settled) return
+        if (contentLength !== null && Number(contentLength) !== totalBytes) {
+          fail(new PublicationCanaryReachableHttpResponseError())
+          return
+        }
         settled = true
         clearTimeout(wallTimeout)
         resolve({
@@ -676,7 +937,7 @@ export async function requestPublicationCanaryHttp(
     response.body.byteLength < 1 ||
     response.body.byteLength > input.maxResponseBytes
   ) {
-    throw new Error("publication_canary_http_response_invalid")
+    throw new PublicationCanaryReachableHttpResponseError()
   }
   return response
 }
@@ -685,7 +946,7 @@ export async function isPublicationCanaryHostnameProvisioned(
   client: SupabaseClient,
   hostname: string,
 ): Promise<boolean> {
-  if (!isExactProductionAdvocateHostname(hostname)) {
+  if (!isExactProductionCanaryHostname(hostname)) {
     throw new Error("publication_canary_hostname_invalid")
   }
   const label = hostname.slice(0, -".creatorshare.com".length)
@@ -718,6 +979,148 @@ export interface PublicationCanaryRuntimeOptions {
   environment?: ProvisioningEnvironment
   fetchImplementation?: PublicationCanaryFetchImplementation
   now?: () => number
+  resolverFactory?: PublicationCanaryDnsResolverFactory
+  connectPinnedTls?: typeof connectPinnedPublicationCanaryTls
+  httpTransport?: PublicationCanaryHttpTransport
+}
+
+export interface PublicationCanarySentinelBootstrapRuntimeOptions {
+  environment?: ProvisioningEnvironment
+  fetchImplementation?: PublicationCanaryFetchImplementation
+  now?: () => number
+  resolverFactory?: PublicationCanaryDnsResolverFactory
+  connectPinnedTls?: typeof connectPinnedPublicationCanaryTls
+  httpTransport?: PublicationCanaryHttpTransport
+  deadlineAtMilliseconds?: number
+  monotonicNow?: () => number
+}
+
+export function createPublicationCanarySentinelBootstrapRuntimeDependencies(
+  options: PublicationCanarySentinelBootstrapRuntimeOptions = {},
+): Omit<PublicationCanarySentinelBootstrapDependencies, "evidence"> {
+  const environment = options.environment ?? process.env
+  const fetchImplementation = options.fetchImplementation ?? fetch
+  const now = options.now ?? Date.now
+  const monotonicNow = options.monotonicNow ?? (() => performance.now())
+  const deadlineAtMilliseconds =
+    options.deadlineAtMilliseconds ??
+    monotonicNow() + PUBLICATION_CANARY_SENTINEL_INVOCATION_BUDGET_MS
+  const baseAdapterFactory = createDomainProviderAdapterFactory({
+    env: environment,
+    fetchImplementation,
+  })
+  const boundedTimeout = (
+    remainingCalls: number,
+    minimumMilliseconds: number,
+    maximumMilliseconds: number,
+  ): number => {
+    const availableMilliseconds =
+      deadlineAtMilliseconds -
+      monotonicNow() -
+      PUBLICATION_CANARY_SENTINEL_SETTLEMENT_RESERVE_MS
+    const timeoutMilliseconds = Math.min(
+      maximumMilliseconds,
+      Math.floor(availableMilliseconds / remainingCalls),
+    )
+    if (timeoutMilliseconds < minimumMilliseconds) {
+      throw new Error("publication_canary_sentinel_deadline_exhausted")
+    }
+    return timeoutMilliseconds
+  }
+  const createAdapter: DomainProviderAdapterFactory = (provider) =>
+    baseAdapterFactory(
+      provider,
+      boundedTimeout(
+        provider === "cloudflare" ? 9 : 6,
+        DOMAIN_PROVIDER_REQUEST_TIMEOUT_MIN_MS,
+        DOMAIN_PROVIDER_REQUEST_TIMEOUT_MAX_MS,
+      ),
+    )
+  let pinnedAddresses: readonly PublicationCanaryPinnedAddress[] | null = null
+
+  return {
+    reconcileProviders() {
+      return reconcilePublicationCanarySentinelProviders(createAdapter)
+    },
+    async observeDns() {
+      if (pinnedAddresses !== null) {
+        throw new Error("publication_canary_dns_repeated")
+      }
+      await observePublicationCanaryDns(
+        {
+          hostname: PUBLICATION_CANARY_SENTINEL_HOSTNAME,
+          timeoutMs: boundedTimeout(
+            3,
+            MINIMUM_NETWORK_TIMEOUT_MS,
+            PUBLICATION_SENTINEL_NETWORK_TIMEOUT_MS,
+          ),
+        },
+        {
+          expectedCnameTarget:
+            loadCloudflareProvisioningConfig(environment).cnameTarget,
+          resolverFactory: options.resolverFactory,
+          now,
+          onPinnedAddresses(addresses) {
+            pinnedAddresses = addresses
+          },
+        },
+      )
+    },
+    inspectTls() {
+      if (pinnedAddresses === null) {
+        throw new Error("publication_canary_dns_pin_unavailable")
+      }
+      return inspectPublicationCanaryTls(
+        {
+          hostname: PUBLICATION_CANARY_SENTINEL_HOSTNAME,
+          serverName: PUBLICATION_CANARY_SENTINEL_HOSTNAME,
+          rejectUnauthorized: true,
+          timeoutMs: boundedTimeout(
+            2,
+            MINIMUM_NETWORK_TIMEOUT_MS,
+            PUBLICATION_SENTINEL_NETWORK_TIMEOUT_MS,
+          ),
+        },
+        {
+          connect: (input) =>
+            (options.connectPinnedTls ?? connectPinnedPublicationCanaryTls)(
+              input,
+              pinnedAddresses as readonly PublicationCanaryPinnedAddress[],
+            ),
+          now,
+        },
+      ).then(() => undefined)
+    },
+    requestHttps() {
+      if (pinnedAddresses === null) {
+        throw new Error("publication_canary_dns_pin_unavailable")
+      }
+      return requestPublicationCanaryHttp(
+        {
+          kind: "negative_sentinel_root",
+          method: "GET",
+          url: `https://${PUBLICATION_CANARY_SENTINEL_HOSTNAME}/`,
+          hostname: PUBLICATION_CANARY_SENTINEL_HOSTNAME,
+          headers: Object.freeze({
+            Accept: "text/html, text/plain;q=0.9",
+          }),
+          redirect: "error",
+          credentials: "omit",
+          cache: "no-store",
+          timeoutMs: boundedTimeout(
+            1,
+            MINIMUM_NETWORK_TIMEOUT_MS,
+            PUBLICATION_SENTINEL_NETWORK_TIMEOUT_MS,
+          ),
+          maxResponseBytes: 32_768,
+        },
+        {
+          pinnedAddresses,
+          transport: options.httpTransport,
+        },
+      )
+    },
+  }
 }
 
 export function createPublicationCanaryRuntimeDependencies(
@@ -735,7 +1138,14 @@ export function createPublicationCanaryRuntimeDependencies(
   ) {
     configurationError()
   }
-  let pinnedAddresses: readonly PublicationCanaryPinnedAddress[] | null = null
+  const pinnedAddressesByHostname = new Map<
+    string,
+    readonly PublicationCanaryPinnedAddress[]
+  >()
+  const createAdapter = createDomainProviderAdapterFactory({
+    env: environment,
+    fetchImplementation,
+  })
 
   return {
     now,
@@ -743,34 +1153,48 @@ export function createPublicationCanaryRuntimeDependencies(
       return observePublicationCanaryDns(input, {
         expectedCnameTarget:
           loadCloudflareProvisioningConfig(environment).cnameTarget,
+        resolverFactory: options.resolverFactory,
         now,
         onPinnedAddresses(addresses) {
-          if (pinnedAddresses !== null) {
+          if (pinnedAddressesByHostname.has(input.hostname)) {
             throw new Error("publication_canary_dns_repeated")
           }
-          pinnedAddresses = addresses
+          pinnedAddressesByHostname.set(input.hostname, addresses)
         },
       })
     },
+    observeUnprovisionedSiblingDnsAbsence(input) {
+      return observeUnprovisionedSiblingDnsAbsence(input, {
+        resolverFactory: options.resolverFactory,
+        aliasAbsenceResolver: (aliasInput) =>
+          queryPublicationCanaryDnsAliasAbsence(aliasInput, {
+            fetchImplementation,
+          }),
+        now,
+      })
+    },
     inspectTls(input) {
-      if (pinnedAddresses === null) {
+      const pinnedAddresses = pinnedAddressesByHostname.get(input.hostname)
+      if (pinnedAddresses === undefined) {
         throw new Error("publication_canary_dns_pin_unavailable")
       }
       return inspectPublicationCanaryTls(input, {
         connect: (connectionInput) =>
-          connectPinnedPublicationCanaryTls(
+          (options.connectPinnedTls ?? connectPinnedPublicationCanaryTls)(
             connectionInput,
-            pinnedAddresses as readonly PublicationCanaryPinnedAddress[],
+            pinnedAddresses,
           ),
         now,
       })
     },
     requestHttp(input) {
-      if (pinnedAddresses === null) {
+      const pinnedAddresses = pinnedAddressesByHostname.get(input.hostname)
+      if (pinnedAddresses === undefined) {
         throw new Error("publication_canary_dns_pin_unavailable")
       }
       return requestPublicationCanaryHttp(input, {
         pinnedAddresses,
+        transport: options.httpTransport,
       })
     },
     createProtectedChallenge(input) {
@@ -806,6 +1230,9 @@ export function createPublicationCanaryRuntimeDependencies(
         options.serviceRoleClient,
         hostname,
       )
+    },
+    inspectNegativeSentinel() {
+      return inspectPublicationCanarySentinel(createAdapter)
     },
     runStripeUsPaymentCanary(input) {
       return runStripePublicationPaymentCanary(

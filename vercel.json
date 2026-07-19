@@ -13,6 +13,9 @@
     "src/app/api/internal/advocates/publication-canaries/route.ts": {
       "maxDuration": 300
     },
+    "src/app/api/internal/advocates/publication-sentinel/route.ts": {
+      "maxDuration": 60
+    },
     "src/app/api/internal/advocates/logo-reconciliation/route.ts": {
       "maxDuration": 60
     },
@@ -45,6 +48,10 @@
     },
     {
       "path": "/api/internal/advocates/publication-canaries",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/advocates/publication-sentinel",
       "schedule": "* * * * *"
     },
     {

@@ -31,6 +31,7 @@ const TENANT_DOCUMENT_ROUTE_IDS = new Set([
   "browse-page",
   "catalog-redirect",
   "payment-result-page",
+  "publication-negative-sentinel",
 ])
 
 function forwardedHeaders(
@@ -205,7 +206,7 @@ export const config = {
   matcher: [
     "/((?!_next/static|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
     {
-      source: "/((?!_next/static(?:/|$)).*)",
+      source: "/:path*",
       has: [
         {
           type: "host",

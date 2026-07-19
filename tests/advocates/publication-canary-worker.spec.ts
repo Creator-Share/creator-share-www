@@ -31,10 +31,7 @@ const {
   isAuthorizedPublicationCanaryWorkerRequest,
   loadPublicationCanaryWorkerSecret,
 } = testRequire(
-  resolve(
-    process.cwd(),
-    "src/lib/advocates/publicationCanary/workerAuth.ts",
-  ),
+  resolve(process.cwd(), "src/lib/advocates/publicationCanary/workerAuth.ts"),
 ) as WorkerAuthModule
 
 const CRON_SECRET = "c".repeat(48)
@@ -42,9 +39,7 @@ const DEDICATED_SECRET = "d".repeat(48)
 
 test.describe("publication canary worker boundary", () => {
   test("uses the exact Vercel cron secret", () => {
-    expect(loadPublicationCanaryWorkerSecret({ CRON_SECRET })).toBe(
-      CRON_SECRET,
-    )
+    expect(loadPublicationCanaryWorkerSecret({ CRON_SECRET })).toBe(CRON_SECRET)
   })
 
   test("rejects missing, short, padded, and control-bearing secrets", () => {
@@ -76,10 +71,7 @@ test.describe("publication canary worker boundary", () => {
       `Bearer ${DEDICATED_SECRET}`,
     ]) {
       expect(
-        isAuthorizedPublicationCanaryWorkerRequest(
-          authorization,
-          CRON_SECRET,
-        ),
+        isAuthorizedPublicationCanaryWorkerRequest(authorization, CRON_SECRET),
       ).toBe(false)
     }
   })
@@ -99,6 +91,13 @@ test.describe("publication canary worker boundary", () => {
       ),
       "utf8",
     )
+    const sentinelRoute = readFileSync(
+      resolve(
+        process.cwd(),
+        "src/app/api/internal/advocates/publication-sentinel/route.ts",
+      ),
+      "utf8",
+    )
     const vercel = JSON.parse(
       readFileSync(resolve(process.cwd(), "vercel.json"), "utf8"),
     ) as {
@@ -108,19 +107,46 @@ test.describe("publication canary worker boundary", () => {
 
     expect(adminRoute).toContain("export const maxDuration = 300")
     expect(adminRoute).toContain("after(async () =>")
-    expect(adminRoute.indexOf("await handlePublicationCanaryOperation")).toBeLessThan(
-      adminRoute.indexOf("after(async () =>"),
-    )
+    expect(
+      adminRoute.indexOf("await handlePublicationCanaryOperation"),
+    ).toBeLessThan(adminRoute.indexOf("after(async () =>"))
     expect(adminRoute).not.toContain("await runPublicationCanary(")
+    expect(adminRoute).toContain("runAfterPublicationCanarySentinel")
+    expect(
+      adminRoute.indexOf(
+        "const gated = await runAfterPublicationCanarySentinel",
+      ),
+    ).toBeLessThan(adminRoute.indexOf("gated.execution.outcome"))
     expect(workerRoute).toContain("processNextPublicationCanaryExecution")
     expect(workerRoute).toContain("loadPublicationCanaryWorkerSecret")
+    expect(workerRoute).toContain("runAfterPublicationCanarySentinel")
+    expect(
+      workerRoute.indexOf(
+        "const sentinel = await runAfterPublicationCanarySentinel",
+      ),
+    ).toBeLessThan(workerRoute.indexOf("const result = sentinel.execution"))
+    expect(sentinelRoute).toContain(
+      "handlePublicationCanarySentinelWorkerRequest",
+    )
+    expect(sentinelRoute).toContain(
+      "PUBLICATION_CANARY_SENTINEL_INVOCATION_BUDGET_MS",
+    )
     expect(
       vercel.functions?.[
         "src/app/api/internal/advocates/publication-canaries/route.ts"
       ]?.maxDuration,
     ).toBe(300)
+    expect(
+      vercel.functions?.[
+        "src/app/api/internal/advocates/publication-sentinel/route.ts"
+      ]?.maxDuration,
+    ).toBe(60)
     expect(vercel.crons).toContainEqual({
       path: "/api/internal/advocates/publication-canaries",
+      schedule: "* * * * *",
+    })
+    expect(vercel.crons).toContainEqual({
+      path: "/api/internal/advocates/publication-sentinel",
       schedule: "* * * * *",
     })
   })

@@ -3,6 +3,7 @@ import "server-only"
 import {
   ADVOCATE_LOCALHOST_ROOT,
   ADVOCATE_TENANT_ROOT,
+  isReservedNonPrimaryHostname,
   resolveAdvocateHost,
   type ResolveAdvocateHostOptions,
 } from "./host"
@@ -538,7 +539,9 @@ function approvedPrimaryHostnames(
   const approved = new Set<string>(DEFAULT_PRIMARY_HOSTNAMES)
   for (const configured of options.approvedPrimaryHostnames ?? []) {
     const hostname = normalizeApprovedPrimaryHostname(configured)
-    if (hostname !== null) approved.add(hostname)
+    if (hostname !== null && !isReservedNonPrimaryHostname(hostname)) {
+      approved.add(hostname)
+    }
   }
   if (options.allowLocalhostDevelopment) {
     approved.add(ADVOCATE_LOCALHOST_ROOT)
