@@ -16,6 +16,7 @@ import {
   AdvocateInvitationEmailEnvelopeError,
   openAdvocateInvitationSecretMaterial,
   parseAdvocateInvitationEmailTemplateData,
+  type AdvocateInvitationEmailTemplateKey,
 } from "./emailEnvelope"
 import { advocateInvitationMessageId } from "./emailMessageId"
 import { renderAdvocateInvitationEmail } from "./emailRenderer"
@@ -27,7 +28,7 @@ export interface ClaimedAdvocateInvitationEmail {
   leaseToken: string
   leaseExpiresAt: string
   targetAuthUserId: string | null
-  templateKey: "advocate_delegate_invitation_v1"
+  templateKey: AdvocateInvitationEmailTemplateKey
   templateData: Record<string, unknown>
   recipientEmailCiphertext: SupabaseRpcBytea
   recipientEmailHmac: SupabaseRpcBytea
@@ -184,7 +185,8 @@ class AdvocateInvitationInvocationDeadlineError extends Error {
 
 function assertClaimedJob(job: ClaimedAdvocateInvitationEmail): void {
   if (
-    job.templateKey !== "advocate_delegate_invitation_v1" ||
+    (job.templateKey !== "advocate_delegate_invitation_v1" &&
+      job.templateKey !== "advocate_initial_owner_invitation_v1") ||
     job.emailNormalizationVersion !== SPONSOR_EMAIL_NORMALIZATION_VERSION ||
     job.emailHmacKeyVersion !== SPONSORSHIP_CRYPTO_KEY_VERSION ||
     job.emailEncryptionKeyVersion !== SPONSORSHIP_CRYPTO_KEY_VERSION ||
@@ -291,7 +293,10 @@ export async function processAdvocateInvitationEmail(options: {
 
   try {
     assertClaimedJob(job)
-    const template = parseAdvocateInvitationEmailTemplateData(job.templateData)
+    const template = parseAdvocateInvitationEmailTemplateData(
+      job.templateKey,
+      job.templateData,
+    )
     if (template.invitationId !== job.invitationId) {
       throw new AdvocateInvitationEmailEnvelopeError()
     }

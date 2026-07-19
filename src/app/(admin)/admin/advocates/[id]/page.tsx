@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 
 import { AdvocateCleanupRecovery } from "@/components/advocates/creatorShareAdmin/AdvocateCleanupRecovery"
+import { AdvocateInitialOwnerControls } from "@/components/advocates/creatorShareAdmin/AdvocateInitialOwnerControls"
 import { AdvocateLifecycleControls } from "@/components/advocates/creatorShareAdmin/AdvocateLifecycleControls"
 import { AdvocateOwnershipTransfer } from "@/components/advocates/creatorShareAdmin/AdvocateOwnershipTransfer"
 import type { CreatorShareAdvocateLifecycleAction } from "@/lib/advocates/creatorShareAdmin/lifecycleContracts"
@@ -57,6 +58,19 @@ function cleanupPhaseLabel(
   }
 }
 
+function ownershipSummaryLabel(
+  snapshot: CreatorShareAdvocateControlSnapshot,
+): string {
+  switch (snapshot.ownershipStatus) {
+    case "awaiting_owner_acceptance":
+      return "Awaiting owner acceptance"
+    case "owner_active":
+      return `Owner: ${snapshot.ownerDisplayName}`
+    case "owner_unassigned":
+      return "Archived with no assigned owner"
+  }
+}
+
 export default async function CreatorShareAdvocateControlDetailPage({
   params,
 }: Readonly<{ params: Promise<{ id: string }> }>) {
@@ -70,7 +84,8 @@ export default async function CreatorShareAdvocateControlDetailPage({
   try {
     snapshot = await repository.loadSnapshot(advocateId)
     ownershipPage =
-      snapshot.relationshipStatus === "archived"
+      snapshot.relationshipStatus === "archived" ||
+      snapshot.ownershipStatus === "awaiting_owner_acceptance"
         ? { candidates: [], hasMore: false }
         : await repository.listOwnershipCandidates(advocateId)
   } catch (error) {
@@ -93,9 +108,15 @@ export default async function CreatorShareAdvocateControlDetailPage({
       displayName: candidate.displayName,
     }))
   const availableActions: CreatorShareAdvocateLifecycleAction[] = []
-  if (snapshot.canSuspend) availableActions.push("suspend")
-  if (snapshot.canResume) availableActions.push("resume")
-  if (snapshot.canRepair) availableActions.push("repair")
+  if (snapshot.ownershipStatus === "owner_active" && snapshot.canSuspend) {
+    availableActions.push("suspend")
+  }
+  if (snapshot.ownershipStatus === "owner_active" && snapshot.canResume) {
+    availableActions.push("resume")
+  }
+  if (snapshot.ownershipStatus === "owner_active" && snapshot.canRepair) {
+    availableActions.push("repair")
+  }
   if (snapshot.canArchive) availableActions.push("archive")
 
   return (
@@ -117,7 +138,7 @@ export default async function CreatorShareAdvocateControlDetailPage({
               {snapshot.displayName}
             </h1>
             <p className="mt-2 text-gray-600">
-              Owner: {snapshot.ownerDisplayName}
+              {ownershipSummaryLabel(snapshot)}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -246,15 +267,24 @@ export default async function CreatorShareAdvocateControlDetailPage({
               Ownership is immutable
             </h2>
             <p className="mt-2 text-sm text-gray-600">
-              Archived advocate ownership cannot be transferred. The retained
-              owner label is historical evidence, not an active control.
+              {snapshot.ownershipStatus === "owner_unassigned"
+                ? "This archived advocate has no assigned owner. No invitation or ownership action remains available."
+                : "Archived advocate ownership cannot be transferred. The retained owner label is historical evidence, not an active control."}
             </p>
           </section>
+        ) : snapshot.ownershipStatus === "awaiting_owner_acceptance" ? (
+          <AdvocateInitialOwnerControls
+            advocateId={snapshot.advocateId}
+            slug={snapshot.slug}
+            initialVersion={snapshot.advocateVersion}
+            canReissueInitialOwner={snapshot.canReissueInitialOwner}
+            canRevokeInitialOwner={snapshot.canRevokeInitialOwner}
+          />
         ) : (
           <AdvocateOwnershipTransfer
             advocateId={snapshot.advocateId}
             slug={snapshot.slug}
-            currentOwnerDisplayName={snapshot.ownerDisplayName}
+            currentOwnerDisplayName={snapshot.ownerDisplayName!}
             expectedOwnerMembershipId={currentOwner?.membershipId ?? null}
             candidates={eligibleCandidates}
             candidateListMayBeIncomplete={ownershipPage.hasMore}

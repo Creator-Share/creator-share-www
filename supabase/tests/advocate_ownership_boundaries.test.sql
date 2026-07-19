@@ -25,7 +25,7 @@ SELECT extensions.ok(
 );
 
 SELECT extensions.ok(
-  has_function_privilege(
+  NOT has_function_privilege(
     'authenticated',
     'public.create_advocate_portal(uuid,text,text,text,text,text,text,text)',
     'EXECUTE'
@@ -60,7 +60,7 @@ SELECT extensions.ok(
     'public.transfer_creator_share_advocate_ownership(uuid,uuid,uuid,text,uuid,text,text,text)',
     'EXECUTE'
   ),
-  'authenticated administration uses the exact-replay wrapper while the compatibility mutation is private'
+  'authenticated tenant creation excludes the compatibility owner mutation while ownership transfer uses the exact-replay wrapper'
 );
 
 SELECT extensions.ok(

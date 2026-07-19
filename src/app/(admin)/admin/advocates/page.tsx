@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import { AdvocateOnboarding } from "@/components/advocates/creatorShareAdmin/AdvocateOnboarding"
 import {
   createCreatorShareAdvocateControlRepository,
   parseCreatorShareAdvocateControlCursor,
@@ -22,6 +23,19 @@ function statusLabel(value: string): string {
     .split("_")
     .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
     .join(" ")
+}
+
+function ownershipLabel(
+  value: "awaiting_owner_acceptance" | "owner_active" | "owner_unassigned",
+): string {
+  switch (value) {
+    case "awaiting_owner_acceptance":
+      return "Awaiting owner acceptance"
+    case "owner_active":
+      return "Owner active"
+    case "owner_unassigned":
+      return "Owner unassigned"
+  }
 }
 
 function timestampLabel(value: string): string {
@@ -101,6 +115,8 @@ export default async function CreatorShareAdvocateControlsPage({
         </Link>
       </div>
 
+      <AdvocateOnboarding />
+
       <form
         method="get"
         className="mt-8 grid gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-[1fr_1fr_auto_auto] md:items-end"
@@ -175,14 +191,19 @@ export default async function CreatorShareAdvocateControlsPage({
                       <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-800">
                         {statusLabel(advocate.publicationStatus)}
                       </span>
+                      <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
+                        {ownershipLabel(advocate.ownershipStatus)}
+                      </span>
                     </div>
                     <p className="mt-1 text-sm text-gray-600">
                       {advocate.primaryHostname ??
                         `${advocate.slug}.creatorshare.com`}
                     </p>
-                    <p className="mt-1 text-sm text-gray-600">
-                      Owner: {advocate.ownerDisplayName}
-                    </p>
+                    {advocate.ownershipStatus === "owner_active" ? (
+                      <p className="mt-1 text-sm text-gray-600">
+                        Owner: {advocate.ownerDisplayName}
+                      </p>
+                    ) : null}
                   </div>
 
                   <Link

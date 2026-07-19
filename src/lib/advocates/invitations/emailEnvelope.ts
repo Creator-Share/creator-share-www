@@ -18,19 +18,37 @@ const ROLE_KEYS = new Set([
   "analytics_viewer",
   "audit_viewer",
 ])
-const TEMPLATE_KEYS = new Set([
+const DELEGATE_TEMPLATE_KEYS = new Set([
   "advocate_display_name",
   "invitation_id",
   "role_keys",
 ])
+const INITIAL_OWNER_TEMPLATE_KEYS = new Set([
+  "advocate_display_name",
+  "invitation_id",
+])
 const MAXIMUM_TEMPLATE_DATA_BYTES = 4_096
 const MAXIMUM_SECRET_PAYLOAD_BYTES = 4_096
 
-export interface AdvocateInvitationEmailTemplateData {
+export type AdvocateInvitationEmailTemplateKey =
+  "advocate_delegate_invitation_v1" | "advocate_initial_owner_invitation_v1"
+
+export interface AdvocateDelegateInvitationEmailTemplateData {
+  templateKey: "advocate_delegate_invitation_v1"
   advocateDisplayName: string
   invitationId: string
   roleKeys: readonly string[]
 }
+
+export interface AdvocateInitialOwnerInvitationEmailTemplateData {
+  templateKey: "advocate_initial_owner_invitation_v1"
+  advocateDisplayName: string
+  invitationId: string
+}
+
+export type AdvocateInvitationEmailTemplateData =
+  | AdvocateDelegateInvitationEmailTemplateData
+  | AdvocateInitialOwnerInvitationEmailTemplateData
 
 export interface AdvocateInvitationSecretMaterial {
   capability: string
@@ -53,6 +71,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function parseAdvocateInvitationEmailTemplateData(
+  templateKey: AdvocateInvitationEmailTemplateKey,
   value: unknown,
 ): AdvocateInvitationEmailTemplateData {
   if (!isRecord(value)) envelopeError()
@@ -65,8 +84,11 @@ export function parseAdvocateInvitationEmailTemplateData(
   }
   if (
     Buffer.byteLength(encoded, "utf8") > MAXIMUM_TEMPLATE_DATA_BYTES ||
-    Object.keys(value).length !== TEMPLATE_KEYS.size ||
-    Object.keys(value).some((key) => !TEMPLATE_KEYS.has(key))
+    (templateKey === "advocate_delegate_invitation_v1"
+      ? Object.keys(value).length !== DELEGATE_TEMPLATE_KEYS.size ||
+        Object.keys(value).some((key) => !DELEGATE_TEMPLATE_KEYS.has(key))
+      : Object.keys(value).length !== INITIAL_OWNER_TEMPLATE_KEYS.size ||
+        Object.keys(value).some((key) => !INITIAL_OWNER_TEMPLATE_KEYS.has(key)))
   ) {
     envelopeError()
   }
@@ -82,25 +104,35 @@ export function parseAdvocateInvitationEmailTemplateData(
     /[\u0000-\u001f\u007f]/.test(advocateDisplayName) ||
     typeof invitationId !== "string" ||
     !UUID_PATTERN.test(invitationId) ||
-    !Array.isArray(roleKeys) ||
-    roleKeys.length < 1 ||
-    roleKeys.length > ROLE_KEYS.size ||
-    roleKeys.some(
-      (role) =>
-        typeof role !== "string" ||
-        !ROLE_KEYS.has(role) ||
-        role !== role.trim(),
-    ) ||
-    new Set(roleKeys).size !== roleKeys.length ||
-    [...roleKeys].sort().some((role, index) => role !== roleKeys[index])
+    (templateKey === "advocate_delegate_invitation_v1" &&
+      (!Array.isArray(roleKeys) ||
+        roleKeys.length < 1 ||
+        roleKeys.length > ROLE_KEYS.size ||
+        roleKeys.some(
+          (role) =>
+            typeof role !== "string" ||
+            !ROLE_KEYS.has(role) ||
+            role !== role.trim(),
+        ) ||
+        new Set(roleKeys).size !== roleKeys.length ||
+        [...roleKeys].sort().some((role, index) => role !== roleKeys[index])))
   ) {
     envelopeError()
   }
 
+  if (templateKey === "advocate_initial_owner_invitation_v1") {
+    return Object.freeze({
+      templateKey,
+      advocateDisplayName,
+      invitationId,
+    })
+  }
+
   return Object.freeze({
+    templateKey,
     advocateDisplayName,
     invitationId,
-    roleKeys: Object.freeze([...roleKeys]),
+    roleKeys: Object.freeze([...(roleKeys as string[])]),
   })
 }
 

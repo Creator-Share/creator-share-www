@@ -15,6 +15,9 @@ const NEXT_EXECUTABLE = resolve(
 )
 const ALPHA_ADVOCATE_ID = "11111111-1111-4111-8111-111111111111"
 const BETA_ADVOCATE_ID = "22222222-2222-4222-8222-222222222222"
+const ONBOARDING_STORAGE_KEY = "creator-share:advocate-onboarding-operation:v1"
+const INITIAL_OWNER_REISSUE_STORAGE_KEY = `creator-share:initial-owner-reissue-operation:v1:${ALPHA_ADVOCATE_ID}`
+const INITIAL_OWNER_REVOCATION_STORAGE_KEY = `creator-share:initial-owner-revocation-operation:v1:${ALPHA_ADVOCATE_ID}`
 
 interface SubmittedRequest {
   url: string
@@ -167,12 +170,90 @@ async function installControlResponses(
       return
     }
 
+    if (request.url().endsWith("/initial-owner/reissue")) {
+      const expectedVersion = body.expectedVersion
+      if (typeof expectedVersion !== "number") {
+        await route.abort()
+        return
+      }
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          operationId: body.operationId,
+          advocateId: ALPHA_ADVOCATE_ID,
+          advocateVersion: expectedVersion + 1,
+          reissueStatus: "initial_owner_invitation_requeued",
+        }),
+      })
+      return
+    }
+
+    if (request.url().endsWith("/initial-owner/revoke")) {
+      const expectedVersion = body.expectedVersion
+      if (typeof expectedVersion !== "number") {
+        await route.abort()
+        return
+      }
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          operationId: body.operationId,
+          advocateId: ALPHA_ADVOCATE_ID,
+          advocateVersion: expectedVersion + 1,
+          revocationStatus: "initial_owner_invitation_revoked",
+        }),
+      })
+      return
+    }
+
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ ok: true, operationId: body.operationId }),
     })
   })
+}
+
+async function fillOnboardingForm(page: Page): Promise<void> {
+  const onboarding = page.getByRole("region", {
+    name: "Create an advocate portal",
+  })
+  await onboarding.getByLabel("Subdomain").fill("hope-partners")
+  await onboarding.getByLabel("Public display name").fill("Hope Partners")
+  await onboarding.getByLabel("Advocate type").selectOption("organization")
+  await onboarding.getByLabel("Initial owner email").fill("owner@example.com")
+  await onboarding
+    .getByLabel("Administrative reason")
+    .fill("Create the approved Hope Partners advocate portal.")
+}
+
+async function fillInitialOwnerReissueForm(page: Page): Promise<void> {
+  const recovery = page.getByRole("region", {
+    name: "Reissue initial owner invitation",
+  })
+  await recovery.getByLabel("Initial owner email").fill("owner@example.com")
+  await recovery
+    .getByLabel("Administrative reason")
+    .fill("The prior invitation expired before secure acceptance.")
+  await recovery
+    .getByLabel(/Type REISSUE OWNER alpha/)
+    .fill("REISSUE OWNER alpha")
+}
+
+async function fillInitialOwnerRevocationForm(page: Page): Promise<void> {
+  const revocation = page.getByRole("region", {
+    name: "Revoke initial owner invitation",
+  })
+  await revocation
+    .getByLabel("Administrative reason")
+    .fill("Invalidate the current owner link before replacing it.")
+  await revocation
+    .getByLabel(/Type REVOKE OWNER alpha/)
+    .fill("REVOKE OWNER alpha")
 }
 
 test.beforeAll(async () => {
@@ -454,4 +535,422 @@ test("ownership state accepts refreshed owner and candidate props", async ({
   expect(submissions[0].body.operationId).not.toBe(
     submissions[1].body.operationId,
   )
+})
+
+test("onboarding restores one privacy-limited operation after reload", async ({
+  page,
+}) => {
+  const submissions: Record<string, unknown>[] = []
+  await page.route(/\/api\/admin\/advocates$/, async (route) => {
+    const requestBody = route.request().postDataJSON() as Record<
+      string,
+      unknown
+    >
+    submissions.push(requestBody)
+    if (submissions.length === 1) {
+      await route.abort("connectionfailed")
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        operationId: requestBody.operationId,
+        advocateId: ALPHA_ADVOCATE_ID,
+        advocateVersion: 1,
+        onboardingStatus: "initial_owner_invitation_queued",
+      }),
+    })
+  })
+
+  await fillOnboardingForm(page)
+  await page
+    .getByRole("region", { name: "Create an advocate portal" })
+    .getByRole("button", { name: "Reserve portal and invite owner" })
+    .click()
+  await expect(
+    page
+      .getByRole("region", { name: "Create an advocate portal" })
+      .getByRole("alert"),
+  ).toContainText("could not be confirmed")
+
+  const storedBeforeReload = await page.evaluate((key) => {
+    const raw = sessionStorage.getItem(key)
+    return raw === null ? null : JSON.parse(raw)
+  }, ONBOARDING_STORAGE_KEY)
+  expect(storedBeforeReload).toEqual({
+    version: 1,
+    operationId: submissions[0].operationId,
+  })
+  expect(JSON.stringify(storedBeforeReload)).not.toMatch(
+    /email|name|reason|slug/i,
+  )
+
+  await page.reload()
+  await expect(page.getByText("A previous result is unresolved.")).toBeVisible()
+  await fillOnboardingForm(page)
+  await page
+    .getByRole("region", { name: "Create an advocate portal" })
+    .getByRole("button", { name: "Reserve portal and invite owner" })
+    .click()
+
+  await expect(page.getByText("Portal reserved.")).toBeVisible()
+  expect(submissions).toHaveLength(2)
+  expect(submissions[1].operationId).toBe(submissions[0].operationId)
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          (key) => sessionStorage.getItem(key),
+          ONBOARDING_STORAGE_KEY,
+        ),
+    )
+    .toBeNull()
+})
+
+test("onboarding retains the saved operation through authentication loss", async ({
+  page,
+}) => {
+  let submittedOperationId: unknown = null
+  await page.route(/\/api\/admin\/advocates$/, async (route) => {
+    const requestBody = route.request().postDataJSON() as Record<
+      string,
+      unknown
+    >
+    submittedOperationId = requestBody.operationId
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        operationId: null,
+        code: "unauthorized",
+      }),
+    })
+  })
+
+  await fillOnboardingForm(page)
+  await page
+    .getByRole("region", { name: "Create an advocate portal" })
+    .getByRole("button", { name: "Reserve portal and invite owner" })
+    .click()
+  await expect(
+    page
+      .getByRole("region", { name: "Create an advocate portal" })
+      .getByRole("alert"),
+  ).toContainText("session expired")
+
+  const stored = await page.evaluate((key) => {
+    const raw = sessionStorage.getItem(key)
+    return raw === null ? null : JSON.parse(raw)
+  }, ONBOARDING_STORAGE_KEY)
+  expect(stored).toEqual({ version: 1, operationId: submittedOperationId })
+  await page.reload()
+  await expect(page.getByText("A previous result is unresolved.")).toBeVisible()
+})
+
+test("onboarding retains retry identity after a generic conflict", async ({
+  page,
+}) => {
+  let submittedOperationId: unknown = null
+  await page.route(/\/api\/admin\/advocates$/, async (route) => {
+    const requestBody = route.request().postDataJSON() as Record<
+      string,
+      unknown
+    >
+    submittedOperationId = requestBody.operationId
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        operationId: requestBody.operationId,
+        code: "onboarding_conflict",
+      }),
+    })
+  })
+
+  await fillOnboardingForm(page)
+  await page
+    .getByRole("region", { name: "Create an advocate portal" })
+    .getByRole("button", { name: "Reserve portal and invite owner" })
+    .click()
+
+  expect(
+    await page.evaluate((key) => {
+      const raw = sessionStorage.getItem(key)
+      return raw === null ? null : JSON.parse(raw)
+    }, ONBOARDING_STORAGE_KEY),
+  ).toEqual({ version: 1, operationId: submittedOperationId })
+})
+
+test("ownerless recovery hides ownership controls and starts only from server eligibility", async ({
+  page,
+}) => {
+  const ownerless = page.getByRole("region", {
+    name: "Ownerless portal controls",
+  })
+  await expect(ownerless.getByText("Awaiting owner acceptance")).toBeVisible()
+  await expect(
+    ownerless.getByRole("region", {
+      name: "Reissue initial owner invitation",
+    }),
+  ).toBeVisible()
+  await expect(ownerless.getByText(/safely terminal/)).toBeVisible()
+  await expect(
+    ownerless.getByRole("region", { name: "Ownership transfer" }),
+  ).toHaveCount(0)
+  await expect(
+    ownerless.getByRole("region", { name: "Lifecycle controls" }),
+  ).toHaveCount(0)
+
+  await page
+    .getByRole("button", { name: "Reload ineligible owner snapshot" })
+    .click()
+  const recoveredOwnerless = page.getByRole("region", {
+    name: "Ownerless portal controls",
+  })
+  await expect(recoveredOwnerless.getByText(/not eligible/)).toBeVisible()
+  await expect(
+    recoveredOwnerless.getByRole("region", {
+      name: "Initial owner invitation pending",
+    }),
+  ).toBeVisible()
+  await expect(
+    recoveredOwnerless.getByLabel("Initial owner email"),
+  ).toHaveCount(0)
+})
+
+test("initial owner reissue recovers a lost committed response after a version-advanced reload", async ({
+  page,
+}) => {
+  const submissions: Record<string, unknown>[] = []
+  await page.route(/\/initial-owner\/reissue$/, async (route) => {
+    const requestBody = route.request().postDataJSON() as Record<
+      string,
+      unknown
+    >
+    submissions.push(requestBody)
+    if (submissions.length === 1) {
+      await route.abort("connectionfailed")
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        operationId: requestBody.operationId,
+        advocateId: ALPHA_ADVOCATE_ID,
+        advocateVersion: 8,
+        reissueStatus: "initial_owner_invitation_requeued",
+      }),
+    })
+  })
+
+  await fillInitialOwnerReissueForm(page)
+  const recovery = page.getByRole("region", {
+    name: "Reissue initial owner invitation",
+  })
+  await recovery
+    .getByRole("button", { name: "Reissue owner invitation" })
+    .click()
+  await expect(recovery.getByRole("alert")).toContainText(
+    "could not be confirmed",
+  )
+
+  const storedBeforeReload = await page.evaluate((key) => {
+    const raw = sessionStorage.getItem(key)
+    return raw === null ? null : JSON.parse(raw)
+  }, INITIAL_OWNER_REISSUE_STORAGE_KEY)
+  expect(storedBeforeReload).toEqual({
+    version: 1,
+    operationId: submissions[0].operationId,
+    advocateId: ALPHA_ADVOCATE_ID,
+    expectedVersion: 7,
+  })
+  expect(JSON.stringify(storedBeforeReload)).not.toMatch(/email|reason|slug/i)
+
+  await page
+    .getByRole("button", {
+      name: "Reload committed reissue snapshot",
+    })
+    .click()
+  const recovered = page.getByRole("region", {
+    name: "Reissue initial owner invitation",
+  })
+  await expect(
+    recovered.getByText("A previous result is unresolved."),
+  ).toBeVisible()
+  await fillInitialOwnerReissueForm(page)
+  await recovered
+    .getByRole("button", { name: "Reissue owner invitation" })
+    .click()
+
+  expect(submissions).toHaveLength(2)
+  expect(submissions[1].operationId).toBe(submissions[0].operationId)
+  expect(submissions[1].expectedVersion).toBe(7)
+  expect(Object.keys(submissions[1]).sort()).toEqual([
+    "confirmation",
+    "expectedVersion",
+    "operationId",
+    "ownerEmail",
+    "reason",
+  ])
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          (key) => sessionStorage.getItem(key),
+          INITIAL_OWNER_REISSUE_STORAGE_KEY,
+        ),
+    )
+    .toBeNull()
+  await expect(
+    page.getByRole("region", { name: "Revoke initial owner invitation" }),
+  ).toBeVisible()
+})
+
+test("initial owner reissue retains retry identity through authentication loss", async ({
+  page,
+}) => {
+  let operationId: unknown = null
+  await page.route(/\/initial-owner\/reissue$/, async (route) => {
+    const requestBody = route.request().postDataJSON() as Record<
+      string,
+      unknown
+    >
+    operationId = requestBody.operationId
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        operationId: null,
+        code: "unauthorized",
+      }),
+    })
+  })
+
+  await fillInitialOwnerReissueForm(page)
+  const recovery = page.getByRole("region", {
+    name: "Reissue initial owner invitation",
+  })
+  await recovery
+    .getByRole("button", { name: "Reissue owner invitation" })
+    .click()
+  await expect(recovery.getByRole("alert")).toContainText("session expired")
+
+  expect(
+    await page.evaluate((key) => {
+      const raw = sessionStorage.getItem(key)
+      return raw === null ? null : JSON.parse(raw)
+    }, INITIAL_OWNER_REISSUE_STORAGE_KEY),
+  ).toEqual({
+    version: 1,
+    operationId,
+    advocateId: ALPHA_ADVOCATE_ID,
+    expectedVersion: 7,
+  })
+  await page.reload()
+  await expect(
+    page
+      .getByRole("region", { name: "Reissue initial owner invitation" })
+      .getByText("A previous result is unresolved."),
+  ).toBeVisible()
+})
+
+test("saved revocation replay outranks newly available reissue after a version-advanced reload", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: "Reload revocable owner snapshot" })
+    .click()
+  const submissions: Record<string, unknown>[] = []
+  await page.route(/\/initial-owner\/revoke$/, async (route) => {
+    const requestBody = route.request().postDataJSON() as Record<
+      string,
+      unknown
+    >
+    submissions.push(requestBody)
+    if (submissions.length === 1) {
+      await route.abort("connectionfailed")
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        operationId: requestBody.operationId,
+        advocateId: ALPHA_ADVOCATE_ID,
+        advocateVersion: 8,
+        revocationStatus: "initial_owner_invitation_revoked",
+      }),
+    })
+  })
+
+  await fillInitialOwnerRevocationForm(page)
+  const revocation = page.getByRole("region", {
+    name: "Revoke initial owner invitation",
+  })
+  await revocation
+    .getByRole("button", { name: "Revoke owner invitation" })
+    .click()
+  await expect(revocation.getByRole("alert")).toContainText(
+    "could not be confirmed",
+  )
+  expect(
+    await page.evaluate((key) => {
+      const raw = sessionStorage.getItem(key)
+      return raw === null ? null : JSON.parse(raw)
+    }, INITIAL_OWNER_REVOCATION_STORAGE_KEY),
+  ).toEqual({
+    version: 1,
+    operationId: submissions[0].operationId,
+    advocateId: ALPHA_ADVOCATE_ID,
+    expectedVersion: 7,
+  })
+
+  await page
+    .getByRole("button", {
+      name: "Reload committed revocation snapshot",
+    })
+    .click()
+  const recovered = page.getByRole("region", {
+    name: "Revoke initial owner invitation",
+  })
+  await expect(
+    recovered.getByText("A previous result is unresolved."),
+  ).toBeVisible()
+  await fillInitialOwnerRevocationForm(page)
+  await recovered
+    .getByRole("button", { name: "Revoke owner invitation" })
+    .click()
+
+  expect(submissions).toHaveLength(2)
+  expect(submissions[1]).toMatchObject({
+    operationId: submissions[0].operationId,
+    expectedVersion: 7,
+    confirmation: "REVOKE_INITIAL_OWNER",
+  })
+  expect(Object.keys(submissions[1]).sort()).toEqual([
+    "confirmation",
+    "expectedVersion",
+    "operationId",
+    "reason",
+  ])
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          (key) => sessionStorage.getItem(key),
+          INITIAL_OWNER_REVOCATION_STORAGE_KEY,
+        ),
+    )
+    .toBeNull()
+  await expect(
+    page.getByRole("region", { name: "Reissue initial owner invitation" }),
+  ).toBeVisible()
 })

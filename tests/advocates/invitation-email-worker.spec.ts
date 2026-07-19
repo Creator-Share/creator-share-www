@@ -229,12 +229,16 @@ test.describe("advocate invitation email envelopes", () => {
 
   test("requires the exact bounded template and canonical role ordering", () => {
     expect(
-      parseAdvocateInvitationEmailTemplateData({
-        advocate_display_name: "Hope Partners",
-        invitation_id: INVITATION_ID,
-        role_keys: ["analytics_viewer", "brand_editor"],
-      }),
+      parseAdvocateInvitationEmailTemplateData(
+        "advocate_delegate_invitation_v1",
+        {
+          advocate_display_name: "Hope Partners",
+          invitation_id: INVITATION_ID,
+          role_keys: ["analytics_viewer", "brand_editor"],
+        },
+      ),
     ).toEqual({
+      templateKey: "advocate_delegate_invitation_v1",
       advocateDisplayName: "Hope Partners",
       invitationId: INVITATION_ID,
       roleKeys: ["analytics_viewer", "brand_editor"],
@@ -257,16 +261,48 @@ test.describe("advocate invitation email envelopes", () => {
         email: RECIPIENT,
       },
     ]) {
-      expect(() => parseAdvocateInvitationEmailTemplateData(invalid)).toThrow(
-        AdvocateInvitationEmailEnvelopeError,
-      )
+      expect(() =>
+        parseAdvocateInvitationEmailTemplateData(
+          "advocate_delegate_invitation_v1",
+          invalid,
+        ),
+      ).toThrow(AdvocateInvitationEmailEnvelopeError)
     }
+  })
+
+  test("strictly discriminates the initial owner template without delegate roles", () => {
+    const parsed = parseAdvocateInvitationEmailTemplateData(
+      "advocate_initial_owner_invitation_v1",
+      {
+        advocate_display_name: "Hope Partners",
+        invitation_id: INVITATION_ID,
+      },
+    )
+    expect(parsed).toEqual({
+      templateKey: "advocate_initial_owner_invitation_v1",
+      advocateDisplayName: "Hope Partners",
+      invitationId: INVITATION_ID,
+    })
+    expect(JSON.stringify(parsed)).not.toMatch(
+      /role|email|capability|target|outbox/i,
+    )
+    expect(() =>
+      parseAdvocateInvitationEmailTemplateData(
+        "advocate_initial_owner_invitation_v1",
+        {
+          advocate_display_name: "Hope Partners",
+          invitation_id: INVITATION_ID,
+          role_keys: [],
+        },
+      ),
+    ).toThrow(AdvocateInvitationEmailEnvelopeError)
   })
 
   test("renders both secrets only in a prefetch-safe URL fragment", () => {
     const rendered = renderAdvocateInvitationEmail({
       canonicalOrigin: "https://creatorshare.com",
       template: parseAdvocateInvitationEmailTemplateData(
+        "advocate_delegate_invitation_v1",
         claimedJob().templateData,
       ),
       authTokenHash: AUTH_TOKEN_HASH,
@@ -282,6 +318,27 @@ test.describe("advocate invitation email envelopes", () => {
     expect(rendered.text).toContain("seven days")
     expect(rendered.text).toContain("sign-in proof expires sooner")
     expect(rendered.html).toContain("ask a portal administrator to resend it")
+  })
+
+  test("renders initial owner acceptance without delegate access language", () => {
+    const rendered = renderAdvocateInvitationEmail({
+      canonicalOrigin: "https://creatorshare.com",
+      template: parseAdvocateInvitationEmailTemplateData(
+        "advocate_initial_owner_invitation_v1",
+        {
+          advocate_display_name: "Hope Partners",
+          invitation_id: INVITATION_ID,
+        },
+      ),
+      authTokenHash: AUTH_TOKEN_HASH,
+      capability: CAPABILITY,
+    })
+    expect(rendered.subject).toBe("Claim your Creator Share advocate portal")
+    expect(rendered.text).toContain("Claim ownership securely")
+    expect(rendered.text).toContain("provider setup")
+    expect(rendered.text).not.toContain("Access:")
+    expect(rendered.html).toContain("Claim portal ownership")
+    expect(rendered.html).not.toContain("<strong>Access:</strong>")
   })
 })
 
@@ -456,6 +513,52 @@ test.describe("advocate invitation auth and persistence adapters", () => {
     })
   })
 
+  test("accepts the strict initial owner claim projection from the repository", async () => {
+    const job = claimedJob({
+      templateKey: "advocate_initial_owner_invitation_v1",
+      templateData: {
+        advocate_display_name: "Hope Partners",
+        invitation_id: INVITATION_ID,
+      },
+    })
+    const adapter = createSupabaseAdvocateInvitationEmailRepository({
+      async rpc(name: string) {
+        expect(name).toBe("claim_advocate_invitation_email_jobs")
+        return {
+          data: [
+            {
+              outbox_id: job.outboxId,
+              invitation_id: job.invitationId,
+              advocate_id: job.advocateId,
+              lease_token: job.leaseToken,
+              lease_expires_at: job.leaseExpiresAt,
+              target_auth_user_id: null,
+              template_key: job.templateKey,
+              template_data: job.templateData,
+              recipient_email_ciphertext: job.recipientEmailCiphertext,
+              recipient_email_hmac: job.recipientEmailHmac,
+              secret_payload_ciphertext: job.secretPayloadCiphertext,
+              capability_digest: job.capabilityDigest,
+              email_normalization_version: 1,
+              email_hmac_key_version: 1,
+              email_encryption_key_version: 1,
+              provider_idempotency_key: job.providerIdempotencyKey,
+              attempt_count: 1,
+            },
+          ],
+          error: null,
+        }
+      },
+    } as unknown as SupabaseClient)
+    await expect(
+      adapter.claimJobs({
+        workerId: `advocate-invitation-email:${WORKER_ID}`,
+        batchSize: 1,
+        context,
+      }),
+    ).resolves.toEqual([job])
+  })
+
   test("rejects extra claim fields and duplicate claims", async () => {
     const invalidRow = {
       outbox_id: OUTBOX_ID,
@@ -538,6 +641,58 @@ test.describe("advocate invitation delivery worker", () => {
     expect(stages).toEqual(["auth", "bind", "begin", "send", "settle"])
     expect(new URL(deliveredUrl).search).toBe("")
     expect(new URL(deliveredUrl).hash).toContain(CAPABILITY)
+  })
+
+  test("delivers an initial owner invitation through the same exact account fence", async () => {
+    const stages: string[] = []
+    let deliveredText = ""
+    const result = await processAdvocateInvitationEmail({
+      config,
+      job: claimedJob({
+        templateKey: "advocate_initial_owner_invitation_v1",
+        templateData: {
+          advocate_display_name: "Hope Partners",
+          invitation_id: INVITATION_ID,
+        },
+      }),
+      context,
+      invocationDeadlineAt: NOW + 60_000,
+      dependencies: dependencies({
+        authProvider: {
+          async generateMagicLink() {
+            stages.push("auth")
+            return { userId: USER_ID, hashedToken: AUTH_TOKEN_HASH }
+          },
+        },
+        repository: repository({
+          async bindTarget(options) {
+            stages.push("bind")
+            expect(options.targetUserId).toBe(USER_ID)
+          },
+          async beginDelivery(options) {
+            stages.push("begin")
+            return {
+              providerIdempotencyKey: options.job.providerIdempotencyKey,
+            }
+          },
+          async settleDelivery() {
+            stages.push("settle")
+            return { status: "sent", retryable: false }
+          },
+        }),
+        transport: {
+          async send(message) {
+            stages.push("send")
+            deliveredText = message.text
+            return { providerMessageId: message.providerMessageId }
+          },
+        },
+      }),
+    })
+    expect(result).toEqual({ outboxId: OUTBOX_ID, status: "sent" })
+    expect(stages).toEqual(["auth", "bind", "begin", "send", "settle"])
+    expect(deliveredText).toContain("Claim ownership securely")
+    expect(deliveredText).not.toContain("Access:")
   })
 
   test("terminalizes a digest mismatch before account creation or send", async () => {

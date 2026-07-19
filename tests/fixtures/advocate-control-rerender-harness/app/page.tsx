@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { AdvocateCleanupRecovery } from "@/components/advocates/creatorShareAdmin/AdvocateCleanupRecovery"
+import { AdvocateInitialOwnerControls } from "@/components/advocates/creatorShareAdmin/AdvocateInitialOwnerControls"
 import { AdvocateLifecycleControls } from "@/components/advocates/creatorShareAdmin/AdvocateLifecycleControls"
+import { AdvocateOnboarding } from "@/components/advocates/creatorShareAdmin/AdvocateOnboarding"
 import { AdvocateOwnershipTransfer } from "@/components/advocates/creatorShareAdmin/AdvocateOwnershipTransfer"
 
 const PORTALS = Object.freeze({
@@ -20,6 +22,8 @@ const PORTALS = Object.freeze({
 const OWNER_MEMBERSHIP_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 const FIRST_CANDIDATE_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 const SECOND_CANDIDATE_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+const REISSUE_SNAPSHOT_STORAGE_KEY =
+  "creator-share:test-initial-owner-snapshot:v1"
 
 const INITIAL_CANDIDATES = Object.freeze([
   Object.freeze({
@@ -42,8 +46,42 @@ const REFRESHED_CANDIDATES = Object.freeze([
 export default function AdvocateControlRerenderHarness() {
   const [portalKey, setPortalKey] = useState<keyof typeof PORTALS>("alpha")
   const [snapshotRevision, setSnapshotRevision] = useState(0)
+  const [ownerSnapshot, setOwnerSnapshot] = useState({
+    version: 7,
+    canReissue: true,
+    canRevoke: true,
+  })
   const portal = PORTALS[portalKey]
   const refreshed = snapshotRevision > 0
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(REISSUE_SNAPSHOT_STORAGE_KEY)
+      if (raw === null) return
+      const parsed: unknown = JSON.parse(raw)
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        !Array.isArray(parsed) &&
+        "version" in parsed &&
+        typeof parsed.version === "number" &&
+        Number.isSafeInteger(parsed.version) &&
+        parsed.version >= 1 &&
+        "canReissue" in parsed &&
+        typeof parsed.canReissue === "boolean" &&
+        "canRevoke" in parsed &&
+        typeof parsed.canRevoke === "boolean"
+      ) {
+        setOwnerSnapshot({
+          version: parsed.version,
+          canReissue: parsed.canReissue,
+          canRevoke: parsed.canRevoke,
+        })
+      }
+    } catch {
+      // The harness starts from the eligible snapshot when storage is invalid.
+    }
+  }, [])
 
   return (
     <main>
@@ -57,6 +95,70 @@ export default function AdvocateControlRerenderHarness() {
         >
           Apply refreshed snapshot
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            sessionStorage.setItem(
+              REISSUE_SNAPSHOT_STORAGE_KEY,
+              JSON.stringify({
+                version: 8,
+                canReissue: false,
+                canRevoke: true,
+              }),
+            )
+            location.reload()
+          }}
+        >
+          Reload committed reissue snapshot
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            sessionStorage.setItem(
+              REISSUE_SNAPSHOT_STORAGE_KEY,
+              JSON.stringify({
+                version: 8,
+                canReissue: true,
+                canRevoke: false,
+              }),
+            )
+            location.reload()
+          }}
+        >
+          Reload committed revocation snapshot
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            sessionStorage.setItem(
+              REISSUE_SNAPSHOT_STORAGE_KEY,
+              JSON.stringify({
+                version: 7,
+                canReissue: false,
+                canRevoke: true,
+              }),
+            )
+            location.reload()
+          }}
+        >
+          Reload revocable owner snapshot
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            sessionStorage.setItem(
+              REISSUE_SNAPSHOT_STORAGE_KEY,
+              JSON.stringify({
+                version: 7,
+                canReissue: false,
+                canRevoke: false,
+              }),
+            )
+            location.reload()
+          }}
+        >
+          Reload ineligible owner snapshot
+        </button>
       </div>
 
       <AdvocateLifecycleControls
@@ -65,6 +167,19 @@ export default function AdvocateControlRerenderHarness() {
         initialVersion={7 + snapshotRevision}
         availableActions={["suspend", "archive"]}
       />
+
+      <AdvocateOnboarding />
+
+      <section aria-label="Ownerless portal controls">
+        <p>Awaiting owner acceptance</p>
+        <AdvocateInitialOwnerControls
+          advocateId={portal.advocateId}
+          slug={portal.slug}
+          initialVersion={ownerSnapshot.version}
+          canReissueInitialOwner={ownerSnapshot.canReissue}
+          canRevokeInitialOwner={ownerSnapshot.canRevoke}
+        />
+      </section>
 
       <AdvocateCleanupRecovery
         advocateId={portal.advocateId}

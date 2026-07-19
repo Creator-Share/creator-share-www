@@ -3,6 +3,7 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { SupabaseRpcBytea } from "@/lib/sponsorships/crypto"
+import type { AdvocateInvitationEmailTemplateKey } from "./emailEnvelope"
 
 import {
   AdvocateInvitationEmailRepositoryError,
@@ -153,7 +154,8 @@ function parseClaimedJob(value: unknown): ClaimedAdvocateInvitationEmail {
   if (
     !LEASE_TOKEN_PATTERN.test(leaseToken) ||
     !Number.isFinite(Date.parse(leaseExpiresAt)) ||
-    templateKey !== "advocate_delegate_invitation_v1" ||
+    (templateKey !== "advocate_delegate_invitation_v1" &&
+      templateKey !== "advocate_initial_owner_invitation_v1") ||
     !isRecord(value.template_data) ||
     !/^advocate-invitation:[0-9a-f-]{36}$/.test(providerIdempotencyKey)
   ) {
@@ -167,7 +169,7 @@ function parseClaimedJob(value: unknown): ClaimedAdvocateInvitationEmail {
     leaseToken,
     leaseExpiresAt,
     targetAuthUserId: optionalUuid(value, "target_auth_user_id", "claim"),
-    templateKey,
+    templateKey: templateKey as AdvocateInvitationEmailTemplateKey,
     templateData: value.template_data,
     recipientEmailCiphertext: requiredRpcBytea(
       value,

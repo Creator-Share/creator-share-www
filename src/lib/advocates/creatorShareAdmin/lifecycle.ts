@@ -57,6 +57,11 @@ const CLEANUP_PHASE_SET = new Set<string>([
   "complete",
   "needs_attention",
 ])
+const OWNERSHIP_STATUS_SET = new Set<string>([
+  "awaiting_owner_acceptance",
+  "owner_active",
+  "owner_unassigned",
+])
 
 const LIST_ROW_KEYS = Object.freeze([
   "advocate_id",
@@ -66,6 +71,9 @@ const LIST_ROW_KEYS = Object.freeze([
   "display_name",
   "open_provider_jobs",
   "owner_display_name",
+  "ownership_status",
+  "can_reissue_initial_owner",
+  "can_revoke_initial_owner",
   "pending_invitations",
   "primary_domain_status",
   "primary_hostname",
@@ -92,6 +100,9 @@ const SNAPSHOT_ROW_KEYS = Object.freeze([
   "open_deprovision_jobs",
   "open_provider_jobs",
   "owner_display_name",
+  "ownership_status",
+  "can_reissue_initial_owner",
+  "can_revoke_initial_owner",
   "pending_invitations",
   "primary_domain_id",
   "primary_domain_status",
@@ -135,7 +146,11 @@ export interface CreatorShareAdvocateControlSummary {
   relationshipStatus: CreatorShareAdvocateRelationshipStatus
   publicationStatus: CreatorShareAdvocatePublicationStatus
   advocateVersion: number
-  ownerDisplayName: string
+  ownerDisplayName: string | null
+  ownershipStatus:
+    "awaiting_owner_acceptance" | "owner_active" | "owner_unassigned"
+  canReissueInitialOwner: boolean
+  canRevokeInitialOwner: boolean
   primaryHostname: string | null
   primaryDomainStatus: string | null
   readyRequiredIntegrations: number
@@ -148,8 +163,10 @@ export interface CreatorShareAdvocateControlSummary {
   createdAt: string
 }
 
-export interface CreatorShareAdvocateControlSnapshot
-  extends Omit<CreatorShareAdvocateControlSummary, "createdAt"> {
+export interface CreatorShareAdvocateControlSnapshot extends Omit<
+  CreatorShareAdvocateControlSummary,
+  "createdAt"
+> {
   openDeprovisionJobs: number
   cleanupPhase: CreatorShareAdvocateCleanupPhase
   canRetryCleanup: boolean
@@ -393,7 +410,11 @@ function parseCommonRow(value: Record<string, unknown>): Readonly<{
   relationshipStatus: CreatorShareAdvocateRelationshipStatus
   publicationStatus: CreatorShareAdvocatePublicationStatus
   advocateVersion: number
-  ownerDisplayName: string
+  ownerDisplayName: string | null
+  ownershipStatus:
+    "awaiting_owner_acceptance" | "owner_active" | "owner_unassigned"
+  canReissueInitialOwner: boolean
+  canRevokeInitialOwner: boolean
   primaryHostname: string | null
   primaryDomainStatus: string | null
   readyRequiredIntegrations: number
@@ -410,7 +431,13 @@ function parseCommonRow(value: Record<string, unknown>): Readonly<{
   const relationshipStatus = parseRelationshipStatus(value.relationship_status)
   const publicationStatus = parsePublicationStatus(value.publication_status)
   const advocateVersion = parseVersion(value.advocate_version)
-  const ownerDisplayName = parseSafePersonLabel(value.owner_display_name)
+  const ownerDisplayName =
+    value.owner_display_name === null
+      ? null
+      : parseSafePersonLabel(value.owner_display_name)
+  const ownershipStatus = value.ownership_status
+  const canReissueInitialOwner = value.can_reissue_initial_owner
+  const canRevokeInitialOwner = value.can_revoke_initial_owner
   const readyRequiredIntegrations = parseCount(
     value.ready_required_integrations,
   )
@@ -429,7 +456,24 @@ function parseCommonRow(value: Record<string, unknown>): Readonly<{
     relationshipStatus === null ||
     publicationStatus === null ||
     advocateVersion === null ||
-    ownerDisplayName === null ||
+    typeof ownershipStatus !== "string" ||
+    !OWNERSHIP_STATUS_SET.has(ownershipStatus) ||
+    (ownershipStatus === "owner_active" && ownerDisplayName === null) ||
+    (ownershipStatus !== "owner_active" && ownerDisplayName !== null) ||
+    typeof canReissueInitialOwner !== "boolean" ||
+    typeof canRevokeInitialOwner !== "boolean" ||
+    (canReissueInitialOwner &&
+      ownershipStatus !== "awaiting_owner_acceptance") ||
+    (canRevokeInitialOwner &&
+      ownershipStatus !== "awaiting_owner_acceptance") ||
+    (ownershipStatus === "awaiting_owner_acceptance" &&
+      (relationshipStatus !== "invited" ||
+        publicationStatus !== "draft" ||
+        value.primary_hostname !== null ||
+        value.primary_domain_status !== null)) ||
+    (ownershipStatus === "owner_unassigned" &&
+      (relationshipStatus !== "archived" ||
+        publicationStatus !== "suspended")) ||
     readyRequiredIntegrations === null ||
     requiredIntegrations === null ||
     readyRequiredIntegrations > requiredIntegrations ||
@@ -457,6 +501,10 @@ function parseCommonRow(value: Record<string, unknown>): Readonly<{
     publicationStatus,
     advocateVersion,
     ownerDisplayName,
+    ownershipStatus: ownershipStatus as
+      "awaiting_owner_acceptance" | "owner_active" | "owner_unassigned",
+    canReissueInitialOwner,
+    canRevokeInitialOwner,
     primaryHostname: domain.hostname,
     primaryDomainStatus: domain.status,
     readyRequiredIntegrations,
@@ -544,6 +592,13 @@ export function parseCreatorShareAdvocateControlSnapshot(
     (row.can_retry_cleanup &&
       (common.relationshipStatus !== "archived" ||
         cleanupPhase !== "needs_attention" ||
+        openDeprovisionJobs !== 0)) ||
+    (common.ownershipStatus === "awaiting_owner_acceptance" &&
+      (row.can_suspend ||
+        row.can_resume ||
+        row.can_repair ||
+        row.can_retry_cleanup ||
+        cleanupPhase !== "not_requested" ||
         openDeprovisionJobs !== 0)) ||
     (common.relationshipStatus === "archived" &&
       (row.can_suspend || row.can_resume || row.can_archive || row.can_repair))

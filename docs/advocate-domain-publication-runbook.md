@@ -96,7 +96,7 @@ Vercel Cron does not retry a failed invocation and may occasionally deliver over
 1. Open the authenticated Advocate portals administration surface and choose Create portal.
 2. Enter the canonical lowercase slug, display name, advocate type, initial owner email, and a specific administrative reason. The client creates one stable operation ID and reuses it for every ambiguous retry.
 3. Confirm the result shows an invited, draft portal with a reserved hostname and pending initial-owner delivery, but no provider topology or provider work.
-4. If delivery fails terminally, correct the external cause and use the audited reissue control. Never create a second tenant or release the slug to work around delivery state.
+4. If delivery fails terminally, correct the external cause and use the audited reissue control. If a sent or ambiguous owner link must be invalidated, use the separate audited revocation control first, observe the new tenant version, then reissue. Never duplicate live authority, create a second tenant, or release the slug to work around delivery state.
 5. After the owner accepts, confirm the portal shows one active owner and exactly five required provisioning tracks. The browser receives only aggregate readiness and fixed states.
 6. Allow automated reconciliation to reach a verifying domain. Use Repair only when the server derives it as eligible. The browser never chooses a provider, integration, or job.
 7. Enter the publication reason once and start publication. The client stores the nonsecret operation ID, expected version, and exact reason in same-tab session storage before sending the request.
@@ -273,7 +273,7 @@ Retain:
 - Protected canary report and its SHA256 digest.
 - A focused concurrency test proving single ownership, expired lease reclaim, and rejection of stale completion.
 - Route evidence for `202 Accepted`, authenticated polling, low-latency `after()` execution, cron recovery, and the rule that background execution cannot publish.
-- Browser evidence for the complete create, initial-owner acceptance, provision, verify, publish, timeout recovery, and reload recovery path with exact operation replay and sanitized responses.
+- Browser evidence for create, terminal-delivery reissue, sent or ambiguous invitation revocation, post-revocation reissue, initial-owner acceptance, provision, verify, publish, timeout recovery, and reload recovery. The evidence must prove exact operation replay, version fencing, contact-free browser storage, and sanitized responses.
 - Provider evidence proving both Stripe Sessions were unpaid and expired, the PayPal Subscription remained unapproved, and no financial or sponsorship state was created.
 - Super administrator publication result and immutable audit event references.
 - Super administrator lifecycle and ownership results, append-only exact replay receipts, and private browser forensic capture with 90 day deletion evidence.

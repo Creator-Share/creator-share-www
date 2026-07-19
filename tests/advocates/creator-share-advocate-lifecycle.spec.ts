@@ -65,6 +65,9 @@ const SUMMARY_ROW = Object.freeze({
   publication_status: "active",
   advocate_version: "7",
   owner_display_name: "Aubrey F.",
+  ownership_status: "owner_active",
+  can_reissue_initial_owner: false,
+  can_revoke_initial_owner: false,
   primary_hostname: "hope.creatorshare.com",
   primary_domain_status: "active",
   ready_required_integrations: 5,
@@ -484,8 +487,80 @@ test.describe("Creator Share advocate control projections", () => {
       /primary_domain_id|provider_id|provider_error|email|auth_user|contact/i,
     )
 
+    const awaitingOwner = lifecycle.parseCreatorShareAdvocateControlSummary({
+      ...SUMMARY_ROW,
+      relationship_status: "invited",
+      publication_status: "draft",
+      owner_display_name: null,
+      ownership_status: "awaiting_owner_acceptance",
+      can_reissue_initial_owner: true,
+      can_revoke_initial_owner: true,
+      primary_hostname: null,
+      primary_domain_status: null,
+      ready_required_integrations: 0,
+      required_integrations: 0,
+      open_provider_jobs: 0,
+    })
+    expect(awaitingOwner).toMatchObject({
+      ownerDisplayName: null,
+      ownershipStatus: "awaiting_owner_acceptance",
+      canReissueInitialOwner: true,
+      canRevokeInitialOwner: true,
+    })
+    expect(JSON.stringify(awaitingOwner)).not.toMatch(
+      /email|invitation_id|outbox|capability|ciphertext|provider_error/i,
+    )
+
+    const archivedOwnerless = lifecycle.parseCreatorShareAdvocateControlSummary(
+      {
+        ...SUMMARY_ROW,
+        relationship_status: "archived",
+        publication_status: "suspended",
+        owner_display_name: null,
+        ownership_status: "owner_unassigned",
+        can_reissue_initial_owner: false,
+        can_revoke_initial_owner: false,
+        primary_domain_status: "disabled",
+        pending_invitations: 0,
+        suspended_at: "2026-07-19T05:00:00+00:00",
+        archived_at: "2026-07-19T05:00:00+00:00",
+      },
+    )
+    expect(archivedOwnerless).toMatchObject({
+      relationshipStatus: "archived",
+      publicationStatus: "suspended",
+      ownerDisplayName: null,
+      ownershipStatus: "owner_unassigned",
+      canReissueInitialOwner: false,
+      canRevokeInitialOwner: false,
+    })
+    expect(JSON.stringify(archivedOwnerless)).not.toMatch(
+      /email|invitation_id|outbox|capability|ciphertext|provider_error/i,
+    )
+
     for (const invalid of [
       { ...SUMMARY_ROW, owner_display_name: "owner@example.com" },
+      { ...SUMMARY_ROW, owner_display_name: null },
+      {
+        ...SUMMARY_ROW,
+        ownership_status: "awaiting_owner_acceptance",
+        can_reissue_initial_owner: true,
+        can_revoke_initial_owner: true,
+      },
+      {
+        ...SUMMARY_ROW,
+        owner_display_name: null,
+        ownership_status: "owner_unassigned",
+      },
+      {
+        ...SUMMARY_ROW,
+        relationship_status: "archived",
+        publication_status: "suspended",
+        owner_display_name: null,
+        ownership_status: "owner_unassigned",
+        can_reissue_initial_owner: true,
+        archived_at: "2026-07-19T05:00:00+00:00",
+      },
       { ...SUMMARY_ROW, primary_hostname: "hope.example.com" },
       { ...SUMMARY_ROW, ready_required_integrations: 6 },
       { ...SUMMARY_ROW, auth_user_id: TARGET_MEMBERSHIP_ID },
@@ -591,6 +666,67 @@ test.describe("Creator Share advocate control projections", () => {
         { ...snapshotRow(), can_retry_cleanup: true },
       ]),
     ).toBeNull()
+
+    const awaitingOwner = lifecycle.parseCreatorShareAdvocateControlSnapshot([
+      {
+        ...snapshotRow(),
+        relationship_status: "invited",
+        publication_status: "draft",
+        owner_display_name: null,
+        ownership_status: "awaiting_owner_acceptance",
+        can_reissue_initial_owner: true,
+        can_revoke_initial_owner: true,
+        primary_domain_id: null,
+        primary_hostname: null,
+        primary_domain_status: null,
+        ready_required_integrations: 0,
+        required_integrations: 0,
+        open_provider_jobs: 0,
+        can_suspend: false,
+        can_resume: false,
+        can_repair: false,
+      },
+    ])
+    expect(awaitingOwner).toMatchObject({
+      ownershipStatus: "awaiting_owner_acceptance",
+      ownerDisplayName: null,
+      canReissueInitialOwner: true,
+      canRevokeInitialOwner: true,
+      canSuspend: false,
+    })
+
+    const archivedOwnerless =
+      lifecycle.parseCreatorShareAdvocateControlSnapshot([
+        {
+          ...snapshotRow(),
+          relationship_status: "archived",
+          publication_status: "suspended",
+          owner_display_name: null,
+          ownership_status: "owner_unassigned",
+          can_reissue_initial_owner: false,
+          can_revoke_initial_owner: false,
+          primary_domain_status: "disabled",
+          pending_invitations: 0,
+          suspended_at: "2026-07-19T05:00:00+00:00",
+          archived_at: "2026-07-19T05:00:00+00:00",
+          cleanup_phase: "quiescing",
+          open_deprovision_jobs: 1,
+          can_retry_cleanup: false,
+          can_suspend: false,
+          can_resume: false,
+          can_archive: false,
+          can_repair: false,
+        },
+      ])
+    expect(archivedOwnerless).toMatchObject({
+      relationshipStatus: "archived",
+      publicationStatus: "suspended",
+      ownershipStatus: "owner_unassigned",
+      ownerDisplayName: null,
+      canReissueInitialOwner: false,
+      canRevokeInitialOwner: false,
+      canArchive: false,
+    })
   })
 
   test("accepts only sorted privacy-safe ownership candidates", () => {
