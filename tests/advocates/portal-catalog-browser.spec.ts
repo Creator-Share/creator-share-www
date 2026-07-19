@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises"
 import { createServer } from "node:net"
 import { resolve } from "node:path"
 
-import { devices, expect, test, webkit, type Page } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 
 const HARNESS_DIRECTORY = resolve(
   process.cwd(),
@@ -715,78 +715,72 @@ test("guards browser forward traversal and honors stay or discard without a loop
   await expect(page.getByText("Analytics destination")).toBeVisible()
 })
 
-test("recovers version-bound drafts after mobile WebKit back and forward traversal", async () => {
+test("recovers version-bound drafts after mobile WebKit back and forward traversal", async ({
+  browserName,
+  page,
+}) => {
   test.skip(
     process.env.RUN_WEBKIT_BROWSER_INTEGRATION !== "1",
     "Set RUN_WEBKIT_BROWSER_INTEGRATION=1 for the release WebKit gate.",
   )
+  expect(browserName).toBe("webkit")
 
-  const browser = await webkit.launch()
-  const context = await browser.newContext({ ...devices["iPhone 15 Pro"] })
-  const page = await context.newPage()
   const unexpectedDialogs: string[] = []
   page.on("dialog", async (dialog) => {
     unexpectedDialogs.push(`${dialog.type()}:${dialog.message()}`)
     await dialog.accept()
   })
-  try {
-    await page.goto(harnessOrigin)
-    await page.getByRole("link", { name: "Analytics", exact: true }).click()
-    await page.getByRole("link", { name: "Child catalog" }).click()
+  await page.goto(harnessOrigin)
+  await page.getByRole("link", { name: "Analytics", exact: true }).click()
+  await page.getByRole("link", { name: "Child catalog" }).click()
 
-    const catalog = page.getByRole("region", { name: "Child catalog" })
-    await catalog
-      .getByRole("button", {
-        name: "Remove Unavailable selection 333333333333",
-      })
-      .click()
-    await catalog
-      .getByLabel("Change note")
-      .fill("Recover this mobile catalog draft")
-    await page.evaluate(() => window.history.back())
-    await expect(page).toHaveURL(`${harnessOrigin}/other`)
-    await expect(page.getByText("Analytics destination")).toBeVisible()
+  const catalog = page.getByRole("region", { name: "Child catalog" })
+  await catalog
+    .getByRole("button", {
+      name: "Remove Unavailable selection 333333333333",
+    })
+    .click()
+  await catalog
+    .getByLabel("Change note")
+    .fill("Recover this mobile catalog draft")
+  await page.evaluate(() => window.history.back())
+  await expect(page).toHaveURL(`${harnessOrigin}/other`)
+  await expect(page.getByText("Analytics destination")).toBeVisible()
 
-    await page.evaluate(() => window.history.forward())
-    await expect(page).toHaveURL(harnessOrigin + "/")
-    await expect(
-      page.getByText(
-        "Recovered unsaved catalog changes from this browser tab. Review and save them, or reset to the saved catalog.",
-      ),
-    ).toBeVisible()
-    await expect(catalog.getByText(/^3 of 5 selected\./)).toBeVisible()
-    await expect(catalog.getByLabel("Change note")).toHaveValue(
-      "Recover this mobile catalog draft",
-    )
-    await catalog
-      .getByRole("button", { name: "Reset to saved catalog" })
-      .click()
-    await expect(catalog.getByText(/^4 of 5 selected\./)).toBeVisible()
+  await page.evaluate(() => window.history.forward())
+  await expect(page).toHaveURL(harnessOrigin + "/")
+  await expect(
+    page.getByText(
+      "Recovered unsaved catalog changes from this browser tab. Review and save them, or reset to the saved catalog.",
+    ),
+  ).toBeVisible()
+  await expect(catalog.getByText(/^3 of 5 selected\./)).toBeVisible()
+  await expect(catalog.getByLabel("Change note")).toHaveValue(
+    "Recover this mobile catalog draft",
+  )
+  await catalog.getByRole("button", { name: "Reset to saved catalog" }).click()
+  await expect(catalog.getByText(/^4 of 5 selected\./)).toBeVisible()
 
-    await page.evaluate(() => window.history.back())
-    await expect(page).toHaveURL(`${harnessOrigin}/other`)
-    await page.evaluate(() => window.history.back())
-    await expect(page).toHaveURL(harnessOrigin + "/")
-    await catalog
-      .getByRole("button", {
-        name: "Remove Unavailable selection 333333333333",
-      })
-      .click()
-    await catalog
-      .getByLabel("Change note")
-      .fill("Recover this forward navigation draft")
+  await page.evaluate(() => window.history.back())
+  await expect(page).toHaveURL(`${harnessOrigin}/other`)
+  await page.evaluate(() => window.history.back())
+  await expect(page).toHaveURL(harnessOrigin + "/")
+  await catalog
+    .getByRole("button", {
+      name: "Remove Unavailable selection 333333333333",
+    })
+    .click()
+  await catalog
+    .getByLabel("Change note")
+    .fill("Recover this forward navigation draft")
 
-    await page.evaluate(() => window.history.forward())
-    await expect(page).toHaveURL(`${harnessOrigin}/other`)
-    await page.evaluate(() => window.history.back())
-    await expect(page).toHaveURL(harnessOrigin + "/")
-    await expect(catalog.getByText(/^3 of 5 selected\./)).toBeVisible()
-    await expect(catalog.getByLabel("Change note")).toHaveValue(
-      "Recover this forward navigation draft",
-    )
-    expect(unexpectedDialogs).toEqual([])
-  } finally {
-    await context.close()
-    await browser.close()
-  }
+  await page.evaluate(() => window.history.forward())
+  await expect(page).toHaveURL(`${harnessOrigin}/other`)
+  await page.evaluate(() => window.history.back())
+  await expect(page).toHaveURL(harnessOrigin + "/")
+  await expect(catalog.getByText(/^3 of 5 selected\./)).toBeVisible()
+  await expect(catalog.getByLabel("Change note")).toHaveValue(
+    "Recover this forward navigation draft",
+  )
+  expect(unexpectedDialogs).toEqual([])
 })

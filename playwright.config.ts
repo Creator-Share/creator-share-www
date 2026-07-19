@@ -8,6 +8,7 @@ import { defineConfig, devices } from "@playwright/test"
  */
 const devPort = process.env.PLAYWRIGHT_DEV_PORT ?? "3000"
 const devOrigin = `http://localhost:${devPort}`
+const runWebKitReleaseGate = process.env.RUN_WEBKIT_BROWSER_INTEGRATION === "1"
 
 export default defineConfig({
   testDir: "./tests",
@@ -21,12 +22,19 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
-  projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
-    },
-  ],
+  projects: runWebKitReleaseGate
+    ? [
+        {
+          name: "webkit",
+          use: { ...devices["iPhone 15 Pro"] },
+        },
+      ]
+    : [
+        {
+          name: "chromium",
+          use: { ...devices["Desktop Chrome"] },
+        },
+      ],
   webServer: process.env.PW_NO_WEBSERVER
     ? undefined
     : {

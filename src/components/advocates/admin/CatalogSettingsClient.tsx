@@ -268,9 +268,6 @@ export function CatalogSettingsClient({
       changeReason: nextChangeReason,
     })
   }
-  const serializedDraft = serializeDraft(mode, selections, changeReason)
-  latestSerializedDraft.current = serializedDraft
-
   function persistLatestCatalogDraft(
     nextMode: AdvocateCatalogMode,
     nextSelections: readonly AdvocateCatalogSelection[],
@@ -321,8 +318,10 @@ export function CatalogSettingsClient({
           selectionLimit: settings.selectionLimit,
         })
         if (draft === null) {
+          latestSerializedDraft.current = null
           window.sessionStorage.removeItem(draftStorageKey)
         } else {
+          latestSerializedDraft.current = serializedDraft
           setMode(draft.mode)
           setSelections(freezeSelections(draft.selections))
           setChangeReason(draft.changeReason)
@@ -348,13 +347,6 @@ export function CatalogSettingsClient({
     settings.advocateId,
     settings.selectionLimit,
   ])
-
-  useEffect(() => {
-    if (!draftHydrated) return
-    setDraftPersistenceAvailable(
-      persistCatalogDraft(draftStorageKey, serializedDraft),
-    )
-  }, [draftHydrated, draftStorageKey, serializedDraft])
 
   useEffect(() => {
     if (!draftHydrated) return
