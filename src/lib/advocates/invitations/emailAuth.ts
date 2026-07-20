@@ -2,6 +2,10 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import {
+  isAdvocateInvitationAuthType,
+  type AdvocateInvitationAuthType,
+} from "@/lib/advocates/invitations/material"
 import { normalizeSponsorEmailV1 } from "@/lib/sponsorships/crypto"
 
 const UUID_PATTERN =
@@ -11,6 +15,7 @@ const HASHED_TOKEN_PATTERN = /^[A-Za-z0-9._~-]{32,384}$/
 export interface AdvocateInvitationAuthProof {
   userId: string
   hashedToken: string
+  authType: AdvocateInvitationAuthType
 }
 
 export interface AdvocateInvitationAuthProvider {
@@ -85,7 +90,7 @@ export function createSupabaseAdvocateInvitationAuthProvider(
       if (
         returnedEmail !== normalizedEmail ||
         !UUID_PATTERN.test(data.user.id) ||
-        data.properties.verification_type !== "magiclink" ||
+        !isAdvocateInvitationAuthType(data.properties.verification_type) ||
         !HASHED_TOKEN_PATTERN.test(data.properties.hashed_token)
       ) {
         providerError({ targetUnavailable: true })
@@ -94,6 +99,7 @@ export function createSupabaseAdvocateInvitationAuthProvider(
       return Object.freeze({
         userId: data.user.id,
         hashedToken: data.properties.hashed_token,
+        authType: data.properties.verification_type,
       })
     },
   }

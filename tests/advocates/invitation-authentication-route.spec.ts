@@ -212,7 +212,7 @@ test.beforeEach(() => {
         session_id: "22222222-2222-4222-8222-222222222222",
         aal: "aal1",
         iat: nowEpochSeconds,
-        amr: [{ method: "magiclink", timestamp: nowEpochSeconds }],
+        amr: [{ method: "otp", timestamp: nowEpochSeconds }],
       },
     },
     error: null,
@@ -252,6 +252,24 @@ test("establishes and returns the session before any tenant mutation request", a
   ])
   expect(getUserCalls).toEqual([])
   expect(authenticationReservationCalls).toHaveLength(1)
+})
+
+test("passes a new-account signup proof to provider verification unchanged", async () => {
+  const signupRequest = Object.freeze({
+    ...AUTHENTICATION_REQUEST,
+    authType: "signup" as const,
+  })
+
+  const response = await POST(request(JSON.stringify(signupRequest)))
+
+  expect(response.status).toBe(200)
+  expect(await json(response)).toEqual({ ok: true })
+  expect(verifyCalls).toEqual([
+    {
+      token_hash: signupRequest.authTokenHash,
+      type: "signup",
+    },
+  ])
 })
 
 test("reserves capacity before provider verification and makes quota denial retryable", async () => {
@@ -414,7 +432,7 @@ test("rejects a consumed proof backed only by an unrelated current session", asy
   })
 })
 
-test("requires matching fresh magic-link claims for a consumed-proof retry", async () => {
+test("requires matching fresh otp claims for a consumed-proof retry", async () => {
   verificationResult = {
     data: { session: null, user: null },
     error: { code: "otp_expired" },
@@ -427,28 +445,35 @@ test("requires matching fresh magic-link claims for a consumed-proof retry", asy
       session_id: "22222222-2222-4222-8222-222222222222",
       aal: "aal1",
       iat: nowEpochSeconds,
-      amr: [{ method: "magiclink", timestamp: nowEpochSeconds }],
+      amr: [{ method: "otp", timestamp: nowEpochSeconds }],
     },
     {
       sub: AUTH_USER_ID,
       session_id: "not-a-session-id",
       aal: "aal1",
       iat: nowEpochSeconds,
+      amr: [{ method: "otp", timestamp: nowEpochSeconds }],
+    },
+    {
+      sub: AUTH_USER_ID,
+      session_id: "22222222-2222-4222-8222-222222222222",
+      aal: "aal1",
+      iat: nowEpochSeconds,
+      amr: [{ method: "otp", timestamp: nowEpochSeconds - 901 }],
+    },
+    {
+      sub: AUTH_USER_ID,
+      session_id: "22222222-2222-4222-8222-222222222222",
+      aal: "aal1",
+      iat: nowEpochSeconds,
+      amr: [{ method: "otp", timestamp: nowEpochSeconds + 61 }],
+    },
+    {
+      sub: AUTH_USER_ID,
+      session_id: "22222222-2222-4222-8222-222222222222",
+      aal: "aal1",
+      iat: nowEpochSeconds,
       amr: [{ method: "magiclink", timestamp: nowEpochSeconds }],
-    },
-    {
-      sub: AUTH_USER_ID,
-      session_id: "22222222-2222-4222-8222-222222222222",
-      aal: "aal1",
-      iat: nowEpochSeconds,
-      amr: [{ method: "magiclink", timestamp: nowEpochSeconds - 901 }],
-    },
-    {
-      sub: AUTH_USER_ID,
-      session_id: "22222222-2222-4222-8222-222222222222",
-      aal: "aal1",
-      iat: nowEpochSeconds,
-      amr: [{ method: "magiclink", timestamp: nowEpochSeconds + 61 }],
     },
   ]
 

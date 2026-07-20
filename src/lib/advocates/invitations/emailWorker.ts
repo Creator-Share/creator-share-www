@@ -370,6 +370,7 @@ export async function processAdvocateInvitationEmail(options: {
       canonicalOrigin: dependencies.canonicalOrigin,
       template,
       authTokenHash: authProof.hashedToken,
+      authType: authProof.authType,
       capability: secret.capability,
     })
     const providerMessageId = advocateInvitationMessageId(job.outboxId)

@@ -12,7 +12,7 @@ import {
 } from "./support/concurrency-gate.mjs"
 import {
   configureAuthenticatedTransaction,
-  configureFreshMagicLinkAuthenticatedTransaction,
+  configureFreshEmailOtpAuthenticatedTransaction,
   configureServiceRoleTransaction,
   createTransientLocalSupabaseDatabase,
 } from "./support/local-supabase.mjs"
@@ -173,7 +173,7 @@ async function authenticatedCall(client, actor, query) {
 }
 
 async function freshOwnerCall(client, query) {
-  await configureFreshMagicLinkAuthenticatedTransaction(client, ACTORS.owner)
+  await configureFreshEmailOtpAuthenticatedTransaction(client, ACTORS.owner)
   return finishTransaction(client, query)
 }
 
@@ -193,7 +193,7 @@ async function beginAuthenticatedCall(client, actor, query) {
 }
 
 async function beginFreshOwnerCall(client, query) {
-  await configureFreshMagicLinkAuthenticatedTransaction(client, ACTORS.owner)
+  await configureFreshEmailOtpAuthenticatedTransaction(client, ACTORS.owner)
   try {
     return await query()
   } catch (error) {

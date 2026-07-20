@@ -52,7 +52,7 @@ function isDeterministicInvalidProof(
   return error?.code === "otp_expired"
 }
 
-function hasFreshMagicLinkClaims(
+function hasFreshOtpClaims(
   value: unknown,
   expectedUserId: string,
   nowEpochSeconds = Math.floor(Date.now() / 1_000),
@@ -79,7 +79,7 @@ function hasFreshMagicLinkClaims(
   }
 
   return methods.some((method) => {
-    if (!isRecord(method) || method.method !== "magiclink") return false
+    if (!isRecord(method) || method.method !== "otp") return false
     const timestamp = method.timestamp
     return (
       typeof timestamp === "number" &&
@@ -207,7 +207,7 @@ export async function authenticateAdvocateInvitation(options: {
   if (authUserId !== null) {
     const claims = await options.client.auth.getClaims()
     if (claims.error) throw authenticationUnavailable()
-    if (hasFreshMagicLinkClaims(claims.data?.claims, authUserId)) {
+    if (hasFreshOtpClaims(claims.data?.claims, authUserId)) {
       return Object.freeze({ authUserId })
     }
   }

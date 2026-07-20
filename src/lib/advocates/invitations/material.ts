@@ -21,16 +21,18 @@ const MATERIAL_KEYS = Object.freeze([
 ] as const)
 export const ADVOCATE_INVITATION_MAXIMUM_REQUEST_BODY_LENGTH = 2_048
 
+export type AdvocateInvitationAuthType = "magiclink" | "signup"
+
 export interface AdvocateInvitationMaterial {
   capability: string
   authTokenHash: string
-  authType: "magiclink"
+  authType: AdvocateInvitationAuthType
   version: 1
 }
 
 export interface AdvocateInvitationAuthenticationRequest {
   authTokenHash: string
-  authType: "magiclink"
+  authType: AdvocateInvitationAuthType
   version: 1
 }
 
@@ -54,6 +56,12 @@ export class AdvocateInvitationMaterialError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+export function isAdvocateInvitationAuthType(
+  value: unknown,
+): value is AdvocateInvitationAuthType {
+  return value === "magiclink" || value === "signup"
 }
 
 export function isAdvocateInvitationOperationId(
@@ -83,7 +91,7 @@ function parseExactBody(rawBody: string): Record<string, unknown> | null {
 function isExactMaterial(value: AdvocateInvitationMaterial): boolean {
   return (
     value.version === 1 &&
-    value.authType === "magiclink" &&
+    isAdvocateInvitationAuthType(value.authType) &&
     CAPABILITY_PATTERN.test(value.capability) &&
     AUTH_TOKEN_HASH_PATTERN.test(value.authTokenHash)
   )
@@ -175,9 +183,10 @@ export function parseAdvocateInvitationFragment(
 
   const capability = parameters.get("capability") ?? ""
   const authTokenHash = parameters.get("auth") ?? ""
+  const authType = parameters.get("type")
   if (
     parameters.get("v") !== "1" ||
-    parameters.get("type") !== "magiclink" ||
+    !isAdvocateInvitationAuthType(authType) ||
     !CAPABILITY_PATTERN.test(capability) ||
     !AUTH_TOKEN_HASH_PATTERN.test(authTokenHash)
   ) {
@@ -187,7 +196,7 @@ export function parseAdvocateInvitationFragment(
     version: 1,
     capability,
     authTokenHash,
-    authType: "magiclink",
+    authType,
   })
 }
 
@@ -240,7 +249,7 @@ export function parseAdvocateInvitationAuthenticateBody(
     keys[1] !== "authType" ||
     keys[2] !== "version" ||
     parsed.version !== 1 ||
-    parsed.authType !== "magiclink" ||
+    !isAdvocateInvitationAuthType(parsed.authType) ||
     typeof authTokenHash !== "string" ||
     !AUTH_TOKEN_HASH_PATTERN.test(authTokenHash)
   ) {
@@ -249,7 +258,7 @@ export function parseAdvocateInvitationAuthenticateBody(
 
   const value: AdvocateInvitationAuthenticationRequest = {
     authTokenHash,
-    authType: "magiclink",
+    authType: parsed.authType,
     version: 1,
   }
   if (rawBody !== JSON.stringify(value)) return null

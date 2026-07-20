@@ -1,6 +1,9 @@
 import "server-only"
 
-import { buildAdvocateInvitationLink } from "@/lib/advocates/invitations/material"
+import {
+  buildAdvocateInvitationLink,
+  type AdvocateInvitationAuthType,
+} from "@/lib/advocates/invitations/material"
 
 import type { AdvocateInvitationEmailTemplateData } from "./emailEnvelope"
 
@@ -102,13 +105,14 @@ export function renderAdvocateInvitationEmail(options: {
   canonicalOrigin: string
   template: AdvocateInvitationEmailTemplateData
   authTokenHash: string
+  authType: AdvocateInvitationAuthType
   capability: string
 }): RenderedAdvocateInvitationEmail {
   const invitationUrl = buildAdvocateInvitationLink({
     canonicalOrigin: options.canonicalOrigin,
     material: {
       version: 1,
-      authType: "magiclink",
+      authType: options.authType,
       authTokenHash: options.authTokenHash,
       capability: options.capability,
     },

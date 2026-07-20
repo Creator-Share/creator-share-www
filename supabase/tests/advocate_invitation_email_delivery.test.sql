@@ -780,7 +780,7 @@ SELECT set_config(
     'session_id', '95000000-0000-4000-8000-000000000902',
     'amr', jsonb_build_array(
       jsonb_build_object(
-        'method', 'magiclink',
+        'method', 'otp',
         'timestamp', extract(epoch FROM clock_timestamp())::bigint
       )
     )
@@ -1034,6 +1034,60 @@ SELECT set_config(
     'session_id', '95000000-0000-4000-8000-000000000903',
     'amr', jsonb_build_array(
       jsonb_build_object(
+        'method', 'magiclink',
+        'timestamp', extract(epoch FROM clock_timestamp())::bigint
+      )
+    )
+  )::text,
+  true
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.redeem_advocate_delegate_invitation_legacy(
+      repeat('d', 64),
+      'Attempt direct delegate redemption with a non-provider AMR label'
+    )
+  $$,
+  '42501',
+  'Fresh email authentication is required to accept an invitation',
+  'the internal delegate implementation rejects a fresh magiclink label because Supabase emits otp in the verified session AMR'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.redeem_advocate_invitation(
+      repeat('d', 64),
+      'Attempt redemption with a non-provider AMR label'
+    )
+  $$,
+  '42501',
+  'Fresh email authentication is required to accept an invitation',
+  'delegate redemption rejects a fresh magiclink label because Supabase emits otp in the verified session AMR'
+);
+
+SELECT set_config(
+  'request.jwt.claim.role',
+  'authenticated',
+  true
+);
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '95000000-0000-4000-8000-000000000103',
+  true
+);
+SELECT set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '95000000-0000-4000-8000-000000000103',
+    'role', 'authenticated',
+    'iat', extract(epoch FROM clock_timestamp())::bigint,
+    'aal', 'aal1',
+    'session_id', '95000000-0000-4000-8000-000000000903',
+    'amr', jsonb_build_array(
+      jsonb_build_object(
         'method', 'token_refresh',
         'timestamp', extract(epoch FROM clock_timestamp())::bigint
       )
@@ -1065,7 +1119,7 @@ SELECT set_config(
     'session_id', '95000000-0000-4000-8000-000000000903',
     'amr', jsonb_build_array(
       jsonb_build_object(
-        'method', 'magiclink',
+        'method', 'otp',
         'timestamp', extract(epoch FROM clock_timestamp())::bigint - 901
       )
     )
@@ -1444,7 +1498,7 @@ SELECT set_config(
     'session_id', '95000000-0000-4000-8000-000000000904',
     'amr', jsonb_build_array(
       jsonb_build_object(
-        'method', 'magiclink',
+        'method', 'otp',
         'timestamp', extract(epoch FROM clock_timestamp())::bigint
       )
     )

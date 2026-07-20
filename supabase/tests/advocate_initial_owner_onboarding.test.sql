@@ -51,7 +51,8 @@ CREATE TEMP TABLE onboarding_claim (
 
 CREATE OR REPLACE FUNCTION pg_temp.set_onboarding_claims(
   target_user_id uuid,
-  include_fresh_magic_link boolean DEFAULT false
+  include_fresh_email_otp boolean DEFAULT false,
+  authentication_method text DEFAULT 'otp'
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -72,11 +73,11 @@ BEGIN
     'aal', 'aal1'
   );
 
-  IF include_fresh_magic_link THEN
+  IF include_fresh_email_otp THEN
     v_claims := v_claims || jsonb_build_object(
       'amr', jsonb_build_array(
         jsonb_build_object(
-          'method', 'magiclink',
+          'method', authentication_method,
           'timestamp', v_now_epoch
         )
       )
@@ -116,6 +117,8 @@ SELECT extensions.ok(
       'public.reissue_advocate_initial_owner_invitation(uuid,uuid,bigint,text,bytea,bytea,bytea,bytea,smallint,smallint,smallint,text,text,text,text,text,text)'::regprocedure,
       'public.revoke_advocate_initial_owner_invitation(uuid,uuid,bigint,text,text,text,text,text,text)'::regprocedure,
       'public.redeem_advocate_invitation(text,text,text,text,text,text,text,uuid)'::regprocedure,
+      'public.redeem_advocate_delegate_invitation_legacy(text,text,text,text,text,text,text)'::regprocedure,
+      'private.redeem_advocate_invitation_once_legacy(text,text,text,text,text,text,text)'::regprocedure,
       'public.recover_advocate_invitation_redemption(uuid)'::regprocedure,
       'public.start_advocate_portal_provisioning(uuid,bigint,uuid,text)'::regprocedure,
       'public.apply_creator_share_advocate_lifecycle_action_legacy(uuid,bigint,public.creator_share_advocate_lifecycle_action,text,uuid,text,text,text)'::regprocedure,
@@ -191,6 +194,16 @@ SELECT extensions.ok(
   AND NOT has_function_privilege(
     'service_role',
     'public.recover_advocate_invitation_redemption(uuid)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated',
+    'public.redeem_advocate_delegate_invitation_legacy(text,text,text,text,text,text,text)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'service_role',
+    'public.redeem_advocate_delegate_invitation_legacy(text,text,text,text,text,text,text)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
@@ -1377,6 +1390,29 @@ SELECT extensions.throws_ok(
 );
 
 SELECT pg_temp.set_onboarding_claims(
+  'a7300000-0000-4000-8000-000000000002'::uuid,
+  true,
+  'magiclink'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.redeem_advocate_invitation(
+      plaintext_capability => repeat('c', 64),
+      change_reason => 'Reject a non-provider AMR label',
+      request_id => 'a7300000-0000-4000-8000-000000000107',
+      trace_id => 'initial-owner-wrong-amr-trace',
+      redemption_operation_id =>
+        'a7300000-0000-4000-8000-000000000107'::uuid
+    )
+  $$,
+  '42501',
+  'Fresh email authentication is required to accept an invitation',
+  'initial-owner redemption rejects a fresh magiclink label because Supabase emits otp in the verified session AMR'
+);
+
+SELECT pg_temp.set_onboarding_claims(
   'a7300000-0000-4000-8000-000000000002'::uuid
 );
 
@@ -1394,7 +1430,7 @@ SELECT extensions.throws_ok(
   $$,
   '42501',
   'Fresh email authentication is required to accept an invitation',
-  'initial-owner redemption requires a fresh magic-link authentication proof'
+  'initial-owner redemption requires a fresh email otp authentication proof'
 );
 
 UPDATE auth.users
@@ -1605,7 +1641,7 @@ SELECT extensions.is(
     WHERE receipt.operation_id =
       'a7300000-0000-4000-8000-000000000105'::uuid
   ),
-  'exact operation replay returns the immutable result without a newly fresh magic-link event'
+  'exact operation replay returns the immutable result without a newly fresh email otp event'
 );
 
 SELECT extensions.is(

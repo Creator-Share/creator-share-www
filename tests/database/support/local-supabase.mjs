@@ -1164,7 +1164,7 @@ export async function configureAuthenticatedTransaction(client, actor) {
   })
 }
 
-export async function configureFreshMagicLinkAuthenticatedTransaction(
+export async function configureFreshEmailOtpAuthenticatedTransaction(
   client,
   actor,
 ) {
@@ -1201,7 +1201,7 @@ export async function configureFreshMagicLinkAuthenticatedTransaction(
       iat: authenticatedAtEpoch,
       amr: [
         {
-          method: "magiclink",
+          method: "otp",
           timestamp: authenticatedAtEpoch,
         },
       ],

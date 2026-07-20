@@ -186,7 +186,11 @@ function dependencies(
     repository: repository(),
     authProvider: {
       async generateMagicLink() {
-        return { userId: USER_ID, hashedToken: AUTH_TOKEN_HASH }
+        return {
+          userId: USER_ID,
+          hashedToken: AUTH_TOKEN_HASH,
+          authType: "magiclink",
+        }
       },
     },
     transport: acceptingTransport,
@@ -306,6 +310,7 @@ test.describe("advocate invitation email envelopes", () => {
         claimedJob().templateData,
       ),
       authTokenHash: AUTH_TOKEN_HASH,
+      authType: "magiclink",
       capability: CAPABILITY,
     })
     const url = new URL(rendered.invitationUrl)
@@ -331,6 +336,7 @@ test.describe("advocate invitation email envelopes", () => {
         },
       ),
       authTokenHash: AUTH_TOKEN_HASH,
+      authType: "signup",
       capability: CAPABILITY,
     })
     expect(rendered.subject).toBe("Claim your Creator Share advocate portal")
@@ -370,7 +376,11 @@ test.describe("advocate invitation auth and persistence adapters", () => {
         redirectTo: "https://creatorshare.com/advocate-invitation",
         createUserIfMissing: true,
       }),
-    ).resolves.toEqual({ userId: USER_ID, hashedToken: AUTH_TOKEN_HASH })
+    ).resolves.toEqual({
+      userId: USER_ID,
+      hashedToken: AUTH_TOKEN_HASH,
+      authType: "magiclink",
+    })
     expect(calls).toEqual([
       {
         type: "magiclink",
@@ -380,6 +390,68 @@ test.describe("advocate invitation auth and persistence adapters", () => {
         },
       },
     ])
+  })
+
+  test("preserves the provider signup proof for a newly created account", async () => {
+    const provider = createSupabaseAdvocateInvitationAuthProvider({
+      auth: {
+        admin: {
+          async generateLink() {
+            return {
+              data: {
+                user: { id: USER_ID, email: RECIPIENT },
+                properties: {
+                  verification_type: "signup",
+                  hashed_token: AUTH_TOKEN_HASH,
+                },
+              },
+              error: null,
+            }
+          },
+        },
+      },
+    } as unknown as SupabaseClient)
+
+    await expect(
+      provider.generateMagicLink({
+        recipientEmail: RECIPIENT,
+        redirectTo: "https://creatorshare.com/advocate-invitation",
+        createUserIfMissing: true,
+      }),
+    ).resolves.toEqual({
+      userId: USER_ID,
+      hashedToken: AUTH_TOKEN_HASH,
+      authType: "signup",
+    })
+  })
+
+  test("rejects an unrelated provider verification type", async () => {
+    const provider = createSupabaseAdvocateInvitationAuthProvider({
+      auth: {
+        admin: {
+          async generateLink() {
+            return {
+              data: {
+                user: { id: USER_ID, email: RECIPIENT },
+                properties: {
+                  verification_type: "recovery",
+                  hashed_token: AUTH_TOKEN_HASH,
+                },
+              },
+              error: null,
+            }
+          },
+        },
+      },
+    } as unknown as SupabaseClient)
+
+    await expect(
+      provider.generateMagicLink({
+        recipientEmail: RECIPIENT,
+        redirectTo: "https://creatorshare.com/advocate-invitation",
+        createUserIfMissing: true,
+      }),
+    ).rejects.toMatchObject({ targetUnavailable: true })
   })
 
   test("rejects a provider response for a different account email", async () => {
@@ -605,7 +677,11 @@ test.describe("advocate invitation delivery worker", () => {
           async generateMagicLink(options) {
             stages.push("auth")
             expect(options.createUserIfMissing).toBe(true)
-            return { userId: USER_ID, hashedToken: AUTH_TOKEN_HASH }
+            return {
+              userId: USER_ID,
+              hashedToken: AUTH_TOKEN_HASH,
+              authType: "signup",
+            }
           },
         },
         repository: repository({
@@ -641,6 +717,9 @@ test.describe("advocate invitation delivery worker", () => {
     expect(stages).toEqual(["auth", "bind", "begin", "send", "settle"])
     expect(new URL(deliveredUrl).search).toBe("")
     expect(new URL(deliveredUrl).hash).toContain(CAPABILITY)
+    expect(
+      new URLSearchParams(new URL(deliveredUrl).hash.slice(1)).get("type"),
+    ).toBe("signup")
   })
 
   test("delivers an initial owner invitation through the same exact account fence", async () => {
@@ -661,7 +740,11 @@ test.describe("advocate invitation delivery worker", () => {
         authProvider: {
           async generateMagicLink() {
             stages.push("auth")
-            return { userId: USER_ID, hashedToken: AUTH_TOKEN_HASH }
+            return {
+              userId: USER_ID,
+              hashedToken: AUTH_TOKEN_HASH,
+              authType: "magiclink",
+            }
           },
         },
         repository: repository({
@@ -707,7 +790,11 @@ test.describe("advocate invitation delivery worker", () => {
         authProvider: {
           async generateMagicLink() {
             authCalled = true
-            return { userId: USER_ID, hashedToken: AUTH_TOKEN_HASH }
+            return {
+              userId: USER_ID,
+              hashedToken: AUTH_TOKEN_HASH,
+              authType: "magiclink",
+            }
           },
         },
         repository: repository({
@@ -914,7 +1001,11 @@ test.describe("advocate invitation delivery worker", () => {
         authProvider: {
           async generateMagicLink() {
             authCalled = true
-            return { userId: USER_ID, hashedToken: AUTH_TOKEN_HASH }
+            return {
+              userId: USER_ID,
+              hashedToken: AUTH_TOKEN_HASH,
+              authType: "magiclink",
+            }
           },
         },
         repository: repository({

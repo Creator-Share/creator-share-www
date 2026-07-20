@@ -141,7 +141,7 @@ export function createAdvocateInvitationInterstitial(
         const parsedAuthTokenHash = parameters.get("auth") || "";
         const parsedAuthType = parameters.get("type") || "";
         const version = parameters.get("v");
-        if (!validEnvelope || !exactKeys || !/^[0-9a-f]{64}$/.test(parsedCapability) || parsedAuthTokenHash.length < 32 || parsedAuthTokenHash.length > ${maximumAuthTokenHashLength} || !/^[A-Za-z0-9._~-]+$/.test(parsedAuthTokenHash) || parsedAuthType !== "magiclink" || version !== "1") return null;
+        if (!validEnvelope || !exactKeys || !/^[0-9a-f]{64}$/.test(parsedCapability) || parsedAuthTokenHash.length < 32 || parsedAuthTokenHash.length > ${maximumAuthTokenHashLength} || !/^[A-Za-z0-9._~-]+$/.test(parsedAuthTokenHash) || (parsedAuthType !== "magiclink" && parsedAuthType !== "signup") || version !== "1") return null;
         return { capability: parsedCapability, authTokenHash: parsedAuthTokenHash, authType: parsedAuthType };
       };
 

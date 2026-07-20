@@ -56,6 +56,10 @@ const MATERIAL = Object.freeze({
   authType: "magiclink" as const,
   version: 1 as const,
 })
+const SIGNUP_MATERIAL = Object.freeze({
+  ...MATERIAL,
+  authType: "signup" as const,
+})
 const OPERATION_ID = "11111111-1111-4111-8111-111111111111"
 const AUTHENTICATION_REQUEST = Object.freeze({
   authTokenHash: MATERIAL.authTokenHash,
@@ -89,6 +93,11 @@ test.describe("advocate invitation secret transport", () => {
     expect(link.slice(0, link.indexOf("#"))).not.toContain(MATERIAL.capability)
     expect(link.slice(0, link.indexOf("#"))).not.toContain(
       MATERIAL.authTokenHash,
+    )
+
+    const signupFragment = buildAdvocateInvitationFragment(SIGNUP_MATERIAL)
+    expect(parseAdvocateInvitationFragment(signupFragment)).toEqual(
+      SIGNUP_MATERIAL,
     )
   })
 
@@ -200,6 +209,22 @@ test.describe("advocate invitation secret transport", () => {
     expect(
       parseAdvocateInvitationAuthenticateBody(
         JSON.stringify({ ...AUTHENTICATION_REQUEST, authTokenHash: "short" }),
+      ),
+    ).toBeNull()
+    expect(
+      parseAdvocateInvitationAuthenticateBody(
+        JSON.stringify({
+          ...AUTHENTICATION_REQUEST,
+          authType: "signup",
+        }),
+      ),
+    ).toEqual({
+      ...AUTHENTICATION_REQUEST,
+      authType: "signup",
+    })
+    expect(
+      parseAdvocateInvitationAuthenticateBody(
+        JSON.stringify({ ...AUTHENTICATION_REQUEST, authType: "email" }),
       ),
     ).toBeNull()
     expect(
@@ -440,6 +465,38 @@ test.describe("advocate invitation interstitial", () => {
         ),
       ),
     ).toBeNull()
+  })
+
+  test("carries a signup proof from the fragment into authentication", async ({
+    page,
+  }) => {
+    const authenticationBodies: unknown[] = []
+    await page.route(
+      `**${ADVOCATE_INVITATION_AUTHENTICATE_PATH}`,
+      async (route) => {
+        authenticationBodies.push(route.request().postDataJSON())
+        await route.fulfill({
+          status: 410,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: false, code: "invalid_or_expired" }),
+        })
+      },
+    )
+
+    await page.goto(
+      `${ADVOCATE_INVITATION_PATH}${buildAdvocateInvitationFragment(SIGNUP_MATERIAL)}`,
+    )
+    await page.getByRole("button", { name: "Continue securely" }).click()
+
+    await expect.poll(() => authenticationBodies.length).toBe(1)
+    expect(authenticationBodies).toEqual([
+      {
+        authTokenHash: SIGNUP_MATERIAL.authTokenHash,
+        authType: "signup",
+        version: 1,
+      },
+    ])
+    await expect(page.getByRole("status")).toContainText("invalid or expired")
   })
 
   test("recovers a committed acceptance after the redemption response is lost", async ({
