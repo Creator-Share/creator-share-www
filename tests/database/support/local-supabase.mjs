@@ -20,6 +20,7 @@ const DEFAULT_DATABASE_DROP_TIMEOUT_MILLISECONDS = 4_000
 const DATABASE_LIFECYCLE_TERMINATION_GRACE_MILLISECONDS = 500
 const MAXIMUM_CAPTURED_PROCESS_OUTPUT_BYTES = 1024 * 1024
 const POSTGRES_IDENTIFIER_PATTERN = /^[a-z][a-z0-9_]{0,62}$/
+const TRANSIENT_DATABASE_PREFIX_PATTERN = /^[a-z][a-z0-9]{1,15}$/
 const PROJECT_ID_PATTERN = /^[A-Za-z0-9_.-]{1,63}$/
 const CONTAINER_NAME_PATTERN = /^supabase_db_[A-Za-z0-9_.-]+$/
 const UUID_PATTERN =
@@ -636,9 +637,15 @@ function loadSourceAppliedMigrationVersions(discovery, timeoutMilliseconds) {
   return Object.freeze(versions)
 }
 
-function safeApplicationName(label) {
+function safeApplicationName(label, prefix) {
   if (typeof label !== "string" || label !== label.trim()) {
     throw new Error("postgres_client_label_invalid")
+  }
+  if (
+    typeof prefix !== "string" ||
+    !TRANSIENT_DATABASE_PREFIX_PATTERN.test(prefix)
+  ) {
+    throw new Error("postgres_client_database_prefix_invalid")
   }
   const normalized = label
     .toLowerCase()
@@ -648,7 +655,7 @@ function safeApplicationName(label) {
   if (normalized.length === 0) {
     throw new Error("postgres_client_label_invalid")
   }
-  return `ff040_${normalized}_${randomBytes(6).toString("hex")}`
+  return `${prefix}_${normalized}_${randomBytes(6).toString("hex")}`
 }
 
 function assertConnectedClient(client) {
@@ -774,6 +781,13 @@ export async function discoverLocalSupabase(options = {}) {
 }
 
 export async function createTransientLocalSupabaseDatabase(options = {}) {
+  const databasePrefix = options.databasePrefix ?? "ff040"
+  if (
+    typeof databasePrefix !== "string" ||
+    !TRANSIENT_DATABASE_PREFIX_PATTERN.test(databasePrefix)
+  ) {
+    throw new Error("transient_supabase_database_prefix_invalid")
+  }
   const discovery = await discoverLocalSupabase(options)
   const cloneTimeoutMilliseconds = boundedInteger(
     options.cloneTimeoutMilliseconds,
@@ -782,7 +796,7 @@ export async function createTransientLocalSupabaseDatabase(options = {}) {
     600_000,
     "transient_supabase_clone_timeout",
   )
-  const databaseName = `ff040_${randomBytes(12).toString("hex")}`
+  const databaseName = `${databasePrefix}_${randomBytes(12).toString("hex")}`
   if (!POSTGRES_IDENTIFIER_PATTERN.test(databaseName)) {
     throw new Error("transient_supabase_database_name_invalid")
   }
@@ -958,6 +972,7 @@ GRANT ALL PRIVILEGES ON TABLE auth.users, auth.sessions TO postgres;
   const descriptor = {
     workspace: discovery.workspace,
     projectId: discovery.projectId,
+    databasePrefix,
     databasePort: discovery.databasePort,
     sourceDatabaseName: discovery.sourceDatabaseName,
     sourceAppliedMigrationVersions: discovery.sourceAppliedMigrationVersions,
@@ -1054,7 +1069,12 @@ export async function createPgClient(database, label, options = {}) {
     throw new Error("transient_supabase_database_disposed")
   }
 
-  const applicationName = safeApplicationName(label)
+  const applicationName = safeApplicationName(
+    label,
+    typeof database === "object" && database !== null
+      ? (database.databasePrefix ?? "local")
+      : "local",
+  )
   const client = new Client({
     connectionString: parsedDatabase.url.toString(),
     application_name: applicationName,
@@ -1142,6 +1162,62 @@ export async function configureAuthenticatedTransaction(client, actor) {
     session_id: actor.sessionId,
     aal: actor.aal ?? "aal1",
   })
+}
+
+export async function configureFreshMagicLinkAuthenticatedTransaction(
+  client,
+  actor,
+) {
+  if (
+    !isRecord(actor) ||
+    typeof actor.userId !== "string" ||
+    !UUID_PATTERN.test(actor.userId) ||
+    typeof actor.sessionId !== "string" ||
+    !UUID_PATTERN.test(actor.sessionId) ||
+    (actor.aal !== undefined && actor.aal !== "aal1" && actor.aal !== "aal2")
+  ) {
+    throw new Error("authenticated_transaction_actor_invalid")
+  }
+
+  assertConnectedClient(client)
+  await client.query("BEGIN")
+  try {
+    const timestamp = await client.query(
+      `SELECT extract(epoch FROM clock_timestamp())::bigint::text AS epoch`,
+    )
+    const authenticatedAtEpoch = Number(timestamp.rows[0]?.epoch)
+    if (
+      timestamp.rowCount !== 1 ||
+      !Number.isSafeInteger(authenticatedAtEpoch) ||
+      authenticatedAtEpoch < 1
+    ) {
+      throw new Error("postgres_database_clock_invalid")
+    }
+    const claims = {
+      role: "authenticated",
+      sub: actor.userId,
+      session_id: actor.sessionId,
+      aal: actor.aal ?? "aal1",
+      iat: authenticatedAtEpoch,
+      amr: [
+        {
+          method: "magiclink",
+          timestamp: authenticatedAtEpoch,
+        },
+      ],
+    }
+    await client.query("SET LOCAL ROLE authenticated")
+    await client.query(
+      `SELECT
+         set_config('request.jwt.claim.role', 'authenticated', true),
+         set_config('request.jwt.claim.sub', $1, true),
+         set_config('request.jwt.claims', $2, true)`,
+      [actor.userId, JSON.stringify(claims)],
+    )
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined)
+    throw error
+  }
 }
 
 export async function configureServiceRoleTransaction(client) {

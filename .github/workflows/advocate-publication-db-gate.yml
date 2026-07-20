@@ -8,7 +8,12 @@ on:
       - "supabase/migrations/*.sql"
       - "supabase/tests/*publication*.sql"
       - "supabase/tests/**/*publication*"
+      - "supabase/tests/*initial_owner*.sql"
+      - "supabase/tests/**/*initial_owner*"
+      - "supabase/tests/*invitation*.sql"
+      - "supabase/tests/**/*invitation*"
       - "tests/database/**/*publication*"
+      - "tests/database/**/*initial-owner*"
       - "tests/database/support/*.mjs"
       - "supabase/config.toml"
       - "supabase/seed.sql"
@@ -33,7 +38,7 @@ jobs:
   publication-authority:
     name: Publication authority database tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -59,6 +64,27 @@ jobs:
         run: >-
           yarn supabase start
           --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+
+      - name: Run focused initial owner database tests
+        run: |
+          yarn supabase test db \
+            --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK" \
+            supabase/tests/advocate_initial_owner_onboarding.test.sql \
+            supabase/tests/advocate_invitation_email_delivery.test.sql
+
+      - name: Run initial owner concurrency harness
+        env:
+          ADVOCATE_INITIAL_OWNER_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-initial-owner-concurrency-evidence.json
+        run: yarn test:advocate:initial-owner-concurrency
+
+      - name: Upload sanitized initial owner concurrency evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-initial-owner-concurrency-evidence
+          path: ${{ runner.temp }}/advocate-initial-owner-concurrency-evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Run focused publication database tests
         run: |

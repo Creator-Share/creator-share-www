@@ -1,15 +1,20 @@
 import assert from "node:assert/strict"
-import { createHash, randomUUID } from "node:crypto"
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
-import { dirname, resolve } from "node:path"
+import { randomUUID } from "node:crypto"
+import { readFile } from "node:fs/promises"
+import { resolve } from "node:path"
 
 import {
-  closePgClients,
   configureAuthenticatedTransaction,
   configureServiceRoleTransaction,
   createTransientLocalSupabaseDatabase,
-  disposeActiveTransientLocalSupabaseDatabases,
 } from "./support/local-supabase.mjs"
+import {
+  clearConcurrencyGateEvidence,
+  installConcurrencyGateTerminationCleanup,
+  loadConcurrencyGateProvenance,
+  withPgClients as withClients,
+  writeConcurrencyGateEvidence,
+} from "./support/concurrency-gate.mjs"
 import {
   holdAdvisoryLock,
   holdRowLock,
@@ -24,6 +29,10 @@ const FIXTURE_PATH = resolve(
   WORKSPACE,
   "tests/database/fixtures/advocate-publication-concurrency.sql",
 )
+const EVIDENCE_OUTPUT_PATH = process.env
+  .ADVOCATE_PUBLICATION_CONCURRENCY_EVIDENCE_PATH
+  ? resolve(process.env.ADVOCATE_PUBLICATION_CONCURRENCY_EVIDENCE_PATH)
+  : null
 const OPERATION_LOCK_SEED = 731929
 const RUN_LOCK_SEED = 731927
 const QUEUE_LOCK_SEED = 731928
@@ -364,17 +373,6 @@ async function countAuditValueOccurrences(client, value) {
     total += result.rows[0].occurrence_count
   }
   return total
-}
-
-async function withClients(database, labels, callback) {
-  const clients = await Promise.all(
-    labels.map((label) => database.createClient(label)),
-  )
-  try {
-    return await callback(...clients)
-  } finally {
-    await closePgClients(clients)
-  }
 }
 
 async function differentOperationStartRace(database, portal) {
@@ -1281,137 +1279,21 @@ async function deploymentRolloverRace(database, portal) {
   )
 }
 
-function evidenceOutputPath() {
-  const target = process.env.ADVOCATE_PUBLICATION_CONCURRENCY_EVIDENCE_PATH
-  return target ? resolve(target) : null
-}
-
-async function clearExistingEvidence() {
-  const outputPath = evidenceOutputPath()
-  if (outputPath) await rm(outputPath, { force: true })
-}
-
-async function loadGateProvenance(database) {
-  const migrationDirectory = resolve(WORKSPACE, "supabase/migrations")
-  const migrationFiles = (await readdir(migrationDirectory))
-    .filter((fileName) => fileName.endsWith(".sql"))
-    .sort()
-  assert.equal(migrationFiles.length > 0, true)
-  assert.equal(
-    migrationFiles.every((fileName) =>
-      /^[0-9]{14}_[a-z0-9_-]+\.sql$/.test(fileName),
-    ),
-    true,
-  )
-  const expectedMigrationVersions = migrationFiles.map((fileName) =>
-    fileName.slice(0, 14),
-  )
-  assert.equal(
-    new Set(expectedMigrationVersions).size,
-    expectedMigrationVersions.length,
-  )
-  const migrationDigest = createHash("sha256")
-  for (const fileName of migrationFiles) {
-    migrationDigest.update(fileName, "utf8")
-    migrationDigest.update("\0", "utf8")
-    migrationDigest.update(
-      await readFile(resolve(migrationDirectory, fileName)),
-    )
-    migrationDigest.update("\0", "utf8")
-  }
-
-  assert.deepEqual(
-    database.sourceAppliedMigrationVersions,
-    expectedMigrationVersions,
-  )
-
-  const postgresqlMajorVersion = await withClients(
-    database,
-    ["provenance_reader"],
-    async (client) => {
-      const result = await client.query(
-        `SELECT current_setting('server_version_num')::integer AS version_num`,
-      )
-      assert.equal(result.rowCount, 1)
-      return Math.trunc(result.rows[0].version_num / 10_000)
-    },
-  )
-  assert.equal(postgresqlMajorVersion, 15)
-
-  return Object.freeze({
-    postgresqlMajorVersion,
-    migrationBoundary: migrationFiles.at(-1).replace(/\.sql$/, ""),
-    migrationSetSha256: migrationDigest.digest("hex"),
-  })
-}
-
-function installTerminationCleanup(getDatabase) {
-  const listeners = new Map()
-  let handlingSignal = false
-  for (const [signal, exitCode] of [
-    ["SIGINT", 130],
-    ["SIGTERM", 143],
-  ]) {
-    const listener = () => {
-      if (handlingSignal) return
-      handlingSignal = true
-      const hardStop = setTimeout(() => process.exit(exitCode), 20_000)
-      const database = getDatabase()
-      Promise.resolve(
-        database
-          ? database.dispose()
-          : disposeActiveTransientLocalSupabaseDatabases(),
-      )
-        .catch(() => {
-          process.stderr.write(
-            "FF-040 transient database cleanup failed during termination\n",
-          )
-        })
-        .finally(() => {
-          clearTimeout(hardStop)
-          process.exit(exitCode)
-        })
-    }
-    listeners.set(signal, listener)
-    process.once(signal, listener)
-  }
-  return () => {
-    for (const [signal, listener] of listeners) {
-      process.removeListener(signal, listener)
-    }
-  }
-}
-
-async function writeEvidence(scenarios, provenance) {
-  const outputPath = evidenceOutputPath()
-  if (!outputPath) return
-  const evidence = {
-    schemaVersion: 1,
-    gate: "FF-040",
-    outcome: "passed",
-    database: `disposable_local_supabase_postgresql_${provenance.postgresqlMajorVersion}`,
-    synchronization: "server_observed_blocking_pids",
-    migrationBoundary: provenance.migrationBoundary,
-    migrationSetSha256: provenance.migrationSetSha256,
-    completedAt: new Date().toISOString(),
-    scenarios,
-  }
-  await mkdir(dirname(outputPath), { recursive: true })
-  await writeFile(outputPath, `${JSON.stringify(evidence, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  })
-}
-
 async function main() {
   let database
-  const removeTerminationCleanup = installTerminationCleanup(() => database)
+  const removeTerminationCleanup = installConcurrencyGateTerminationCleanup({
+    gate: "FF-040",
+    getDatabase: () => database,
+  })
   try {
-    await clearExistingEvidence()
+    await clearConcurrencyGateEvidence(EVIDENCE_OUTPUT_PATH)
     database = await createTransientLocalSupabaseDatabase({
       workspace: WORKSPACE,
+      databasePrefix: "ff040",
     })
-    const provenance = await loadGateProvenance(database)
+    const provenance = await loadConcurrencyGateProvenance(database, {
+      workspace: WORKSPACE,
+    })
     const fixtureSql = await readFile(FIXTURE_PATH, "utf8")
     await database.executeSupabaseAdminSql(fixtureSql)
 
@@ -1448,7 +1330,12 @@ async function main() {
     )
     await database.dispose()
     database = undefined
-    await writeEvidence(scenarios, provenance)
+    await writeConcurrencyGateEvidence({
+      gate: "FF-040",
+      outputPath: EVIDENCE_OUTPUT_PATH,
+      provenance,
+      scenarios,
+    })
     process.stdout.write(
       "FF-040 publication authority concurrency gate passed\n",
     )
