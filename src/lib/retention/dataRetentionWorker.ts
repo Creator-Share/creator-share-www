@@ -62,6 +62,7 @@ export interface DataRetentionCounts {
   sponsorPasswordlessReservationsDeleted: number
   sponsorPasswordlessVerificationAttemptsDeleted: number
   advocateInvitationAuthenticationAttemptsDeleted: number
+  emailProofIssuanceGatesDeleted: number
 }
 
 export interface DataRetentionWorkerResult {
@@ -201,37 +202,60 @@ function applyStepCounts(
       "passwordless_verification_attempts_deleted",
       "recent_auth_receipts_deleted",
     ]
-    const currentKeys = [
+    const advocateKeys = [
       "advocate_invitation_authentication_attempts_deleted",
       ...legacyKeys,
+    ].sort()
+    const currentKeys = [
+      "email_proof_issuance_gates_deleted",
+      ...advocateKeys,
     ].sort()
     const suppliedKeys = Object.keys(row).sort()
     const isLegacyShape =
       suppliedKeys.length === legacyKeys.length &&
       suppliedKeys.every((key, index) => key === legacyKeys[index])
+    const isAdvocateShape =
+      suppliedKeys.length === advocateKeys.length &&
+      suppliedKeys.every((key, index) => key === advocateKeys[index])
     const isCurrentShape =
       suppliedKeys.length === currentKeys.length &&
       suppliedKeys.every((key, index) => key === currentKeys[index])
-    if (!isLegacyShape && !isCurrentShape) resultShapeError()
+    if (!isLegacyShape && !isAdvocateShape && !isCurrentShape) {
+      resultShapeError()
+    }
 
-    counts.sponsorRecentAuthenticationReceiptsDeleted = boundedCount(
+    const recentAuthenticationReceiptsDeleted = boundedCount(
       row.recent_auth_receipts_deleted,
       batchSize,
     )
-    counts.sponsorPasswordlessReservationsDeleted = boundedCount(
+    const passwordlessReservationsDeleted = boundedCount(
       row.passwordless_reservations_deleted,
       batchSize,
     )
-    counts.sponsorPasswordlessVerificationAttemptsDeleted = boundedCount(
+    const passwordlessVerificationAttemptsDeleted = boundedCount(
       row.passwordless_verification_attempts_deleted,
       batchSize,
     )
-    counts.advocateInvitationAuthenticationAttemptsDeleted = isCurrentShape
-      ? boundedCount(
-          row.advocate_invitation_authentication_attempts_deleted,
-          batchSize,
-        )
+    const advocateInvitationAuthenticationAttemptsDeleted =
+      isAdvocateShape || isCurrentShape
+        ? boundedCount(
+            row.advocate_invitation_authentication_attempts_deleted,
+            batchSize,
+          )
+        : 0
+    const emailProofIssuanceGatesDeleted = isCurrentShape
+      ? boundedCount(row.email_proof_issuance_gates_deleted, batchSize)
       : 0
+
+    counts.sponsorRecentAuthenticationReceiptsDeleted =
+      recentAuthenticationReceiptsDeleted
+    counts.sponsorPasswordlessReservationsDeleted =
+      passwordlessReservationsDeleted
+    counts.sponsorPasswordlessVerificationAttemptsDeleted =
+      passwordlessVerificationAttemptsDeleted
+    counts.advocateInvitationAuthenticationAttemptsDeleted =
+      advocateInvitationAuthenticationAttemptsDeleted
+    counts.emailProofIssuanceGatesDeleted = emailProofIssuanceGatesDeleted
     return
   }
   const exposuresDeleted = boundedCount(row.exposures_deleted, batchSize)
@@ -346,6 +370,7 @@ export function createEmptyDataRetentionCounts(): DataRetentionCounts {
     sponsorPasswordlessReservationsDeleted: 0,
     sponsorPasswordlessVerificationAttemptsDeleted: 0,
     advocateInvitationAuthenticationAttemptsDeleted: 0,
+    emailProofIssuanceGatesDeleted: 0,
   }
 }
 

@@ -960,7 +960,8 @@ SELECT extensions.ok(
       "recent_auth_receipts_deleted": 0,
       "passwordless_reservations_deleted": 0,
       "passwordless_verification_attempts_deleted": 0,
-      "advocate_invitation_authentication_attempts_deleted": 0
+      "advocate_invitation_authentication_attempts_deleted": 0,
+      "email_proof_issuance_gates_deleted": 0
     }'::jsonb
       AND result ->> 'step_key' = 'sponsor_authentication'
     FROM retention_run_one_steps
@@ -1149,7 +1150,8 @@ SELECT extensions.ok(
         "recent_auth_receipts_deleted": 0,
         "passwordless_reservations_deleted": 0,
         "passwordless_verification_attempts_deleted": 0,
-        "advocate_invitation_authentication_attempts_deleted": 0
+        "advocate_invitation_authentication_attempts_deleted": 0,
+        "email_proof_issuance_gates_deleted": 0
       }'::jsonb
       AND has_more IS NULL
       AND oldest_expired_at IS NULL

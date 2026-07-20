@@ -38,7 +38,8 @@ SELECT extensions.ok(
       "recent_auth_receipts_deleted": 0,
       "passwordless_reservations_deleted": 0,
       "passwordless_verification_attempts_deleted": 0,
-      "advocate_invitation_authentication_attempts_deleted": 0
+      "advocate_invitation_authentication_attempts_deleted": 0,
+      "email_proof_issuance_gates_deleted": 0
     }'::jsonb
   AND private.data_retention_counts_are_valid(
     'sponsor_authentication',
@@ -46,7 +47,8 @@ SELECT extensions.ok(
       "recent_auth_receipts_deleted": 5000,
       "passwordless_reservations_deleted": 5000,
       "passwordless_verification_attempts_deleted": 5000,
-      "advocate_invitation_authentication_attempts_deleted": 5000
+      "advocate_invitation_authentication_attempts_deleted": 5000,
+      "email_proof_issuance_gates_deleted": 5000
     }'::jsonb
   )
   AND NOT private.data_retention_counts_are_valid(
@@ -55,7 +57,8 @@ SELECT extensions.ok(
       "recent_auth_receipts_deleted": 5001,
       "passwordless_reservations_deleted": 0,
       "passwordless_verification_attempts_deleted": 0,
-      "advocate_invitation_authentication_attempts_deleted": 0
+      "advocate_invitation_authentication_attempts_deleted": 0,
+      "email_proof_issuance_gates_deleted": 0
     }'::jsonb
   )
   AND NOT private.data_retention_counts_are_valid(
@@ -64,7 +67,8 @@ SELECT extensions.ok(
       "recent_auth_receipts_deleted": 0,
       "passwordless_reservations_deleted": 0,
       "passwordless_verification_attempts_deleted": 0,
-      "advocate_invitation_authentication_attempts_deleted": 5001
+      "advocate_invitation_authentication_attempts_deleted": 5001,
+      "email_proof_issuance_gates_deleted": 0
     }'::jsonb
   ),
   'the retention vocabulary accepts only bounded sponsor authentication counts'
@@ -346,6 +350,7 @@ SELECT extensions.ok(
       AND passwordless_reservations_deleted = 1
       AND passwordless_verification_attempts_deleted = 1
       AND advocate_invitation_authentication_attempts_deleted = 1
+      AND email_proof_issuance_gates_deleted = 0
     FROM sponsor_authentication_first_purge
   ),
   'one purge call deletes at most one eligible row from each evidence table'
@@ -392,6 +397,7 @@ SELECT extensions.ok(
       AND passwordless_reservations_deleted = 1
       AND passwordless_verification_attempts_deleted = 1
       AND advocate_invitation_authentication_attempts_deleted = 1
+      AND email_proof_issuance_gates_deleted = 0
     FROM sponsor_authentication_second_purge
   ),
   'a later bounded purge removes the remaining eligible evidence'
@@ -403,6 +409,7 @@ SELECT extensions.ok(
       AND passwordless_reservations_deleted = 0
       AND passwordless_verification_attempts_deleted = 0
       AND advocate_invitation_authentication_attempts_deleted = 0
+      AND email_proof_issuance_gates_deleted = 0
     FROM public.purge_expired_sponsor_authentication_evidence(10)
   ),
   'replaying the sponsor authentication purge is idempotent'
@@ -438,6 +445,7 @@ SELECT extensions.ok(
       AND passwordless_reservations_deleted = 0
       AND passwordless_verification_attempts_deleted = 0
       AND advocate_invitation_authentication_attempts_deleted = 1
+      AND email_proof_issuance_gates_deleted = 0
     FROM public.purge_expired_sponsor_authentication_evidence(10)
   ),
   'the scheduled purge removes advocate-only expired evidence without new authentication traffic'
@@ -590,7 +598,8 @@ SELECT extensions.ok(
         "recent_auth_receipts_deleted": 1,
         "passwordless_reservations_deleted": 1,
         "passwordless_verification_attempts_deleted": 1,
-        "advocate_invitation_authentication_attempts_deleted": 1
+        "advocate_invitation_authentication_attempts_deleted": 1,
+        "email_proof_issuance_gates_deleted": 0
       }'::jsonb
       AND (result ->> 'has_more')::boolean = false
       AND result -> 'oldest_expired_at' = 'null'::jsonb
@@ -614,7 +623,8 @@ SELECT extensions.ok(
         "recent_auth_receipts_deleted": 1,
         "passwordless_reservations_deleted": 1,
         "passwordless_verification_attempts_deleted": 1,
-        "advocate_invitation_authentication_attempts_deleted": 1
+        "advocate_invitation_authentication_attempts_deleted": 1,
+        "email_proof_issuance_gates_deleted": 0
       }'::jsonb
       AND event.request_id = 'sponsor-authentication-retention-run'
       AND event.trace_id = 'sponsor-authentication-retention-trace'
