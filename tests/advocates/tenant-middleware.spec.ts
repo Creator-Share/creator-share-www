@@ -307,32 +307,56 @@ test.describe("advocate tenant middleware", () => {
     expect(response.headers.get("vary")).toBe("Host")
   })
 
-  test("never turns a bare exposure request into a new durable visitor", async () => {
-    const withoutCookie = await middleware(
-      request("/api/advocates/exposure", { method: "POST" }),
-    )
-    expect(withoutCookie.status).toBe(200)
-    expect(withoutCookie.headers.get("set-cookie")).toBeNull()
-    expect(withoutCookie.headers.get("vary")).toBe("Host, Origin")
+  test("bypasses generic durable state on the broker path for every Host", async () => {
+    const apexCookie = `${SPONSORSHIP_VISITOR_COOKIE_NAME}=stale-parent-token`
+    for (const method of ["OPTIONS", "POST", "GET"]) {
+      const apex = await middleware(
+        request("/api/advocates/exposure", {
+          host: "creatorshare.com",
+          method,
+          headers: { cookie: apexCookie },
+        }),
+      )
+      expect(apex.status, method).toBe(200)
+      expect(apex.headers.get("x-middleware-next"), method).toBe("1")
+      expect(apex.headers.get("set-cookie"), method).toBeNull()
+      expect(apex.headers.get("x-middleware-request-cookie"), method).toBe(
+        apexCookie,
+      )
+    }
 
-    const token = await createSponsorshipVisitorToken()
-    expect(token).not.toBeNull()
-    const cookie = `${SPONSORSHIP_VISITOR_COOKIE_NAME}=${token}`
-    const withCookie = await middleware(
-      request("/api/advocates/exposure", {
-        method: "POST",
-        headers: { cookie },
-      }),
-    )
-    expect(withCookie.headers.get("set-cookie")).toContain(
-      `${SPONSORSHIP_VISITOR_COOKIE_NAME}=`,
-    )
-    expect(withCookie.headers.get("set-cookie")).toContain(
-      "Domain=.creatorshare.com",
-    )
-    expect(withCookie.headers.get("set-cookie")).toContain("Max-Age=0")
-    expect(withCookie.headers.get("set-cookie")).not.toContain("=v2.")
-    expect(withCookie.headers.get("x-middleware-request-cookie")).toBe(cookie)
+    for (const host of [
+      "hope.creatorshare.com",
+      "www.creatorshare.com",
+      "unapproved.example",
+    ]) {
+      for (const method of ["OPTIONS", "POST", "GET"]) {
+        const neutral = await middleware(
+          request("/api/advocates/exposure", {
+            host,
+            method,
+            headers: { cookie: apexCookie },
+          }),
+        )
+        expect(neutral.status, `${host} ${method}`).toBe(200)
+        expect(
+          neutral.headers.get("x-middleware-next"),
+          `${host} ${method}`,
+        ).toBe("1")
+        expect(
+          neutral.headers.get("set-cookie"),
+          `${host} ${method}`,
+        ).toBeNull()
+        expect(
+          neutral.headers.get("access-control-allow-origin"),
+          `${host} ${method}`,
+        ).toBeNull()
+        expect(
+          neutral.headers.get("x-middleware-request-cookie"),
+          `${host} ${method}`,
+        ).toBe(apexCookie)
+      }
+    }
   })
 
   test("strips a spoofed payment shell header from ordinary tenant pages", async () => {

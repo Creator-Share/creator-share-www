@@ -27,6 +27,7 @@ const PRODUCTION_PRIMARY_ALIAS_HOSTNAMES = new Set<string>([
 const READ_METHODS = Object.freeze(["GET", "HEAD"] as const)
 const GET_METHOD = Object.freeze(["GET"] as const)
 const POST_METHOD = Object.freeze(["POST"] as const)
+const EXPOSURE_BROKER_METHODS = Object.freeze(["OPTIONS", "POST"] as const)
 
 export type TenantRoutePolicyEnvironment = Readonly<
   Record<string, string | undefined>
@@ -135,8 +136,9 @@ const STATIC_RULES = new Map<string, RouteRule>([
     Object.freeze({
       id: "exposure-api",
       action: "allow",
-      methods: POST_METHOD,
-      tenantAllowed: true,
+      hideMethodMismatch: true,
+      methods: EXPOSURE_BROKER_METHODS,
+      tenantAllowed: false,
       visitorSession: false,
     } satisfies RouteRule),
   ],

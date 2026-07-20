@@ -125,16 +125,19 @@ test.describe("advocate tenant route policy", () => {
     }
 
     for (const pathname of [
-      "/api/advocates/exposure",
       "/api/stripe",
       "/api/paypal",
       "/api/sponsorships/checkout-status",
     ]) {
       expect(decide(pathname, "POST")).toMatchObject({ kind: "allow" })
     }
-    expect(decide("/api/advocates/exposure", "POST")).toMatchObject({
-      visitorSession: false,
-    })
+    for (const method of ["OPTIONS", "POST", "GET"]) {
+      expect(decide("/api/advocates/exposure", method)).toEqual({
+        kind: "deny",
+        status: 404,
+        allow: null,
+      })
+    }
 
     expect(decide("/api/stripe", "GET")).toEqual({
       kind: "deny",

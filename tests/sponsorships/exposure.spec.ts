@@ -40,12 +40,8 @@ const visitorCookie = testRequire(
 ) as VisitorCookieModule
 nodeModule._load = originalModuleLoad
 
-const {
-  createQualifiedExposureEventKey,
-  digestSponsorshipVisitorToken,
-  getQualifiedExposureContext,
-  shouldRejectExposureRequest,
-} = exposure
+const { createQualifiedExposureEventKey, digestSponsorshipVisitorToken } =
+  exposure
 const { sponsorshipVisitorDigest } = stripeCheckout
 const { createSponsorshipVisitorToken } = visitorCookie
 
@@ -60,101 +56,6 @@ test.beforeAll(async () => {
   )
   if (token === null) throw new Error("Visitor test token was not created")
   TOKEN = token
-})
-
-test("accepts a same-origin browser request and rejects automation hints", () => {
-  expect(
-    shouldRejectExposureRequest(
-      new Headers({
-        origin: "https://hope.creatorshare.com",
-        "sec-fetch-site": "same-origin",
-        "user-agent": "Mozilla/5.0 Mobile Safari/605.1.15",
-      }),
-      "https://hope.creatorshare.com",
-    ),
-  ).toBe(false)
-  expect(
-    shouldRejectExposureRequest(
-      new Headers({ purpose: "prefetch", "user-agent": "Mozilla/5.0" }),
-      "https://hope.creatorshare.com",
-    ),
-  ).toBe(true)
-  expect(
-    shouldRejectExposureRequest(
-      new Headers({ "user-agent": "Googlebot/2.1" }),
-      "https://hope.creatorshare.com",
-    ),
-  ).toBe(true)
-  expect(
-    shouldRejectExposureRequest(
-      new Headers({
-        origin: "https://hope.creatorshare.com",
-        "sec-fetch-site": "cross-site",
-        "user-agent": "Mozilla/5.0",
-      }),
-      "https://hope.creatorshare.com",
-    ),
-  ).toBe(true)
-  expect(
-    shouldRejectExposureRequest(
-      new Headers({
-        origin: "https://other.creatorshare.com",
-        "sec-fetch-site": "same-origin",
-        "user-agent": "Mozilla/5.0",
-      }),
-      "https://hope.creatorshare.com",
-    ),
-  ).toBe(true)
-  expect(
-    shouldRejectExposureRequest(
-      new Headers({
-        origin: "https://hope.creatorshare.com",
-        "user-agent": "Mozilla/5.0",
-      }),
-      "https://hope.creatorshare.com",
-    ),
-  ).toBe(true)
-})
-
-test("derives page context only from the exact same host referrer", () => {
-  expect(
-    getQualifiedExposureContext(
-      "https://hope.creatorshare.com/sponsorships/amina?utm_source=social",
-      "hope.creatorshare.com",
-      null,
-    ),
-  ).toEqual({ pagePath: "/sponsorships/amina", referrerHost: null })
-  expect(
-    getQualifiedExposureContext(
-      "https://hope.creatorshare.com.evil.example/sponsorships/amina",
-      "hope.creatorshare.com",
-      null,
-    ),
-  ).toBeNull()
-  expect(
-    getQualifiedExposureContext(
-      "http://hope.localhost:3000/sponsorships/amina",
-      "hope.localhost",
-      3000,
-    ),
-  ).toEqual({ pagePath: "/sponsorships/amina", referrerHost: null })
-
-  for (const pathname of [
-    "/sponsorships",
-    "/payments/success",
-    "/payments/failed",
-    "/auth/callback",
-    "/admin",
-    "/api/beneficiaries/get",
-  ]) {
-    expect(
-      getQualifiedExposureContext(
-        `https://hope.creatorshare.com${pathname}`,
-        "hope.creatorshare.com",
-        null,
-      ),
-    ).toBeNull()
-  }
 })
 
 test("hashes the opaque visitor token before database transport", () => {

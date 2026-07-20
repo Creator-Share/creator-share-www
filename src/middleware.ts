@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 
+import { ADVOCATE_EXPOSURE_BROKER_PATH } from "@/lib/advocates/exposureBrokerProtocol"
 import {
   INTERNAL_ROUTE_SHELL_HEADER,
   isProductionPrimaryAliasHost,
@@ -23,7 +24,6 @@ const TENANT_NO_STORE_HEADERS = {
 
 const ORIGIN_VARYING_ROUTE_IDS = new Set([
   "checkout-status-api",
-  "exposure-api",
   "paypal-checkout-api",
   "stripe-checkout-api",
 ])
@@ -59,6 +59,12 @@ async function bypassSession(
       request: { headers: forwardedHeaders(request, shell) },
     }),
   )
+}
+
+function bypassAllDurableState(request: NextRequest): NextResponse {
+  return NextResponse.next({
+    request: { headers: forwardedHeaders(request) },
+  })
 }
 
 function appendVary(headers: Headers, values: readonly string[]): void {
@@ -158,6 +164,10 @@ function tenantVaryValues(
 }
 
 export async function middleware(request: NextRequest) {
+  if (request.nextUrl.pathname === ADVOCATE_EXPOSURE_BROKER_PATH) {
+    return bypassAllDurableState(request)
+  }
+
   if (
     (request.method === "GET" || request.method === "HEAD") &&
     isProductionPrimaryAliasHost(request.headers.get("host"))

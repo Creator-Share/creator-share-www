@@ -1,16 +1,18 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { usePathname } from "next/navigation"
 
 import { resolveAdvocateHost } from "@/lib/advocates/host"
+import { recordAdvocateExposureThroughBroker } from "@/lib/advocates/exposureBrokerClient"
+import { createAdvocateExposurePageRetryController } from "@/lib/advocates/exposureBrokerTracker"
 import { isQualifyingAdvocateExposurePagePath } from "@/lib/advocates/publicBrowsePaths"
 import { PUBLIC_PATH_CHANGE_EVENT } from "@/lib/advocates/publicPathChanges"
 
-const EXPOSURE_ENDPOINT = "/api/advocates/exposure"
-
 export function AdvocateExposureTracker() {
   const pathname = usePathname()
+  const completedPaths = useRef(new Set<string>())
+  const pendingPaths = useRef(new Map<string, Promise<boolean>>())
 
   useEffect(() => {
     if (window.self !== window.top) return
@@ -19,43 +21,59 @@ export function AdvocateExposureTracker() {
       allowLocalhostDevelopment: process.env.NODE_ENV === "development",
     })
     if (host.kind !== "tenant-candidate") return
+    if (completedPaths.current.has(pathname)) return
 
-    let recordedPath: string | null = null
+    const pageHost = window.location.host
+    const recordExposure = () => {
+      if (completedPaths.current.has(pathname)) return Promise.resolve(true)
 
-    const recordCurrentPathWhenVisible = () => {
-      const currentPath = window.location.pathname
-      if (
-        document.visibilityState !== "visible" ||
-        currentPath === recordedPath ||
-        !isQualifyingAdvocateExposurePagePath(currentPath)
-      ) {
-        return
-      }
-      recordedPath = currentPath
-      void fetch(EXPOSURE_ENDPOINT, {
-        method: "POST",
-        cache: "no-store",
-        credentials: "same-origin",
-        keepalive: true,
-      }).catch(() => undefined)
+      const existingRequest = pendingPaths.current.get(pathname)
+      if (existingRequest !== undefined) return existingRequest
+
+      const request = recordAdvocateExposureThroughBroker({
+        pageHost,
+        pagePath: pathname,
+      })
+        .catch(() => false)
+        .then((accepted) => {
+          if (accepted) completedPaths.current.add(pathname)
+          return accepted
+        })
+      pendingPaths.current.set(pathname, request)
+      void request.finally(() => {
+        if (pendingPaths.current.get(pathname) === request) {
+          pendingPaths.current.delete(pathname)
+        }
+      })
+      return request
     }
 
-    recordCurrentPathWhenVisible()
-    document.addEventListener("visibilitychange", recordCurrentPathWhenVisible)
-    window.addEventListener("popstate", recordCurrentPathWhenVisible)
-    window.addEventListener(
-      PUBLIC_PATH_CHANGE_EVENT,
-      recordCurrentPathWhenVisible,
-    )
+    const controller = createAdvocateExposurePageRetryController({
+      isCurrentEligiblePath: () => {
+        return (
+          window.location.host === pageHost &&
+          window.location.pathname === pathname &&
+          isQualifyingAdvocateExposurePagePath(pathname)
+        )
+      },
+      isVisible: () => document.visibilityState === "visible",
+      onAccepted: () => completedPaths.current.add(pathname),
+      recordExposure,
+    })
+
+    const notifyEnvironmentChange = () => controller.notifyEnvironmentChange()
+
+    controller.start()
+    document.addEventListener("visibilitychange", notifyEnvironmentChange)
+    window.addEventListener("popstate", notifyEnvironmentChange)
+    window.addEventListener(PUBLIC_PATH_CHANGE_EVENT, notifyEnvironmentChange)
     return () => {
-      document.removeEventListener(
-        "visibilitychange",
-        recordCurrentPathWhenVisible,
-      )
-      window.removeEventListener("popstate", recordCurrentPathWhenVisible)
+      controller.dispose()
+      document.removeEventListener("visibilitychange", notifyEnvironmentChange)
+      window.removeEventListener("popstate", notifyEnvironmentChange)
       window.removeEventListener(
         PUBLIC_PATH_CHANGE_EVENT,
-        recordCurrentPathWhenVisible,
+        notifyEnvironmentChange,
       )
     }
   }, [pathname])
