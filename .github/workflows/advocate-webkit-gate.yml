@@ -27,6 +27,9 @@ jobs:
     name: Catalog recovery in WebKit
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-browser-anon-key"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
