@@ -34,6 +34,7 @@ function traceId(request: NextRequest): string | null {
 
 async function runWorker(request: NextRequest) {
   const invocationDeadlineAt = Date.now() + 60_000
+  const requestId = randomUUID()
   let expectedSecret: string
   try {
     expectedSecret = loadSponsorWelcomeEmailWorkerSecret()
@@ -54,12 +55,27 @@ async function runWorker(request: NextRequest) {
     const batch = await runSponsorWelcomeEmailBatchFromEnvironment({
       config: loadSponsorWelcomeEmailWorkerConfig(),
       workerId: `sponsor-welcome-email-worker:${randomUUID()}`,
-      context: { requestId: randomUUID(), traceId: traceId(request) },
+      context: { requestId, traceId: traceId(request) },
       invocationDeadlineAt,
     })
+    const requiresAttention =
+      batch.terminalFailed > 0 ||
+      batch.manualReview > 0 ||
+      batch.settlementUnknown > 0
+    if (requiresAttention) {
+      console.error("SPONSOR_WELCOME_EMAIL_WORKER_REQUIRES_ATTENTION", {
+        requestId,
+        code: "worker_batch_incomplete",
+        terminalFailed: batch.terminalFailed,
+        manualReview: batch.manualReview,
+        settlementUnknown: batch.settlementUnknown,
+      })
+    }
     return response(
       {
-        ok: true,
+        ok: !requiresAttention,
+        ...(requiresAttention ? { code: "worker_batch_incomplete" } : {}),
+        requestId,
         claimed: batch.claimed,
         sent: batch.sent,
         retried: batch.retried,
@@ -68,10 +84,17 @@ async function runWorker(request: NextRequest) {
         manualReview: batch.manualReview,
         settlementUnknown: batch.settlementUnknown,
       },
-      200,
+      requiresAttention ? 503 : 200,
     )
   } catch {
-    return response({ ok: false, code: "worker_execution_failed" }, 503)
+    console.error("SPONSOR_WELCOME_EMAIL_WORKER_REQUIRES_ATTENTION", {
+      requestId,
+      code: "worker_execution_failed",
+    })
+    return response(
+      { ok: false, code: "worker_execution_failed", requestId },
+      503,
+    )
   }
 }
 

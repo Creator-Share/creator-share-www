@@ -53,9 +53,20 @@ async function runWorker(request: NextRequest) {
       workerId: `payment-gateway-event-worker:${randomUUID()}`,
       context: { requestId, traceId: traceId(request) },
     })
+    const requiresAttention =
+      batch.terminalFailed > 0 || batch.settlementUnknown > 0
+    if (requiresAttention) {
+      console.error("PAYMENT_GATEWAY_EVENT_WORKER_REQUIRES_ATTENTION", {
+        requestId,
+        code: "worker_batch_incomplete",
+        terminalFailed: batch.terminalFailed,
+        settlementUnknown: batch.settlementUnknown,
+      })
+    }
     return response(
       {
-        ok: true,
+        ok: !requiresAttention,
+        ...(requiresAttention ? { code: "worker_batch_incomplete" } : {}),
         requestId,
         claimed: batch.claimed,
         applied: batch.applied,
@@ -67,9 +78,13 @@ async function runWorker(request: NextRequest) {
         contactEnvelopesErased: batch.contactErasure.erased,
         contactEnvelopeErasure: batch.contactErasure,
       },
-      200,
+      requiresAttention ? 503 : 200,
     )
   } catch {
+    console.error("PAYMENT_GATEWAY_EVENT_WORKER_REQUIRES_ATTENTION", {
+      requestId,
+      code: "worker_execution_failed",
+    })
     return response(
       { ok: false, code: "worker_execution_failed", requestId },
       503,

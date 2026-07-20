@@ -63,7 +63,19 @@ async function runWorker(request: NextRequest) {
       },
       invocationDeadlineAt,
     })
-    const healthy = batch.claimFailed === 0 && batch.settlementUnknown === 0
+    const healthy =
+      batch.manualReview === 0 &&
+      batch.claimFailed === 0 &&
+      batch.settlementUnknown === 0
+    if (!healthy) {
+      console.error("SUBSCRIPTION_CANCELLATION_WORKER_REQUIRES_ATTENTION", {
+        requestId,
+        code: "worker_batch_incomplete",
+        manualReview: batch.manualReview,
+        claimFailed: batch.claimFailed,
+        settlementUnknown: batch.settlementUnknown,
+      })
+    }
     return response(
       {
         ok: healthy,
@@ -81,6 +93,10 @@ async function runWorker(request: NextRequest) {
       healthy ? 200 : 503,
     )
   } catch {
+    console.error("SUBSCRIPTION_CANCELLATION_WORKER_REQUIRES_ATTENTION", {
+      requestId,
+      code: "worker_execution_failed",
+    })
     return response(
       { ok: false, code: "worker_execution_failed", requestId },
       503,
