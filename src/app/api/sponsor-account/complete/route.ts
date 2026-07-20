@@ -1,68 +1,94 @@
-import { randomUUID } from "node:crypto"
+import { isIP } from "node:net"
 
 import { NextRequest, NextResponse } from "next/server"
 
 import {
   completeSponsorAccountClaim,
   getSponsorClaimCanonicalOrigin,
-  getSponsorClaimCookieOptions,
   isTrustedSponsorClaimRequest,
+  parseSponsorClaimCookieHeader,
   parseSponsorAccountClaimRpcResult,
+  sponsorClaimCookieClearHeaders,
+  sponsorClaimLegacyCookieTombstoneHeaders,
   SponsorAccountClaimError,
-  SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
 } from "@/lib/sponsorships/accountClaim"
+import { resolveTrustedPrimaryRequestOrigin } from "@/lib/sponsorships/checkout/requestSecurity"
 import { createSponsorshipCryptoFromEnvironment } from "@/lib/sponsorships/crypto"
-import {
-  createClient,
-  createServiceRoleClient,
-} from "@/utils/supabase/server"
+import { sponsorPasswordlessDeliveryContext } from "@/lib/sponsorships/management/passwordlessRateLimit"
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 
 export const runtime = "nodejs"
 
-function boundedHeader(
-  request: NextRequest,
-  name: string,
-  maximumLength: number,
-): string | null {
-  const value = request.headers.get(name)?.trim()
-  return value ? value.slice(0, maximumLength) : null
-}
+const SERVICE_REQUEST_TIMEOUT_MILLISECONDS = 8_000
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/
 
 function requestContext(request: NextRequest) {
+  const deliveryContext = sponsorPasswordlessDeliveryContext(request)
+  const candidateClientIp =
+    process.env.VERCEL === "1"
+      ? request.headers.get("x-vercel-forwarded-for")?.trim()
+      : null
+  const candidateUserAgent = request.headers.get("user-agent")?.trim()
+  const userAgent =
+    candidateUserAgent && !CONTROL_CHARACTER_PATTERN.test(candidateUserAgent)
+      ? candidateUserAgent.slice(0, 1024)
+      : null
   return {
-    requestId: randomUUID(),
-    traceId:
-      boundedHeader(request, "x-vercel-id", 255) ??
-      boundedHeader(request, "cf-ray", 255) ??
-      boundedHeader(request, "traceparent", 255) ??
-      boundedHeader(request, "x-trace-id", 255),
+    requestId: deliveryContext.requestId,
+    traceId: deliveryContext.traceId,
     clientIp:
-      boundedHeader(request, "cf-connecting-ip", 256) ??
-      boundedHeader(request, "x-vercel-forwarded-for", 256) ??
-      boundedHeader(request, "x-forwarded-for", 256) ??
-      boundedHeader(request, "x-real-ip", 256),
-    userAgent: boundedHeader(request, "user-agent", 1024),
+      candidateClientIp &&
+      candidateClientIp.length <= 64 &&
+      isIP(candidateClientIp) !== 0
+        ? candidateClientIp.toLowerCase()
+        : null,
+    userAgent,
   }
 }
 
-function readSingleClaimCookie(request: NextRequest): string | null {
-  const values = request.cookies.getAll(SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME)
-  return values.length === 1 ? values[0].value : null
-}
-
-function clearClaimCookie(response: NextResponse): NextResponse {
-  response.cookies.set(SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME, "", {
-    ...getSponsorClaimCookieOptions(),
-    maxAge: 0,
-    expires: new Date(0),
-  })
+function appendSetCookieHeaders(
+  response: NextResponse,
+  headers: readonly string[],
+): NextResponse {
+  for (const header of headers) response.headers.append("Set-Cookie", header)
   return response
 }
 
+function clearClaimCookies(
+  response: NextResponse,
+  request: NextRequest,
+  canonicalOrigin: string,
+): NextResponse {
+  return appendSetCookieHeaders(
+    response,
+    sponsorClaimCookieClearHeaders({
+      canonicalOrigin,
+      rawHost: request.headers.get("host"),
+      requestPathname: "/api/sponsor-account/complete",
+    }),
+  )
+}
+
+function clearLegacyClaimCookies(
+  response: NextResponse,
+  request: NextRequest,
+  canonicalOrigin: string,
+): NextResponse {
+  return appendSetCookieHeaders(
+    response,
+    sponsorClaimLegacyCookieTombstoneHeaders({
+      canonicalOrigin,
+      rawHost: request.headers.get("host"),
+      requestPathname: "/api/sponsor-account/complete",
+    }),
+  )
+}
+
 function noStore(response: NextResponse): NextResponse {
-  response.headers.set("Cache-Control", "no-store")
+  response.headers.set("Cache-Control", "no-store, max-age=0")
   response.headers.set("Pragma", "no-cache")
   response.headers.set("Referrer-Policy", "no-referrer")
+  response.headers.set("X-Content-Type-Options", "nosniff")
   return response
 }
 
@@ -71,23 +97,46 @@ export async function POST(request: NextRequest) {
   try {
     canonicalOrigin = getSponsorClaimCanonicalOrigin()
   } catch {
-    return noStore(
-      NextResponse.json({ error: "unavailable" }, { status: 503 }),
-    )
+    return noStore(NextResponse.json({ error: "unavailable" }, { status: 503 }))
   }
 
-  if (!isTrustedSponsorClaimRequest(request.headers, canonicalOrigin)) {
-    return noStore(
-      NextResponse.json({ error: "unavailable" }, { status: 403 }),
-    )
+  const requestOrigin = resolveTrustedPrimaryRequestOrigin({
+    rawHost: request.headers.get("host"),
+  })
+  if (
+    requestOrigin !== canonicalOrigin ||
+    request.nextUrl.origin !== canonicalOrigin ||
+    !isTrustedSponsorClaimRequest(request.headers, canonicalOrigin)
+  ) {
+    return noStore(NextResponse.json({ error: "unavailable" }, { status: 403 }))
   }
 
-  const authClient = await createClient()
-  const serviceClient = createServiceRoleClient()
+  let claimCookie
+  try {
+    claimCookie = parseSponsorClaimCookieHeader({
+      rawCookieHeader: request.headers.get("cookie"),
+      canonicalOrigin,
+    })
+  } catch {
+    return noStore(NextResponse.json({ error: "unavailable" }, { status: 503 }))
+  }
+  if (claimCookie.status !== "accepted") {
+    return clearClaimCookies(
+      noStore(
+        NextResponse.json({ error: "invalid-or-expired" }, { status: 410 }),
+      ),
+      request,
+      canonicalOrigin,
+    )
+  }
 
   try {
+    const authClient = await createClient()
+    const serviceClient = createServiceRoleClient({
+      requestTimeoutMilliseconds: SERVICE_REQUEST_TIMEOUT_MILLISECONDS,
+    })
     const result = await completeSponsorAccountClaim(
-      readSingleClaimCookie(request),
+      claimCookie.claimToken,
       requestContext(request),
       {
         crypto: createSponsorshipCryptoFromEnvironment(),
@@ -134,8 +183,10 @@ export async function POST(request: NextRequest) {
       },
     )
 
-    return clearClaimCookie(
+    return clearClaimCookies(
       noStore(NextResponse.json(result, { status: 200 })),
+      request,
+      canonicalOrigin,
     )
   } catch (error) {
     const claimError =
@@ -155,7 +206,7 @@ export async function POST(request: NextRequest) {
     return claimError.code === "invalid-or-expired" ||
       claimError.code === "email-mismatch" ||
       claimError.code === "account-conflict"
-      ? clearClaimCookie(response)
-      : response
+      ? clearClaimCookies(response, request, canonicalOrigin)
+      : clearLegacyClaimCookies(response, request, canonicalOrigin)
   }
 }

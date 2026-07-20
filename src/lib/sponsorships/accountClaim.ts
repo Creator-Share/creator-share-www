@@ -7,7 +7,9 @@ import {
   type VersionedEmailDigest,
 } from "@/lib/sponsorships/crypto"
 
-export const SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME =
+export const SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME = "__Host-cs-sponsor-claim-v1"
+export const LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME = "cs_sponsor_claim_v1"
+export const LEGACY_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME =
   "creator_share_sponsor_claim_v1"
 export const SPONSOR_ACCOUNT_CLAIM_COOKIE_MAX_AGE_SECONDS = 30 * 60
 export const SPONSOR_ACCOUNT_CLAIM_CALLBACK_PATH = "/auth/callback"
@@ -18,9 +20,16 @@ export const SPONSOR_ACCOUNT_EMAIL_PROOF_VALID_FOR = "10 minutes"
 
 const PRODUCTION_SITE_ORIGIN = "https://creatorshare.com"
 const DEVELOPMENT_SITE_ORIGIN = "http://localhost:3000"
-const MAXIMUM_START_BODY_BYTES = 4096
+export const SPONSOR_ACCOUNT_CLAIM_START_BODY_MAXIMUM_BYTES = 4096
 const MAXIMUM_AUTH_CODE_LENGTH = 2048
+const MAXIMUM_COOKIE_HEADER_BYTES = 128 * 1024
+const MAXIMUM_COOKIE_VALUE_BYTES = 65_536
 const SUPABASE_AUTH_CODE_PATTERN = /^[A-Za-z0-9._~-]+$/
+const COOKIE_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
+const COOKIE_CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/
+const CLAIM_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"])
+const COOKIE_EXPIRATION = "Thu, 01 Jan 1970 00:00:00 GMT"
 
 export type SponsorClaimPageState =
   "ready" | "auth-error" | "check-email" | "complete"
@@ -50,12 +59,24 @@ export class SponsorAccountClaimError extends Error {
 
 export interface SponsorClaimCookieOptions {
   httpOnly: true
-  secure: true
+  secure: boolean
   sameSite: "lax"
   path: "/"
   maxAge: number
   priority: "high"
 }
+
+export interface SponsorClaimCookieConfiguration {
+  name:
+    | typeof SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME
+    | typeof LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME
+  secure: boolean
+  options: SponsorClaimCookieOptions
+}
+
+export type SponsorClaimCookieReadResult =
+  | Readonly<{ status: "accepted"; claimToken: string }>
+  | Readonly<{ status: "missing" | "rejected" }>
 
 export interface PreparedSponsorClaimStart {
   claimToken: string
@@ -69,18 +90,20 @@ export interface SponsorClaimAuthenticatedUser {
   emailConfirmedAt: string | null | undefined
 }
 
+export type SponsorClaimStartMode = "initial-claim" | "account-reauth"
+
 export interface SponsorClaimStartDependencies {
   getClaimStartMode(input: {
     claimTokenDigest: SupabaseRpcBytea
     emailDigest: SupabaseRpcBytea
     emailNormalizationVersion: number
     emailHmacKeyVersion: number
-  }): Promise<"initial-claim" | "account-reauth" | null>
+  }): Promise<SponsorClaimStartMode | null>
   getAuthenticatedUser(): Promise<SponsorClaimAuthenticatedUser | null>
   sendMagicLink(input: {
     email: string
     emailRedirectTo: string
-    shouldCreateUser: boolean
+    mode: SponsorClaimStartMode
   }): Promise<void>
 }
 
@@ -170,9 +193,7 @@ function configuredOriginValue(
 }
 
 function isLoopbackHostname(hostname: string): boolean {
-  return (
-    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
-  )
+  return LOOPBACK_HOSTNAMES.has(hostname)
 }
 
 /**
@@ -203,15 +224,284 @@ export function getSponsorClaimCanonicalOrigin(
   return url.origin
 }
 
-export function getSponsorClaimCookieOptions(): SponsorClaimCookieOptions {
-  return {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: SPONSOR_ACCOUNT_CLAIM_COOKIE_MAX_AGE_SECONDS,
-    priority: "high",
+export function sponsorClaimCookieConfiguration(
+  canonicalOrigin: string = PRODUCTION_SITE_ORIGIN,
+): SponsorClaimCookieConfiguration {
+  let parsed: URL
+  try {
+    parsed = new URL(canonicalOrigin)
+  } catch {
+    throw claimError("unavailable")
   }
+  if (
+    parsed.origin !== canonicalOrigin ||
+    parsed.username !== "" ||
+    parsed.password !== "" ||
+    (parsed.protocol !== "https:" &&
+      !(parsed.protocol === "http:" && isLoopbackHostname(parsed.hostname)))
+  ) {
+    throw claimError("unavailable")
+  }
+
+  const secure = parsed.protocol === "https:"
+  const name = secure
+    ? SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME
+    : LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME
+  return Object.freeze({
+    name,
+    secure,
+    options: Object.freeze({
+      httpOnly: true,
+      secure,
+      sameSite: "lax",
+      path: "/",
+      maxAge: SPONSOR_ACCOUNT_CLAIM_COOKIE_MAX_AGE_SECONDS,
+      priority: "high",
+    }),
+  })
+}
+
+export function getSponsorClaimCookieOptions(
+  canonicalOrigin: string = PRODUCTION_SITE_ORIGIN,
+): SponsorClaimCookieOptions {
+  return sponsorClaimCookieConfiguration(canonicalOrigin).options
+}
+
+function parseRawCookieHeader(
+  rawCookieHeader: string | null,
+): readonly Readonly<{ name: string; value: string }>[] | null {
+  if (rawCookieHeader === null || rawCookieHeader === "") return []
+  if (
+    Buffer.byteLength(rawCookieHeader, "utf8") > MAXIMUM_COOKIE_HEADER_BYTES
+  ) {
+    return null
+  }
+
+  const cookies: Array<Readonly<{ name: string; value: string }>> = []
+  for (const rawSegment of rawCookieHeader.split(";")) {
+    const segment = rawSegment.trim()
+    if (segment === "") continue
+    const separator = segment.indexOf("=")
+    if (separator <= 0) return null
+    const name = segment.slice(0, separator).trim()
+    const value = segment.slice(separator + 1).trim()
+    if (
+      !COOKIE_NAME_PATTERN.test(name) ||
+      Buffer.byteLength(name, "utf8") > 256 ||
+      Buffer.byteLength(value, "utf8") > MAXIMUM_COOKIE_VALUE_BYTES ||
+      COOKIE_CONTROL_CHARACTER_PATTERN.test(value)
+    ) {
+      return null
+    }
+    cookies.push(Object.freeze({ name, value }))
+  }
+  return Object.freeze(cookies)
+}
+
+/**
+ * Reads the capability from the raw Cookie header so same-name host and
+ * parent-domain cookies cannot be collapsed before duplicate detection.
+ */
+export function parseSponsorClaimCookieHeader(options: {
+  rawCookieHeader: string | null
+  canonicalOrigin: string
+}): SponsorClaimCookieReadResult {
+  const configuration = sponsorClaimCookieConfiguration(options.canonicalOrigin)
+  const cookies = parseRawCookieHeader(options.rawCookieHeader)
+  if (cookies === null) return Object.freeze({ status: "rejected" })
+
+  const configuredCookies = cookies.filter(
+    (cookie) => cookie.name === configuration.name,
+  )
+  const hasNoncanonicalClaimCookie = cookies.some(
+    (cookie) =>
+      cookie.name === LEGACY_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME ||
+      cookie.name ===
+        (configuration.name === SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME
+          ? LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME
+          : SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME),
+  )
+  if (configuredCookies.length === 0) {
+    return Object.freeze({
+      status: hasNoncanonicalClaimCookie ? "rejected" : "missing",
+    })
+  }
+  if (
+    configuredCookies.length !== 1 ||
+    !CLAIM_TOKEN_PATTERN.test(configuredCookies[0].value) ||
+    (!configuration.secure && hasNoncanonicalClaimCookie)
+  ) {
+    return Object.freeze({ status: "rejected" })
+  }
+  return Object.freeze({
+    status: "accepted",
+    claimToken: configuredCookies[0].value,
+  })
+}
+
+function serializedClaimCookie(options: {
+  name: string
+  value: string
+  secure: boolean
+  maxAge: number
+  path?: string
+  expires?: string
+  domain?: string
+}): string {
+  const attributes = [
+    `${options.name}=${options.value}`,
+    `Path=${options.path ?? "/"}`,
+    ...(options.domain === undefined ? [] : [`Domain=${options.domain}`]),
+    `Max-Age=${options.maxAge}`,
+    ...(options.expires === undefined ? [] : [`Expires=${options.expires}`]),
+    "HttpOnly",
+    ...(options.secure ? ["Secure"] : []),
+    "SameSite=Lax",
+    "Priority=High",
+  ]
+  return attributes.join("; ")
+}
+
+function claimCookieTombstone(options: {
+  name: string
+  secure: boolean
+  path?: string
+  domain?: string
+}): string {
+  return serializedClaimCookie({
+    name: options.name,
+    value: "",
+    secure: options.secure,
+    path: options.path,
+    domain: options.domain,
+    maxAge: 0,
+    expires: COOKIE_EXPIRATION,
+  })
+}
+
+function claimCookieTombstonePaths(
+  requestPathname:
+    "/api/sponsor-account/start" | "/api/sponsor-account/complete",
+): readonly string[] {
+  const finalSegment = requestPathname.endsWith("/start") ? "start" : "complete"
+  return Object.freeze([
+    "/",
+    "/api",
+    "/api/",
+    "/api/sponsor-account",
+    "/api/sponsor-account/",
+    `/api/sponsor-account/${finalSegment}`,
+  ])
+}
+
+function isExactCreatorShareApex(options: {
+  canonicalOrigin: string
+  rawHost: string | null
+}): boolean {
+  return (
+    options.canonicalOrigin === PRODUCTION_SITE_ORIGIN &&
+    options.rawHost?.trim().toLowerCase() === "creatorshare.com"
+  )
+}
+
+export function sponsorClaimLegacyCookieTombstoneHeaders(options: {
+  canonicalOrigin: string
+  rawHost: string | null
+  requestPathname:
+    "/api/sponsor-account/start" | "/api/sponsor-account/complete"
+}): readonly string[] {
+  const configuration = sponsorClaimCookieConfiguration(options.canonicalOrigin)
+  const headers: string[] = []
+  for (const path of claimCookieTombstonePaths(options.requestPathname)) {
+    headers.push(
+      claimCookieTombstone({
+        name: LEGACY_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
+        secure: configuration.secure,
+        path,
+      }),
+    )
+    if (isExactCreatorShareApex(options)) {
+      headers.push(
+        claimCookieTombstone({
+          name: LEGACY_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
+          secure: true,
+          path,
+          domain: ".creatorshare.com",
+        }),
+      )
+    }
+  }
+  if (configuration.secure) {
+    headers.push(
+      claimCookieTombstone({
+        name: LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
+        secure: true,
+      }),
+    )
+    if (isExactCreatorShareApex(options)) {
+      headers.push(
+        claimCookieTombstone({
+          name: LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
+          secure: true,
+          domain: ".creatorshare.com",
+        }),
+      )
+    }
+  }
+  return Object.freeze(headers)
+}
+
+export function sponsorClaimCookieSetHeaders(options: {
+  canonicalOrigin: string
+  rawHost: string | null
+  requestPathname: "/api/sponsor-account/start"
+  claimToken: string
+}): readonly string[] {
+  if (!CLAIM_TOKEN_PATTERN.test(options.claimToken)) {
+    throw claimError("invalid-or-expired")
+  }
+  const configuration = sponsorClaimCookieConfiguration(options.canonicalOrigin)
+  return Object.freeze([
+    serializedClaimCookie({
+      name: configuration.name,
+      value: options.claimToken,
+      secure: configuration.secure,
+      maxAge: configuration.options.maxAge,
+    }),
+    ...sponsorClaimLegacyCookieTombstoneHeaders(options),
+  ])
+}
+
+export function sponsorClaimCookieClearHeaders(options: {
+  canonicalOrigin: string
+  rawHost: string | null
+  requestPathname: "/api/sponsor-account/complete"
+}): readonly string[] {
+  const configuration = sponsorClaimCookieConfiguration(options.canonicalOrigin)
+  return Object.freeze([
+    claimCookieTombstone({
+      name: configuration.name,
+      secure: configuration.secure,
+    }),
+    ...sponsorClaimLegacyCookieTombstoneHeaders(options),
+  ])
+}
+
+export function parseSponsorClaimStartModeRpcResult(
+  data: unknown,
+): "initial-claim" | "account-reauth" | null {
+  if (!Array.isArray(data) || data.length > 1) return null
+  if (data.length === 0) return null
+  const row = data[0]
+  if (
+    !isRecord(row) ||
+    Object.keys(row).length !== 1 ||
+    !Object.hasOwn(row, "claim_start_mode")
+  ) {
+    return null
+  }
+  const mode = row.claim_start_mode
+  return mode === "initial-claim" || mode === "account-reauth" ? mode : null
 }
 
 export function isTrustedSponsorClaimRequest(
@@ -233,7 +523,8 @@ export function parseSponsorClaimStartBody(
 ): PreparedSponsorClaimStart | null {
   if (
     typeof rawBody !== "string" ||
-    Buffer.byteLength(rawBody, "utf8") > MAXIMUM_START_BODY_BYTES
+    Buffer.byteLength(rawBody, "utf8") >
+      SPONSOR_ACCOUNT_CLAIM_START_BODY_MAXIMUM_BYTES
   ) {
     return null
   }
@@ -245,6 +536,11 @@ export function parseSponsorClaimStartBody(
     return null
   }
   if (!isRecord(parsed)) return null
+
+  const keys = Object.keys(parsed).sort()
+  if (keys.length !== 2 || keys[0] !== "email" || keys[1] !== "token") {
+    return null
+  }
 
   const claimToken = parsed.token
   const email = parsed.email
@@ -335,7 +631,7 @@ export async function decideSponsorClaimStart(
   crypto: SponsorshipCrypto,
   dependencies: SponsorClaimStartDependencies,
 ): Promise<"ready" | "check-email"> {
-  let mode: "initial-claim" | "account-reauth" | null = null
+  let mode: SponsorClaimStartMode | null = null
   try {
     mode = await dependencies.getClaimStartMode({
       claimTokenDigest: prepared.claimTokenDigest,
@@ -363,7 +659,7 @@ export async function decideSponsorClaimStart(
     await dependencies.sendMagicLink({
       email: prepared.email.normalizedEmail,
       emailRedirectTo: buildSponsorClaimMagicLinkCallback(canonicalOrigin),
-      shouldCreateUser: mode === "initial-claim",
+      mode,
     })
   } catch {
     // The public response remains generic for unknown and known accounts.

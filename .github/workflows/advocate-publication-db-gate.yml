@@ -17,6 +17,8 @@ on:
       - "supabase/tests/*password_recovery*.sql"
       - "supabase/tests/**/*password_recovery*"
       - "supabase/tests/sponsor_recent_authentication_management.test.sql"
+      - "supabase/tests/persistent_sponsor_account_claim_links.test.sql"
+      - "supabase/tests/sponsor_passwordless_email_delivery_limits.test.sql"
       - "tests/database/**/*publication*"
       - "tests/database/**/*initial-owner*"
       - "tests/database/**/*email-proof*"
@@ -39,6 +41,8 @@ on:
       - "src/app/api/auth/verify-otp/route.ts"
       - "src/app/api/auth/change-password/route.ts"
       - "src/app/api/sponsor-account/reauth/start/route.ts"
+      - "src/app/api/sponsor-account/start/route.ts"
+      - "src/app/api/sponsor-account/complete/route.ts"
       - "src/app/auth/confirm/route.ts"
       - "src/app/forgot-password/**"
       - "src/app/register/page.tsx"
@@ -56,6 +60,9 @@ on:
       - "tests/advocates/attribution-identity-session-auth-routes.spec.ts"
       - "tests/auth/supabase-email-proof-issuer.spec.ts"
       - "tests/sponsorships/passwordless-access.spec.ts"
+      - "tests/sponsorships/passwordless-rate-limit.spec.ts"
+      - "tests/sponsorships/account-claim.spec.ts"
+      - "tests/sponsorships/sponsor-claim-routes.spec.ts"
       - "tests/sponsorships/sponsor-email-confirmation.spec.ts"
       - "tests/sponsorships/stateless-email-auth-client.spec.ts"
       - "supabase/config.toml"
@@ -120,6 +127,9 @@ jobs:
           tests/advocates/attribution-identity-auth-routes.spec.ts
           tests/advocates/attribution-identity-session-auth-routes.spec.ts
           tests/sponsorships/passwordless-access.spec.ts
+          tests/sponsorships/passwordless-rate-limit.spec.ts
+          tests/sponsorships/account-claim.spec.ts
+          tests/sponsorships/sponsor-claim-routes.spec.ts
           tests/sponsorships/sponsor-email-confirmation.spec.ts
           tests/sponsorships/stateless-email-auth-client.spec.ts
           --workers=1
@@ -221,6 +231,13 @@ jobs:
           --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
           supabase/tests/sponsor_recent_authentication_management.test.sql
           supabase/tests/password_recovery_receipt_consumption.test.sql
+
+      - name: Run sponsor account claim database tests
+        run: >-
+          yarn supabase test db
+          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+          supabase/tests/persistent_sponsor_account_claim_links.test.sql
+          supabase/tests/sponsor_passwordless_email_delivery_limits.test.sql
 
       - name: Run shared email proof issuance concurrency harness
         env:

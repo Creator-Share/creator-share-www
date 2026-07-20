@@ -49,9 +49,17 @@ const {
   getSponsorClaimCookieOptions,
   isTrustedSponsorClaimRequest,
   isValidSupabaseAuthCode,
+  LEGACY_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
+  LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
+  parseSponsorClaimCookieHeader,
   parseSponsorAccountClaimRpcResult,
+  parseSponsorClaimStartModeRpcResult,
   parseSponsorClaimStartBody,
+  sponsorClaimCookieClearHeaders,
+  sponsorClaimCookieConfiguration,
+  sponsorClaimCookieSetHeaders,
   SponsorAccountClaimError,
+  SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
   SPONSOR_ACCOUNT_CLAIM_COOKIE_MAX_AGE_SECONDS,
   SPONSOR_ACCOUNT_CLAIM_PAGE_PATH,
   SPONSOR_ACCOUNT_EMAIL_CONFIRMATION_PATH,
@@ -181,6 +189,160 @@ test.describe("sponsor claim canonical origin and cookie", () => {
     expect(options.maxAge).toBe(30 * 60)
   })
 
+  test("uses a __Host cookie in production and an HTTP loopback fallback", () => {
+    expect(sponsorClaimCookieConfiguration(CANONICAL_ORIGIN)).toMatchObject({
+      name: SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
+      secure: true,
+    })
+    expect(
+      sponsorClaimCookieConfiguration("http://localhost:3000"),
+    ).toMatchObject({
+      name: LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
+      secure: false,
+    })
+  })
+
+  test("requires exactly one canonical production capability cookie", () => {
+    const canonical = `${SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${CLAIM_TOKEN}`
+    const legacy = `${LEGACY_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${"B".repeat(43)}`
+    const local = `${LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${"C".repeat(43)}`
+
+    expect(
+      parseSponsorClaimCookieHeader({
+        rawCookieHeader: canonical,
+        canonicalOrigin: CANONICAL_ORIGIN,
+      }),
+    ).toEqual({ status: "accepted", claimToken: CLAIM_TOKEN })
+    for (const mixed of [
+      `${canonical}; ${legacy}; ${local}`,
+      `${local}; ${legacy}; ${canonical}`,
+    ]) {
+      expect(
+        parseSponsorClaimCookieHeader({
+          rawCookieHeader: mixed,
+          canonicalOrigin: CANONICAL_ORIGIN,
+        }),
+      ).toEqual({ status: "accepted", claimToken: CLAIM_TOKEN })
+    }
+
+    for (const rejected of [
+      legacy,
+      local,
+      `${canonical}; ${SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${"D".repeat(43)}`,
+      `${SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${"D".repeat(43)}; ${canonical}`,
+      `${SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=malformed`,
+    ]) {
+      expect(
+        parseSponsorClaimCookieHeader({
+          rawCookieHeader: rejected,
+          canonicalOrigin: CANONICAL_ORIGIN,
+        }),
+      ).toEqual({ status: "rejected" })
+    }
+    expect(
+      parseSponsorClaimCookieHeader({
+        rawCookieHeader: "unrelated=value",
+        canonicalOrigin: CANONICAL_ORIGIN,
+      }),
+    ).toEqual({ status: "missing" })
+  })
+
+  test("requires exactly one isolated local fallback capability", () => {
+    const localOrigin = "http://localhost:3000"
+    const local = `${LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${CLAIM_TOKEN}`
+    expect(
+      parseSponsorClaimCookieHeader({
+        rawCookieHeader: local,
+        canonicalOrigin: localOrigin,
+      }),
+    ).toEqual({ status: "accepted", claimToken: CLAIM_TOKEN })
+
+    for (const rejected of [
+      `${local}; ${LEGACY_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${"B".repeat(43)}`,
+      `${local}; ${SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${"C".repeat(43)}`,
+      `${local}; ${LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${"D".repeat(43)}`,
+      `${SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${CLAIM_TOKEN}`,
+    ]) {
+      expect(
+        parseSponsorClaimCookieHeader({
+          rawCookieHeader: rejected,
+          canonicalOrigin: localOrigin,
+        }),
+      ).toEqual({ status: "rejected" })
+    }
+  })
+
+  test("sets and clears the canonical cookie while retiring legacy paths", () => {
+    const setHeaders = sponsorClaimCookieSetHeaders({
+      canonicalOrigin: CANONICAL_ORIGIN,
+      rawHost: "creatorshare.com",
+      requestPathname: "/api/sponsor-account/start",
+      claimToken: CLAIM_TOKEN,
+    })
+    expect(setHeaders[0]).toBe(
+      `${SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${CLAIM_TOKEN}; Path=/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax; Priority=High`,
+    )
+    expect(setHeaders[0]).not.toContain("Domain=")
+    expect(setHeaders).toContain(
+      `${LEGACY_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=; Path=/api/sponsor-account/start; Domain=.creatorshare.com; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax; Priority=High`,
+    )
+
+    const clearHeaders = sponsorClaimCookieClearHeaders({
+      canonicalOrigin: CANONICAL_ORIGIN,
+      rawHost: "creatorshare.com",
+      requestPathname: "/api/sponsor-account/complete",
+    })
+    expect(clearHeaders[0]).toBe(
+      `${SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax; Priority=High`,
+    )
+    for (const path of [
+      "/",
+      "/api",
+      "/api/",
+      "/api/sponsor-account",
+      "/api/sponsor-account/",
+      "/api/sponsor-account/complete",
+    ]) {
+      expect(
+        clearHeaders.some(
+          (header) =>
+            header.startsWith(
+              `${LEGACY_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=; Path=${path};`,
+            ) && !header.includes("Domain="),
+        ),
+      ).toBe(true)
+      expect(
+        clearHeaders.some((header) =>
+          header.startsWith(
+            `${LEGACY_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=; Path=${path}; Domain=.creatorshare.com;`,
+          ),
+        ),
+      ).toBe(true)
+    }
+
+    const nonApexHeaders = sponsorClaimCookieClearHeaders({
+      canonicalOrigin: "https://www.creatorshare.com",
+      rawHost: "www.creatorshare.com",
+      requestPathname: "/api/sponsor-account/complete",
+    })
+    expect(nonApexHeaders.every((header) => !header.includes("Domain="))).toBe(
+      true,
+    )
+  })
+
+  test("omits Secure only for the loopback fallback", () => {
+    const headers = sponsorClaimCookieSetHeaders({
+      canonicalOrigin: "http://localhost:3000",
+      rawHost: "localhost:3000",
+      requestPathname: "/api/sponsor-account/start",
+      claimToken: CLAIM_TOKEN,
+    })
+    expect(headers[0]).toBe(
+      `${LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME}=${CLAIM_TOKEN}; Path=/; Max-Age=1800; HttpOnly; SameSite=Lax; Priority=High`,
+    )
+    expect(headers.every((header) => !header.includes("; Secure;"))).toBe(true)
+  })
+
   test("accepts only same-origin browser POSTs", () => {
     expect(
       isTrustedSponsorClaimRequest(
@@ -210,6 +372,33 @@ test.describe("sponsor claim canonical origin and cookie", () => {
 })
 
 test.describe("sponsor claim start boundary", () => {
+  test("accepts only one exact resolver row", () => {
+    expect(
+      parseSponsorClaimStartModeRpcResult([
+        { claim_start_mode: "initial-claim" },
+      ]),
+    ).toBe("initial-claim")
+    expect(
+      parseSponsorClaimStartModeRpcResult([
+        { claim_start_mode: "account-reauth" },
+      ]),
+    ).toBe("account-reauth")
+
+    for (const value of [
+      { claim_start_mode: "initial-claim" },
+      [],
+      [
+        { claim_start_mode: "initial-claim" },
+        { claim_start_mode: "account-reauth" },
+      ],
+      [{ claim_start_mode: "initial-claim", extra: true }],
+      [{ claim_start_mode: "unknown" }],
+      [{ claim_start_mode: null }],
+    ]) {
+      expect(parseSponsorClaimStartModeRpcResult(value)).toBeNull()
+    }
+  })
+
   test("validates and digests private values before database transport", () => {
     const prepared = preparedClaim()
 
@@ -225,6 +414,16 @@ test.describe("sponsor claim start boundary", () => {
       JSON.stringify({ token: "short", email: CLAIM_EMAIL }),
       JSON.stringify({ token: CLAIM_TOKEN, email: "not-an-email" }),
       JSON.stringify({ token: CLAIM_TOKEN }),
+      JSON.stringify({
+        token: CLAIM_TOKEN,
+        email: CLAIM_EMAIL,
+        next: "/admin",
+      }),
+      JSON.stringify({
+        token: CLAIM_TOKEN,
+        email: CLAIM_EMAIL,
+        password: "secret",
+      }),
       "x".repeat(4097),
     ]) {
       expect(parseSponsorClaimStartBody(body, crypto)).toBeNull()
@@ -288,7 +487,7 @@ test.describe("sponsor claim start boundary", () => {
     const sent: Array<{
       email: string
       emailRedirectTo: string
-      shouldCreateUser: boolean
+      mode: "initial-claim" | "account-reauth"
     }> = []
     const disposition = await decideSponsorClaimStart(
       preparedClaim(),
@@ -313,13 +512,16 @@ test.describe("sponsor claim start boundary", () => {
         email: "sponsor+family@example.com",
         emailRedirectTo:
           "https://creatorshare.com/auth/confirm?next=%2Fsponsor%2Fclaim",
-        shouldCreateUser: true,
+        mode: "initial-claim",
       },
     ])
   })
 
   test("reuses a consumed welcome link without creating a new account", async () => {
-    const sent: Array<{ email: string; shouldCreateUser: boolean }> = []
+    const sent: Array<{
+      email: string
+      mode: "initial-claim" | "account-reauth"
+    }> = []
     const disposition = await decideSponsorClaimStart(
       preparedClaim(),
       CANONICAL_ORIGIN,
@@ -334,7 +536,7 @@ test.describe("sponsor claim start boundary", () => {
         async sendMagicLink(input) {
           sent.push({
             email: input.email,
-            shouldCreateUser: input.shouldCreateUser,
+            mode: input.mode,
           })
         },
       },
@@ -344,7 +546,7 @@ test.describe("sponsor claim start boundary", () => {
     expect(sent).toEqual([
       {
         email: "sponsor+family@example.com",
-        shouldCreateUser: false,
+        mode: "account-reauth",
       },
     ])
   })

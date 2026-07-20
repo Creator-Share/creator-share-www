@@ -1,71 +1,77 @@
-import { randomUUID } from "node:crypto"
-
 import { NextRequest, NextResponse } from "next/server"
 
 import {
+  issueAccountClaimEmailProof,
+  issueInitialClaimEmailProof,
+} from "@/lib/auth/supabaseEmailProofIssuer"
+import {
   decideSponsorClaimStart,
   getSponsorClaimCanonicalOrigin,
-  getSponsorClaimCookieOptions,
+  parseSponsorClaimStartModeRpcResult,
   parseSponsorClaimStartBody,
-  SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
+  sponsorClaimCookieSetHeaders,
+  SPONSOR_ACCOUNT_CLAIM_START_BODY_MAXIMUM_BYTES,
 } from "@/lib/sponsorships/accountClaim"
 import {
   isTrustedCheckoutJsonRequest,
   resolveTrustedPrimaryRequestOrigin,
 } from "@/lib/sponsorships/checkout/requestSecurity"
 import { createSponsorshipCryptoFromEnvironment } from "@/lib/sponsorships/crypto"
+import { readBoundedSponsorManagementBody } from "@/lib/sponsorships/management/passwordlessAccess"
 import {
   createSponsorPasswordlessDeliverySignals,
   reserveSponsorPasswordlessDelivery,
   sponsorPasswordlessDeliveryContext,
 } from "@/lib/sponsorships/management/passwordlessRateLimit"
-import { createStatelessSponsorEmailAuthClient } from "@/lib/sponsorships/management/statelessAuth"
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 
 export const runtime = "nodejs"
 
 const GENERIC_START_RESPONSE = { status: "check-email" } as const
-const MAXIMUM_START_BODY_BYTES = 4096
-
-function requestTraceId(request: NextRequest): string | null {
-  for (const name of ["x-vercel-id", "cf-ray", "traceparent", "x-trace-id"]) {
-    const value = request.headers.get(name)?.trim()
-    if (value && value.length <= 255 && /^[\x21-\x7e]+$/.test(value)) {
-      return value
-    }
-  }
-  return null
-}
+const SERVICE_REQUEST_TIMEOUT_MILLISECONDS = 8_000
+const RESPONSE_HEADERS = {
+  "Cache-Control": "no-store, max-age=0",
+  Pragma: "no-cache",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+} as const
 
 function genericResponse() {
   return NextResponse.json(GENERIC_START_RESPONSE, {
     status: 202,
-    headers: {
-      "Cache-Control": "no-store",
-      Pragma: "no-cache",
-      "Referrer-Policy": "no-referrer",
-    },
+    headers: RESPONSE_HEADERS,
   })
 }
 
-async function readBoundedBody(request: NextRequest): Promise<string | null> {
-  const declaredLength = request.headers.get("content-length")
-  if (
-    declaredLength &&
-    (!/^\d+$/.test(declaredLength) ||
-      Number(declaredLength) > MAXIMUM_START_BODY_BYTES)
-  ) {
-    return null
-  }
+function unavailableResponse() {
+  return NextResponse.json(
+    { status: "unavailable" },
+    { status: 503, headers: RESPONSE_HEADERS },
+  )
+}
 
-  try {
-    const body = await request.text()
-    return Buffer.byteLength(body, "utf8") <= MAXIMUM_START_BODY_BYTES
-      ? body
-      : null
-  } catch {
-    return null
+function claimStartResponse(
+  disposition: "ready" | "check-email",
+  claimToken: string,
+  canonicalOrigin: string,
+  request: NextRequest,
+) {
+  const response = NextResponse.json(
+    { status: disposition },
+    {
+      status: disposition === "ready" ? 200 : 202,
+      headers: RESPONSE_HEADERS,
+    },
+  )
+  for (const header of sponsorClaimCookieSetHeaders({
+    canonicalOrigin,
+    rawHost: request.headers.get("host"),
+    requestPathname: "/api/sponsor-account/start",
+    claimToken,
+  })) {
+    response.headers.append("Set-Cookie", header)
   }
+  return response
 }
 
 export async function POST(request: NextRequest) {
@@ -73,13 +79,7 @@ export async function POST(request: NextRequest) {
   try {
     canonicalOrigin = getSponsorClaimCanonicalOrigin()
   } catch {
-    return NextResponse.json(
-      { status: "unavailable" },
-      {
-        status: 503,
-        headers: { "Cache-Control": "no-store" },
-      },
-    )
+    return unavailableResponse()
   }
 
   const expectedOrigin = resolveTrustedPrimaryRequestOrigin({
@@ -93,103 +93,105 @@ export async function POST(request: NextRequest) {
     return genericResponse()
   }
 
-  const rawBody = await readBoundedBody(request)
+  const rawBody = await readBoundedSponsorManagementBody(
+    request,
+    SPONSOR_ACCOUNT_CLAIM_START_BODY_MAXIMUM_BYTES,
+  )
   if (rawBody === null) return genericResponse()
 
   let sponsorshipCrypto
   try {
     sponsorshipCrypto = createSponsorshipCryptoFromEnvironment()
   } catch {
-    return NextResponse.json(
-      { status: "unavailable" },
-      {
-        status: 503,
-        headers: { "Cache-Control": "no-store" },
-      },
-    )
+    return unavailableResponse()
   }
 
   const prepared = parseSponsorClaimStartBody(rawBody, sponsorshipCrypto)
   if (!prepared) return genericResponse()
 
-  const authClient = await createClient()
-  const serviceClient = createServiceRoleClient()
-  const disposition = await decideSponsorClaimStart(
-    prepared,
-    canonicalOrigin,
-    sponsorshipCrypto,
-    {
-      async getClaimStartMode(input) {
-        const { data, error } = await serviceClient.rpc(
-          "resolve_sponsor_account_claim_start",
-          {
-            target_claim_token_digest: input.claimTokenDigest,
-            target_email_hmac: input.emailDigest,
-            target_email_normalization_version: input.emailNormalizationVersion,
-            target_email_hmac_key_version: input.emailHmacKeyVersion,
-            context_request_id: randomUUID(),
-            context_trace_id: requestTraceId(request),
-          },
-        )
-        if (error) throw error
-
-        const row = Array.isArray(data) ? data[0] : data
-        if (!row || typeof row !== "object") return null
-        const mode = (row as { claim_start_mode?: unknown }).claim_start_mode
-        return mode === "initial-claim" || mode === "account-reauth"
-          ? mode
-          : null
-      },
-      async getAuthenticatedUser() {
-        const { data, error } = await authClient.auth.getUser()
-        if (error || !data.user) return null
-        return {
-          id: data.user.id,
-          email: data.user.email,
-          emailConfirmedAt: data.user.email_confirmed_at,
-        }
-      },
-      async sendMagicLink(input) {
-        const signals = createSponsorPasswordlessDeliverySignals({
-          email: input.email,
-          headers: request.headers,
-        })
-        const allowed = await reserveSponsorPasswordlessDelivery({
-          flow: input.shouldCreateUser ? "initial-claim" : "account-claim",
-          signals,
-          context: sponsorPasswordlessDeliveryContext(request),
-          serviceClient,
-        })
-        if (!allowed) return
-
-        const { error } =
-          await createStatelessSponsorEmailAuthClient().auth.signInWithOtp({
-            email: input.email,
-            options: {
-              emailRedirectTo: input.emailRedirectTo,
-              shouldCreateUser: input.shouldCreateUser,
+  let disposition: "ready" | "check-email" = "check-email"
+  try {
+    const context = sponsorPasswordlessDeliveryContext(request)
+    let authClientPromise: ReturnType<typeof createClient> | null = null
+    let serviceClient: ReturnType<typeof createServiceRoleClient> | null = null
+    const getAuthClient = () => {
+      authClientPromise ??= createClient()
+      return authClientPromise
+    }
+    const getServiceClient = () => {
+      serviceClient ??= createServiceRoleClient({
+        requestTimeoutMilliseconds: SERVICE_REQUEST_TIMEOUT_MILLISECONDS,
+      })
+      return serviceClient
+    }
+    disposition = await decideSponsorClaimStart(
+      prepared,
+      canonicalOrigin,
+      sponsorshipCrypto,
+      {
+        async getClaimStartMode(input) {
+          const { data, error } = await getServiceClient().rpc(
+            "resolve_sponsor_account_claim_start",
+            {
+              target_claim_token_digest: input.claimTokenDigest,
+              target_email_hmac: input.emailDigest,
+              target_email_normalization_version:
+                input.emailNormalizationVersion,
+              target_email_hmac_key_version: input.emailHmacKeyVersion,
+              context_request_id: context.requestId,
+              context_trace_id: context.traceId,
             },
-          })
-        if (error) throw error
-      },
-    },
-  )
+          )
+          if (error) throw error
 
-  const response = NextResponse.json(
-    { status: disposition },
-    {
-      status: disposition === "ready" ? 200 : 202,
-      headers: {
-        "Cache-Control": "no-store",
-        Pragma: "no-cache",
-        "Referrer-Policy": "no-referrer",
+          return parseSponsorClaimStartModeRpcResult(data)
+        },
+        async getAuthenticatedUser() {
+          const authClient = await getAuthClient()
+          const { data, error } = await authClient.auth.getUser()
+          if (error || !data.user) return null
+          return {
+            id: data.user.id,
+            email: data.user.email,
+            emailConfirmedAt: data.user.email_confirmed_at,
+          }
+        },
+        async sendMagicLink(input) {
+          const signals = createSponsorPasswordlessDeliverySignals({
+            email: input.email,
+            headers: request.headers,
+          })
+          const allowed = await reserveSponsorPasswordlessDelivery({
+            flow:
+              input.mode === "initial-claim"
+                ? "initial-claim"
+                : "account-claim",
+            signals,
+            context,
+            serviceClient: getServiceClient(),
+          })
+          if (!allowed) return
+
+          const issueEmailProof =
+            input.mode === "initial-claim"
+              ? issueInitialClaimEmailProof
+              : issueAccountClaimEmailProof
+          await issueEmailProof({
+            recipientEmail: input.email,
+            redirectTo: input.emailRedirectTo,
+            context,
+          })
+        },
       },
-    },
-  )
-  response.cookies.set(
-    SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME,
+    )
+  } catch {
+    // Valid claims retain only a generic disposition during infrastructure loss.
+  }
+
+  return claimStartResponse(
+    disposition,
     prepared.claimToken,
-    getSponsorClaimCookieOptions(),
+    canonicalOrigin,
+    request,
   )
-  return response
 }
