@@ -29,17 +29,25 @@ const AUTH_USER_ID = "11111111-1111-4111-8111-111111111111"
 const ORIGIN = "https://creatorshare.com"
 const PREVIOUS_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL
 
-const otpCalls: Array<Record<string, unknown>> = []
+const deliveryContext = Object.freeze({
+  requestId: "71000000-0000-4000-8000-000000000001",
+  traceId: null,
+})
+const events: string[] = []
+const contextCalls: Request[] = []
+const signalCalls: Array<Record<string, unknown>> = []
+const genericIssuerCalls: Array<Record<string, unknown>> = []
+const reauthenticationIssuerCalls: Array<Record<string, unknown>> = []
 const reservationCalls: Array<Record<string, unknown>> = []
 let createClientCalls = 0
-let createStatelessClientCalls = 0
 let getUserCalls = 0
 let createClientFailure: Error | null = null
-let createStatelessClientFailure: Error | null = null
 let getUserFailure: Error | null = null
 let getUserError: { message: string } | null = null
-let otpFailure: Error | null = null
-let otpError: { message: string } | null = null
+let contextFailure: Error | null = null
+let signalFailure: Error | null = null
+let issuerFailure: Error | null = null
+let issuerResult: unknown = Object.freeze({ status: "issued" })
 let deliveryAllowed = true
 let reservationFailure: Error | null = null
 let authenticatedUser: MockAuthUser | null = {
@@ -77,37 +85,43 @@ nodeModule._load = function mockedModuleLoad(
       },
     }
   }
-  if (request === "@/lib/sponsorships/management/statelessAuth") {
+  if (request === "@/lib/auth/supabaseEmailProofIssuer") {
     return {
-      createStatelessSponsorEmailAuthClient() {
-        createStatelessClientCalls += 1
-        if (createStatelessClientFailure) {
-          throw createStatelessClientFailure
-        }
-        return {
-          auth: {
-            async signInWithOtp(input: Record<string, unknown>) {
-              otpCalls.push(input)
-              if (otpFailure) throw otpFailure
-              return { data: { user: null }, error: otpError }
-            },
-          },
-        }
+      async issueGenericSignInEmailProof(input: Record<string, unknown>) {
+        events.push("issue-generic")
+        genericIssuerCalls.push(input)
+        if (issuerFailure) throw issuerFailure
+        return issuerResult
+      },
+      async issueReauthenticationEmailProof(input: Record<string, unknown>) {
+        events.push("issue-reauthentication")
+        reauthenticationIssuerCalls.push(input)
+        if (issuerFailure) throw issuerFailure
+        return issuerResult
       },
     }
   }
   if (request === "@/lib/sponsorships/management/passwordlessRateLimit") {
     return {
-      createSponsorPasswordlessDeliverySignals(input: { email: string }) {
+      createSponsorPasswordlessDeliverySignals(
+        input: Record<string, unknown> & { email: string },
+      ) {
+        events.push("signals")
+        signalCalls.push(input)
+        if (signalFailure) throw signalFailure
         return {
           recipientDigest: input.email,
           sourceDigest: "trusted-source",
         }
       },
-      sponsorPasswordlessDeliveryContext() {
-        return { requestId: "71000000-0000-4000-8000-000000000001" }
+      sponsorPasswordlessDeliveryContext(input: Request) {
+        events.push("context")
+        contextCalls.push(input)
+        if (contextFailure) throw contextFailure
+        return deliveryContext
       },
       async reserveSponsorPasswordlessDelivery(input: Record<string, unknown>) {
+        events.push("reserve")
         reservationCalls.push(input)
         if (reservationFailure) throw reservationFailure
         return deliveryAllowed
@@ -184,19 +198,39 @@ async function bodyOf(response: Response): Promise<Record<string, unknown>> {
   return (await response.json()) as Record<string, unknown>
 }
 
+async function expectCheckEmailResponse(
+  response: Response,
+  forbiddenText: readonly string[] = [],
+): Promise<void> {
+  expect(response.status).toBe(202)
+  const body = await bodyOf(response)
+  expect(body).toEqual({ status: "check-email" })
+  const serializedBody = JSON.stringify(body)
+  for (const value of forbiddenText) expect(serializedBody).not.toContain(value)
+  expect(response.headers.get("cache-control")).toBe("no-store, max-age=0")
+  expect(response.headers.get("pragma")).toBe("no-cache")
+  expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+  expect(response.headers.get("x-content-type-options")).toBe("nosniff")
+  expect(response.headers.get("retry-after")).toBeNull()
+}
+
 test.beforeEach(() => {
   process.env.NEXT_PUBLIC_BASE_URL = ORIGIN
-  otpCalls.length = 0
+  events.length = 0
+  contextCalls.length = 0
+  signalCalls.length = 0
+  genericIssuerCalls.length = 0
+  reauthenticationIssuerCalls.length = 0
   reservationCalls.length = 0
   createClientCalls = 0
-  createStatelessClientCalls = 0
   getUserCalls = 0
   createClientFailure = null
-  createStatelessClientFailure = null
   getUserFailure = null
   getUserError = null
-  otpFailure = null
-  otpError = null
+  contextFailure = null
+  signalFailure = null
+  issuerFailure = null
+  issuerResult = Object.freeze({ status: "issued" })
   deliveryAllowed = true
   reservationFailure = null
   authenticatedUser = {
@@ -314,66 +348,89 @@ test("passwordless access rejects untrusted or malformed requests before Supabas
     expect(await bodyOf(response)).toEqual({ error: "invalid-request" })
   }
   expect(createClientCalls).toBe(0)
-  expect(createStatelessClientCalls).toBe(0)
+  expect(contextCalls).toHaveLength(0)
   expect(reservationCalls).toHaveLength(0)
-  expect(otpCalls).toHaveLength(0)
+  expect(genericIssuerCalls).toHaveLength(0)
+  expect(reauthenticationIssuerCalls).toHaveLength(0)
 })
 
-test("passwordless access sends one fixed noncreating link", async () => {
-  const response = await passwordlessAccessPost(
-    requestFor(
-      "/api/auth/passwordless",
-      JSON.stringify({ email: " Sponsor+Family@Example.com " }),
-    ),
+test("passwordless access reserves and issues with one exact context", async () => {
+  const request = requestFor(
+    "/api/auth/passwordless",
+    JSON.stringify({ email: " Sponsor+Family@Example.com " }),
   )
+  const response = await passwordlessAccessPost(request)
 
-  expect(response.status).toBe(202)
-  expect(await bodyOf(response)).toEqual({ status: "check-email" })
-  expect(response.headers.get("cache-control")).toBe("no-store, max-age=0")
+  await expectCheckEmailResponse(response)
   expect(createClientCalls).toBe(0)
-  expect(createStatelessClientCalls).toBe(1)
+  expect(events).toEqual(["context", "signals", "reserve", "issue-generic"])
+  expect(contextCalls).toEqual([request])
+  expect(signalCalls).toHaveLength(1)
+  expect(signalCalls[0].email).toBe("sponsor+family@example.com")
+  expect(signalCalls[0].headers).toBe(request.headers)
   expect(reservationCalls).toHaveLength(1)
-  expect(otpCalls).toEqual([
+  expect(reservationCalls[0].flow).toBe("generic-sign-in")
+  expect(reservationCalls[0].signals).toEqual({
+    recipientDigest: "sponsor+family@example.com",
+    sourceDigest: "trusted-source",
+  })
+  expect(reservationCalls[0].context).toBe(deliveryContext)
+  expect(genericIssuerCalls).toEqual([
     {
-      email: "sponsor+family@example.com",
-      options: {
-        emailRedirectTo: "https://creatorshare.com/auth/confirm?next=%2Fapp",
-        shouldCreateUser: false,
-      },
+      recipientEmail: "sponsor+family@example.com",
+      redirectTo: "https://creatorshare.com/auth/confirm?next=%2Fapp",
+      context: deliveryContext,
     },
   ])
+  expect(genericIssuerCalls[0].context).toBe(reservationCalls[0].context)
+  expect(reauthenticationIssuerCalls).toHaveLength(0)
 })
 
-test("passwordless access keeps provider and unknown-account failures uniform", async () => {
-  otpError = { message: "User not found" }
-  const unknownAccount = await passwordlessAccessPost(
-    requestFor(
-      "/api/auth/passwordless",
-      JSON.stringify({ email: "unknown@example.com" }),
-    ),
-  )
+test("passwordless access keeps every issuer outcome uniform", async () => {
+  const dispositions = [
+    Object.freeze({ status: "issued" }),
+    Object.freeze({ status: "coalesced", retryAfterSeconds: 30 }),
+    Object.freeze({ status: "deferred", retryAfterSeconds: 120 }),
+    Object.freeze({ status: "ambiguous", retryAfterSeconds: 3900 }),
+    Object.freeze({ status: "unavailable", stage: "configuration" }),
+    Object.freeze({ status: "unavailable", stage: "acquire" }),
+    Object.freeze({
+      status: "unavailable",
+      stage: "begin",
+      retryAfterSeconds: 3900,
+    }),
+  ]
 
-  otpError = null
-  otpFailure = new Error("mail provider unavailable")
-  const providerFailure = await passwordlessAccessPost(
-    requestFor(
-      "/api/auth/passwordless",
-      JSON.stringify({ email: "known@example.com" }),
-    ),
-  )
-
-  createStatelessClientFailure = new Error("auth provider unavailable")
-  const clientFailure = await passwordlessAccessPost(
-    requestFor(
-      "/api/auth/passwordless",
-      JSON.stringify({ email: "known@example.com" }),
-    ),
-  )
-
-  for (const response of [unknownAccount, providerFailure, clientFailure]) {
-    expect(response.status).toBe(202)
-    expect(await bodyOf(response)).toEqual({ status: "check-email" })
+  for (const [index, disposition] of dispositions.entries()) {
+    issuerResult = disposition
+    const response = await passwordlessAccessPost(
+      requestFor(
+        "/api/auth/passwordless",
+        JSON.stringify({ email: `sponsor${index}@example.com` }),
+      ),
+    )
+    await expectCheckEmailResponse(response, [
+      `sponsor${index}@example.com`,
+      disposition.status,
+      "retryAfterSeconds",
+    ])
   }
+
+  issuerFailure = new Error(
+    "provider failed for private-sponsor@example.com with secret detail",
+  )
+  const exception = await passwordlessAccessPost(
+    requestFor(
+      "/api/auth/passwordless",
+      JSON.stringify({ email: "private-sponsor@example.com" }),
+    ),
+  )
+  await expectCheckEmailResponse(exception, [
+    "private-sponsor@example.com",
+    "provider failed",
+    "secret detail",
+  ])
+  expect(genericIssuerCalls).toHaveLength(dispositions.length + 1)
 })
 
 test("passwordless access hides throttling and reservation failures", async () => {
@@ -384,12 +441,12 @@ test("passwordless access hides throttling and reservation failures", async () =
       JSON.stringify({ email: "known@example.com" }),
     ),
   )
-  expect(suppressed.status).toBe(202)
-  expect(await bodyOf(suppressed)).toEqual({ status: "check-email" })
+  await expectCheckEmailResponse(suppressed, ["known@example.com"])
+  expect(events).toEqual(["context", "signals", "reserve"])
   expect(reservationCalls).toHaveLength(1)
-  expect(createStatelessClientCalls).toBe(0)
-  expect(otpCalls).toHaveLength(0)
+  expect(genericIssuerCalls).toHaveLength(0)
 
+  events.length = 0
   deliveryAllowed = true
   reservationFailure = new Error("database unavailable")
   const unavailable = await passwordlessAccessPost(
@@ -398,11 +455,47 @@ test("passwordless access hides throttling and reservation failures", async () =
       JSON.stringify({ email: "known@example.com" }),
     ),
   )
-  expect(unavailable.status).toBe(202)
-  expect(await bodyOf(unavailable)).toEqual({ status: "check-email" })
+  await expectCheckEmailResponse(unavailable, [
+    "known@example.com",
+    "database unavailable",
+  ])
+  expect(events).toEqual(["context", "signals", "reserve"])
   expect(reservationCalls).toHaveLength(2)
-  expect(createStatelessClientCalls).toBe(0)
-  expect(otpCalls).toHaveLength(0)
+  expect(genericIssuerCalls).toHaveLength(0)
+})
+
+test("passwordless access stops on private context and signal failures", async () => {
+  contextFailure = new Error("private context failure")
+  const contextUnavailable = await passwordlessAccessPost(
+    requestFor(
+      "/api/auth/passwordless",
+      JSON.stringify({ email: "known@example.com" }),
+    ),
+  )
+  await expectCheckEmailResponse(contextUnavailable, [
+    "known@example.com",
+    "private context failure",
+  ])
+  expect(events).toEqual(["context"])
+  expect(reservationCalls).toHaveLength(0)
+  expect(genericIssuerCalls).toHaveLength(0)
+
+  events.length = 0
+  contextFailure = null
+  signalFailure = new Error("private signal failure")
+  const signalUnavailable = await passwordlessAccessPost(
+    requestFor(
+      "/api/auth/passwordless",
+      JSON.stringify({ email: "known@example.com" }),
+    ),
+  )
+  await expectCheckEmailResponse(signalUnavailable, [
+    "known@example.com",
+    "private signal failure",
+  ])
+  expect(events).toEqual(["context", "signals"])
+  expect(reservationCalls).toHaveLength(0)
+  expect(genericIssuerCalls).toHaveLength(0)
 })
 
 test("reauthentication rejects browser identity and redirect input before auth", async () => {
@@ -431,10 +524,11 @@ test("reauthentication rejects browser identity and redirect input before auth",
     expect(await bodyOf(response)).toEqual({ error: "invalid-request" })
   }
   expect(createClientCalls).toBe(0)
-  expect(createStatelessClientCalls).toBe(0)
+  expect(contextCalls).toHaveLength(0)
   expect(reservationCalls).toHaveLength(0)
   expect(getUserCalls).toBe(0)
-  expect(otpCalls).toHaveLength(0)
+  expect(genericIssuerCalls).toHaveLength(0)
+  expect(reauthenticationIssuerCalls).toHaveLength(0)
 })
 
 test("reauthentication requires one confirmed authenticated email", async () => {
@@ -455,46 +549,134 @@ test("reauthentication requires one confirmed authenticated email", async () => 
   )
   expect(unconfirmed.status).toBe(401)
   expect(await bodyOf(unconfirmed)).toEqual({ error: "unauthorized" })
-  expect(otpCalls).toHaveLength(0)
+  expect(reauthenticationIssuerCalls).toHaveLength(0)
 })
 
-test("reauthentication derives the recipient from auth and never creates users", async () => {
+test("reauthentication derives its recipient and shares one exact context", async () => {
   authenticatedUser = {
     id: AUTH_USER_ID,
     email: " Sponsor+Family@Example.com ",
     email_confirmed_at: "2026-07-19T08:00:00.000Z",
   }
-  const response = await reauthenticationPost(
-    requestFor("/api/sponsor-account/reauth/start", "{}"),
-  )
+  const request = requestFor("/api/sponsor-account/reauth/start", "{}")
+  const response = await reauthenticationPost(request)
 
-  expect(response.status).toBe(202)
-  expect(await bodyOf(response)).toEqual({ status: "check-email" })
+  await expectCheckEmailResponse(response)
   expect(getUserCalls).toBe(1)
-  expect(otpCalls).toEqual([
+  expect(events).toEqual([
+    "context",
+    "signals",
+    "reserve",
+    "issue-reauthentication",
+  ])
+  expect(contextCalls).toEqual([request])
+  expect(signalCalls).toHaveLength(1)
+  expect(signalCalls[0].email).toBe("sponsor+family@example.com")
+  expect(signalCalls[0].headers).toBe(request.headers)
+  expect(reservationCalls).toHaveLength(1)
+  expect(reservationCalls[0].flow).toBe("reauthentication")
+  expect(reservationCalls[0].signals).toEqual({
+    recipientDigest: "sponsor+family@example.com",
+    sourceDigest: "trusted-source",
+  })
+  expect(reservationCalls[0].context).toBe(deliveryContext)
+  expect(reauthenticationIssuerCalls).toEqual([
     {
-      email: "sponsor+family@example.com",
-      options: {
-        emailRedirectTo: "https://creatorshare.com/auth/confirm?next=%2Fapp",
-        shouldCreateUser: false,
-      },
+      recipientEmail: "sponsor+family@example.com",
+      redirectTo: "https://creatorshare.com/auth/confirm?next=%2Fapp",
+      context: deliveryContext,
     },
   ])
+  expect(reauthenticationIssuerCalls[0].context).toBe(
+    reservationCalls[0].context,
+  )
+  expect(genericIssuerCalls).toHaveLength(0)
 })
 
-test("reauthentication does not disclose magic-link delivery failures", async () => {
-  otpError = { message: "provider account detail" }
-  const providerError = await reauthenticationPost(
+test("reauthentication hides quota and every issuer outcome", async () => {
+  deliveryAllowed = false
+  const suppressed = await reauthenticationPost(
     requestFor("/api/sponsor-account/reauth/start", "{}"),
   )
-  otpError = null
-  otpFailure = new Error("provider unavailable")
-  const providerException = await reauthenticationPost(
-    requestFor("/api/sponsor-account/reauth/start", "{}"),
-  )
+  await expectCheckEmailResponse(suppressed, ["sponsor@example.com"])
+  expect(events).toEqual(["context", "signals", "reserve"])
+  expect(reauthenticationIssuerCalls).toHaveLength(0)
 
-  for (const response of [providerError, providerException]) {
-    expect(response.status).toBe(202)
-    expect(await bodyOf(response)).toEqual({ status: "check-email" })
+  events.length = 0
+  deliveryAllowed = true
+  reservationFailure = new Error("database unavailable")
+  const reservationUnavailable = await reauthenticationPost(
+    requestFor("/api/sponsor-account/reauth/start", "{}"),
+  )
+  await expectCheckEmailResponse(reservationUnavailable, [
+    "sponsor@example.com",
+    "database unavailable",
+  ])
+  expect(events).toEqual(["context", "signals", "reserve"])
+  expect(reauthenticationIssuerCalls).toHaveLength(0)
+
+  events.length = 0
+  reservationFailure = null
+  const dispositions = [
+    Object.freeze({ status: "issued" }),
+    Object.freeze({ status: "coalesced", retryAfterSeconds: 30 }),
+    Object.freeze({ status: "deferred", retryAfterSeconds: 120 }),
+    Object.freeze({ status: "ambiguous", retryAfterSeconds: 3900 }),
+    Object.freeze({ status: "unavailable", stage: "configuration" }),
+    Object.freeze({ status: "unavailable", stage: "acquire" }),
+    Object.freeze({
+      status: "unavailable",
+      stage: "begin",
+      retryAfterSeconds: 3900,
+    }),
+  ]
+  for (const disposition of dispositions) {
+    issuerResult = disposition
+    const response = await reauthenticationPost(
+      requestFor("/api/sponsor-account/reauth/start", "{}"),
+    )
+    await expectCheckEmailResponse(response, [
+      "sponsor@example.com",
+      disposition.status,
+      "retryAfterSeconds",
+    ])
   }
+
+  issuerFailure = new Error("provider account detail")
+  const issuerException = await reauthenticationPost(
+    requestFor("/api/sponsor-account/reauth/start", "{}"),
+  )
+  await expectCheckEmailResponse(issuerException, [
+    "sponsor@example.com",
+    "provider account detail",
+  ])
+  expect(reauthenticationIssuerCalls).toHaveLength(dispositions.length + 1)
+})
+
+test("reauthentication stops on private context and signal failures", async () => {
+  contextFailure = new Error("private context failure")
+  const contextUnavailable = await reauthenticationPost(
+    requestFor("/api/sponsor-account/reauth/start", "{}"),
+  )
+  await expectCheckEmailResponse(contextUnavailable, [
+    "sponsor@example.com",
+    "private context failure",
+  ])
+  expect(events).toEqual(["context"])
+  expect(reservationCalls).toHaveLength(0)
+  expect(reauthenticationIssuerCalls).toHaveLength(0)
+
+  events.length = 0
+  contextFailure = null
+  signalFailure = new Error("private signal failure")
+  const signalUnavailable = await reauthenticationPost(
+    requestFor("/api/sponsor-account/reauth/start", "{}"),
+  )
+  await expectCheckEmailResponse(signalUnavailable, [
+    "sponsor@example.com",
+    "private signal failure",
+  ])
+  expect(events).toEqual(["context", "signals"])
+  expect(reservationCalls).toHaveLength(0)
+  expect(reauthenticationIssuerCalls).toHaveLength(0)
 })

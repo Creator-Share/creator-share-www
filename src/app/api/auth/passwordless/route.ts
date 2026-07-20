@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { issueGenericSignInEmailProof } from "@/lib/auth/supabaseEmailProofIssuer"
 import { getSponsorClaimCanonicalOrigin } from "@/lib/sponsorships/accountClaim"
 import {
   isTrustedCheckoutJsonRequest,
@@ -16,7 +17,6 @@ import {
   reserveSponsorPasswordlessDelivery,
   sponsorPasswordlessDeliveryContext,
 } from "@/lib/sponsorships/management/passwordlessRateLimit"
-import { createStatelessSponsorEmailAuthClient } from "@/lib/sponsorships/management/statelessAuth"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const context = sponsorPasswordlessDeliveryContext(request)
     const signals = createSponsorPasswordlessDeliverySignals({
       email: accessRequest.email,
       headers: request.headers,
@@ -78,21 +79,17 @@ export async function POST(request: NextRequest) {
     const allowed = await reserveSponsorPasswordlessDelivery({
       flow: "generic-sign-in",
       signals,
-      context: sponsorPasswordlessDeliveryContext(request),
+      context,
     })
     if (!allowed) return checkEmailResponse()
 
-    const supabase = createStatelessSponsorEmailAuthClient()
-    await supabase.auth.signInWithOtp({
-      email: accessRequest.email,
-      options: {
-        emailRedirectTo:
-          buildSponsorManagementMagicLinkCallback(canonicalOrigin),
-        shouldCreateUser: false,
-      },
+    await issueGenericSignInEmailProof({
+      recipientEmail: accessRequest.email,
+      redirectTo: buildSponsorManagementMagicLinkCallback(canonicalOrigin),
+      context,
     })
   } catch {
-    // Unknown accounts and provider failures share one public disposition.
+    // Quota, gate, unknown-account, and provider failures stay private.
   }
 
   return checkEmailResponse()

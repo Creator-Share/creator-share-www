@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { issueReauthenticationEmailProof } from "@/lib/auth/supabaseEmailProofIssuer"
 import { getSponsorClaimCanonicalOrigin } from "@/lib/sponsorships/accountClaim"
 import {
   isTrustedCheckoutJsonRequest,
@@ -17,7 +18,6 @@ import {
   reserveSponsorPasswordlessDelivery,
   sponsorPasswordlessDeliveryContext,
 } from "@/lib/sponsorships/management/passwordlessRateLimit"
-import { createStatelessSponsorEmailAuthClient } from "@/lib/sponsorships/management/statelessAuth"
 import { createClient } from "@/utils/supabase/server"
 
 export const runtime = "nodejs"
@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const context = sponsorPasswordlessDeliveryContext(request)
     const signals = createSponsorPasswordlessDeliverySignals({
       email: authenticatedEmail,
       headers: request.headers,
@@ -104,20 +105,17 @@ export async function POST(request: NextRequest) {
     const allowed = await reserveSponsorPasswordlessDelivery({
       flow: "reauthentication",
       signals,
-      context: sponsorPasswordlessDeliveryContext(request),
+      context,
     })
     if (!allowed) return response({ status: "check-email" }, 202)
 
-    await createStatelessSponsorEmailAuthClient().auth.signInWithOtp({
-      email: authenticatedEmail,
-      options: {
-        emailRedirectTo:
-          buildSponsorManagementMagicLinkCallback(canonicalOrigin),
-        shouldCreateUser: false,
-      },
+    await issueReauthenticationEmailProof({
+      recipientEmail: authenticatedEmail,
+      redirectTo: buildSponsorManagementMagicLinkCallback(canonicalOrigin),
+      context,
     })
   } catch {
-    // Delivery state remains private, even to an authenticated browser.
+    // Quota, gate, and provider state stays private to the server.
   }
 
   return response({ status: "check-email" }, 202)

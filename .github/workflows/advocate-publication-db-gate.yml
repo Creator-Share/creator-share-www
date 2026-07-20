@@ -33,9 +33,11 @@ on:
       - "src/lib/sponsorships/management/passwordlessRateLimit.ts"
       - "src/lib/sponsorships/management/responseBoundSupabaseCookies.ts"
       - "src/lib/sponsorships/management/sponsorEmailConfirmation.ts"
+      - "src/app/api/auth/passwordless/route.ts"
       - "src/app/api/auth/reset-password/route.ts"
       - "src/app/api/auth/verify-otp/route.ts"
       - "src/app/api/auth/change-password/route.ts"
+      - "src/app/api/sponsor-account/reauth/start/route.ts"
       - "src/app/forgot-password/**"
       - "src/lib/sponsorships/management/statelessAuth.ts"
       - "src/utils/passwordValidation.ts"
@@ -48,6 +50,7 @@ on:
       - "tests/advocates/attribution-identity-auth-routes.spec.ts"
       - "tests/advocates/attribution-identity-session-auth-routes.spec.ts"
       - "tests/auth/supabase-email-proof-issuer.spec.ts"
+      - "tests/sponsorships/passwordless-access.spec.ts"
       - "tests/sponsorships/stateless-email-auth-client.spec.ts"
       - "supabase/config.toml"
       - "supabase/seed.sql"
@@ -110,6 +113,7 @@ jobs:
           tests/auth/change-password.spec.ts
           tests/advocates/attribution-identity-auth-routes.spec.ts
           tests/advocates/attribution-identity-session-auth-routes.spec.ts
+          tests/sponsorships/passwordless-access.spec.ts
           tests/sponsorships/stateless-email-auth-client.spec.ts
           --workers=1
           --retries=0
