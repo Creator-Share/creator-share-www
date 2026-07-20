@@ -1630,6 +1630,10 @@ test("keeps the FF-029 workflow loopback only, ephemeral, and observational", as
   expect(bindingVerification).toContain("exit 1")
 
   const credentialLoad = step("Load local Supabase canary credentials")
+  expect(credentialLoad).toContain(
+    'node_modules/.bin/supabase status -o env > "$status_file"',
+  )
+  expect(credentialLoad).not.toContain("yarn supabase status")
   expect(
     [...credentialLoad.matchAll(/printf '([A-Z0-9_]+)=%q/g)].map(
       (match) => match[1],
