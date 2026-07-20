@@ -14,15 +14,39 @@ on:
       - "supabase/tests/**/*invitation*"
       - "supabase/tests/*email_proof*.sql"
       - "supabase/tests/**/*email_proof*"
+      - "supabase/tests/*password_recovery*.sql"
+      - "supabase/tests/**/*password_recovery*"
+      - "supabase/tests/sponsor_recent_authentication_management.test.sql"
       - "tests/database/**/*publication*"
       - "tests/database/**/*initial-owner*"
       - "tests/database/**/*email-proof*"
       - "tests/database/support/*.mjs"
       - "tests/provider/**"
+      - "src/lib/advocates/attributionIdentityCookie.ts"
       - "src/lib/auth/emailProof*.ts"
       - "src/lib/auth/supabaseEmailProofIssuer.ts"
+      - "src/lib/auth/passwordRecoveryClient.ts"
+      - "src/lib/sponsorships/accountClaim.ts"
+      - "src/lib/sponsorships/checkout/requestSecurity.ts"
+      - "src/lib/sponsorships/crypto.ts"
+      - "src/lib/sponsorships/management/passwordlessAccess.ts"
+      - "src/lib/sponsorships/management/passwordlessRateLimit.ts"
+      - "src/lib/sponsorships/management/responseBoundSupabaseCookies.ts"
+      - "src/lib/sponsorships/management/sponsorEmailConfirmation.ts"
+      - "src/app/api/auth/reset-password/route.ts"
+      - "src/app/api/auth/verify-otp/route.ts"
+      - "src/app/api/auth/change-password/route.ts"
+      - "src/app/forgot-password/**"
       - "src/lib/sponsorships/management/statelessAuth.ts"
+      - "src/utils/passwordValidation.ts"
+      - "src/utils/supabase/server.ts"
       - "tests/auth/*email-proof*.spec.ts"
+      - "tests/auth/password-recovery-client.spec.ts"
+      - "tests/auth/password-reset-request-route.spec.ts"
+      - "tests/auth/verify-otp.spec.ts"
+      - "tests/auth/change-password.spec.ts"
+      - "tests/advocates/attribution-identity-auth-routes.spec.ts"
+      - "tests/advocates/attribution-identity-session-auth-routes.spec.ts"
       - "tests/auth/supabase-email-proof-issuer.spec.ts"
       - "tests/sponsorships/stateless-email-auth-client.spec.ts"
       - "supabase/config.toml"
@@ -80,6 +104,12 @@ jobs:
           tests/auth/email-proof-issuance-gate.spec.ts
           tests/auth/supabase-email-proof-issuer.spec.ts
           tests/auth/email-proof-provider-inventory.spec.ts
+          tests/auth/password-recovery-client.spec.ts
+          tests/auth/password-reset-request-route.spec.ts
+          tests/auth/verify-otp.spec.ts
+          tests/auth/change-password.spec.ts
+          tests/advocates/attribution-identity-auth-routes.spec.ts
+          tests/advocates/attribution-identity-session-auth-routes.spec.ts
           tests/sponsorships/stateless-email-auth-client.spec.ts
           --workers=1
           --retries=0
@@ -173,6 +203,13 @@ jobs:
           yarn supabase test db
           --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
           supabase/tests/shared_email_proof_issuance_gate.test.sql
+
+      - name: Run password recovery authorization database tests
+        run: >-
+          yarn supabase test db
+          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+          supabase/tests/sponsor_recent_authentication_management.test.sql
+          supabase/tests/password_recovery_receipt_consumption.test.sql
 
       - name: Run shared email proof issuance concurrency harness
         env:

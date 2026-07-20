@@ -1,74 +1,87 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Field } from "@/components/ui/field"
 import { Box, Button, Input, Stack, Text } from "@chakra-ui/react"
-import { useForm } from "react-hook-form"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
+import { useEffect, useRef, useState } from "react"
+import { type FieldErrors, useForm } from "react-hook-form"
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa"
-import { create } from "zustand"
-import { validatePassword } from "@/utils/passwordValidation"
+
+import { Field } from "@/components/ui/field"
 import { PasswordStrengthIndicator } from "@/components/ui/PasswordStrengthIndicator"
+import { classifyPasswordChangeResponse } from "@/lib/auth/passwordRecoveryClient"
+import { validatePassword } from "@/utils/passwordValidation"
 
 interface FormValues {
   password: string
   confirmPassword: string
 }
 
-const useFormStore = create<{
-  isDisabled: boolean
-  setIsDisabled: (value: boolean) => void
-}>((set) => ({
-  isDisabled: true,
-  setIsDisabled: (value) => set({ isDisabled: value }),
-}))
+const PASSWORD_CHANGE_AMBIGUOUS_MESSAGE =
+  "We couldn't confirm whether your password changed. Try signing in with the new password before submitting another reset."
+const PASSWORD_MISMATCH_MESSAGE = "Passwords do not match"
 
 const ResetPassword = () => {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
     watch,
-  } = useForm<FormValues>({
-    mode: "onChange",
-  })
+  } = useForm<FormValues>({ mode: "onChange" })
 
   const router = useRouter()
-  const [loading, setLoading] = useState<boolean>(false)
-  const [successMessage, setSuccessMessage] = useState<string>("")
-  const [errorMessage, setErrorMessage] = useState<string>("")
-  const setIsDisabled = useFormStore((state) => state.setIsDisabled)
-  const isDisabled = useFormStore((state) => state.isDisabled)
+  const operationEpoch = useRef(0)
+  const mounted = useRef(false)
+  const navigationTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [clientReady, setClientReady] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [successMessage, setSuccessMessage] = useState("")
+  const [errorMessage, setErrorMessage] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
-  const togglePasswordVisibility = () => setShowPassword(!showPassword)
-  const toggleConfirmPasswordVisibility = () =>
-    setShowConfirmPassword(!showConfirmPassword)
-
   const password = watch("password")
   const confirmPassword = watch("confirmPassword")
-  const fields = watch()
+  const isDisabled = !password || !confirmPassword
 
   useEffect(() => {
-    const hasEmptyFields = Object.values(fields).some((value) => !value)
-    const passwordsMatch = password === confirmPassword
+    mounted.current = true
+    setClientReady(true)
+    return () => {
+      mounted.current = false
+      operationEpoch.current += 1
+      if (navigationTimeout.current !== null) {
+        clearTimeout(navigationTimeout.current)
+      }
+    }
+  }, [])
 
-    setIsDisabled(hasEmptyFields || !passwordsMatch)
-  }, [fields, password, confirmPassword, setIsDisabled])
+  const clearPasswords = () => {
+    reset({ password: "", confirmPassword: "" })
+    setShowPassword(false)
+    setShowConfirmPassword(false)
+  }
 
   const onSubmit = async (data: FormValues) => {
-    setLoading(true)
-    setSuccessMessage("")
-    setErrorMessage("")
+    if (data.password !== data.confirmPassword) {
+      clearPasswords()
+      setSuccessMessage("")
+      setErrorMessage(PASSWORD_MISMATCH_MESSAGE)
+      return
+    }
 
     const validation = validatePassword(data.password)
     if (!validation.isValid) {
       setErrorMessage(validation.error)
-      setLoading(false)
       return
     }
+
+    setLoading(true)
+    setSuccessMessage("")
+    setErrorMessage("")
+    const epoch = ++operationEpoch.current
+    const isCurrent = () => mounted.current && operationEpoch.current === epoch
 
     try {
       const response = await fetch("/api/auth/change-password", {
@@ -77,26 +90,68 @@ const ResetPassword = () => {
         body: JSON.stringify({ password: data.password }),
       })
 
-      const result = await response.json()
+      let responseBody: unknown = null
+      try {
+        responseBody = await response.json()
+      } catch {
+        if (isCurrent()) {
+          clearPasswords()
+          setErrorMessage(PASSWORD_CHANGE_AMBIGUOUS_MESSAGE)
+        }
+        return
+      }
 
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to reset password.")
+      const disposition = classifyPasswordChangeResponse(
+        response.status,
+        responseBody,
+      )
+      if (!isCurrent()) return
+
+      clearPasswords()
+      if (disposition === "rejected") {
+        setErrorMessage(
+          "The password request was invalid. Review the requirements and try again.",
+        )
+        return
+      }
+      if (disposition === "unauthorized") {
+        setErrorMessage(
+          "Your recovery session has expired. Request a new code and try again.",
+        )
+        return
+      }
+      if (disposition === "ambiguous") {
+        setErrorMessage(PASSWORD_CHANGE_AMBIGUOUS_MESSAGE)
+        return
       }
 
       setSuccessMessage("Password reset successful! Please log in again.")
-      setTimeout(() => router.push("/login"), 2000)
-    } catch (err) {
-      setErrorMessage((err as Error).message || "Failed to reset password.")
+      navigationTimeout.current = setTimeout(() => {
+        if (isCurrent()) router.replace("/login")
+      }, 2000)
+    } catch {
+      if (!isCurrent()) return
+      clearPasswords()
+      setErrorMessage(PASSWORD_CHANGE_AMBIGUOUS_MESSAGE)
     } finally {
-      setLoading(false)
+      if (isCurrent()) setLoading(false)
+    }
+  }
+
+  const onInvalid = (formErrors: FieldErrors<FormValues>) => {
+    if (formErrors.confirmPassword?.message === PASSWORD_MISMATCH_MESSAGE) {
+      clearPasswords()
+      setSuccessMessage("")
+      setErrorMessage(PASSWORD_MISMATCH_MESSAGE)
     }
   }
 
   return (
     <Box className="flex flex-col items-center justify-center min-h-screen p-4">
       <form
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={handleSubmit(onSubmit, onInvalid)}
         className="w-full max-w-md p-6 bg-[#FFFFFF] md:rounded-xl md:border md:shadow-sm md:px-8 md:py-12"
+        aria-busy={!clientReady || loading}
       >
         <Box className="flex justify-center">
           <Image
@@ -115,100 +170,117 @@ const ResetPassword = () => {
           </Text>
         </Box>
         <Stack gap="4" className="text-[#8D9692]">
-          <Box>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb="1"
-            >
-              <Text as="label">Password</Text>
+          <Field
+            label="Password"
+            invalid={!!errors.password}
+            errorText={errors.password?.message}
+          >
+            <Box className="relative w-full">
+              <Input
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                disabled={!clientReady || loading}
+                {...register("password", {
+                  required: "Password is required",
+                  validate: (value) => {
+                    const result = validatePassword(value)
+                    return result.isValid || result.error
+                  },
+                })}
+                className="border border-[#8D9692] p-2 pr-12 w-full"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                disabled={!clientReady || loading}
+                onClick={() => setShowPassword((visible) => !visible)}
+                className="absolute right-1 top-1/2 -translate-y-1/2"
+              >
+                {showPassword ? (
+                  <FaRegEyeSlash aria-hidden="true" />
+                ) : (
+                  <FaRegEye aria-hidden="true" />
+                )}
+              </Button>
             </Box>
-            <Field
-              invalid={!!errors.password}
-              errorText={errors.password?.message}
-            >
-              <Box className="relative w-full">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  {...register("password", {
-                    required: "Password is required",
-                    validate: (value) => {
-                      const validation = validatePassword(value)
-                      return validation.isValid || validation.error
-                    }
-                  })}
-                  className="border border-[#8D9692] p-2 w-full"
-                />
-                <PasswordStrengthIndicator password={watch("password")} />
-                <Text fontSize="xs" color="gray.600" mt={1}>
-                  Password must contain at least 8 characters, including uppercase, lowercase, 
-                  number, and special character (!@#$%^&*(),.?":{}|&lt;&gt;).
-                </Text>
-                <Box
-                  onClick={togglePasswordVisibility}
-                  className="absolute right-[10px] top-1/2 -translate-y-1/2 cursor-pointer"
-                >
-                  {showPassword ? <FaRegEyeSlash /> : <FaRegEye />}
-                </Box>
-              </Box>
-            </Field>
-          </Box>
-          <Box>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb="1"
-            >
-              <Text as="label">Confirm Password</Text>
+            <PasswordStrengthIndicator password={password} />
+            <Text fontSize="xs" color="gray.600" mt={1}>
+              Password must contain at least 8 characters, including uppercase,
+              lowercase, number, and special character (!@#$%^&*(),.?":{}
+              |&lt;&gt;).
+            </Text>
+          </Field>
+          <Field
+            label="Confirm Password"
+            invalid={
+              !!errors.confirmPassword ||
+              (!!confirmPassword && password !== confirmPassword)
+            }
+            errorText={
+              !!confirmPassword && password !== confirmPassword
+                ? PASSWORD_MISMATCH_MESSAGE
+                : errors.confirmPassword?.message
+            }
+          >
+            <Box className="relative w-full">
+              <Input
+                type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
+                disabled={!clientReady || loading}
+                {...register("confirmPassword", {
+                  required: "Confirm Password is required",
+                  validate: (value) =>
+                    value === password || PASSWORD_MISMATCH_MESSAGE,
+                })}
+                className="border border-[#8D9692] p-2 pr-12 w-full"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={
+                  showConfirmPassword
+                    ? "Hide password confirmation"
+                    : "Show password confirmation"
+                }
+                disabled={!clientReady || loading}
+                onClick={() => setShowConfirmPassword((visible) => !visible)}
+                className="absolute right-1 top-1/2 -translate-y-1/2"
+              >
+                {showConfirmPassword ? (
+                  <FaRegEyeSlash aria-hidden="true" />
+                ) : (
+                  <FaRegEye aria-hidden="true" />
+                )}
+              </Button>
             </Box>
-            <Field
-              invalid={
-                !!errors.confirmPassword ||
-                (!!confirmPassword && password !== confirmPassword)
-              }
-              errorText={
-                !!confirmPassword && password !== confirmPassword
-                  ? "Passwords do not match"
-                  : errors.confirmPassword?.message
-              }
-            >
-              <Box className="relative w-full">
-                <Input
-                  type={showConfirmPassword ? "text" : "password"}
-                  {...register("confirmPassword", {
-                    required: "Confirm Password is required",
-                  })}
-                  className="border border-[#8D9692] p-2 w-full"
-                />
-                <Box
-                  onClick={toggleConfirmPasswordVisibility}
-                  className="absolute right-[10px] top-1/2 -translate-y-1/2 cursor-pointer"
-                >
-                  {showConfirmPassword ? <FaRegEyeSlash /> : <FaRegEye />}
-                </Box>
-              </Box>
-            </Field>
-          </Box>
+          </Field>
           <Button
             type="submit"
-            disabled={isDisabled || loading}
+            disabled={!clientReady || isDisabled || loading}
             className="bg-[#2b7ff9] text-white"
           >
             {loading ? "Resetting..." : "Continue"}
           </Button>
         </Stack>
-        {successMessage && (
-          <Text color="green.500" mt={4}>
-            {successMessage}
-          </Text>
-        )}
-        {errorMessage && (
-          <Text color="red.500" mt={4}>
-            {errorMessage}
-          </Text>
-        )}
+        <Text
+          color={successMessage ? "green.500" : undefined}
+          mt={4}
+          role="status"
+          aria-live="polite"
+        >
+          {successMessage}
+        </Text>
+        <Text
+          color={errorMessage ? "red.500" : undefined}
+          mt={4}
+          role="status"
+          aria-live="polite"
+        >
+          {errorMessage}
+        </Text>
       </form>
     </Box>
   )

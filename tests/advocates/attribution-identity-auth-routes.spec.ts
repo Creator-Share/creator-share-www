@@ -18,6 +18,9 @@ type AttributionIdentityCookieModule =
   typeof import("../../src/lib/advocates/attributionIdentityCookie")
 
 const AUTH_USER_ID = "11111111-1111-4111-8111-111111111111"
+const AUTH_SESSION_ID = "33333333-3333-4333-8333-333333333333"
+const DEFAULT_SUPABASE_AUTH_COOKIE = "sb-project-auth-token"
+const RECOVERY_AUTH_COOKIE = "__Host-cs-password-recovery-v1"
 const CURRENT_SECRET = Buffer.alloc(32, 7).toString("base64")
 const PREVIOUS_ENVIRONMENT = {
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -32,8 +35,10 @@ let exchangeError: { message: string } | null = null
 let signOutError: { message: string } | null = null
 let updateUserError: { message: string } | null = null
 let exchangeCalls = 0
+let getUserCalls = 0
 let signOutCalls = 0
 let updateUserCalls = 0
+let consumeReceiptCalls = 0
 
 const nodeModule = Module as unknown as { _load: NodeModuleLoader }
 const originalModuleLoad = nodeModule._load
@@ -46,7 +51,22 @@ nodeModule._load = function mockedModuleLoad(
   if (request === "server-only") return {}
   if (request === "@supabase/ssr") {
     return {
-      createServerClient() {
+      createServerClient(
+        _url: string,
+        _key: string,
+        options?: {
+          cookieOptions?: Record<string, unknown>
+          cookies?: {
+            setAll(
+              cookies: Array<{
+                name: string
+                value: string
+                options?: Record<string, unknown>
+              }>,
+            ): void
+          }
+        },
+      ) {
         return {
           auth: {
             async exchangeCodeForSession() {
@@ -56,6 +76,59 @@ nodeModule._load = function mockedModuleLoad(
                 error: exchangeError,
               }
             },
+            async getUser() {
+              getUserCalls += 1
+              return {
+                data: {
+                  user: {
+                    id: AUTH_USER_ID,
+                    email: "sponsor@example.com",
+                    email_confirmed_at: "2025-01-01T00:00:00.000Z",
+                    is_anonymous: false,
+                  },
+                },
+                error: null,
+              }
+            },
+            async updateUser() {
+              updateUserCalls += 1
+              return {
+                data: { user: { id: AUTH_USER_ID } },
+                error: updateUserError,
+              }
+            },
+            async signOut() {
+              signOutCalls += 1
+              if (signOutError === null) {
+                options?.cookies?.setAll([
+                  {
+                    name: RECOVERY_AUTH_COOKIE,
+                    value: "",
+                    options: {
+                      path: "/",
+                      sameSite: "lax",
+                      httpOnly: true,
+                      secure: true,
+                      maxAge: 0,
+                    },
+                  },
+                ])
+              }
+              return { error: signOutError }
+            },
+          },
+          async rpc(name: string) {
+            expect(name).toBe("consume_password_recovery_authorization")
+            consumeReceiptCalls += 1
+            return {
+              data: [
+                {
+                  authorized_auth_user_id: AUTH_USER_ID,
+                  authorized_auth_session_id: AUTH_SESSION_ID,
+                },
+              ],
+              error: null,
+            }
           },
         }
       },
@@ -66,13 +139,30 @@ nodeModule._load = function mockedModuleLoad(
       async createClient() {
         return {
           auth: {
+            async getUser() {
+              getUserCalls += 1
+              return {
+                data: {
+                  user: {
+                    id: AUTH_USER_ID,
+                    email: "sponsor@example.com",
+                    email_confirmed_at: "2025-01-01T00:00:00.000Z",
+                    is_anonymous: false,
+                  },
+                },
+                error: null,
+              }
+            },
             async signOut() {
               signOutCalls += 1
               return { error: signOutError }
             },
             async updateUser() {
               updateUserCalls += 1
-              return { error: updateUserError }
+              return {
+                data: { user: { id: AUTH_USER_ID } },
+                error: updateUserError,
+              }
             },
           },
         }
@@ -127,12 +217,18 @@ function postRequest(
   path: string,
   host = "creatorshare.com",
   body?: Record<string, unknown>,
-): Request {
-  return new Request(`https://${host}${path}`, {
+): NextRequest {
+  return new NextRequest(`https://${host}${path}`, {
     method: "POST",
     headers: {
       host,
+      origin: `https://${host}`,
+      "sec-fetch-site": "same-origin",
       ...(body ? { "content-type": "application/json" } : {}),
+      cookie:
+        path === "/api/auth/change-password"
+          ? `${RECOVERY_AUTH_COOKIE}=base64-recovery-session; ${DEFAULT_SUPABASE_AUTH_COOKIE}=base64-provider-session`
+          : `${DEFAULT_SUPABASE_AUTH_COOKIE}=base64-provider-session`,
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
@@ -149,8 +245,10 @@ test.beforeEach(() => {
   signOutError = null
   updateUserError = null
   exchangeCalls = 0
+  getUserCalls = 0
   signOutCalls = 0
   updateUserCalls = 0
+  consumeReceiptCalls = 0
 })
 
 test.afterAll(() => {
@@ -240,7 +338,7 @@ test("logout failure preserves the attribution identity signal", async () => {
 test("successful password reset signout expires the parent-domain signal", async () => {
   const response = await changePassword(
     postRequest("/api/auth/change-password", "creatorshare.com", {
-      password: "correct horse battery staple",
+      password: "Correct horse 7!",
     }),
   )
   const identityCookie = setCookieHeaders(response).find((header) =>
@@ -248,7 +346,9 @@ test("successful password reset signout expires the parent-domain signal", async
   )
 
   expect(response.status).toBe(200)
+  expect(getUserCalls).toBe(1)
   expect(updateUserCalls).toBe(1)
+  expect(consumeReceiptCalls).toBe(1)
   expect(signOutCalls).toBe(1)
   expect(identityCookie).toContain("Domain=.creatorshare.com")
   expect(identityCookie).toContain("Path=/")
@@ -263,12 +363,14 @@ test("password reset signout failure preserves the signal", async () => {
   signOutError = { message: "provider failure" }
   const response = await changePassword(
     postRequest("/api/auth/change-password", "creatorshare.com", {
-      password: "correct horse battery staple",
+      password: "Correct horse 7!",
     }),
   )
 
-  expect(response.status).toBe(500)
+  expect(response.status).toBe(503)
+  expect(getUserCalls).toBe(1)
   expect(updateUserCalls).toBe(1)
+  expect(consumeReceiptCalls).toBe(1)
   expect(signOutCalls).toBe(1)
   expect(
     setCookieHeaders(response).some((header) =>

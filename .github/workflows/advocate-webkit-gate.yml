@@ -7,8 +7,12 @@ on:
     paths:
       - "src/components/advocates/admin/CatalogSettingsClient.tsx"
       - "src/lib/advocates/admin/catalogForm.ts"
+      - "src/app/forgot-password/**"
+      - "src/lib/auth/passwordRecoveryClient.ts"
+      - "tests/auth/password-recovery-browser.spec.ts"
       - "tests/advocates/portal-catalog-browser.spec.ts"
       - "tests/fixtures/advocate-catalog-harness/**"
+      - "playwright.config.ts"
       - ".nvmrc"
       - "package.json"
       - "yarn.lock"
@@ -36,8 +40,24 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Install WebKit runtime
-        run: yarn playwright install --with-deps webkit
+      - name: Install browser runtimes
+        run: yarn playwright install --with-deps chromium webkit
 
       - name: Verify catalog recovery
         run: yarn test:advocate:webkit
+
+      - name: Verify password recovery in Chromium
+        run: >-
+          yarn playwright test
+          tests/auth/password-recovery-browser.spec.ts
+          --workers=1
+          --retries=0
+
+      - name: Verify password recovery in WebKit
+        env:
+          RUN_WEBKIT_BROWSER_INTEGRATION: "1"
+        run: >-
+          yarn playwright test
+          tests/auth/password-recovery-browser.spec.ts
+          --workers=1
+          --retries=0

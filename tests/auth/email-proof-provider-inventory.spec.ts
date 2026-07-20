@@ -54,7 +54,6 @@ const EXPECTED_LEGACY_CALLS = Object.freeze([
   "src/app/api/admin/users/invite/route.ts:auth.admin.inviteUserByEmail",
   "src/app/api/auth/passwordless/route.ts:auth.signInWithOtp",
   "src/app/api/auth/registration/route.ts:auth.signUp",
-  "src/app/api/auth/reset-password/route.ts:auth.resetPasswordForEmail",
   "src/app/api/sponsor-account/reauth/start/route.ts:auth.signInWithOtp",
   "src/app/api/sponsor-account/start/route.ts:auth.signInWithOtp",
   "src/lib/advocates/invitations/emailAuth.ts:auth.admin.generateLink",
@@ -75,10 +74,7 @@ const EXPECTED_PROOF_IDENTIFIER_FILES = Object.freeze({
     "src/app/api/admin/users/invite/route.ts",
   ]),
   resend: Object.freeze([]),
-  resetPasswordForEmail: Object.freeze([
-    CENTRAL_ISSUER,
-    "src/app/api/auth/reset-password/route.ts",
-  ]),
+  resetPasswordForEmail: Object.freeze([CENTRAL_ISSUER]),
   signInWithOtp: Object.freeze([
     CENTRAL_ISSUER,
     "src/app/api/auth/passwordless/route.ts",
@@ -100,7 +96,6 @@ const EXPECTED_PROOF_IDENTIFIER_COUNTS = Object.freeze({
   "src/app/api/admin/users/invite/route.ts:inviteUserByEmail": 1,
   "src/app/api/auth/passwordless/route.ts:signInWithOtp": 1,
   "src/app/api/auth/registration/route.ts:signUp": 1,
-  "src/app/api/auth/reset-password/route.ts:resetPasswordForEmail": 1,
   "src/app/api/sponsor-account/reauth/start/route.ts:signInWithOtp": 1,
   "src/app/api/sponsor-account/start/route.ts:signInWithOtp": 1,
   "src/lib/advocates/invitations/emailAuth.ts:generateLink": 2,
@@ -234,7 +229,7 @@ test("locks proof-producing Supabase calls to the central issuer and exact migra
     [...EXPECTED_CENTRAL_CALLS, ...EXPECTED_LEGACY_CALLS].sort(),
   )
   expect(proofCalls.filter((call) => call.endsWith(":auth.resend"))).toEqual([])
-  expect(EXPECTED_LEGACY_CALLS).toHaveLength(7)
+  expect(EXPECTED_LEGACY_CALLS).toHaveLength(6)
 })
 
 test("forces every directly called Supabase auth method into a reviewed classification", () => {

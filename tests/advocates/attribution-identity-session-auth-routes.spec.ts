@@ -24,19 +24,55 @@ interface AuthUser {
   identities?: Array<Record<string, unknown>>
 }
 
+interface AuthSession {
+  access_token: string
+  refresh_token: string
+  token_type: "bearer"
+  expires_in: number
+  expires_at?: number
+  user: AuthUser
+}
+
 const AUTH_USER_ID = "11111111-1111-4111-8111-111111111111"
+const AUTH_SESSION_ID = "33333333-3333-4333-8333-333333333333"
+const SUPABASE_URL = "https://project.supabase.co"
+const RECOVERY_AUTH_COOKIE = "__Host-cs-password-recovery-v1"
 const CURRENT_SECRET = Buffer.alloc(32, 13).toString("base64")
 const CANONICAL_ORIGIN = "https://creatorshare.com"
-const PREVIOUS_IDENTITY_SECRET =
-  process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1
-const PREVIOUS_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL
+const PREVIOUS_ENVIRONMENT = {
+  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1:
+    process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1,
+  NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
+  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  NEXT_SERVICE_ROLE_KEY: process.env.NEXT_SERVICE_ROLE_KEY,
+}
+
+function recoveryAccessToken(): string {
+  const encode = (value: Record<string, string>) =>
+    Buffer.from(JSON.stringify(value)).toString("base64url")
+  return `${encode({ alg: "HS256", typ: "JWT" })}.${encode({
+    sub: AUTH_USER_ID,
+    session_id: AUTH_SESSION_ID,
+  })}.provider-signature`
+}
 
 let passwordLoginData: { user: AuthUser | null } = {
   user: { id: AUTH_USER_ID },
 }
 let passwordLoginError: { message: string } | null = null
-let verificationData: { user: AuthUser | null } = {
+let verificationData: {
+  user: AuthUser | null
+  session: AuthSession | null
+} = {
   user: { id: AUTH_USER_ID },
+  session: {
+    access_token: recoveryAccessToken(),
+    refresh_token: "opaque-refresh-token",
+    token_type: "bearer",
+    expires_in: 3600,
+    user: { id: AUTH_USER_ID },
+  },
 }
 let verificationError: { message: string } | null = null
 let registrationData: {
@@ -50,6 +86,9 @@ let registrationError: { message: string } | null = null
 const registrationCalls: Array<Record<string, unknown>> = []
 const registrationReservations: Array<Record<string, unknown>> = []
 let registrationDeliveryAllowed = true
+const verificationReservations: Array<Record<string, unknown>> = []
+let verificationAttemptAllowed = true
+let recoveryReceiptCalls = 0
 
 const nodeModule = Module as unknown as { _load: NodeModuleLoader }
 const originalModuleLoad = nodeModule._load
@@ -60,6 +99,69 @@ nodeModule._load = function mockedModuleLoad(
   isMain: boolean,
 ) {
   if (request === "server-only") return {}
+  if (request === "@supabase/ssr") {
+    return {
+      createServerClient(
+        _url: string,
+        _key: string,
+        options: {
+          cookieOptions: Record<string, unknown>
+          cookies: {
+            setAll(
+              cookies: Array<{
+                name: string
+                value: string
+                options?: Record<string, unknown>
+              }>,
+            ): void
+          }
+        },
+      ) {
+        return {
+          auth: {
+            async verifyOtp() {
+              if (
+                verificationError === null &&
+                verificationData.user !== null &&
+                verificationData.session !== null
+              ) {
+                options.cookies.setAll([
+                  {
+                    name: RECOVERY_AUTH_COOKIE,
+                    value: "base64-provider-session",
+                    options: {
+                      path: "/",
+                      sameSite: "lax",
+                      httpOnly: true,
+                      secure: true,
+                      maxAge: 400 * 24 * 60 * 60,
+                    },
+                  },
+                ])
+              }
+              return {
+                data: verificationData,
+                error: verificationError,
+              }
+            },
+            async getUser() {
+              return {
+                data: {
+                  user: {
+                    id: AUTH_USER_ID,
+                    email: "sponsor@example.com",
+                    email_confirmed_at: "2026-07-20T00:00:00.000Z",
+                    is_anonymous: false,
+                  },
+                },
+                error: null,
+              }
+            },
+          },
+        }
+      },
+    }
+  }
   if (request === "@/utils/supabase/server") {
     return {
       async createClient() {
@@ -69,12 +171,6 @@ nodeModule._load = function mockedModuleLoad(
               return {
                 data: passwordLoginData,
                 error: passwordLoginError,
-              }
-            },
-            async verifyOtp() {
-              return {
-                data: verificationData,
-                error: verificationError,
               }
             },
           },
@@ -103,6 +199,18 @@ nodeModule._load = function mockedModuleLoad(
                   },
                 }
               },
+            }
+          },
+        }
+      },
+      createServiceRoleClient() {
+        return {
+          async rpc(name: string) {
+            expect(name).toBe("record_sponsor_email_authentication_receipt")
+            recoveryReceiptCalls += 1
+            return {
+              data: [{ receipt_expires_at: "2099-07-20T00:15:00.000Z" }],
+              error: null,
             }
           },
         }
@@ -137,6 +245,18 @@ nodeModule._load = function mockedModuleLoad(
       async reserveSponsorPasswordlessDelivery(input: Record<string, unknown>) {
         registrationReservations.push(input)
         return registrationDeliveryAllowed
+      },
+      createSponsorPasswordlessVerificationSignals() {
+        return {
+          sourceDigest: "opaque-verification-source",
+          sourceHmacKeyVersion: 1,
+        }
+      },
+      async reserveSponsorPasswordlessVerificationAttempt(
+        input: Record<string, unknown>,
+      ) {
+        verificationReservations.push(input)
+        return verificationAttemptAllowed
       },
     }
   }
@@ -257,9 +377,21 @@ function registrationRequest(): Request {
 test.beforeEach(() => {
   process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1 = CURRENT_SECRET
   process.env.NEXT_PUBLIC_BASE_URL = CANONICAL_ORIGIN
+  process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key"
+  process.env.NEXT_SERVICE_ROLE_KEY = "service-role-key"
   passwordLoginData = { user: { id: AUTH_USER_ID } }
   passwordLoginError = null
-  verificationData = { user: { id: AUTH_USER_ID } }
+  verificationData = {
+    user: { id: AUTH_USER_ID },
+    session: {
+      access_token: recoveryAccessToken(),
+      refresh_token: "opaque-refresh-token",
+      token_type: "bearer",
+      expires_in: 3600,
+      user: { id: AUTH_USER_ID },
+    },
+  }
   verificationError = null
   registrationData = {
     session: { access_token: "opaque-session" },
@@ -269,19 +401,15 @@ test.beforeEach(() => {
   registrationCalls.length = 0
   registrationReservations.length = 0
   registrationDeliveryAllowed = true
+  verificationReservations.length = 0
+  verificationAttemptAllowed = true
+  recoveryReceiptCalls = 0
 })
 
 test.afterAll(() => {
-  if (PREVIOUS_IDENTITY_SECRET === undefined) {
-    delete process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1
-  } else {
-    process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1 =
-      PREVIOUS_IDENTITY_SECRET
-  }
-  if (PREVIOUS_BASE_URL === undefined) {
-    delete process.env.NEXT_PUBLIC_BASE_URL
-  } else {
-    process.env.NEXT_PUBLIC_BASE_URL = PREVIOUS_BASE_URL
+  for (const [name, value] of Object.entries(PREVIOUS_ENVIRONMENT)) {
+    if (value === undefined) delete process.env[name]
+    else process.env[name] = value
   }
 })
 
@@ -306,11 +434,20 @@ test("successful recovery verification issues a verified host-only identity sign
   const response = await verifyOtp(recoveryVerificationRequest())
 
   expect(response.status).toBe(200)
+  expect(recoveryReceiptCalls).toBe(1)
+  const authCookie = setCookieHeaders(response).find((header) =>
+    header.startsWith(`${RECOVERY_AUTH_COOKIE}=`),
+  )
+  expect(authCookie).toBeDefined()
+  expect(authCookie).not.toContain("Domain=")
+  expect(authCookie).toContain("Secure")
+  expect(authCookie).toContain("HttpOnly")
+  expect(authCookie).toContain("Max-Age=900")
   expectVerifiedHostOnlyIdentity(response, AUTH_USER_ID)
 })
 
-test("failed or userless recovery verification does not issue an identity signal", async () => {
-  verificationData = { user: null }
+test("failed or malformed recovery verification does not issue an identity signal", async () => {
+  verificationData = { user: null, session: null }
   verificationError = { message: "Invalid token" }
 
   const failedResponse = await verifyOtp(recoveryVerificationRequest())
@@ -319,7 +456,7 @@ test("failed or userless recovery verification does not issue an identity signal
 
   verificationError = null
   const userlessResponse = await verifyOtp(recoveryVerificationRequest())
-  expect(userlessResponse.status).toBe(200)
+  expect(userlessResponse.status).toBe(503)
   expect(identityCookie(userlessResponse)).toBeUndefined()
 })
 
