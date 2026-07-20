@@ -26,7 +26,7 @@ on:
       - "tests/database/**/*initial-owner*"
       - "tests/database/**/*invitation*"
       - "tests/database/**/*email-proof*"
-      - "tests/database/advocate-branding-authority-concurrency.mjs"
+      - "tests/database/advocate-branding-authority-*.mjs"
       - "tests/database/fixtures/advocate-branding-authority-concurrency.sql"
       - "tests/database/support/*.mjs"
       - "tests/provider/**"
@@ -454,6 +454,9 @@ jobs:
         env:
           ADVOCATE_BRANDING_AUTHORITY_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-branding-authority-concurrency-evidence.json
         run: yarn test:advocate:branding-authority-concurrency
+
+      - name: Verify branding authority forced termination cleanup
+        run: yarn test:advocate:branding-authority-termination
 
       - name: Upload sanitized branding authority concurrency evidence
         if: ${{ always() }}

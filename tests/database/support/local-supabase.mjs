@@ -986,14 +986,22 @@ GRANT ALL PRIVILEGES ON TABLE auth.users, auth.sessions TO postgres;
     async executeSupabaseAdminSql(sql, sqlOptions = {}) {
       return executeSupabaseAdminSql(descriptor, sql, sqlOptions)
     },
-    async dispose() {
+    async dispose(options = {}) {
+      if (
+        !isRecord(options) ||
+        Object.keys(options).some((key) => key !== "force") ||
+        (options.force !== undefined && typeof options.force !== "boolean")
+      ) {
+        throw new Error("transient_supabase_database_dispose_options_invalid")
+      }
+      const force = options.force === true
       const state = transientDatabaseStates.get(descriptor)
       if (!state) throw new Error("transient_supabase_database_unknown")
       if (state.disposePromise) return state.disposePromise
       state.disposing = true
       const disposeAttempt = (async () => {
         try {
-          await closePgClients([...state.clients])
+          await closePgClients([...state.clients], { force })
         } finally {
           await cleanupDatabase()
           state.disposed = true
@@ -1250,26 +1258,36 @@ async function settleClientCleanup(client, operation, label) {
   if (result.error) throw result.error
 }
 
-export async function closePgClients(clients) {
+export async function closePgClients(clients, options = {}) {
   if (!Array.isArray(clients)) throw new Error("postgres_client_list_invalid")
+  if (
+    !isRecord(options) ||
+    Object.keys(options).some((key) => key !== "force") ||
+    (options.force !== undefined && typeof options.force !== "boolean")
+  ) {
+    throw new Error("postgres_client_close_options_invalid")
+  }
+  const force = options.force === true
   const uniqueClients = [...new Set(clients.filter(Boolean))]
   const failures = []
   await Promise.all(
     uniqueClients.map(async (client) => {
-      try {
-        await settleClientCleanup(
-          client,
-          () => client.query("ROLLBACK"),
-          "postgres_client_rollback",
-        )
-      } catch (error) {
-        failures.push(error)
+      if (!force) {
+        try {
+          await settleClientCleanup(
+            client,
+            () => client.query("ROLLBACK"),
+            "postgres_client_rollback",
+          )
+        } catch (error) {
+          failures.push(error)
+        }
       }
       try {
         await settleClientCleanup(
           client,
           () => client.end(),
-          "postgres_client_end",
+          force ? "postgres_client_force_end" : "postgres_client_end",
         )
       } catch (error) {
         failures.push(error)

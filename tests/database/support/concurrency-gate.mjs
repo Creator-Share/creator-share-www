@@ -142,7 +142,7 @@ export function installConcurrencyGateTerminationCleanup({
       const database = getDatabase()
       Promise.resolve(
         database
-          ? database.dispose()
+          ? database.dispose({ force: true })
           : disposeActiveTransientLocalSupabaseDatabases(),
       )
         .catch(() => {

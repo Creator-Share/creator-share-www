@@ -30,6 +30,16 @@ const EVIDENCE_OUTPUT_PATH = process.env
       process.env.ADVOCATE_BRANDING_AUTHORITY_CONCURRENCY_EVIDENCE_PATH,
     )
   : null
+const TERMINATION_PROBE_MODE =
+  process.env.ADVOCATE_BRANDING_AUTHORITY_TERMINATION_PROBE
+if (TERMINATION_PROBE_MODE !== undefined && TERMINATION_PROBE_MODE !== "1") {
+  throw new Error("branding_authority_termination_probe_invalid")
+}
+const DATABASE_PREFIX =
+  process.env.ADVOCATE_BRANDING_AUTHORITY_DATABASE_PREFIX ?? "brandauth"
+if (!/^[a-z][a-z0-9]{1,15}$/.test(DATABASE_PREFIX)) {
+  throw new Error("branding_authority_database_prefix_invalid")
+}
 
 const FF048_EVIDENCE_SCENARIO_SCHEMA = Object.freeze({
   reservation_commits_before_account_ban: Object.freeze({
@@ -1275,6 +1285,36 @@ async function missingRoleLeavesNoReservation(database) {
   )
 }
 
+async function waitForTerminationProbe(database) {
+  if (TERMINATION_PROBE_MODE !== "1") return
+  await withPgClients(
+    database,
+    ["termination_blocker", "termination_waiter", "termination_observer"],
+    async (blockerClient, waiterClient, observerClient) => {
+      await blockerClient.query("BEGIN")
+      await blockerClient.query(
+        "SELECT pg_catalog.pg_advisory_xact_lock(48048)",
+      )
+      await waiterClient.query("BEGIN")
+      const pendingWait = waiterClient.query(
+        "SELECT pg_catalog.pg_advisory_xact_lock(48048)",
+      )
+      pendingWait.catch(() => undefined)
+      const observations = await waitForClientsBlockedBy(
+        observerClient,
+        [waiterClient],
+        blockerClient,
+      )
+      assert.equal(observations.length, 1)
+      assert.equal(observations[0].waitEventType, "Lock")
+      process.stdout.write("FF-048 termination probe ready\n")
+      await new Promise(() => {
+        setInterval(() => undefined, 1_000)
+      })
+    },
+  )
+}
+
 async function main() {
   let database
   const removeTerminationCleanup = installConcurrencyGateTerminationCleanup({
@@ -1285,12 +1325,13 @@ async function main() {
     await clearConcurrencyGateEvidence(EVIDENCE_OUTPUT_PATH)
     database = await createTransientLocalSupabaseDatabase({
       workspace: WORKSPACE,
-      databasePrefix: "brandauth",
+      databasePrefix: DATABASE_PREFIX,
     })
     const provenance = await loadConcurrencyGateProvenance(database, {
       workspace: WORKSPACE,
     })
     await database.executeSupabaseAdminSql(await readFile(FIXTURE_PATH, "utf8"))
+    await waitForTerminationProbe(database)
 
     const scenarios = []
     scenarios.push(await reservationBeforeBan(database))
