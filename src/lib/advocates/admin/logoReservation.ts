@@ -173,6 +173,7 @@ export function classifyAdvocateLogoReservationFailure(
     case "40001":
       return { status: 409, code: "version_conflict" }
     case "55000":
+    case "55P03":
       return { status: 409, code: "upload_in_progress" }
     case "54000":
       return { status: 429, code: "rate_limited" }

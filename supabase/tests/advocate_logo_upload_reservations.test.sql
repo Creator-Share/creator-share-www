@@ -46,8 +46,11 @@ SELECT extensions.ok(
 SELECT extensions.ok(
   (
     SELECT function_definition.prosecdef
-      AND coalesce(array_to_string(function_definition.proconfig, ','), '') =
-        'search_path=""'
+      AND function_definition.proconfig @> ARRAY[
+        'search_path=""',
+        'lock_timeout=5s'
+      ]
+      AND cardinality(function_definition.proconfig) = 2
     FROM pg_proc function_definition
     WHERE function_definition.oid =
       'public.reserve_advocate_logo_upload(uuid,uuid,bigint,text,text)'::regprocedure
@@ -71,8 +74,11 @@ SELECT extensions.ok(
   )
   AND (
     SELECT function_definition.prosecdef
-      AND coalesce(array_to_string(function_definition.proconfig, ','), '') =
-        'search_path=""'
+      AND function_definition.proconfig @> ARRAY[
+        'search_path=""',
+        'lock_timeout=5s'
+      ]
+      AND cardinality(function_definition.proconfig) = 2
     FROM pg_proc function_definition
     WHERE function_definition.oid =
       'public.update_advocate_branding(uuid,uuid,bigint,text,text,text,uuid,text,text,text,text,text,text,text)'::regprocedure
@@ -253,6 +259,84 @@ SELECT extensions.ok(
 
 SELECT extensions.ok(
   pg_get_functiondef(
+    'private.lock_advocate_branding_actor_authority(uuid,uuid)'::regprocedure
+  ) LIKE '%FROM auth.users account%FOR SHARE%'
+  AND pg_get_functiondef(
+    'private.lock_advocate_branding_actor_authority(uuid,uuid)'::regprocedure
+  ) LIKE '%FROM public.advocate_memberships membership%FOR UPDATE%'
+  AND pg_get_functiondef(
+    'private.lock_advocate_branding_actor_authority(uuid,uuid)'::regprocedure
+  ) LIKE '%FOR SHARE OF membership_role, role_permission, permission%'
+  AND NOT has_function_privilege(
+    'anon',
+    'private.lock_advocate_branding_actor_authority(uuid,uuid)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated',
+    'private.lock_advocate_branding_actor_authority(uuid,uuid)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'service_role',
+    'private.lock_advocate_branding_actor_authority(uuid,uuid)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'service_role',
+    'private.reserve_advocate_logo_upload_unguarded_v1(uuid,uuid,bigint,text,text)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon',
+    'private.reserve_advocate_logo_upload_unguarded_v1(uuid,uuid,bigint,text,text)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated',
+    'private.reserve_advocate_logo_upload_unguarded_v1(uuid,uuid,bigint,text,text)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'service_role',
+    'private.update_advocate_branding_unguarded_v1(uuid,uuid,bigint,text,text,text,uuid,text,text,text,text,text,text,text)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon',
+    'private.update_advocate_branding_unguarded_v1(uuid,uuid,bigint,text,text,text,uuid,text,text,text,text,text,text,text)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated',
+    'private.update_advocate_branding_unguarded_v1(uuid,uuid,bigint,text,text,text,uuid,text,text,text,text,text,text,text)',
+    'EXECUTE'
+  )
+  AND has_function_privilege(
+    'service_role',
+    'public.reserve_advocate_logo_upload(uuid,uuid,bigint,text,text)',
+    'EXECUTE'
+  )
+  AND has_function_privilege(
+    'service_role',
+    'public.update_advocate_branding(uuid,uuid,bigint,text,text,text,uuid,text,text,text,text,text,text,text)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon',
+    'public.update_advocate_branding(uuid,uuid,bigint,text,text,text,uuid,text,text,text,text,text,text,text)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated',
+    'public.update_advocate_branding(uuid,uuid,bigint,text,text,text,uuid,text,text,text,text,text,text,text)',
+    'EXECUTE'
+  ),
+  'public wrappers lock healthy actor authority and no runtime role can bypass them through private helpers'
+);
+
+SELECT extensions.ok(
+  pg_get_functiondef(
     'public.get_advocate_audit_history_page(uuid,uuid,integer)'::regprocedure
   ) NOT LIKE '%advocate_logo_upload_reservations%'
   AND to_regprocedure(
@@ -333,6 +417,17 @@ VALUES
     'authenticated',
     'authenticated',
     'logo-suspended@example.test',
+    now(),
+    '{}'::jsonb,
+    '{}'::jsonb,
+    now(),
+    now()
+  ),
+  (
+    'b1000000-0000-4000-8000-000000000007',
+    'authenticated',
+    'authenticated',
+    'logo-inactive-member@example.test',
     now(),
     '{}'::jsonb,
     '{}'::jsonb,
@@ -437,7 +532,8 @@ VALUES
   ('b3000000-0000-4000-8000-000000000013', 'b0000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000003', 'active'),
   ('b3000000-0000-4000-8000-000000000014', 'b0000000-0000-4000-8000-000000000003', 'b1000000-0000-4000-8000-000000000004', 'active'),
   ('b3000000-0000-4000-8000-000000000015', 'b0000000-0000-4000-8000-000000000004', 'b1000000-0000-4000-8000-000000000005', 'active'),
-  ('b3000000-0000-4000-8000-000000000016', 'b0000000-0000-4000-8000-000000000005', 'b1000000-0000-4000-8000-000000000006', 'active');
+  ('b3000000-0000-4000-8000-000000000016', 'b0000000-0000-4000-8000-000000000005', 'b1000000-0000-4000-8000-000000000006', 'active'),
+  ('b3000000-0000-4000-8000-000000000017', 'b0000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000007', 'suspended');
 
 INSERT INTO public.advocate_membership_roles (
   advocate_id,
@@ -481,7 +577,8 @@ WHERE membership.id IN (
   'b3000000-0000-4000-8000-000000000013',
   'b3000000-0000-4000-8000-000000000014',
   'b3000000-0000-4000-8000-000000000015',
-  'b3000000-0000-4000-8000-000000000016'
+  'b3000000-0000-4000-8000-000000000016',
+  'b3000000-0000-4000-8000-000000000017'
 );
 
 UPDATE public.advocates advocate
@@ -952,6 +1049,334 @@ SELECT extensions.ok(
 );
 
 RESET ROLE;
+
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
+SELECT set_config(
+  'test.logo_actor_health_version',
+  (
+    SELECT advocate.version::text
+    FROM public.advocates advocate
+    WHERE advocate.id = 'b0000000-0000-4000-8000-000000000001'
+  ),
+  true
+);
+
+RESET ROLE;
+
+UPDATE auth.users account
+SET banned_until = clock_timestamp() + interval '1 hour'
+WHERE account.id = 'b1000000-0000-4000-8000-000000000002';
+
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.reserve_advocate_logo_upload(
+      'b0000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000002',
+      current_setting('test.logo_actor_health_version')::bigint,
+      'logo-banned-reserve',
+      NULL
+    )
+  $$,
+  '42501',
+  'Insufficient portal permission',
+  'a banned branding delegate cannot reserve a logo through the service boundary'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT public.update_advocate_branding(
+      'b0000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000002',
+      current_setting('test.logo_actor_health_version')::bigint,
+      '#123456',
+      '#ABCDEF',
+      NULL,
+      NULL,
+      NULL,
+      '<h2>Banned actor</h2>',
+      '<p>Banned actor</p>',
+      'A banned actor must not change branding',
+      'logo-banned-branding',
+      NULL,
+      NULL
+    )
+  $$,
+  '42501',
+  'Insufficient portal permission',
+  'a banned branding delegate cannot mutate branding through the service boundary'
+);
+
+RESET ROLE;
+
+UPDATE auth.users account
+SET
+  banned_until = NULL,
+  email_confirmed_at = NULL
+WHERE account.id = 'b1000000-0000-4000-8000-000000000002';
+
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.reserve_advocate_logo_upload(
+      'b0000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000002',
+      current_setting('test.logo_actor_health_version')::bigint,
+      'logo-unconfirmed-reserve',
+      NULL
+    )
+  $$,
+  '42501',
+  'Insufficient portal permission',
+  'an unconfirmed branding delegate cannot reserve a logo through the service boundary'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT public.update_advocate_branding(
+      'b0000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000002',
+      current_setting('test.logo_actor_health_version')::bigint,
+      '#123456',
+      '#ABCDEF',
+      NULL,
+      NULL,
+      NULL,
+      '<h2>Unconfirmed actor</h2>',
+      '<p>Unconfirmed actor</p>',
+      'An unconfirmed actor must not change branding',
+      'logo-unconfirmed-branding',
+      NULL,
+      NULL
+    )
+  $$,
+  '42501',
+  'Insufficient portal permission',
+  'an unconfirmed branding delegate cannot mutate branding through the service boundary'
+);
+
+RESET ROLE;
+
+UPDATE auth.users account
+SET
+  email_confirmed_at = clock_timestamp(),
+  is_anonymous = true
+WHERE account.id = 'b1000000-0000-4000-8000-000000000002';
+
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.reserve_advocate_logo_upload(
+      'b0000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000002',
+      current_setting('test.logo_actor_health_version')::bigint,
+      'logo-anonymous-reserve',
+      NULL
+    )
+  $$,
+  '42501',
+  'Insufficient portal permission',
+  'an anonymous branding delegate cannot reserve a logo through the service boundary'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT public.update_advocate_branding(
+      'b0000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000002',
+      current_setting('test.logo_actor_health_version')::bigint,
+      '#123456',
+      '#ABCDEF',
+      NULL,
+      NULL,
+      NULL,
+      '<h2>Anonymous actor</h2>',
+      '<p>Anonymous actor</p>',
+      'An anonymous actor must not change branding',
+      'logo-anonymous-branding',
+      NULL,
+      NULL
+    )
+  $$,
+  '42501',
+  'Insufficient portal permission',
+  'an anonymous branding delegate cannot mutate branding through the service boundary'
+);
+
+RESET ROLE;
+
+UPDATE auth.users account
+SET
+  is_anonymous = false,
+  deleted_at = clock_timestamp()
+WHERE account.id = 'b1000000-0000-4000-8000-000000000002';
+
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.reserve_advocate_logo_upload(
+      'b0000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000002',
+      current_setting('test.logo_actor_health_version')::bigint,
+      'logo-deleted-reserve',
+      NULL
+    )
+  $$,
+  '42501',
+  'Insufficient portal permission',
+  'a deleted branding delegate cannot reserve a logo through the service boundary'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT public.update_advocate_branding(
+      'b0000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000002',
+      current_setting('test.logo_actor_health_version')::bigint,
+      '#123456',
+      '#ABCDEF',
+      NULL,
+      NULL,
+      NULL,
+      '<h2>Deleted actor</h2>',
+      '<p>Deleted actor</p>',
+      'A deleted actor must not change branding',
+      'logo-deleted-branding',
+      NULL,
+      NULL
+    )
+  $$,
+  '42501',
+  'Insufficient portal permission',
+  'a deleted branding delegate cannot mutate branding through the service boundary'
+);
+
+RESET ROLE;
+
+UPDATE auth.users account
+SET deleted_at = NULL
+WHERE account.id = 'b1000000-0000-4000-8000-000000000002';
+
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.reserve_advocate_logo_upload(
+      'b0000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000007',
+      current_setting('test.logo_actor_health_version')::bigint,
+      'logo-inactive-member-reserve',
+      NULL
+    )
+  $$,
+  '42501',
+  'Insufficient portal permission',
+  'an inactive branding membership cannot reserve a logo through the service boundary'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT public.update_advocate_branding(
+      'b0000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000007',
+      current_setting('test.logo_actor_health_version')::bigint,
+      '#123456',
+      '#ABCDEF',
+      NULL,
+      NULL,
+      NULL,
+      '<h2>Inactive member</h2>',
+      '<p>Inactive member</p>',
+      'An inactive membership must not change branding',
+      'logo-inactive-member-branding',
+      NULL,
+      NULL
+    )
+  $$,
+  '42501',
+  'Insufficient portal permission',
+  'an inactive branding membership cannot mutate branding through the service boundary'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT public.update_advocate_branding(
+      'b0000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000003',
+      current_setting('test.logo_actor_health_version')::bigint,
+      '#123456',
+      '#ABCDEF',
+      NULL,
+      NULL,
+      NULL,
+      '<h2>Missing permission</h2>',
+      '<p>Missing permission</p>',
+      'A catalog-only member must not change branding',
+      'logo-missing-permission-branding',
+      NULL,
+      NULL
+    )
+  $$,
+  '42501',
+  'Insufficient portal permission',
+  'an active member without branding permission cannot mutate branding through the service boundary'
+);
+
+RESET ROLE;
+
+SELECT extensions.ok(
+  (
+    SELECT advocate.version =
+      current_setting('test.logo_actor_health_version')::bigint
+    FROM public.advocates advocate
+    WHERE advocate.id = 'b0000000-0000-4000-8000-000000000001'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM private.advocate_logo_upload_reservations reservation
+    WHERE reservation.request_id IN (
+      'logo-banned-reserve',
+      'logo-unconfirmed-reserve',
+      'logo-anonymous-reserve',
+      'logo-deleted-reserve',
+      'logo-inactive-member-reserve'
+    )
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM audit.audit_events event
+    WHERE event.request_id IN (
+      'logo-banned-reserve',
+      'logo-banned-branding',
+      'logo-unconfirmed-reserve',
+      'logo-unconfirmed-branding',
+      'logo-anonymous-reserve',
+      'logo-anonymous-branding',
+      'logo-deleted-reserve',
+      'logo-deleted-branding',
+      'logo-inactive-member-reserve',
+      'logo-inactive-member-branding',
+      'logo-missing-permission-branding'
+    )
+  ),
+  'every unhealthy actor denial leaves no reservation, branding version, or audit residue'
+);
 
 SET LOCAL ROLE service_role;
 SELECT set_config('request.jwt.claim.role', 'service_role', true);

@@ -137,6 +137,9 @@ test.describe("advocate logo reservation application boundary", () => {
     expect(reservation.classifyAdvocateLogoReservationFailure("55000")).toEqual(
       { status: 409, code: "upload_in_progress" },
     )
+    expect(reservation.classifyAdvocateLogoReservationFailure("55P03")).toEqual(
+      { status: 409, code: "upload_in_progress" },
+    )
     expect(reservation.classifyAdvocateLogoReservationFailure("54000")).toEqual(
       { status: 429, code: "rate_limited" },
     )

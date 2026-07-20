@@ -931,6 +931,7 @@ export async function createTransientLocalSupabaseDatabase(options = {}) {
         "--disable-triggers",
         "--table=public.roles",
         "--table=public.advocate_roles",
+        "--table=public.advocate_permissions",
         "--table=public.advocate_role_permissions",
         "--table=public.advocate_reserved_subdomains",
       ],

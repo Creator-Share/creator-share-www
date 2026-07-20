@@ -226,7 +226,7 @@ SELECT extensions.ok(
   AND (
     SELECT function_definition.prosecdef
       AND coalesce(array_to_string(function_definition.proconfig, ','), '') =
-        'search_path=""'
+        'search_path="",lock_timeout=5s'
     FROM pg_proc function_definition
     WHERE function_definition.oid =
       'public.update_advocate_branding(uuid,uuid,bigint,text,text,text,uuid,text,text,text,text,text,text,text)'::regprocedure
@@ -247,7 +247,7 @@ SELECT extensions.ok(
     WHERE function_definition.oid =
       'public.replace_advocate_beneficiary_configuration(uuid,uuid,bigint,public.advocate_beneficiary_mode,uuid[],uuid[],text,text,text,text,text,text)'::regprocedure
   ),
-  'every advocate settings RPC uses fixed definer authority'
+  'every advocate settings RPC uses fixed definer authority and branding bounds lock waits'
 );
 
 SELECT extensions.ok(

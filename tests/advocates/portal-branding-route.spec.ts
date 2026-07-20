@@ -25,6 +25,7 @@ let updateResult: { data: unknown; error: { code?: string } | null } = {
 }
 let createClientCalls = 0
 let serviceClientCalls = 0
+const serviceClientOptions: unknown[] = []
 const rpcCalls: Array<{ name: string; input: unknown }> = []
 
 function validAccessRow() {
@@ -71,8 +72,9 @@ nodeModule._load = function mockedModuleLoad(
           },
         }
       },
-      createServiceRoleClient() {
+      createServiceRoleClient(options?: unknown) {
         serviceClientCalls += 1
+        serviceClientOptions.push(options)
         return {
           async rpc(name: string, input?: unknown) {
             rpcCalls.push({ name, input })
@@ -144,6 +146,7 @@ test.beforeEach(() => {
   updateResult = { data: 8, error: null }
   createClientCalls = 0
   serviceClientCalls = 0
+  serviceClientOptions.length = 0
   rpcCalls.length = 0
 })
 
@@ -239,6 +242,9 @@ test.describe("advocate portal branding route", () => {
       target_logo_upload_reservation_id: null,
     })
     expect(serviceClientCalls).toBe(1)
+    expect(serviceClientOptions).toEqual([
+      { requestTimeoutMilliseconds: 15_000 },
+    ])
   })
 
   test("maps stale writes and database failures without leaking details", async () => {

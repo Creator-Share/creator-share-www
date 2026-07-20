@@ -321,6 +321,7 @@ export function classifyAdvocateBrandingUpdateFailure(
     case "23503":
       return { status: 404, code: "portal_not_found" }
     case "40001":
+    case "55P03":
     case "55000":
       return { status: 409, code: "version_conflict" }
     default:

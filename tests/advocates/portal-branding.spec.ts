@@ -261,6 +261,10 @@ test.describe("advocate portal branding boundary", () => {
       status: 409,
       code: "version_conflict",
     })
+    expect(classifyAdvocateBrandingUpdateFailure("55P03")).toEqual({
+      status: 409,
+      code: "version_conflict",
+    })
     expect(classifyAdvocateBrandingUpdateFailure("XX000")).toEqual({
       status: 500,
       code: "branding_update_failed",

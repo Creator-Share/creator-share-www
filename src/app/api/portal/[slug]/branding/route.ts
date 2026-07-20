@@ -23,6 +23,8 @@ import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+const BRANDING_REQUEST_TIMEOUT_MILLISECONDS = 15_000
+
 function response(body: Record<string, unknown>, status: number): NextResponse {
   return NextResponse.json(body, {
     status,
@@ -117,8 +119,11 @@ export async function POST(
   requestId = deterministicRequestId
 
   try {
+    const serviceClient = createServiceRoleClient({
+      requestTimeoutMilliseconds: BRANDING_REQUEST_TIMEOUT_MILLISECONDS,
+    })
     const advocateVersion = await updateAdvocateBranding(
-      createServiceRoleClient(),
+      serviceClient,
       {
         advocateId: portal.advocateId,
         actorUserId: user.id,
