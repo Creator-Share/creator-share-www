@@ -5,12 +5,22 @@ import { cookies } from "next/headers"
 const MIN_SERVICE_ROLE_REQUEST_TIMEOUT_MILLISECONDS = 1_000
 const MAX_SERVICE_ROLE_REQUEST_TIMEOUT_MILLISECONDS = 45_000
 
-export type ServiceRoleClientOptions = {
+export type SupabaseClientOptions = {
   requestTimeoutMilliseconds?: number
 }
 
-export async function createClient() {
+export type ServiceRoleClientOptions = SupabaseClientOptions
+
+export async function createClient(options: SupabaseClientOptions = {}) {
   const cookieStore = await cookies()
+  const global =
+    options.requestTimeoutMilliseconds === undefined
+      ? undefined
+      : {
+          fetch: createAbortingServiceRoleFetch(
+            options.requestTimeoutMilliseconds,
+          ),
+        }
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,6 +48,7 @@ export async function createClient() {
           }
         },
       },
+      ...(global === undefined ? {} : { global }),
     },
   )
 }

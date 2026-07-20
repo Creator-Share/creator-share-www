@@ -12,6 +12,7 @@ type NodeModuleLoader = (
 ) => unknown
 
 const clientOptionsCalls: unknown[] = []
+const serverClientOptionsCalls: unknown[] = []
 const nodeModule = Module as unknown as { _load: NodeModuleLoader }
 const originalModuleLoad = nodeModule._load
 nodeModule._load = function mockedModuleLoad(
@@ -21,7 +22,12 @@ nodeModule._load = function mockedModuleLoad(
   isMain: boolean,
 ) {
   if (request === "@supabase/ssr") {
-    return { createServerClient() {} }
+    return {
+      createServerClient(_url: string, _key: string, options: unknown) {
+        serverClientOptionsCalls.push(options)
+        return { options }
+      },
+    }
   }
   if (request === "@supabase/supabase-js") {
     return {
@@ -43,9 +49,11 @@ const testRequire = createRequire(
 const serverModulePath = resolve(process.cwd(), "src/utils/supabase/server.ts")
 const previouslyCachedServerModule = testRequire.cache[serverModulePath]
 delete testRequire.cache[serverModulePath]
-const { createAbortingServiceRoleFetch, createServiceRoleClient } = testRequire(
-  serverModulePath,
-) as ServerModule
+const {
+  createAbortingServiceRoleFetch,
+  createClient,
+  createServiceRoleClient,
+} = testRequire(serverModulePath) as ServerModule
 if (previouslyCachedServerModule) {
   testRequire.cache[serverModulePath] = previouslyCachedServerModule
 } else {
@@ -55,6 +63,7 @@ nodeModule._load = originalModuleLoad
 
 test.beforeEach(() => {
   clientOptionsCalls.length = 0
+  serverClientOptionsCalls.length = 0
 })
 
 test.describe("service role request timeout", () => {
@@ -102,6 +111,20 @@ test.describe("service role request timeout", () => {
     expect(options.global?.fetch).toEqual(expect.any(Function))
   })
 
+  test("bounds authenticated server clients only when requested", async () => {
+    await createClient()
+    await createClient({ requestTimeoutMilliseconds: 8_000 })
+
+    const ordinary = serverClientOptionsCalls[0] as {
+      global?: { fetch?: unknown }
+    }
+    const bounded = serverClientOptionsCalls[1] as {
+      global?: { fetch?: unknown }
+    }
+    expect(ordinary.global).toBeUndefined()
+    expect(bounded.global?.fetch).toEqual(expect.any(Function))
+  })
+
   test("rejects unsafe timeout bounds before creating a client", () => {
     for (const requestTimeoutMilliseconds of [999, 45_001, 1_500.5, NaN]) {
       expect(() =>
@@ -109,5 +132,14 @@ test.describe("service role request timeout", () => {
       ).toThrow(RangeError)
     }
     expect(clientOptionsCalls).toHaveLength(0)
+  })
+
+  test("rejects unsafe authenticated timeout bounds before creating a client", async () => {
+    for (const requestTimeoutMilliseconds of [999, 45_001, 1_500.5, NaN]) {
+      await expect(
+        createClient({ requestTimeoutMilliseconds }),
+      ).rejects.toThrow(RangeError)
+    }
+    expect(serverClientOptionsCalls).toHaveLength(0)
   })
 })

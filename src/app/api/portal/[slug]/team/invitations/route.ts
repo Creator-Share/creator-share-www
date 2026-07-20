@@ -55,6 +55,14 @@ function classifyFailure(error: unknown): { status: number; code: string } {
   }
 }
 
+async function loadAuthentication() {
+  const authenticatedClient = await createClient()
+  const {
+    data: { user },
+  } = await authenticatedClient.auth.getUser()
+  return { authenticatedClient, user }
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
@@ -73,10 +81,20 @@ export async function POST(
     )
   }
 
-  const authenticatedClient = await createClient()
-  const {
-    data: { user },
-  } = await authenticatedClient.auth.getUser()
+  let authentication: Awaited<ReturnType<typeof loadAuthentication>>
+  try {
+    authentication = await loadAuthentication()
+  } catch {
+    console.error("ADVOCATE_PORTAL_INVITATION_FAILED", {
+      requestId: context.requestId,
+      code: "authentication_unavailable",
+    })
+    return response(
+      { ok: false, code: "invitation_failed", requestId: context.requestId },
+      500,
+    )
+  }
+  const { authenticatedClient, user } = authentication
   if (!user) {
     return response(
       { ok: false, code: "unauthorized", requestId: context.requestId },

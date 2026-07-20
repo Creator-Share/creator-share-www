@@ -5,6 +5,9 @@ export interface CreatorShareRole {
   role_name: string
 }
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
 export function roleChangeReason(
   suppliedReason: unknown,
   fallback: string,
@@ -33,18 +36,21 @@ export async function getCreatorShareRoleIds(
 
 export async function replaceCreatorShareRoles(
   supabase: SupabaseClient,
-  request: Request,
+  requestId: string,
   userId: string,
   roleIds: string[],
   reason: string,
 ): Promise<CreatorShareRole[]> {
+  if (!UUID_PATTERN.test(requestId)) {
+    throw new Error("creator_share_role_request_id_invalid")
+  }
   const { data, error } = await supabase.rpc(
     "replace_creator_share_user_roles",
     {
       target_user_id: userId,
       target_role_ids: roleIds,
       change_reason: reason,
-      request_id: request.headers.get("x-request-id"),
+      request_id: requestId,
     },
   )
 

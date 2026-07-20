@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
@@ -25,7 +27,7 @@ export async function DELETE(request: Request) {
     const currentRoleIds = await getCreatorShareRoleIds(supabase, userId)
     const roles = await replaceCreatorShareRoles(
       supabase,
-      request,
+      randomUUID(),
       userId,
       currentRoleIds.filter((currentRoleId) => currentRoleId !== roleId),
       roleChangeReason(reason, "Administrator removed a Creator Share role"),

@@ -66,8 +66,11 @@ SELECT extensions.ok(
   to_regprocedure(
     'public.create_advocate_invitation(uuid,text,text[],interval)'
   ) IS NULL
-  AND to_regprocedure('public.redeem_advocate_invitation(text)') IS NULL,
-  'the plaintext-returning legacy issuance and weak redemption RPCs are removed'
+  AND to_regprocedure('public.redeem_advocate_invitation(text)') IS NULL
+  AND to_regprocedure(
+    'public.claim_advocate_invitation_email_jobs(text,integer,text,text)'
+  ) IS NULL,
+  'plaintext-returning issuance, weak redemption, and the legacy claim signature are removed'
 );
 
 SELECT extensions.ok(
@@ -80,7 +83,7 @@ SELECT extensions.ok(
     FROM pg_proc function_definition
     WHERE function_definition.oid = ANY (ARRAY[
       'public.issue_advocate_invitation_email(uuid,uuid,text,text[],text,bytea,bytea,bytea,bytea,smallint,smallint,smallint,text,text,text,text,text,text)'::regprocedure,
-      'public.claim_advocate_invitation_email_jobs(text,integer,text,text)'::regprocedure,
+      'public.claim_advocate_invitation_email_jobs(text,smallint,integer,text,text)'::regprocedure,
       'public.bind_advocate_invitation_email_target(uuid,text,uuid,bytea,bytea,text,text)'::regprocedure,
       'public.begin_advocate_invitation_email_delivery(uuid,text,bytea,bytea,text,text)'::regprocedure,
       'public.fail_advocate_invitation_email_delivery(uuid,text,text,integer,text,text)'::regprocedure,
@@ -102,7 +105,7 @@ SELECT extensions.ok(
   )
   AND has_function_privilege(
     'service_role',
-    'public.claim_advocate_invitation_email_jobs(text,integer,text,text)',
+    'public.claim_advocate_invitation_email_jobs(text,smallint,integer,text,text)',
     'EXECUTE'
   )
   AND has_function_privilege(
@@ -178,13 +181,13 @@ SELECT extensions.ok(
 
 SELECT extensions.ok(
   pg_get_functiondef(
-    'public.claim_advocate_invitation_email_jobs(text,integer,text,text)'::regprocedure
+    'public.claim_advocate_invitation_email_jobs(text,smallint,integer,text,text)'::regprocedure
   ) LIKE '%FOR UPDATE OF outbox SKIP LOCKED%'
   AND pg_get_functiondef(
-    'public.claim_advocate_invitation_email_jobs(text,integer,text,text)'::regprocedure
+    'public.claim_advocate_invitation_email_jobs(text,smallint,integer,text,text)'::regprocedure
   ) LIKE '%gen_random_bytes(32)%'
   AND pg_get_functiondef(
-    'public.claim_advocate_invitation_email_jobs(text,integer,text,text)'::regprocedure
+    'public.claim_advocate_invitation_email_jobs(text,smallint,integer,text,text)'::regprocedure
   ) LIKE '%delivery_started_at IS NULL%'
   AND EXISTS (
     SELECT 1
@@ -357,6 +360,34 @@ SELECT 'advocate', id FROM created;
 
 SELECT set_config('request.jwt.claim.sub', '', true);
 SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
+DO $test_cutover$
+BEGIN
+  PERFORM public.arm_advocate_invitation_legacy_email_proof_quarantine(
+    '95000000-0000-4000-8000-000000000801'::uuid,
+    'invitation-delivery-test-arm'
+  );
+END;
+$test_cutover$;
+
+SET LOCAL session_replication_role = replica;
+UPDATE private.advocate_invitation_legacy_email_proof_quarantine
+SET
+  legacy_claim_fenced_at = clock_timestamp() - interval '71 seconds',
+  legacy_claim_fence_transaction_id = '1'::xid8
+WHERE quarantine_identity = 'advocate_invitation_legacy_email_proof_v1';
+SET LOCAL session_replication_role = origin;
+
+DO $test_cutover$
+BEGIN
+  PERFORM *
+  FROM public.quarantine_legacy_advocate_invitation_proofs(
+    3600::smallint,
+    '95000000-0000-4000-8000-000000000802'::uuid,
+    'invitation-delivery-test-quarantine'
+  );
+END;
+$test_cutover$;
 
 WITH issued AS (
   SELECT *
@@ -639,6 +670,7 @@ INSERT INTO invitation_claim
 SELECT *
 FROM public.claim_advocate_invitation_email_jobs(
   'invitation-email-test-worker',
+  1::smallint,
   10,
   'request-invitation-claim',
   'trace-invitation-claim'
@@ -674,6 +706,7 @@ SELECT extensions.is(
     SELECT count(*)::integer
     FROM public.claim_advocate_invitation_email_jobs(
       'invitation-email-second-worker',
+      1::smallint,
       10
     )
   ),
@@ -1330,6 +1363,7 @@ INSERT INTO invitation_claim
 SELECT *
 FROM public.claim_advocate_invitation_email_jobs(
   'invitation-email-failure-worker',
+  1::smallint,
   10
 );
 
@@ -1397,6 +1431,7 @@ INSERT INTO invitation_claim
 SELECT *
 FROM public.claim_advocate_invitation_email_jobs(
   'invitation-email-terminal-worker',
+  1::smallint,
   10
 );
 
@@ -1422,6 +1457,7 @@ SELECT extensions.is(
     SELECT count(*)::integer
     FROM public.claim_advocate_invitation_email_jobs(
       'invitation-email-after-failure-worker',
+      1::smallint,
       10
     )
   ),

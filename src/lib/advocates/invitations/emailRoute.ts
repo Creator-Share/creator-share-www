@@ -10,6 +10,7 @@ import {
 import {
   emptyAdvocateInvitationEmailBatchResult,
   runAdvocateInvitationEmailBatch,
+  ADVOCATE_INVITATION_EMAIL_INVOCATION_BUDGET_MILLISECONDS,
   type AdvocateInvitationEmailWorkerDependencies,
 } from "./emailWorker"
 import { isAuthorizedAdvocateInvitationEmailWorkerRequest } from "./emailWorkerAuthorization"
@@ -32,20 +33,24 @@ function response(body: Record<string, unknown>, status: number): Response {
     status,
     headers: {
       "Cache-Control": "no-store",
+      Pragma: "no-cache",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
     },
   })
 }
 
-function traceId(request: Request): string | null {
-  for (const header of ["x-vercel-id", "cf-ray", "traceparent", "x-trace-id"]) {
-    const value = request.headers.get(header)?.trim()
-    if (value && value.length <= 255 && /^[\x21-\x7e]+$/.test(value)) {
-      return value
-    }
-  }
-  return null
+function traceId(
+  request: Request,
+  environment: AdvocateInvitationEmailEnvironment,
+): string | null {
+  if (environment.VERCEL !== "1") return null
+  const value = request.headers.get("x-vercel-id")?.trim()
+  return value &&
+    Buffer.byteLength(value, "utf8") <= 255 &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
+    ? value
+    : null
 }
 
 function safeResponse(options: {
@@ -138,8 +143,9 @@ export async function handleAdvocateInvitationEmailRequest(
     const batch = await runAdvocateInvitationEmailBatch({
       config,
       workerId: `advocate-invitation-email:${workerToken}`,
-      context: { requestId, traceId: traceId(request) },
-      invocationDeadlineAt: startedAt + 60_000,
+      context: { requestId, traceId: traceId(request, environment) },
+      invocationDeadlineAt:
+        startedAt + ADVOCATE_INVITATION_EMAIL_INVOCATION_BUDGET_MILLISECONDS,
       dependencies: dependencies.createWorkerDependencies({ config }),
     })
     const requiresAttention =

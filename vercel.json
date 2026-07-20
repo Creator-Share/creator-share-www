@@ -1,5 +1,8 @@
 {
   "functions": {
+    "src/app/api/admin/users/invite/route.ts": {
+      "maxDuration": 120
+    },
     "src/app/api/admin/beneficiaries/images/create/route.ts": {
       "maxDuration": 60,
       "memory": 3008
@@ -20,7 +23,7 @@
       "maxDuration": 60
     },
     "src/app/api/internal/advocates/invitations/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 120
     },
     "src/app/api/internal/advocates/public-metrics/route.ts": {
       "maxDuration": 60

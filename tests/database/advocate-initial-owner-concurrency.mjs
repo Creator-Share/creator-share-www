@@ -311,6 +311,7 @@ async function queryClaim(client, portal, suffix) {
        capability_digest
      FROM public.claim_advocate_invitation_email_jobs(
        $1::text,
+       1::smallint,
        1,
        $2::text,
        $3::text
@@ -1440,6 +1441,7 @@ async function claimVersusRevoke(database) {
           `SELECT outbox_id
            FROM public.claim_advocate_invitation_email_jobs(
              'ff039-worker-revoke-first',
+             1::smallint,
              1,
              $1::text,
              $2::text

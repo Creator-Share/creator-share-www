@@ -3,7 +3,7 @@ import "server-only"
 import { createSponsorshipCryptoFromEnvironment } from "@/lib/sponsorships/crypto"
 import { createServiceRoleClient } from "@/utils/supabase/server"
 
-import { createSupabaseAdvocateInvitationAuthProvider } from "./emailAuth"
+import { createSharedAdvocateInvitationAuthProvider } from "./emailAuth"
 import {
   loadAdvocateInvitationEmailCanonicalOrigin,
   loadAdvocateInvitationEmailTransportConfig,
@@ -27,7 +27,7 @@ export function createAdvocateInvitationEmailWorkerDependencies(options: {
   })
   return {
     repository: createSupabaseAdvocateInvitationEmailRepository(serviceClient),
-    authProvider: createSupabaseAdvocateInvitationAuthProvider(serviceClient),
+    authProvider: createSharedAdvocateInvitationAuthProvider(),
     transport: createNodemailerAdvocateInvitationEmailTransport(
       loadAdvocateInvitationEmailTransportConfig(environment),
     ),

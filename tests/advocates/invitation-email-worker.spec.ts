@@ -7,6 +7,8 @@ import { resolve } from "node:path"
 import { expect, test } from "@playwright/test"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { AdvocateInvitationEmailProofResult } from "../../src/lib/auth/supabaseEmailProofIssuer"
+
 import type {
   AdvocateInvitationEmailRepository,
   AdvocateInvitationEmailTransport,
@@ -29,6 +31,15 @@ nodeModule._load = function mockedModuleLoad(
   isMain: boolean,
 ) {
   if (request === "server-only") return {}
+  if (request === "@/lib/auth/supabaseEmailProofIssuer") {
+    return {
+      EMAIL_PROOF_AMBIGUOUS_RETRY_AFTER_SECONDS: 3900,
+      EMAIL_PROOF_ISSUER_WORST_CASE_DURATION_MILLISECONDS: 42_000,
+      async issueAdvocateInvitationEmailProof() {
+        throw new Error("shared issuer must be injected in this unit suite")
+      },
+    }
+  }
   return originalModuleLoad.call(this, request, parent, isMain)
 }
 const testRequire = createRequire(
@@ -45,10 +56,7 @@ const {
 } = testRequire(
   "../../src/lib/advocates/invitations/emailEnvelope",
 ) as typeof import("../../src/lib/advocates/invitations/emailEnvelope")
-const {
-  AdvocateInvitationAuthProviderError,
-  createSupabaseAdvocateInvitationAuthProvider,
-} = testRequire(
+const { createSharedAdvocateInvitationAuthProvider } = testRequire(
   "../../src/lib/advocates/invitations/emailAuth",
 ) as typeof import("../../src/lib/advocates/invitations/emailAuth")
 const {
@@ -71,12 +79,17 @@ const { createSupabaseAdvocateInvitationEmailRepository } = testRequire(
 const invitationEmailRoute = testRequire(
   "../../src/lib/advocates/invitations/emailRoute",
 ) as typeof import("../../src/lib/advocates/invitations/emailRoute")
+const { advocateInvitationRequestContext } = testRequire(
+  "../../src/lib/advocates/invitations/requestContext",
+) as typeof import("../../src/lib/advocates/invitations/requestContext")
 const { createNodemailerAdvocateInvitationEmailTransport } = testRequire(
   "../../src/lib/advocates/invitations/emailTransport",
 ) as typeof import("../../src/lib/advocates/invitations/emailTransport")
 const {
+  ADVOCATE_INVITATION_EMAIL_INVOCATION_BUDGET_MILLISECONDS,
   AdvocateInvitationEmailRepositoryError,
   AdvocateInvitationEmailTransportError,
+  advocateInvitationPreIssuerHeadroomMilliseconds,
   processAdvocateInvitationEmail,
   runAdvocateInvitationEmailBatch,
 } = testRequire(
@@ -154,6 +167,16 @@ function repository(
     async claimJobs() {
       return []
     },
+    async settleProofIssuance(options) {
+      return {
+        retryable: true,
+        attemptRefunded:
+          options.disposition === "coalesced" ||
+          options.disposition === "deferred" ||
+          options.disposition === "begin_ambiguous" ||
+          options.disposition === "unavailable",
+      }
+    },
     async bindTarget() {},
     async beginDelivery(options) {
       return {
@@ -185,11 +208,14 @@ function dependencies(
   return {
     repository: repository(),
     authProvider: {
-      async generateMagicLink() {
+      async issueEmailProof() {
         return {
-          userId: USER_ID,
-          hashedToken: AUTH_TOKEN_HASH,
-          authType: "magiclink",
+          status: "issued",
+          proof: {
+            userId: USER_ID,
+            hashedToken: AUTH_TOKEN_HASH,
+            authType: "magiclink",
+          },
         }
       },
     },
@@ -349,140 +375,41 @@ test.describe("advocate invitation email envelopes", () => {
 })
 
 test.describe("advocate invitation auth and persistence adapters", () => {
-  test("uses admin magiclink generation with explicit create-if-missing semantics", async () => {
+  test("forwards the exact durable operation and worker context to the shared issuer", async () => {
     const calls: unknown[] = []
-    const provider = createSupabaseAdvocateInvitationAuthProvider({
-      auth: {
-        admin: {
-          async generateLink(input: unknown) {
-            calls.push(input)
-            return {
-              data: {
-                user: { id: USER_ID, email: RECIPIENT },
-                properties: {
-                  verification_type: "magiclink",
-                  hashed_token: AUTH_TOKEN_HASH,
-                },
-              },
-              error: null,
-            }
-          },
-        },
+    const expected = {
+      status: "issued" as const,
+      proof: {
+        userId: USER_ID,
+        hashedToken: AUTH_TOKEN_HASH,
+        authType: "signup" as const,
       },
-    } as unknown as SupabaseClient)
+    }
+    const provider = createSharedAdvocateInvitationAuthProvider(
+      async (options) => {
+        calls.push(options)
+        return expected
+      },
+    )
     await expect(
-      provider.generateMagicLink({
+      provider.issueEmailProof({
         recipientEmail: RECIPIENT,
         redirectTo: "https://creatorshare.com/advocate-invitation",
-        createUserIfMissing: true,
+        outboxId: OUTBOX_ID,
+        context,
       }),
-    ).resolves.toEqual({
-      userId: USER_ID,
-      hashedToken: AUTH_TOKEN_HASH,
-      authType: "magiclink",
-    })
+    ).resolves.toEqual(expected)
     expect(calls).toEqual([
       {
-        type: "magiclink",
-        email: RECIPIENT,
-        options: {
-          redirectTo: "https://creatorshare.com/advocate-invitation",
-        },
+        recipientEmail: RECIPIENT,
+        redirectTo: "https://creatorshare.com/advocate-invitation",
+        outboxId: OUTBOX_ID,
+        context,
       },
     ])
   })
 
-  test("preserves the provider signup proof for a newly created account", async () => {
-    const provider = createSupabaseAdvocateInvitationAuthProvider({
-      auth: {
-        admin: {
-          async generateLink() {
-            return {
-              data: {
-                user: { id: USER_ID, email: RECIPIENT },
-                properties: {
-                  verification_type: "signup",
-                  hashed_token: AUTH_TOKEN_HASH,
-                },
-              },
-              error: null,
-            }
-          },
-        },
-      },
-    } as unknown as SupabaseClient)
-
-    await expect(
-      provider.generateMagicLink({
-        recipientEmail: RECIPIENT,
-        redirectTo: "https://creatorshare.com/advocate-invitation",
-        createUserIfMissing: true,
-      }),
-    ).resolves.toEqual({
-      userId: USER_ID,
-      hashedToken: AUTH_TOKEN_HASH,
-      authType: "signup",
-    })
-  })
-
-  test("rejects an unrelated provider verification type", async () => {
-    const provider = createSupabaseAdvocateInvitationAuthProvider({
-      auth: {
-        admin: {
-          async generateLink() {
-            return {
-              data: {
-                user: { id: USER_ID, email: RECIPIENT },
-                properties: {
-                  verification_type: "recovery",
-                  hashed_token: AUTH_TOKEN_HASH,
-                },
-              },
-              error: null,
-            }
-          },
-        },
-      },
-    } as unknown as SupabaseClient)
-
-    await expect(
-      provider.generateMagicLink({
-        recipientEmail: RECIPIENT,
-        redirectTo: "https://creatorshare.com/advocate-invitation",
-        createUserIfMissing: true,
-      }),
-    ).rejects.toMatchObject({ targetUnavailable: true })
-  })
-
-  test("rejects a provider response for a different account email", async () => {
-    const provider = createSupabaseAdvocateInvitationAuthProvider({
-      auth: {
-        admin: {
-          async generateLink() {
-            return {
-              data: {
-                user: { id: USER_ID, email: "other@example.test" },
-                properties: {
-                  verification_type: "magiclink",
-                  hashed_token: AUTH_TOKEN_HASH,
-                },
-              },
-              error: null,
-            }
-          },
-        },
-      },
-    } as unknown as SupabaseClient)
-    await expect(
-      provider.generateMagicLink({
-        recipientEmail: RECIPIENT,
-        redirectTo: "https://creatorshare.com/advocate-invitation",
-        createUserIfMissing: true,
-      }),
-    ).rejects.toMatchObject({ targetUnavailable: true })
-  })
-
-  test("maps the dedicated claim, bind, begin, settle, and fail RPCs exactly", async () => {
+  test("maps the dedicated claim, proof settlement, bind, begin, settle, and fail RPCs exactly", async () => {
     const job = claimedJob()
     const calls: Array<{ name: string; args: Record<string, unknown> }> = []
     const client = {
@@ -517,6 +444,19 @@ test.describe("advocate invitation auth and persistence adapters", () => {
         if (name === "bind_advocate_invitation_email_target") {
           return { data: true, error: null }
         }
+        if (name === "settle_advocate_invitation_email_proof_issuance") {
+          return {
+            data: [
+              {
+                retryable: true,
+                attempt_refunded: true,
+                available_at: "2026-07-18T12:05:00.000Z",
+                settled_at: "2026-07-18T12:00:00.000Z",
+              },
+            ],
+            error: null,
+          }
+        }
         if (name === "begin_advocate_invitation_email_delivery") {
           return { data: job.providerIdempotencyKey, error: null }
         }
@@ -542,6 +482,12 @@ test.describe("advocate invitation auth and persistence adapters", () => {
       context,
     })
     expect(claimed).toEqual(job)
+    await adapter.settleProofIssuance({
+      job,
+      disposition: "deferred",
+      retryAfterSeconds: 300,
+      context,
+    })
     await adapter.bindTarget({
       job,
       targetUserId: USER_ID,
@@ -571,12 +517,28 @@ test.describe("advocate invitation auth and persistence adapters", () => {
     })
     expect(calls.map((call) => call.name)).toEqual([
       "claim_advocate_invitation_email_jobs",
+      "settle_advocate_invitation_email_proof_issuance",
       "bind_advocate_invitation_email_target",
       "begin_advocate_invitation_email_delivery",
       "settle_advocate_invitation_email_delivery",
       "fail_advocate_invitation_email_delivery",
     ])
-    expect(calls[1].args).toMatchObject({
+    expect(calls[0].args).toEqual({
+      worker_id: `advocate-invitation-email:${WORKER_ID}`,
+      batch_size: 2,
+      shared_email_proof_issuer_version: 1,
+      request_id: REQUEST_ID,
+      trace_id: context.traceId,
+    })
+    expect(calls[1].args).toEqual({
+      target_outbox_id: OUTBOX_ID,
+      lease_token: LEASE_TOKEN,
+      proof_disposition: "deferred",
+      retry_after_seconds: 300,
+      context_request_id: REQUEST_ID,
+      context_trace_id: context.traceId,
+    })
+    expect(calls[2].args).toMatchObject({
       target_user_id: USER_ID,
       verified_recipient_email_hmac: job.recipientEmailHmac,
       verified_capability_digest: job.capabilityDigest,
@@ -631,6 +593,64 @@ test.describe("advocate invitation auth and persistence adapters", () => {
     ).resolves.toEqual([job])
   })
 
+  test("rejects a retryable target-mismatch settlement row", async () => {
+    const adapter = createSupabaseAdvocateInvitationEmailRepository({
+      async rpc(name: string) {
+        expect(name).toBe("settle_advocate_invitation_email_proof_issuance")
+        return {
+          data: [
+            {
+              retryable: true,
+              attempt_refunded: false,
+              available_at: "2026-07-18T13:05:00.000Z",
+              settled_at: "2026-07-18T12:00:00.000Z",
+            },
+          ],
+          error: null,
+        }
+      },
+    } as unknown as SupabaseClient)
+    await expect(
+      adapter.settleProofIssuance({
+        job: claimedJob(),
+        disposition: "issued_target_mismatch",
+        retryAfterSeconds: 3900,
+        context,
+      }),
+    ).rejects.toThrow(
+      "advocate_invitation_email_repository_proof_settlement_shape",
+    )
+  })
+
+  test("rejects a proof settlement available before it was settled", async () => {
+    const adapter = createSupabaseAdvocateInvitationEmailRepository({
+      async rpc(name: string) {
+        expect(name).toBe("settle_advocate_invitation_email_proof_issuance")
+        return {
+          data: [
+            {
+              retryable: true,
+              attempt_refunded: true,
+              available_at: "2026-07-18T11:59:59.999Z",
+              settled_at: "2026-07-18T12:00:00.000Z",
+            },
+          ],
+          error: null,
+        }
+      },
+    } as unknown as SupabaseClient)
+    await expect(
+      adapter.settleProofIssuance({
+        job: claimedJob(),
+        disposition: "deferred",
+        retryAfterSeconds: 300,
+        context,
+      }),
+    ).rejects.toThrow(
+      "advocate_invitation_email_repository_proof_settlement_shape",
+    )
+  })
+
   test("rejects extra claim fields and duplicate claims", async () => {
     const invalidRow = {
       outbox_id: OUTBOX_ID,
@@ -671,16 +691,24 @@ test.describe("advocate invitation delivery worker", () => {
       config,
       job: claimedJob(),
       context,
-      invocationDeadlineAt: NOW + 60_000,
+      invocationDeadlineAt: NOW + 120_000,
       dependencies: dependencies({
         authProvider: {
-          async generateMagicLink(options) {
+          async issueEmailProof(options) {
             stages.push("auth")
-            expect(options.createUserIfMissing).toBe(true)
+            expect(options).toEqual({
+              recipientEmail: RECIPIENT,
+              redirectTo: "https://creatorshare.com/advocate-invitation",
+              outboxId: OUTBOX_ID,
+              context,
+            })
             return {
-              userId: USER_ID,
-              hashedToken: AUTH_TOKEN_HASH,
-              authType: "signup",
+              status: "issued",
+              proof: {
+                userId: USER_ID,
+                hashedToken: AUTH_TOKEN_HASH,
+                authType: "signup",
+              },
             }
           },
         },
@@ -735,15 +763,18 @@ test.describe("advocate invitation delivery worker", () => {
         },
       }),
       context,
-      invocationDeadlineAt: NOW + 60_000,
+      invocationDeadlineAt: NOW + 120_000,
       dependencies: dependencies({
         authProvider: {
-          async generateMagicLink() {
+          async issueEmailProof() {
             stages.push("auth")
             return {
-              userId: USER_ID,
-              hashedToken: AUTH_TOKEN_HASH,
-              authType: "magiclink",
+              status: "issued",
+              proof: {
+                userId: USER_ID,
+                hashedToken: AUTH_TOKEN_HASH,
+                authType: "magiclink",
+              },
             }
           },
         },
@@ -785,15 +816,18 @@ test.describe("advocate invitation delivery worker", () => {
       config,
       job: claimedJob({ recipientEmailHmac: `\\x${"00".repeat(32)}` }),
       context,
-      invocationDeadlineAt: NOW + 60_000,
+      invocationDeadlineAt: NOW + 120_000,
       dependencies: dependencies({
         authProvider: {
-          async generateMagicLink() {
+          async issueEmailProof() {
             authCalled = true
             return {
-              userId: USER_ID,
-              hashedToken: AUTH_TOKEN_HASH,
-              authType: "magiclink",
+              status: "issued",
+              proof: {
+                userId: USER_ID,
+                hashedToken: AUTH_TOKEN_HASH,
+                authType: "magiclink",
+              },
             }
           },
         },
@@ -810,51 +844,344 @@ test.describe("advocate invitation delivery worker", () => {
     expect(authCalled).toBe(false)
   })
 
-  test("retries a short-lived auth generation failure before handoff", async () => {
-    let failureCode: string | null = null
+  test("fences an unexpected issuer failure as ambiguous", async () => {
+    let proofSettlement: Record<string, unknown> | null = null
     const result = await processAdvocateInvitationEmail({
       config,
       job: claimedJob(),
       context,
-      invocationDeadlineAt: NOW + 60_000,
+      invocationDeadlineAt: NOW + 120_000,
       dependencies: dependencies({
         authProvider: {
-          async generateMagicLink() {
-            throw new AdvocateInvitationAuthProviderError()
+          async issueEmailProof() {
+            throw new Error("lost issuer response")
           },
         },
         repository: repository({
-          async failDelivery(options) {
-            failureCode = options.errorCode
-            return { retryable: true }
+          async settleProofIssuance(options) {
+            proofSettlement = options
+            return { retryable: true, attemptRefunded: false }
           },
         }),
       }),
     })
     expect(result.status).toBe("retried")
-    expect(failureCode).toBe("auth_link_generation_failed")
+    expect(result.code).toBe("email_proof_issuance_ambiguous")
+    expect(proofSettlement).toMatchObject({
+      disposition: "ambiguous",
+      retryAfterSeconds: 3900,
+    })
   })
 
+  const proofDeferralScenarios: Array<{
+    name: string
+    issuance: AdvocateInvitationEmailProofResult
+    disposition: string
+    retryAfterSeconds: number
+    attemptRefunded: boolean
+    code: string
+  }> = [
+    {
+      name: "coalesced zero delay",
+      issuance: { status: "coalesced", retryAfterSeconds: 0 },
+      disposition: "coalesced",
+      retryAfterSeconds: 0,
+      attemptRefunded: true,
+      code: "email_proof_deferred",
+    },
+    {
+      name: "coalesced positive delay",
+      issuance: { status: "coalesced", retryAfterSeconds: 73 },
+      disposition: "coalesced",
+      retryAfterSeconds: 73,
+      attemptRefunded: true,
+      code: "email_proof_deferred",
+    },
+    {
+      name: "deferred",
+      issuance: { status: "deferred", retryAfterSeconds: 41 },
+      disposition: "deferred",
+      retryAfterSeconds: 41,
+      attemptRefunded: true,
+      code: "email_proof_deferred",
+    },
+    {
+      name: "provider ambiguous",
+      issuance: { status: "ambiguous", retryAfterSeconds: 3900 },
+      disposition: "ambiguous",
+      retryAfterSeconds: 3900,
+      attemptRefunded: false,
+      code: "email_proof_issuance_ambiguous",
+    },
+    ...(["configuration", "acquire"] as const).map((stage) => ({
+      name: `${stage} unavailable`,
+      issuance: { status: "unavailable" as const, stage },
+      disposition: "unavailable",
+      retryAfterSeconds: 300,
+      attemptRefunded: true,
+      code: "email_proof_unavailable",
+    })),
+    {
+      name: "begin ambiguous",
+      issuance: {
+        status: "unavailable",
+        stage: "begin",
+        retryAfterSeconds: 3900,
+      },
+      disposition: "begin_ambiguous",
+      retryAfterSeconds: 3900,
+      attemptRefunded: true,
+      code: "email_proof_issuance_ambiguous",
+    },
+  ]
+
+  for (const scenario of proofDeferralScenarios) {
+    test(`settles ${scenario.name} with the exact shared issuer delay`, async () => {
+      let issuerCalls = 0
+      let transportCalls = 0
+      let settlement: Record<string, unknown> | null = null
+      const result = await processAdvocateInvitationEmail({
+        config,
+        job: claimedJob(),
+        context,
+        invocationDeadlineAt: NOW + 120_000,
+        dependencies: dependencies({
+          authProvider: {
+            async issueEmailProof() {
+              issuerCalls += 1
+              return scenario.issuance
+            },
+          },
+          repository: repository({
+            async settleProofIssuance(options) {
+              settlement = options
+              return {
+                retryable: true,
+                attemptRefunded: scenario.attemptRefunded,
+              }
+            },
+          }),
+          transport: {
+            async send(message) {
+              transportCalls += 1
+              return { providerMessageId: message.providerMessageId }
+            },
+          },
+        }),
+      })
+      expect(result).toMatchObject({ status: "retried", code: scenario.code })
+      expect(settlement).toMatchObject({
+        disposition: scenario.disposition,
+        retryAfterSeconds: scenario.retryAfterSeconds,
+      })
+      expect(issuerCalls).toBe(1)
+      expect(transportCalls).toBe(0)
+    })
+  }
+
   test("classifies an exact bound-account mismatch as target unavailable", async () => {
-    let failureCode: string | null = null
+    let proofSettlement: Record<string, unknown> | null = null
     const result = await processAdvocateInvitationEmail({
       config,
       job: claimedJob({
         targetAuthUserId: "77777777-7777-4777-8777-777777777777",
       }),
       context,
-      invocationDeadlineAt: NOW + 60_000,
+      invocationDeadlineAt: NOW + 120_000,
       dependencies: dependencies({
         repository: repository({
-          async failDelivery(options) {
-            failureCode = options.errorCode
-            return { retryable: true }
+          async settleProofIssuance(options) {
+            proofSettlement = options
+            return { retryable: false, attemptRefunded: false }
           },
         }),
       }),
     })
-    expect(result.status).toBe("retried")
-    expect(failureCode).toBe("invitation_target_unavailable")
+    expect(result).toMatchObject({
+      status: "terminal_failed",
+      code: "invitation_target_unavailable",
+    })
+    expect(proofSettlement).toMatchObject({
+      disposition: "issued_target_mismatch",
+      retryAfterSeconds: 3900,
+    })
+  })
+
+  test("rejects a retryable target mismatch defensively in the worker", async () => {
+    const result = await processAdvocateInvitationEmail({
+      config,
+      job: claimedJob({
+        targetAuthUserId: "77777777-7777-4777-8777-777777777777",
+      }),
+      context,
+      invocationDeadlineAt: NOW + 110_000,
+      dependencies: dependencies({
+        repository: repository({
+          async settleProofIssuance() {
+            return { retryable: true, attemptRefunded: false }
+          },
+        }),
+      }),
+    })
+    expect(result).toMatchObject({
+      status: "settlement_unknown",
+      code: "invitation_target_unavailable",
+    })
+  })
+
+  test("terminalizes a bind target mismatch through the issued proof receipt", async () => {
+    let proofSettlement: Record<string, unknown> | null = null
+    const result = await processAdvocateInvitationEmail({
+      config,
+      job: claimedJob(),
+      context,
+      invocationDeadlineAt: NOW + 120_000,
+      dependencies: dependencies({
+        repository: repository({
+          async bindTarget() {
+            throw new AdvocateInvitationEmailRepositoryError("bind", {
+              targetUnavailable: true,
+            })
+          },
+          async settleProofIssuance(options) {
+            proofSettlement = options
+            return { retryable: false, attemptRefunded: false }
+          },
+        }),
+      }),
+    })
+    expect(result).toMatchObject({
+      status: "terminal_failed",
+      code: "invitation_target_unavailable",
+    })
+    expect(proofSettlement).toMatchObject({
+      disposition: "issued_target_mismatch",
+      retryAfterSeconds: 3900,
+    })
+  })
+
+  test("fences an issued proof when target binding fails before handoff", async () => {
+    let transportCalled = false
+    let proofSettlement: Record<string, unknown> | null = null
+    const result = await processAdvocateInvitationEmail({
+      config,
+      job: claimedJob(),
+      context,
+      invocationDeadlineAt: NOW + 120_000,
+      dependencies: dependencies({
+        repository: repository({
+          async bindTarget() {
+            throw new AdvocateInvitationEmailRepositoryError("bind")
+          },
+          async settleProofIssuance(options) {
+            proofSettlement = options
+            return { retryable: true, attemptRefunded: false }
+          },
+        }),
+        transport: {
+          async send(message) {
+            transportCalled = true
+            return { providerMessageId: message.providerMessageId }
+          },
+        },
+      }),
+    })
+    expect(result).toMatchObject({
+      status: "retried",
+      code: "email_proof_issued_not_handed_off",
+    })
+    expect(proofSettlement).toMatchObject({
+      disposition: "issued_not_handed_off",
+      retryAfterSeconds: 3900,
+    })
+    expect(transportCalled).toBe(false)
+  })
+
+  test("keeps a late target-mismatch settlement failure visible for attention", async () => {
+    let nowCalls = 0
+    let settlementCalls = 0
+    const result = await processAdvocateInvitationEmail({
+      config,
+      job: claimedJob({
+        targetAuthUserId: "77777777-7777-4777-8777-777777777777",
+      }),
+      context,
+      invocationDeadlineAt: NOW + 110_000,
+      dependencies: dependencies({
+        now() {
+          nowCalls += 1
+          return nowCalls < 3 ? NOW : NOW + 100_000
+        },
+        repository: repository({
+          async settleProofIssuance() {
+            settlementCalls += 1
+            return { retryable: false, attemptRefunded: false }
+          },
+        }),
+      }),
+    })
+    expect(result).toMatchObject({
+      status: "settlement_unknown",
+      code: "invitation_target_unavailable",
+    })
+    expect(settlementCalls).toBe(0)
+  })
+
+  test("distinguishes exact post-issued invocation and lease settlement boundaries", async () => {
+    const invocationOutcomes: string[] = []
+    for (const extraHeadroom of [0, 1]) {
+      let nowCalls = 0
+      let settlementCalls = 0
+      const result = await processAdvocateInvitationEmail({
+        config,
+        job: claimedJob(),
+        context,
+        invocationDeadlineAt: NOW + 110_000,
+        dependencies: dependencies({
+          now() {
+            nowCalls += 1
+            return nowCalls < 3 ? NOW : NOW + 100_000 - extraHeadroom
+          },
+          repository: repository({
+            async bindTarget() {
+              throw new AdvocateInvitationEmailRepositoryError("bind")
+            },
+            async settleProofIssuance() {
+              settlementCalls += 1
+              return { retryable: true, attemptRefunded: false }
+            },
+          }),
+        }),
+      })
+      invocationOutcomes.push(result.status)
+      expect(settlementCalls).toBe(extraHeadroom)
+    }
+    expect(invocationOutcomes).toEqual(["settlement_unknown", "retried"])
+
+    let nowCalls = 0
+    const leaseResult = await processAdvocateInvitationEmail({
+      config,
+      job: claimedJob({
+        leaseExpiresAt: new Date(NOW + 100_000).toISOString(),
+      }),
+      context,
+      invocationDeadlineAt: NOW + 110_000,
+      dependencies: dependencies({
+        now() {
+          nowCalls += 1
+          return nowCalls < 3 ? NOW : NOW + 90_000
+        },
+        repository: repository({
+          async bindTarget() {
+            throw new AdvocateInvitationEmailRepositoryError("bind")
+          },
+        }),
+      }),
+    })
+    expect(leaseResult).toMatchObject({
+      status: "lease_lost",
+      code: "email_proof_issued_not_handed_off",
+    })
   })
 
   test("settles a provider-confirmed rejection as retryable", async () => {
@@ -863,7 +1190,7 @@ test.describe("advocate invitation delivery worker", () => {
       config,
       job: claimedJob(),
       context,
-      invocationDeadlineAt: NOW + 60_000,
+      invocationDeadlineAt: NOW + 120_000,
       dependencies: dependencies({
         repository: repository({
           async settleDelivery(options) {
@@ -899,7 +1226,7 @@ test.describe("advocate invitation delivery worker", () => {
       config,
       job: claimedJob(),
       context,
-      invocationDeadlineAt: NOW + 60_000,
+      invocationDeadlineAt: NOW + 120_000,
       dependencies: dependencies({
         repository: repository({
           async failDelivery() {
@@ -933,7 +1260,7 @@ test.describe("advocate invitation delivery worker", () => {
       config,
       job: claimedJob(),
       context,
-      invocationDeadlineAt: NOW + 60_000,
+      invocationDeadlineAt: NOW + 120_000,
       dependencies: dependencies({
         transport: {
           async send(message) {
@@ -949,7 +1276,7 @@ test.describe("advocate invitation delivery worker", () => {
       config,
       job: claimedJob({ leaseToken: "c3".repeat(32), attemptCount: 2 }),
       context,
-      invocationDeadlineAt: NOW + 60_000,
+      invocationDeadlineAt: NOW + 120_000,
       dependencies: dependencies({
         transport: {
           async send(message) {
@@ -972,7 +1299,7 @@ test.describe("advocate invitation delivery worker", () => {
       config,
       job: claimedJob(),
       context,
-      invocationDeadlineAt: NOW + 60_000,
+      invocationDeadlineAt: NOW + 120_000,
       dependencies: dependencies({
         repository: repository({
           async settleDelivery() {
@@ -989,9 +1316,9 @@ test.describe("advocate invitation delivery worker", () => {
     expect(failed).toBe(false)
   })
 
-  test("fails safely before auth when invocation headroom is insufficient", async () => {
+  test("refunds the attempt before auth when invocation headroom is insufficient", async () => {
     let authCalled = false
-    let failureCode: string | null = null
+    let proofSettlement: Record<string, unknown> | null = null
     const result = await processAdvocateInvitationEmail({
       config,
       job: claimedJob(),
@@ -999,26 +1326,250 @@ test.describe("advocate invitation delivery worker", () => {
       invocationDeadlineAt: NOW + 30_000,
       dependencies: dependencies({
         authProvider: {
-          async generateMagicLink() {
+          async issueEmailProof() {
             authCalled = true
             return {
-              userId: USER_ID,
-              hashedToken: AUTH_TOKEN_HASH,
-              authType: "magiclink",
+              status: "issued",
+              proof: {
+                userId: USER_ID,
+                hashedToken: AUTH_TOKEN_HASH,
+                authType: "magiclink",
+              },
             }
           },
         },
         repository: repository({
-          async failDelivery(options) {
-            failureCode = options.errorCode
-            return { retryable: true }
+          async settleProofIssuance(options) {
+            proofSettlement = options
+            return { retryable: true, attemptRefunded: true }
           },
         }),
       }),
     })
     expect(result.status).toBe("retried")
-    expect(failureCode).toBe("internal_error")
+    expect(result.code).toBe("email_proof_deferred")
+    expect(proofSettlement).toMatchObject({
+      disposition: "deferred",
+      retryAfterSeconds: 300,
+    })
     expect(authCalled).toBe(false)
+  })
+
+  test("rejects exact pre-issuer headroom and accepts one millisecond more", async () => {
+    const required = advocateInvitationPreIssuerHeadroomMilliseconds(config)
+    const calls: Array<{ delta: number; issuer: number; transport: number }> =
+      []
+    for (const delta of [0, 1]) {
+      const observed = { delta, issuer: 0, transport: 0 }
+      const result = await processAdvocateInvitationEmail({
+        config,
+        job: claimedJob(),
+        context,
+        invocationDeadlineAt: NOW + required + delta,
+        dependencies: dependencies({
+          authProvider: {
+            async issueEmailProof() {
+              observed.issuer += 1
+              return {
+                status: "issued",
+                proof: {
+                  userId: USER_ID,
+                  hashedToken: AUTH_TOKEN_HASH,
+                  authType: "magiclink",
+                },
+              }
+            },
+          },
+          transport: {
+            async send(message) {
+              observed.transport += 1
+              return { providerMessageId: message.providerMessageId }
+            },
+          },
+        }),
+      })
+      expect(result.status).toBe(delta === 0 ? "retried" : "sent")
+      calls.push(observed)
+    }
+    expect(calls).toEqual([
+      { delta: 0, issuer: 0, transport: 0 },
+      { delta: 1, issuer: 1, transport: 1 },
+    ])
+  })
+
+  test("rejects an exact lease boundary without invoking the issuer", async () => {
+    const required = advocateInvitationPreIssuerHeadroomMilliseconds(config)
+    let issuerCalls = 0
+    const result = await processAdvocateInvitationEmail({
+      config,
+      job: claimedJob({
+        leaseExpiresAt: new Date(NOW + required).toISOString(),
+      }),
+      context,
+      invocationDeadlineAt: NOW + 120_000,
+      dependencies: dependencies({
+        authProvider: {
+          async issueEmailProof() {
+            issuerCalls += 1
+            return {
+              status: "issued",
+              proof: {
+                userId: USER_ID,
+                hashedToken: AUTH_TOKEN_HASH,
+                authType: "magiclink",
+              },
+            }
+          },
+        },
+      }),
+    })
+    expect(result.status).toBe("lease_lost")
+    expect(issuerCalls).toBe(0)
+  })
+
+  test("rechecks headroom immediately after proof issuance", async () => {
+    const outcomes: string[] = []
+    for (const extraHeadroom of [0, 1]) {
+      let currentTime = NOW
+      let settlement: Record<string, unknown> | null = null
+      const result = await processAdvocateInvitationEmail({
+        config,
+        job: claimedJob(),
+        context,
+        invocationDeadlineAt: NOW + 120_000,
+        dependencies: dependencies({
+          now: () => currentTime,
+          authProvider: {
+            async issueEmailProof() {
+              currentTime = NOW + 80_000 - extraHeadroom
+              return {
+                status: "issued",
+                proof: {
+                  userId: USER_ID,
+                  hashedToken: AUTH_TOKEN_HASH,
+                  authType: "magiclink",
+                },
+              }
+            },
+          },
+          repository: repository({
+            async settleProofIssuance(options) {
+              settlement = options
+              return { retryable: true, attemptRefunded: false }
+            },
+          }),
+        }),
+      })
+      outcomes.push(result.status)
+      if (extraHeadroom === 0) {
+        expect(settlement).toMatchObject({
+          disposition: "issued_not_handed_off",
+          retryAfterSeconds: 3900,
+        })
+      }
+    }
+    expect(outcomes).toEqual(["retried", "sent"])
+  })
+
+  test("rechecks headroom immediately before delivery begin", async () => {
+    const outcomes: string[] = []
+    for (const extraHeadroom of [0, 1]) {
+      let currentTime = NOW
+      let beginCalls = 0
+      let settlement: Record<string, unknown> | null = null
+      const result = await processAdvocateInvitationEmail({
+        config,
+        job: claimedJob(),
+        context,
+        invocationDeadlineAt: NOW + 120_000,
+        dependencies: dependencies({
+          now: () => currentTime,
+          repository: repository({
+            async bindTarget() {
+              currentTime = NOW + 85_000 - extraHeadroom
+            },
+            async beginDelivery(options) {
+              beginCalls += 1
+              return {
+                providerIdempotencyKey: options.job.providerIdempotencyKey,
+              }
+            },
+            async settleProofIssuance(options) {
+              settlement = options
+              return { retryable: true, attemptRefunded: false }
+            },
+          }),
+        }),
+      })
+      outcomes.push(result.status)
+      expect(beginCalls).toBe(extraHeadroom)
+      if (extraHeadroom === 0) {
+        expect(settlement).toMatchObject({
+          disposition: "issued_not_handed_off",
+          retryAfterSeconds: 3900,
+        })
+      }
+    }
+    expect(outcomes).toEqual(["retried", "sent"])
+  })
+
+  test("reports a failed pre-issuer deferral settlement without external calls", async () => {
+    let issuerCalls = 0
+    let transportCalls = 0
+    const result = await processAdvocateInvitationEmail({
+      config,
+      job: claimedJob(),
+      context,
+      invocationDeadlineAt: NOW + 30_000,
+      dependencies: dependencies({
+        authProvider: {
+          async issueEmailProof() {
+            issuerCalls += 1
+            throw new Error("must not run")
+          },
+        },
+        repository: repository({
+          async settleProofIssuance() {
+            throw new AdvocateInvitationEmailRepositoryError("proof_settlement")
+          },
+        }),
+        transport: {
+          async send(message) {
+            transportCalls += 1
+            return { providerMessageId: message.providerMessageId }
+          },
+        },
+      }),
+    })
+    expect(result).toMatchObject({
+      status: "settlement_unknown",
+      code: "email_proof_deferred",
+    })
+    expect(issuerCalls).toBe(0)
+    expect(transportCalls).toBe(0)
+  })
+
+  test("rejects a batch that could queue claimed work locally", async () => {
+    let claimCalls = 0
+    await expect(
+      runAdvocateInvitationEmailBatch({
+        config: { ...config, concurrency: 1 },
+        workerId: `advocate-invitation-email:${WORKER_ID}`,
+        context,
+        invocationDeadlineAt: NOW + 120_000,
+        dependencies: dependencies({
+          repository: repository({
+            async claimJobs() {
+              claimCalls += 1
+              return [claimedJob(), claimedJob()]
+            },
+          }),
+        }),
+      }),
+    ).rejects.toThrow(
+      "Advocate invitation email worker configuration is invalid",
+    )
+    expect(claimCalls).toBe(0)
   })
 
   test("bounds batch concurrency and reports only aggregate outcomes", async () => {
@@ -1036,7 +1587,7 @@ test.describe("advocate invitation delivery worker", () => {
       config,
       workerId: `advocate-invitation-email:${WORKER_ID}`,
       context,
-      invocationDeadlineAt: NOW + 60_000,
+      invocationDeadlineAt: NOW + 120_000,
       dependencies: dependencies({
         repository: repository({
           async claimJobs() {
@@ -1060,6 +1611,42 @@ test.describe("advocate invitation delivery worker", () => {
 })
 
 test.describe("advocate invitation transport and route", () => {
+  test("trusts invitation trace and IP metadata only on Vercel", () => {
+    const request = new Request("https://creatorshare.com/portal", {
+      headers: {
+        "x-vercel-id": "sfo1::trusted-trace",
+        "x-vercel-forwarded-for": "2001:0DB8:0:0:0:0:0:1",
+        "cf-connecting-ip": "198.51.100.4",
+        "x-forwarded-for": "198.51.100.5",
+        "x-real-ip": "198.51.100.6",
+        "user-agent": "Trusted Mobile Client",
+      },
+    })
+    expect(
+      advocateInvitationRequestContext(request, { VERCEL: "1" }),
+    ).toMatchObject({
+      traceId: "sfo1::trusted-trace",
+      clientIp: "2001:0db8:0:0:0:0:0:1",
+      userAgent: "Trusted Mobile Client",
+    })
+    expect(advocateInvitationRequestContext(request, {})).toMatchObject({
+      traceId: null,
+      clientIp: null,
+      userAgent: "Trusted Mobile Client",
+    })
+    expect(
+      advocateInvitationRequestContext(
+        new Request("https://creatorshare.com/portal", {
+          headers: {
+            "x-vercel-id": "a".repeat(256),
+            "x-vercel-forwarded-for": "203.0.113.1, 203.0.113.2",
+          },
+        }),
+        { VERCEL: "1" },
+      ),
+    ).toMatchObject({ traceId: null, clientIp: null })
+  })
+
   test("uses deterministic Message-ID and delivery key headers", async () => {
     let sent: Record<string, unknown> = {}
     const transport = createNodemailerAdvocateInvitationEmailTransport(
@@ -1178,19 +1765,53 @@ test.describe("advocate invitation transport and route", () => {
     ).toBe(false)
   })
 
+  test("reserves claim and platform time at the exact internal budget boundary", () => {
+    const boundary = {
+      ADVOCATE_INVITATION_EMAIL_BATCH_SIZE: "4",
+      ADVOCATE_INVITATION_EMAIL_CONCURRENCY: "4",
+      ADVOCATE_INVITATION_EMAIL_SERVICE_REQUEST_TIMEOUT_MILLISECONDS: "9000",
+      ADVOCATE_INVITATION_EMAIL_TRANSPORT_TIMEOUT_MILLISECONDS: "30000",
+      ADVOCATE_INVITATION_EMAIL_INVOCATION_SAFETY_MARGIN_MILLISECONDS: "2000",
+    }
+    expect(() => loadAdvocateInvitationEmailWorkerConfig(boundary)).toThrow(
+      "Advocate invitation email worker is unavailable",
+    )
+    expect(
+      loadAdvocateInvitationEmailWorkerConfig({
+        ...boundary,
+        ADVOCATE_INVITATION_EMAIL_INVOCATION_SAFETY_MARGIN_MILLISECONDS: "1999",
+      }),
+    ).toMatchObject({
+      batchSize: 4,
+      concurrency: 4,
+      serviceRequestTimeoutMilliseconds: 9_000,
+      transportTimeoutMilliseconds: 30_000,
+      invocationSafetyMarginMilliseconds: 1_999,
+    })
+    expect(() =>
+      loadAdvocateInvitationEmailWorkerConfig({
+        ADVOCATE_INVITATION_EMAIL_BATCH_SIZE: "2",
+        ADVOCATE_INVITATION_EMAIL_CONCURRENCY: "1",
+      }),
+    ).toThrow("Advocate invitation email worker is unavailable")
+  })
+
   test("returns aggregate-only route responses and never logs delivery material", async () => {
     const request = new Request(
       "https://creatorshare.com/api/internal/advocates/invitations",
       {
         headers: {
           authorization: `Bearer ${SECRET}`,
-          "x-trace-id": "trace-reference",
+          "x-vercel-id": "sfo1::trusted-trace",
+          "x-trace-id": "spoofed-trace",
         },
       },
     )
+    let capturedContext: unknown = null
     const routeDependencies = {
       environment: {
         ADVOCATE_INVITATION_EMAIL_WORKER_SECRET: SECRET,
+        VERCEL: "1",
       },
       now: () => NOW,
       requestId: () => REQUEST_ID,
@@ -1198,7 +1819,8 @@ test.describe("advocate invitation transport and route", () => {
       createWorkerDependencies() {
         return dependencies({
           repository: repository({
-            async claimJobs() {
+            async claimJobs(options) {
+              capturedContext = options.context
               return []
             },
           }),
@@ -1226,6 +1848,10 @@ test.describe("advocate invitation transport and route", () => {
     expect(JSON.stringify(body)).not.toContain(RECIPIENT)
     expect(JSON.stringify(body)).not.toContain(CAPABILITY)
     expect(JSON.stringify(body)).not.toContain(AUTH_TOKEN_HASH)
+    expect(capturedContext).toEqual({
+      requestId: REQUEST_ID,
+      traceId: "sfo1::trusted-trace",
+    })
 
     const unauthorized =
       await invitationEmailRoute.handleAdvocateInvitationEmailRequest(
@@ -1242,7 +1868,10 @@ test.describe("advocate invitation transport and route", () => {
     })
   })
 
-  test("declares and schedules the sixty second Node worker route", async () => {
+  test("declares and schedules the 120 second Node worker route", async () => {
+    expect(ADVOCATE_INVITATION_EMAIL_INVOCATION_BUDGET_MILLISECONDS).toBe(
+      110_000,
+    )
     const source = await readFile(
       resolve(
         process.cwd(),
@@ -1251,7 +1880,7 @@ test.describe("advocate invitation transport and route", () => {
       "utf8",
     )
     expect(source).toContain('export const runtime = "nodejs"')
-    expect(source).toContain("export const maxDuration = 60")
+    expect(source).toContain("export const maxDuration = 120")
 
     const vercel = JSON.parse(
       await readFile(resolve(process.cwd(), "vercel.json"), "utf8"),
@@ -1261,7 +1890,7 @@ test.describe("advocate invitation transport and route", () => {
     }
     expect(
       vercel.functions?.["src/app/api/internal/advocates/invitations/route.ts"],
-    ).toEqual({ maxDuration: 60 })
+    ).toEqual({ maxDuration: 120 })
     expect(
       vercel.crons?.filter(
         (entry) => entry.path === "/api/internal/advocates/invitations",

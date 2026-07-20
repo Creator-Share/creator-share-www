@@ -793,6 +793,9 @@ test("issues Creator Share administrator invitations with fixed metadata", async
 })
 
 test("uses the durable outbox UUID and returns only bounded advocate proof material", async () => {
+  expect(issuer.EMAIL_PROOF_ISSUER_WORST_CASE_DURATION_MILLISECONDS).toBe(
+    42_000,
+  )
   await expect(
     issuer.issueAdvocateInvitationEmailProof({
       recipientEmail: " Advocate@Example.com ",

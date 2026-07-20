@@ -3,7 +3,7 @@ import { createAdvocateInvitationEmailWorkerDependencies } from "@/lib/advocates
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-export const maxDuration = 60
+export const maxDuration = 120
 
 async function handle(request: Request): Promise<Response> {
   return handleAdvocateInvitationEmailRequest(request, {

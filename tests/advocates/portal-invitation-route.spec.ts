@@ -20,10 +20,8 @@ const INVITATION_ID = "33333333-3333-4333-8333-333333333333"
 const OUTBOX_ID = "44444444-4444-4444-8444-444444444444"
 const IDEMPOTENCY_KEY = "55555555-5555-4555-8555-555555555555"
 const ORIGIN = "https://creatorshare.com"
-
-process.env.SPONSORSHIP_CRYPTO_SECRET_V1 = Buffer.alloc(32, 0x41).toString(
-  "base64",
-)
+const ORIGINAL_VERCEL = process.env.VERCEL
+const ORIGINAL_CRYPTO_SECRET = process.env.SPONSORSHIP_CRYPTO_SECRET_V1
 
 let currentUser: { id: string } | null = { id: ACTOR_ID }
 let accessPermissions = [
@@ -38,6 +36,7 @@ let serviceResult: { data: unknown; error: { code?: string } | null } = {
 let pendingRows: unknown = []
 let createClientCalls = 0
 let createServiceClientCalls = 0
+let createClientFailure = false
 const authRpcCalls: Array<{ name: string; input: unknown }> = []
 const serviceRpcCalls: Array<{ name: string; input: unknown }> = []
 
@@ -81,6 +80,7 @@ nodeModule._load = function mockedModuleLoad(
     return {
       async createClient() {
         createClientCalls += 1
+        if (createClientFailure) throw new Error("client unavailable")
         return {
           auth: {
             async getUser() {
@@ -148,7 +148,7 @@ function request(
     origin: ORIGIN,
     "sec-fetch-site": "same-origin",
     "content-type": "application/json; charset=utf-8",
-    "x-trace-id": "trace-123",
+    "x-vercel-id": "sfo1::trace-123",
   })
   for (const [name, value] of Object.entries(headerOverrides)) {
     if (value === null) headers.delete(name)
@@ -175,6 +175,23 @@ async function json(response: Response) {
   return (await response.json()) as Record<string, unknown>
 }
 
+test.beforeAll(() => {
+  process.env.SPONSORSHIP_CRYPTO_SECRET_V1 = Buffer.alloc(32, 0x41).toString(
+    "base64",
+  )
+  process.env.VERCEL = "1"
+})
+
+test.afterAll(() => {
+  if (ORIGINAL_VERCEL === undefined) delete process.env.VERCEL
+  else process.env.VERCEL = ORIGINAL_VERCEL
+  if (ORIGINAL_CRYPTO_SECRET === undefined) {
+    delete process.env.SPONSORSHIP_CRYPTO_SECRET_V1
+  } else {
+    process.env.SPONSORSHIP_CRYPTO_SECRET_V1 = ORIGINAL_CRYPTO_SECRET
+  }
+})
+
 test.beforeEach(() => {
   currentUser = { id: ACTOR_ID }
   accessPermissions = [
@@ -196,6 +213,7 @@ test.beforeEach(() => {
   pendingRows = [pendingRow()]
   createClientCalls = 0
   createServiceClientCalls = 0
+  createClientFailure = false
   authRpcCalls.length = 0
   serviceRpcCalls.length = 0
 })
@@ -221,6 +239,32 @@ test.describe("advocate invitation administration routes", () => {
       expect(response.status).toBe(400)
     }
     expect(createClientCalls).toBe(0)
+    expect(createServiceClientCalls).toBe(0)
+  })
+
+  test("contains authenticated client construction failures behind generic responses", async () => {
+    createClientFailure = true
+    const issueResponse = await post(
+      request("/api/portal/hope/team/invitations", "POST", issueBody()),
+    )
+    expect(issueResponse.status).toBe(500)
+    expect(await json(issueResponse)).toMatchObject({
+      ok: false,
+      code: "invitation_failed",
+    })
+
+    const revokeResponse = await remove(
+      request(
+        `/api/portal/hope/team/invitations/${INVITATION_ID}`,
+        "DELETE",
+        JSON.stringify({ reason: "Access no longer needed." }),
+      ),
+    )
+    expect(revokeResponse.status).toBe(500)
+    expect(await json(revokeResponse)).toMatchObject({
+      ok: false,
+      code: "invitation_revoke_failed",
+    })
     expect(createServiceClientCalls).toBe(0)
   })
 
@@ -293,7 +337,7 @@ test.describe("advocate invitation administration routes", () => {
       idempotency_key: IDEMPOTENCY_KEY,
       change_reason: "Provide reporting and brand access.",
       request_id: expect.any(String),
-      trace_id: "trace-123",
+      trace_id: "sfo1::trace-123",
     })
     const delivery = issueCall.input as Record<string, unknown>
     expect(delivery.capability_digest).toMatch(/^\\x[0-9a-f]{64}$/)

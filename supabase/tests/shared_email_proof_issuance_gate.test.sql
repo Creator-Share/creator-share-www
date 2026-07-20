@@ -23,7 +23,8 @@ SELECT extensions.columns_are(
     'proof_exclusivity_expires_at',
     'finish_disposition',
     'finished_at',
-    'updated_at'
+    'updated_at',
+    'legacy_proof_quarantine_expires_at'
   ],
   'the gate stores one bounded state machine without raw contact or provider material'
 );

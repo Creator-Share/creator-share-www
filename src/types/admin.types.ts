@@ -186,7 +186,7 @@ export interface UserRole {
 export interface UserInvitation {
   email: string
   role_ids: string[]
-  invited_by: string
+  reason?: string
 }
 
 export interface UserManagementState {

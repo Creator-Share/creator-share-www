@@ -21,12 +21,17 @@ on:
       - "supabase/tests/sponsor_passwordless_email_delivery_limits.test.sql"
       - "tests/database/**/*publication*"
       - "tests/database/**/*initial-owner*"
+      - "tests/database/**/*invitation*"
       - "tests/database/**/*email-proof*"
       - "tests/database/support/*.mjs"
       - "tests/provider/**"
       - "src/lib/advocates/attributionIdentityCookie.ts"
       - "src/lib/auth/emailProof*.ts"
+      - "src/lib/auth/creatorShareAdminInvitationContracts.ts"
       - "src/lib/auth/supabaseEmailProofIssuer.ts"
+      - "src/lib/advocates/invitations/email*.ts"
+      - "src/lib/advocates/invitations/requestContext.ts"
+      - "src/lib/advocates/creatorShareAdmin/routeSecurity.ts"
       - "src/lib/auth/passwordRecoveryClient.ts"
       - "src/lib/sponsorships/accountClaim.ts"
       - "src/lib/sponsorships/checkout/requestSecurity.ts"
@@ -40,6 +45,10 @@ on:
       - "src/app/api/auth/reset-password/route.ts"
       - "src/app/api/auth/verify-otp/route.ts"
       - "src/app/api/auth/change-password/route.ts"
+      - "src/app/api/admin/users/invite/route.ts"
+      - "src/app/(admin)/admin/users/components/InviteUserDialog.tsx"
+      - "src/app/api/internal/advocates/invitations/route.ts"
+      - "src/app/api/portal/*/team/invitations/**"
       - "src/app/api/sponsor-account/reauth/start/route.ts"
       - "src/app/api/sponsor-account/start/route.ts"
       - "src/app/api/sponsor-account/complete/route.ts"
@@ -50,14 +59,26 @@ on:
       - "supabase/templates/sponsor_email_confirmation.html"
       - "src/lib/sponsorships/management/statelessAuth.ts"
       - "src/utils/passwordValidation.ts"
+      - "src/utils/admin/creatorShareRoles.ts"
+      - "src/utils/auth/requireSuperAdmin.ts"
       - "src/utils/supabase/server.ts"
+      - "src/store/userManagementStore.ts"
+      - "src/types/admin.types.ts"
       - "tests/auth/*email-proof*.spec.ts"
       - "tests/auth/password-recovery-client.spec.ts"
       - "tests/auth/password-reset-request-route.spec.ts"
       - "tests/auth/verify-otp.spec.ts"
       - "tests/auth/change-password.spec.ts"
+      - "tests/auth/creator-share-admin-invitation-route.spec.ts"
       - "tests/advocates/attribution-identity-auth-routes.spec.ts"
       - "tests/advocates/attribution-identity-session-auth-routes.spec.ts"
+      - "tests/advocates/invitation-email-worker.spec.ts"
+      - "tests/advocates/invitation-rollout-safety.spec.ts"
+      - "tests/advocates/portal-invitation-route.spec.ts"
+      - "tests/advocates/service-role-client-timeout.spec.ts"
+      - "docs/advocate-domain-publication-runbook.md"
+      - "docs/advocate-payment-release-runbook.md"
+      - "docs/advocate-platform-roadmap.md"
       - "tests/auth/supabase-email-proof-issuer.spec.ts"
       - "tests/sponsorships/passwordless-access.spec.ts"
       - "tests/sponsorships/passwordless-rate-limit.spec.ts"
@@ -68,6 +89,7 @@ on:
       - "supabase/config.toml"
       - "supabase/seed.sql"
       - ".nvmrc"
+      - "vercel.json"
       - "package.json"
       - "package-lock.json"
       - "yarn.lock"
@@ -124,8 +146,13 @@ jobs:
           tests/auth/password-reset-request-route.spec.ts
           tests/auth/verify-otp.spec.ts
           tests/auth/change-password.spec.ts
+          tests/auth/creator-share-admin-invitation-route.spec.ts
           tests/advocates/attribution-identity-auth-routes.spec.ts
           tests/advocates/attribution-identity-session-auth-routes.spec.ts
+          tests/advocates/invitation-email-worker.spec.ts
+          tests/advocates/invitation-rollout-safety.spec.ts
+          tests/advocates/portal-invitation-route.spec.ts
+          tests/advocates/service-role-client-timeout.spec.ts
           tests/sponsorships/passwordless-access.spec.ts
           tests/sponsorships/passwordless-rate-limit.spec.ts
           tests/sponsorships/account-claim.spec.ts
@@ -180,6 +207,26 @@ jobs:
             supabase/tests/advocate_initial_owner_onboarding.test.sql \
             supabase/tests/advocate_invitation_email_delivery.test.sql \
             supabase/tests/advocate_invitation_authentication_rate_limit.test.sql
+
+      - name: Run invitation proof settlement database tests
+        run: >-
+          yarn supabase test db
+          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+          supabase/tests/advocate_invitation_email_proof_settlement.test.sql
+
+      - name: Run invitation proof quarantine concurrency harness
+        env:
+          ADVOCATE_INVITATION_PROOF_QUARANTINE_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-invitation-proof-quarantine-concurrency-evidence.json
+        run: yarn test:advocate:invitation-proof-quarantine-concurrency
+
+      - name: Upload sanitized invitation proof quarantine concurrency evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-invitation-proof-quarantine-concurrency-evidence
+          path: ${{ runner.temp }}/advocate-invitation-proof-quarantine-concurrency-evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Run initial owner concurrency harness
         env:

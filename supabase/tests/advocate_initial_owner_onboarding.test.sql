@@ -929,10 +929,39 @@ SELECT extensions.ok(
 
 SELECT pg_temp.set_onboarding_service_role();
 
+DO $test_cutover$
+BEGIN
+  PERFORM public.arm_advocate_invitation_legacy_email_proof_quarantine(
+    'a7300000-0000-4000-8000-000000000801'::uuid,
+    'initial-owner-test-arm'
+  );
+END;
+$test_cutover$;
+
+SET LOCAL session_replication_role = replica;
+UPDATE private.advocate_invitation_legacy_email_proof_quarantine
+SET
+  legacy_claim_fenced_at = clock_timestamp() - interval '71 seconds',
+  legacy_claim_fence_transaction_id = '1'::xid8
+WHERE quarantine_identity = 'advocate_invitation_legacy_email_proof_v1';
+SET LOCAL session_replication_role = origin;
+
+DO $test_cutover$
+BEGIN
+  PERFORM *
+  FROM public.quarantine_legacy_advocate_invitation_proofs(
+    3600::smallint,
+    'a7300000-0000-4000-8000-000000000802'::uuid,
+    'initial-owner-test-quarantine'
+  );
+END;
+$test_cutover$;
+
 INSERT INTO onboarding_claim
 SELECT *
 FROM public.claim_advocate_invitation_email_jobs(
   'initial-owner-worker',
+  1::smallint,
   10,
   'initial-owner-claim',
   'initial-owner-claim-trace'
@@ -1169,6 +1198,7 @@ INSERT INTO onboarding_claim
 SELECT *
 FROM public.claim_advocate_invitation_email_jobs(
   'initial-owner-reissue-worker',
+  1::smallint,
   10,
   'initial-owner-reissue-claim',
   'initial-owner-reissue-claim-trace'
@@ -1324,6 +1354,7 @@ INSERT INTO onboarding_claim
 SELECT *
 FROM public.claim_advocate_invitation_email_jobs(
   'initial-owner-final-worker',
+  1::smallint,
   10,
   'initial-owner-final-claim',
   'initial-owner-final-claim-trace'

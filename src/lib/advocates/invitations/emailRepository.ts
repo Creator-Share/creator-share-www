@@ -7,6 +7,7 @@ import type { AdvocateInvitationEmailTemplateKey } from "./emailEnvelope"
 
 import {
   AdvocateInvitationEmailRepositoryError,
+  type AdvocateInvitationEmailProofDisposition,
   type AdvocateInvitationEmailRepository,
   type ClaimedAdvocateInvitationEmail,
 } from "./emailWorker"
@@ -38,6 +39,12 @@ const CLAIM_KEYS = new Set([
   "provider_idempotency_key",
   "attempt_count",
 ])
+const PROOF_SETTLEMENT_KEYS = new Set([
+  "retryable",
+  "attempt_refunded",
+  "available_at",
+  "settled_at",
+])
 
 function repositoryError(
   stage: string,
@@ -57,6 +64,14 @@ function oneRow(data: unknown, stage: string): Record<string, unknown> {
   const row = Array.isArray(data) ? (data.length === 1 ? data[0] : null) : data
   if (!isRecord(row)) repositoryError(`${stage}_shape`)
   return row
+}
+
+function hasExactKeys(
+  value: Record<string, unknown>,
+  expected: ReadonlySet<string>,
+): boolean {
+  const keys = Object.keys(value)
+  return keys.length === expected.size && keys.every((key) => expected.has(key))
 }
 
 function requiredString(
@@ -235,6 +250,7 @@ export function createSupabaseAdvocateInvitationEmailRepository(
         {
           worker_id: workerId,
           batch_size: batchSize,
+          shared_email_proof_issuer_version: 1,
           request_id: context.requestId,
           trace_id: context.traceId,
         },
@@ -247,6 +263,54 @@ export function createSupabaseAdvocateInvitationEmailRepository(
         repositoryError("claim_duplicate")
       }
       return jobs
+    },
+
+    async settleProofIssuance(options) {
+      const { data, error } = await client.rpc(
+        "settle_advocate_invitation_email_proof_issuance",
+        {
+          target_outbox_id: options.job.outboxId,
+          lease_token: options.job.leaseToken,
+          proof_disposition: options.disposition,
+          retry_after_seconds: options.retryAfterSeconds,
+          context_request_id: options.context.requestId,
+          context_trace_id: options.context.traceId,
+        },
+      )
+      if (error) repositoryError("proof_settlement", error)
+      const row = oneRow(data, "proof_settlement")
+      if (
+        !hasExactKeys(row, PROOF_SETTLEMENT_KEYS) ||
+        typeof row.retryable !== "boolean" ||
+        typeof row.attempt_refunded !== "boolean" ||
+        typeof row.available_at !== "string" ||
+        !Number.isFinite(Date.parse(row.available_at)) ||
+        typeof row.settled_at !== "string" ||
+        !Number.isFinite(Date.parse(row.settled_at)) ||
+        Date.parse(row.available_at) < Date.parse(row.settled_at)
+      ) {
+        repositoryError("proof_settlement_shape")
+      }
+      const disposition =
+        options.disposition as AdvocateInvitationEmailProofDisposition
+      const expectedRefund =
+        disposition === "coalesced" ||
+        disposition === "deferred" ||
+        disposition === "begin_ambiguous" ||
+        disposition === "unavailable"
+      if (row.attempt_refunded !== expectedRefund) {
+        repositoryError("proof_settlement_shape")
+      }
+      if (
+        options.disposition === "issued_target_mismatch" &&
+        row.retryable !== false
+      ) {
+        repositoryError("proof_settlement_shape")
+      }
+      return {
+        retryable: row.retryable,
+        attemptRefunded: row.attempt_refunded,
+      }
     },
 
     async bindTarget(options) {

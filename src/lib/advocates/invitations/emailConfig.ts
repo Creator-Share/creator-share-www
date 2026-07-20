@@ -1,6 +1,10 @@
 import "server-only"
 
-import type { AdvocateInvitationEmailWorkerConfig } from "./emailWorker"
+import {
+  ADVOCATE_INVITATION_EMAIL_INVOCATION_BUDGET_MILLISECONDS,
+  advocateInvitationInvocationHeadroomMilliseconds,
+  type AdvocateInvitationEmailWorkerConfig,
+} from "./emailWorker"
 
 export type AdvocateInvitationEmailEnvironment = Readonly<
   Record<string, string | undefined>
@@ -111,11 +115,9 @@ export function loadAdvocateInvitationEmailWorkerConfig(
     ),
   }
   if (
-    config.concurrency > config.batchSize ||
-    config.serviceRequestTimeoutMilliseconds * 5 +
-      config.transportTimeoutMilliseconds +
-      config.invocationSafetyMarginMilliseconds >
-      59_000
+    config.concurrency !== config.batchSize ||
+    advocateInvitationInvocationHeadroomMilliseconds(config) >=
+      ADVOCATE_INVITATION_EMAIL_INVOCATION_BUDGET_MILLISECONDS
   ) {
     configurationError()
   }

@@ -1,6 +1,11 @@
 import "server-only"
 
 import {
+  EMAIL_PROOF_AMBIGUOUS_RETRY_AFTER_SECONDS,
+  EMAIL_PROOF_ISSUER_WORST_CASE_DURATION_MILLISECONDS,
+  type AdvocateInvitationEmailProofResult,
+} from "@/lib/auth/supabaseEmailProofIssuer"
+import {
   constantTimeDigestEqual,
   fromSupabaseRpcBytea,
   SPONSOR_EMAIL_NORMALIZATION_VERSION,
@@ -11,7 +16,6 @@ import {
 } from "@/lib/sponsorships/crypto"
 
 import type { AdvocateInvitationAuthProvider } from "./emailAuth"
-import { AdvocateInvitationAuthProviderError } from "./emailAuth"
 import {
   AdvocateInvitationEmailEnvelopeError,
   openAdvocateInvitationSecretMaterial,
@@ -20,6 +24,9 @@ import {
 } from "./emailEnvelope"
 import { advocateInvitationMessageId } from "./emailMessageId"
 import { renderAdvocateInvitationEmail } from "./emailRenderer"
+
+export const ADVOCATE_INVITATION_EMAIL_INVOCATION_BUDGET_MILLISECONDS =
+  110_000 as const
 
 export interface ClaimedAdvocateInvitationEmail {
   outboxId: string
@@ -54,12 +61,27 @@ export type AdvocateInvitationEmailFailureCode =
   | "email_delivery_rejected"
   | "internal_error"
 
+export type AdvocateInvitationEmailProofDisposition =
+  | "coalesced"
+  | "deferred"
+  | "ambiguous"
+  | "begin_ambiguous"
+  | "unavailable"
+  | "issued_not_handed_off"
+  | "issued_target_mismatch"
+
 export interface AdvocateInvitationEmailRepository {
   claimJobs(options: {
     workerId: string
     batchSize: number
     context: AdvocateInvitationEmailWorkerContext
   }): Promise<ClaimedAdvocateInvitationEmail[]>
+  settleProofIssuance(options: {
+    job: ClaimedAdvocateInvitationEmail
+    disposition: AdvocateInvitationEmailProofDisposition
+    retryAfterSeconds: number
+    context: AdvocateInvitationEmailWorkerContext
+  }): Promise<{ retryable: boolean; attemptRefunded: boolean }>
   bindTarget(options: {
     job: ClaimedAdvocateInvitationEmail
     targetUserId: string
@@ -183,6 +205,13 @@ class AdvocateInvitationInvocationDeadlineError extends Error {
   }
 }
 
+class AdvocateInvitationTargetUnavailableError extends Error {
+  constructor() {
+    super("advocate_invitation_target_unavailable")
+    this.name = "AdvocateInvitationTargetUnavailableError"
+  }
+}
+
 function assertClaimedJob(job: ClaimedAdvocateInvitationEmail): void {
   if (
     (job.templateKey !== "advocate_delegate_invitation_v1" &&
@@ -200,47 +229,80 @@ function assertClaimedJob(job: ClaimedAdvocateInvitationEmail): void {
   }
 }
 
+function headroomAt(options: {
+  job: ClaimedAdvocateInvitationEmail
+  now: () => number
+  invocationDeadlineAt: number
+  requiredMilliseconds: number
+}): {
+  currentTime: number
+  leaseAvailable: boolean
+  invocationAvailable: boolean
+} {
+  const currentTime = options.now()
+  if (!Number.isSafeInteger(currentTime)) {
+    return {
+      currentTime: Number.MAX_SAFE_INTEGER,
+      leaseAvailable: false,
+      invocationAvailable: false,
+    }
+  }
+  return {
+    currentTime,
+    leaseAvailable:
+      Date.parse(options.job.leaseExpiresAt) >
+      currentTime + options.requiredMilliseconds,
+    invocationAvailable:
+      options.invocationDeadlineAt > currentTime + options.requiredMilliseconds,
+  }
+}
+
 function assertHeadroom(options: {
   job: ClaimedAdvocateInvitationEmail
   now: () => number
   invocationDeadlineAt: number
   requiredMilliseconds: number
 }): void {
-  const currentTime = options.now()
-  if (
-    !Number.isSafeInteger(currentTime) ||
-    Date.parse(options.job.leaseExpiresAt) <=
-      currentTime + options.requiredMilliseconds
-  ) {
+  const headroom = headroomAt(options)
+  if (!headroom.leaseAvailable) {
     throw new AdvocateInvitationEmailRepositoryError("lease_headroom", {
       leaseLost: true,
     })
   }
-  if (
-    options.invocationDeadlineAt <=
-    currentTime + options.requiredMilliseconds
-  ) {
+  if (!headroom.invocationAvailable) {
     throw new AdvocateInvitationInvocationDeadlineError()
   }
+}
+
+function settlementHeadroom(options: {
+  job: ClaimedAdvocateInvitationEmail
+  now: () => number
+  invocationDeadlineAt: number
+  config: AdvocateInvitationEmailWorkerConfig
+}): { leaseAvailable: boolean; invocationAvailable: boolean } {
+  return headroomAt({
+    job: options.job,
+    now: options.now,
+    invocationDeadlineAt: options.invocationDeadlineAt,
+    requiredMilliseconds:
+      options.config.serviceRequestTimeoutMilliseconds +
+      options.config.invocationSafetyMarginMilliseconds,
+  })
 }
 
 function preHandoffFailureCode(
   error: unknown,
 ): AdvocateInvitationEmailFailureCode {
-  if (error instanceof AdvocateInvitationEmailEnvelopeError) {
+  if (
+    error instanceof AdvocateInvitationEmailEnvelopeError ||
+    error instanceof SponsorshipCryptoError
+  ) {
     return "invitation_email_material_invalid"
-  }
-  if (error instanceof SponsorshipCryptoError) {
-    return "invitation_email_material_invalid"
-  }
-  if (error instanceof AdvocateInvitationAuthProviderError) {
-    return error.targetUnavailable
-      ? "invitation_target_unavailable"
-      : "auth_link_generation_failed"
   }
   if (
-    error instanceof AdvocateInvitationEmailRepositoryError &&
-    error.targetUnavailable
+    error instanceof AdvocateInvitationTargetUnavailableError ||
+    (error instanceof AdvocateInvitationEmailRepositoryError &&
+      error.targetUnavailable)
   ) {
     return "invitation_target_unavailable"
   }
@@ -280,6 +342,135 @@ async function settlePreHandoffFailure(options: {
   }
 }
 
+const PROOF_DISPOSITION_CODES = Object.freeze({
+  coalesced: "email_proof_deferred",
+  deferred: "email_proof_deferred",
+  ambiguous: "email_proof_issuance_ambiguous",
+  begin_ambiguous: "email_proof_issuance_ambiguous",
+  unavailable: "email_proof_unavailable",
+  issued_not_handed_off: "email_proof_issued_not_handed_off",
+  issued_target_mismatch: "invitation_target_unavailable",
+} satisfies Record<AdvocateInvitationEmailProofDisposition, string>)
+
+function proofDispositionRefundsAttempt(
+  disposition: AdvocateInvitationEmailProofDisposition,
+): boolean {
+  return (
+    disposition === "coalesced" ||
+    disposition === "deferred" ||
+    disposition === "begin_ambiguous" ||
+    disposition === "unavailable"
+  )
+}
+
+async function settleProofDisposition(options: {
+  repository: AdvocateInvitationEmailRepository
+  job: ClaimedAdvocateInvitationEmail
+  disposition: AdvocateInvitationEmailProofDisposition
+  retryAfterSeconds: number
+  context: AdvocateInvitationEmailWorkerContext
+}): Promise<AdvocateInvitationEmailProcessResult> {
+  const code = PROOF_DISPOSITION_CODES[options.disposition]
+  try {
+    const result = await options.repository.settleProofIssuance(options)
+    if (
+      result.attemptRefunded !==
+        proofDispositionRefundsAttempt(options.disposition) ||
+      (options.disposition === "issued_target_mismatch" && result.retryable)
+    ) {
+      throw new AdvocateInvitationEmailRepositoryError("proof_settlement_shape")
+    }
+    return {
+      outboxId: options.job.outboxId,
+      status: result.retryable ? "retried" : "terminal_failed",
+      code,
+    }
+  } catch (error) {
+    if (
+      error instanceof AdvocateInvitationEmailRepositoryError &&
+      error.leaseLost
+    ) {
+      return { outboxId: options.job.outboxId, status: "lease_lost", code }
+    }
+    return {
+      outboxId: options.job.outboxId,
+      status: "settlement_unknown",
+      code,
+    }
+  }
+}
+
+function nonIssuedProofSettlement(
+  result: Exclude<AdvocateInvitationEmailProofResult, { status: "issued" }>,
+  config: AdvocateInvitationEmailWorkerConfig,
+): {
+  disposition: AdvocateInvitationEmailProofDisposition
+  retryAfterSeconds: number
+} {
+  switch (result.status) {
+    case "coalesced":
+    case "deferred":
+      return {
+        disposition: result.status,
+        retryAfterSeconds: result.retryAfterSeconds,
+      }
+    case "ambiguous":
+      return {
+        disposition: "ambiguous",
+        retryAfterSeconds: result.retryAfterSeconds,
+      }
+    case "unavailable":
+      return {
+        disposition:
+          result.stage === "begin" ? "begin_ambiguous" : "unavailable",
+        retryAfterSeconds:
+          result.stage === "begin"
+            ? result.retryAfterSeconds
+            : config.retryAfterSeconds,
+      }
+  }
+}
+
+export function advocateInvitationPreIssuerHeadroomMilliseconds(
+  config: AdvocateInvitationEmailWorkerConfig,
+): number {
+  return (
+    EMAIL_PROOF_ISSUER_WORST_CASE_DURATION_MILLISECONDS +
+    config.serviceRequestTimeoutMilliseconds * 3 +
+    config.transportTimeoutMilliseconds +
+    config.invocationSafetyMarginMilliseconds
+  )
+}
+
+export function advocateInvitationInvocationHeadroomMilliseconds(
+  config: AdvocateInvitationEmailWorkerConfig,
+): number {
+  return (
+    config.serviceRequestTimeoutMilliseconds +
+    advocateInvitationPreIssuerHeadroomMilliseconds(config)
+  )
+}
+
+function advocateInvitationPostIssuerHeadroomMilliseconds(
+  config: AdvocateInvitationEmailWorkerConfig,
+): number {
+  return (
+    config.serviceRequestTimeoutMilliseconds * 3 +
+    config.transportTimeoutMilliseconds +
+    config.invocationSafetyMarginMilliseconds
+  )
+}
+
+function advocateInvitationPreDeliveryHeadroomMilliseconds(
+  config: AdvocateInvitationEmailWorkerConfig,
+): number {
+  return (
+    config.serviceRequestTimeoutMilliseconds * 2 +
+    config.transportTimeoutMilliseconds +
+    config.invocationSafetyMarginMilliseconds
+  )
+}
+
 export async function processAdvocateInvitationEmail(options: {
   dependencies: AdvocateInvitationEmailWorkerDependencies
   config: AdvocateInvitationEmailWorkerConfig
@@ -289,11 +480,14 @@ export async function processAdvocateInvitationEmail(options: {
 }): Promise<AdvocateInvitationEmailProcessResult> {
   const { dependencies, config, job, context } = options
   const now = dependencies.now ?? Date.now
-  let handoffAttempted = false
+  let template: ReturnType<typeof parseAdvocateInvitationEmailTemplateData>
+  let recipientEmail: string
+  let recipientDigest: ReturnType<SponsorshipCrypto["digestEmail"]>
+  let secret: ReturnType<typeof openAdvocateInvitationSecretMaterial>
 
   try {
     assertClaimedJob(job)
-    const template = parseAdvocateInvitationEmailTemplateData(
+    template = parseAdvocateInvitationEmailTemplateData(
       job.templateKey,
       job.templateData,
     )
@@ -305,24 +499,21 @@ export async function processAdvocateInvitationEmail(options: {
       now,
       invocationDeadlineAt: options.invocationDeadlineAt,
       requiredMilliseconds:
-        config.serviceRequestTimeoutMilliseconds * 4 +
-        config.transportTimeoutMilliseconds +
-        config.invocationSafetyMarginMilliseconds,
+        advocateInvitationPreIssuerHeadroomMilliseconds(config),
     })
 
-    const recipientEmail = dependencies.crypto.decryptRecipientEmail(
+    recipientEmail = dependencies.crypto.decryptRecipientEmail(
       fromSupabaseRpcBytea(job.recipientEmailCiphertext),
     )
     const secretPlaintext = dependencies.crypto.decryptSecretPayload(
       fromSupabaseRpcBytea(job.secretPayloadCiphertext),
     )
-    let secret
     try {
       secret = openAdvocateInvitationSecretMaterial(secretPlaintext)
     } finally {
       secretPlaintext.fill(0)
     }
-    const recipientDigest = dependencies.crypto.digestEmail(recipientEmail)
+    recipientDigest = dependencies.crypto.digestEmail(recipientEmail)
     if (
       !constantTimeDigestEqual(
         recipientDigest.digest,
@@ -335,19 +526,94 @@ export async function processAdvocateInvitationEmail(options: {
     ) {
       throw new AdvocateInvitationEmailEnvelopeError()
     }
+  } catch (error) {
+    if (error instanceof AdvocateInvitationInvocationDeadlineError) {
+      const headroom = settlementHeadroom({
+        job,
+        now,
+        invocationDeadlineAt: options.invocationDeadlineAt,
+        config,
+      })
+      if (!headroom.leaseAvailable) {
+        return {
+          outboxId: job.outboxId,
+          status: "lease_lost",
+          code: "email_proof_deferred",
+        }
+      }
+      if (!headroom.invocationAvailable) {
+        return {
+          outboxId: job.outboxId,
+          status: "settlement_unknown",
+          code: "email_proof_deferred",
+        }
+      }
+      return settleProofDisposition({
+        repository: dependencies.repository,
+        job,
+        disposition: "deferred",
+        retryAfterSeconds: config.retryAfterSeconds,
+        context,
+      })
+    }
+    if (
+      error instanceof AdvocateInvitationEmailRepositoryError &&
+      error.leaseLost
+    ) {
+      return { outboxId: job.outboxId, status: "lease_lost" }
+    }
+    return settlePreHandoffFailure({
+      repository: dependencies.repository,
+      job,
+      errorCode: preHandoffFailureCode(error),
+      retryAfterSeconds: config.retryAfterSeconds,
+      context,
+    })
+  }
 
-    const authProof = await dependencies.authProvider.generateMagicLink({
+  let issuance: AdvocateInvitationEmailProofResult
+  try {
+    issuance = await dependencies.authProvider.issueEmailProof({
       recipientEmail,
       redirectTo: `${dependencies.canonicalOrigin}/advocate-invitation`,
-      createUserIfMissing: true,
+      outboxId: job.outboxId,
+      context,
+    })
+  } catch {
+    return settleProofDisposition({
+      repository: dependencies.repository,
+      job,
+      disposition: "ambiguous",
+      retryAfterSeconds: EMAIL_PROOF_AMBIGUOUS_RETRY_AFTER_SECONDS,
+      context,
+    })
+  }
+
+  if (issuance.status !== "issued") {
+    const settlement = nonIssuedProofSettlement(issuance, config)
+    return settleProofDisposition({
+      repository: dependencies.repository,
+      job,
+      ...settlement,
+      context,
+    })
+  }
+
+  const authProof = issuance.proof
+  let handoffAttempted = false
+  try {
+    assertHeadroom({
+      job,
+      now,
+      invocationDeadlineAt: options.invocationDeadlineAt,
+      requiredMilliseconds:
+        advocateInvitationPostIssuerHeadroomMilliseconds(config),
     })
     if (
       job.targetAuthUserId !== null &&
       job.targetAuthUserId !== authProof.userId
     ) {
-      throw new AdvocateInvitationAuthProviderError({
-        targetUnavailable: true,
-      })
+      throw new AdvocateInvitationTargetUnavailableError()
     }
     await dependencies.repository.bindTarget({
       job,
@@ -357,15 +623,6 @@ export async function processAdvocateInvitationEmail(options: {
       context,
     })
 
-    assertHeadroom({
-      job,
-      now,
-      invocationDeadlineAt: options.invocationDeadlineAt,
-      requiredMilliseconds:
-        config.serviceRequestTimeoutMilliseconds * 2 +
-        config.transportTimeoutMilliseconds +
-        config.invocationSafetyMarginMilliseconds,
-    })
     const rendered = renderAdvocateInvitationEmail({
       canonicalOrigin: dependencies.canonicalOrigin,
       template,
@@ -375,6 +632,13 @@ export async function processAdvocateInvitationEmail(options: {
     })
     const providerMessageId = advocateInvitationMessageId(job.outboxId)
 
+    assertHeadroom({
+      job,
+      now,
+      invocationDeadlineAt: options.invocationDeadlineAt,
+      requiredMilliseconds:
+        advocateInvitationPreDeliveryHeadroomMilliseconds(config),
+    })
     handoffAttempted = true
     const handoff = await dependencies.repository.beginDelivery({
       job,
@@ -458,14 +722,13 @@ export async function processAdvocateInvitationEmail(options: {
       return { outboxId: job.outboxId, status: "settlement_unknown" }
     }
   } catch (error) {
-    if (
-      handoffAttempted &&
-      error instanceof AdvocateInvitationEmailRepositoryError &&
-      error.leaseLost
-    ) {
-      return { outboxId: job.outboxId, status: "lease_lost" }
-    }
     if (handoffAttempted) {
+      if (
+        error instanceof AdvocateInvitationEmailRepositoryError &&
+        error.leaseLost
+      ) {
+        return { outboxId: job.outboxId, status: "lease_lost" }
+      }
       return {
         outboxId: job.outboxId,
         status: "manual_review",
@@ -478,11 +741,64 @@ export async function processAdvocateInvitationEmail(options: {
     ) {
       return { outboxId: job.outboxId, status: "lease_lost" }
     }
-    return settlePreHandoffFailure({
+    if (
+      error instanceof AdvocateInvitationTargetUnavailableError ||
+      (error instanceof AdvocateInvitationEmailRepositoryError &&
+        error.targetUnavailable)
+    ) {
+      const headroom = settlementHeadroom({
+        job,
+        now,
+        invocationDeadlineAt: options.invocationDeadlineAt,
+        config,
+      })
+      if (!headroom.leaseAvailable) {
+        return {
+          outboxId: job.outboxId,
+          status: "lease_lost",
+          code: "invitation_target_unavailable",
+        }
+      }
+      if (!headroom.invocationAvailable) {
+        return {
+          outboxId: job.outboxId,
+          status: "settlement_unknown",
+          code: "invitation_target_unavailable",
+        }
+      }
+      return settleProofDisposition({
+        repository: dependencies.repository,
+        job,
+        disposition: "issued_target_mismatch",
+        retryAfterSeconds: EMAIL_PROOF_AMBIGUOUS_RETRY_AFTER_SECONDS,
+        context,
+      })
+    }
+    const headroom = settlementHeadroom({
+      job,
+      now,
+      invocationDeadlineAt: options.invocationDeadlineAt,
+      config,
+    })
+    if (!headroom.leaseAvailable) {
+      return {
+        outboxId: job.outboxId,
+        status: "lease_lost",
+        code: "email_proof_issued_not_handed_off",
+      }
+    }
+    if (!headroom.invocationAvailable) {
+      return {
+        outboxId: job.outboxId,
+        status: "settlement_unknown",
+        code: "email_proof_issued_not_handed_off",
+      }
+    }
+    return settleProofDisposition({
       repository: dependencies.repository,
       job,
-      errorCode: preHandoffFailureCode(error),
-      retryAfterSeconds: config.retryAfterSeconds,
+      disposition: "issued_not_handed_off",
+      retryAfterSeconds: EMAIL_PROOF_AMBIGUOUS_RETRY_AFTER_SECONDS,
       context,
     })
   }
@@ -496,7 +812,7 @@ function assertConfig(config: AdvocateInvitationEmailWorkerConfig): void {
     !Number.isSafeInteger(config.concurrency) ||
     config.concurrency < 1 ||
     config.concurrency > 4 ||
-    config.concurrency > config.batchSize ||
+    config.concurrency !== config.batchSize ||
     !Number.isSafeInteger(config.retryAfterSeconds) ||
     config.retryAfterSeconds < 1 ||
     config.retryAfterSeconds > 86_400 ||
@@ -509,10 +825,8 @@ function assertConfig(config: AdvocateInvitationEmailWorkerConfig): void {
     !Number.isSafeInteger(config.invocationSafetyMarginMilliseconds) ||
     config.invocationSafetyMarginMilliseconds < 1_000 ||
     config.invocationSafetyMarginMilliseconds > 15_000 ||
-    config.serviceRequestTimeoutMilliseconds * 5 +
-      config.transportTimeoutMilliseconds +
-      config.invocationSafetyMarginMilliseconds >
-      59_000
+    advocateInvitationInvocationHeadroomMilliseconds(config) >=
+      ADVOCATE_INVITATION_EMAIL_INVOCATION_BUDGET_MILLISECONDS
   ) {
     throw new Error("Advocate invitation email worker configuration is invalid")
   }

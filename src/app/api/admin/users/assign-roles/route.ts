@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
@@ -20,7 +22,7 @@ export async function POST(request: Request) {
 
     const roles = await replaceCreatorShareRoles(
       supabase,
-      request,
+      randomUUID(),
       userId,
       roleIds,
       roleChangeReason(reason, "Administrator replaced Creator Share roles"),

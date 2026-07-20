@@ -119,6 +119,13 @@ interface PreparedExecution {
 
 const PROVIDER_TRANSPORT_TIMEOUT_MILLISECONDS = 8_000
 const PROVIDER_RESPONSE_TIMEOUT_MILLISECONDS = 10_000
+
+// acquire may make two bounded attempts. begin, finish, and the provider
+// transport each consume one service timeout, while the outer provider response
+// deadline is the larger bound for the provider call itself.
+export const EMAIL_PROOF_ISSUER_WORST_CASE_DURATION_MILLISECONDS =
+  PROVIDER_TRANSPORT_TIMEOUT_MILLISECONDS * 4 +
+  PROVIDER_RESPONSE_TIMEOUT_MILLISECONDS
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000"
