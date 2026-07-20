@@ -19,6 +19,12 @@ on:
       - "tests/database/**/*email-proof*"
       - "tests/database/support/*.mjs"
       - "tests/provider/**"
+      - "src/lib/auth/emailProof*.ts"
+      - "src/lib/auth/supabaseEmailProofIssuer.ts"
+      - "src/lib/sponsorships/management/statelessAuth.ts"
+      - "tests/auth/*email-proof*.spec.ts"
+      - "tests/auth/supabase-email-proof-issuer.spec.ts"
+      - "tests/sponsorships/stateless-email-auth-client.spec.ts"
       - "supabase/config.toml"
       - "supabase/seed.sql"
       - ".nvmrc"
@@ -63,6 +69,18 @@ jobs:
         run: >-
           yarn playwright test
           tests/provider/supabase-email-proof-supersession.spec.ts
+          --workers=1
+          --retries=0
+
+      - name: Verify shared email proof issuer boundary
+        env:
+          PW_NO_WEBSERVER: "1"
+        run: >-
+          yarn playwright test
+          tests/auth/email-proof-issuance-gate.spec.ts
+          tests/auth/supabase-email-proof-issuer.spec.ts
+          tests/auth/email-proof-provider-inventory.spec.ts
+          tests/sponsorships/stateless-email-auth-client.spec.ts
           --workers=1
           --retries=0
 
