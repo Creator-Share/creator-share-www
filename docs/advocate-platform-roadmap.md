@@ -138,6 +138,10 @@ An email magic link is the default account entry. A password is optional. Guest 
 
 Every sponsor email proof returns through the exact canonical primary host. The token hash travels only in the URL fragment, is removed from browser history before any request or analytics can run, and is verified only after the person deliberately selects Continue. The stateless flow works when the requesting browser and the consuming browser are different. Known accounts, unknown accounts, throttled requests, and email-provider failures receive the same public accepted response so the route cannot enumerate accounts or delivery policy.
 
+Sponsor account claim issuance derives its creation policy only from the database resolver. A validated unused first-sponsorship claim selects the initial-claim issuer, while an already consumed claim selects the noncreating account-reauthentication issuer. The browser cannot choose the mode, account-creation policy, callback, quota class, or redirect. One server-generated request context binds the resolver, passwordless quota reservation, and shared proof issuer, and every provider or infrastructure disposition remains the same public `202 Accepted` response.
+
+The claim token is a 30-minute capability stored only in a purpose-specific cookie. Production uses `__Host-cs-sponsor-claim-v1` with Secure, root Path, no Domain attribute, HttpOnly, SameSite Lax, and Priority High. Completion reads the raw Cookie header, requires exactly one canonical capability, and rejects duplicates before constructing authentication or database clients. Legacy and local fallback cookie values never authorize production completion. A valid canonical cookie remains usable when legacy debris is present, which prevents a sibling from creating a denial of service with a narrower parent-domain cookie path. The apex retires legacy host and parent-domain copies across every path prefix that can reach the claim routes. HTTP loopback development uses one isolated nonsecure fallback name and rejects mixed topology.
+
 After verifying an email, an account can claim historical subscriptions associated with that email across Stripe US, Stripe UK, and PayPal. Claims attach records to a stable sponsor identity. Subsequent access uses that stable identity instead of repeating an email query.
 
 Changing an account email preserves already attached subscriptions and does not automatically claim another email address's history. Manual identity reconciliation and a team support tool are fast follows.
@@ -430,6 +434,7 @@ This phase is a release gate. The current invitation flow cannot be extended bec
 - Make provider webhooks idempotent and authoritative.
 - Add refund, reversal, dispute, and renewal ledger parity.
 - Add passwordless account claim and sponsorship management.
+- Route initial and existing-account claim proofs through the shared issuer and cut claim capability storage over to the purpose-specific production `__Host-` cookie.
 - Add stateless cross-device magic-link sign in and recent-action authentication with privacy-safe atomic delivery limits.
 - Replace password recovery with the canonical contact-free request, verification, single-use receipt, password mutation, and recovery-session signout flow. Apply its additive database migration before the application build.
 - Add the durable welcome email sequence.
