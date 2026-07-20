@@ -32,6 +32,7 @@ const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/
 export type SponsorPasswordlessFlow =
   | "generic-sign-in"
   | "registration"
+  | "password-reset"
   | "reauthentication"
   | "initial-claim"
   | "account-claim"

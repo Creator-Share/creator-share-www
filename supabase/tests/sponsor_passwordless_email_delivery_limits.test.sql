@@ -184,6 +184,42 @@ SELECT extensions.throws_ok(
 RESET ROLE;
 TRUNCATE private.sponsor_passwordless_email_delivery_reservations;
 
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+SELECT extensions.is(
+  (
+    SELECT delivery_allowed
+    FROM public.reserve_sponsor_passwordless_email_delivery(
+      decode(repeat('24', 32), 'hex'),
+      1::smallint,
+      1::smallint,
+      decode(repeat('25', 32), 'hex'),
+      1::smallint,
+      'password-reset',
+      '71000000-0000-4000-8000-000000000024',
+      'sfo1::password-reset-test'
+    )
+  ),
+  true,
+  'the first password reset delivery reserves public capacity'
+);
+
+RESET ROLE;
+
+SELECT extensions.is(
+  (
+    SELECT reservation.delivery_flow
+    FROM private.sponsor_passwordless_email_delivery_reservations reservation
+    WHERE reservation.request_id =
+      '71000000-0000-4000-8000-000000000024'
+  ),
+  'password-reset',
+  'the reservation ledger preserves the password reset flow classification'
+);
+
+TRUNCATE private.sponsor_passwordless_email_delivery_reservations;
+
 INSERT INTO private.sponsor_passwordless_email_delivery_reservations (
   recipient_digest,
   recipient_normalization_version,
@@ -237,13 +273,82 @@ SELECT extensions.is(
       1::smallint,
       decode(repeat('34', 32), 'hex'),
       1::smallint,
-      'generic-sign-in',
+      'password-reset',
       '71000000-0000-4000-8000-000000000005',
       NULL
     )
   ),
   false,
-  'a protected single flight still suppresses lower-priority public delivery'
+  'a protected single flight still suppresses public password reset delivery'
+);
+
+RESET ROLE;
+TRUNCATE private.sponsor_passwordless_email_delivery_reservations;
+
+INSERT INTO private.sponsor_passwordless_email_delivery_reservations (
+  recipient_digest,
+  recipient_normalization_version,
+  recipient_hmac_key_version,
+  source_digest,
+  source_hmac_key_version,
+  delivery_flow,
+  requested_at,
+  single_flight_expires_at,
+  request_id
+)
+SELECT
+  extensions.digest('public-daily-source-recipient:' || series.value::text, 'sha256'),
+  1,
+  1,
+  decode(repeat('54', 32), 'hex'),
+  1,
+  CASE series.value % 3
+    WHEN 0 THEN 'registration'
+    WHEN 1 THEN 'generic-sign-in'
+    ELSE 'password-reset'
+  END,
+  clock_timestamp() - interval '2 hours',
+  clock_timestamp() - interval '119 minutes',
+  gen_random_uuid()::text
+FROM generate_series(1, 120) AS series(value);
+
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+SELECT extensions.is(
+  (
+    SELECT delivery_allowed
+    FROM public.reserve_sponsor_passwordless_email_delivery(
+      decode(repeat('55', 32), 'hex'),
+      1::smallint,
+      1::smallint,
+      decode(repeat('54', 32), 'hex'),
+      1::smallint,
+      'password-reset',
+      '71000000-0000-4000-8000-000000000025',
+      NULL
+    )
+  ),
+  false,
+  'the public source daily pool includes password reset delivery'
+);
+
+SELECT extensions.is(
+  (
+    SELECT delivery_allowed
+    FROM public.reserve_sponsor_passwordless_email_delivery(
+      decode(repeat('56', 32), 'hex'),
+      1::smallint,
+      1::smallint,
+      decode(repeat('54', 32), 'hex'),
+      1::smallint,
+      'initial-claim',
+      '71000000-0000-4000-8000-000000000026',
+      NULL
+    )
+  ),
+  true,
+  'public source daily exhaustion preserves validated claim capacity'
 );
 
 RESET ROLE;
@@ -266,7 +371,7 @@ SELECT
   1,
   extensions.digest('public-recipient-source:' || series.value::text, 'sha256'),
   1,
-  CASE WHEN series.value = 1 THEN 'generic-sign-in' ELSE 'registration' END,
+  CASE WHEN series.value = 1 THEN 'registration' ELSE 'password-reset' END,
   clock_timestamp() - interval '2 minutes',
   clock_timestamp() - interval '1 minute',
   gen_random_uuid()::text
@@ -290,7 +395,7 @@ SELECT extensions.is(
     )
   ),
   false,
-  'public sign-in and registration share the lower recipient pool'
+  'sign-in, registration, and password reset share the public recipient pool'
 );
 
 SELECT extensions.is(
@@ -331,7 +436,11 @@ SELECT
   1,
   decode(repeat('51', 32), 'hex'),
   1,
-  CASE WHEN series.value % 2 = 0 THEN 'registration' ELSE 'generic-sign-in' END,
+  CASE series.value % 3
+    WHEN 0 THEN 'registration'
+    WHEN 1 THEN 'generic-sign-in'
+    ELSE 'password-reset'
+  END,
   clock_timestamp() - interval '2 minutes',
   clock_timestamp() - interval '1 minute',
   gen_random_uuid()::text
@@ -349,13 +458,13 @@ SELECT extensions.is(
       1::smallint,
       decode(repeat('51', 32), 'hex'),
       1::smallint,
-      'registration',
+      'password-reset',
       '71000000-0000-4000-8000-000000000008',
       NULL
     )
   ),
   false,
-  'the public source pool suppresses a public recipient spray'
+  'the public source pool suppresses a password reset recipient spray'
 );
 
 SELECT extensions.is(
@@ -396,7 +505,11 @@ SELECT
   1,
   extensions.digest('public-global-source:' || series.value::text, 'sha256'),
   1,
-  CASE WHEN series.value % 2 = 0 THEN 'registration' ELSE 'generic-sign-in' END,
+  CASE series.value % 3
+    WHEN 0 THEN 'registration'
+    WHEN 1 THEN 'generic-sign-in'
+    ELSE 'password-reset'
+  END,
   clock_timestamp() - interval '2 minutes',
   clock_timestamp() - interval '1 minute',
   gen_random_uuid()::text
@@ -414,13 +527,13 @@ SELECT extensions.is(
       1::smallint,
       decode(repeat('62', 32), 'hex'),
       1::smallint,
-      'generic-sign-in',
+      'password-reset',
       '71000000-0000-4000-8000-000000000010',
       NULL
     )
   ),
   false,
-  'the public global hourly pool closes independently'
+  'the public global hourly pool includes password reset delivery'
 );
 
 SELECT extensions.is(
@@ -511,7 +624,11 @@ SELECT
   1,
   extensions.digest('public-daily-source:' || series.value::text, 'sha256'),
   1,
-  CASE WHEN series.value % 2 = 0 THEN 'registration' ELSE 'generic-sign-in' END,
+  CASE series.value % 3
+    WHEN 0 THEN 'registration'
+    WHEN 1 THEN 'generic-sign-in'
+    ELSE 'password-reset'
+  END,
   clock_timestamp() - interval '2 hours',
   clock_timestamp() - interval '119 minutes',
   gen_random_uuid()::text
@@ -529,13 +646,13 @@ SELECT extensions.is(
       1::smallint,
       decode(repeat('74', 32), 'hex'),
       1::smallint,
-      'registration',
+      'password-reset',
       '71000000-0000-4000-8000-000000000018',
       NULL
     )
   ),
   false,
-  'the public recipient daily pool closes outside the short window'
+  'the public recipient daily pool includes password reset delivery'
 );
 
 SELECT extensions.is(
@@ -576,7 +693,11 @@ SELECT
   1,
   extensions.digest('public-daily-global-source:' || series.value::text, 'sha256'),
   1,
-  CASE WHEN series.value % 2 = 0 THEN 'registration' ELSE 'generic-sign-in' END,
+  CASE series.value % 3
+    WHEN 0 THEN 'registration'
+    WHEN 1 THEN 'generic-sign-in'
+    ELSE 'password-reset'
+  END,
   clock_timestamp() - interval '2 hours',
   clock_timestamp() - interval '119 minutes',
   gen_random_uuid()::text
@@ -594,13 +715,13 @@ SELECT extensions.is(
       1::smallint,
       decode(repeat('77', 32), 'hex'),
       1::smallint,
-      'generic-sign-in',
+      'password-reset',
       '71000000-0000-4000-8000-000000000020',
       NULL
     )
   ),
   false,
-  'the public global daily pool closes outside the hourly window'
+  'the public global daily pool includes password reset delivery'
 );
 
 SELECT extensions.is(

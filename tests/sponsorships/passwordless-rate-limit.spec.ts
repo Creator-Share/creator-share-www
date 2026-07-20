@@ -230,7 +230,7 @@ test("reserves one exact service-role RPC envelope", async () => {
   ])
 })
 
-test("exposes registration delivery and purpose-separated verification reservations", async () => {
+test("exposes public delivery flows and purpose-separated verification reservations", async () => {
   const calls: Array<{ name: string; input: Record<string, unknown> }> = []
   const serviceClient = {
     async rpc(name: string, input: Record<string, unknown>) {
@@ -257,6 +257,16 @@ test("exposes registration delivery and purpose-separated verification reservati
     }),
   ).resolves.toBe(true)
 
+  await expect(
+    rateLimit.reserveSponsorPasswordlessDeliveryForRequest({
+      flow: "password-reset",
+      email: "new-sponsor@example.com",
+      request,
+      environment,
+      serviceClient,
+    }),
+  ).resolves.toBe(true)
+
   const verificationSignals =
     rateLimit.createSponsorPasswordlessVerificationSignals({
       headers: request.headers,
@@ -273,10 +283,12 @@ test("exposes registration delivery and purpose-separated verification reservati
     }),
   ).resolves.toBe(true)
 
-  expect(calls).toHaveLength(2)
+  expect(calls).toHaveLength(3)
   expect(calls[0].name).toBe("reserve_sponsor_passwordless_email_delivery")
   expect(calls[0].input.delivery_flow).toBe("registration")
-  expect(calls[1]).toEqual({
+  expect(calls[1].name).toBe("reserve_sponsor_passwordless_email_delivery")
+  expect(calls[1].input.delivery_flow).toBe("password-reset")
+  expect(calls[2]).toEqual({
     name: "reserve_sponsor_passwordless_email_verification_attempt",
     input: {
       target_source_digest: verificationSignals.sourceDigest,
@@ -286,6 +298,6 @@ test("exposes registration delivery and purpose-separated verification reservati
     },
   })
   expect(calls[0].input.target_source_digest).not.toBe(
-    calls[1].input.target_source_digest,
+    calls[2].input.target_source_digest,
   )
 })
