@@ -19,13 +19,55 @@ on:
       - "supabase/tests/sponsor_recent_authentication_management.test.sql"
       - "supabase/tests/persistent_sponsor_account_claim_links.test.sql"
       - "supabase/tests/sponsor_passwordless_email_delivery_limits.test.sql"
+      - "supabase/tests/advocate_attribution_settlement_integration.test.sql"
+      - "supabase/tests/advocate_admin_settings_boundary.test.sql"
+      - "supabase/tests/advocate_logo_upload_reservations.test.sql"
       - "tests/database/**/*publication*"
       - "tests/database/**/*initial-owner*"
       - "tests/database/**/*invitation*"
       - "tests/database/**/*email-proof*"
+      - "tests/database/advocate-branding-authority-concurrency.mjs"
+      - "tests/database/fixtures/advocate-branding-authority-concurrency.sql"
       - "tests/database/support/*.mjs"
       - "tests/provider/**"
+      - "tests/advocates/provisioning*.spec.ts"
+      - "tests/advocates/publication-canary-*.spec.ts"
+      - "tests/advocates/exposure-attribution-identity.spec.ts"
+      - "tests/advocates/exposure-broker-client.spec.ts"
+      - "tests/advocates/exposure-broker-server.spec.ts"
+      - "tests/advocates/exposure-broker-tracker.spec.ts"
+      - "tests/advocates/portal-analytics.spec.ts"
+      - "tests/advocates/portal-public-metrics-*.spec.ts"
+      - "tests/advocates/public-metric-release-worker.spec.ts"
+      - "tests/advocates/public-presentation*.spec.ts"
+      - "tests/advocates/public-impact-metrics.spec.ts"
+      - "tests/sponsorships/exposure.spec.ts"
+      - "tests/sponsorships/stripe-checkout*.spec.ts"
+      - "tests/sponsorships/stripe-provider-request.spec.ts"
+      - "tests/sponsorships/paypal-browser-payload.spec.ts"
+      - "tests/sponsorships/paypal-checkout-v2.spec.ts"
+      - "tests/sponsorships/paypal-provider-request.spec.ts"
+      - "tests/sponsorships/paypal-sponsorship-checkout.spec.ts"
+      - "tests/sponsorships/*webhook-ingestion.spec.ts"
+      - "tests/sponsorships/payment-gateway-event-worker.spec.ts"
+      - "tests/sponsorships/sponsor-welcome-email-worker.spec.ts"
       - "src/lib/advocates/attributionIdentityCookie.ts"
+      - "src/lib/advocates/attributionIdentity*.ts"
+      - "src/lib/advocates/exposureBroker*.ts"
+      - "src/lib/advocates/provisioning/**"
+      - "src/lib/advocates/publicationCanary/**"
+      - "src/lib/advocates/admin/access.ts"
+      - "src/lib/advocates/admin/analytics.ts"
+      - "src/lib/advocates/admin/branding.ts"
+      - "src/lib/advocates/admin/brandingForm.ts"
+      - "src/lib/advocates/admin/logo.ts"
+      - "src/lib/advocates/admin/logoReservation.ts"
+      - "src/lib/advocates/admin/publicMetrics*.ts"
+      - "src/lib/advocates/admin/settings.ts"
+      - "src/lib/advocates/publicMetrics/**"
+      - "src/lib/advocates/publicPresentation*.ts"
+      - "src/lib/advocates/publicSite*.ts"
+      - "src/lib/advocates/richText.ts"
       - "src/lib/auth/emailProof*.ts"
       - "src/lib/auth/creatorShareAdminInvitationContracts.ts"
       - "src/lib/auth/supabaseEmailProofIssuer.ts"
@@ -34,12 +76,18 @@ on:
       - "src/lib/advocates/creatorShareAdmin/routeSecurity.ts"
       - "src/lib/auth/passwordRecoveryClient.ts"
       - "src/lib/sponsorships/accountClaim.ts"
-      - "src/lib/sponsorships/checkout/requestSecurity.ts"
+      - "src/lib/sponsorships/checkout/**"
       - "src/lib/sponsorships/crypto.ts"
+      - "src/lib/sponsorships/email/**"
+      - "src/lib/sponsorships/exposure.ts"
+      - "src/lib/sponsorships/gateways/**"
       - "src/lib/sponsorships/management/passwordlessAccess.ts"
       - "src/lib/sponsorships/management/passwordlessRateLimit.ts"
       - "src/lib/sponsorships/management/responseBoundSupabaseCookies.ts"
       - "src/lib/sponsorships/management/sponsorEmailConfirmation.ts"
+      - "src/lib/sponsorships/visitorCookie.ts"
+      - "src/lib/stripe/**"
+      - "src/lib/paypal/**"
       - "src/app/api/auth/passwordless/route.ts"
       - "src/app/api/auth/registration/route.ts"
       - "src/app/api/auth/reset-password/route.ts"
@@ -47,14 +95,37 @@ on:
       - "src/app/api/auth/change-password/route.ts"
       - "src/app/api/admin/users/invite/route.ts"
       - "src/app/(admin)/admin/users/components/InviteUserDialog.tsx"
+      - "src/app/(advocate-admin)/portal/*/domain/**"
+      - "src/app/(advocate-admin)/portal/*/branding/**"
+      - "src/app/(advocate-admin)/portal/*/analytics/**"
+      - "src/app/(advocate-admin)/portal/*/public-metrics/**"
+      - "src/app/(advocate-admin)/portal/*/layout.tsx"
+      - "src/app/.well-known/creator-share/advocate-publication-canary/**"
+      - "src/app/api/admin/advocates/*/provisioning/**"
+      - "src/app/api/admin/advocates/*/publish/**"
+      - "src/app/api/advocates/exposure/**"
       - "src/app/api/internal/advocates/invitations/route.ts"
+      - "src/app/api/internal/advocates/provisioning/**"
+      - "src/app/api/internal/advocates/publication-canaries/**"
+      - "src/app/api/internal/advocates/publication-sentinel/**"
+      - "src/app/api/internal/advocates/public-metrics/**"
+      - "src/app/api/internal/payments/gateway-events/**"
+      - "src/app/api/internal/sponsorships/welcome-emails/**"
+      - "src/app/api/paypal/**"
+      - "src/app/api/portal/*/branding/**"
+      - "src/app/api/portal/*/logo/**"
+      - "src/app/api/portal/*/public-metrics/**"
       - "src/app/api/portal/*/team/invitations/**"
+      - "src/app/api/stripe/**"
+      - "src/app/api/webhooks/stripe/**"
       - "src/app/api/sponsor-account/reauth/start/route.ts"
       - "src/app/api/sponsor-account/start/route.ts"
       - "src/app/api/sponsor-account/complete/route.ts"
       - "src/app/auth/confirm/route.ts"
       - "src/app/forgot-password/**"
+      - "src/app/page.tsx"
       - "src/app/register/page.tsx"
+      - "src/app/sponsorships/components/SponsorshipModal/**"
       - "src/app/verifyAccount/page.tsx"
       - "supabase/templates/sponsor_email_confirmation.html"
       - "src/lib/sponsorships/management/statelessAuth.ts"
@@ -62,8 +133,16 @@ on:
       - "src/utils/admin/creatorShareRoles.ts"
       - "src/utils/auth/requireSuperAdmin.ts"
       - "src/utils/supabase/server.ts"
+      - "src/utils/supabase/middleware.ts"
       - "src/store/userManagementStore.ts"
       - "src/types/admin.types.ts"
+      - "src/components/advocates/admin/DomainStatus.tsx"
+      - "src/components/advocates/admin/BrandingSettingsClient.tsx"
+      - "src/components/advocates/admin/AnalyticsDashboard.tsx"
+      - "src/components/advocates/admin/PublicMetricSettingsClient.tsx"
+      - "src/components/advocates/AdvocateImpactMetrics.tsx"
+      - "src/components/advocates/admin/PortalNavigation.tsx"
+      - "src/components/advocates/admin/PortalShell.tsx"
       - "tests/auth/*email-proof*.spec.ts"
       - "tests/auth/password-recovery-client.spec.ts"
       - "tests/auth/password-reset-request-route.spec.ts"
@@ -75,6 +154,12 @@ on:
       - "tests/advocates/invitation-email-worker.spec.ts"
       - "tests/advocates/invitation-rollout-safety.spec.ts"
       - "tests/advocates/portal-invitation-route.spec.ts"
+      - "tests/advocates/portal-access.spec.ts"
+      - "tests/advocates/portal-domain-ui.spec.ts"
+      - "tests/advocates/portal-branding.spec.ts"
+      - "tests/advocates/portal-branding-route.spec.ts"
+      - "tests/advocates/portal-logo-reservation.spec.ts"
+      - "tests/advocates/portal-logo-route.spec.ts"
       - "tests/advocates/service-role-client-timeout.spec.ts"
       - "docs/advocate-domain-publication-runbook.md"
       - "docs/advocate-payment-release-runbook.md"
@@ -168,6 +253,72 @@ jobs:
           --driver bridge
           --opt com.docker.network.bridge.host_binding_ipv4=127.0.0.1
           "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+
+      - name: Verify advocate portal administration
+        env:
+          PW_NO_WEBSERVER: "1"
+        run: >-
+          yarn playwright test
+          tests/advocates/portal-access.spec.ts
+          tests/advocates/portal-domain-ui.spec.ts
+          tests/advocates/portal-branding.spec.ts
+          tests/advocates/portal-branding-route.spec.ts
+          tests/advocates/portal-logo-reservation.spec.ts
+          tests/advocates/portal-logo-route.spec.ts
+          --workers=1
+          --retries=0
+
+      - name: Verify provider-free provisioning and publication boundary
+        env:
+          PW_NO_WEBSERVER: "1"
+        run: >-
+          yarn playwright test
+          tests/advocates/provisioning-start.spec.ts
+          tests/advocates/provisioning.spec.ts
+          tests/advocates/publication-canary-challenge.spec.ts
+          tests/advocates/publication-canary-client-operation.spec.ts
+          tests/advocates/publication-canary-database.spec.ts
+          tests/advocates/publication-canary-execute.spec.ts
+          tests/advocates/publication-canary-operation.spec.ts
+          tests/advocates/publication-canary-route.spec.ts
+          tests/advocates/publication-canary-runner.spec.ts
+          tests/advocates/publication-canary-runtime.spec.ts
+          tests/advocates/publication-canary-sentinel-bootstrap.spec.ts
+          tests/advocates/publication-canary-sentinel.spec.ts
+          tests/advocates/publication-canary-worker.spec.ts
+          --workers=1
+          --retries=0
+
+      - name: Verify attribution settlement application boundary
+        env:
+          PW_NO_WEBSERVER: "1"
+        run: >-
+          yarn playwright test
+          tests/advocates/exposure-attribution-identity.spec.ts
+          tests/advocates/exposure-broker-client.spec.ts
+          tests/advocates/exposure-broker-server.spec.ts
+          tests/advocates/exposure-broker-tracker.spec.ts
+          tests/sponsorships/exposure.spec.ts
+          tests/sponsorships/stripe-checkout.spec.ts
+          tests/sponsorships/stripe-checkout-v2.spec.ts
+          tests/sponsorships/stripe-provider-request.spec.ts
+          tests/sponsorships/paypal-browser-payload.spec.ts
+          tests/sponsorships/paypal-checkout-v2.spec.ts
+          tests/sponsorships/paypal-provider-request.spec.ts
+          tests/sponsorships/paypal-sponsorship-checkout.spec.ts
+          tests/sponsorships/stripe-webhook-ingestion.spec.ts
+          tests/sponsorships/paypal-webhook-ingestion.spec.ts
+          tests/sponsorships/payment-gateway-event-worker.spec.ts
+          tests/advocates/portal-analytics.spec.ts
+          tests/advocates/portal-public-metrics-route.spec.ts
+          tests/advocates/portal-public-metrics-ui.spec.ts
+          tests/advocates/public-metric-release-worker.spec.ts
+          tests/advocates/public-presentation-repository.spec.ts
+          tests/advocates/public-presentation.spec.ts
+          tests/advocates/public-impact-metrics.spec.ts
+          tests/sponsorships/sponsor-welcome-email-worker.spec.ts
+          --workers=1
+          --retries=0
 
       - name: Start local Supabase
         run: >-
@@ -285,6 +436,33 @@ jobs:
           --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
           supabase/tests/persistent_sponsor_account_claim_links.test.sql
           supabase/tests/sponsor_passwordless_email_delivery_limits.test.sql
+
+      - name: Run attribution settlement integration gate
+        run: >-
+          yarn supabase test db
+          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+          supabase/tests/advocate_attribution_settlement_integration.test.sql
+
+      - name: Run branding authority database tests
+        run: >-
+          yarn supabase test db
+          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+          supabase/tests/advocate_admin_settings_boundary.test.sql
+          supabase/tests/advocate_logo_upload_reservations.test.sql
+
+      - name: Run branding authority concurrency harness
+        env:
+          ADVOCATE_BRANDING_AUTHORITY_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-branding-authority-concurrency-evidence.json
+        run: yarn test:advocate:branding-authority-concurrency
+
+      - name: Upload sanitized branding authority concurrency evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-branding-authority-concurrency-evidence
+          path: ${{ runner.temp }}/advocate-branding-authority-concurrency-evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Run shared email proof issuance concurrency harness
         env:
