@@ -238,6 +238,19 @@ test.describe("advocate portal navigation", () => {
       }),
     )
 
+    const domainViewer = buildAdvocatePortalNavigation({
+      slug: "hope",
+      permissions: ["portal.domains.view", "portal.view"],
+    })
+    expect(domainViewer.at(-1)).toEqual(
+      expect.objectContaining({
+        section: "domain",
+        href: "/portal/hope/domain",
+        availability: "available",
+      }),
+    )
+    expect(domainViewer.every((item) => item.href.length > 0)).toBe(true)
+
     const branding = buildAdvocatePortalNavigation(
       { slug: "hope", permissions: ["portal.view"] },
       "branding",
@@ -293,7 +306,12 @@ test.describe("advocate portal navigation", () => {
 
 test.describe("advocate portal middleware protection", () => {
   test("protects exact portal page and API prefixes without catching lookalikes", () => {
-    for (const path of ["/portal", "/portal/hope", "/portal/hope/branding"]) {
+    for (const path of [
+      "/portal",
+      "/portal/hope",
+      "/portal/hope/branding",
+      "/portal/hope/domain",
+    ]) {
       expect(requiresAuthenticatedPagePath(path)).toBe(true)
     }
     for (const path of ["/api/portal", "/api/portal/hope/branding"]) {

@@ -20,46 +20,53 @@ export type AdvocatePortalSection =
 export interface AdvocatePortalNavigationItem {
   section: AdvocatePortalSection
   label: string
-  href: string | null
+  href: string
   current: boolean
-  availability: "available" | "coming-soon"
+  availability: "available"
 }
 
-const FUTURE_SECTIONS = Object.freeze([
+const PERMISSION_SECTIONS = Object.freeze([
   {
     section: "catalog",
     label: "Catalog",
     permission: "portal.beneficiaries.manage",
+    path: "catalog",
   },
   {
     section: "public-metrics",
     label: "Public metrics",
     permission: "portal.public_metrics.update",
+    path: "public-metrics",
   },
   {
     section: "analytics",
     label: "Analytics",
     permission: "portal.analytics.view",
+    path: "analytics",
   },
   {
     section: "team",
     label: "Team",
     permission: "portal.members.view",
+    path: "team",
   },
   {
     section: "audit",
     label: "Audit history",
     permission: "portal.audit.view",
+    path: "audit",
   },
   {
     section: "domain",
     label: "Domain",
     permission: "portal.domains.view",
+    path: "domain",
   },
 ] as const satisfies readonly {
-  section: Exclude<AdvocatePortalSection, "overview">
+  section: Exclude<AdvocatePortalSection, "overview" | "branding">
   label: string
   permission: AdvocatePortalPermission
+  path: string
 }[])
 
 export function buildAdvocatePortalNavigation(
@@ -84,26 +91,14 @@ export function buildAdvocatePortalNavigation(
     },
   ]
 
-  for (const section of FUTURE_SECTIONS) {
+  for (const section of PERMISSION_SECTIONS) {
     if (!permissions.has(section.permission)) continue
-    const href =
-      section.section === "catalog"
-        ? `/portal/${portal.slug}/catalog`
-        : section.section === "public-metrics"
-          ? `/portal/${portal.slug}/public-metrics`
-          : section.section === "analytics"
-            ? `/portal/${portal.slug}/analytics`
-            : section.section === "team"
-              ? `/portal/${portal.slug}/team`
-              : section.section === "audit"
-                ? `/portal/${portal.slug}/audit`
-                : null
     items.push({
       section: section.section,
       label: section.label,
-      href,
+      href: `/portal/${portal.slug}/${section.path}`,
       current: currentSection === section.section,
-      availability: href === null ? "coming-soon" : "available",
+      availability: "available",
     })
   }
   return Object.freeze(items)
