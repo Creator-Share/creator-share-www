@@ -5,11 +5,12 @@ import { expect, test } from "@playwright/test"
 import {
   ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_MAX_AGE_SECONDS,
   ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
-  createAdvocateAttributionIdentityCookieValue,
+  createAdvocateAttributionIdentityCookieValue as createScopedCookieValue,
   getAdvocateAttributionIdentityCookieOptions,
-  readAdvocateAttributionIdentityCookie,
-  resolveAdvocateAttributionIdentityCookie,
-  verifyAdvocateAttributionIdentityCookieValue,
+  readAdvocateAttributionIdentityCookie as readScopedCookie,
+  resolveAdvocateAttributionIdentityCookie as resolveScopedCookie,
+  verifyAdvocateAttributionIdentityCookieValue as verifyScopedCookieValue,
+  type AdvocateAttributionIdentityCookieInput,
 } from "../../src/lib/advocates/attributionIdentityCookie"
 
 const AUTH_USER_ID = "97abcdef-abcd-4abc-8abc-abcdef000001"
@@ -24,6 +25,61 @@ const PRODUCTION_ENVIRONMENT = Object.freeze({
   NODE_ENV: "production",
   ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1: CURRENT_SECRET,
 })
+const TEST_REQUEST_CONTEXT = Object.freeze({ rawHost: "creatorshare.com" })
+
+function createAdvocateAttributionIdentityCookieValue(
+  input: AdvocateAttributionIdentityCookieInput,
+  environment: Readonly<
+    Record<string, string | undefined>
+  > = PRODUCTION_ENVIRONMENT,
+) {
+  return createScopedCookieValue(input, TEST_REQUEST_CONTEXT, environment)
+}
+
+function verifyAdvocateAttributionIdentityCookieValue(
+  value: string | null | undefined,
+  environment: Readonly<
+    Record<string, string | undefined>
+  > = PRODUCTION_ENVIRONMENT,
+  nowSeconds: number = Math.floor(Date.now() / 1_000),
+) {
+  return verifyScopedCookieValue(
+    value,
+    TEST_REQUEST_CONTEXT,
+    environment,
+    nowSeconds,
+  )
+}
+
+function resolveAdvocateAttributionIdentityCookie(
+  cookieHeader: string | null,
+  environment: Readonly<
+    Record<string, string | undefined>
+  > = PRODUCTION_ENVIRONMENT,
+  nowSeconds: number = Math.floor(Date.now() / 1_000),
+) {
+  return resolveScopedCookie(
+    cookieHeader,
+    TEST_REQUEST_CONTEXT,
+    environment,
+    nowSeconds,
+  )
+}
+
+function readAdvocateAttributionIdentityCookie(
+  cookieHeader: string | null,
+  environment: Readonly<
+    Record<string, string | undefined>
+  > = PRODUCTION_ENVIRONMENT,
+  nowSeconds: number = Math.floor(Date.now() / 1_000),
+) {
+  return readScopedCookie(
+    cookieHeader,
+    TEST_REQUEST_CONTEXT,
+    environment,
+    nowSeconds,
+  )
+}
 
 function createCookieValue(
   overrides: Partial<{
@@ -63,7 +119,7 @@ test("signs only a versioned auth UUID and bounded timestamps", () => {
   )
 
   expect(value).toMatch(
-    /^v1\.[0-9a-f-]{36}\.[1-9][0-9]+\.[1-9][0-9]+\.[A-Za-z0-9_-]{43}$/,
+    /^v2\.[0-9a-f-]{36}\.[1-9][0-9]+\.[1-9][0-9]+\.[A-Za-z0-9_-]{43}$/,
   )
   expect(value).not.toContain("private@example.com")
   expect(value).not.toContain("administrator")
@@ -88,26 +144,56 @@ test("signs only a versioned auth UUID and bounded timestamps", () => {
 })
 
 test("matches the documented HKDF and HMAC signing contract", () => {
-  const payload = `v1.${AUTH_USER_ID}.${ISSUED_AT_SECONDS}.${EXPIRES_AT_SECONDS}`
+  const payload = `v2.${AUTH_USER_ID}.${ISSUED_AT_SECONDS}.${EXPIRES_AT_SECONDS}`
   const key = Buffer.from(
     hkdfSync(
       "sha256",
       Buffer.from(CURRENT_SECRET, "base64"),
       Buffer.from("creator-share/advocates/key-derivation/v1"),
       Buffer.from(
-        "creator-share/advocates/attribution-identity-cookie-hmac-key/v1",
+        "creator-share/advocates/attribution-identity-cookie-hmac-key/v2\0host:creatorshare.com",
       ),
       32,
     ),
   )
   const tag = createHmac("sha256", key)
     .update(
-      Buffer.from("creator-share/advocates/attribution-identity-cookie/v1\0"),
+      Buffer.from("creator-share/advocates/attribution-identity-cookie/v2\0"),
     )
     .update(payload, "utf8")
     .digest("base64url")
 
   expect(createCookieValue()).toBe(`${payload}.${tag}`)
+})
+
+test("normalizes equivalent hosts and rejects a host-scoped token on a sibling", () => {
+  const input = {
+    authUserId: AUTH_USER_ID,
+    issuedAtSeconds: ISSUED_AT_SECONDS,
+    expiresAtSeconds: EXPIRES_AT_SECONDS,
+  }
+  const value = createScopedCookieValue(
+    input,
+    { rawHost: "Hope.CreatorShare.com.:443" },
+    PRODUCTION_ENVIRONMENT,
+  )
+  expect(value).not.toBeNull()
+  expect(
+    verifyScopedCookieValue(
+      value,
+      { rawHost: "hope.creatorshare.com" },
+      PRODUCTION_ENVIRONMENT,
+      ISSUED_AT_SECONDS,
+    ),
+  ).not.toBeNull()
+  expect(
+    verifyScopedCookieValue(
+      value,
+      { rawHost: "another.creatorshare.com" },
+      PRODUCTION_ENVIRONMENT,
+      ISSUED_AT_SECONDS,
+    ),
+  ).toBeNull()
 })
 
 test("rejects invalid identities, timestamps, and lifetimes", () => {
@@ -198,7 +284,7 @@ test("rejects every tampered or noncanonical token component", () => {
   const alteredTag = `${tag[0] === "A" ? "B" : "A"}${tag.slice(1)}`
 
   for (const tampered of [
-    value.replace(/^v1\./, "v2."),
+    value.replace(/^v2\./, "v1."),
     value.replace(AUTH_USER_ID, OTHER_AUTH_USER_ID),
     value.replace(`.${ISSUED_AT_SECONDS}.`, `.${ISSUED_AT_SECONDS + 1}.`),
     value.replace(`.${EXPIRES_AT_SECONDS}.`, `.${EXPIRES_AT_SECONDS - 1}.`),
@@ -353,7 +439,7 @@ test("fails closed for missing, invalid, shared, or ambiguous production secrets
   ).not.toBeNull()
 })
 
-test("rejects ambiguous duplicate cookies and normalizes exact duplicates", () => {
+test("keeps one valid identity through forged duplicates and rejects conflicting valid identities", () => {
   const value = createCookieValue()
   const otherValue = createCookieValue({ authUserId: OTHER_AUTH_USER_ID })
   const cookie = `${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=${value}`
@@ -379,23 +465,31 @@ test("rejects ambiguous duplicate cookies and normalizes exact duplicates", () =
     requiresRefresh: false,
   })
 
-  for (const ambiguous of [
-    `${cookie}; ${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=${otherValue}`,
-    `${cookie}; ${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=forged`,
-  ]) {
-    expect(
-      resolveAdvocateAttributionIdentityCookie(
-        ambiguous,
-        PRODUCTION_ENVIRONMENT,
-        ISSUED_AT_SECONDS,
-      ),
-    ).toEqual({
-      signal: null,
-      hadCandidates: true,
-      requiresNormalization: true,
-      requiresRefresh: false,
-    })
-  }
+  expect(
+    resolveAdvocateAttributionIdentityCookie(
+      `${cookie}; ${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=forged`,
+      PRODUCTION_ENVIRONMENT,
+      ISSUED_AT_SECONDS,
+    ),
+  ).toMatchObject({
+    signal: { authUserId: AUTH_USER_ID },
+    hadCandidates: true,
+    requiresNormalization: true,
+    requiresRefresh: false,
+  })
+
+  expect(
+    resolveAdvocateAttributionIdentityCookie(
+      `${cookie}; ${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=${otherValue}`,
+      PRODUCTION_ENVIRONMENT,
+      ISSUED_AT_SECONDS,
+    ),
+  ).toEqual({
+    signal: null,
+    hadCandidates: true,
+    requiresNormalization: true,
+    requiresRefresh: false,
+  })
 
   expect(
     resolveAdvocateAttributionIdentityCookie(
@@ -433,15 +527,20 @@ test("bounds cookie header and candidate processing", () => {
   }
 })
 
-test("uses parent-domain production cookies and host-only preview or local cookies", () => {
+test("keeps production cookies host only while parent activation is unavailable", () => {
   for (const host of [
     "creatorshare.com",
     "hope.creatorshare.com",
     "www.creatorshare.com",
     "hope.creatorshare.com:443",
   ]) {
-    expect(getAdvocateAttributionIdentityCookieOptions(host, false)).toEqual({
-      domain: ".creatorshare.com",
+    expect(
+      getAdvocateAttributionIdentityCookieOptions(
+        host,
+        false,
+        PRODUCTION_ENVIRONMENT,
+      ),
+    ).toEqual({
       httpOnly: true,
       maxAge: ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_MAX_AGE_SECONDS,
       path: "/",
@@ -454,6 +553,7 @@ test("uses parent-domain production cookies and host-only preview or local cooki
     getAdvocateAttributionIdentityCookieOptions(
       "creator-share-preview.vercel.app",
       true,
+      PRODUCTION_ENVIRONMENT,
     ),
   ).toEqual({
     httpOnly: true,
@@ -463,7 +563,9 @@ test("uses parent-domain production cookies and host-only preview or local cooki
     secure: true,
   })
   expect(
-    getAdvocateAttributionIdentityCookieOptions("hope.localhost:3000", false),
+    getAdvocateAttributionIdentityCookieOptions("hope.localhost:3000", false, {
+      NODE_ENV: "development",
+    }),
   ).toEqual({
     httpOnly: true,
     maxAge: ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_MAX_AGE_SECONDS,
@@ -475,6 +577,7 @@ test("uses parent-domain production cookies and host-only preview or local cooki
     getAdvocateAttributionIdentityCookieOptions(
       "hope.creatorshare.com.evil.example",
       true,
+      PRODUCTION_ENVIRONMENT,
     ).domain,
   ).toBeUndefined()
 })

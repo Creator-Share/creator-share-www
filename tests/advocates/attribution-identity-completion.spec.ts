@@ -105,16 +105,18 @@ test.afterAll(() => {
   }
 })
 
-test("completes a client-created session with a parent-domain signal", async () => {
+test("completes a client-created session with a host-only signal", async () => {
   const response = await POST(request())
-  const identityCookie = setCookies(response).find((cookie) =>
-    cookie.startsWith(`${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=`),
+  const identityCookie = setCookies(response).find(
+    (cookie) =>
+      cookie.startsWith(`${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=`) &&
+      !cookie.includes("Max-Age=0"),
   )
 
   expect(response.status).toBe(200)
   await expect(response.json()).resolves.toEqual({ ok: true })
   expect(getUserCalls).toBe(1)
-  expect(identityCookie).toContain("Domain=.creatorshare.com")
+  expect(identityCookie).not.toContain("Domain=")
   expect(identityCookie).toContain("HttpOnly")
   expect(identityCookie).toContain("Secure")
   const value = identityCookie?.slice(
@@ -122,7 +124,9 @@ test("completes a client-created session with a parent-domain signal", async () 
     identityCookie.indexOf(";"),
   )
   expect(
-    verifyAdvocateAttributionIdentityCookieValue(value)?.signal.authUserId,
+    verifyAdvocateAttributionIdentityCookieValue(value, {
+      rawHost: "creatorshare.com",
+    })?.signal.authUserId,
   ).toBe(AUTH_USER_ID)
 })
 

@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server"
-import {
-  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
-  getAdvocateAttributionIdentityCookieOptions,
-} from "@/lib/advocates/attributionIdentityCookie"
+import { advocateAttributionIdentityCookieClearHeaders } from "@/lib/advocates/attributionIdentityCookie"
 import { createClient } from "@/utils/supabase/server"
 
 export async function POST(request: Request) {
@@ -19,14 +16,12 @@ export async function POST(request: Request) {
       { message: "Logout successful" },
       { status: 200 },
     )
-    response.cookies.set(ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME, "", {
-      ...getAdvocateAttributionIdentityCookieOptions(
-        request.headers.get("host"),
-        new URL(request.url).protocol === "https:",
-      ),
-      expires: new Date(0),
-      maxAge: 0,
-    })
+    for (const header of advocateAttributionIdentityCookieClearHeaders(
+      request.headers.get("host"),
+      new URL(request.url).protocol === "https:",
+    )) {
+      response.headers.append("Set-Cookie", header)
+    }
     return response
   } catch (err: unknown) {
     const errorMessage =

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import {
-  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  advocateAttributionIdentityCookieSetHeaders,
   createAdvocateAttributionIdentityCookieValue,
-  getAdvocateAttributionIdentityCookieOptions,
 } from "@/lib/advocates/attributionIdentityCookie"
 import {
   ADVOCATE_INVITATION_AUTHENTICATE_PATH,
@@ -99,20 +98,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       request: authentication,
     })
     const successResponse = advocateInvitationJsonResponse({ ok: true }, 200)
-    const identitySignal = createAdvocateAttributionIdentityCookieValue({
-      authUserId: result.authUserId,
-    })
+    routeClient.applyCookies(successResponse)
+    const identitySignal = createAdvocateAttributionIdentityCookieValue(
+      {
+        authUserId: result.authUserId,
+      },
+      { rawHost: request.headers.get("host") },
+    )
     if (identitySignal) {
-      successResponse.cookies.set(
-        ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+      for (const header of advocateAttributionIdentityCookieSetHeaders(
         identitySignal,
-        getAdvocateAttributionIdentityCookieOptions(
-          request.headers.get("host"),
-          secureCookies,
-        ),
-      )
+        request.headers.get("host"),
+        secureCookies,
+      )) {
+        successResponse.headers.append("Set-Cookie", header)
+      }
     }
-    return routeClient.applyCookies(successResponse)
+    return successResponse
   } catch (error) {
     let failureResponse: NextResponse
     if (

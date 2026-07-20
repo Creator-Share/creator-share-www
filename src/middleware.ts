@@ -10,6 +10,7 @@ import {
   type TenantRoutePolicyDecision,
 } from "@/lib/advocates/tenantRoutePolicy"
 import {
+  applyRolledBackParentCookieDeletions,
   updateSession,
   updateSponsorshipVisitor,
 } from "@/utils/supabase/middleware"
@@ -48,13 +49,16 @@ function forwardedHeaders(
   return headers
 }
 
-function bypassSession(
+async function bypassSession(
   request: NextRequest,
   shell: string | null = null,
-): NextResponse {
-  return NextResponse.next({
-    request: { headers: forwardedHeaders(request, shell) },
-  })
+): Promise<NextResponse> {
+  return applyRolledBackParentCookieDeletions(
+    request,
+    NextResponse.next({
+      request: { headers: forwardedHeaders(request, shell) },
+    }),
+  )
 }
 
 function appendVary(headers: Headers, values: readonly string[]): void {
@@ -94,10 +98,10 @@ function hardenTenantResponse(
   return response
 }
 
-function deniedTenantResponse(
+async function deniedTenantResponse(
   request: NextRequest,
   decision: Extract<TenantRoutePolicyDecision, { kind: "deny" }>,
-): NextResponse {
+): Promise<NextResponse> {
   const apiRequest = request.nextUrl.pathname.startsWith("/api/")
   const message = decision.status === 405 ? "Method Not Allowed" : "Not Found"
   const response = apiRequest
@@ -111,13 +115,18 @@ function deniedTenantResponse(
       })
   if (decision.allow !== null) response.headers.set("Allow", decision.allow)
   response.headers.set("X-Robots-Tag", "noindex, nofollow")
-  return hardenTenantResponse(response, {
-    denyFraming: !apiRequest,
-    noReferrer: true,
-  })
+  return applyRolledBackParentCookieDeletions(
+    request,
+    hardenTenantResponse(response, {
+      denyFraming: !apiRequest,
+      noReferrer: true,
+    }),
+  )
 }
 
-function canonicalAuthRedirect(request: NextRequest): NextResponse {
+async function canonicalAuthRedirect(
+  request: NextRequest,
+): Promise<NextResponse> {
   const origin = resolveCanonicalPrimaryOrigin()
   if (origin === null) {
     return deniedTenantResponse(request, {
@@ -130,10 +139,13 @@ function canonicalAuthRedirect(request: NextRequest): NextResponse {
   const destination = new URL("/auth/callback", origin)
   destination.search = request.nextUrl.search
   const response = NextResponse.redirect(destination, 307)
-  return hardenTenantResponse(response, {
-    denyFraming: true,
-    noReferrer: true,
-  })
+  return applyRolledBackParentCookieDeletions(
+    request,
+    hardenTenantResponse(response, {
+      denyFraming: true,
+      noReferrer: true,
+    }),
+  )
 }
 
 function tenantVaryValues(
@@ -155,11 +167,14 @@ export async function middleware(request: NextRequest) {
     destination.hostname = "creatorshare.com"
     destination.port = ""
     const response = NextResponse.redirect(destination, 308)
-    return hardenTenantResponse(response, {
-      denyFraming: true,
-      noReferrer: true,
-      vary: ["Host"],
-    })
+    return applyRolledBackParentCookieDeletions(
+      request,
+      hardenTenantResponse(response, {
+        denyFraming: true,
+        noReferrer: true,
+        vary: ["Host"],
+      }),
+    )
   }
 
   const decision = resolveTenantRoutePolicy({
@@ -194,21 +209,24 @@ export async function middleware(request: NextRequest) {
         const destination = request.nextUrl.clone()
         destination.pathname = "/"
         destination.hash = ""
-        return hardenTenantResponse(NextResponse.redirect(destination, 308), {
-          denyFraming: true,
-          noReferrer: true,
-          vary: ["Host"],
-        })
+        return applyRolledBackParentCookieDeletions(
+          request,
+          hardenTenantResponse(NextResponse.redirect(destination, 308), {
+            denyFraming: true,
+            noReferrer: true,
+            vary: ["Host"],
+          }),
+        )
       }
       const response = decision.neutralPaymentShell
-        ? bypassSession(request, TENANT_PAYMENT_SHELL)
+        ? await bypassSession(request, TENANT_PAYMENT_SHELL)
         : decision.visitorSession
           ? await updateSponsorshipVisitor(request, {
               requestHeaderOverrides: {
                 [INTERNAL_ROUTE_SHELL_HEADER]: null,
               },
             })
-          : bypassSession(request)
+          : await bypassSession(request)
 
       return hardenTenantResponse(response, {
         denyFraming: TENANT_DOCUMENT_ROUTE_IDS.has(decision.routeId),

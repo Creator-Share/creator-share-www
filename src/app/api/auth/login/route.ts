@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server"
 
 import {
-  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  advocateAttributionIdentityCookieSetHeaders,
   createAdvocateAttributionIdentityCookieValue,
-  getAdvocateAttributionIdentityCookieOptions,
 } from "@/lib/advocates/attributionIdentityCookie"
 import { createClient } from "@/utils/supabase/server"
 
@@ -55,18 +54,20 @@ export async function POST(request: Request) {
       { message: "Login successful.", redirect: "/" },
       { status: 200 },
     )
-    const identitySignal = createAdvocateAttributionIdentityCookieValue({
-      authUserId: userId,
-    })
+    const identitySignal = createAdvocateAttributionIdentityCookieValue(
+      {
+        authUserId: userId,
+      },
+      { rawHost: request.headers.get("host") },
+    )
     if (identitySignal) {
-      response.cookies.set(
-        ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+      for (const header of advocateAttributionIdentityCookieSetHeaders(
         identitySignal,
-        getAdvocateAttributionIdentityCookieOptions(
-          request.headers.get("host"),
-          new URL(request.url).protocol === "https:",
-        ),
-      )
+        request.headers.get("host"),
+        new URL(request.url).protocol === "https:",
+      )) {
+        response.headers.append("Set-Cookie", header)
+      }
     }
     return response
   } catch (error) {

@@ -7,7 +7,7 @@ export * from "./visitorCookieToken"
 import type { VerifiedSponsorshipVisitorToken } from "./visitorCookieToken"
 
 const VISITOR_TOKEN_BYTES = 32
-const VISITOR_TOKEN_PATTERN = /^v1\.([A-Za-z0-9_-]{43})\.[A-Za-z0-9_-]{22}$/
+const VISITOR_TOKEN_PATTERN = /^v2\.([A-Za-z0-9_-]{43})\.[A-Za-z0-9_-]{22}$/
 
 function sponsorshipVisitorIdFromToken(
   value: VerifiedSponsorshipVisitorToken,

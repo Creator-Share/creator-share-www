@@ -33,31 +33,71 @@ const visitorCookie = testRequire(
 nodeModule._load = originalModuleLoad
 
 const {
-  createSponsorshipVisitorToken,
+  createSponsorshipVisitorToken: createScopedSponsorshipVisitorToken,
   getSponsorshipVisitorCookieOptions,
   isStructurallyValidSponsorshipVisitorToken,
-  readSponsorshipVisitorCookie,
-  resolveSponsorshipVisitorCookie,
+  readSponsorshipVisitorCookie: readScopedSponsorshipVisitorCookie,
+  resolveSponsorshipVisitorCookie: resolveScopedSponsorshipVisitorCookie,
   SPONSORSHIP_VISITOR_COOKIE_MAX_AGE_SECONDS,
   SPONSORSHIP_VISITOR_COOKIE_NAME,
-  verifySponsorshipVisitorToken,
+  verifySponsorshipVisitorToken: verifyScopedSponsorshipVisitorToken,
 } = visitorCookie
 
 const TEST_ENVIRONMENT = Object.freeze({ NODE_ENV: "test" })
+const TEST_REQUEST_CONTEXT = Object.freeze({ rawHost: "creatorshare.com" })
+
+function createSponsorshipVisitorToken(
+  environment: Readonly<Record<string, string | undefined>> = TEST_ENVIRONMENT,
+) {
+  return createScopedSponsorshipVisitorToken(TEST_REQUEST_CONTEXT, environment)
+}
+
+function verifySponsorshipVisitorToken(
+  value: string | null | undefined,
+  environment: Readonly<Record<string, string | undefined>> = TEST_ENVIRONMENT,
+) {
+  return verifyScopedSponsorshipVisitorToken(
+    value,
+    TEST_REQUEST_CONTEXT,
+    environment,
+  )
+}
+
+function readSponsorshipVisitorCookie(
+  cookieHeader: string | null,
+  environment: Readonly<Record<string, string | undefined>> = TEST_ENVIRONMENT,
+) {
+  return readScopedSponsorshipVisitorCookie(
+    cookieHeader,
+    TEST_REQUEST_CONTEXT,
+    environment,
+  )
+}
+
+function resolveSponsorshipVisitorCookie(
+  cookieHeader: string | null,
+  environment: Readonly<Record<string, string | undefined>> = TEST_ENVIRONMENT,
+) {
+  return resolveScopedSponsorshipVisitorCookie(
+    cookieHeader,
+    TEST_REQUEST_CONTEXT,
+    environment,
+  )
+}
 
 test("creates independent authenticated 256 bit visitor identifiers", async () => {
   const first = await createSponsorshipVisitorToken(TEST_ENVIRONMENT)
   const second = await createSponsorshipVisitorToken(TEST_ENVIRONMENT)
 
-  expect(first).toMatch(/^v1\.[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{22}$/)
-  expect(second).toMatch(/^v1\.[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{22}$/)
+  expect(first).toMatch(/^v2\.[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{22}$/)
+  expect(second).toMatch(/^v2\.[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{22}$/)
   expect(second).not.toBe(first)
   expect(await verifySponsorshipVisitorToken(first, TEST_ENVIRONMENT)).toBe(
     true,
   )
 })
 
-test("accepts only the exact version one token encoding", async () => {
+test("accepts only the exact version two token encoding", async () => {
   const token = await createSponsorshipVisitorToken(TEST_ENVIRONMENT)
 
   expect(isStructurallyValidSponsorshipVisitorToken(token)).toBe(true)
@@ -70,12 +110,12 @@ test("accepts only the exact version one token encoding", async () => {
     isStructurallyValidSponsorshipVisitorToken(
       `v1.${"a".repeat(43)}.${"a".repeat(22)}`,
     ),
-  ).toBe(true)
+  ).toBe(false)
   expect(
     isStructurallyValidSponsorshipVisitorToken(
       `v2.${"a".repeat(43)}.${"a".repeat(22)}`,
     ),
-  ).toBe(false)
+  ).toBe(true)
   expect(isStructurallyValidSponsorshipVisitorToken(null)).toBe(false)
 })
 
@@ -144,7 +184,7 @@ test("rejects forged tags, missing production keys, and duplicate cookies", asyn
   })
 })
 
-test("verifies tokens produced by the original Node cryptography algorithm", async () => {
+test("verifies scoped tokens produced by the documented Node cryptography algorithm", async () => {
   const secret = Buffer.alloc(32, 21)
   const visitorId = Buffer.alloc(32, 7).toString("base64url")
   const key = Buffer.from(
@@ -152,17 +192,19 @@ test("verifies tokens produced by the original Node cryptography algorithm", asy
       "sha256",
       secret,
       Buffer.from("creator-share/sponsorship/key-derivation/v1"),
-      Buffer.from("creator-share/sponsorship/visitor-cookie-hmac-key/v1"),
+      Buffer.from(
+        "creator-share/sponsorship/visitor-cookie-hmac-key/v2\0host:creatorshare.com",
+      ),
       32,
     ),
   )
   const tag = createHmac("sha256", key)
-    .update(Buffer.from("creator-share/sponsorship/visitor-cookie/v1\0"))
+    .update(Buffer.from("creator-share/sponsorship/visitor-cookie/v2\0"))
     .update(visitorId, "utf8")
     .digest()
     .subarray(0, 16)
     .toString("base64url")
-  const token = `v1.${visitorId}.${tag}`
+  const token = `v2.${visitorId}.${tag}`
 
   await expect(
     verifySponsorshipVisitorToken(token, {
@@ -172,19 +214,51 @@ test("verifies tokens produced by the original Node cryptography algorithm", asy
   ).resolves.toBe(true)
 })
 
-test("shares the cookie across the Creator Share domain family", () => {
-  const root = getSponsorshipVisitorCookieOptions("creatorshare.com", true)
+test("normalizes equivalent hosts and rejects a host-scoped token on a sibling", async () => {
+  const environment = {
+    NODE_ENV: "production",
+    SPONSORSHIP_VISITOR_COOKIE_SECRET_V1: Buffer.alloc(32, 22).toString(
+      "base64",
+    ),
+  }
+  const token = await createScopedSponsorshipVisitorToken(
+    { rawHost: "Hope.CreatorShare.com.:443" },
+    environment,
+  )
+  expect(token).not.toBeNull()
+  await expect(
+    verifyScopedSponsorshipVisitorToken(
+      token,
+      { rawHost: "hope.creatorshare.com" },
+      environment,
+    ),
+  ).resolves.toBe(true)
+  await expect(
+    verifyScopedSponsorshipVisitorToken(
+      token,
+      { rawHost: "another.creatorshare.com" },
+      environment,
+    ),
+  ).resolves.toBe(false)
+})
+
+test("keeps the Creator Share domain family host only until review approval", () => {
+  const root = getSponsorshipVisitorCookieOptions("creatorshare.com", true, {
+    NODE_ENV: "production",
+  })
   const advocate = getSponsorshipVisitorCookieOptions(
     "hope.creatorshare.com",
     true,
+    { NODE_ENV: "production" },
   )
   const reserved = getSponsorshipVisitorCookieOptions(
     "www.creatorshare.com",
     true,
+    { NODE_ENV: "production" },
   )
 
   for (const options of [root, advocate, reserved]) {
-    expect(options.domain).toBe(".creatorshare.com")
+    expect(options.domain).toBeUndefined()
     expect(options.httpOnly).toBe(true)
     expect(options.sameSite).toBe("lax")
     expect(options.secure).toBe(true)

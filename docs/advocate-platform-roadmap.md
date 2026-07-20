@@ -519,11 +519,15 @@ Aggregate SQL is straightforward. Preventing small cohort, complement, export, a
 
 ### Medium to high: auth across subdomains
 
-The experience must handle cookies, magic links, OTP entry, return URLs, CSRF, origin validation, session refresh, and mobile email clients across primary and advocate hosts. The plan must not promise cross device attribution for anonymous visits that cannot technically be joined.
+Authentication remains canonical on the apex origin. Advocate hosts must not receive an apex authentication credential merely to support attribution. Magic links, OTP entry, return URLs, CSRF, origin validation, session refresh, and mobile email clients still require exact host and origin handling. The plan must not promise cross device attribution for anonymous visits that cannot technically be joined.
 
-### Medium to high: cross-subdomain attribution token
+### Medium to high: apex attribution broker
 
-Post visit attribution requires one pseudonymous token to survive an advocate visit and a later primary site checkout. The token must be authenticated, normalized against cookie tossing, hashed identically at exposure and checkout, and handled without blocking payment if analytics cryptography fails. Its parent domain scope also sends it to every Creator Share sibling host, so production release requires a complete DNS and hosting trust inventory. A dedicated signing key keeps middleware separate from payment and contact encryption.
+The recommended activation architecture is an apex-origin attribution broker. Advocate visits use a narrowly scoped request to `creatorshare.com` so the broker can record the eligible post-visit signal against an apex-only pseudonymous visitor token. A later primary-site checkout can use that apex token without exposing it to every sibling host. Stripe and PayPal checkout APIs remain same-origin on each tenant host. Direct attribution is derived on the server from the exact checkout Host and does not require the exposure visitor digest to match. This avoids moving payment APIs behind CORS for the MVP.
+
+The production-shaped HTTPS feasibility gate passed in Chrome and WebKit. The first exact managed-origin request set a `Secure`, `HttpOnly`, `SameSite=Lax`, host-only apex cookie. The second request sent it. Tenant JavaScript could not read it, and an untrusted sibling was rejected. The gate also proved exact managed `Origin` handling plus same-site CORS and Fetch Metadata enforcement. Implementation still requires the durable broker protocol, CSRF and replay boundaries, nonblocking failure behavior, privacy-safe retention, mobile production canaries, and end-to-end attribution settlement tests.
+
+The repository retains v2 visitor and attribution identity token mechanics with HKDF keys bound to either `parent` or one canonical `host:<hostname>` scope. Production currently permits only host scope. Parent-domain activation is intentionally unavailable, even with an approved static policy digest. A static digest cannot detect later DNS, Vercel attachment, or managed-domain drift. Shared parent cookies also reach a sibling before application code can observe drift and return a deletion response. Parent-cookie activation is therefore not the intended MVP path and requires a separate future architecture decision plus a trusted live collector, fresh complete provider evidence, continuous drift response, and an explicitly accepted exposure window.
 
 ### Medium: constrained branding
 
@@ -548,9 +552,10 @@ No advocate tenant may publish until all of the following are true:
 - Provisioning, TLS, HTTP tenant, and checkout canaries pass.
 - A random sibling proves exact DNS absence, while the separately resolved and pinned `publication-sentinel.creatorshare.com` proves automated provider readiness, normal TLS, hostname verification, and the byte-identical neutral 404.
 - A Creator Share super administrator promotes the expected advocate version and exact primary domain through the audited publication function using the protected canary report digest.
-- The dedicated visitor signing secret passes a production canary and differs from every payment or contact encryption key.
+- The dedicated visitor signing secret passes a production host-scope canary, rejects the same token on a sibling host, and differs from every payment or contact encryption key.
 - The production build proves Edge middleware selection. A Vercel canary accepts one exact provisioned tenant hostname and rejects an unprovisioned sibling hostname.
-- Every Creator Share sibling hostname has an approved DNS, hosting, and cookie trust inventory entry.
+- Parent-domain cookie activation remains unavailable. The committed cookie trust policy stays pending, and release preflight reports the absent trusted collector and absent fresh provider evidence as separate fixed checks. The strict offline inventory evaluator remains review tooling, not runtime authority.
+- The apex attribution broker retains the passed Chrome and WebKit production-shaped feasibility evidence, then passes its implementation, mobile production, security, and settlement canaries before post-visit attribution is enabled across hosts.
 - Advocate roles cannot read sponsor contact or raw tracking data.
 - Audit redaction and append only protections pass adversarial tests.
 - Creator Share ownership and lifecycle controls prove staff reauthorization, optimistic state fencing, required reasons, exact replay, append-only receipts, and transaction-bound mutation guards.

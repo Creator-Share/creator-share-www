@@ -1,4 +1,8 @@
-import { ADVOCATE_TENANT_ROOT, resolveAdvocateHost } from "@/lib/advocates/host"
+import {
+  resolveCrossSubdomainCookieScope,
+  type CrossSubdomainCookieLocalTestOptions,
+  type CrossSubdomainCookieTrustEnvironment,
+} from "@/lib/advocates/crossSubdomainAttributionGate"
 import { hkdf } from "@noble/hashes/hkdf"
 import { hmac } from "@noble/hashes/hmac"
 import { sha256 } from "@noble/hashes/sha256"
@@ -11,18 +15,17 @@ const VISITOR_AUTH_TAG_BYTES = 16
 const MAXIMUM_COOKIE_HEADER_BYTES = 32_768
 const MAXIMUM_VISITOR_COOKIE_CANDIDATES = 8
 const CRYPTO_ALERT_INTERVAL_MILLISECONDS = 60_000
-const VISITOR_TOKEN_PATTERN = /^v1\.([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{22})$/
+const VISITOR_TOKEN_PATTERN = /^v2\.([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{22})$/
 const CANONICAL_BASE64_PATTERN =
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 const TEXT_ENCODER = new TextEncoder()
 const KEY_DERIVATION_SALT = TEXT_ENCODER.encode(
   "creator-share/sponsorship/key-derivation/v1",
 )
-const VISITOR_COOKIE_KEY_INFO = TEXT_ENCODER.encode(
-  "creator-share/sponsorship/visitor-cookie-hmac-key/v1",
-)
+const VISITOR_COOKIE_KEY_INFO_PREFIX =
+  "creator-share/sponsorship/visitor-cookie-hmac-key/v2"
 const VISITOR_COOKIE_CONTEXT = TEXT_ENCODER.encode(
-  "creator-share/sponsorship/visitor-cookie/v1\0",
+  "creator-share/sponsorship/visitor-cookie/v2\0",
 )
 const LOCAL_DEVELOPMENT_SECRET = TEXT_ENCODER.encode(
   "creator-share-local-visitor-cookie-secret-v1",
@@ -48,6 +51,19 @@ export interface SponsorshipVisitorCookieOptions {
   path: "/"
   sameSite: "lax"
   secure: boolean
+}
+
+export interface SponsorshipVisitorCookieScopePlan {
+  options: SponsorshipVisitorCookieOptions
+  creatorShareHost: boolean
+  deleteHostOnlyBeforeWrite: boolean
+  deleteParentDomainBeforeWrite: boolean
+}
+
+export interface SponsorshipVisitorCookieRequestContext {
+  rawHost: string | null
+  cookieTrustPolicy?: unknown
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions
 }
 
 export interface SponsorshipVisitorCookieResolution {
@@ -129,10 +145,14 @@ function appSecret(
 
 function visitorCookieHmacKey(
   environment: SponsorshipVisitorCookieEnvironment,
+  cryptographicScope: string,
 ): Uint8Array | null {
   const secret = appSecret(environment)
   if (secret === null) return null
-  return hkdf(sha256, secret, KEY_DERIVATION_SALT, VISITOR_COOKIE_KEY_INFO, 32)
+  const scopeInfo = TEXT_ENCODER.encode(
+    `${VISITOR_COOKIE_KEY_INFO_PREFIX}\0${cryptographicScope}`,
+  )
+  return hkdf(sha256, secret, KEY_DERIVATION_SALT, scopeInfo, 32)
 }
 
 function visitorAuthenticationMessage(visitorId: string): Uint8Array {
@@ -148,8 +168,9 @@ function visitorAuthenticationMessage(visitorId: string): Uint8Array {
 function visitorAuthenticationTag(
   visitorId: string,
   environment: SponsorshipVisitorCookieEnvironment,
+  cryptographicScope: string,
 ): string | null {
-  const key = visitorCookieHmacKey(environment)
+  const key = visitorCookieHmacKey(environment, cryptographicScope)
   if (key === null) return null
   const signature = hmac(sha256, key, visitorAuthenticationMessage(visitorId))
   return encodeBase64Url(signature.slice(0, VISITOR_AUTH_TAG_BYTES))
@@ -165,21 +186,30 @@ function constantTimeTextEqual(left: string, right: string): boolean {
 }
 
 export async function createSponsorshipVisitorToken(
+  context: SponsorshipVisitorCookieRequestContext,
   environment: SponsorshipVisitorCookieEnvironment = process.env,
 ): Promise<VerifiedSponsorshipVisitorToken | null> {
   try {
+    const cryptographicScope = resolveCrossSubdomainCookieScope(
+      context.rawHost,
+      environment,
+      context.cookieTrustPolicy,
+      context.localTestOptions,
+    ).cryptographicScope
+    if (cryptographicScope === null) return null
     const visitorIdBytes = new Uint8Array(VISITOR_TOKEN_BYTES)
     crypto.getRandomValues(visitorIdBytes)
     const visitorId = encodeBase64Url(visitorIdBytes)
     const authenticationTag = await visitorAuthenticationTag(
       visitorId,
       environment,
+      cryptographicScope,
     )
     if (authenticationTag === null) {
       reportVisitorCryptoFailure("create", null)
       return null
     }
-    return `v1.${visitorId}.${authenticationTag}` as VerifiedSponsorshipVisitorToken
+    return `v2.${visitorId}.${authenticationTag}` as VerifiedSponsorshipVisitorToken
   } catch (error) {
     reportVisitorCryptoFailure("create", error)
     return null
@@ -194,13 +224,25 @@ export function isStructurallyValidSponsorshipVisitorToken(
 
 async function authenticateSponsorshipVisitorToken(
   value: string | null | undefined,
+  context: SponsorshipVisitorCookieRequestContext,
   environment: SponsorshipVisitorCookieEnvironment = process.env,
 ): Promise<VerifiedSponsorshipVisitorToken | null> {
   if (typeof value !== "string") return null
   const match = VISITOR_TOKEN_PATTERN.exec(value)
   if (!match) return null
   try {
-    const expectedTag = await visitorAuthenticationTag(match[1], environment)
+    const cryptographicScope = resolveCrossSubdomainCookieScope(
+      context.rawHost,
+      environment,
+      context.cookieTrustPolicy,
+      context.localTestOptions,
+    ).cryptographicScope
+    if (cryptographicScope === null) return null
+    const expectedTag = await visitorAuthenticationTag(
+      match[1],
+      environment,
+      cryptographicScope,
+    )
     if (expectedTag === null) {
       reportVisitorCryptoFailure("verify", null)
       return null
@@ -216,10 +258,12 @@ async function authenticateSponsorshipVisitorToken(
 
 export async function verifySponsorshipVisitorToken(
   value: string | null | undefined,
+  context: SponsorshipVisitorCookieRequestContext,
   environment: SponsorshipVisitorCookieEnvironment = process.env,
 ): Promise<boolean> {
   return (
-    (await authenticateSponsorshipVisitorToken(value, environment)) !== null
+    (await authenticateSponsorshipVisitorToken(value, context, environment)) !==
+    null
   )
 }
 
@@ -243,6 +287,7 @@ function visitorCookieCandidates(cookieHeader: string | null): string[] {
 
 export async function resolveSponsorshipVisitorCookie(
   cookieHeader: string | null,
+  context: SponsorshipVisitorCookieRequestContext,
   environment: SponsorshipVisitorCookieEnvironment = process.env,
 ): Promise<SponsorshipVisitorCookieResolution> {
   const values = visitorCookieCandidates(cookieHeader)
@@ -255,7 +300,11 @@ export async function resolveSponsorshipVisitorCookie(
 
   const authenticatedTokens = new Map<string, VerifiedSponsorshipVisitorToken>()
   for (const value of new Set(values)) {
-    const token = await authenticateSponsorshipVisitorToken(value, environment)
+    const token = await authenticateSponsorshipVisitorToken(
+      value,
+      context,
+      environment,
+    )
     if (token !== null) authenticatedTokens.set(token, token)
   }
 
@@ -271,39 +320,170 @@ export async function resolveSponsorshipVisitorCookie(
 
 export async function readSponsorshipVisitorCookie(
   cookieHeader: string | null,
+  context: SponsorshipVisitorCookieRequestContext,
   environment: SponsorshipVisitorCookieEnvironment = process.env,
 ): Promise<VerifiedSponsorshipVisitorToken | null> {
-  return (await resolveSponsorshipVisitorCookie(cookieHeader, environment))
-    .token
+  return (
+    await resolveSponsorshipVisitorCookie(cookieHeader, context, environment)
+  ).token
 }
 
-function getNormalizedHostname(rawHost: string | null): string | null {
-  const resolution = resolveAdvocateHost(rawHost, {
-    allowLocalhostDevelopment: true,
+export function getSponsorshipVisitorCookieScopePlan(
+  rawHost: string | null,
+  requestIsSecure: boolean,
+  environment: SponsorshipVisitorCookieEnvironment = process.env,
+  cookieTrustPolicy?: unknown,
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions,
+): SponsorshipVisitorCookieScopePlan {
+  const scope = resolveCrossSubdomainCookieScope(
+    rawHost,
+    environment as CrossSubdomainCookieTrustEnvironment,
+    cookieTrustPolicy,
+    localTestOptions,
+  )
+  return Object.freeze({
+    options: Object.freeze({
+      ...(scope.domain === undefined ? {} : { domain: scope.domain }),
+      httpOnly: true as const,
+      maxAge: SPONSORSHIP_VISITOR_COOKIE_MAX_AGE_SECONDS,
+      path: "/" as const,
+      sameSite: "lax" as const,
+      secure: scope.creatorShareHost || requestIsSecure,
+    }),
+    creatorShareHost: scope.creatorShareHost,
+    deleteHostOnlyBeforeWrite: scope.deleteHostOnlyBeforeWrite,
+    deleteParentDomainBeforeWrite: scope.deleteParentDomainBeforeWrite,
   })
-
-  if (resolution.kind === "invalid") return null
-  if (resolution.kind === "tenant-candidate") {
-    return resolution.requestHostname
-  }
-  return resolution.normalizedHostname
 }
 
 export function getSponsorshipVisitorCookieOptions(
   rawHost: string | null,
   requestIsSecure: boolean,
+  environment: SponsorshipVisitorCookieEnvironment = process.env,
+  cookieTrustPolicy?: unknown,
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions,
 ): SponsorshipVisitorCookieOptions {
-  const hostname = getNormalizedHostname(rawHost)
-  const isCreatorShareDomain =
-    hostname === ADVOCATE_TENANT_ROOT ||
-    hostname?.endsWith(`.${ADVOCATE_TENANT_ROOT}`) === true
+  return getSponsorshipVisitorCookieScopePlan(
+    rawHost,
+    requestIsSecure,
+    environment,
+    cookieTrustPolicy,
+    localTestOptions,
+  ).options
+}
 
-  return {
-    ...(isCreatorShareDomain ? { domain: `.${ADVOCATE_TENANT_ROOT}` } : {}),
-    httpOnly: true,
-    maxAge: SPONSORSHIP_VISITOR_COOKIE_MAX_AGE_SECONDS,
-    path: "/",
-    sameSite: "lax",
-    secure: isCreatorShareDomain || requestIsSecure,
+function serializeVisitorCookie(
+  value: string,
+  options: SponsorshipVisitorCookieOptions,
+): string {
+  return [
+    `${SPONSORSHIP_VISITOR_COOKIE_NAME}=${value}`,
+    options.domain === undefined ? null : `Domain=${options.domain}`,
+    `Max-Age=${options.maxAge}`,
+    "Path=/",
+    options.secure ? "Secure" : null,
+    "HttpOnly",
+    "SameSite=lax",
+  ]
+    .filter((part): part is string => part !== null)
+    .join("; ")
+}
+
+function serializeVisitorCookieDeletion(
+  domain: ".creatorshare.com" | undefined,
+  secure: boolean,
+): string {
+  return [
+    `${SPONSORSHIP_VISITOR_COOKIE_NAME}=`,
+    domain === undefined ? null : `Domain=${domain}`,
+    "Path=/",
+    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "Max-Age=0",
+    secure ? "Secure" : null,
+    "HttpOnly",
+    "SameSite=lax",
+  ]
+    .filter((part): part is string => part !== null)
+    .join("; ")
+}
+
+export function sponsorshipVisitorCookieSetHeaders(
+  value: VerifiedSponsorshipVisitorToken,
+  rawHost: string | null,
+  requestIsSecure: boolean,
+  environment: SponsorshipVisitorCookieEnvironment = process.env,
+  cookieTrustPolicy?: unknown,
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions,
+): readonly string[] {
+  const plan = getSponsorshipVisitorCookieScopePlan(
+    rawHost,
+    requestIsSecure,
+    environment,
+    cookieTrustPolicy,
+    localTestOptions,
+  )
+  const headers: string[] = []
+  if (plan.deleteParentDomainBeforeWrite) {
+    headers.push(serializeVisitorCookieDeletion(".creatorshare.com", true))
   }
+  if (plan.deleteHostOnlyBeforeWrite) {
+    headers.push(serializeVisitorCookieDeletion(undefined, plan.options.secure))
+  }
+  headers.push(serializeVisitorCookie(value, plan.options))
+  return Object.freeze(headers)
+}
+
+/**
+ * Deletes an obsolete parent-domain visitor cookie without minting a durable
+ * replacement on routes that intentionally bypass visitor creation.
+ */
+export async function sponsorshipVisitorCookieRollbackHeaders(
+  cookieHeader: string | null,
+  rawHost: string | null,
+  requestIsSecure: boolean,
+  environment: SponsorshipVisitorCookieEnvironment = process.env,
+  cookieTrustPolicy?: unknown,
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions,
+): Promise<readonly string[]> {
+  if (visitorCookieCandidates(cookieHeader).length === 0) {
+    return Object.freeze([])
+  }
+  const plan = getSponsorshipVisitorCookieScopePlan(
+    rawHost,
+    requestIsSecure,
+    environment,
+    cookieTrustPolicy,
+    localTestOptions,
+  )
+  if (!plan.creatorShareHost || !plan.deleteParentDomainBeforeWrite) {
+    return Object.freeze([])
+  }
+
+  const parentDeletion = serializeVisitorCookieDeletion(
+    ".creatorshare.com",
+    true,
+  )
+  const scope = resolveCrossSubdomainCookieScope(
+    rawHost,
+    environment,
+    cookieTrustPolicy,
+    localTestOptions,
+  )
+  if (scope.cryptographicScope !== "host:creatorshare.com") {
+    return Object.freeze([parentDeletion])
+  }
+
+  const resolution = await resolveSponsorshipVisitorCookie(
+    cookieHeader,
+    { rawHost, cookieTrustPolicy, localTestOptions },
+    environment,
+  )
+  if (resolution.token !== null && !resolution.requiresNormalization) {
+    return Object.freeze([])
+  }
+  if (resolution.token === null) return Object.freeze([parentDeletion])
+  return Object.freeze([
+    parentDeletion,
+    serializeVisitorCookie(resolution.token, plan.options),
+  ])
 }

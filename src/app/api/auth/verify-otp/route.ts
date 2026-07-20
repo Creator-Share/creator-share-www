@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import {
-  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  advocateAttributionIdentityCookieSetHeaders,
   createAdvocateAttributionIdentityCookieValue,
-  getAdvocateAttributionIdentityCookieOptions,
 } from "@/lib/advocates/attributionIdentityCookie"
 import {
   isTrustedCheckoutJsonRequest,
@@ -150,18 +149,20 @@ export async function POST(request: NextRequest) {
     )
     const authUserId = data.user?.id
     if (authUserId) {
-      const identitySignal = createAdvocateAttributionIdentityCookieValue({
-        authUserId,
-      })
+      const identitySignal = createAdvocateAttributionIdentityCookieValue(
+        {
+          authUserId,
+        },
+        { rawHost: request.headers.get("host") },
+      )
       if (identitySignal) {
-        verificationResponse.cookies.set(
-          ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+        for (const header of advocateAttributionIdentityCookieSetHeaders(
           identitySignal,
-          getAdvocateAttributionIdentityCookieOptions(
-            request.headers.get("host"),
-            request.nextUrl.protocol === "https:",
-          ),
-        )
+          request.headers.get("host"),
+          request.nextUrl.protocol === "https:",
+        )) {
+          verificationResponse.headers.append("Set-Cookie", header)
+        }
       }
     }
     return verificationResponse

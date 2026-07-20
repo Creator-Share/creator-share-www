@@ -4,6 +4,7 @@ import { resolve } from "node:path"
 
 import { expect, test } from "@playwright/test"
 import { NextRequest } from "next/server"
+import { CookieJar } from "tough-cookie"
 
 import {
   INTERNAL_ROUTE_SHELL_HEADER,
@@ -12,6 +13,8 @@ import {
 
 type MiddlewareModule = typeof import("@/middleware")
 type VisitorCookieModule = typeof import("@/lib/sponsorships/visitorCookie")
+type IdentityCookieModule =
+  typeof import("@/lib/advocates/attributionIdentityCookie")
 type NodeModuleLoader = (
   request: string,
   parent: unknown,
@@ -34,13 +37,30 @@ const testRequire = createRequire(
 )
 const { middleware } = testRequire("../../src/middleware") as MiddlewareModule
 const {
-  createSponsorshipVisitorToken,
+  createSponsorshipVisitorToken: createScopedSponsorshipVisitorToken,
   SPONSORSHIP_VISITOR_COOKIE_NAME,
-  verifySponsorshipVisitorToken,
+  verifySponsorshipVisitorToken: verifyScopedSponsorshipVisitorToken,
 } = testRequire(
   "../../src/lib/sponsorships/visitorCookie",
 ) as VisitorCookieModule
+const {
+  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  createAdvocateAttributionIdentityCookieValue,
+} = testRequire(
+  "../../src/lib/advocates/attributionIdentityCookie",
+) as IdentityCookieModule
 nodeModule._load = originalModuleLoad
+
+function createSponsorshipVisitorToken(rawHost = "hope.creatorshare.com") {
+  return createScopedSponsorshipVisitorToken({ rawHost })
+}
+
+function verifySponsorshipVisitorToken(
+  value: string | null | undefined,
+  rawHost = "hope.creatorshare.com",
+) {
+  return verifyScopedSponsorshipVisitorToken(value, { rawHost })
+}
 
 function request(
   pathname: string,
@@ -131,14 +151,26 @@ test.describe("advocate tenant middleware", () => {
     })
   })
 
-  test("issues only the shared visitor cookie for an allowed tenant browse page", async () => {
+  test("issues only a host scoped visitor cookie for an allowed tenant browse page", async () => {
     const response = await middleware(request("/"))
-    const cookie = response.headers.get("set-cookie")
+    const cookies = (
+      response.headers as Headers & { getSetCookie(): string[] }
+    ).getSetCookie()
+    const cookie = cookies.find((candidate) =>
+      candidate.includes(`${SPONSORSHIP_VISITOR_COOKIE_NAME}=v2.`),
+    )
+    const parentDeletion = cookies.find(
+      (candidate) =>
+        candidate.includes("Domain=.creatorshare.com") &&
+        candidate.includes("Max-Age=0"),
+    )
 
     expect(response.status).toBe(200)
     expect(response.headers.get("x-middleware-next")).toBe("1")
     expect(cookie).toContain(`${SPONSORSHIP_VISITOR_COOKIE_NAME}=`)
-    expect(cookie).toContain("Domain=.creatorshare.com")
+    expect(cookies).toHaveLength(2)
+    expect(parentDeletion).toBeTruthy()
+    expect(cookie).not.toContain("Domain=")
     expect(cookie).toContain("HttpOnly")
     expect(cookie).toContain("SameSite=lax")
     expect(response.headers.get("vary")).toBe("Host, Cookie")
@@ -181,15 +213,17 @@ test.describe("advocate tenant middleware", () => {
       const setCookies = (
         response.headers as Headers & { getSetCookie(): string[] }
       ).getSetCookie()
-      const sharedCookie = setCookies.find((cookie) =>
-        cookie.includes("Domain=.creatorshare.com"),
+      const issuedCookie = setCookies.find(
+        (cookie) =>
+          cookie.includes(`${SPONSORSHIP_VISITOR_COOKIE_NAME}=v2.`) &&
+          !cookie.includes("Max-Age=0"),
       )
-      const hostOnlyDeletion = setCookies.find(
+      const parentDeletion = setCookies.find(
         (cookie) =>
           cookie.startsWith(`${SPONSORSHIP_VISITOR_COOKIE_NAME}=;`) &&
-          !cookie.includes("Domain="),
+          cookie.includes("Domain=.creatorshare.com"),
       )
-      const issuedToken = sharedCookie?.match(
+      const issuedToken = issuedCookie?.match(
         new RegExp(`${SPONSORSHIP_VISITOR_COOKIE_NAME}=([^;]+)`),
       )?.[1]
       const forwardedCookie = response.headers.get(
@@ -207,7 +241,8 @@ test.describe("advocate tenant middleware", () => {
         expect(issuedToken).not.toBe(second)
       }
       expect(setCookies).toHaveLength(2)
-      expect(hostOnlyDeletion).toContain("Max-Age=0")
+      expect(parentDeletion).toContain("Max-Age=0")
+      expect(issuedCookie).not.toContain("Domain=")
       expect(forwardedCookie).toBe(
         `${SPONSORSHIP_VISITOR_COOKIE_NAME}=${issuedToken}`,
       )
@@ -215,7 +250,7 @@ test.describe("advocate tenant middleware", () => {
   })
 
   test("normalizes local duplicates without deleting the host scoped replacement", async () => {
-    const token = await createSponsorshipVisitorToken()
+    const token = await createSponsorshipVisitorToken("hope.localhost:3000")
     expect(token).not.toBeNull()
     const response = await middleware(
       request("/", {
@@ -244,12 +279,20 @@ test.describe("advocate tenant middleware", () => {
       request("/payments/success?provider=paypal", {
         headers: {
           [INTERNAL_ROUTE_SHELL_HEADER]: "attacker-controlled",
+          cookie: `${SPONSORSHIP_VISITOR_COOKIE_NAME}=stale-parent-token`,
         },
       }),
     )
 
     expect(response.status).toBe(200)
-    expect(response.headers.get("set-cookie")).toBeNull()
+    expect(response.headers.get("set-cookie")).toContain(
+      `${SPONSORSHIP_VISITOR_COOKIE_NAME}=`,
+    )
+    expect(response.headers.get("set-cookie")).toContain(
+      "Domain=.creatorshare.com",
+    )
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0")
+    expect(response.headers.get("set-cookie")).not.toContain("=v2.")
     expect(response.headers.get("x-middleware-next")).toBe("1")
     expect(
       response.headers.get(
@@ -281,7 +324,14 @@ test.describe("advocate tenant middleware", () => {
         headers: { cookie },
       }),
     )
-    expect(withCookie.headers.get("set-cookie")).toBeNull()
+    expect(withCookie.headers.get("set-cookie")).toContain(
+      `${SPONSORSHIP_VISITOR_COOKIE_NAME}=`,
+    )
+    expect(withCookie.headers.get("set-cookie")).toContain(
+      "Domain=.creatorshare.com",
+    )
+    expect(withCookie.headers.get("set-cookie")).toContain("Max-Age=0")
+    expect(withCookie.headers.get("set-cookie")).not.toContain("=v2.")
     expect(withCookie.headers.get("x-middleware-request-cookie")).toBe(cookie)
   })
 
@@ -465,6 +515,53 @@ test.describe("advocate tenant middleware", () => {
     )
     expect(tenantWebhook.status).toBe(404)
     expect(tenantWebhook.headers.get("set-cookie")).toBeNull()
+  })
+
+  test("preserves valid apex host-only cookies on a bypass response", async () => {
+    const url = "https://creatorshare.com/api/webhooks/stripe"
+    const visitorToken = await createSponsorshipVisitorToken("creatorshare.com")
+    const identityToken = createAdvocateAttributionIdentityCookieValue(
+      { authUserId: "97000000-0000-4000-8000-000000000001" },
+      { rawHost: "creatorshare.com" },
+    )
+    if (visitorToken === null || identityToken === null) {
+      throw new Error("Cookie setup failed")
+    }
+
+    const jar = new CookieJar()
+    await jar.setCookie(
+      `${SPONSORSHIP_VISITOR_COOKIE_NAME}=${visitorToken}; Path=/; Secure; HttpOnly; SameSite=Lax`,
+      url,
+    )
+    await jar.setCookie(
+      `${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=${identityToken}; Path=/; Secure; HttpOnly; SameSite=Lax`,
+      url,
+    )
+
+    const response = await middleware(
+      request("/api/webhooks/stripe", {
+        host: "creatorshare.com",
+        method: "POST",
+        headers: { cookie: await jar.getCookieString(url) },
+      }),
+    )
+    const responseCookies = (
+      response.headers as Headers & { getSetCookie(): string[] }
+    ).getSetCookie()
+    expect(responseCookies).toEqual([])
+    for (const cookie of responseCookies) await jar.setCookie(cookie, url)
+
+    const survivingCookies = await jar.getCookies(url)
+    expect(
+      survivingCookies.find(
+        (cookie) => cookie.key === SPONSORSHIP_VISITOR_COOKIE_NAME,
+      )?.value,
+    ).toBe(visitorToken)
+    expect(
+      survivingCookies.find(
+        (cookie) => cookie.key === ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+      )?.value,
+    ).toBe(identityToken)
   })
 
   test("bypasses generic session work for exact invitation secret routes", async () => {

@@ -97,12 +97,17 @@ test("forwards refreshed Supabase and visitor cookies to the same request", asyn
     ]),
   )
   expect(forwardedCookie).toContain("existing=value")
-  expect(forwardedCookie).toContain("cs_sponsorship_visitor_v1=v1.")
+  expect(forwardedCookie).toContain("cs_sponsorship_visitor_v1=v2.")
   expect(forwardedCookie).toContain("sb-test-auth-token=refreshed-session")
-  expect(setCookies).toHaveLength(2)
+  expect(setCookies).toHaveLength(3)
   expect(setCookies).toEqual(
     expect.arrayContaining([
-      expect.stringContaining("Domain=.creatorshare.com"),
+      expect.stringMatching(
+        /cs_sponsorship_visitor_v1=; Domain=\.creatorshare\.com;.*Max-Age=0/,
+      ),
+      expect.stringMatching(
+        /cs_sponsorship_visitor_v1=v2\.[^;]+;(?!.*Domain=)/,
+      ),
       expect.stringContaining("sb-test-auth-token=refreshed-session"),
     ]),
   )

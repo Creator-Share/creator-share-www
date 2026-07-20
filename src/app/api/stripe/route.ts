@@ -847,6 +847,7 @@ export async function POST(request: Request) {
         authenticatedUser: await authenticatedCheckoutUser(),
         visitorToken: await readSponsorshipVisitorCookie(
           request.headers.get("cookie"),
+          { rawHost: request.headers.get("host") },
         ),
         requestContext: context,
       },

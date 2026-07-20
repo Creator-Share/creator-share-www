@@ -6,6 +6,11 @@ import {
   loadAdvocateInvitationEmailWorkerConfig,
   loadAdvocateInvitationEmailWorkerSecret,
 } from "@/lib/advocates/invitations/emailConfig"
+import {
+  COOKIE_TRUST_POLICY_DIGEST_ENVIRONMENT_VARIABLE,
+  CROSS_SUBDOMAIN_COOKIE_MODE_ENVIRONMENT_VARIABLE,
+  evaluateCrossSubdomainCookieTrustGate,
+} from "@/lib/advocates/crossSubdomainAttributionGate"
 import { loadArchivedAdvocateDomainCleanupWorkerSecret } from "@/lib/advocates/lifecycleCleanup/auth"
 import { loadArchivedAdvocateDomainCleanupWorkerConfig } from "@/lib/advocates/lifecycleCleanup/config"
 import { loadAdvocateLogoReconciliationWorkerSecret } from "@/lib/advocates/logoReconciliation/auth"
@@ -50,6 +55,9 @@ export type AdvocateReleasePreflightEnvironment = Readonly<
 export const ADVOCATE_RELEASE_PREFLIGHT_CHECK_NAMES = Object.freeze([
   "deployment_identity",
   "provider_automation_gate",
+  "cross_subdomain_cookie_trust",
+  "cross_subdomain_cookie_trusted_collector",
+  "cross_subdomain_cookie_fresh_provider_evidence",
   "supabase_configuration",
   "worker_configuration",
   "email_configuration",
@@ -567,6 +575,28 @@ export function runAdvocateReleasePreflight(
           throw new Error("release_preflight_configuration_invalid")
         }
       },
+    }),
+    evaluateCheck({
+      environment,
+      name: "cross_subdomain_cookie_trust",
+      required: [
+        CROSS_SUBDOMAIN_COOKIE_MODE_ENVIRONMENT_VARIABLE,
+        COOKIE_TRUST_POLICY_DIGEST_ENVIRONMENT_VARIABLE,
+      ],
+      validate: () => {
+        const trustGate = evaluateCrossSubdomainCookieTrustGate(environment)
+        if (trustGate.state !== "active" || trustGate.reason !== "active") {
+          throw new Error("release_preflight_configuration_invalid")
+        }
+      },
+    }),
+    Object.freeze({
+      name: "cross_subdomain_cookie_trusted_collector",
+      state: "unverified",
+    }),
+    Object.freeze({
+      name: "cross_subdomain_cookie_fresh_provider_evidence",
+      state: "unverified",
     }),
     evaluateCheck({
       environment,

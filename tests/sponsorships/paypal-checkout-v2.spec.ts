@@ -88,7 +88,7 @@ const QUOTE_EXPIRES_AT = "2026-07-18T08:15:00.000Z"
 const REQUEST_EXPIRES_AT = "2026-07-18T08:31:00.000Z"
 const APP_SECRET = Buffer.alloc(48, 13).toString("base64")
 const VISITOR_TOKEN =
-  `v1.${Buffer.alloc(32, 8).toString("base64url")}.${"A".repeat(22)}` as VerifiedSponsorshipVisitorToken
+  `v2.${Buffer.alloc(32, 8).toString("base64url")}.${"A".repeat(22)}` as VerifiedSponsorshipVisitorToken
 
 const beneficiary: AuthoritativeBeneficiary = {
   id: BENEFICIARY_ID,

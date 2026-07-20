@@ -1,18 +1,22 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { AuthSessionMissingError } from "@supabase/supabase-js"
-import { ADVOCATE_TENANT_ROOT, resolveAdvocateHost } from "@/lib/advocates/host"
+import type { CrossSubdomainCookieLocalTestOptions } from "@/lib/advocates/crossSubdomainAttributionGate"
 import {
   ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  advocateAttributionIdentityCookieRollbackHeaders,
+  advocateAttributionIdentityCookieSetHeaders,
+  type AdvocateAttributionIdentityCookieEnvironment,
   createAdvocateAttributionIdentityCookieValue,
-  getAdvocateAttributionIdentityCookieOptions,
   resolveAdvocateAttributionIdentityCookie,
 } from "@/lib/advocates/attributionIdentityCookie"
 import {
   createSponsorshipVisitorToken,
-  getSponsorshipVisitorCookieOptions,
   resolveSponsorshipVisitorCookie,
   SPONSORSHIP_VISITOR_COOKIE_NAME,
+  sponsorshipVisitorCookieRollbackHeaders,
+  sponsorshipVisitorCookieSetHeaders,
+  type SponsorshipVisitorCookieEnvironment,
 } from "@/lib/sponsorships/visitorCookieToken"
 
 type ResponseCookieMutation = {
@@ -23,39 +27,19 @@ type ResponseCookieMutation = {
 
 type ResponseCookiePlan = {
   mutations: ResponseCookieMutation[]
-  hostOnlyDeletions: Array<{
-    name: string
-    secure: boolean
-  }>
+  orderedHeaders: string[]
 }
 
 export interface MiddlewareRequestForwardingOptions {
+  cookieEnvironment?: AdvocateAttributionIdentityCookieEnvironment &
+    SponsorshipVisitorCookieEnvironment
+  cookieTrustPolicy?: unknown
+  localTestCookieOptions?: CrossSubdomainCookieLocalTestOptions
   requestHeaderOverrides?: Readonly<Record<string, string | null>>
 }
 
 const AUTHENTICATED_PAGE_PREFIXES = Object.freeze(["/app", "/admin", "/portal"])
 const AUTHENTICATED_API_PREFIXES = Object.freeze(["/api/admin", "/api/portal"])
-
-function shouldDeleteHostOnlyCookie(
-  request: NextRequest,
-  sharedDomain: string | undefined,
-): boolean {
-  if (sharedDomain === undefined) return false
-
-  const host = resolveAdvocateHost(request.headers.get("host"), {
-    allowLocalhostDevelopment: true,
-  })
-  if (host.kind === "invalid") return false
-  const hostname =
-    host.kind === "tenant-candidate"
-      ? host.requestHostname
-      : host.normalizedHostname
-
-  // On the apex, host-only and Domain cookies have the same name, domain,
-  // and path tuple. The new shared cookie replaces the host-only cookie by
-  // itself. A later deletion header would delete the new cookie as well.
-  return hostname !== ADVOCATE_TENANT_ROOT
-}
 
 function matchesPathPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(`${prefix}/`)
@@ -101,56 +85,46 @@ function nextResponse(
 
 async function ensureSponsorshipVisitor(
   request: NextRequest,
+  environment: SponsorshipVisitorCookieEnvironment = process.env,
+  cookieTrustPolicy?: unknown,
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions,
 ): Promise<ResponseCookiePlan> {
   const plan: ResponseCookiePlan = {
     mutations: [],
-    hostOnlyDeletions: [],
+    orderedHeaders: [],
+  }
+  const requestContext = {
+    rawHost: request.headers.get("host"),
+    cookieTrustPolicy,
+    localTestOptions,
   }
   const resolution = await resolveSponsorshipVisitorCookie(
     request.headers.get("cookie"),
+    requestContext,
+    environment,
   )
   const visitorToken =
-    resolution.token ?? (await createSponsorshipVisitorToken())
+    resolution.token ??
+    (await createSponsorshipVisitorToken(requestContext, environment))
   if (visitorToken === null) return plan
 
   if (resolution.token === null || resolution.requiresNormalization) {
-    const options = getSponsorshipVisitorCookieOptions(
-      request.headers.get("host"),
-      request.nextUrl.protocol === "https:",
+    const rawHost = request.headers.get("host")
+    const requestIsSecure = request.nextUrl.protocol === "https:"
+    plan.orderedHeaders.push(
+      ...sponsorshipVisitorCookieSetHeaders(
+        visitorToken,
+        rawHost,
+        requestIsSecure,
+        environment,
+        cookieTrustPolicy,
+        localTestOptions,
+      ),
     )
-    const visitorCookie = {
-      name: SPONSORSHIP_VISITOR_COOKIE_NAME,
-      value: visitorToken,
-      options,
-    }
-    request.cookies.set(visitorCookie.name, visitorCookie.value)
-    plan.mutations.push(visitorCookie)
-    if (
-      resolution.requiresNormalization &&
-      shouldDeleteHostOnlyCookie(request, options.domain)
-    ) {
-      plan.hostOnlyDeletions.push({
-        name: SPONSORSHIP_VISITOR_COOKIE_NAME,
-        secure: options.secure,
-      })
-    }
+    request.cookies.set(SPONSORSHIP_VISITOR_COOKIE_NAME, visitorToken)
   }
 
   return plan
-}
-
-function hostOnlyDeletionCookie(name: string, secure: boolean): string {
-  return [
-    `${name}=`,
-    "Path=/",
-    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
-    "Max-Age=0",
-    secure ? "Secure" : null,
-    "HttpOnly",
-    "SameSite=Lax",
-  ]
-    .filter(Boolean)
-    .join("; ")
 }
 
 function applyResponseCookies(
@@ -160,11 +134,8 @@ function applyResponseCookies(
   plan.mutations.forEach(({ name, value, options }) =>
     response.cookies.set(name, value, options),
   )
-  for (const deletion of plan.hostOnlyDeletions) {
-    response.headers.append(
-      "Set-Cookie",
-      hostOnlyDeletionCookie(deletion.name, deletion.secure),
-    )
+  for (const header of plan.orderedHeaders) {
+    response.headers.append("Set-Cookie", header)
   }
   return response
 }
@@ -173,9 +144,19 @@ function ensureAdvocateAttributionIdentity(
   request: NextRequest,
   plan: ResponseCookiePlan,
   authUserId: string,
+  environment: AdvocateAttributionIdentityCookieEnvironment = process.env,
+  cookieTrustPolicy?: unknown,
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions,
 ): void {
+  const requestContext = {
+    rawHost: request.headers.get("host"),
+    cookieTrustPolicy,
+    localTestOptions,
+  }
   const resolution = resolveAdvocateAttributionIdentityCookie(
     request.headers.get("cookie"),
+    requestContext,
+    environment,
   )
   if (
     resolution.signal?.authUserId === authUserId &&
@@ -184,38 +165,90 @@ function ensureAdvocateAttributionIdentity(
   ) {
     return
   }
-
-  const value = createAdvocateAttributionIdentityCookieValue({ authUserId })
-  if (value === null) return
-
-  const options = getAdvocateAttributionIdentityCookieOptions(
-    request.headers.get("host"),
-    request.nextUrl.protocol === "https:",
+  const value = createAdvocateAttributionIdentityCookieValue(
+    { authUserId },
+    requestContext,
+    environment,
   )
-  const mutation = {
-    name: ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
-    value,
-    options,
-  }
-  request.cookies.set(mutation.name, mutation.value)
-  plan.mutations.push(mutation)
+  if (value === null) return
+  request.cookies.set(ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME, value)
+  plan.orderedHeaders.push(
+    ...advocateAttributionIdentityCookieSetHeaders(
+      value,
+      request.headers.get("host"),
+      request.nextUrl.protocol === "https:",
+      environment,
+      cookieTrustPolicy,
+      localTestOptions,
+    ),
+  )
+}
 
-  if (
-    resolution.hadCandidates &&
-    shouldDeleteHostOnlyCookie(request, options.domain)
-  ) {
-    plan.hostOnlyDeletions.push({
-      name: ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
-      secure: options.secure,
-    })
+async function appendRolledBackParentCookieDeletions(
+  request: NextRequest,
+  plan: ResponseCookiePlan,
+  environment: AdvocateAttributionIdentityCookieEnvironment = process.env,
+  cookieTrustPolicy?: unknown,
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions,
+): Promise<void> {
+  const rollbackHeaders = [
+    ...advocateAttributionIdentityCookieRollbackHeaders(
+      request.headers.get("cookie"),
+      request.headers.get("host"),
+      request.nextUrl.protocol === "https:",
+      environment,
+      cookieTrustPolicy,
+      localTestOptions,
+    ),
+    ...(await sponsorshipVisitorCookieRollbackHeaders(
+      request.headers.get("cookie"),
+      request.headers.get("host"),
+      request.nextUrl.protocol === "https:",
+      environment,
+      cookieTrustPolicy,
+      localTestOptions,
+    )),
+  ]
+  for (const header of rollbackHeaders) {
+    if (!plan.orderedHeaders.includes(header)) {
+      plan.orderedHeaders.push(header)
+    }
   }
+}
+
+export async function applyRolledBackParentCookieDeletions(
+  request: NextRequest,
+  response: NextResponse,
+  options: MiddlewareRequestForwardingOptions = {},
+): Promise<NextResponse> {
+  const plan: ResponseCookiePlan = { mutations: [], orderedHeaders: [] }
+  await appendRolledBackParentCookieDeletions(
+    request,
+    plan,
+    options.cookieEnvironment,
+    options.cookieTrustPolicy,
+    options.localTestCookieOptions,
+  )
+  return applyResponseCookies(response, plan)
 }
 
 export async function updateSponsorshipVisitor(
   request: NextRequest,
   options: MiddlewareRequestForwardingOptions = {},
 ): Promise<NextResponse> {
-  const cookiePlan = await ensureSponsorshipVisitor(request)
+  const cookiePlan = await ensureSponsorshipVisitor(
+    request,
+    options.cookieEnvironment,
+    options.cookieTrustPolicy,
+    options.localTestCookieOptions,
+  )
+  await appendRolledBackParentCookieDeletions(
+    request,
+    cookiePlan,
+    options.cookieEnvironment,
+    options.cookieTrustPolicy,
+    options.localTestCookieOptions,
+  )
   return applyResponseCookies(nextResponse(request, options), cookiePlan)
 }
 
@@ -223,7 +256,12 @@ export async function updateSession(
   request: NextRequest,
   options: MiddlewareRequestForwardingOptions = {},
 ) {
-  const cookiePlan = await ensureSponsorshipVisitor(request)
+  const cookiePlan = await ensureSponsorshipVisitor(
+    request,
+    options.cookieEnvironment,
+    options.cookieTrustPolicy,
+    options.localTestCookieOptions,
+  )
 
   const applyCookies = (response: NextResponse) =>
     applyResponseCookies(response, cookiePlan)
@@ -265,7 +303,23 @@ export async function updateSession(
     user = null
   }
   if (user) {
-    ensureAdvocateAttributionIdentity(request, cookiePlan, user.id)
+    ensureAdvocateAttributionIdentity(
+      request,
+      cookiePlan,
+      user.id,
+      options.cookieEnvironment,
+      options.cookieTrustPolicy,
+      options.localTestCookieOptions,
+    )
+    supabaseResponse = applyCookies(nextResponse(request, options))
+  } else {
+    await appendRolledBackParentCookieDeletions(
+      request,
+      cookiePlan,
+      options.cookieEnvironment,
+      options.cookieTrustPolicy,
+      options.localTestCookieOptions,
+    )
     supabaseResponse = applyCookies(nextResponse(request, options))
   }
   if (!user && requiresAuthenticatedPagePath(request.nextUrl.pathname)) {

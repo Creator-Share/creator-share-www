@@ -174,8 +174,10 @@ function setCookieHeaders(response: Response): string[] {
 }
 
 function identityCookie(response: Response): string | undefined {
-  return setCookieHeaders(response).find((header) =>
-    header.startsWith(`${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=`),
+  return setCookieHeaders(response).find(
+    (header) =>
+      header.startsWith(`${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=`) &&
+      !header.includes("Max-Age=0"),
   )
 }
 
@@ -183,14 +185,14 @@ function cookieValue(setCookie: string): string {
   return setCookie.slice(setCookie.indexOf("=") + 1, setCookie.indexOf(";"))
 }
 
-function expectVerifiedParentDomainIdentity(
+function expectVerifiedHostOnlyIdentity(
   response: Response,
   expectedUserId: string,
 ) {
   const setCookie = identityCookie(response)
 
   expect(setCookie).toBeDefined()
-  expect(setCookie).toContain("Domain=.creatorshare.com")
+  expect(setCookie).not.toContain("Domain=")
   expect(setCookie).toContain("Path=/")
   expect(setCookie).toContain(
     `Max-Age=${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_MAX_AGE_SECONDS}`,
@@ -201,6 +203,7 @@ function expectVerifiedParentDomainIdentity(
 
   const verification = verifyAdvocateAttributionIdentityCookieValue(
     cookieValue(setCookie!),
+    { rawHost: "creatorshare.com" },
   )
   expect(verification?.signal.authUserId).toBe(expectedUserId)
 }
@@ -282,11 +285,11 @@ test.afterAll(() => {
   }
 })
 
-test("successful password login issues a verified parent-domain identity signal", async () => {
+test("successful password login issues a verified host-only identity signal", async () => {
   const response = await login(loginRequest())
 
   expect(response.status).toBe(200)
-  expectVerifiedParentDomainIdentity(response, AUTH_USER_ID)
+  expectVerifiedHostOnlyIdentity(response, AUTH_USER_ID)
 })
 
 test("failed password login does not issue an identity signal", async () => {
@@ -299,11 +302,11 @@ test("failed password login does not issue an identity signal", async () => {
   expect(identityCookie(response)).toBeUndefined()
 })
 
-test("successful recovery verification issues a verified parent-domain identity signal", async () => {
+test("successful recovery verification issues a verified host-only identity signal", async () => {
   const response = await verifyOtp(recoveryVerificationRequest())
 
   expect(response.status).toBe(200)
-  expectVerifiedParentDomainIdentity(response, AUTH_USER_ID)
+  expectVerifiedHostOnlyIdentity(response, AUTH_USER_ID)
 })
 
 test("failed or userless recovery verification does not issue an identity signal", async () => {

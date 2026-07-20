@@ -160,17 +160,19 @@ test.afterAll(() => {
   }
 })
 
-test("successful auth completion issues a signed parent-domain exclusion signal", async () => {
+test("successful auth completion issues a signed host-only exclusion signal", async () => {
   const response = await authCallback(authCallbackRequest())
-  const identityCookie = setCookieHeaders(response).find((header) =>
-    header.startsWith(`${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=`),
+  const identityCookie = setCookieHeaders(response).find(
+    (header) =>
+      header.startsWith(`${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=`) &&
+      !header.includes("Max-Age=0"),
   )
 
   expect(response.status).toBe(303)
   expect(response.headers.get("location")).toContain("state=ready")
   expect(exchangeCalls).toBe(1)
   expect(identityCookie).toBeDefined()
-  expect(identityCookie).toContain("Domain=.creatorshare.com")
+  expect(identityCookie).not.toContain("Domain=")
   expect(identityCookie).toContain("Path=/")
   expect(identityCookie).toContain(
     `Max-Age=${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_MAX_AGE_SECONDS}`,
@@ -181,6 +183,7 @@ test("successful auth completion issues a signed parent-domain exclusion signal"
 
   const verified = verifyAdvocateAttributionIdentityCookieValue(
     cookieValue(identityCookie!),
+    { rawHost: "creatorshare.com" },
   )
   expect(verified?.signal.authUserId).toBe(AUTH_USER_ID)
 })

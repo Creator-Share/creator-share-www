@@ -2,9 +2,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextRequest, NextResponse } from "next/server"
 
 import {
-  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  advocateAttributionIdentityCookieSetHeaders,
   createAdvocateAttributionIdentityCookieValue,
-  getAdvocateAttributionIdentityCookieOptions,
 } from "@/lib/advocates/attributionIdentityCookie"
 import {
   buildSponsorClaimPageRedirect,
@@ -81,18 +80,20 @@ export async function GET(request: NextRequest) {
 
     const authUserId = data.user?.id
     if (authUserId) {
-      const attributionIdentity = createAdvocateAttributionIdentityCookieValue({
-        authUserId,
-      })
+      const attributionIdentity = createAdvocateAttributionIdentityCookieValue(
+        {
+          authUserId,
+        },
+        { rawHost: request.headers.get("host") },
+      )
       if (attributionIdentity) {
-        successResponse.cookies.set(
-          ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+        for (const header of advocateAttributionIdentityCookieSetHeaders(
           attributionIdentity,
-          getAdvocateAttributionIdentityCookieOptions(
-            request.headers.get("host"),
-            request.nextUrl.protocol === "https:",
-          ),
-        )
+          request.headers.get("host"),
+          request.nextUrl.protocol === "https:",
+        )) {
+          successResponse.headers.append("Set-Cookie", header)
+        }
       }
     }
 

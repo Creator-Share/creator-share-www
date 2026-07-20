@@ -5,6 +5,12 @@ import { resolve } from "node:path"
 
 import { expect, test } from "@playwright/test"
 
+import {
+  COOKIE_TRUST_POLICY_DIGEST_ENVIRONMENT_VARIABLE,
+  CROSS_SUBDOMAIN_COOKIE_MODE_ENVIRONMENT_VARIABLE,
+} from "../../src/lib/advocates/crossSubdomainAttributionGate"
+import { COMMITTED_COOKIE_TRUST_POLICY_DIGEST } from "../../src/lib/advocates/cookieTrustInventory"
+
 type NodeModuleLoader = (
   request: string,
   parent: unknown,
@@ -129,11 +135,17 @@ test.describe("advocate release preflight", () => {
 
     expect(result).toEqual({
       schemaVersion: 1,
-      configurationState: "configured",
+      configurationState: "unverified",
       providerReadiness: "not_probed",
       checks: preflight.ADVOCATE_RELEASE_PREFLIGHT_CHECK_NAMES.map((name) => ({
         name,
-        state: "configured",
+        state: [
+          "cross_subdomain_cookie_trust",
+          "cross_subdomain_cookie_trusted_collector",
+          "cross_subdomain_cookie_fresh_provider_evidence",
+        ].includes(name)
+          ? "unverified"
+          : "configured",
       })),
     })
     expect(Object.keys(result).sort()).toEqual([
@@ -146,6 +158,19 @@ test.describe("advocate release preflight", () => {
       expect(Object.keys(check).sort()).toEqual(["name", "state"])
       expect(["configured", "invalid", "unverified"]).toContain(check.state)
     }
+
+    expect(result.checks).toEqual(
+      expect.arrayContaining([
+        {
+          name: "cross_subdomain_cookie_trusted_collector",
+          state: "unverified",
+        },
+        {
+          name: "cross_subdomain_cookie_fresh_provider_evidence",
+          state: "unverified",
+        },
+      ]),
+    )
 
     const serialized = JSON.stringify(result)
     for (const value of Object.values(environment).filter(
@@ -200,6 +225,62 @@ test.describe("advocate release preflight", () => {
       configurationState: "invalid",
       checks: expect.arrayContaining([
         { name: "provider_automation_gate", state: "invalid" },
+      ]),
+    })
+
+    const missingCookieTrustDigest = validEnvironment()
+    missingCookieTrustDigest[CROSS_SUBDOMAIN_COOKIE_MODE_ENVIRONMENT_VARIABLE] =
+      "active"
+    expect(
+      preflight.runAdvocateReleasePreflight(missingCookieTrustDigest),
+    ).toMatchObject({
+      configurationState: "unverified",
+      checks: expect.arrayContaining([
+        { name: "cross_subdomain_cookie_trust", state: "unverified" },
+      ]),
+    })
+
+    const malformedCookieTrustMode = validEnvironment()
+    malformedCookieTrustMode[CROSS_SUBDOMAIN_COOKIE_MODE_ENVIRONMENT_VARIABLE] =
+      "enabled"
+    malformedCookieTrustMode[COOKIE_TRUST_POLICY_DIGEST_ENVIRONMENT_VARIABLE] =
+      COMMITTED_COOKIE_TRUST_POLICY_DIGEST as string
+    expect(
+      preflight.runAdvocateReleasePreflight(malformedCookieTrustMode),
+    ).toMatchObject({
+      configurationState: "invalid",
+      checks: expect.arrayContaining([
+        { name: "cross_subdomain_cookie_trust", state: "invalid" },
+      ]),
+    })
+
+    const staleCookieTrustDigest = validEnvironment()
+    staleCookieTrustDigest[CROSS_SUBDOMAIN_COOKIE_MODE_ENVIRONMENT_VARIABLE] =
+      "active"
+    staleCookieTrustDigest[COOKIE_TRUST_POLICY_DIGEST_ENVIRONMENT_VARIABLE] =
+      "f".repeat(64)
+    expect(
+      preflight.runAdvocateReleasePreflight(staleCookieTrustDigest),
+    ).toMatchObject({
+      configurationState: "invalid",
+      checks: expect.arrayContaining([
+        { name: "cross_subdomain_cookie_trust", state: "invalid" },
+      ]),
+    })
+
+    const pendingCookieTrustInventory = validEnvironment()
+    pendingCookieTrustInventory[
+      CROSS_SUBDOMAIN_COOKIE_MODE_ENVIRONMENT_VARIABLE
+    ] = "active"
+    pendingCookieTrustInventory[
+      COOKIE_TRUST_POLICY_DIGEST_ENVIRONMENT_VARIABLE
+    ] = COMMITTED_COOKIE_TRUST_POLICY_DIGEST as string
+    expect(
+      preflight.runAdvocateReleasePreflight(pendingCookieTrustInventory),
+    ).toMatchObject({
+      configurationState: "invalid",
+      checks: expect.arrayContaining([
+        { name: "cross_subdomain_cookie_trust", state: "invalid" },
       ]),
     })
 
@@ -329,7 +410,7 @@ test.describe("advocate release preflight", () => {
     expect(
       preflight.runAdvocateReleasePreflight(legacySupabaseKeys),
     ).toMatchObject({
-      configurationState: "configured",
+      configurationState: "unverified",
       checks: expect.arrayContaining([
         { name: "supabase_configuration", state: "configured" },
       ]),
@@ -410,7 +491,7 @@ test.describe("advocate release preflight", () => {
     expect(
       preflight.runAdvocateReleasePreflight(publicOnlyReuse),
     ).toMatchObject({
-      configurationState: "configured",
+      configurationState: "unverified",
       checks: expect.arrayContaining([
         { name: "secret_separation", state: "configured" },
       ]),
@@ -531,9 +612,7 @@ test.describe("advocate release preflight", () => {
       "utf8",
     )
     expect(source).toContain('import "server-only"')
-    expect(source).toContain(
-      'botToken: process.env.TELEGRAM_BOT_TOKEN ?? ""',
-    )
+    expect(source).toContain('botToken: process.env.TELEGRAM_BOT_TOKEN ?? ""')
     expect(source).not.toMatch(/\b\d{6,}:[A-Za-z0-9_-]{20,}\b/)
   })
 })

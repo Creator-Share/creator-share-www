@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import {
-  ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  advocateAttributionIdentityCookieSetHeaders,
   createAdvocateAttributionIdentityCookieValue,
-  getAdvocateAttributionIdentityCookieOptions,
   resolveAdvocateAttributionIdentityCookie,
 } from "@/lib/advocates/attributionIdentityCookie"
 import {
@@ -52,6 +51,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const existingSignal = resolveAdvocateAttributionIdentityCookie(
       request.headers.get("cookie"),
+      { rawHost: request.headers.get("host") },
     )
     if (
       existingSignal.signal?.authUserId === user.id &&
@@ -61,20 +61,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return response(200)
     }
 
-    const identitySignal = createAdvocateAttributionIdentityCookieValue({
-      authUserId: user.id,
-    })
+    const identitySignal = createAdvocateAttributionIdentityCookieValue(
+      {
+        authUserId: user.id,
+      },
+      { rawHost: request.headers.get("host") },
+    )
     if (identitySignal === null) return response(503)
 
     const completionResponse = response(200)
-    completionResponse.cookies.set(
-      ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+    for (const header of advocateAttributionIdentityCookieSetHeaders(
       identitySignal,
-      getAdvocateAttributionIdentityCookieOptions(
-        request.headers.get("host"),
-        request.nextUrl.protocol === "https:",
-      ),
-    )
+      request.headers.get("host"),
+      request.nextUrl.protocol === "https:",
+    )) {
+      completionResponse.headers.append("Set-Cookie", header)
+    }
     return completionResponse
   } catch {
     return response(503)

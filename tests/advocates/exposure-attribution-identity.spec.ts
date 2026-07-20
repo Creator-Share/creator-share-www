@@ -76,9 +76,12 @@ const { POST } = testRequire(
 nodeModule._load = originalModuleLoad
 
 function requireIdentityCookie(authUserId = SIGNAL_USER_ID): string {
-  const value = identityCookie.createAdvocateAttributionIdentityCookieValue({
-    authUserId,
-  })
+  const value = identityCookie.createAdvocateAttributionIdentityCookieValue(
+    {
+      authUserId,
+    },
+    { rawHost: "hope.creatorshare.com" },
+  )
   if (value === null) {
     throw new Error(
       "Expected the test attribution identity cookie to be signed",
@@ -95,7 +98,9 @@ function forgeIdentityCookie(value: string): string {
 }
 
 async function requireVisitorCookie(): Promise<string> {
-  const value = await visitorCookie.createSponsorshipVisitorToken()
+  const value = await visitorCookie.createSponsorshipVisitorToken({
+    rawHost: "hope.creatorshare.com",
+  })
   if (value === null) {
     throw new Error("Expected the test sponsorship visitor cookie to be signed")
   }

@@ -1,4 +1,8 @@
-import { ADVOCATE_TENANT_ROOT, resolveAdvocateHost } from "@/lib/advocates/host"
+import {
+  resolveCrossSubdomainCookieScope,
+  type CrossSubdomainCookieLocalTestOptions,
+  type CrossSubdomainCookieTrustEnvironment,
+} from "@/lib/advocates/crossSubdomainAttributionGate"
 import { hkdf } from "@noble/hashes/hkdf"
 import { hmac } from "@noble/hashes/hmac"
 import { sha256 } from "@noble/hashes/sha256"
@@ -23,7 +27,7 @@ const MAXIMUM_COOKIE_CANDIDATES = 8
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const TOKEN_PATTERN =
-  /^v1\.([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.([1-9][0-9]{0,15})\.([1-9][0-9]{0,15})\.([A-Za-z0-9_-]{43})$/
+  /^v2\.([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.([1-9][0-9]{0,15})\.([1-9][0-9]{0,15})\.([A-Za-z0-9_-]{43})$/
 const CANONICAL_BASE64_PATTERN =
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 const CANONICAL_BASE64_URL_TAG_PATTERN = /^[A-Za-z0-9_-]{43}$/
@@ -31,11 +35,10 @@ const TEXT_ENCODER = new TextEncoder()
 const KEY_DERIVATION_SALT = TEXT_ENCODER.encode(
   "creator-share/advocates/key-derivation/v1",
 )
-const COOKIE_KEY_INFO = TEXT_ENCODER.encode(
-  "creator-share/advocates/attribution-identity-cookie-hmac-key/v1",
-)
+const COOKIE_KEY_INFO_PREFIX =
+  "creator-share/advocates/attribution-identity-cookie-hmac-key/v2"
 const COOKIE_CONTEXT = TEXT_ENCODER.encode(
-  "creator-share/advocates/attribution-identity-cookie/v1\0",
+  "creator-share/advocates/attribution-identity-cookie/v2\0",
 )
 const LOCAL_DEVELOPMENT_SECRET = TEXT_ENCODER.encode(
   "creator-share-local-advocate-attribution-identity-cookie-secret-v1",
@@ -83,6 +86,19 @@ export interface AdvocateAttributionIdentityCookieOptions {
   path: "/"
   sameSite: "lax"
   secure: boolean
+}
+
+export interface AdvocateAttributionIdentityCookieScopePlan {
+  options: AdvocateAttributionIdentityCookieOptions
+  creatorShareHost: boolean
+  deleteHostOnlyBeforeWrite: boolean
+  deleteParentDomainBeforeWrite: boolean
+}
+
+export interface AdvocateAttributionIdentityCookieRequestContext {
+  rawHost: string | null
+  cookieTrustPolicy?: unknown
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions
 }
 
 interface DerivedKeys {
@@ -213,6 +229,7 @@ function hasReusedSecret(
 
 function derivedKeys(
   environment: AdvocateAttributionIdentityCookieEnvironment,
+  cryptographicScope: string,
 ): DerivedKeys | null {
   const configuredCurrentSecret = decodedSecret(
     environment,
@@ -245,7 +262,7 @@ function derivedKeys(
       sha256,
       currentSecret,
       KEY_DERIVATION_SALT,
-      COOKIE_KEY_INFO,
+      TEXT_ENCODER.encode(`${COOKIE_KEY_INFO_PREFIX}\0${cryptographicScope}`),
       AUTHENTICATION_TAG_BYTES,
     ),
     previous:
@@ -255,7 +272,9 @@ function derivedKeys(
             sha256,
             previousSecret,
             KEY_DERIVATION_SALT,
-            COOKIE_KEY_INFO,
+            TEXT_ENCODER.encode(
+              `${COOKIE_KEY_INFO_PREFIX}\0${cryptographicScope}`,
+            ),
             AUTHENTICATION_TAG_BYTES,
           ),
   }
@@ -310,7 +329,7 @@ function parseToken(value: string): ParsedToken | null {
     authUserId: match[1],
     issuedAtSeconds,
     expiresAtSeconds,
-    payload: `v1.${match[1]}.${match[2]}.${match[3]}`,
+    payload: `v2.${match[1]}.${match[2]}.${match[3]}`,
     authenticationTag,
   }
 }
@@ -327,6 +346,7 @@ function verifiedSignal(
 
 export function createAdvocateAttributionIdentityCookieValue(
   input: AdvocateAttributionIdentityCookieInput,
+  context: AdvocateAttributionIdentityCookieRequestContext,
   environment: AdvocateAttributionIdentityCookieEnvironment = process.env,
 ): string | null {
   const issuedAtSeconds =
@@ -344,15 +364,23 @@ export function createAdvocateAttributionIdentityCookieValue(
     return null
   }
 
-  const keys = derivedKeys(environment)
+  const cryptographicScope = resolveCrossSubdomainCookieScope(
+    context.rawHost,
+    environment,
+    context.cookieTrustPolicy,
+    context.localTestOptions,
+  ).cryptographicScope
+  if (cryptographicScope === null) return null
+  const keys = derivedKeys(environment, cryptographicScope)
   if (keys === null) return null
-  const payload = `v1.${input.authUserId}.${issuedAtSeconds}.${expiresAtSeconds}`
+  const payload = `v2.${input.authUserId}.${issuedAtSeconds}.${expiresAtSeconds}`
   const tag = encodeBase64Url(authenticationTag(payload, keys.current))
   return `${payload}.${tag}`
 }
 
 export function verifyAdvocateAttributionIdentityCookieValue(
   value: string | null | undefined,
+  context: AdvocateAttributionIdentityCookieRequestContext,
   environment: AdvocateAttributionIdentityCookieEnvironment = process.env,
   nowSeconds: number = Math.floor(Date.now() / 1_000),
 ): AdvocateAttributionIdentityCookieVerification | null {
@@ -366,7 +394,14 @@ export function verifyAdvocateAttributionIdentityCookieValue(
     return null
   }
 
-  const keys = derivedKeys(environment)
+  const cryptographicScope = resolveCrossSubdomainCookieScope(
+    context.rawHost,
+    environment,
+    context.cookieTrustPolicy,
+    context.localTestOptions,
+  ).cryptographicScope
+  if (cryptographicScope === null) return null
+  const keys = derivedKeys(environment, cryptographicScope)
   if (keys === null) return null
   const expectedCurrentTag = authenticationTag(parsed.payload, keys.current)
   const currentMatches = constantTimeAuthenticationTagEqual(
@@ -413,6 +448,7 @@ function cookieCandidates(cookieHeader: string | null): string[] {
 
 export function resolveAdvocateAttributionIdentityCookie(
   cookieHeader: string | null,
+  context: AdvocateAttributionIdentityCookieRequestContext,
   environment: AdvocateAttributionIdentityCookieEnvironment = process.env,
   nowSeconds: number = Math.floor(Date.now() / 1_000),
 ): AdvocateAttributionIdentityCookieResolution {
@@ -426,8 +462,7 @@ export function resolveAdvocateAttributionIdentityCookie(
     }
   }
 
-  const uniqueValues = new Set(values)
-  if (values.length > MAXIMUM_COOKIE_CANDIDATES || uniqueValues.size !== 1) {
+  if (values.length > MAXIMUM_COOKIE_CANDIDATES) {
     return {
       signal: null,
       hadCandidates: true,
@@ -436,16 +471,40 @@ export function resolveAdvocateAttributionIdentityCookie(
     }
   }
 
-  const verification = verifyAdvocateAttributionIdentityCookieValue(
-    values[0],
-    environment,
-    nowSeconds,
-  )
+  const verifiedByAuthUserId = new Map<
+    string,
+    AdvocateAttributionIdentityCookieVerification[]
+  >()
+  for (const value of new Set(values)) {
+    const verification = verifyAdvocateAttributionIdentityCookieValue(
+      value,
+      context,
+      environment,
+      nowSeconds,
+    )
+    if (verification === null) continue
+    const matches =
+      verifiedByAuthUserId.get(verification.signal.authUserId) ?? []
+    matches.push(verification)
+    verifiedByAuthUserId.set(verification.signal.authUserId, matches)
+  }
+
+  const matchingIdentities = [...verifiedByAuthUserId.values()]
+  const verification =
+    matchingIdentities.length === 1
+      ? matchingIdentities[0].sort((left, right) => {
+          if (left.requiresRefresh !== right.requiresRefresh) {
+            return left.requiresRefresh ? 1 : -1
+          }
+          return right.signal.issuedAtSeconds - left.signal.issuedAtSeconds
+        })[0]
+      : null
   return {
     signal: verification?.signal ?? null,
     hadCandidates: true,
     requiresNormalization:
       values.length !== 1 ||
+      new Set(values).size !== 1 ||
       verification === null ||
       verification.requiresRefresh,
     requiresRefresh: verification?.requiresRefresh ?? false,
@@ -454,43 +513,216 @@ export function resolveAdvocateAttributionIdentityCookie(
 
 export function readAdvocateAttributionIdentityCookie(
   cookieHeader: string | null,
+  context: AdvocateAttributionIdentityCookieRequestContext,
   environment: AdvocateAttributionIdentityCookieEnvironment = process.env,
   nowSeconds: number = Math.floor(Date.now() / 1_000),
 ): VerifiedAdvocateAttributionIdentitySignal | null {
   return resolveAdvocateAttributionIdentityCookie(
     cookieHeader,
+    context,
     environment,
     nowSeconds,
   ).signal
 }
 
-function getNormalizedHostname(rawHost: string | null): string | null {
-  const resolution = resolveAdvocateHost(rawHost, {
-    allowLocalhostDevelopment: true,
+export function getAdvocateAttributionIdentityCookieScopePlan(
+  rawHost: string | null,
+  requestIsSecure: boolean,
+  environment: AdvocateAttributionIdentityCookieEnvironment = process.env,
+  cookieTrustPolicy?: unknown,
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions,
+): AdvocateAttributionIdentityCookieScopePlan {
+  const scope = resolveCrossSubdomainCookieScope(
+    rawHost,
+    environment as CrossSubdomainCookieTrustEnvironment,
+    cookieTrustPolicy,
+    localTestOptions,
+  )
+  return Object.freeze({
+    options: Object.freeze({
+      ...(scope.domain === undefined ? {} : { domain: scope.domain }),
+      httpOnly: true as const,
+      maxAge: ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_MAX_AGE_SECONDS,
+      path: "/" as const,
+      sameSite: "lax" as const,
+      secure: scope.creatorShareHost || requestIsSecure,
+    }),
+    creatorShareHost: scope.creatorShareHost,
+    deleteHostOnlyBeforeWrite: scope.deleteHostOnlyBeforeWrite,
+    deleteParentDomainBeforeWrite: scope.deleteParentDomainBeforeWrite,
   })
-
-  if (resolution.kind === "invalid") return null
-  if (resolution.kind === "tenant-candidate") {
-    return resolution.requestHostname
-  }
-  return resolution.normalizedHostname
 }
 
 export function getAdvocateAttributionIdentityCookieOptions(
   rawHost: string | null,
   requestIsSecure: boolean,
+  environment: AdvocateAttributionIdentityCookieEnvironment = process.env,
+  cookieTrustPolicy?: unknown,
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions,
 ): AdvocateAttributionIdentityCookieOptions {
-  const hostname = getNormalizedHostname(rawHost)
-  const isCreatorShareDomain =
-    hostname === ADVOCATE_TENANT_ROOT ||
-    hostname?.endsWith(`.${ADVOCATE_TENANT_ROOT}`) === true
+  return getAdvocateAttributionIdentityCookieScopePlan(
+    rawHost,
+    requestIsSecure,
+    environment,
+    cookieTrustPolicy,
+    localTestOptions,
+  ).options
+}
 
-  return {
-    ...(isCreatorShareDomain ? { domain: `.${ADVOCATE_TENANT_ROOT}` } : {}),
-    httpOnly: true,
-    maxAge: ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_MAX_AGE_SECONDS,
-    path: "/",
-    sameSite: "lax",
-    secure: isCreatorShareDomain || requestIsSecure,
+function serializeAttributionIdentityCookie(
+  value: string,
+  options: AdvocateAttributionIdentityCookieOptions,
+): string {
+  return [
+    `${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=${value}`,
+    options.domain === undefined ? null : `Domain=${options.domain}`,
+    `Max-Age=${options.maxAge}`,
+    "Path=/",
+    options.secure ? "Secure" : null,
+    "HttpOnly",
+    "SameSite=lax",
+  ]
+    .filter((part): part is string => part !== null)
+    .join("; ")
+}
+
+function serializeAttributionIdentityCookieDeletion(
+  domain: ".creatorshare.com" | undefined,
+  secure: boolean,
+): string {
+  return [
+    `${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=`,
+    domain === undefined ? null : `Domain=${domain}`,
+    "Path=/",
+    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "Max-Age=0",
+    secure ? "Secure" : null,
+    "HttpOnly",
+    "SameSite=lax",
+  ]
+    .filter((part): part is string => part !== null)
+    .join("; ")
+}
+
+export function advocateAttributionIdentityCookieSetHeaders(
+  value: string,
+  rawHost: string | null,
+  requestIsSecure: boolean,
+  environment: AdvocateAttributionIdentityCookieEnvironment = process.env,
+  cookieTrustPolicy?: unknown,
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions,
+): readonly string[] {
+  const plan = getAdvocateAttributionIdentityCookieScopePlan(
+    rawHost,
+    requestIsSecure,
+    environment,
+    cookieTrustPolicy,
+    localTestOptions,
+  )
+  const headers: string[] = []
+  if (plan.deleteParentDomainBeforeWrite) {
+    headers.push(
+      serializeAttributionIdentityCookieDeletion(".creatorshare.com", true),
+    )
   }
+  if (plan.deleteHostOnlyBeforeWrite) {
+    headers.push(
+      serializeAttributionIdentityCookieDeletion(
+        undefined,
+        plan.options.secure,
+      ),
+    )
+  }
+  headers.push(serializeAttributionIdentityCookie(value, plan.options))
+  return Object.freeze(headers)
+}
+
+/**
+ * Deletes an obsolete parent-domain copy during fail-closed rollback. On the
+ * apex, host-only and parent-domain cookies share one storage tuple, so a valid
+ * host-bound signal is preserved or rewritten after any required deletion.
+ */
+export function advocateAttributionIdentityCookieRollbackHeaders(
+  cookieHeader: string | null,
+  rawHost: string | null,
+  requestIsSecure: boolean,
+  environment: AdvocateAttributionIdentityCookieEnvironment = process.env,
+  cookieTrustPolicy?: unknown,
+  localTestOptions?: CrossSubdomainCookieLocalTestOptions,
+): readonly string[] {
+  if (cookieCandidates(cookieHeader).length === 0) return Object.freeze([])
+  const plan = getAdvocateAttributionIdentityCookieScopePlan(
+    rawHost,
+    requestIsSecure,
+    environment,
+    cookieTrustPolicy,
+    localTestOptions,
+  )
+  if (!plan.creatorShareHost || !plan.deleteParentDomainBeforeWrite) {
+    return Object.freeze([])
+  }
+
+  const parentDeletion = serializeAttributionIdentityCookieDeletion(
+    ".creatorshare.com",
+    true,
+  )
+  const scope = resolveCrossSubdomainCookieScope(
+    rawHost,
+    environment,
+    cookieTrustPolicy,
+    localTestOptions,
+  )
+  if (scope.cryptographicScope !== "host:creatorshare.com") {
+    return Object.freeze([parentDeletion])
+  }
+
+  const context = { rawHost, cookieTrustPolicy, localTestOptions }
+  const resolution = resolveAdvocateAttributionIdentityCookie(
+    cookieHeader,
+    context,
+    environment,
+  )
+  if (resolution.signal !== null && !resolution.requiresNormalization) {
+    return Object.freeze([])
+  }
+  if (resolution.signal === null) return Object.freeze([parentDeletion])
+
+  const validValue = cookieCandidates(cookieHeader).find((candidate) => {
+    const verification = verifyAdvocateAttributionIdentityCookieValue(
+      candidate,
+      context,
+      environment,
+    )
+    return verification?.signal.authUserId === resolution.signal?.authUserId
+  })
+  if (validValue === undefined) return Object.freeze([parentDeletion])
+  return Object.freeze([
+    parentDeletion,
+    serializeAttributionIdentityCookie(validValue, plan.options),
+  ])
+}
+
+export function advocateAttributionIdentityCookieClearHeaders(
+  rawHost: string | null,
+  requestIsSecure: boolean,
+  environment: AdvocateAttributionIdentityCookieEnvironment = process.env,
+): readonly string[] {
+  const plan = getAdvocateAttributionIdentityCookieScopePlan(
+    rawHost,
+    requestIsSecure,
+    environment,
+  )
+  return Object.freeze(
+    plan.creatorShareHost
+      ? [
+          serializeAttributionIdentityCookieDeletion(".creatorshare.com", true),
+          serializeAttributionIdentityCookieDeletion(undefined, true),
+        ]
+      : [
+          serializeAttributionIdentityCookieDeletion(
+            undefined,
+            plan.options.secure,
+          ),
+        ],
+  )
 }

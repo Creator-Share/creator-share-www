@@ -54,7 +54,10 @@ let TOKEN: NonNullable<
 >
 
 test.beforeAll(async () => {
-  const token = await createSponsorshipVisitorToken({ NODE_ENV: "test" })
+  const token = await createSponsorshipVisitorToken(
+    { rawHost: "hope.creatorshare.com" },
+    { NODE_ENV: "test" },
+  )
   if (token === null) throw new Error("Visitor test token was not created")
   TOKEN = token
 })

@@ -69,8 +69,11 @@ const CHECKOUT_URL =
   "https://checkout.stripe.com/c/pay/cs_test_authoritative123"
 const NOW = new Date("2026-07-18T08:00:00.000Z")
 const VISITOR_TOKEN =
-  `v1.${Buffer.alloc(32, 9).toString("base64url")}.${"A".repeat(22)}` as VerifiedSponsorshipVisitorToken
+  `v2.${Buffer.alloc(32, 9).toString("base64url")}.${"A".repeat(22)}` as VerifiedSponsorshipVisitorToken
 const APP_SECRET = Buffer.alloc(48, 7).toString("base64")
+const VISITOR_REQUEST_CONTEXT = Object.freeze({
+  rawHost: "creatorshare.com",
+})
 
 interface RecordedCalls {
   beneficiaryIds: string[]
@@ -607,13 +610,20 @@ test.describe("checkout host and visitor classification", () => {
       NODE_ENV: "production",
       SPONSORSHIP_VISITOR_COOKIE_SECRET_V1: APP_SECRET,
     }
-    const signedToken = await createSponsorshipVisitorToken(environment)
-    const secondSignedToken = await createSponsorshipVisitorToken(environment)
+    const signedToken = await createSponsorshipVisitorToken(
+      VISITOR_REQUEST_CONTEXT,
+      environment,
+    )
+    const secondSignedToken = await createSponsorshipVisitorToken(
+      VISITOR_REQUEST_CONTEXT,
+      environment,
+    )
     expect(signedToken).not.toBeNull()
     expect(secondSignedToken).not.toBeNull()
     await expect(
       readSponsorshipVisitorCookie(
         `other=value; cs_sponsorship_visitor_v1=${signedToken}`,
+        VISITOR_REQUEST_CONTEXT,
         environment,
       ),
     ).resolves.toBe(signedToken)
@@ -621,6 +631,7 @@ test.describe("checkout host and visitor classification", () => {
       readSponsorshipVisitorCookie(
         `cs_sponsorship_visitor_v1=${signedToken}; ` +
           `cs_sponsorship_visitor_v1=${secondSignedToken}`,
+        VISITOR_REQUEST_CONTEXT,
         environment,
       ),
     ).resolves.toBeNull()
@@ -628,12 +639,14 @@ test.describe("checkout host and visitor classification", () => {
       readSponsorshipVisitorCookie(
         `cs_sponsorship_visitor_v1=${signedToken}; ` +
           `cs_sponsorship_visitor_v1=${VISITOR_TOKEN}`,
+        VISITOR_REQUEST_CONTEXT,
         environment,
       ),
     ).resolves.toBe(signedToken)
     await expect(
       readSponsorshipVisitorCookie(
         "cs_sponsorship_visitor_v1=not-a-token",
+        VISITOR_REQUEST_CONTEXT,
         environment,
       ),
     ).resolves.toBeNull()

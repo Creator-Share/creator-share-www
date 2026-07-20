@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
 
   const visitorToken = await readSponsorshipVisitorCookie(
     request.headers.get("cookie"),
+    { rawHost: request.headers.get("host") },
   )
   if (!visitorToken) return noContent()
 
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
     } = await authClient.auth.getUser()
     const identitySignal = readAdvocateAttributionIdentityCookie(
       request.headers.get("cookie"),
+      { rawHost: request.headers.get("host") },
     )
     if (
       user?.id &&
