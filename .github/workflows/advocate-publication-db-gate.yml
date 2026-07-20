@@ -12,8 +12,11 @@ on:
       - "supabase/tests/**/*initial_owner*"
       - "supabase/tests/*invitation*.sql"
       - "supabase/tests/**/*invitation*"
+      - "supabase/tests/*email_proof*.sql"
+      - "supabase/tests/**/*email_proof*"
       - "tests/database/**/*publication*"
       - "tests/database/**/*initial-owner*"
+      - "tests/database/**/*email-proof*"
       - "tests/database/support/*.mjs"
       - "tests/provider/**"
       - "supabase/config.toml"
@@ -144,6 +147,26 @@ jobs:
         with:
           name: advocate-publication-concurrency-evidence
           path: ${{ runner.temp }}/advocate-publication-concurrency-evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Run shared email proof issuance database tests
+        run: >-
+          yarn supabase test db
+          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+          supabase/tests/shared_email_proof_issuance_gate.test.sql
+
+      - name: Run shared email proof issuance concurrency harness
+        env:
+          EMAIL_PROOF_ISSUANCE_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/email-proof-issuance-concurrency-evidence.json
+        run: yarn test:email-proof-issuance-concurrency
+
+      - name: Upload sanitized email proof issuance concurrency evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: email-proof-issuance-concurrency-evidence
+          path: ${{ runner.temp }}/email-proof-issuance-concurrency-evidence.json
           if-no-files-found: ignore
           retention-days: 30
 

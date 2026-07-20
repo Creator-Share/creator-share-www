@@ -18,6 +18,7 @@
     "test:advocate:webkit": "PW_NO_WEBSERVER=1 RUN_WEBKIT_BROWSER_INTEGRATION=1 playwright test tests/advocates/portal-catalog-browser.spec.ts --grep \"recovers version-bound drafts after mobile WebKit\" --workers=1 --retries=0",
     "test:advocate:initial-owner-concurrency": "node tests/database/advocate-initial-owner-concurrency.mjs",
     "test:advocate:publication-concurrency": "node tests/database/advocate-publication-concurrency.mjs",
+    "test:email-proof-issuance-concurrency": "node tests/database/email-proof-issuance-concurrency.mjs",
     "canary:supabase-email-proof-supersession:local": "node tests/provider/supabase-email-proof-supersession-local.mjs",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed"
