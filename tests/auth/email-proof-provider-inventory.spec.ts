@@ -52,7 +52,6 @@ const EXPECTED_CENTRAL_CALLS = Object.freeze([
 // green because the central issuer is the only approved destination.
 const EXPECTED_LEGACY_CALLS = Object.freeze([
   "src/app/api/admin/users/invite/route.ts:auth.admin.inviteUserByEmail",
-  "src/app/api/auth/registration/route.ts:auth.signUp",
   "src/app/api/sponsor-account/start/route.ts:auth.signInWithOtp",
   "src/lib/advocates/invitations/emailAuth.ts:auth.admin.generateLink",
 ])
@@ -77,10 +76,7 @@ const EXPECTED_PROOF_IDENTIFIER_FILES = Object.freeze({
     CENTRAL_ISSUER,
     "src/app/api/sponsor-account/start/route.ts",
   ]),
-  signUp: Object.freeze([
-    CENTRAL_ISSUER,
-    "src/app/api/auth/registration/route.ts",
-  ]),
+  signUp: Object.freeze([CENTRAL_ISSUER]),
 })
 
 const EXPECTED_PROOF_IDENTIFIER_COUNTS = Object.freeze({
@@ -90,7 +86,6 @@ const EXPECTED_PROOF_IDENTIFIER_COUNTS = Object.freeze({
   [`${CENTRAL_ISSUER}:signInWithOtp`]: 2,
   [`${CENTRAL_ISSUER}:signUp`]: 2,
   "src/app/api/admin/users/invite/route.ts:inviteUserByEmail": 1,
-  "src/app/api/auth/registration/route.ts:signUp": 1,
   "src/app/api/sponsor-account/start/route.ts:signInWithOtp": 1,
   "src/lib/advocates/invitations/emailAuth.ts:generateLink": 2,
 })
@@ -223,7 +218,7 @@ test("locks proof-producing Supabase calls to the central issuer and exact migra
     [...EXPECTED_CENTRAL_CALLS, ...EXPECTED_LEGACY_CALLS].sort(),
   )
   expect(proofCalls.filter((call) => call.endsWith(":auth.resend"))).toEqual([])
-  expect(EXPECTED_LEGACY_CALLS).toHaveLength(4)
+  expect(EXPECTED_LEGACY_CALLS).toHaveLength(3)
 })
 
 test("forces every directly called Supabase auth method into a reviewed classification", () => {

@@ -585,6 +585,171 @@ test("issues registration with exact normalized identity, profile, password, and
   ).toBe("registration")
 })
 
+test("settles every malformed registration response without leaking registration data to the gate", async () => {
+  const password = " Correct1! "
+  const firstName = "Ada Marie"
+  const lastName = "Lovelace Family"
+  const normalizedEmail = "family@example.com"
+  const redirectTo =
+    "https://creatorshare.com/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding"
+  const validUser = successUser(normalizedEmail)
+  const validData = { user: validUser, session: null }
+  const failures: Array<{
+    label: string
+    invoke: () => unknown | Promise<unknown>
+  }> = [
+    {
+      label: "provider throw",
+      invoke: () => {
+        throw new Error("provider failed")
+      },
+    },
+    {
+      label: "provider error",
+      invoke: () => ({
+        data: validData,
+        error: { message: "provider rejected request" },
+      }),
+    },
+    {
+      label: "null user",
+      invoke: () => ({
+        data: { user: null, session: null },
+        error: null,
+      }),
+    },
+    {
+      label: "invalid user UUID",
+      invoke: () => ({
+        data: {
+          user: { id: "not-a-uuid", email: normalizedEmail },
+          session: null,
+        },
+        error: null,
+      }),
+    },
+    {
+      label: "mismatched user email",
+      invoke: () => ({
+        data: {
+          user: successUser("other@example.com"),
+          session: null,
+        },
+        error: null,
+      }),
+    },
+    {
+      label: "noncanonical user email",
+      invoke: () => ({
+        data: {
+          user: successUser("Family@Example.com"),
+          session: null,
+        },
+        error: null,
+      }),
+    },
+    {
+      label: "missing root data",
+      invoke: () => ({ error: null }),
+    },
+    {
+      label: "missing root error",
+      invoke: () => ({ data: validData }),
+    },
+    {
+      label: "extra root key",
+      invoke: () => ({ data: validData, error: null, extra: true }),
+    },
+    {
+      label: "missing data user",
+      invoke: () => ({ data: { session: null }, error: null }),
+    },
+    {
+      label: "missing data session",
+      invoke: () => ({ data: { user: validUser }, error: null }),
+    },
+    {
+      label: "extra data key",
+      invoke: () => ({
+        data: { ...validData, extra: true },
+        error: null,
+      }),
+    },
+    {
+      label: "unconfirmed provider session",
+      invoke: () => ({
+        data: { user: validUser, session: { access_token: "secret" } },
+        error: null,
+      }),
+    },
+    {
+      label: "undefined response",
+      invoke: () => undefined,
+    },
+  ]
+
+  for (const failure of failures) {
+    await test.step(failure.label, async () => {
+      resetHarness()
+      signUpHandler = failure.invoke
+
+      await expect(
+        issuer.issueRegistrationEmailProof({
+          recipientEmail: " Family@Example.com ",
+          password,
+          firstName,
+          lastName,
+          redirectTo,
+          context: context(),
+        }),
+      ).resolves.toEqual({ status: "ambiguous", retryAfterSeconds: 3900 })
+
+      const providerEvents = events.filter((event) => event.kind === "signUp")
+      expect(providerEvents).toHaveLength(1)
+      expect(providerEvents[0].args).toEqual({
+        email: normalizedEmail,
+        password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+          },
+          emailRedirectTo: redirectTo,
+        },
+      })
+
+      const acquireEvents = rpcEvents("acquire_email_proof_issuance_gate")
+      const beginEvents = rpcEvents("begin_email_proof_issuance")
+      const finishEvents = rpcEvents("finish_email_proof_issuance")
+      expect(acquireEvents).toHaveLength(1)
+      expect(beginEvents).toHaveLength(1)
+      expect(finishEvents).toHaveLength(1)
+      const acquire = acquireEvents[0].args as Record<string, unknown>
+      const begin = beginEvents[0].args as Record<string, unknown>
+      const finish = finishEvents[0].args as Record<string, unknown>
+      expect(begin).toEqual(acquire)
+      expect(finish).toEqual({
+        ...acquire,
+        target_finish_disposition: "ambiguous",
+      })
+      const serializedGateArguments = JSON.stringify([acquire, begin, finish])
+      for (const privateValue of [
+        normalizedEmail,
+        password,
+        firstName,
+        lastName,
+      ]) {
+        expect(serializedGateArguments).not.toContain(privateValue)
+      }
+      expect(
+        events.filter((event) =>
+          (JSON.stringify(event.args) ?? "").includes(password),
+        ),
+      ).toEqual(providerEvents)
+    })
+  }
+})
+
 test("issues password reset without accepting a caller-controlled redirect", async () => {
   await expect(
     issuer.issuePasswordResetEmailProof({

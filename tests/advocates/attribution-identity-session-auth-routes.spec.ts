@@ -39,6 +39,10 @@ const SUPABASE_URL = "https://project.supabase.co"
 const RECOVERY_AUTH_COOKIE = "__Host-cs-password-recovery-v1"
 const CURRENT_SECRET = Buffer.alloc(32, 13).toString("base64")
 const CANONICAL_ORIGIN = "https://creatorshare.com"
+const REGISTRATION_DELIVERY_CONTEXT = Object.freeze({
+  requestId: "71000000-0000-4000-8000-000000000002",
+  traceId: null,
+})
 const PREVIOUS_ENVIRONMENT = {
   ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1:
     process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1,
@@ -75,17 +79,17 @@ let verificationData: {
   },
 }
 let verificationError: { message: string } | null = null
-let registrationData: {
-  session: Record<string, unknown> | null
-  user: AuthUser | null
-} = {
-  session: { access_token: "opaque-session" },
-  user: { id: AUTH_USER_ID, identities: [{}] },
-}
-let registrationError: { message: string } | null = null
-const registrationCalls: Array<Record<string, unknown>> = []
+const registrationEvents: string[] = []
+const registrationContextCalls: Request[] = []
+const registrationSignalCalls: Array<Record<string, unknown>> = []
+const registrationIssuerCalls: Array<Record<string, unknown>> = []
 const registrationReservations: Array<Record<string, unknown>> = []
 let registrationDeliveryAllowed = true
+let registrationContextFailure: Error | null = null
+let registrationSignalFailure: Error | null = null
+let registrationReservationFailure: Error | null = null
+let registrationIssuerFailure: Error | null = null
+let registrationIssuerResult: unknown = Object.freeze({ status: "issued" })
 const verificationReservations: Array<Record<string, unknown>> = []
 let verificationAttemptAllowed = true
 let recoveryReceiptCalls = 0
@@ -217,33 +221,36 @@ nodeModule._load = function mockedModuleLoad(
       },
     }
   }
-  if (request === "@/lib/sponsorships/management/statelessAuth") {
+  if (request === "@/lib/auth/supabaseEmailProofIssuer") {
     return {
-      createStatelessSponsorEmailAuthClient() {
-        return {
-          auth: {
-            async signUp(input: Record<string, unknown>) {
-              registrationCalls.push(input)
-              return {
-                data: registrationData,
-                error: registrationError,
-              }
-            },
-          },
-        }
+      async issueRegistrationEmailProof(input: Record<string, unknown>) {
+        registrationEvents.push("issue")
+        registrationIssuerCalls.push(input)
+        if (registrationIssuerFailure) throw registrationIssuerFailure
+        return registrationIssuerResult
       },
     }
   }
   if (request === "@/lib/sponsorships/management/passwordlessRateLimit") {
     return {
       createSponsorPasswordlessDeliverySignals(input: Record<string, unknown>) {
+        registrationEvents.push("signals")
+        registrationSignalCalls.push(input)
+        if (registrationSignalFailure) throw registrationSignalFailure
         return { recipient: input.email, source: "opaque-source" }
       },
-      sponsorPasswordlessDeliveryContext() {
-        return { requestId: "registration-request", traceId: null }
+      sponsorPasswordlessDeliveryContext(input: Request) {
+        registrationEvents.push("context")
+        registrationContextCalls.push(input)
+        if (registrationContextFailure) throw registrationContextFailure
+        return REGISTRATION_DELIVERY_CONTEXT
       },
       async reserveSponsorPasswordlessDelivery(input: Record<string, unknown>) {
+        registrationEvents.push("reserve")
         registrationReservations.push(input)
+        if (registrationReservationFailure) {
+          throw registrationReservationFailure
+        }
         return registrationDeliveryAllowed
       },
       createSponsorPasswordlessVerificationSignals() {
@@ -365,13 +372,44 @@ function loginRequest(): Request {
   })
 }
 
-function registrationRequest(): Request {
+function registrationRequest(overrides: Record<string, unknown> = {}): Request {
   return jsonRequest("/api/auth/registration", {
     email: "sponsor@example.com",
     password: "CorrectHorse1!",
     first_name: "Sponsor",
     last_name: "Family",
+    ...overrides,
   })
+}
+
+async function expectRegistrationAccepted(
+  response: Response,
+  forbiddenText: readonly string[] = [],
+): Promise<void> {
+  expect(response.status).toBe(202)
+  const body = (await response.json()) as Record<string, unknown>
+  expect(body).toEqual({ status: "check-email" })
+  const serializedBody = JSON.stringify(body)
+  const serializedHeaders = JSON.stringify([...response.headers.entries()])
+  for (const value of forbiddenText) {
+    expect(serializedBody).not.toContain(value)
+    expect(serializedHeaders).not.toContain(value)
+  }
+  expect(response.headers.get("cache-control")).toBe("no-store, max-age=0")
+  expect(response.headers.get("pragma")).toBe("no-cache")
+  expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+  expect(response.headers.get("x-content-type-options")).toBe("nosniff")
+  expect(response.headers.get("retry-after")).toBeNull()
+  expect(setCookieHeaders(response)).toEqual([])
+  expect(identityCookie(response)).toBeUndefined()
+}
+
+function clearRegistrationObservations(): void {
+  registrationEvents.length = 0
+  registrationContextCalls.length = 0
+  registrationSignalCalls.length = 0
+  registrationIssuerCalls.length = 0
+  registrationReservations.length = 0
 }
 
 test.beforeEach(() => {
@@ -393,14 +431,17 @@ test.beforeEach(() => {
     },
   }
   verificationError = null
-  registrationData = {
-    session: { access_token: "opaque-session" },
-    user: { id: AUTH_USER_ID, identities: [{}] },
-  }
-  registrationError = null
-  registrationCalls.length = 0
+  registrationEvents.length = 0
+  registrationContextCalls.length = 0
+  registrationSignalCalls.length = 0
+  registrationIssuerCalls.length = 0
   registrationReservations.length = 0
   registrationDeliveryAllowed = true
+  registrationContextFailure = null
+  registrationSignalFailure = null
+  registrationReservationFailure = null
+  registrationIssuerFailure = null
+  registrationIssuerResult = Object.freeze({ status: "issued" })
   verificationReservations.length = 0
   verificationAttemptAllowed = true
   recoveryReceiptCalls = 0
@@ -460,40 +501,61 @@ test("failed or malformed recovery verification does not issue an identity signa
   expect(identityCookie(userlessResponse)).toBeUndefined()
 })
 
-test("registration reserves delivery and never releases an unconfirmed provider session", async () => {
-  const response = await register(registrationRequest())
+test("registration normalizes one identity across quota and issuance", async () => {
+  const password = "  CorrectHorse1!  "
+  const request = registrationRequest({
+    email: " Sponsor+Family@Example.com ",
+    first_name: "  Sponsor   Grace ",
+    last_name: " Family   Name ",
+    password,
+  })
+  const response = await register(request)
 
-  expect(response.status).toBe(202)
-  await expect(response.json()).resolves.toEqual({ status: "check-email" })
-  expect(identityCookie(response)).toBeUndefined()
+  await expectRegistrationAccepted(response, [password])
+  expect(registrationEvents).toEqual(["context", "signals", "reserve", "issue"])
+  expect(registrationContextCalls).toEqual([request])
+  expect(registrationSignalCalls).toHaveLength(1)
+  expect(registrationSignalCalls[0].email).toBe("sponsor+family@example.com")
+  expect(registrationSignalCalls[0].headers).toBe(request.headers)
   expect(registrationReservations).toHaveLength(1)
-  expect(registrationReservations[0]).toMatchObject({
+  expect(registrationReservations[0]).toEqual({
     flow: "registration",
     signals: {
-      recipient: "sponsor@example.com",
+      recipient: "sponsor+family@example.com",
       source: "opaque-source",
     },
+    context: REGISTRATION_DELIVERY_CONTEXT,
   })
-  expect(registrationCalls).toEqual([
+  expect(registrationReservations[0].context).toBe(
+    REGISTRATION_DELIVERY_CONTEXT,
+  )
+  expect(JSON.stringify(registrationSignalCalls)).not.toContain(password)
+  expect(JSON.stringify(registrationReservations)).not.toContain(password)
+  expect(JSON.stringify(REGISTRATION_DELIVERY_CONTEXT)).not.toContain(password)
+  expect(registrationIssuerCalls).toEqual([
     {
-      email: "sponsor@example.com",
-      password: "CorrectHorse1!",
-      options: {
-        data: {
-          first_name: "Sponsor",
-          last_name: "Family",
-        },
-        emailRedirectTo:
-          "https://creatorshare.com/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding",
-      },
+      recipientEmail: "sponsor+family@example.com",
+      redirectTo:
+        "https://creatorshare.com/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding",
+      context: REGISTRATION_DELIVERY_CONTEXT,
+      password,
+      firstName: "Sponsor Grace",
+      lastName: "Family Name",
     },
   ])
+  expect(registrationIssuerCalls[0].recipientEmail).toBe(
+    registrationSignalCalls[0].email,
+  )
+  expect(registrationIssuerCalls[0].context).toBe(
+    registrationReservations[0].context,
+  )
+  expect(registrationIssuerCalls[0].redirectTo).not.toContain(password)
 })
 
 test("registration issues confirmation mail only from the exact canonical origin", async () => {
   const body = JSON.stringify({
     email: "sponsor@example.com",
-    password: "correct horse battery staple",
+    password: "CorrectHorse1!",
     first_name: "Sponsor",
     last_name: "Family",
   })
@@ -524,25 +586,120 @@ test("registration issues confirmation mail only from the exact canonical origin
     const response = await register(request)
     expect(response.status).toBe(400)
   }
-  expect(registrationCalls).toHaveLength(0)
+  expect(registrationEvents).toEqual([])
+  expect(registrationContextCalls).toHaveLength(0)
+  expect(registrationSignalCalls).toHaveLength(0)
+  expect(registrationReservations).toHaveLength(0)
+  expect(registrationIssuerCalls).toHaveLength(0)
 })
 
-test("registration hides existing accounts, provider failures, and delivery denial", async () => {
-  registrationData = { session: null, user: null }
-  registrationError = { message: "User already registered: provider secret" }
-  const providerFailure = await register(registrationRequest())
-  expect(providerFailure.status).toBe(202)
-  await expect(providerFailure.json()).resolves.toEqual({
-    status: "check-email",
-  })
-  expect(identityCookie(providerFailure)).toBeUndefined()
+test("registration preserves exact profile and password validation", async () => {
+  const requests = [
+    registrationRequest({ email: "not-an-email" }),
+    registrationRequest({ first_name: " " }),
+    registrationRequest({ last_name: "Family\u0000Name" }),
+    registrationRequest({ password: "weak" }),
+    registrationRequest({ password: `A1!a${"x".repeat(253)}` }),
+    registrationRequest({ unexpected: true }),
+  ]
 
-  registrationCalls.length = 0
+  for (const request of requests) {
+    const response = await register(request)
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid-request",
+    })
+  }
+  expect(registrationEvents).toEqual([])
+  expect(registrationIssuerCalls).toHaveLength(0)
+})
+
+test("registration hides context, signal, and quota outcomes", async () => {
+  registrationContextFailure = new Error(
+    "context failed for private-sponsor@example.com",
+  )
+  const contextFailure = await register(registrationRequest())
+  await expectRegistrationAccepted(contextFailure, [
+    "private-sponsor@example.com",
+    "context failed",
+  ])
+  expect(registrationEvents).toEqual(["context"])
+  expect(registrationSignalCalls).toHaveLength(0)
+  expect(registrationReservations).toHaveLength(0)
+  expect(registrationIssuerCalls).toHaveLength(0)
+
+  clearRegistrationObservations()
+  registrationContextFailure = null
+  registrationSignalFailure = new Error(
+    "signal failed for private-sponsor@example.com",
+  )
+  const signalFailure = await register(registrationRequest())
+  await expectRegistrationAccepted(signalFailure, [
+    "private-sponsor@example.com",
+    "signal failed",
+  ])
+  expect(registrationEvents).toEqual(["context", "signals"])
+  expect(registrationReservations).toHaveLength(0)
+  expect(registrationIssuerCalls).toHaveLength(0)
+
+  clearRegistrationObservations()
+  registrationSignalFailure = null
   registrationDeliveryAllowed = false
   const denied = await register(registrationRequest())
-  expect(denied.status).toBe(202)
-  await expect(denied.json()).resolves.toEqual({ status: "check-email" })
-  expect(registrationCalls).toHaveLength(0)
+  await expectRegistrationAccepted(denied, ["sponsor@example.com"])
+  expect(registrationEvents).toEqual(["context", "signals", "reserve"])
+  expect(registrationIssuerCalls).toHaveLength(0)
+
+  clearRegistrationObservations()
+  registrationDeliveryAllowed = true
+  registrationReservationFailure = new Error(
+    "quota failed for private-sponsor@example.com",
+  )
+  const reservationFailure = await register(registrationRequest())
+  await expectRegistrationAccepted(reservationFailure, [
+    "private-sponsor@example.com",
+    "quota failed",
+  ])
+  expect(registrationEvents).toEqual(["context", "signals", "reserve"])
+  expect(registrationIssuerCalls).toHaveLength(0)
+})
+
+test("registration hides every issuer disposition and exception", async () => {
+  const dispositions = [
+    Object.freeze({ status: "issued" }),
+    Object.freeze({ status: "coalesced", retryAfterSeconds: 30 }),
+    Object.freeze({ status: "deferred", retryAfterSeconds: 120 }),
+    Object.freeze({ status: "ambiguous", retryAfterSeconds: 3900 }),
+    Object.freeze({ status: "unavailable", stage: "configuration" }),
+    Object.freeze({ status: "unavailable", stage: "acquire" }),
+    Object.freeze({
+      status: "unavailable",
+      stage: "begin",
+      retryAfterSeconds: 3900,
+    }),
+  ]
+
+  for (const disposition of dispositions) {
+    registrationIssuerResult = disposition
+    const response = await register(registrationRequest())
+    await expectRegistrationAccepted(response, [
+      "sponsor@example.com",
+      disposition.status,
+      "retryAfterSeconds",
+      "provider secret",
+    ])
+  }
+
+  registrationIssuerFailure = new Error(
+    "provider failed for sponsor@example.com with provider secret",
+  )
+  const exception = await register(registrationRequest())
+  await expectRegistrationAccepted(exception, [
+    "sponsor@example.com",
+    "provider failed",
+    "provider secret",
+  ])
+  expect(registrationIssuerCalls).toHaveLength(dispositions.length + 1)
 })
 
 test("registration confirmation uses a fixed contact-free route", () => {

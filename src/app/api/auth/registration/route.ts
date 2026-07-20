@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { issueRegistrationEmailProof } from "@/lib/auth/supabaseEmailProofIssuer"
 import {
   getSponsorClaimCanonicalOrigin,
   SPONSOR_ACCOUNT_EMAIL_CONFIRMATION_PATH,
@@ -18,7 +19,6 @@ import {
   sponsorPasswordlessDeliveryContext,
 } from "@/lib/sponsorships/management/passwordlessRateLimit"
 import { CREATOR_SHARE_ACCOUNT_ONBOARDING_PATH } from "@/lib/sponsorships/management/sponsorEmailConfirmation"
-import { createStatelessSponsorEmailAuthClient } from "@/lib/sponsorships/management/statelessAuth"
 import { validatePassword } from "@/utils/passwordValidation"
 
 export const runtime = "nodejs"
@@ -107,6 +107,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const context = sponsorPasswordlessDeliveryContext(request)
     const signals = createSponsorPasswordlessDeliverySignals({
       email,
       headers: request.headers,
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
     const allowed = await reserveSponsorPasswordlessDelivery({
       flow: "registration",
       signals,
-      context: sponsorPasswordlessDeliveryContext(request),
+      context,
     })
     if (!allowed) return checkEmailResponse()
 
@@ -127,16 +128,16 @@ export async function POST(request: Request) {
       CREATOR_SHARE_ACCOUNT_ONBOARDING_PATH,
     )
 
-    await createStatelessSponsorEmailAuthClient().auth.signUp({
-      email,
+    await issueRegistrationEmailProof({
+      recipientEmail: email,
+      redirectTo: confirmationUrl.toString(),
+      context,
       password,
-      options: {
-        data: { first_name: firstName, last_name: lastName },
-        emailRedirectTo: confirmationUrl.toString(),
-      },
+      firstName,
+      lastName,
     })
   } catch {
-    // Existing accounts, delivery denial, and provider failure stay uniform.
+    // Quota, gate, account, and provider state stays private to the server.
   }
 
   return checkEmailResponse()
