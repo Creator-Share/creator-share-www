@@ -15,6 +15,7 @@ on:
       - "tests/database/**/*publication*"
       - "tests/database/**/*initial-owner*"
       - "tests/database/support/*.mjs"
+      - "tests/provider/**"
       - "supabase/config.toml"
       - "supabase/seed.sql"
       - ".nvmrc"
@@ -53,6 +54,15 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Verify email proof supersession harness safety
+        env:
+          PW_NO_WEBSERVER: "1"
+        run: >-
+          yarn playwright test
+          tests/provider/supabase-email-proof-supersession.spec.ts
+          --workers=1
+          --retries=0
+
       - name: Create loopback-only Docker network
         run: >-
           docker network create
@@ -64,6 +74,32 @@ jobs:
         run: >-
           yarn supabase start
           --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+
+      - name: Verify Supabase ports are loopback only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t published_bindings < <(
+            docker ps \
+              --filter "label=com.supabase.cli.project=creator-share-www" \
+              --quiet |
+              while read -r container; do
+                docker inspect "$container" \
+                  --format '{{range $port, $bindings := .NetworkSettings.Ports}}{{range $bindings}}{{println .HostIp}}{{end}}{{end}}'
+              done |
+              sed '/^$/d' |
+              sort -u
+          )
+          if (( ${#published_bindings[@]} == 0 )); then
+            echo "No local Supabase ports were published" >&2
+            exit 1
+          fi
+          for host_ip in "${published_bindings[@]}"; do
+            if [[ "$host_ip" != "127.0.0.1" && "$host_ip" != "::1" ]]; then
+              echo "Local Supabase published a non-loopback port" >&2
+              exit 1
+            fi
+          done
 
       - name: Run focused initial owner database tests
         run: |
@@ -111,9 +147,53 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      - name: Load local Supabase canary credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          status_file="$RUNNER_TEMP/ff029-supabase-status.env"
+          credentials_file="$RUNNER_TEMP/ff029-supabase-credentials.env"
+          trap 'rm -f "$status_file"' EXIT
+          yarn supabase status -o env > "$status_file"
+          set -a
+          source "$status_file"
+          set +a
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          umask 077
+          {
+            printf 'FF029_LOCAL_SUPABASE_ANON_KEY=%q\n' "$ANON_KEY"
+            printf 'FF029_LOCAL_SUPABASE_SERVICE_ROLE_KEY=%q\n' "$SERVICE_ROLE_KEY"
+          } > "$credentials_file"
+
+      - name: Observe local email proof supersession behavior
+        continue-on-error: true
+        shell: bash
+        env:
+          FF029_SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          credentials_file="$RUNNER_TEMP/ff029-supabase-credentials.env"
+          trap 'rm -f "$credentials_file"' EXIT
+          set -a
+          source "$credentials_file"
+          set +a
+          yarn canary:supabase-email-proof-supersession:local
+
+      - name: Upload sanitized email proof supersession evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: supabase-email-proof-supersession-evidence
+          path: test-results/provider/ff029-supabase-email-proof-supersession.json
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Stop local Supabase
         if: ${{ always() }}
-        run: yarn supabase stop --no-backup
+        run: |
+          rm -f "$RUNNER_TEMP/ff029-supabase-credentials.env"
+          yarn supabase stop --no-backup
 
       - name: Remove loopback-only Docker network
         if: ${{ always() }}
