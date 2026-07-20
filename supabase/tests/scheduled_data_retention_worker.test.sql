@@ -553,6 +553,16 @@ SELECT extensions.ok(
   )
   AND NOT has_function_privilege(
     'service_role',
+    'private.data_retention_backlog_v1(text)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'service_role',
+    'private.data_retention_counts_are_valid_v1(text,jsonb)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'service_role',
     'private.validate_data_retention_run_context(uuid,integer,text,text)',
     'EXECUTE'
   ),
@@ -949,7 +959,8 @@ SELECT extensions.ok(
     SELECT result -> 'counts' = '{
       "recent_auth_receipts_deleted": 0,
       "passwordless_reservations_deleted": 0,
-      "passwordless_verification_attempts_deleted": 0
+      "passwordless_verification_attempts_deleted": 0,
+      "advocate_invitation_authentication_attempts_deleted": 0
     }'::jsonb
       AND result ->> 'step_key' = 'sponsor_authentication'
     FROM retention_run_one_steps
@@ -1137,7 +1148,8 @@ SELECT extensions.ok(
       AND counts = '{
         "recent_auth_receipts_deleted": 0,
         "passwordless_reservations_deleted": 0,
-        "passwordless_verification_attempts_deleted": 0
+        "passwordless_verification_attempts_deleted": 0,
+        "advocate_invitation_authentication_attempts_deleted": 0
       }'::jsonb
       AND has_more IS NULL
       AND oldest_expired_at IS NULL

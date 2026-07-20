@@ -93,6 +93,7 @@ function stepCounts(stepKey: DataRetentionStepKey) {
       recent_auth_receipts_deleted: 3,
       passwordless_reservations_deleted: 6,
       passwordless_verification_attempts_deleted: 8,
+      advocate_invitation_authentication_attempts_deleted: 9,
     }
   }
   return { exposures_deleted: 7, visitors_deleted: 3 }
@@ -304,6 +305,7 @@ test.describe("data retention worker execution", () => {
         sponsorRecentAuthenticationReceiptsDeleted: 3,
         sponsorPasswordlessReservationsDeleted: 6,
         sponsorPasswordlessVerificationAttemptsDeleted: 8,
+        advocateInvitationAuthenticationAttemptsDeleted: 9,
       },
       startFailed: false,
       finalizeFailed: false,
@@ -387,6 +389,89 @@ test.describe("data retention worker execution", () => {
       expect(JSON.stringify({ result, errorCalls })).not.toContain(
         "private database failure",
       )
+    } finally {
+      console.error = originalError
+    }
+  })
+
+  test("replays historical sponsor authentication counts with a zero advocate count", async () => {
+    const result = await worker.runDataRetentionWorker({
+      config: workerConfig,
+      context: retentionContext,
+      invocationDeadlineAt: NOW + 60_000,
+      now: () => NOW,
+      timeoutSignal,
+      executor: {
+        async startRun() {
+          return RUN_ID
+        },
+        async executeStep(stepKey) {
+          if (stepKey !== "sponsor_authentication") return stepResult(stepKey)
+          return {
+            ...stepResult(stepKey),
+            counts: {
+              recent_auth_receipts_deleted: 3,
+              passwordless_reservations_deleted: 6,
+              passwordless_verification_attempts_deleted: 8,
+            },
+          }
+        },
+        async finishRun() {
+          return finishResult()
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      failedSteps: [],
+      counts: {
+        sponsorRecentAuthenticationReceiptsDeleted: 3,
+        sponsorPasswordlessReservationsDeleted: 6,
+        sponsorPasswordlessVerificationAttemptsDeleted: 8,
+        advocateInvitationAuthenticationAttemptsDeleted: 0,
+      },
+    })
+  })
+
+  test("rejects a noncanonical sponsor authentication count envelope", async () => {
+    const originalError = console.error
+    console.error = () => undefined
+    try {
+      const result = await worker.runDataRetentionWorker({
+        config: workerConfig,
+        context: retentionContext,
+        invocationDeadlineAt: NOW + 60_000,
+        now: () => NOW,
+        timeoutSignal,
+        executor: {
+          async startRun() {
+            return RUN_ID
+          },
+          async executeStep(stepKey) {
+            if (stepKey !== "sponsor_authentication") {
+              return stepResult(stepKey)
+            }
+            return {
+              ...stepResult(stepKey),
+              counts: { ...stepCounts(stepKey), unexpected_count: 1 },
+            }
+          },
+          async finishRun(reportedFailedSteps) {
+            expect(reportedFailedSteps).toEqual(["sponsor_authentication"])
+            return finishResult(["sponsor_authentication"])
+          },
+        },
+      })
+
+      expect(result).toMatchObject({
+        ok: false,
+        status: "completed_with_failures",
+        failedSteps: ["sponsor_authentication"],
+        counts: {
+          advocateInvitationAuthenticationAttemptsDeleted: 0,
+        },
+      })
     } finally {
       console.error = originalError
     }
@@ -899,6 +984,7 @@ test.describe("data retention route and scheduler", () => {
         sponsorRecentAuthenticationReceiptsDeleted: 3,
         sponsorPasswordlessReservationsDeleted: 6,
         sponsorPasswordlessVerificationAttemptsDeleted: 8,
+        advocateInvitationAuthenticationAttemptsDeleted: 9,
       })
       expect(bodyText).not.toContain(SECRET)
       expect(bodyText).not.toContain("upstream included")

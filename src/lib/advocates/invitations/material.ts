@@ -1,24 +1,47 @@
 export const ADVOCATE_INVITATION_PATH = "/advocate-invitation"
+export const ADVOCATE_INVITATION_AUTHENTICATE_PATH =
+  "/api/auth/advocate-invitations/authenticate"
 export const ADVOCATE_INVITATION_REDEEM_PATH =
   "/api/auth/advocate-invitations/redeem"
+export const ADVOCATE_INVITATION_RECOVER_PATH =
+  "/api/auth/advocate-invitations/recover"
 
 const CAPABILITY_PATTERN = /^[0-9a-f]{64}$/
 export const ADVOCATE_INVITATION_AUTH_TOKEN_HASH_MAXIMUM_LENGTH = 384
 export const ADVOCATE_INVITATION_MAXIMUM_FRAGMENT_LENGTH = 1_536
 
 const AUTH_TOKEN_HASH_PATTERN = /^[A-Za-z0-9._~-]{32,384}$/
+const OPERATION_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const MATERIAL_KEYS = Object.freeze([
   "auth",
   "capability",
   "type",
   "v",
 ] as const)
-const MAXIMUM_REDEEM_BODY_LENGTH = 2_048
+export const ADVOCATE_INVITATION_MAXIMUM_REQUEST_BODY_LENGTH = 2_048
 
 export interface AdvocateInvitationMaterial {
   capability: string
   authTokenHash: string
   authType: "magiclink"
+  version: 1
+}
+
+export interface AdvocateInvitationAuthenticationRequest {
+  authTokenHash: string
+  authType: "magiclink"
+  version: 1
+}
+
+export interface AdvocateInvitationRedemptionRequest {
+  capability: string
+  operationId: string
+  version: 1
+}
+
+export interface AdvocateInvitationRecoveryRequest {
+  operationId: string
   version: 1
 }
 
@@ -31,6 +54,30 @@ export class AdvocateInvitationMaterialError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+export function isAdvocateInvitationOperationId(
+  value: unknown,
+): value is string {
+  return typeof value === "string" && OPERATION_ID_PATTERN.test(value)
+}
+
+function parseExactBody(rawBody: string): Record<string, unknown> | null {
+  if (
+    typeof rawBody !== "string" ||
+    rawBody.length < 2 ||
+    rawBody.length > ADVOCATE_INVITATION_MAXIMUM_REQUEST_BODY_LENGTH ||
+    /[^\x09\x0a\x0d\x20-\x7e]/.test(rawBody)
+  ) {
+    return null
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(rawBody)
+    return isRecord(parsed) ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 function isExactMaterial(value: AdvocateInvitationMaterial): boolean {
@@ -146,51 +193,88 @@ export function parseAdvocateInvitationFragment(
 
 export function parseAdvocateInvitationRedeemBody(
   rawBody: string,
-): AdvocateInvitationMaterial | null {
-  if (
-    typeof rawBody !== "string" ||
-    rawBody.length < 2 ||
-    rawBody.length > MAXIMUM_REDEEM_BODY_LENGTH ||
-    /[^\x09\x0a\x0d\x20-\x7e]/.test(rawBody)
-  ) {
-    return null
-  }
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(rawBody)
-  } catch {
-    return null
-  }
-  if (!isRecord(parsed)) return null
+): AdvocateInvitationRedemptionRequest | null {
+  const parsed = parseExactBody(rawBody)
+  if (parsed === null) return null
 
   const keys = Object.keys(parsed).sort()
   if (
-    keys.length !== 4 ||
-    keys[0] !== "authTokenHash" ||
-    keys[1] !== "authType" ||
-    keys[2] !== "capability" ||
-    keys[3] !== "version"
+    keys.length !== 3 ||
+    keys[0] !== "capability" ||
+    keys[1] !== "operationId" ||
+    keys[2] !== "version"
   ) {
     return null
   }
 
   const capability = parsed.capability
-  const authTokenHash = parsed.authTokenHash
+  const operationId = parsed.operationId
   if (
     parsed.version !== 1 ||
-    parsed.authType !== "magiclink" ||
     typeof capability !== "string" ||
     !CAPABILITY_PATTERN.test(capability) ||
+    !isAdvocateInvitationOperationId(operationId)
+  ) {
+    return null
+  }
+  const value: AdvocateInvitationRedemptionRequest = {
+    capability,
+    operationId,
+    version: 1,
+  }
+  if (rawBody !== JSON.stringify(value)) return null
+  return Object.freeze(value)
+}
+
+export function parseAdvocateInvitationAuthenticateBody(
+  rawBody: string,
+): AdvocateInvitationAuthenticationRequest | null {
+  const parsed = parseExactBody(rawBody)
+  if (parsed === null) return null
+
+  const keys = Object.keys(parsed).sort()
+  const authTokenHash = parsed.authTokenHash
+  if (
+    keys.length !== 3 ||
+    keys[0] !== "authTokenHash" ||
+    keys[1] !== "authType" ||
+    keys[2] !== "version" ||
+    parsed.version !== 1 ||
+    parsed.authType !== "magiclink" ||
     typeof authTokenHash !== "string" ||
     !AUTH_TOKEN_HASH_PATTERN.test(authTokenHash)
   ) {
     return null
   }
-  const value: AdvocateInvitationMaterial = {
-    capability,
+
+  const value: AdvocateInvitationAuthenticationRequest = {
     authTokenHash,
     authType: "magiclink",
+    version: 1,
+  }
+  if (rawBody !== JSON.stringify(value)) return null
+  return Object.freeze(value)
+}
+
+export function parseAdvocateInvitationRecoveryBody(
+  rawBody: string,
+): AdvocateInvitationRecoveryRequest | null {
+  const parsed = parseExactBody(rawBody)
+  if (parsed === null) return null
+
+  const keys = Object.keys(parsed).sort()
+  if (
+    keys.length !== 2 ||
+    keys[0] !== "operationId" ||
+    keys[1] !== "version" ||
+    parsed.version !== 1 ||
+    !isAdvocateInvitationOperationId(parsed.operationId)
+  ) {
+    return null
+  }
+
+  const value: AdvocateInvitationRecoveryRequest = {
+    operationId: parsed.operationId,
     version: 1,
   }
   if (rawBody !== JSON.stringify(value)) return null

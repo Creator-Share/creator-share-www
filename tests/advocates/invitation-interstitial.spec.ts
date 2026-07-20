@@ -5,11 +5,15 @@ import { resolve } from "node:path"
 import { expect, test } from "@playwright/test"
 
 import {
+  ADVOCATE_INVITATION_AUTHENTICATE_PATH,
   ADVOCATE_INVITATION_PATH,
+  ADVOCATE_INVITATION_RECOVER_PATH,
   ADVOCATE_INVITATION_REDEEM_PATH,
   buildAdvocateInvitationFragment,
   buildAdvocateInvitationLink,
+  parseAdvocateInvitationAuthenticateBody,
   parseAdvocateInvitationFragment,
+  parseAdvocateInvitationRecoveryBody,
   parseAdvocateInvitationRedeemBody,
 } from "../../src/lib/advocates/invitations/material"
 
@@ -21,6 +25,8 @@ type NodeModuleLoader = (
   parent: unknown,
   isMain: boolean,
 ) => unknown
+
+process.env.VERCEL_URL = "preview.example.test"
 
 const nodeModule = Module as unknown as { _load: NodeModuleLoader }
 const originalModuleLoad = nodeModule._load
@@ -50,6 +56,22 @@ const MATERIAL = Object.freeze({
   authType: "magiclink" as const,
   version: 1 as const,
 })
+const OPERATION_ID = "11111111-1111-4111-8111-111111111111"
+const AUTHENTICATION_REQUEST = Object.freeze({
+  authTokenHash: MATERIAL.authTokenHash,
+  authType: MATERIAL.authType,
+  version: 1 as const,
+})
+const REDEMPTION_REQUEST = Object.freeze({
+  capability: MATERIAL.capability,
+  operationId: OPERATION_ID,
+  version: 1 as const,
+})
+const RECOVERY_REQUEST = Object.freeze({
+  operationId: OPERATION_ID,
+  version: 1 as const,
+})
+const RECOVERY_STORAGE_KEY = "creator_share_advocate_invitation_redemption_v1"
 
 test.describe("advocate invitation secret transport", () => {
   test("places both capabilities in the fragment and never in the request target", () => {
@@ -139,35 +161,52 @@ test.describe("advocate invitation secret transport", () => {
     ).toBeNull()
   })
 
-  test("accepts only the exact bounded redeem body", () => {
-    const rawBody = JSON.stringify(MATERIAL)
-    expect(parseAdvocateInvitationRedeemBody(rawBody)).toEqual(MATERIAL)
-    expect(Object.isFrozen(parseAdvocateInvitationRedeemBody(rawBody))).toBe(
-      true,
-    )
+  test("accepts only the three exact bounded two-response bodies", () => {
+    expect(
+      parseAdvocateInvitationAuthenticateBody(
+        JSON.stringify(AUTHENTICATION_REQUEST),
+      ),
+    ).toEqual(AUTHENTICATION_REQUEST)
+    expect(
+      parseAdvocateInvitationRedeemBody(JSON.stringify(REDEMPTION_REQUEST)),
+    ).toEqual(REDEMPTION_REQUEST)
+    expect(
+      parseAdvocateInvitationRecoveryBody(JSON.stringify(RECOVERY_REQUEST)),
+    ).toEqual(RECOVERY_REQUEST)
+    expect(
+      Object.isFrozen(
+        parseAdvocateInvitationRecoveryBody(JSON.stringify(RECOVERY_REQUEST)),
+      ),
+    ).toBe(true)
 
     for (const invalid of [
       "{}",
-      JSON.stringify({ ...MATERIAL, email: "person@example.com" }),
-      JSON.stringify({ ...MATERIAL, version: 2 }),
-      JSON.stringify({ ...MATERIAL, capability: "a".repeat(63) }),
-      JSON.stringify({ ...MATERIAL, authTokenHash: "short" }),
-      JSON.stringify({ ...MATERIAL, authType: "invite" }),
+      JSON.stringify({ ...REDEMPTION_REQUEST, email: "person@example.com" }),
+      JSON.stringify({ ...REDEMPTION_REQUEST, version: 2 }),
+      JSON.stringify({ ...REDEMPTION_REQUEST, capability: "a".repeat(63) }),
+      JSON.stringify({ ...REDEMPTION_REQUEST, operationId: "not-v4" }),
       `{"value":"${"a".repeat(2_100)}"}`,
       "not-json",
-      `{"capability":"${MATERIAL.capability}","capability":"${MATERIAL.capability}","authTokenHash":"${MATERIAL.authTokenHash}","authType":"magiclink","version":1}`,
-      `{"capability":"${MATERIAL.capability}","authTokenHash":"short","authTokenHash":"${MATERIAL.authTokenHash}","authType":"magiclink","version":1}`,
-      `{"capability":"${MATERIAL.capability}","authTokenHash":"${MATERIAL.authTokenHash}","authType":"invite","authType":"magiclink","version":1}`,
-      `{"capability":"${MATERIAL.capability}","authTokenHash":"${MATERIAL.authTokenHash}","authType":"magiclink","version":2,"version":1}`,
+      `{"capability":"${MATERIAL.capability}","capability":"${MATERIAL.capability}","operationId":"${OPERATION_ID}","version":1}`,
       JSON.stringify({
         version: 1,
-        authType: "magiclink",
-        authTokenHash: MATERIAL.authTokenHash,
         capability: MATERIAL.capability,
+        operationId: OPERATION_ID,
       }),
     ]) {
       expect(parseAdvocateInvitationRedeemBody(invalid)).toBeNull()
     }
+
+    expect(
+      parseAdvocateInvitationAuthenticateBody(
+        JSON.stringify({ ...AUTHENTICATION_REQUEST, authTokenHash: "short" }),
+      ),
+    ).toBeNull()
+    expect(
+      parseAdvocateInvitationRecoveryBody(
+        JSON.stringify({ version: 1, operationId: OPERATION_ID }),
+      ),
+    ).toBeNull()
   })
 })
 
@@ -198,6 +237,9 @@ test.describe("advocate invitation interstitial", () => {
     )
 
     for (const host of [
+      "www.creatorshare.com",
+      "creator-share-www.vercel.app",
+      "preview.example.test",
       "hope.creatorshare.com",
       "nested.hope.creatorshare.com",
       "evil.example",
@@ -211,6 +253,19 @@ test.describe("advocate invitation interstitial", () => {
       expect(denied.status).toBe(404)
       expect(await denied.text()).toBe("")
       expect(denied.headers.get("referrer-policy")).toBe("no-referrer")
+    }
+
+    for (const target of [
+      "https://internal.example/advocate-invitation?source=email",
+      `https://internal.example/advocate-invitation?capability=${MATERIAL.capability}`,
+      "https://internal.example/advocate-invitation/extra",
+      "https://internal.example/wrong-path",
+    ]) {
+      const denied = await invitationRoute.GET(
+        new Request(target, { headers: { host: "creatorshare.com" } }),
+      )
+      expect(denied.status).toBe(404)
+      expect(await denied.text()).toBe("")
     }
   })
 
@@ -244,7 +299,7 @@ test.describe("advocate invitation interstitial", () => {
       "B".repeat(24),
     )
     const captureIndex = rendered.html.indexOf(
-      "const rawFragment = window.location.hash",
+      "let rawFragment = window.location.hash",
     )
     const stripIndex = rendered.html.indexOf("window.history.replaceState")
     const parseIndex = rendered.html.indexOf("new URLSearchParams")
@@ -255,14 +310,21 @@ test.describe("advocate invitation interstitial", () => {
     expect(stripIndex).toBeGreaterThan(captureIndex)
     expect(parseIndex).toBeGreaterThan(stripIndex)
     expect(submitIndex).toBeGreaterThan(parseIndex)
-    expect(fetchIndex).toBeGreaterThan(submitIndex)
+    expect(fetchIndex).toBeGreaterThan(parseIndex)
+    expect(rendered.html).toContain(
+      `fetch(${JSON.stringify(ADVOCATE_INVITATION_AUTHENTICATE_PATH)}`,
+    )
     expect(rendered.html).toContain(
       `fetch(${JSON.stringify(ADVOCATE_INVITATION_REDEEM_PATH)}`,
     )
+    expect(rendered.html).toContain(
+      `fetch(${JSON.stringify(ADVOCATE_INVITATION_RECOVER_PATH)}`,
+    )
     expect(rendered.html).toContain('redirect: "error"')
     expect(rendered.html).toContain('credentials: "same-origin"')
-    expect(rendered.html).toContain('payload.redirect !== "/portal"')
-    expect(rendered.html).not.toContain("sessionStorage")
+    expect(rendered.html).toContain("window.sessionStorage.setItem")
+    expect(rendered.html).toContain("window.sessionStorage.removeItem")
+    expect(rendered.html).toContain("window.crypto.randomUUID")
     expect(rendered.html).not.toContain("localStorage")
   })
 
@@ -282,20 +344,642 @@ test.describe("advocate invitation interstitial", () => {
   test("removes secrets from browser history before explicit redemption", async ({
     page,
   }) => {
+    const authenticationBodies: unknown[] = []
     const redeemBodies: unknown[] = []
-    const redeemRequests: Array<{ url: string; referer: string | undefined }> =
-      []
+    const requests: Array<{ url: string; referer: string | undefined }> = []
+    const recoveryBodies: unknown[] = []
+    await page.route(
+      `**${ADVOCATE_INVITATION_AUTHENTICATE_PATH}`,
+      async (route) => {
+        const request = route.request()
+        authenticationBodies.push(request.postDataJSON())
+        requests.push({
+          url: request.url(),
+          referer: request.headers().referer,
+        })
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true }),
+        })
+      },
+    )
     await page.route(`**${ADVOCATE_INVITATION_REDEEM_PATH}`, async (route) => {
       const request = route.request()
-      redeemBodies.push(request.postDataJSON())
-      redeemRequests.push({
+      const redemption = request.postDataJSON() as Record<string, unknown>
+      redeemBodies.push(redemption)
+      requests.push({
         url: request.url(),
         referer: request.headers().referer,
       })
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ redirect: "/portal" }),
+        body: JSON.stringify({
+          ok: true,
+          operationId: redemption.operationId,
+          redirect: "/portal",
+        }),
+      })
+    })
+    await page.route(`**${ADVOCATE_INVITATION_RECOVER_PATH}`, async (route) => {
+      recoveryBodies.push(route.request().postDataJSON())
+      await route.fulfill({ status: 500, body: "unexpected recovery" })
+    })
+    await page.route("**/portal", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><title>Portal</title>",
+      }),
+    )
+
+    await page.goto(
+      `${ADVOCATE_INVITATION_PATH}${buildAdvocateInvitationFragment(MATERIAL)}`,
+    )
+    const browserOrigin = new URL(page.url()).origin
+
+    await expect(page).toHaveURL(new RegExp(`${ADVOCATE_INVITATION_PATH}$`))
+    expect(page.url()).not.toContain(MATERIAL.capability)
+    expect(page.url()).not.toContain(MATERIAL.authTokenHash)
+    expect(authenticationBodies).toHaveLength(0)
+    expect(redeemBodies).toHaveLength(0)
+    await expect(
+      page.getByRole("button", { name: "Continue securely" }),
+    ).toBeEnabled()
+
+    await page.getByRole("button", { name: "Continue securely" }).click()
+    await expect.poll(() => authenticationBodies.length).toBe(1)
+    await expect.poll(() => redeemBodies.length).toBe(1)
+    expect(authenticationBodies).toEqual([AUTHENTICATION_REQUEST])
+    expect(redeemBodies).toEqual([
+      {
+        capability: MATERIAL.capability,
+        operationId: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+        ),
+        version: 1,
+      },
+    ])
+    expect(recoveryBodies).toEqual([])
+    expect(requests).toEqual([
+      {
+        url: `${browserOrigin}${ADVOCATE_INVITATION_AUTHENTICATE_PATH}`,
+        referer: undefined,
+      },
+      {
+        url: `${browserOrigin}${ADVOCATE_INVITATION_REDEEM_PATH}`,
+        referer: undefined,
+      },
+    ])
+    await expect(page).toHaveURL(/\/portal$/)
+    expect(
+      await page.evaluate(() =>
+        sessionStorage.getItem(
+          "creator_share_advocate_invitation_redemption_v1",
+        ),
+      ),
+    ).toBeNull()
+  })
+
+  test("recovers a committed acceptance after the redemption response is lost", async ({
+    page,
+  }) => {
+    const redemptionBodies: Array<Record<string, unknown>> = []
+    const recoveryBodies: unknown[] = []
+    let releaseRecovery: () => void = () => {
+      throw new Error("recovery request did not wait for confirmation")
+    }
+
+    await page.route(`**${ADVOCATE_INVITATION_AUTHENTICATE_PATH}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      }),
+    )
+    await page.route(`**${ADVOCATE_INVITATION_REDEEM_PATH}`, async (route) => {
+      redemptionBodies.push(
+        route.request().postDataJSON() as Record<string, unknown>,
+      )
+      await route.abort("failed")
+    })
+    await page.route(`**${ADVOCATE_INVITATION_RECOVER_PATH}`, async (route) => {
+      const recovery = route.request().postDataJSON() as Record<string, unknown>
+      recoveryBodies.push(recovery)
+      await new Promise<void>((resolveRecovery) => {
+        releaseRecovery = resolveRecovery
+      })
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          operationId: recovery.operationId,
+          redirect: "/portal",
+        }),
+      })
+    })
+    await page.route("**/portal", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><title>Portal</title>",
+      }),
+    )
+
+    await page.goto(
+      `${ADVOCATE_INVITATION_PATH}${buildAdvocateInvitationFragment(MATERIAL)}`,
+    )
+    await page.getByRole("button", { name: "Continue securely" }).click()
+    await expect.poll(() => redemptionBodies.length).toBe(1)
+    await expect.poll(() => recoveryBodies.length).toBe(1)
+
+    const redemption = redemptionBodies[0]
+    const operationId = redemption.operationId
+    expect(recoveryBodies).toEqual([{ operationId, version: 1 }])
+    expect(Object.keys(recoveryBodies[0] as object).sort()).toEqual([
+      "operationId",
+      "version",
+    ])
+    expect(
+      await page.evaluate((storageKey) => {
+        const stored = sessionStorage.getItem(storageKey)
+        return { length: sessionStorage.length, stored }
+      }, RECOVERY_STORAGE_KEY),
+    ).toEqual({
+      length: 1,
+      stored: JSON.stringify({ operationId, version: 1 }),
+    })
+
+    releaseRecovery()
+
+    await expect(page).toHaveURL(/\/portal$/)
+    expect(
+      await page.evaluate(
+        (storageKey) => sessionStorage.getItem(storageKey),
+        RECOVERY_STORAGE_KEY,
+      ),
+    ).toBeNull()
+  })
+
+  test("retries the same email proof when its successful response is lost", async ({
+    page,
+  }) => {
+    const authenticationBodies: unknown[] = []
+    const redemptionBodies: Array<Record<string, unknown>> = []
+    await page.route(
+      `**${ADVOCATE_INVITATION_AUTHENTICATE_PATH}`,
+      async (route) => {
+        authenticationBodies.push(route.request().postDataJSON())
+        if (authenticationBodies.length === 1) {
+          await route.abort("failed")
+          return
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true }),
+        })
+      },
+    )
+    await page.route(`**${ADVOCATE_INVITATION_REDEEM_PATH}`, async (route) => {
+      const redemption = route.request().postDataJSON() as Record<
+        string,
+        unknown
+      >
+      redemptionBodies.push(redemption)
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          operationId: redemption.operationId,
+          redirect: "/portal",
+        }),
+      })
+    })
+    await page.route("**/portal", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><title>Portal</title>",
+      }),
+    )
+
+    await page.goto(
+      `${ADVOCATE_INVITATION_PATH}${buildAdvocateInvitationFragment(MATERIAL)}`,
+    )
+    await page.getByRole("button", { name: "Continue securely" }).click()
+
+    await expect(
+      page.getByRole("button", { name: "Try email verification again" }),
+    ).toBeEnabled()
+    expect(authenticationBodies).toEqual([AUTHENTICATION_REQUEST])
+    expect(redemptionBodies).toEqual([])
+
+    await page
+      .getByRole("button", { name: "Try email verification again" })
+      .click()
+
+    await expect(page).toHaveURL(/\/portal$/)
+    expect(authenticationBodies).toEqual([
+      AUTHENTICATION_REQUEST,
+      AUTHENTICATION_REQUEST,
+    ])
+    expect(redemptionBodies).toHaveLength(1)
+  })
+
+  test("retains invitation material when authentication capacity is unavailable", async ({
+    page,
+  }) => {
+    const authenticationBodies: unknown[] = []
+    const redemptionBodies: Array<Record<string, unknown>> = []
+    await page.route(
+      `**${ADVOCATE_INVITATION_AUTHENTICATE_PATH}`,
+      async (route) => {
+        authenticationBodies.push(route.request().postDataJSON())
+        await route.fulfill(
+          authenticationBodies.length === 1
+            ? {
+                status: 503,
+                contentType: "application/json",
+                body: JSON.stringify({
+                  ok: false,
+                  code: "authentication_unavailable",
+                }),
+              }
+            : {
+                status: 200,
+                contentType: "application/json",
+                body: JSON.stringify({ ok: true }),
+              },
+        )
+      },
+    )
+    await page.route(`**${ADVOCATE_INVITATION_REDEEM_PATH}`, async (route) => {
+      const redemption = route.request().postDataJSON() as Record<
+        string,
+        unknown
+      >
+      redemptionBodies.push(redemption)
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          operationId: redemption.operationId,
+          redirect: "/portal",
+        }),
+      })
+    })
+    await page.route("**/portal", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><title>Portal</title>",
+      }),
+    )
+
+    await page.goto(
+      `${ADVOCATE_INVITATION_PATH}${buildAdvocateInvitationFragment(MATERIAL)}`,
+    )
+    await page.getByRole("button", { name: "Continue securely" }).click()
+
+    await expect(
+      page.getByRole("button", { name: "Try email verification again" }),
+    ).toBeEnabled()
+    expect(authenticationBodies).toEqual([AUTHENTICATION_REQUEST])
+    expect(redemptionBodies).toEqual([])
+
+    await page
+      .getByRole("button", { name: "Try email verification again" })
+      .click()
+
+    await expect(page).toHaveURL(/\/portal$/)
+    expect(authenticationBodies).toEqual([
+      AUTHENTICATION_REQUEST,
+      AUTHENTICATION_REQUEST,
+    ])
+    expect(redemptionBodies).toHaveLength(1)
+  })
+
+  test("treats a malformed success response as ambiguous and recovers", async ({
+    page,
+  }) => {
+    const redemptionBodies: Array<Record<string, unknown>> = []
+    const recoveryBodies: unknown[] = []
+    await page.route(`**${ADVOCATE_INVITATION_AUTHENTICATE_PATH}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      }),
+    )
+    await page.route(`**${ADVOCATE_INVITATION_REDEEM_PATH}`, async (route) => {
+      redemptionBodies.push(
+        route.request().postDataJSON() as Record<string, unknown>,
+      )
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+    await page.route(`**${ADVOCATE_INVITATION_RECOVER_PATH}`, async (route) => {
+      const recovery = route.request().postDataJSON() as Record<string, unknown>
+      recoveryBodies.push(recovery)
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          operationId: recovery.operationId,
+          redirect: "/portal",
+        }),
+      })
+    })
+    await page.route("**/portal", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><title>Portal</title>",
+      }),
+    )
+
+    await page.goto(
+      `${ADVOCATE_INVITATION_PATH}${buildAdvocateInvitationFragment(MATERIAL)}`,
+    )
+    await page.getByRole("button", { name: "Continue securely" }).click()
+
+    await expect(page).toHaveURL(/\/portal$/)
+    expect(redemptionBodies).toHaveLength(1)
+    expect(recoveryBodies).toEqual([
+      {
+        operationId: redemptionBodies[0].operationId,
+        version: 1,
+      },
+    ])
+  })
+
+  test("preserves the operation when the redemption session needs reauthentication", async ({
+    page,
+  }) => {
+    const redemptionBodies: Array<Record<string, unknown>> = []
+    const recoveryBodies: unknown[] = []
+    await page.route(`**${ADVOCATE_INVITATION_AUTHENTICATE_PATH}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      }),
+    )
+    await page.route(`**${ADVOCATE_INVITATION_REDEEM_PATH}`, async (route) => {
+      const redemption = route.request().postDataJSON() as Record<
+        string,
+        unknown
+      >
+      redemptionBodies.push(redemption)
+      if (redemptionBodies.length === 1) {
+        await route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ok: false,
+            code: "authentication_required",
+          }),
+        })
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          operationId: redemption.operationId,
+          redirect: "/portal",
+        }),
+      })
+    })
+    await page.route(`**${ADVOCATE_INVITATION_RECOVER_PATH}`, async (route) => {
+      recoveryBodies.push(route.request().postDataJSON())
+      await route.fulfill({
+        status: 410,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false, code: "invalid_or_expired" }),
+      })
+    })
+    await page.route("**/portal", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><title>Portal</title>",
+      }),
+    )
+
+    await page.goto(
+      `${ADVOCATE_INVITATION_PATH}${buildAdvocateInvitationFragment(MATERIAL)}`,
+    )
+    await page.getByRole("button", { name: "Continue securely" }).click()
+
+    await expect(
+      page.getByRole("link", { name: "Sign in in another tab" }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Recover access" }),
+    ).toBeEnabled()
+    expect(redemptionBodies).toHaveLength(1)
+    const operationId = redemptionBodies[0].operationId
+    expect(
+      await page.evaluate(
+        (storageKey) => sessionStorage.getItem(storageKey),
+        RECOVERY_STORAGE_KEY,
+      ),
+    ).toBe(JSON.stringify({ operationId, version: 1 }))
+
+    await page.getByRole("button", { name: "Recover access" }).click()
+
+    await expect(page).toHaveURL(/\/portal$/)
+    expect(recoveryBodies).toEqual([{ operationId, version: 1 }])
+    expect(redemptionBodies).toEqual([
+      {
+        capability: MATERIAL.capability,
+        operationId,
+        version: 1,
+      },
+      {
+        capability: MATERIAL.capability,
+        operationId,
+        version: 1,
+      },
+    ])
+  })
+
+  test("recovers from an exact stored operation after the interstitial reloads", async ({
+    page,
+  }) => {
+    const authenticationBodies: unknown[] = []
+    const redemptionBodies: unknown[] = []
+    const recoveryBodies: unknown[] = []
+    await page.addInitScript(
+      ({ storageKey, operation, invitationPath }) => {
+        if (window.location.pathname === invitationPath) {
+          sessionStorage.setItem(storageKey, JSON.stringify(operation))
+        }
+      },
+      {
+        storageKey: RECOVERY_STORAGE_KEY,
+        operation: RECOVERY_REQUEST,
+        invitationPath: ADVOCATE_INVITATION_PATH,
+      },
+    )
+    await page.route(
+      `**${ADVOCATE_INVITATION_AUTHENTICATE_PATH}`,
+      async (route) => {
+        authenticationBodies.push(route.request().postDataJSON())
+        await route.fulfill({ status: 500, body: "unexpected authentication" })
+      },
+    )
+    await page.route(`**${ADVOCATE_INVITATION_REDEEM_PATH}`, async (route) => {
+      redemptionBodies.push(route.request().postDataJSON())
+      await route.fulfill({ status: 500, body: "unexpected redemption" })
+    })
+    await page.route(`**${ADVOCATE_INVITATION_RECOVER_PATH}`, async (route) => {
+      const recovery = route.request().postDataJSON() as Record<string, unknown>
+      recoveryBodies.push(recovery)
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          operationId: recovery.operationId,
+          redirect: "/portal",
+        }),
+      })
+    })
+    await page.route("**/portal", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><title>Portal</title>",
+      }),
+    )
+
+    await page.goto(ADVOCATE_INVITATION_PATH)
+
+    await expect(page).toHaveURL(/\/portal$/)
+    expect(authenticationBodies).toEqual([])
+    expect(redemptionBodies).toEqual([])
+    expect(recoveryBodies).toEqual([RECOVERY_REQUEST])
+    expect(
+      await page.evaluate(
+        (storageKey) => sessionStorage.getItem(storageKey),
+        RECOVERY_STORAGE_KEY,
+      ),
+    ).toBeNull()
+  })
+
+  test("allows the same stored operation to be checked again after recovery races redemption", async ({
+    page,
+  }) => {
+    const recoveryBodies: unknown[] = []
+    await page.addInitScript(
+      ({ storageKey, operation, invitationPath }) => {
+        if (window.location.pathname === invitationPath) {
+          sessionStorage.setItem(storageKey, JSON.stringify(operation))
+        }
+      },
+      {
+        storageKey: RECOVERY_STORAGE_KEY,
+        operation: RECOVERY_REQUEST,
+        invitationPath: ADVOCATE_INVITATION_PATH,
+      },
+    )
+    await page.route(`**${ADVOCATE_INVITATION_RECOVER_PATH}`, async (route) => {
+      const recovery = route.request().postDataJSON() as Record<string, unknown>
+      recoveryBodies.push(recovery)
+      if (recoveryBodies.length === 1) {
+        await route.fulfill({
+          status: 410,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: false, code: "invalid_or_expired" }),
+        })
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          operationId: recovery.operationId,
+          redirect: "/portal",
+        }),
+      })
+    })
+    await page.route("**/portal", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><title>Portal</title>",
+      }),
+    )
+
+    await page.goto(ADVOCATE_INVITATION_PATH)
+
+    await expect(
+      page.getByRole("button", { name: "Check again" }),
+    ).toBeEnabled()
+    await expect(page.getByRole("status")).toContainText(
+      "The original request may still be finishing.",
+    )
+    expect(recoveryBodies).toEqual([RECOVERY_REQUEST])
+
+    await page.getByRole("button", { name: "Check again" }).click()
+
+    await expect(page).toHaveURL(/\/portal$/)
+    expect(recoveryBodies).toEqual([RECOVERY_REQUEST, RECOVERY_REQUEST])
+  })
+
+  test("resolves an outstanding operation before processing a reopened invitation link", async ({
+    page,
+  }) => {
+    const authenticationBodies: unknown[] = []
+    const redemptionBodies: unknown[] = []
+    const recoveryBodies: unknown[] = []
+    await page.addInitScript(
+      ({ storageKey, operation, invitationPath }) => {
+        if (window.location.pathname === invitationPath) {
+          sessionStorage.setItem(storageKey, JSON.stringify(operation))
+        }
+      },
+      {
+        storageKey: RECOVERY_STORAGE_KEY,
+        operation: RECOVERY_REQUEST,
+        invitationPath: ADVOCATE_INVITATION_PATH,
+      },
+    )
+    await page.route(
+      `**${ADVOCATE_INVITATION_AUTHENTICATE_PATH}`,
+      async (route) => {
+        authenticationBodies.push(route.request().postDataJSON())
+        await route.fulfill({ status: 500, body: "unexpected authentication" })
+      },
+    )
+    await page.route(`**${ADVOCATE_INVITATION_REDEEM_PATH}`, async (route) => {
+      redemptionBodies.push(route.request().postDataJSON())
+      await route.fulfill({ status: 500, body: "unexpected redemption" })
+    })
+    await page.route(`**${ADVOCATE_INVITATION_RECOVER_PATH}`, async (route) => {
+      const recovery = route.request().postDataJSON() as Record<string, unknown>
+      recoveryBodies.push(recovery)
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          operationId: recovery.operationId,
+          redirect: "/portal",
+        }),
       })
     })
     await page.route("**/portal", (route) =>
@@ -310,23 +994,110 @@ test.describe("advocate invitation interstitial", () => {
       `${ADVOCATE_INVITATION_PATH}${buildAdvocateInvitationFragment(MATERIAL)}`,
     )
 
-    await expect(page).toHaveURL(new RegExp(`${ADVOCATE_INVITATION_PATH}$`))
+    await expect(page).toHaveURL(/\/portal$/)
+    expect(authenticationBodies).toEqual([])
+    expect(redemptionBodies).toEqual([])
+    expect(recoveryBodies).toEqual([RECOVERY_REQUEST])
     expect(page.url()).not.toContain(MATERIAL.capability)
     expect(page.url()).not.toContain(MATERIAL.authTokenHash)
-    expect(redeemBodies).toHaveLength(0)
-    await expect(
-      page.getByRole("button", { name: "Continue securely" }),
-    ).toBeEnabled()
+  })
 
-    await page.getByRole("button", { name: "Continue securely" }).click()
-    await expect.poll(() => redeemBodies.length).toBe(1)
-    expect(redeemBodies).toEqual([MATERIAL])
-    expect(redeemRequests).toEqual([
-      {
-        url: `${new URL(ADVOCATE_INVITATION_REDEEM_PATH, page.url()).origin}${ADVOCATE_INVITATION_REDEEM_PATH}`,
-        referer: undefined,
+  test("rejects malformed recovery storage without making a request", async ({
+    page,
+  }) => {
+    const endpointRequests: string[] = []
+    await page.addInitScript(
+      ({ storageKey, operation }) => {
+        sessionStorage.setItem(
+          storageKey,
+          JSON.stringify({ ...operation, capability: "must-not-survive" }),
+        )
       },
-    ])
-    await expect(page).toHaveURL(/\/portal$/)
+      { storageKey: RECOVERY_STORAGE_KEY, operation: RECOVERY_REQUEST },
+    )
+    for (const path of [
+      ADVOCATE_INVITATION_AUTHENTICATE_PATH,
+      ADVOCATE_INVITATION_REDEEM_PATH,
+      ADVOCATE_INVITATION_RECOVER_PATH,
+    ]) {
+      await page.route(`**${path}`, async (route) => {
+        endpointRequests.push(route.request().url())
+        await route.fulfill({ status: 500, body: "unexpected request" })
+      })
+    }
+
+    await page.goto(ADVOCATE_INVITATION_PATH)
+
+    await expect(page.getByRole("status")).toContainText(
+      "This invitation link is invalid or incomplete.",
+    )
+    await expect(page.getByRole("button")).toBeDisabled()
+    expect(endpointRequests).toEqual([])
+    expect(
+      await page.evaluate(
+        (storageKey) => sessionStorage.getItem(storageKey),
+        RECOVERY_STORAGE_KEY,
+      ),
+    ).toBeNull()
+  })
+
+  test("retains only the operation receipt key when recovery requires sign in", async ({
+    page,
+  }) => {
+    const authenticationBodies: unknown[] = []
+    const redemptionBodies: unknown[] = []
+    const recoveryBodies: unknown[] = []
+    await page.addInitScript(
+      ({ storageKey, operation }) => {
+        sessionStorage.setItem(storageKey, JSON.stringify(operation))
+      },
+      { storageKey: RECOVERY_STORAGE_KEY, operation: RECOVERY_REQUEST },
+    )
+    await page.route(
+      `**${ADVOCATE_INVITATION_AUTHENTICATE_PATH}`,
+      async (route) => {
+        authenticationBodies.push(route.request().postDataJSON())
+        await route.fulfill({ status: 500, body: "unexpected authentication" })
+      },
+    )
+    await page.route(`**${ADVOCATE_INVITATION_REDEEM_PATH}`, async (route) => {
+      redemptionBodies.push(route.request().postDataJSON())
+      await route.fulfill({ status: 500, body: "unexpected redemption" })
+    })
+    await page.route(`**${ADVOCATE_INVITATION_RECOVER_PATH}`, async (route) => {
+      recoveryBodies.push(route.request().postDataJSON())
+      await route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false, code: "authentication_required" }),
+      })
+    })
+
+    await page.goto(ADVOCATE_INVITATION_PATH)
+
+    await expect(
+      page.getByRole("link", { name: "Sign in in another tab" }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Recover access" }),
+    ).toBeEnabled()
+    await expect(page.getByRole("status")).toContainText(
+      "this tab is no longer signed in",
+    )
+    expect(authenticationBodies).toEqual([])
+    expect(redemptionBodies).toEqual([])
+    expect(recoveryBodies).toEqual([RECOVERY_REQUEST])
+    expect(
+      await page.evaluate(
+        (storageKey) => ({
+          length: sessionStorage.length,
+          stored: sessionStorage.getItem(storageKey),
+        }),
+        RECOVERY_STORAGE_KEY,
+      ),
+    ).toEqual({
+      length: 1,
+      stored: JSON.stringify(RECOVERY_REQUEST),
+    })
   })
 })

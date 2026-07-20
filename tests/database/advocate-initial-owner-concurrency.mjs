@@ -95,6 +95,10 @@ const PORTAL_DEFINITIONS = Object.freeze({
     slug: "ff039-concurrent-redemption",
     displayName: "FF-039 Concurrent Redemption",
   }),
+  redemptionRecovery: Object.freeze({
+    slug: "ff039-redemption-recovery",
+    displayName: "FF-039 Redemption Recovery",
+  }),
   differentReissueOperations: Object.freeze({
     slug: "ff039-different-reissue-operations",
     displayName: "FF-039 Different Reissue Operations",
@@ -470,7 +474,7 @@ async function reissuePortal(
 async function queryRedeem(
   client,
   portal,
-  requestId,
+  operationId,
   trace,
   capabilityToken = portal.material.token,
 ) {
@@ -486,21 +490,40 @@ async function queryRedeem(
        $4::text,
        $5::text,
        NULL,
-       NULL
+       NULL,
+       $6::uuid
      )`,
     [
       capabilityToken,
       "Accept the FF-039 initial owner invitation",
-      requestId,
+      operationId,
       trace,
       ACTORS.owner.sessionId,
+      operationId,
     ],
   )
 }
 
-async function redeemPortal(client, portal, requestId, trace) {
+async function redeemPortal(client, portal, operationId, trace) {
   return freshOwnerCall(client, () =>
-    queryRedeem(client, portal, requestId, trace),
+    queryRedeem(client, portal, operationId, trace),
+  )
+}
+
+async function queryRecover(client, operationId) {
+  return client.query(
+    `SELECT
+       advocate_id::text,
+       membership_id::text,
+       membership_version::integer
+     FROM public.recover_advocate_invitation_redemption($1::uuid)`,
+    [operationId],
+  )
+}
+
+async function recoverPortal(client, operationId) {
+  return authenticatedCall(client, ACTORS.owner, () =>
+    queryRecover(client, operationId),
   )
 }
 
@@ -688,6 +711,11 @@ async function loadPortalState(client, portal) {
          FROM audit.advocate_portal_provisioning_starts provisioning_start
          WHERE provisioning_start.advocate_id = advocate.id
        ) AS provisioning_start_count,
+       (
+         SELECT count(*)::integer
+         FROM audit.creator_share_advocate_invitation_redemption_receipts receipt
+         WHERE receipt.advocate_id = advocate.id
+       ) AS redemption_receipt_count,
        (
          SELECT count(*)::integer
          FROM audit.creator_share_advocate_initial_owner_reissue_receipts receipt
@@ -1045,6 +1073,7 @@ function assertRevokedState(state) {
       integrationCount: state.integration_count,
       provisioningJobCount: state.provisioning_job_count,
       provisioningStartCount: state.provisioning_start_count,
+      redemptionReceiptCount: state.redemption_receipt_count,
       reissueReceiptCount: state.reissue_receipt_count,
       revocationReceiptCount: state.revocation_receipt_count,
       lifecycleReceiptCount: state.lifecycle_receipt_count,
@@ -1070,6 +1099,7 @@ function assertRevokedState(state) {
       integrationCount: 0,
       provisioningJobCount: 0,
       provisioningStartCount: 0,
+      redemptionReceiptCount: 0,
       reissueReceiptCount: 0,
       revocationReceiptCount: 1,
       lifecycleReceiptCount: 0,
@@ -1100,6 +1130,7 @@ function assertReissuedState(state) {
       integrationCount: state.integration_count,
       provisioningJobCount: state.provisioning_job_count,
       provisioningStartCount: state.provisioning_start_count,
+      redemptionReceiptCount: state.redemption_receipt_count,
       reissueReceiptCount: state.reissue_receipt_count,
       revocationReceiptCount: state.revocation_receipt_count,
       lifecycleReceiptCount: state.lifecycle_receipt_count,
@@ -1125,6 +1156,7 @@ function assertReissuedState(state) {
       integrationCount: 0,
       provisioningJobCount: 0,
       provisioningStartCount: 0,
+      redemptionReceiptCount: 0,
       reissueReceiptCount: 1,
       revocationReceiptCount: 0,
       lifecycleReceiptCount: 0,
@@ -1155,6 +1187,7 @@ function assertRedeemedState(state, { reissued = false } = {}) {
       integrationCount: state.integration_count,
       provisioningJobCount: state.provisioning_job_count,
       provisioningStartCount: state.provisioning_start_count,
+      redemptionReceiptCount: state.redemption_receipt_count,
       reissueReceiptCount: state.reissue_receipt_count,
       revocationReceiptCount: state.revocation_receipt_count,
       lifecycleReceiptCount: state.lifecycle_receipt_count,
@@ -1180,6 +1213,7 @@ function assertRedeemedState(state, { reissued = false } = {}) {
       integrationCount: 5,
       provisioningJobCount: 5,
       provisioningStartCount: 1,
+      redemptionReceiptCount: 1,
       reissueReceiptCount: reissued ? 1 : 0,
       revocationReceiptCount: 0,
       lifecycleReceiptCount: 0,
@@ -1210,6 +1244,7 @@ function assertArchivedState(state) {
       integrationCount: state.integration_count,
       provisioningJobCount: state.provisioning_job_count,
       provisioningStartCount: state.provisioning_start_count,
+      redemptionReceiptCount: state.redemption_receipt_count,
       reissueReceiptCount: state.reissue_receipt_count,
       revocationReceiptCount: state.revocation_receipt_count,
       lifecycleReceiptCount: state.lifecycle_receipt_count,
@@ -1235,6 +1270,7 @@ function assertArchivedState(state) {
       integrationCount: 0,
       provisioningJobCount: 0,
       provisioningStartCount: 0,
+      redemptionReceiptCount: 0,
       reissueReceiptCount: 0,
       revocationReceiptCount: 0,
       lifecycleReceiptCount: 1,
@@ -1592,13 +1628,14 @@ async function redemptionVersusReissue(database) {
       "redeem_reissue_reissue_second",
     ],
     async (observer, redeemClient, reissueClient) => {
+      const redeemOperationId = randomUUID()
       const reissueOperationId = randomUUID()
       const reissueTrace = "ff039-redeem-first-reissue-second"
       const redeemed = await beginFreshOwnerCall(redeemClient, () =>
         queryRedeem(
           redeemClient,
           redeemFirstPortal,
-          "ff039-redeem-first",
+          redeemOperationId,
           "ff039-redeem-first-trace",
         ),
       )
@@ -1648,8 +1685,8 @@ async function redemptionVersusReissue(database) {
       "reissue_redeem_redeem_second",
     ],
     async (observer, reissueClient, redeemClient) => {
-      const redeemRequestId = "ff039-loser-redeem-after-reissue"
-      const redeemTrace = `${redeemRequestId}-trace`
+      const redeemOperationId = randomUUID()
+      const redeemTrace = "ff039-loser-redeem-after-reissue"
       const reissued = await beginAuthenticatedCall(
         reissueClient,
         ACTORS.adminOne,
@@ -1668,7 +1705,7 @@ async function redemptionVersusReissue(database) {
         redeemPortal(
           redeemClient,
           reissueFirstPortal,
-          redeemRequestId,
+          redeemOperationId,
           redeemTrace,
         ),
       )
@@ -1682,7 +1719,7 @@ async function redemptionVersusReissue(database) {
       assertRejected(await redeemSettlement, "42501")
       assertReissuedState(await loadPortalState(observer, reissueFirstPortal))
       const residue = await countAuditValueOccurrences(observer, [
-        redeemRequestId,
+        redeemOperationId,
         redeemTrace,
       ])
       assert.equal(residue, 0)
@@ -1722,13 +1759,14 @@ async function redemptionVersusArchive(database) {
       "redeem_archive_archive_second",
     ],
     async (observer, redeemClient, archiveClient) => {
+      const redeemOperationId = randomUUID()
       const archiveRequestId = randomUUID()
       const archiveTrace = "ff039-redeem-first-archive-second"
       const redeemed = await beginFreshOwnerCall(redeemClient, () =>
         queryRedeem(
           redeemClient,
           redeemFirstPortal,
-          "ff039-redeem-before-archive",
+          redeemOperationId,
           "ff039-redeem-before-archive-trace",
         ),
       )
@@ -1776,8 +1814,8 @@ async function redemptionVersusArchive(database) {
       "archive_redeem_redeem_second",
     ],
     async (observer, archiveClient, redeemClient) => {
-      const redeemRequestId = "ff039-loser-redeem-after-archive"
-      const redeemTrace = `${redeemRequestId}-trace`
+      const redeemOperationId = randomUUID()
+      const redeemTrace = "ff039-loser-redeem-after-archive"
       const archived = await beginAuthenticatedCall(
         archiveClient,
         ACTORS.adminOne,
@@ -1795,7 +1833,7 @@ async function redemptionVersusArchive(database) {
         redeemPortal(
           redeemClient,
           archiveFirstPortal,
-          redeemRequestId,
+          redeemOperationId,
           redeemTrace,
         ),
       )
@@ -1809,7 +1847,7 @@ async function redemptionVersusArchive(database) {
       assertRejected(await redeemSettlement, "42501")
       assertArchivedState(await loadPortalState(observer, archiveFirstPortal))
       const residue = await countAuditValueOccurrences(observer, [
-        redeemRequestId,
+        redeemOperationId,
         redeemTrace,
       ])
       assert.equal(residue, 0)
@@ -1964,8 +2002,8 @@ async function reissueVersusRevocation(database) {
 
 async function concurrentRedemption(database) {
   const portal = await createPortalFixture(database, "concurrentRedemption")
-  const secondRequestId = "ff039-loser-concurrent-redemption"
-  const secondTrace = `${secondRequestId}-trace`
+  const secondOperationId = randomUUID()
+  const secondTrace = "ff039-loser-concurrent-redemption"
   let exactAcceptedTopology = false
   const blockedSessions = await withPgClients(
     database,
@@ -1975,17 +2013,18 @@ async function concurrentRedemption(database) {
       "redemption_concurrency_second",
     ],
     async (observer, first, second) => {
+      const firstOperationId = randomUUID()
       const firstResult = await beginFreshOwnerCall(first, () =>
         queryRedeem(
           first,
           portal,
-          "ff039-winner-concurrent-redemption",
+          firstOperationId,
           "ff039-winner-concurrent-redemption-trace",
         ),
       )
       assert.equal(firstResult.rowCount, 1)
       const secondSettlement = settled(
-        redeemPortal(second, portal, secondRequestId, secondTrace),
+        redeemPortal(second, portal, secondOperationId, secondTrace),
       )
       const observations = await waitForClientsBlockedBy(
         observer,
@@ -1993,13 +2032,13 @@ async function concurrentRedemption(database) {
         first,
       )
       await first.query("COMMIT")
-      assertRejected(await secondSettlement, "42501")
+      assertRejected(await secondSettlement, "40001")
       assertRedeemedState(await loadPortalState(observer, portal))
       exactAcceptedTopology = await assertExactProvisioningTopology(
         observer,
         portal,
       )
-      await assertNoAuditResidue(observer, [secondRequestId, secondTrace])
+      await assertNoAuditResidue(observer, [secondOperationId, secondTrace])
       return observations.length
     },
   )
@@ -2010,8 +2049,116 @@ async function concurrentRedemption(database) {
     blockedSessions,
     committedRedemptions: 1,
     rejectedRedemptions: 1,
-    loserSqlstate: "42501",
+    loserSqlstate: "40001",
+    redemptionReceipts: 1,
     exactAcceptedTopology,
+    losingPathResidue: 0,
+  }
+}
+
+async function redemptionVersusRecovery(database) {
+  const portal = await createPortalFixture(database, "redemptionRecovery")
+  const operationId = randomUUID()
+  const result = await withPgClients(
+    database,
+    [
+      "redemption_recovery_observer",
+      "redemption_recovery_redeem",
+      "redemption_recovery_recover",
+    ],
+    async (observer, redeemClient, recoveryClient) => {
+      const redeemed = await beginFreshOwnerCall(redeemClient, () =>
+        queryRedeem(
+          redeemClient,
+          portal,
+          operationId,
+          "ff039-redemption-recovery-redeem",
+        ),
+      )
+      assert.equal(redeemed.rowCount, 1)
+
+      const recoverySettlement = settled(
+        recoverPortal(recoveryClient, operationId),
+      )
+      const observations = await waitForClientsBlockedBy(
+        observer,
+        [recoveryClient],
+        redeemClient,
+      )
+      await redeemClient.query("COMMIT")
+
+      const recovered = assertFulfilled(await recoverySettlement)
+      assert.equal(recovered.rowCount, 1)
+      assert.deepEqual(recovered.rows[0], redeemed.rows[0])
+
+      const state = await loadPortalState(observer, portal)
+      assertRedeemedState(state)
+      const receipt = await observer.query(
+        `SELECT
+           receipt.operation_id::text,
+           receipt.invitation_kind::text,
+           receipt.initiating_user_id::text,
+           receipt.advocate_id::text,
+           receipt.invitation_id::text,
+           receipt.membership_id::text,
+           receipt.membership_version::integer,
+           (receipt.provisioning_request_id IS NOT NULL)
+             AS has_provisioning_request,
+           receipt.resulting_advocate_version::integer
+         FROM audit.creator_share_advocate_invitation_redemption_receipts receipt
+         WHERE receipt.advocate_id = $1::uuid`,
+        [portal.advocateId],
+      )
+      assert.equal(receipt.rowCount, 1)
+      assert.deepEqual(
+        {
+          operationId: receipt.rows[0].operation_id,
+          invitationKind: receipt.rows[0].invitation_kind,
+          initiatingUserId: receipt.rows[0].initiating_user_id,
+          advocateId: receipt.rows[0].advocate_id,
+          invitationId: receipt.rows[0].invitation_id,
+          membershipId: receipt.rows[0].membership_id,
+          membershipVersion: receipt.rows[0].membership_version,
+          hasProvisioningRequest: receipt.rows[0].has_provisioning_request,
+          resultingAdvocateVersion: receipt.rows[0].resulting_advocate_version,
+        },
+        {
+          operationId,
+          invitationKind: "initial_owner",
+          initiatingUserId: ACTORS.owner.userId,
+          advocateId: portal.advocateId,
+          invitationId: portal.invitationId,
+          membershipId: redeemed.rows[0].membership_id,
+          membershipVersion: redeemed.rows[0].membership_version,
+          hasProvisioningRequest: true,
+          resultingAdvocateVersion: 3,
+        },
+      )
+      const exactAcceptedTopology = await assertExactProvisioningTopology(
+        observer,
+        portal,
+      )
+      return {
+        blockedSessions: observations.length,
+        exactAcceptedTopology,
+        redemptionReceipts: state.redemption_receipt_count,
+      }
+    },
+  )
+
+  assert.equal(result.blockedSessions, 1)
+  assert.equal(result.redemptionReceipts, 1)
+  return {
+    scenario: "redemption_vs_recovery",
+    interleavings: 1,
+    blockedSessions: result.blockedSessions,
+    committedRedemptions: 1,
+    recoveredRedemptions: 1,
+    sameOperation: true,
+    capabilityFreeRecovery: true,
+    exactRecoveredOutcome: true,
+    redemptionReceipts: result.redemptionReceipts,
+    exactAcceptedTopology: result.exactAcceptedTopology,
     losingPathResidue: 0,
   }
 }
@@ -2218,15 +2365,14 @@ async function exactReissueReplay(database) {
       )
       await assertNoAuditResidue(observer, [secondTrace])
 
-      const replayCapabilityRequestId =
-        "ff039-loser-replay-capability-redemption"
-      const replayCapabilityTrace = `${replayCapabilityRequestId}-trace`
+      const replayCapabilityOperationId = randomUUID()
+      const replayCapabilityTrace = "ff039-loser-replay-capability-redemption"
       const replayCapabilitySettlement = settled(
         freshOwnerCall(second, () =>
           queryRedeem(
             second,
             portal,
-            replayCapabilityRequestId,
+            replayCapabilityOperationId,
             replayCapabilityTrace,
             secondMaterial.token,
           ),
@@ -2235,15 +2381,16 @@ async function exactReissueReplay(database) {
       assertRejected(await replayCapabilitySettlement, "42501")
       assertReissuedState(await loadPortalState(observer, portal))
       await assertNoAuditResidue(observer, [
-        replayCapabilityRequestId,
+        replayCapabilityOperationId,
         replayCapabilityTrace,
       ])
 
+      const winningCapabilityOperationId = randomUUID()
       const winningCapability = await freshOwnerCall(first, () =>
         queryRedeem(
           first,
           portal,
-          "ff039-winning-reissue-capability-redemption",
+          winningCapabilityOperationId,
           "ff039-winning-reissue-capability-redemption-trace",
           firstMaterial.token,
         ),
@@ -2383,6 +2530,8 @@ async function main() {
     process.stdout.write("ok FF-039 reissue versus revocation\n")
     scenarios.push(await concurrentRedemption(database))
     process.stdout.write("ok FF-039 concurrent redemption\n")
+    scenarios.push(await redemptionVersusRecovery(database))
+    process.stdout.write("ok FF-039 redemption versus recovery\n")
     scenarios.push(await differentReissueOperations(database))
     process.stdout.write("ok FF-039 different reissue operations\n")
     scenarios.push(await differentRevocationOperations(database))
@@ -2392,10 +2541,10 @@ async function main() {
     scenarios.push(await exactRevocationReplay(database))
     process.stdout.write("ok FF-039 exact revocation replay\n")
 
-    assert.equal(scenarios.length, 10)
+    assert.equal(scenarios.length, 11)
     assert.equal(
       scenarios.reduce((total, scenario) => total + scenario.interleavings, 0),
-      15,
+      16,
     )
     assert.equal(
       scenarios.every(

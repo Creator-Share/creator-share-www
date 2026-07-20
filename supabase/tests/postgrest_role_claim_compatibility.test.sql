@@ -212,7 +212,7 @@ SELECT extensions.throws_ok(
 
 SELECT set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"97000000-0000-4000-8000-000000000001"}',
+  '{"role":"authenticated","sub":"97000000-0000-4000-8000-000000000001","session_id":"97000000-0000-4000-8000-000000000901"}',
   true
 );
 
@@ -262,8 +262,50 @@ SELECT extensions.throws_ok(
   'a consolidated authenticated claim crosses the legacy claim role gate'
 );
 
+INSERT INTO auth.users (
+  id,
+  aud,
+  role,
+  email,
+  email_confirmed_at,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at,
+  is_anonymous
+)
+VALUES (
+  '97000000-0000-4000-8000-000000000001'::uuid,
+  'authenticated',
+  'authenticated',
+  'postgrest-compatibility@example.test',
+  clock_timestamp(),
+  '{}'::jsonb,
+  '{}'::jsonb,
+  clock_timestamp(),
+  clock_timestamp(),
+  false
+);
+
+INSERT INTO auth.sessions (
+  id,
+  user_id,
+  created_at,
+  updated_at,
+  aal,
+  not_after
+)
+VALUES (
+  '97000000-0000-4000-8000-000000000901'::uuid,
+  '97000000-0000-4000-8000-000000000001'::uuid,
+  clock_timestamp(),
+  clock_timestamp(),
+  'aal1',
+  clock_timestamp() + interval '1 hour'
+);
+
 SELECT extensions.throws_ok(
-  $$SELECT * FROM public.redeem_advocate_invitation(NULL, 'Compatibility test')$$,
+  $$SELECT * FROM public.redeem_advocate_invitation(repeat('0', 64), 'Compatibility test')$$,
   '42501',
   'Invitation is invalid or unavailable',
   'a consolidated authenticated claim crosses the invitation redemption role gate'

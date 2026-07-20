@@ -1,5 +1,6 @@
 import { createAdvocateInvitationInterstitial } from "@/lib/advocates/invitations/interstitial"
-import { resolveTrustedPrimaryRequestOrigin } from "@/lib/sponsorships/checkout/requestSecurity"
+import { ADVOCATE_INVITATION_PATH } from "@/lib/advocates/invitations/material"
+import { resolveTrustedAdvocateInvitationOrigin } from "@/lib/advocates/invitations/routeSecurity"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -13,8 +14,17 @@ const DENIED_HEADERS = {
 } as const
 
 export async function GET(request: Request) {
+  let target: URL
+  try {
+    target = new URL(request.url)
+  } catch {
+    return new Response(null, { status: 404, headers: DENIED_HEADERS })
+  }
   if (
-    resolveTrustedPrimaryRequestOrigin({
+    request.url.includes("#") ||
+    target.pathname !== ADVOCATE_INVITATION_PATH ||
+    target.search !== "" ||
+    resolveTrustedAdvocateInvitationOrigin({
       rawHost: request.headers.get("host"),
     }) === null
   ) {

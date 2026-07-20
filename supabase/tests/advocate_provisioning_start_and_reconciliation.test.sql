@@ -1066,7 +1066,7 @@ SELECT extensions.throws_ok(
 );
 
 SELECT extensions.throws_ok(
-  $$TRUNCATE audit.advocate_portal_provisioning_starts$$,
+  $$TRUNCATE audit.advocate_portal_provisioning_starts CASCADE$$,
   '42501',
   'Advocate provisioning start evidence is append-only',
   'provisioning start evidence cannot be truncated'

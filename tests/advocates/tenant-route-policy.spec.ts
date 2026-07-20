@@ -350,6 +350,38 @@ test.describe("advocate tenant route policy", () => {
     })
   })
 
+  test("isolates exact advocate invitation routes from generic session middleware", () => {
+    for (const [pathname, method] of [
+      ["/advocate-invitation", "GET"],
+      ["/advocate-invitation", "HEAD"],
+      ["/api/auth/advocate-invitations/authenticate", "POST"],
+      ["/api/auth/advocate-invitations/redeem", "POST"],
+      ["/api/auth/advocate-invitations/recover", "POST"],
+    ] as const) {
+      expect(decide(pathname, method, "creatorshare.com")).toEqual({
+        kind: "bypass",
+        routeId:
+          pathname === "/advocate-invitation"
+            ? "advocate-invitation-interstitial"
+            : `advocate-invitation-${pathname.split("/").at(-1)}`,
+        reason: "sensitive-auth",
+      })
+      expect(decide(pathname, method)).toEqual({
+        kind: "deny",
+        status: 404,
+        allow: null,
+      })
+    }
+
+    expect(
+      decide(
+        "/api/auth/advocate-invitations/authenticate",
+        "GET",
+        "creatorshare.com",
+      ),
+    ).toMatchObject({ kind: "bypass", reason: "sensitive-auth" })
+  })
+
   test("canonicalizes only the exact tenant auth callback", () => {
     expect(decide("/auth/callback")).toMatchObject({
       kind: "canonical-auth-callback",

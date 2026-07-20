@@ -67,7 +67,7 @@ BEGIN
   v_claims := jsonb_build_object(
     'role', 'authenticated',
     'sub', target_user_id::text,
-    'session_id', 'a7300000-0000-4000-8000-000000000099',
+    'session_id', target_user_id::text,
     'iat', v_now_epoch,
     'aal', 'aal1'
   );
@@ -115,7 +115,8 @@ SELECT extensions.ok(
       'public.onboard_creator_share_advocate(uuid,text,text,text,text,bytea,bytea,bytea,bytea,smallint,smallint,smallint,text,text,text,text,text,text)'::regprocedure,
       'public.reissue_advocate_initial_owner_invitation(uuid,uuid,bigint,text,bytea,bytea,bytea,bytea,smallint,smallint,smallint,text,text,text,text,text,text)'::regprocedure,
       'public.revoke_advocate_initial_owner_invitation(uuid,uuid,bigint,text,text,text,text,text,text)'::regprocedure,
-      'public.redeem_advocate_invitation(text,text,text,text,text,text,text)'::regprocedure,
+      'public.redeem_advocate_invitation(text,text,text,text,text,text,text,uuid)'::regprocedure,
+      'public.recover_advocate_invitation_redemption(uuid)'::regprocedure,
       'public.start_advocate_portal_provisioning(uuid,bigint,uuid,text)'::regprocedure,
       'public.apply_creator_share_advocate_lifecycle_action_legacy(uuid,bigint,public.creator_share_advocate_lifecycle_action,text,uuid,text,text,text)'::regprocedure,
       'public.apply_creator_share_advocate_lifecycle_action(uuid,bigint,public.creator_share_advocate_lifecycle_action,text,uuid,text,text,text)'::regprocedure,
@@ -172,6 +173,36 @@ SELECT extensions.ok(
     'public.revoke_advocate_initial_owner_invitation(uuid,uuid,bigint,text,text,text,text,text,text)',
     'EXECUTE'
   )
+  AND has_function_privilege(
+    'authenticated',
+    'public.redeem_advocate_invitation(text,text,text,text,text,text,text,uuid)',
+    'EXECUTE'
+  )
+  AND has_function_privilege(
+    'authenticated',
+    'public.recover_advocate_invitation_redemption(uuid)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon',
+    'public.redeem_advocate_invitation(text,text,text,text,text,text,text,uuid)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'service_role',
+    'public.recover_advocate_invitation_redemption(uuid)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated',
+    'private.redeem_advocate_invitation_once_legacy(text,text,text,text,text,text,text)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'service_role',
+    'private.redeem_advocate_invitation_once_legacy(text,text,text,text,text,text,text)',
+    'EXECUTE'
+  )
   AND NOT has_function_privilege(
     'authenticated',
     'public.create_advocate_portal(uuid,text,text,text,text,text,text,text)',
@@ -187,21 +218,22 @@ SELECT extensions.ok(
     'public.apply_creator_share_advocate_lifecycle_action_legacy(uuid,bigint,public.creator_share_advocate_lifecycle_action,text,uuid,text,text,text)',
     'EXECUTE'
   ),
-  'onboarding, reissue, and revoke are authenticated entrypoints while legacy direct-owner creation is revoked'
+  'onboarding and redemption expose only authenticated narrow entrypoints while both legacy mutation boundaries are revoked'
 );
 
 SELECT extensions.ok(
   (
     SELECT bool_and(relation.relrowsecurity)
       AND bool_and(relation.relforcerowsecurity)
-      AND count(*) = 3
+      AND count(*) = 4
     FROM pg_class relation
     JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
     WHERE namespace.nspname = 'audit'
       AND relation.relname IN (
         'creator_share_advocate_onboarding_receipts',
         'creator_share_advocate_initial_owner_reissue_receipts',
-        'creator_share_advocate_initial_owner_revocation_receipts'
+        'creator_share_advocate_initial_owner_revocation_receipts',
+        'creator_share_advocate_invitation_redemption_receipts'
       )
   )
   AND NOT EXISTS (
@@ -211,7 +243,8 @@ SELECT extensions.ok(
       AND policy.tablename IN (
         'creator_share_advocate_onboarding_receipts',
         'creator_share_advocate_initial_owner_reissue_receipts',
-        'creator_share_advocate_initial_owner_revocation_receipts'
+        'creator_share_advocate_initial_owner_revocation_receipts',
+        'creator_share_advocate_invitation_redemption_receipts'
       )
   )
   AND NOT EXISTS (
@@ -220,7 +253,8 @@ SELECT extensions.ok(
       VALUES
         ('audit.creator_share_advocate_onboarding_receipts'),
         ('audit.creator_share_advocate_initial_owner_reissue_receipts'),
-        ('audit.creator_share_advocate_initial_owner_revocation_receipts')
+        ('audit.creator_share_advocate_initial_owner_revocation_receipts'),
+        ('audit.creator_share_advocate_invitation_redemption_receipts')
     ) receipt(relation_name)
     WHERE has_table_privilege(
         'authenticated',
@@ -234,6 +268,33 @@ SELECT extensions.ok(
       )
   ),
   'onboarding receipts are forced-RLS default deny evidence with no API table surface'
+);
+
+SELECT extensions.is(
+  (
+    SELECT array_agg(
+      column_definition.column_name::text
+      ORDER BY column_definition.ordinal_position
+    )
+    FROM information_schema.columns column_definition
+    WHERE column_definition.table_schema = 'audit'
+      AND column_definition.table_name =
+        'creator_share_advocate_invitation_redemption_receipts'
+  ),
+  ARRAY[
+    'operation_id',
+    'invitation_kind',
+    'initiating_user_id',
+    'request_fingerprint',
+    'advocate_id',
+    'invitation_id',
+    'membership_id',
+    'membership_version',
+    'provisioning_request_id',
+    'resulting_advocate_version',
+    'created_at'
+  ]::text[],
+  'invitation redemption receipts retain only the exact pseudonymous committed outcome'
 );
 
 SELECT extensions.ok(
@@ -360,6 +421,28 @@ VALUES
     now()
   );
 
+INSERT INTO auth.sessions (
+  id,
+  user_id,
+  created_at,
+  updated_at,
+  aal,
+  not_after
+)
+SELECT
+  account.id,
+  account.id,
+  clock_timestamp(),
+  clock_timestamp(),
+  'aal1',
+  clock_timestamp() + interval '1 hour'
+FROM auth.users account
+WHERE account.id IN (
+  'a7300000-0000-4000-8000-000000000001'::uuid,
+  'a7300000-0000-4000-8000-000000000002'::uuid,
+  'a7300000-0000-4000-8000-000000000003'::uuid
+);
+
 INSERT INTO public.role_assignments (
   user_id,
   role_id,
@@ -376,6 +459,22 @@ WHERE role.name = 'SUPER_ADMIN';
 
 SELECT pg_temp.set_onboarding_claims(
   'a7300000-0000-4000-8000-000000000003'::uuid
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.redeem_advocate_invitation(
+      plaintext_capability => repeat('c', 64),
+      change_reason => 'Accept ownership and atomically begin provisioning',
+      request_id => 'a7300000-0000-4000-8000-000000000105',
+      redemption_operation_id =>
+        'a7300000-0000-4000-8000-000000000105'::uuid
+    )
+  $$,
+  '42501',
+  'Invitation is invalid or unavailable',
+  'an exact operation and capability disclose no receipt to a different user'
 );
 
 SELECT extensions.throws_ok(
@@ -1264,10 +1363,12 @@ SELECT extensions.throws_ok(
   $$
     SELECT *
     FROM public.redeem_advocate_invitation(
-      repeat('c', 64),
-      'Reject a different verified account',
-      'initial-owner-wrong-user-request',
-      'initial-owner-wrong-user-trace'
+      plaintext_capability => repeat('c', 64),
+      change_reason => 'Reject a different verified account',
+      request_id => 'a7300000-0000-4000-8000-000000000101',
+      trace_id => 'initial-owner-wrong-user-trace',
+      redemption_operation_id =>
+        'a7300000-0000-4000-8000-000000000101'::uuid
     )
   $$,
   '42501',
@@ -1283,10 +1384,12 @@ SELECT extensions.throws_ok(
   $$
     SELECT *
     FROM public.redeem_advocate_invitation(
-      repeat('c', 64),
-      'Reject stale authentication proof',
-      'initial-owner-stale-auth-request',
-      'initial-owner-stale-auth-trace'
+      plaintext_capability => repeat('c', 64),
+      change_reason => 'Reject stale authentication proof',
+      request_id => 'a7300000-0000-4000-8000-000000000102',
+      trace_id => 'initial-owner-stale-auth-trace',
+      redemption_operation_id =>
+        'a7300000-0000-4000-8000-000000000102'::uuid
     )
   $$,
   '42501',
@@ -1307,10 +1410,12 @@ SELECT extensions.throws_ok(
   $$
     SELECT *
     FROM public.redeem_advocate_invitation(
-      repeat('c', 64),
-      'Reject a changed account email',
-      'initial-owner-email-change-request',
-      'initial-owner-email-change-trace'
+      plaintext_capability => repeat('c', 64),
+      change_reason => 'Reject a changed account email',
+      request_id => 'a7300000-0000-4000-8000-000000000103',
+      trace_id => 'initial-owner-email-change-trace',
+      redemption_operation_id =>
+        'a7300000-0000-4000-8000-000000000103'::uuid
     )
   $$,
   '42501',
@@ -1389,10 +1494,12 @@ SELECT extensions.throws_ok(
   $$
     SELECT *
     FROM public.redeem_advocate_invitation(
-      repeat('c', 64),
-      'Prove complete rollback after owner creation',
-      'initial-owner-rollback-request',
-      'initial-owner-rollback-trace'
+      plaintext_capability => repeat('c', 64),
+      change_reason => 'Prove complete rollback after owner creation',
+      request_id => 'a7300000-0000-4000-8000-000000000104',
+      trace_id => 'initial-owner-rollback-trace',
+      redemption_operation_id =>
+        'a7300000-0000-4000-8000-000000000104'::uuid
     )
   $$,
   '55000',
@@ -1426,6 +1533,12 @@ SELECT extensions.ok(
       SELECT uuid_value FROM onboarding_test_context WHERE key = 'advocate'
     )
   )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM audit.creator_share_advocate_invitation_redemption_receipts receipt
+    WHERE receipt.operation_id =
+      'a7300000-0000-4000-8000-000000000104'::uuid
+  )
   AND EXISTS (
     SELECT 1
     FROM public.advocate_invitations invitation
@@ -1436,7 +1549,7 @@ SELECT extensions.ok(
       )
       AND invitation.accepted_at IS NULL
   ),
-  'failed provisioning leaves no membership, owner pointer, activation, topology, or consumed invitation behind'
+  'failed provisioning leaves no membership, owner pointer, activation, topology, receipt, or consumed invitation behind'
 );
 
 DELETE FROM public.advocate_domains
@@ -1455,28 +1568,230 @@ SELECT extensions.lives_ok(
   $$
     SELECT *
     FROM public.redeem_advocate_invitation(
-      repeat('c', 64),
-      'Accept ownership and atomically begin provisioning',
-      'initial-owner-redemption-request',
-      'initial-owner-redemption-trace'
+      plaintext_capability => repeat('c', 64),
+      change_reason => 'Accept ownership and atomically begin provisioning',
+      request_id => 'a7300000-0000-4000-8000-000000000105',
+      trace_id => 'initial-owner-redemption-trace',
+      redemption_operation_id =>
+        'a7300000-0000-4000-8000-000000000105'::uuid
     )
   $$,
   'the verified reissued owner capability redeems through the original onboarding provisioning receipt'
+);
+
+SELECT pg_temp.set_onboarding_claims(
+  'a7300000-0000-4000-8000-000000000002'::uuid
+);
+
+SELECT extensions.is(
+  (
+    SELECT to_jsonb(replayed)
+    FROM public.redeem_advocate_invitation(
+      plaintext_capability => repeat('c', 64),
+      change_reason => 'Accept ownership and atomically begin provisioning',
+      request_id => 'a7300000-0000-4000-8000-000000000105',
+      trace_id => 'initial-owner-redemption-replay-trace',
+      redemption_operation_id =>
+        'a7300000-0000-4000-8000-000000000105'::uuid
+    ) replayed
+  ),
+  (
+    SELECT jsonb_build_object(
+      'advocate_id', receipt.advocate_id,
+      'membership_id', receipt.membership_id,
+      'membership_version', receipt.membership_version
+    )
+    FROM audit.creator_share_advocate_invitation_redemption_receipts receipt
+    WHERE receipt.operation_id =
+      'a7300000-0000-4000-8000-000000000105'::uuid
+  ),
+  'exact operation replay returns the immutable result without a newly fresh magic-link event'
+);
+
+SELECT extensions.is(
+  (
+    SELECT to_jsonb(recovered)
+    FROM public.recover_advocate_invitation_redemption(
+      'a7300000-0000-4000-8000-000000000105'::uuid
+    ) recovered
+  ),
+  (
+    SELECT jsonb_build_object(
+      'advocate_id', receipt.advocate_id,
+      'membership_id', receipt.membership_id,
+      'membership_version', receipt.membership_version
+    )
+    FROM audit.creator_share_advocate_invitation_redemption_receipts receipt
+    WHERE receipt.operation_id =
+      'a7300000-0000-4000-8000-000000000105'::uuid
+  ),
+  'capability-free recovery returns the exact committed outcome to its authenticated user'
+);
+
+DELETE FROM auth.sessions
+WHERE id = 'a7300000-0000-4000-8000-000000000002'::uuid;
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.recover_advocate_invitation_redemption(
+      'a7300000-0000-4000-8000-000000000105'::uuid
+    )
+  $$,
+  '28000',
+  'An active invitation authentication session is required',
+  'a signed but revoked authentication session cannot recover a receipt'
+);
+
+INSERT INTO auth.sessions (
+  id,
+  user_id,
+  created_at,
+  updated_at,
+  aal,
+  not_after
+)
+VALUES (
+  'a7300000-0000-4000-8000-000000000002'::uuid,
+  'a7300000-0000-4000-8000-000000000002'::uuid,
+  clock_timestamp(),
+  clock_timestamp(),
+  'aal1',
+  clock_timestamp() + interval '1 hour'
+);
+
+UPDATE auth.users
+SET banned_until = clock_timestamp() + interval '1 hour'
+WHERE id = 'a7300000-0000-4000-8000-000000000002'::uuid;
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.recover_advocate_invitation_redemption(
+      'a7300000-0000-4000-8000-000000000105'::uuid
+    )
+  $$,
+  '28000',
+  'An active invitation authentication session is required',
+  'a banned account cannot recover a committed invitation receipt'
+);
+
+UPDATE auth.users
+SET banned_until = NULL
+WHERE id = 'a7300000-0000-4000-8000-000000000002'::uuid;
+
+SELECT extensions.ok(
+  (
+    SELECT count(*) = 1
+      AND bool_and(octet_length(receipt.request_fingerprint) = 32)
+    FROM audit.creator_share_advocate_invitation_redemption_receipts receipt
+    WHERE receipt.operation_id =
+      'a7300000-0000-4000-8000-000000000105'::uuid
+      AND receipt.initiating_user_id =
+        'a7300000-0000-4000-8000-000000000002'::uuid
+      AND receipt.invitation_kind = 'initial_owner'
+      AND receipt.invitation_id = (
+        SELECT uuid_value
+        FROM onboarding_test_context
+        WHERE key = 'second_reissue'
+      )
+      AND receipt.resulting_advocate_version = 6
+      AND EXISTS (
+        SELECT 1
+        FROM audit.advocate_portal_provisioning_starts provisioning_start
+        WHERE provisioning_start.request_id = receipt.provisioning_request_id
+          AND provisioning_start.advocate_id = receipt.advocate_id
+          AND provisioning_start.initial_owner_invitation_id =
+            receipt.invitation_id
+      )
+  ),
+  'one sanitized receipt binds the owner, invitation, membership, final version, and provisioning start'
 );
 
 SELECT extensions.throws_ok(
   $$
     SELECT *
     FROM public.redeem_advocate_invitation(
-      repeat('c', 64),
-      'Reject duplicate initial owner redemption',
-      'initial-owner-duplicate-request',
-      'initial-owner-duplicate-trace'
+      plaintext_capability => repeat('c', 64),
+      change_reason => 'A conflicting semantic reason',
+      request_id => 'a7300000-0000-4000-8000-000000000105',
+      trace_id => 'initial-owner-redemption-conflict-trace',
+      redemption_operation_id =>
+        'a7300000-0000-4000-8000-000000000105'::uuid
+    )
+  $$,
+  '40001',
+  'Invitation redemption operation conflicts with its receipt',
+  'an operation UUID cannot be reused with a different semantic reason'
+);
+
+SELECT pg_temp.set_onboarding_claims(
+  'a7300000-0000-4000-8000-000000000003'::uuid
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.recover_advocate_invitation_redemption(
+      'a7300000-0000-4000-8000-000000000105'::uuid
     )
   $$,
   '42501',
-  'Invitation is invalid or unavailable',
-  'successful initial-owner authority is single use even under a fresh authenticated session'
+  'Invitation redemption recovery is unavailable',
+  'the operation UUID discloses no receipt to a different authenticated user'
+);
+
+SELECT pg_temp.set_onboarding_claims(
+  'a7300000-0000-4000-8000-000000000002'::uuid
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.redeem_advocate_invitation(
+      plaintext_capability => repeat('c', 64),
+      change_reason => 'Reject duplicate initial owner redemption',
+      request_id => 'a7300000-0000-4000-8000-000000000106',
+      trace_id => 'initial-owner-duplicate-trace',
+      redemption_operation_id =>
+        'a7300000-0000-4000-8000-000000000106'::uuid
+    )
+  $$,
+  '40001',
+  'Invitation was redeemed by another operation',
+  'successful initial-owner authority rejects a competing operation identity'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    UPDATE audit.creator_share_advocate_invitation_redemption_receipts
+    SET resulting_advocate_version = resulting_advocate_version + 1
+    WHERE operation_id =
+      'a7300000-0000-4000-8000-000000000105'::uuid
+  $$,
+  '42501',
+  'Advocate onboarding receipts are append-only',
+  'initial-owner redemption receipts cannot be updated'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    DELETE FROM audit.creator_share_advocate_invitation_redemption_receipts
+    WHERE operation_id =
+      'a7300000-0000-4000-8000-000000000105'::uuid
+  $$,
+  '42501',
+  'Advocate onboarding receipts are append-only',
+  'initial-owner redemption receipts cannot be deleted'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    TRUNCATE audit.creator_share_advocate_invitation_redemption_receipts
+  $$,
+  '42501',
+  'Advocate onboarding receipts are append-only',
+  'initial-owner redemption receipts cannot be truncated'
 );
 
 SELECT extensions.ok(

@@ -97,6 +97,9 @@ CRON_SECRET=
 # PAYMENT_GATEWAY_EVENT_WORKER_SECRET=
 # SPONSOR_WELCOME_EMAIL_WORKER_SECRET=
 # SUBSCRIPTION_CANCELLATION_WORKER_SECRET=
+# Advocate invitation delivery only. External schedulers may use this dedicated
+# value. Leave it unset for Vercel Cron, which sends CRON_SECRET.
+# ADVOCATE_INVITATION_EMAIL_WORKER_SECRET=
 # Advocate logo cleanup only. External schedulers may use this dedicated value.
 # Leave it unset for Vercel Cron, which sends CRON_SECRET.
 # ADVOCATE_LOGO_RECONCILIATION_WORKER_SECRET=
@@ -120,6 +123,17 @@ SPONSOR_WELCOME_EMAIL_RETRY_AFTER_SECONDS=300
 # 55 seconds inside the 60 second Vercel route.
 SPONSOR_WELCOME_EMAIL_TRANSPORT_TIMEOUT_MILLISECONDS=20000
 SPONSOR_WELCOME_EMAIL_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+# Advocate invitation delivery uses five bounded database calls and one SMTP
+# call in each 60 second invocation. Concurrency cannot exceed the batch size.
+ADVOCATE_INVITATION_EMAIL_BATCH_SIZE=2
+ADVOCATE_INVITATION_EMAIL_CONCURRENCY=2
+ADVOCATE_INVITATION_EMAIL_RETRY_AFTER_SECONDS=300
+ADVOCATE_INVITATION_EMAIL_SERVICE_REQUEST_TIMEOUT_MILLISECONDS=5000
+ADVOCATE_INVITATION_EMAIL_TRANSPORT_TIMEOUT_MILLISECONDS=20000
+ADVOCATE_INVITATION_EMAIL_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+# Leave unset in production. If explicitly configured, only this exact value
+# is accepted. Local invitation delivery still generates the canonical link.
+# ADVOCATE_INVITATION_CANONICAL_ORIGIN=https://creatorshare.com
 # Bounded provider cancellation batch. Retry timing is durable in the database.
 SUBSCRIPTION_CANCELLATION_BATCH_SIZE=4
 SUBSCRIPTION_CANCELLATION_CONCURRENCY=2
@@ -196,6 +210,12 @@ SPONSORSHIP_CRYPTO_SECRET_V1=
 # passwordless delivery and verification limits. It must not equal any
 # sponsorship, visitor, attribution, worker, or provider secret.
 SPONSOR_PASSWORDLESS_RATE_LIMIT_SECRET_V1=
+# Advocate invitation email proof throttling only. Server only. Generate a
+# dedicated canonical base64 value with at least 32 random bytes in every
+# environment. It must differ from every other secret. Advance the numbered
+# environment key and database key version together for a planned rotation.
+# Preserve the prior 24 hour quota evidence during that rotation.
+ADVOCATE_INVITATION_AUTHENTICATION_RATE_LIMIT_SECRET_V1=
 # First party visitor cookie signing only. Server only. Generate a different
 # canonical base64 value with at least 32 random bytes in every environment.
 # This value must not equal SPONSORSHIP_CRYPTO_SECRET_V1.

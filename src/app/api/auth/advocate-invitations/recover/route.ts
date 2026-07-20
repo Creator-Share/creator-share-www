@@ -6,12 +6,12 @@ import {
   getAdvocateAttributionIdentityCookieOptions,
 } from "@/lib/advocates/attributionIdentityCookie"
 import {
-  parseAdvocateInvitationRedeemBody,
-  ADVOCATE_INVITATION_REDEEM_PATH,
+  ADVOCATE_INVITATION_RECOVER_PATH,
+  parseAdvocateInvitationRecoveryBody,
 } from "@/lib/advocates/invitations/material"
 import {
   AdvocateInvitationRedemptionError,
-  redeemAdvocateInvitation,
+  recoverAdvocateInvitationRedemption,
 } from "@/lib/advocates/invitations/redemption"
 import { advocateInvitationRequestContext } from "@/lib/advocates/invitations/requestContext"
 import {
@@ -25,13 +25,9 @@ import { createAdvocateInvitationRouteClient } from "@/lib/advocates/invitations
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-function response(body: Record<string, unknown>, status: number): NextResponse {
-  return advocateInvitationJsonResponse(body, status)
-}
-
-function classifyFailure(error: unknown): { status: number; code: string } {
+function failure(error: unknown): { status: number; code: string } {
   if (!(error instanceof AdvocateInvitationRedemptionError)) {
-    return { status: 503, code: "redemption_unavailable" }
+    return { status: 503, code: "recovery_unavailable" }
   }
   if (error.stage === "authentication") {
     return { status: 401, code: "authentication_required" }
@@ -41,15 +37,10 @@ function classifyFailure(error: unknown): { status: number; code: string } {
       return { status: 410, code: "invalid_or_expired" }
     case "28000":
       return { status: 401, code: "authentication_required" }
-    case "23505":
-    case "55000":
-      return { status: 409, code: "membership_conflict" }
-    case "40001":
-      return { status: 409, code: "redemption_conflict" }
     case "22023":
       return { status: 400, code: "invalid_request" }
     default:
-      return { status: 503, code: "redemption_unavailable" }
+      return { status: 503, code: "recovery_unavailable" }
   }
 }
 
@@ -62,17 +53,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     trustedOrigin === null ||
     !isTrustedAdvocateInvitationJsonRequest(
       request,
-      ADVOCATE_INVITATION_REDEEM_PATH,
+      ADVOCATE_INVITATION_RECOVER_PATH,
     )
   ) {
-    return response({ ok: false, code: "invalid_request" }, 400)
+    return advocateInvitationJsonResponse(
+      { ok: false, code: "invalid_request" },
+      400,
+    )
   }
 
   const rawBody = await readBoundedAdvocateInvitationBody(request)
-  const redemptionRequest =
-    rawBody === null ? null : parseAdvocateInvitationRedeemBody(rawBody)
-  if (redemptionRequest === null) {
-    return response({ ok: false, code: "invalid_request" }, 400)
+  const recoveryRequest =
+    rawBody === null ? null : parseAdvocateInvitationRecoveryBody(rawBody)
+  if (recoveryRequest === null) {
+    return advocateInvitationJsonResponse(
+      { ok: false, code: "invalid_request" },
+      400,
+    )
   }
 
   const secureCookies = trustedOrigin === "https://creatorshare.com"
@@ -81,19 +78,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     secureCookies,
   )
   if (routeClient === null) {
-    return response({ ok: false, code: "redemption_unavailable" }, 503)
+    return advocateInvitationJsonResponse(
+      { ok: false, code: "recovery_unavailable" },
+      503,
+    )
   }
 
   try {
-    const result = await redeemAdvocateInvitation({
+    const result = await recoverAdvocateInvitationRedemption({
       client: routeClient.client,
-      request: redemptionRequest,
-      context,
+      request: recoveryRequest,
     })
-    const resultResponse = response(
+    const resultResponse = advocateInvitationJsonResponse(
       {
         ok: true,
-        operationId: redemptionRequest.operationId,
+        operationId: recoveryRequest.operationId,
         redirect: "/portal",
       },
       200,
@@ -113,21 +112,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
     return routeClient.applyCookies(resultResponse)
   } catch (error) {
-    const failure = classifyFailure(error)
-    if (failure.status === 503) {
-      console.error("ADVOCATE_INVITATION_REDEMPTION_FAILED", {
+    const classified = failure(error)
+    if (classified.status === 503) {
+      console.error("ADVOCATE_INVITATION_REDEMPTION_RECOVERY_FAILED", {
         requestId: context.requestId,
-        code: failure.code,
+        code: classified.code,
       })
     }
-    const failureResponse = response(
-      { ok: false, code: failure.code },
-      failure.status,
+    const failureResponse = advocateInvitationJsonResponse(
+      { ok: false, code: classified.code },
+      classified.status,
     )
     try {
       return routeClient.applyCookies(failureResponse)
     } catch {
-      return response({ ok: false, code: "redemption_unavailable" }, 503)
+      return advocateInvitationJsonResponse(
+        { ok: false, code: "recovery_unavailable" },
+        503,
+      )
     }
   }
 }

@@ -70,7 +70,8 @@ jobs:
           yarn supabase test db \
             --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK" \
             supabase/tests/advocate_initial_owner_onboarding.test.sql \
-            supabase/tests/advocate_invitation_email_delivery.test.sql
+            supabase/tests/advocate_invitation_email_delivery.test.sql \
+            supabase/tests/advocate_invitation_authentication_rate_limit.test.sql
 
       - name: Run initial owner concurrency harness
         env:

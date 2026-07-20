@@ -86,7 +86,8 @@ SELECT extensions.ok(
       'public.fail_advocate_invitation_email_delivery(uuid,text,text,integer,text,text)'::regprocedure,
       'public.settle_advocate_invitation_email_delivery(uuid,text,text,text,text,integer,text,text)'::regprocedure,
       'public.revoke_advocate_invitation(uuid,uuid,uuid,text,text,text,text,text,text)'::regprocedure,
-      'public.redeem_advocate_invitation(text,text,text,text,text,text,text)'::regprocedure,
+      'public.redeem_advocate_invitation(text,text,text,text,text,text,text,uuid)'::regprocedure,
+      'public.recover_advocate_invitation_redemption(uuid)'::regprocedure,
       'public.get_advocate_pending_invitations(uuid)'::regprocedure
     ])
   ),
@@ -116,7 +117,12 @@ SELECT extensions.ok(
   )
   AND has_function_privilege(
     'authenticated',
-    'public.redeem_advocate_invitation(text,text,text,text,text,text,text)',
+    'public.redeem_advocate_invitation(text,text,text,text,text,text,text,uuid)',
+    'EXECUTE'
+  )
+  AND has_function_privilege(
+    'authenticated',
+    'public.recover_advocate_invitation_redemption(uuid)',
     'EXECUTE'
   )
   AND has_function_privilege(
@@ -126,7 +132,12 @@ SELECT extensions.ok(
   )
   AND NOT has_function_privilege(
     'anon',
-    'public.redeem_advocate_invitation(text,text,text,text,text,text,text)',
+    'public.redeem_advocate_invitation(text,text,text,text,text,text,text,uuid)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'service_role',
+    'public.recover_advocate_invitation_redemption(uuid)',
     'EXECUTE'
   ),
   'service and authenticated invitation capabilities are separated exactly by purpose'
@@ -289,6 +300,40 @@ VALUES
     now(),
     now(),
     false
+  );
+
+INSERT INTO auth.sessions (
+  id,
+  user_id,
+  created_at,
+  updated_at,
+  aal,
+  not_after
+)
+VALUES
+  (
+    '95000000-0000-4000-8000-000000000902'::uuid,
+    '95000000-0000-4000-8000-000000000102'::uuid,
+    clock_timestamp(),
+    clock_timestamp(),
+    'aal1',
+    clock_timestamp() + interval '1 hour'
+  ),
+  (
+    '95000000-0000-4000-8000-000000000903'::uuid,
+    '95000000-0000-4000-8000-000000000103'::uuid,
+    clock_timestamp(),
+    clock_timestamp(),
+    'aal1',
+    clock_timestamp() + interval '1 hour'
+  ),
+  (
+    '95000000-0000-4000-8000-000000000904'::uuid,
+    '95000000-0000-4000-8000-000000000102'::uuid,
+    clock_timestamp(),
+    clock_timestamp(),
+    'aal2',
+    clock_timestamp() + interval '1 hour'
   );
 
 SELECT set_config(
@@ -754,13 +799,15 @@ SELECT set_config(
 WITH redeemed AS (
   SELECT *
   FROM public.redeem_advocate_invitation(
-    repeat('a', 64),
-    'Accept the first delegate invitation',
-    'request-invitation-redeem',
-    'trace-invitation-redeem',
-    'session-invitation-redeem',
-    '192.0.2.11',
-    'invitation-redemption-test-agent'
+    plaintext_capability => repeat('a', 64),
+    change_reason => 'Accept the first delegate invitation',
+    request_id => '95100000-0000-4000-8000-000000000801',
+    trace_id => 'trace-invitation-redeem',
+    session_id => 'session-invitation-redeem',
+    client_ip => '192.0.2.11',
+    user_agent => 'invitation-redemption-test-agent',
+    redemption_operation_id =>
+      '95100000-0000-4000-8000-000000000801'::uuid
   )
 )
 INSERT INTO invitation_test_ids (key, value)
@@ -793,6 +840,54 @@ SELECT extensions.ok(
       AND invitation.revoked_at IS NULL
   ),
   'fresh exact-email redemption atomically creates an active membership and consumes the invitation once'
+);
+
+SELECT extensions.is(
+  (
+    SELECT membership_id
+    FROM public.redeem_advocate_invitation(
+      plaintext_capability => repeat('a', 64),
+      change_reason => 'Accept the first delegate invitation',
+      request_id => '95100000-0000-4000-8000-000000000801',
+      trace_id => 'trace-invitation-redeem-replay',
+      redemption_operation_id =>
+        '95100000-0000-4000-8000-000000000801'::uuid
+    )
+  ),
+  (SELECT value FROM invitation_test_ids WHERE key = 'membership_a'),
+  'an exact delegate operation replay returns the immutable committed membership'
+);
+
+SELECT extensions.is(
+  (
+    SELECT membership_id
+    FROM public.recover_advocate_invitation_redemption(
+      '95100000-0000-4000-8000-000000000801'::uuid
+    )
+  ),
+  (SELECT value FROM invitation_test_ids WHERE key = 'membership_a'),
+  'delegate recovery needs no capability after the exact authenticated commit'
+);
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM audit.creator_share_advocate_invitation_redemption_receipts receipt
+    WHERE receipt.operation_id =
+        '95100000-0000-4000-8000-000000000801'::uuid
+      AND receipt.invitation_kind = 'delegate'
+      AND receipt.initiating_user_id =
+        '95000000-0000-4000-8000-000000000102'::uuid
+      AND receipt.invitation_id = (
+        SELECT value FROM invitation_test_ids WHERE key = 'invitation_a'
+      )
+      AND receipt.membership_id = (
+        SELECT value FROM invitation_test_ids WHERE key = 'membership_a'
+      )
+      AND receipt.provisioning_request_id IS NULL
+      AND receipt.resulting_advocate_version IS NULL
+  ),
+  'delegate receipts retain only the contact-free committed operation anchors'
 );
 
 SELECT extensions.is(
@@ -874,7 +969,7 @@ SELECT extensions.ok(
     WHERE event.advocate_id = (
         SELECT value FROM invitation_test_ids WHERE key = 'advocate'
       )
-      AND event.request_id = 'request-invitation-redeem'
+      AND event.request_id = '95100000-0000-4000-8000-000000000801'
       AND event.trace_id = 'trace-invitation-redeem'
       AND event.session_id = '95000000-0000-4000-8000-000000000902'
       AND forensic.client_ip = '198.51.100.44'
@@ -1109,7 +1204,7 @@ SELECT extensions.ok(
     FROM audit.advocate_delegate_events disclosed
     JOIN audit.audit_events source
       ON source.sequence_id = disclosed.source_audit_sequence
-    WHERE source.request_id = 'request-invitation-redeem'
+    WHERE source.request_id = '95100000-0000-4000-8000-000000000801'
       AND disclosed.event_key = 'team.invitation.accepted'
       AND disclosed.areas = ARRAY['invitation']::text[]
       AND disclosed.actor_kind = 'portal_member'

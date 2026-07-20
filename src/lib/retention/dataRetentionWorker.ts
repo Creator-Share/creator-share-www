@@ -61,6 +61,7 @@ export interface DataRetentionCounts {
   sponsorRecentAuthenticationReceiptsDeleted: number
   sponsorPasswordlessReservationsDeleted: number
   sponsorPasswordlessVerificationAttemptsDeleted: number
+  advocateInvitationAuthenticationAttemptsDeleted: number
 }
 
 export interface DataRetentionWorkerResult {
@@ -195,6 +196,24 @@ function applyStepCounts(
     return
   }
   if (stepKey === "sponsor_authentication") {
+    const legacyKeys = [
+      "passwordless_reservations_deleted",
+      "passwordless_verification_attempts_deleted",
+      "recent_auth_receipts_deleted",
+    ]
+    const currentKeys = [
+      "advocate_invitation_authentication_attempts_deleted",
+      ...legacyKeys,
+    ].sort()
+    const suppliedKeys = Object.keys(row).sort()
+    const isLegacyShape =
+      suppliedKeys.length === legacyKeys.length &&
+      suppliedKeys.every((key, index) => key === legacyKeys[index])
+    const isCurrentShape =
+      suppliedKeys.length === currentKeys.length &&
+      suppliedKeys.every((key, index) => key === currentKeys[index])
+    if (!isLegacyShape && !isCurrentShape) resultShapeError()
+
     counts.sponsorRecentAuthenticationReceiptsDeleted = boundedCount(
       row.recent_auth_receipts_deleted,
       batchSize,
@@ -207,6 +226,12 @@ function applyStepCounts(
       row.passwordless_verification_attempts_deleted,
       batchSize,
     )
+    counts.advocateInvitationAuthenticationAttemptsDeleted = isCurrentShape
+      ? boundedCount(
+          row.advocate_invitation_authentication_attempts_deleted,
+          batchSize,
+        )
+      : 0
     return
   }
   const exposuresDeleted = boundedCount(row.exposures_deleted, batchSize)
@@ -320,6 +345,7 @@ export function createEmptyDataRetentionCounts(): DataRetentionCounts {
     sponsorRecentAuthenticationReceiptsDeleted: 0,
     sponsorPasswordlessReservationsDeleted: 0,
     sponsorPasswordlessVerificationAttemptsDeleted: 0,
+    advocateInvitationAuthenticationAttemptsDeleted: 0,
   }
 }
 

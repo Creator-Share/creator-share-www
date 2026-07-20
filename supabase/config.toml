@@ -104,9 +104,12 @@ additional_redirect_urls = [
   "http://localhost:3000/auth/confirm?next=%2Fapp",
   "http://localhost:3000/auth/confirm?next=%2Fsponsor%2Fclaim",
   "http://localhost:3000/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding",
+  "http://localhost:3000/advocate-invitation",
+  "http://127.0.0.1:3000/advocate-invitation",
   "https://creatorshare.com/auth/confirm?next=%2Fapp",
   "https://creatorshare.com/auth/confirm?next=%2Fsponsor%2Fclaim",
   "https://creatorshare.com/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding",
+  "https://creatorshare.com/advocate-invitation",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600

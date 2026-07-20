@@ -467,6 +467,27 @@ test.describe("advocate tenant middleware", () => {
     expect(tenantWebhook.headers.get("set-cookie")).toBeNull()
   })
 
+  test("bypasses generic session work for exact invitation secret routes", async () => {
+    for (const [pathname, method] of [
+      ["/advocate-invitation", "GET"],
+      ["/advocate-invitation", "HEAD"],
+      ["/api/auth/advocate-invitations/authenticate", "POST"],
+      ["/api/auth/advocate-invitations/redeem", "POST"],
+      ["/api/auth/advocate-invitations/recover", "POST"],
+    ] as const) {
+      const response = await middleware(
+        request(pathname, { host: "creatorshare.com", method }),
+      )
+      expect(response.status).toBe(200)
+      expect(response.headers.get("x-middleware-next")).toBe("1")
+      expect(response.headers.get("set-cookie")).toBeNull()
+
+      const deniedTenant = await middleware(request(pathname, { method }))
+      expect(deniedTenant.status).toBe(404)
+      expect(deniedTenant.headers.get("set-cookie")).toBeNull()
+    }
+  })
+
   test("serves exact public assets without the former extension wildcard", async () => {
     const asset = await middleware(request("/logo_text.svg"))
     expect(asset.status).toBe(200)

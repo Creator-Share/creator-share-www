@@ -37,14 +37,16 @@ SELECT extensions.ok(
     '{
       "recent_auth_receipts_deleted": 0,
       "passwordless_reservations_deleted": 0,
-      "passwordless_verification_attempts_deleted": 0
+      "passwordless_verification_attempts_deleted": 0,
+      "advocate_invitation_authentication_attempts_deleted": 0
     }'::jsonb
   AND private.data_retention_counts_are_valid(
     'sponsor_authentication',
     '{
       "recent_auth_receipts_deleted": 5000,
       "passwordless_reservations_deleted": 5000,
-      "passwordless_verification_attempts_deleted": 5000
+      "passwordless_verification_attempts_deleted": 5000,
+      "advocate_invitation_authentication_attempts_deleted": 5000
     }'::jsonb
   )
   AND NOT private.data_retention_counts_are_valid(
@@ -52,10 +54,32 @@ SELECT extensions.ok(
     '{
       "recent_auth_receipts_deleted": 5001,
       "passwordless_reservations_deleted": 0,
-      "passwordless_verification_attempts_deleted": 0
+      "passwordless_verification_attempts_deleted": 0,
+      "advocate_invitation_authentication_attempts_deleted": 0
+    }'::jsonb
+  )
+  AND NOT private.data_retention_counts_are_valid(
+    'sponsor_authentication',
+    '{
+      "recent_auth_receipts_deleted": 0,
+      "passwordless_reservations_deleted": 0,
+      "passwordless_verification_attempts_deleted": 0,
+      "advocate_invitation_authentication_attempts_deleted": 5001
     }'::jsonb
   ),
   'the retention vocabulary accepts only bounded sponsor authentication counts'
+);
+
+SELECT extensions.ok(
+  private.data_retention_counts_are_valid(
+    'sponsor_authentication',
+    '{
+      "recent_auth_receipts_deleted": 1,
+      "passwordless_reservations_deleted": 2,
+      "passwordless_verification_attempts_deleted": 3
+    }'::jsonb
+  ),
+  'historical three-count retention outcomes remain replay compatible'
 );
 
 SET LOCAL ROLE anon;
@@ -250,6 +274,28 @@ SELECT
   attempt_times.request_id
 FROM attempt_times;
 
+INSERT INTO private.advocate_invitation_authentication_attempts (
+  source_digest,
+  source_hmac_key_version,
+  attempted_at
+)
+VALUES
+  (
+    decode(repeat('51', 32), 'hex'),
+    1,
+    clock_timestamp() - interval '27 hours'
+  ),
+  (
+    decode(repeat('52', 32), 'hex'),
+    1,
+    clock_timestamp() - interval '26 hours'
+  ),
+  (
+    decode(repeat('53', 32), 'hex'),
+    1,
+    clock_timestamp() - interval '23 hours'
+  );
+
 SELECT set_config(
   'request.jwt.claims',
   '{"role":"service_role"}',
@@ -299,6 +345,7 @@ SELECT extensions.ok(
     SELECT recent_auth_receipts_deleted = 1
       AND passwordless_reservations_deleted = 1
       AND passwordless_verification_attempts_deleted = 1
+      AND advocate_invitation_authentication_attempts_deleted = 1
     FROM sponsor_authentication_first_purge
   ),
   'one purge call deletes at most one eligible row from each evidence table'
@@ -318,6 +365,10 @@ SELECT extensions.ok(
   AND (
     SELECT count(*) = 2
     FROM private.sponsor_passwordless_email_verification_attempts
+  )
+  AND (
+    SELECT count(*) = 2
+    FROM private.advocate_invitation_authentication_attempts
   )
   AND (
     SELECT backlog.has_more
@@ -340,6 +391,7 @@ SELECT extensions.ok(
     SELECT recent_auth_receipts_deleted = 1
       AND passwordless_reservations_deleted = 1
       AND passwordless_verification_attempts_deleted = 1
+      AND advocate_invitation_authentication_attempts_deleted = 1
     FROM sponsor_authentication_second_purge
   ),
   'a later bounded purge removes the remaining eligible evidence'
@@ -350,12 +402,57 @@ SELECT extensions.ok(
     SELECT recent_auth_receipts_deleted = 0
       AND passwordless_reservations_deleted = 0
       AND passwordless_verification_attempts_deleted = 0
+      AND advocate_invitation_authentication_attempts_deleted = 0
     FROM public.purge_expired_sponsor_authentication_evidence(10)
   ),
   'replaying the sponsor authentication purge is idempotent'
 );
 
 RESET ROLE;
+
+INSERT INTO private.advocate_invitation_authentication_attempts (
+  source_digest,
+  source_hmac_key_version,
+  attempted_at
+)
+VALUES (
+  decode(repeat('54', 32), 'hex'),
+  1,
+  clock_timestamp() - interval '25 hours'
+);
+
+SELECT extensions.ok(
+  (
+    SELECT backlog.has_more
+      AND backlog.oldest_expired_at <= clock_timestamp()
+    FROM private.data_retention_backlog('sponsor_authentication') backlog
+  ),
+  'an advocate-only quiet-traffic expiration is visible in durable backlog health'
+);
+
+SET LOCAL ROLE service_role;
+
+SELECT extensions.ok(
+  (
+    SELECT recent_auth_receipts_deleted = 0
+      AND passwordless_reservations_deleted = 0
+      AND passwordless_verification_attempts_deleted = 0
+      AND advocate_invitation_authentication_attempts_deleted = 1
+    FROM public.purge_expired_sponsor_authentication_evidence(10)
+  ),
+  'the scheduled purge removes advocate-only expired evidence without new authentication traffic'
+);
+
+RESET ROLE;
+
+SELECT extensions.ok(
+  (
+    SELECT NOT backlog.has_more
+      AND backlog.oldest_expired_at IS NULL
+    FROM private.data_retention_backlog('sponsor_authentication') backlog
+  ),
+  'advocate-only quiet-traffic backlog clears after the bounded scheduled purge'
+);
 
 SELECT extensions.ok(
   EXISTS (
@@ -378,6 +475,12 @@ SELECT extensions.ok(
     FROM private.sponsor_passwordless_email_verification_attempts attempt
     WHERE attempt.request_id =
       '6e000000-0000-4000-8000-000000000003'
+      AND attempt.attempted_at > clock_timestamp() - interval '24 hours'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM private.advocate_invitation_authentication_attempts attempt
+    WHERE attempt.source_digest = decode(repeat('53', 32), 'hex')
       AND attempt.attempted_at > clock_timestamp() - interval '24 hours'
   ),
   'cleanup preserves the complete fifteen minute authorization and twenty-four hour limiter quota windows'
@@ -445,6 +548,17 @@ SELECT
   '6e000000-0000-4000-8000-000000000004'
 FROM attempt_time;
 
+INSERT INTO private.advocate_invitation_authentication_attempts (
+  source_digest,
+  source_hmac_key_version,
+  attempted_at
+)
+VALUES (
+  decode(repeat('64', 32), 'hex'),
+  1,
+  clock_timestamp() - interval '26 hours'
+);
+
 SET LOCAL ROLE service_role;
 
 SELECT extensions.is(
@@ -475,7 +589,8 @@ SELECT extensions.ok(
       AND result -> 'counts' = '{
         "recent_auth_receipts_deleted": 1,
         "passwordless_reservations_deleted": 1,
-        "passwordless_verification_attempts_deleted": 1
+        "passwordless_verification_attempts_deleted": 1,
+        "advocate_invitation_authentication_attempts_deleted": 1
       }'::jsonb
       AND (result ->> 'has_more')::boolean = false
       AND result -> 'oldest_expired_at' = 'null'::jsonb
@@ -498,7 +613,8 @@ SELECT extensions.ok(
       AND event.counts = '{
         "recent_auth_receipts_deleted": 1,
         "passwordless_reservations_deleted": 1,
-        "passwordless_verification_attempts_deleted": 1
+        "passwordless_verification_attempts_deleted": 1,
+        "advocate_invitation_authentication_attempts_deleted": 1
       }'::jsonb
       AND event.request_id = 'sponsor-authentication-retention-run'
       AND event.trace_id = 'sponsor-authentication-retention-trace'

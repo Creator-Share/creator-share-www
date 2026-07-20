@@ -38,6 +38,7 @@ type RouteAction =
   | "framework-asset"
   | "image-optimizer"
   | "public-asset"
+  | "sensitive-auth"
   | "webhook"
 
 type RouteRule = Readonly<{
@@ -75,6 +76,27 @@ const PAYMENT_PAGE_RULE = Object.freeze({
 } satisfies RouteRule)
 
 const STATIC_RULES = new Map<string, RouteRule>([
+  [
+    "/advocate-invitation",
+    Object.freeze({
+      id: "advocate-invitation-interstitial",
+      action: "sensitive-auth",
+      methods: READ_METHODS,
+      tenantAllowed: false,
+    } satisfies RouteRule),
+  ],
+  ...["authenticate", "recover", "redeem"].map(
+    (operation) =>
+      [
+        `/api/auth/advocate-invitations/${operation}`,
+        Object.freeze({
+          id: `advocate-invitation-${operation}`,
+          action: "sensitive-auth",
+          methods: POST_METHOD,
+          tenantAllowed: false,
+        } satisfies RouteRule),
+      ] as const,
+  ),
   [
     "/.well-known/creator-share/advocate-publication-canary",
     Object.freeze({
@@ -440,7 +462,7 @@ export type TenantRoutePolicyDecision =
   | Readonly<{
       kind: "bypass"
       routeId: string
-      reason: "framework-asset" | "public-asset" | "webhook"
+      reason: "framework-asset" | "public-asset" | "sensitive-auth" | "webhook"
     }>
   | Readonly<{
       kind: "allow"
@@ -491,6 +513,9 @@ export function resolveTenantRoutePolicy(options: {
   }
 
   if (hostScope === "approved-primary") {
+    if (rule?.action === "sensitive-auth") {
+      return { kind: "bypass", routeId: rule.id, reason: "sensitive-auth" }
+    }
     if (!rule || !methodAllowed(rule, method)) return { kind: "pass-through" }
     if (rule.action === "webhook") {
       return { kind: "bypass", routeId: rule.id, reason: "webhook" }
@@ -531,6 +556,8 @@ export function resolveTenantRoutePolicy(options: {
       return { kind: "bypass", routeId: rule.id, reason: rule.action }
     case "image-optimizer":
       return { kind: "allow-image-optimizer", routeId: rule.id }
+    case "sensitive-auth":
+      return { kind: "deny", status: 404, allow: null }
     case "allow":
       return {
         kind: "allow",
