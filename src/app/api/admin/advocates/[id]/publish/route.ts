@@ -30,6 +30,7 @@ import {
   runAfterPublicationCanarySentinel,
 } from "@/lib/advocates/publicationCanary/sentinelBootstrap"
 import { createPublicationCanarySentinelEvidenceRepository } from "@/lib/advocates/publicationCanary/sentinelEvidence"
+import { runWhenProviderAutomationActive } from "@/lib/advocates/providerAutomation"
 import {
   creatorShareAdvocateControlForensicContext,
   creatorShareAdvocateControlTraceId,
@@ -159,45 +160,59 @@ export async function POST(
 
     if (result.outcome === "pending") {
       if (result.workerKickoff) {
-        const serviceRoleClient = createServiceRoleClient()
-        const workerDatabase =
-          createPublicationCanaryWorkerDatabase(serviceRoleClient)
         after(async () => {
           try {
-            const monotonicNow = () => performance.now()
-            const deadlineAtMilliseconds =
-              monotonicNow() + PUBLICATION_CANARY_SENTINEL_INVOCATION_BUDGET_MS
-            const requestReferenceSha256 = createHash("sha256")
-              .update(randomUUID())
-              .digest("hex")
-            const gated = await runAfterPublicationCanarySentinel(
-              {
-                runId: randomUUID(),
-                requestReferenceSha256,
-              },
-              {
-                ...createPublicationCanarySentinelBootstrapRuntimeDependencies({
-                  deadlineAtMilliseconds,
-                  monotonicNow,
-                }),
-                evidence: createPublicationCanarySentinelEvidenceRepository(
-                  createServiceRoleClient({
-                    requestTimeoutMilliseconds: 8_000,
-                  }),
-                ),
-              },
-              () =>
-                processNextPublicationCanaryExecution(deploymentIdentity, {
-                  database: workerDatabase,
-                  runnerDependencies:
-                    createPublicationCanaryRuntimeDependencies({
-                      serviceRoleClient,
+            const automation = await runWhenProviderAutomationActive(
+              async () => {
+                const serviceRoleClient = createServiceRoleClient()
+                const workerDatabase =
+                  createPublicationCanaryWorkerDatabase(serviceRoleClient)
+                const monotonicNow = () => performance.now()
+                const deadlineAtMilliseconds =
+                  monotonicNow() +
+                  PUBLICATION_CANARY_SENTINEL_INVOCATION_BUDGET_MS
+                const requestReferenceSha256 = createHash("sha256")
+                  .update(randomUUID())
+                  .digest("hex")
+                const sentinel = await runAfterPublicationCanarySentinel(
+                  {
+                    runId: randomUUID(),
+                    requestReferenceSha256,
+                  },
+                  {
+                    ...createPublicationCanarySentinelBootstrapRuntimeDependencies(
+                      {
+                        deadlineAtMilliseconds,
+                        monotonicNow,
+                      },
+                    ),
+                    evidence: createPublicationCanarySentinelEvidenceRepository(
+                      createServiceRoleClient({
+                        requestTimeoutMilliseconds: 8_000,
+                      }),
+                    ),
+                  },
+                  () =>
+                    processNextPublicationCanaryExecution(
                       deploymentIdentity,
-                    }),
-                }),
+                      {
+                        database: workerDatabase,
+                        runnerDependencies:
+                          createPublicationCanaryRuntimeDependencies({
+                            serviceRoleClient,
+                            deploymentIdentity,
+                          }),
+                      },
+                    ),
+                )
+                return { sentinel, requestReferenceSha256 }
+              },
             )
-            if (!gated.ready) {
-              if (gated.outcome === "failed") {
+            if (!automation.active) return
+
+            const { sentinel, requestReferenceSha256 } = automation.value
+            if (!sentinel.ready) {
+              if (sentinel.outcome === "failed") {
                 console.error(
                   "ADVOCATE_PUBLICATION_SENTINEL_REQUIRES_ATTENTION",
                   {
@@ -208,11 +223,11 @@ export async function POST(
               }
               return
             }
-            if (gated.execution.outcome === "failed") {
+            if (sentinel.execution.outcome === "failed") {
               console.error("ADVOCATE_PUBLICATION_CANARY_REQUIRES_ATTENTION", {
                 operationId: input.operationId,
-                runId: gated.execution.runId,
-                failureCode: gated.execution.failureCode,
+                runId: sentinel.execution.runId,
+                failureCode: sentinel.execution.failureCode,
               })
             }
           } catch (error) {

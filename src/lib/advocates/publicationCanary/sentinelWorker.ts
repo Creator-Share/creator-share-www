@@ -3,6 +3,10 @@ import "server-only"
 import { createHash, randomUUID as systemRandomUUID } from "node:crypto"
 
 import {
+  PROVIDER_AUTOMATION_DISABLED_RESULT,
+  runWhenProviderAutomationActive,
+} from "../providerAutomation"
+import {
   isAuthorizedPublicationCanaryWorkerRequest,
   loadPublicationCanaryWorkerSecret,
 } from "./workerAuth"
@@ -60,10 +64,17 @@ export async function handlePublicationCanarySentinelWorkerRequest(
 
   const requestReferenceSha256 = requestReference(requestId)
   try {
-    const result = await dependencies.runBootstrap({
-      runId: (dependencies.randomUUID ?? systemRandomUUID)(),
-      requestReferenceSha256,
-    })
+    const execution = await runWhenProviderAutomationActive(async () => {
+      const result = await dependencies.runBootstrap({
+        runId: (dependencies.randomUUID ?? systemRandomUUID)(),
+        requestReferenceSha256,
+      })
+      return result
+    }, dependencies.environment ?? process.env)
+    if (!execution.active) {
+      return response(PROVIDER_AUTOMATION_DISABLED_RESULT, 200)
+    }
+    const result = execution.value
     if (result.outcome === "ready") {
       return response({ ok: true, ready: true, requestId }, 200)
     }

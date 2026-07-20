@@ -3,13 +3,16 @@
 // safe to import from client components (Footer, FAQ, About) as well as
 // server-side email rendering.
 
-import {
-  ALL_STRIPE_REGIONS,
-  type StripeRegion,
-} from "@/lib/stripe/region"
+import { ALL_STRIPE_REGIONS, type StripeRegion } from "@/lib/stripe/region"
 
 export const DEFAULT_STRIPE_PORTAL_URL = "https://stripe.creatorshare.com"
 export const PAYPAL_MANAGE_URL = "https://www.paypal.com/myaccount/autopay/"
+
+const APPROVED_STRIPE_PORTAL_HOSTS = new Set([
+  "billing.stripe.com",
+  "stripe.creatorshare.com",
+])
+const UNSAFE_RAW_URL_CHARACTERS = /[\u0000-\u0020\u007f"'<>\\]/
 
 export interface PortalLink {
   provider: "STRIPE" | "PAYPAL"
@@ -31,13 +34,45 @@ const PUBLIC_PORTAL_URLS: Record<StripeRegion, string | undefined> = {
   uk: process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_UK,
 }
 
+export function normalizePublicStripePortalUrl(
+  value: string | undefined,
+): string | null {
+  if (
+    typeof value !== "string" ||
+    value.length < 1 ||
+    value.length > 2_048 ||
+    UNSAFE_RAW_URL_CHARACTERS.test(value)
+  ) {
+    return null
+  }
+
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return null
+  }
+  if (
+    url.protocol !== "https:" ||
+    !APPROVED_STRIPE_PORTAL_HOSTS.has(url.hostname) ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.port !== "" ||
+    url.search !== "" ||
+    url.hash !== ""
+  ) {
+    return null
+  }
+  return url.toString()
+}
+
 export function buildStripePortalLinks(
   portalUrls: Record<StripeRegion, string | undefined>,
 ): PortalLink[] {
   const linksByHref = new Map<string, StripeRegion[]>()
 
   for (const region of ALL_STRIPE_REGIONS) {
-    const href = portalUrls[region]?.trim()
+    const href = normalizePublicStripePortalUrl(portalUrls[region])
     if (!href) continue
 
     const regions = linksByHref.get(href) || []

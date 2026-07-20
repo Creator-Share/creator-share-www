@@ -11,6 +11,10 @@ import {
   loadWorkerRouteSecret,
   runScheduledDomainProvisioningBatch,
 } from "@/lib/advocates/provisioning"
+import {
+  PROVIDER_AUTOMATION_DISABLED_RESULT,
+  runWhenProviderAutomationActive,
+} from "@/lib/advocates/providerAutomation"
 import { createServiceRoleClient } from "@/utils/supabase/server"
 
 export const runtime = "nodejs"
@@ -45,20 +49,27 @@ async function handle(request: NextRequest) {
   }
 
   try {
-    const config = loadDomainWorkerConfig()
-    const repository = createSupabaseDomainProvisioningRepository(
-      createServiceRoleClient({
-        requestTimeoutMilliseconds: DOMAIN_WORKER_INVOCATION_BUDGET_MS - 5_000,
-      }),
-    )
-    const batch = await runScheduledDomainProvisioningBatch({
-      repository,
-      adapterFactory: createDomainProviderAdapterFactory(),
-      config,
-      workerId: `advocate-domain-worker:${requestId}`,
-      correlationId: `advocate-domain-reconciliation:${requestId}`,
-      deadlineAtMilliseconds,
+    const execution = await runWhenProviderAutomationActive(async () => {
+      const config = loadDomainWorkerConfig()
+      const repository = createSupabaseDomainProvisioningRepository(
+        createServiceRoleClient({
+          requestTimeoutMilliseconds:
+            DOMAIN_WORKER_INVOCATION_BUDGET_MS - 5_000,
+        }),
+      )
+      return runScheduledDomainProvisioningBatch({
+        repository,
+        adapterFactory: createDomainProviderAdapterFactory(),
+        config,
+        workerId: `advocate-domain-worker:${requestId}`,
+        correlationId: `advocate-domain-reconciliation:${requestId}`,
+        deadlineAtMilliseconds,
+      })
     })
+    if (!execution.active) {
+      return response(PROVIDER_AUTOMATION_DISABLED_RESULT, 200)
+    }
+    const batch = execution.value
 
     const requiresAttention =
       batch.schedulingFailed ||

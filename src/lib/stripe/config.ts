@@ -1,4 +1,5 @@
 import Stripe from "stripe"
+import { normalizePublicStripePortalUrl } from "@/lib/payments/portals"
 import {
   ALL_STRIPE_REGIONS,
   isValidStripeRegion,
@@ -50,8 +51,7 @@ const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
     secretKey: process.env.STRIPE_SECRET_KEY_US || "",
     publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US || "",
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_US || "",
-    previousWebhookSecret:
-      process.env.STRIPE_WEBHOOK_SECRET_US_PREVIOUS || "",
+    previousWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET_US_PREVIOUS || "",
     portalUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_US || "",
     label: "Creator Share US",
   },
@@ -59,8 +59,7 @@ const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
     secretKey: process.env.STRIPE_SECRET_KEY_UK || "",
     publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK || "",
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_UK || "",
-    previousWebhookSecret:
-      process.env.STRIPE_WEBHOOK_SECRET_UK_PREVIOUS || "",
+    previousWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET_UK_PREVIOUS || "",
     portalUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_UK || "",
     label: "Creator Share UK",
   },
@@ -82,9 +81,7 @@ export const isValidRegion = isValidStripeRegion
 // downstream lookups against the wrong account fail closed with a
 // cleanly worded error. Do not use this function as an authorization
 // boundary.
-export function coerceRegion(
-  value: string | null | undefined,
-): StripeRegion {
+export function coerceRegion(value: string | null | undefined): StripeRegion {
   return isValidStripeRegion(value) ? value : STRIPE_DEFAULT_REGION
 }
 
@@ -134,8 +131,7 @@ export interface StripeWebhookSecretCandidate {
   version: "current" | "previous"
 }
 
-export interface ScopedStripeWebhookSecretCandidate
-  extends StripeWebhookSecretCandidate {
+export interface ScopedStripeWebhookSecretCandidate extends StripeWebhookSecretCandidate {
   region: StripeRegion
 }
 
@@ -204,7 +200,7 @@ export function getStripeAccountLivemode(region: StripeRegion): boolean {
 export function getPortalUrl(
   region: StripeRegion = STRIPE_DEFAULT_REGION,
 ): string {
-  return getStripeConfig(region).portalUrl
+  return normalizePublicStripePortalUrl(getStripeConfig(region).portalUrl) ?? ""
 }
 
 export function getAvailableRegions(): StripeRegion[] {

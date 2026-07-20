@@ -45,6 +45,15 @@ function resolveStripePortalUrl(region: StripeRegion): string {
   return getPortalUrl(region) || DEFAULT_STRIPE_PORTAL_URL
 }
 
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+}
+
 /**
  * Render the "manage your subscription" HTML block, parameterized by provider
  * and (for Stripe) the region-specific billing portal URL. PayPal sponsors get
@@ -70,7 +79,9 @@ export function renderManagementSection({
     `
   }
 
-  const portalUrl = resolveStripePortalUrl(coerceRegion(region))
+  const portalUrl = escapeHtmlAttribute(
+    resolveStripePortalUrl(coerceRegion(region)),
+  )
   if (variant === "prominent") {
     return `
       <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">

@@ -499,7 +499,10 @@ test.describe("publication sentinel worker response boundary", () => {
     const response = await worker.handlePublicationCanarySentinelWorkerRequest(
       request(),
       {
-        environment: { CRON_SECRET: SECRET },
+        environment: {
+          CRON_SECRET: SECRET,
+          ADVOCATE_PROVIDER_AUTOMATION_MODE: "active",
+        },
         randomUUID: (() => {
           const values = [REQUEST_ID, WORKER_RUN_ID]
           return () => values.shift() ?? RUN_ID
@@ -535,7 +538,10 @@ test.describe("publication sentinel worker response boundary", () => {
   test("keeps convergence nonterminal and denies unauthenticated execution", async () => {
     let runs = 0
     const dependencies = {
-      environment: { CRON_SECRET: SECRET },
+      environment: {
+        CRON_SECRET: SECRET,
+        ADVOCATE_PROVIDER_AUTOMATION_MODE: "active",
+      },
       randomUUID: (() => {
         const values = [REQUEST_ID, WORKER_RUN_ID]
         return () => values.shift() ?? RUN_ID

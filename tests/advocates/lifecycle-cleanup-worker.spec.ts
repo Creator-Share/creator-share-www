@@ -406,13 +406,57 @@ test.describe("archived advocate domain cleanup route and schedule", () => {
     expect(response.headers.get("referrer-policy")).toBe("no-referrer")
   })
 
+  test("stops before cleanup coordination when provider automation is disabled", async () => {
+    let executorCalls = 0
+    let workerIdCalls = 0
+
+    for (const environment of [
+      { CRON_SECRET: SECRET },
+      {
+        CRON_SECRET: SECRET,
+        ADVOCATE_PROVIDER_AUTOMATION_MODE: "disabled",
+      },
+      {
+        CRON_SECRET: SECRET,
+        ADVOCATE_PROVIDER_AUTOMATION_MODE: "malformed",
+      },
+    ]) {
+      const response = await route.handleArchivedAdvocateDomainCleanupRequest(
+        authorizedRequest(),
+        {
+          environment,
+          requestId: () => REQUEST_ID,
+          workerId: () => {
+            workerIdCalls += 1
+            return WORKER_ID
+          },
+          createExecutor() {
+            executorCalls += 1
+            return executorDouble()
+          },
+        },
+      )
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({
+        ok: true,
+        code: "automation_disabled",
+      })
+    }
+
+    expect(workerIdCalls).toBe(0)
+    expect(executorCalls).toBe(0)
+  })
+
   test("is safely replayable throughout the server-owned quiescence interval", async () => {
     let calls = 0
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const response = await route.handleArchivedAdvocateDomainCleanupRequest(
         authorizedRequest(),
         {
-          environment: { CRON_SECRET: SECRET },
+          environment: {
+            CRON_SECRET: SECRET,
+            ADVOCATE_PROVIDER_AUTOMATION_MODE: "active",
+          },
           requestId: () => REQUEST_ID,
           workerId: () => WORKER_ID,
           createExecutor: () =>
@@ -447,6 +491,7 @@ test.describe("archived advocate domain cleanup route and schedule", () => {
         {
           environment: {
             CRON_SECRET: SECRET,
+            ADVOCATE_PROVIDER_AUTOMATION_MODE: "active",
             ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_BATCH_SIZE: "8",
           },
           requestId: () => REQUEST_ID,
@@ -487,7 +532,10 @@ test.describe("archived advocate domain cleanup route and schedule", () => {
       const response = await route.handleArchivedAdvocateDomainCleanupRequest(
         authorizedRequest(),
         {
-          environment: { CRON_SECRET: SECRET },
+          environment: {
+            CRON_SECRET: SECRET,
+            ADVOCATE_PROVIDER_AUTOMATION_MODE: "active",
+          },
           requestId: () => REQUEST_ID,
           workerId: () => WORKER_ID,
           createExecutor: () =>

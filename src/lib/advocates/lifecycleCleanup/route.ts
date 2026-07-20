@@ -14,6 +14,10 @@ import {
   type ArchivedAdvocateDomainCleanupRpcExecutor,
   type ArchivedAdvocateDomainCleanupSummary,
 } from "./worker"
+import {
+  PROVIDER_AUTOMATION_DISABLED_RESULT,
+  runWhenProviderAutomationActive,
+} from "../providerAutomation"
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -93,53 +97,61 @@ export async function handleArchivedAdvocateDomainCleanupRequest(
     return safeResponse({ ok: false, requestId, code: "unauthorized" })
   }
 
-  const workerId = (dependencies.workerId ?? randomUUID)()
-  if (!UUID_PATTERN.test(workerId)) {
-    return safeResponse({
-      ok: false,
-      requestId,
-      code: "worker_unavailable",
-    })
-  }
-
-  try {
-    const config = loadArchivedAdvocateDomainCleanupWorkerConfig(environment)
-    const summary = await runArchivedAdvocateDomainCleanupWorker({
-      ...config,
-      coordinatorId: `advocate-domain-lifecycle-coordinator:${workerId}`,
-      executor: dependencies.createExecutor(),
-      timeoutSignal: dependencies.timeoutSignal,
-    })
-    const requiresAttention = summary.blockedDomains > 0
-    if (requiresAttention) {
-      console.error("ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_REQUIRES_ATTENTION", {
+  const execution = await runWhenProviderAutomationActive(async () => {
+    const workerId = (dependencies.workerId ?? randomUUID)()
+    if (!UUID_PATTERN.test(workerId)) {
+      return safeResponse({
+        ok: false,
         requestId,
-        code: "worker_batch_requires_attention",
-        processedDomains: summary.processedDomains,
-        jobsEnqueued: summary.jobsEnqueued,
-        quiescingDomains: summary.quiescingDomains,
-        blockedDomains: summary.blockedDomains,
+        code: "worker_unavailable",
       })
     }
-    return safeResponse({
-      ok: !requiresAttention,
-      requestId,
-      ...(requiresAttention ? { code: "worker_batch_requires_attention" } : {}),
-      summary,
-    })
-  } catch {
-    console.error("ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_REQUIRES_ATTENTION", {
-      requestId,
-      code: "worker_execution_failed",
-      processedDomains: 0,
-      jobsEnqueued: 0,
-      quiescingDomains: 0,
-      blockedDomains: 0,
-    })
-    return safeResponse({
-      ok: false,
-      requestId,
-      code: "worker_execution_failed",
-    })
+
+    try {
+      const config = loadArchivedAdvocateDomainCleanupWorkerConfig(environment)
+      const summary = await runArchivedAdvocateDomainCleanupWorker({
+        ...config,
+        coordinatorId: `advocate-domain-lifecycle-coordinator:${workerId}`,
+        executor: dependencies.createExecutor(),
+        timeoutSignal: dependencies.timeoutSignal,
+      })
+      const requiresAttention = summary.blockedDomains > 0
+      if (requiresAttention) {
+        console.error("ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_REQUIRES_ATTENTION", {
+          requestId,
+          code: "worker_batch_requires_attention",
+          processedDomains: summary.processedDomains,
+          jobsEnqueued: summary.jobsEnqueued,
+          quiescingDomains: summary.quiescingDomains,
+          blockedDomains: summary.blockedDomains,
+        })
+      }
+      return safeResponse({
+        ok: !requiresAttention,
+        requestId,
+        ...(requiresAttention
+          ? { code: "worker_batch_requires_attention" }
+          : {}),
+        summary,
+      })
+    } catch {
+      console.error("ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_REQUIRES_ATTENTION", {
+        requestId,
+        code: "worker_execution_failed",
+        processedDomains: 0,
+        jobsEnqueued: 0,
+        quiescingDomains: 0,
+        blockedDomains: 0,
+      })
+      return safeResponse({
+        ok: false,
+        requestId,
+        code: "worker_execution_failed",
+      })
+    }
+  }, environment)
+  if (!execution.active) {
+    return response(PROVIDER_AUTOMATION_DISABLED_RESULT, 200)
   }
+  return execution.value
 }

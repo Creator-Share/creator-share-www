@@ -169,6 +169,13 @@ ADVOCATE_LOGO_RECONCILIATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
 
 # Automated advocate domain provisioning. Cloudflare remains authoritative
 # DNS. The CNAME must be DNS only and target Vercel's configured CNAME target.
+# Provider automation is a release-controlled master switch. Missing,
+# malformed, and explicit disabled values all prevent database claims and
+# provider traffic. Preview, test, and local environments stay disabled. A
+# production release sets active only in a staged Production deployment with
+# automatic domain assignment disabled, then runs the authenticated preflight
+# against that exact build before promotion.
+ADVOCATE_PROVIDER_AUTOMATION_MODE=disabled
 ADVOCATE_CLOUDFLARE_API_TOKEN=
 ADVOCATE_CLOUDFLARE_ZONE_ID=
 # Discover the project specific target through Vercel's domain configuration
@@ -226,7 +233,7 @@ SPONSORSHIP_VISITOR_COOKIE_SECRET_V1=
 # planned rotation, move the former current value to the optional previous
 # slot until every 400-day signal has been refreshed or expired.
 ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1=
-ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1_PREVIOUS=
+# ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1_PREVIOUS=
 
 
 # AI Proofreading (OpenAI-Compatible API)

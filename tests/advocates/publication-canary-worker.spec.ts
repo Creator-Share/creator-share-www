@@ -114,9 +114,18 @@ test.describe("publication canary worker boundary", () => {
     expect(adminRoute).toContain("runAfterPublicationCanarySentinel")
     expect(
       adminRoute.indexOf(
-        "const gated = await runAfterPublicationCanarySentinel",
+        "const automation = await runWhenProviderAutomationActive",
       ),
-    ).toBeLessThan(adminRoute.indexOf("gated.execution.outcome"))
+    ).toBeLessThan(
+      adminRoute.indexOf(
+        "const sentinel = await runAfterPublicationCanarySentinel",
+      ),
+    )
+    expect(
+      adminRoute.indexOf(
+        "const sentinel = await runAfterPublicationCanarySentinel",
+      ),
+    ).toBeLessThan(adminRoute.indexOf("sentinel.execution.outcome"))
     expect(workerRoute).toContain("processNextPublicationCanaryExecution")
     expect(workerRoute).toContain("loadPublicationCanaryWorkerSecret")
     expect(workerRoute).toContain("runAfterPublicationCanarySentinel")

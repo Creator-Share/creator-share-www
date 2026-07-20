@@ -39,7 +39,7 @@ const NOW = Date.parse("2026-07-18T18:00:00.000Z")
 const HOSTNAME = "hope.creatorshare.com"
 const SENTINEL_HOSTNAME = "publication-sentinel.creatorshare.com"
 const SIBLING_HOSTNAME = "canary-0123456789abcdef.creatorshare.com"
-const TARGET = "cname.vercel-dns.com"
+const TARGET = "d1d4fc829fe7bc7c.vercel-dns-017.com"
 const PINNED_ADDRESSES = Object.freeze([
   Object.freeze({ address: "76.76.21.21", family: 4 as const }),
 ])

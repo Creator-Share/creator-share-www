@@ -232,7 +232,7 @@ test.describe("publication negative sentinel reconciler", () => {
       id: recordId,
       type: "CNAME",
       name: "publication-sentinel.creatorshare.com",
-      content: "cname.vercel-dns.com",
+      content: "d1d4fc829fe7bc7c.vercel-dns-017.com",
       proxied: false,
       comment:
         "creator-share:advocate-domain-integration:00000000-0000-4000-8000-0000000000c1",
@@ -241,7 +241,7 @@ test.describe("publication negative sentinel reconciler", () => {
       {
         apiToken: "cloudflare-token-value-1234567890",
         zoneId: "b".repeat(32),
-        cnameTarget: "cname.vercel-dns.com",
+        cnameTarget: "d1d4fc829fe7bc7c.vercel-dns-017.com",
         ttl: 300,
         requestTimeoutMs: 5_000,
       },
@@ -291,7 +291,7 @@ test.describe("publication negative sentinel reconciler", () => {
     expect(JSON.parse(String(cloudflareCalls[1].init?.body))).toEqual({
       type: "CNAME",
       name: "publication-sentinel.creatorshare.com",
-      content: "cname.vercel-dns.com",
+      content: "d1d4fc829fe7bc7c.vercel-dns-017.com",
       ttl: 300,
       proxied: false,
       comment:
@@ -311,7 +311,7 @@ test.describe("publication negative sentinel reconciler", () => {
       id: recordId,
       type: "CNAME",
       name: "publication-sentinel.creatorshare.com",
-      content: "cname.vercel-dns.com",
+      content: "d1d4fc829fe7bc7c.vercel-dns-017.com",
       proxied: false,
       comment:
         "creator-share:advocate-domain-integration:00000000-0000-4000-8000-0000000000c1",
@@ -320,7 +320,7 @@ test.describe("publication negative sentinel reconciler", () => {
       {
         apiToken: "cloudflare-token-value-1234567890",
         zoneId: "b".repeat(32),
-        cnameTarget: "cname.vercel-dns.com",
+        cnameTarget: "d1d4fc829fe7bc7c.vercel-dns-017.com",
         ttl: 300,
         requestTimeoutMs: 5_000,
       },

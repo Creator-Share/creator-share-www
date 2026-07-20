@@ -67,7 +67,7 @@ const context: DomainProvisioningContext = {
 const cloudflareConfig = {
   apiToken: "cloudflare_token_that_is_long_enough",
   zoneId: "a".repeat(32),
-  cnameTarget: "cname.vercel-dns.com",
+  cnameTarget: "d1d4fc829fe7bc7c.vercel-dns-017.com",
   ttl: 300,
   requestTimeoutMs: 5_000,
 }
@@ -2652,6 +2652,22 @@ test.describe("domain provisioning configuration", () => {
         ADVOCATE_CLOUDFLARE_CNAME_TARGET: cloudflareConfig.cnameTarget,
       }),
     ).toThrow("worker_configuration_invalid")
+
+    for (const cnameTarget of [
+      "cname.vercel-dns.com",
+      "tenant.vercel-dns.com",
+      "d1d4fc829fe7bc7c.vercel-dns.com",
+      "d1d4fc829fe7bc7c.vercel-dns-17.com",
+      "d1d4fc829fe7bc7c.example.com",
+    ]) {
+      expect(() =>
+        loadCloudflareProvisioningConfig({
+          ADVOCATE_CLOUDFLARE_API_TOKEN: cloudflareConfig.apiToken,
+          ADVOCATE_CLOUDFLARE_ZONE_ID: cloudflareConfig.zoneId,
+          ADVOCATE_CLOUDFLARE_CNAME_TARGET: cnameTarget,
+        }),
+      ).toThrow("worker_configuration_invalid")
+    }
 
     expect(() =>
       loadVercelProvisioningConfig({

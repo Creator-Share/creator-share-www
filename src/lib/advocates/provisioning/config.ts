@@ -49,8 +49,7 @@ export interface PayPalPublicationPaymentCanaryConfig {
 }
 
 export type PublicationPaymentCanaryConfig =
-  | StripePublicationPaymentCanaryConfig
-  | PayPalPublicationPaymentCanaryConfig
+  StripePublicationPaymentCanaryConfig | PayPalPublicationPaymentCanaryConfig
 
 export interface DomainWorkerConfig {
   batchSize: number
@@ -64,6 +63,8 @@ export type ProvisioningEnvironment = Readonly<
 
 const DNS_HOSTNAME_PATTERN =
   /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
+const VERCEL_PROJECT_CNAME_TARGET_PATTERN =
+  /^[a-z0-9]{8,64}\.vercel-dns-[0-9]{3}\.com$/
 const PUBLICATION_PAYMENT_CANARY_MAX_TIMEOUT_MS = 15_000
 const PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_DEFAULT_MS = 15_000
 const PROVIDER_CONFIGURATION_REQUEST_TIMEOUT_MAX_MS = 60_000
@@ -144,10 +145,15 @@ export function loadCloudflareProvisioningConfig(
     throw configurationError()
   }
 
+  const cnameTarget = normalizeDnsHostname(env.ADVOCATE_CLOUDFLARE_CNAME_TARGET)
+  if (!VERCEL_PROJECT_CNAME_TARGET_PATTERN.test(cnameTarget)) {
+    throw configurationError()
+  }
+
   return {
     apiToken: requireSecret(env, "ADVOCATE_CLOUDFLARE_API_TOKEN"),
     zoneId,
-    cnameTarget: normalizeDnsHostname(env.ADVOCATE_CLOUDFLARE_CNAME_TARGET),
+    cnameTarget,
     ttl: parseBoundedInteger(
       env.ADVOCATE_CLOUDFLARE_TTL_SECONDS,
       300,
