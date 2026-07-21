@@ -20,6 +20,8 @@
     "test:advocate:invitation-proof-quarantine-concurrency": "node tests/database/advocate-invitation-proof-quarantine-concurrency.mjs",
     "test:advocate:branding-authority-concurrency": "node tests/database/advocate-branding-authority-concurrency.mjs",
     "test:advocate:branding-authority-termination": "node tests/database/advocate-branding-authority-termination.mjs",
+    "test:advocate:postgrest-role-http": "node tests/database/postgrest-role-claim-http.mjs",
+    "test:advocate:postgrest-role-http-termination": "node tests/database/postgrest-role-claim-http-termination.mjs",
     "test:advocate:publication-concurrency": "node tests/database/advocate-publication-concurrency.mjs",
     "test:email-proof-issuance-concurrency": "node tests/database/email-proof-issuance-concurrency.mjs",
     "canary:supabase-email-proof-supersession:local": "node tests/provider/supabase-email-proof-supersession-local.mjs",

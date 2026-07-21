@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(26);
+SELECT extensions.plan(28);
 
 SELECT set_config('request.jwt.claim.role', '', true);
 SELECT set_config(
@@ -35,6 +35,11 @@ SELECT extensions.lives_ok(
 SELECT extensions.lives_ok(
   $$SELECT private.require_advocate_invitation_service_role()$$,
   'the advocate invitation guard accepts a consolidated service role claim'
+);
+
+SELECT extensions.lives_ok(
+  $$SELECT private.require_advocate_public_metric_service_role()$$,
+  'the advocate public metric guard accepts a consolidated service role claim'
 );
 
 SELECT set_config(
@@ -71,6 +76,13 @@ SELECT extensions.throws_ok(
   'a presented authenticated claim overrides the privileged SQL fallback for advocate invitations'
 );
 
+SELECT extensions.throws_ok(
+  $$SELECT private.require_advocate_public_metric_service_role()$$,
+  '42501',
+  'Advocate public metric RPCs require the service role',
+  'a presented authenticated claim overrides the privileged SQL fallback for advocate public metrics'
+);
+
 SELECT set_config('request.jwt.claim.role', '', true);
 SELECT set_config('request.jwt.claims', '{}', true);
 
@@ -80,7 +92,8 @@ SELECT extensions.lives_ok(
       private.require_payment_service_role(),
       private.require_data_retention_service_role(),
       private.require_advocate_logo_service_role(),
-      private.require_advocate_invitation_service_role()
+      private.require_advocate_invitation_service_role(),
+      private.require_advocate_public_metric_service_role()
   $compatibility_sql_fallback$,
   'direct PostgreSQL maintenance retains the narrow no-claim fallback'
 );
@@ -100,7 +113,8 @@ SELECT extensions.lives_ok(
       private.require_payment_service_role(),
       private.require_data_retention_service_role(),
       private.require_advocate_logo_service_role(),
-      private.require_advocate_invitation_service_role()
+      private.require_advocate_invitation_service_role(),
+      private.require_advocate_public_metric_service_role()
   $compatibility_legacy_claim$,
   'all shared service guards retain legacy scalar claim compatibility'
 );
@@ -113,7 +127,8 @@ SELECT extensions.is(
       'private.require_payment_service_role()'::regprocedure,
       'private.require_data_retention_service_role()'::regprocedure,
       'private.require_advocate_logo_service_role()'::regprocedure,
-      'private.require_advocate_invitation_service_role()'::regprocedure
+      'private.require_advocate_invitation_service_role()'::regprocedure,
+      'private.require_advocate_public_metric_service_role()'::regprocedure
     )
       AND routine.prosecdef
       AND coalesce(array_to_string(routine.proconfig, ','), '') =
@@ -129,7 +144,7 @@ SELECT extensions.is(
         'EXECUTE'
       )
   ),
-  4,
+  5,
   'all shared service guards remain locked security definer internals'
 );
 

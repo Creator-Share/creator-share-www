@@ -22,11 +22,14 @@ on:
       - "supabase/tests/advocate_attribution_settlement_integration.test.sql"
       - "supabase/tests/advocate_admin_settings_boundary.test.sql"
       - "supabase/tests/advocate_logo_upload_reservations.test.sql"
+      - "supabase/tests/postgrest_role_claim_compatibility.test.sql"
       - "tests/database/**/*publication*"
       - "tests/database/**/*initial-owner*"
       - "tests/database/**/*invitation*"
       - "tests/database/**/*email-proof*"
       - "tests/database/advocate-branding-authority-*.mjs"
+      - "tests/database/postgrest-role-claim-http.mjs"
+      - "tests/database/postgrest-role-claim-http-termination.mjs"
       - "tests/database/fixtures/advocate-branding-authority-concurrency.sql"
       - "tests/database/support/*.mjs"
       - "tests/provider/**"
@@ -350,6 +353,29 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Run PostgREST role claim compatibility database tests
+        run: >-
+          yarn supabase test db
+          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+          supabase/tests/postgrest_role_claim_compatibility.test.sql
+
+      - name: Run loopback PostgREST role claim compatibility gate
+        env:
+          ADVOCATE_POSTGREST_ROLE_HTTP_EVIDENCE_PATH: ${{ runner.temp }}/advocate-postgrest-role-http-evidence.json
+          ADVOCATE_POSTGREST_ROLE_HTTP_SOURCE_REVISION: ${{ github.sha }}
+        run: yarn test:advocate:postgrest-role-http
+
+      - name: Verify PostgREST role claim forced termination cleanup
+        run: yarn test:advocate:postgrest-role-http-termination
+
+      - name: Upload sanitized PostgREST role claim compatibility evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-postgrest-role-http-evidence
+          path: ${{ runner.temp }}/advocate-postgrest-role-http-evidence.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Run focused initial owner database tests
         run: |
