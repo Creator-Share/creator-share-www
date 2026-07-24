@@ -58,6 +58,25 @@ function successfulAdapter(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function successfulHostedAdapter(overrides: Record<string, unknown> = {}) {
+  return successfulAdapter({
+    async initialize() {
+      return {
+        authVersion: "v2.188.1",
+        projectRef: "destjwstohzmufshfnuy",
+      }
+    },
+    async observeExpiry() {
+      return {
+        outcome: "rejected",
+        authenticationMethod: "not_available",
+        failureCategory: "none",
+      }
+    },
+    ...overrides,
+  })
+}
+
 function completeRunOptions(overrides: Record<string, unknown> = {}) {
   return {
     provenance: {
@@ -68,6 +87,13 @@ function completeRunOptions(overrides: Record<string, unknown> = {}) {
     },
     ...overrides,
   }
+}
+
+function completeHostedRunOptions(overrides: Record<string, unknown> = {}) {
+  return completeRunOptions({
+    evidenceProfile: "hosted_v4",
+    ...overrides,
+  })
 }
 
 function validLocalEnvironment(
@@ -133,6 +159,12 @@ test("classifies only bounded provider failure categories", () => {
   expect(
     canary.classifySupabaseProviderFailure({ code: "request_timeout" }),
   ).toBe("timeout")
+  expect(
+    canary.classifySupabaseProviderFailure({
+      code: "over_request_rate_limit",
+      status: 429,
+    }),
+  ).toBe("rate_limited")
   expect(
     canary.classifySupabaseProviderFailure(
       new Error("provider wrapper", {
@@ -424,6 +456,197 @@ test("defines the complete local supersession matrix without claiming completion
     first_failure_category: "not_exercised",
     second_failure_category: "not_exercised",
   })
+  expect(canary.serializeSupabaseEmailProofSupersessionEvidence(report)).toBe(
+    `${JSON.stringify(report)}\n`,
+  )
+})
+
+test("emits the closed hosted v4 profile with a real expiry observation", async () => {
+  const observedExpiryCalls: Array<{
+    context: Record<string, unknown>
+    proof: Record<string, unknown>
+  }> = []
+  const report = await canary.runSupabaseEmailProofSupersessionCanary(
+    successfulHostedAdapter({
+      async observeExpiry(
+        context: Record<string, unknown>,
+        proof: Record<string, unknown>,
+        lifecycle: { executionDeadline: number; signal: AbortSignal },
+      ) {
+        expect(lifecycle.executionDeadline).toBeGreaterThan(Date.now())
+        expect(lifecycle.signal.aborted).toBe(false)
+        observedExpiryCalls.push({ context, proof })
+        return {
+          outcome: "rejected",
+          authenticationMethod: "not_available",
+          failureCategory: "none",
+        }
+      },
+    }),
+    completeHostedRunOptions(),
+  )
+
+  expect(observedExpiryCalls).toEqual([
+    {
+      context: { opaque: "local_expiry_observation" },
+      proof: { opaque: "generic_sign_in" },
+    },
+  ])
+  expect(Object.keys(report).sort()).toEqual([
+    "cleanup",
+    "ff029_status",
+    "hosted_observation",
+    "project_ref",
+    "provenance",
+    "scenario_count",
+    "scenarios",
+    "schema_version",
+    "scope",
+  ])
+  expect(report).toMatchObject({
+    schema_version: 4,
+    scope: "hosted_staging",
+    project_ref: "destjwstohzmufshfnuy",
+    ff029_status: "open",
+    hosted_observation: "observed",
+    cleanup: "completed",
+    scenario_count: 86,
+  })
+  expect(report).not.toHaveProperty("local_observation")
+  expect(report).not.toHaveProperty("hosted_evidence_required")
+  expect(
+    report.scenarios.map((scenario: { id: string }) => scenario.id),
+  ).toEqual(
+    canary.FF029_EMAIL_PROOF_SUPERSESSION_MATRIX.map((scenario) => scenario.id),
+  )
+  expect(report.scenarios.at(-1)).toMatchObject({
+    id: "local_expiry_observation",
+    expiry_outcome: "rejected",
+    execution: "observed",
+    first_issuance: "not_exercised",
+    second_issuance: "not_exercised",
+    first_consumption: "not_exercised",
+    second_consumption: "not_exercised",
+    first_authentication_method: "not_exercised",
+    second_authentication_method: "not_exercised",
+    first_failure_category: "not_exercised",
+    second_failure_category: "not_exercised",
+  })
+
+  const serialized =
+    canary.serializeSupabaseEmailProofSupersessionEvidence(report)
+  expect(serialized).toBe(`${JSON.stringify(report)}\n`)
+  expect(JSON.parse(serialized)).toEqual(report)
+})
+
+test("keeps hosted evidence free of adapter secrets and fails closed", async () => {
+  const secrets = [
+    "hosted-contact@example.com",
+    "65f5d85b-327c-4f06-92a8-2e45b6ef9056",
+    "hosted-token-secret-material",
+    "hosted-service-role-key-material",
+    "hosted-mailbox-identity",
+    "raw-provider-error-detail",
+    "raw-provider-payload-detail",
+    "wrong-project-ref",
+  ]
+  const report = await canary.runSupabaseEmailProofSupersessionCanary(
+    successfulHostedAdapter({
+      async initialize() {
+        return {
+          authVersion: "v2.188.1",
+          projectRef: "destjwstohzmufshfnuy",
+          mailboxIdentity: secrets[4],
+          providerPayload: secrets[6],
+        }
+      },
+      async prepareScenario() {
+        return {
+          email: secrets[0],
+          userId: secrets[1],
+          key: secrets[3],
+        }
+      },
+      async issueProof() {
+        return {
+          token: secrets[2],
+          payload: secrets[6],
+        }
+      },
+      async consumeProof() {
+        return {
+          outcome: "accepted",
+          authenticationMethod: "magiclink",
+          failureCategory: "none",
+          providerError: secrets[5],
+          providerPayload: secrets[6],
+        }
+      },
+      async observeExpiry() {
+        return {
+          outcome: "rejected",
+          authenticationMethod: "not_available",
+          failureCategory: "none",
+          providerPayload: secrets[6],
+        }
+      },
+    }),
+    completeHostedRunOptions(),
+  )
+  expect(report.ff029_status).toBe("open")
+  expect(report.hosted_observation).toBe("incomplete")
+  expect(report.scenarios.at(-1)).toMatchObject({
+    expiry_outcome: "provider_error",
+    execution: "provider_error",
+  })
+
+  const serialized =
+    canary.serializeSupabaseEmailProofSupersessionEvidence(report)
+  for (const secret of secrets) expect(serialized).not.toContain(secret)
+  expect(() =>
+    canary.serializeSupabaseEmailProofSupersessionEvidence({
+      ...report,
+      mailbox_identity: secrets[4],
+    }),
+  ).toThrow(/ff029_evidence_shape_invalid/)
+  expect(() =>
+    canary.serializeSupabaseEmailProofSupersessionEvidence({
+      ...report,
+      project_ref: secrets[7],
+    }),
+  ).toThrow(/ff029_evidence_report_incoherent/)
+})
+
+test("requires the exact hosted evidence profile and project binding", async () => {
+  await expect(
+    canary.runSupabaseEmailProofSupersessionCanary(
+      successfulHostedAdapter(),
+      completeRunOptions({ evidenceProfile: "hosted_v5" }),
+    ),
+  ).rejects.toThrow(/ff029_evidence_profile_invalid/)
+
+  const report = await canary.runSupabaseEmailProofSupersessionCanary(
+    successfulHostedAdapter({
+      async initialize() {
+        return {
+          authVersion: "v2.188.1",
+          projectRef: "wrong-project-ref",
+        }
+      },
+    }),
+    completeHostedRunOptions(),
+  )
+  expect(report.project_ref).toBe("destjwstohzmufshfnuy")
+  expect(report.hosted_observation).toBe("incomplete")
+  expect(
+    report.scenarios.every(
+      (scenario: { execution: string }) =>
+        scenario.execution === "provider_error",
+    ),
+  ).toBe(true)
+  expect(
+    canary.serializeSupabaseEmailProofSupersessionEvidence(report),
+  ).not.toContain("wrong-project-ref")
 })
 
 test("consumes every proof pair in the declared order", async () => {
@@ -611,12 +834,26 @@ test("bounds every request and aborts an unresponsive loopback fetch", async () 
       return new Promise(() => {})
     },
     ["http://127.0.0.1:54321"],
-    { requestTimeoutMilliseconds: 20 },
+    {
+      requestTimeoutMilliseconds: 20,
+      abortJoinMilliseconds: 20,
+    },
   )
   const startedAt = Date.now()
-  await expect(
-    guardedFetch("http://127.0.0.1:54321/auth/v1/health"),
-  ).rejects.toThrow(/ff029_request_timeout/)
+  const outcome = await guardedFetch(
+    "http://127.0.0.1:54321/auth/v1/health",
+  ).then(
+    () => ({ status: "resolved" as const, error: null }),
+    (error: unknown) => ({ status: "rejected" as const, error }),
+  )
+  expect(outcome.status).toBe("rejected")
+  expect((outcome.error as Error).message).toBe(
+    "ff029_operation_unsettled_after_abort",
+  )
+  expect(
+    (outcome.error as { ff029RetainExclusiveOwnership?: boolean })
+      .ff029RetainExclusiveOwnership,
+  ).toBe(true)
   expect(Date.now() - startedAt).toBeLessThan(500)
   expect(observedSignal?.aborted).toBe(true)
 })
@@ -804,45 +1041,87 @@ test("reserves bounded cleanup after the execution budget is exhausted", async (
   let cleanupCalls = 0
   let cleanupDeadline = 0
   const startedAt = Date.now()
-  const report = await canary.runSupabaseEmailProofSupersessionCanary(
-    successfulAdapter({
-      async prepareScenario() {
-        return new Promise(() => {})
-      },
-      async cleanup(options: { cleanupDeadline: number }) {
-        cleanupCalls += 1
-        cleanupDeadline = options.cleanupDeadline
-      },
-    }),
-    completeRunOptions({
-      operationTimeoutMilliseconds: 200,
-      totalBudgetMilliseconds: 80,
-      cleanupBudgetMilliseconds: 30,
-    }),
-  )
+  const outcome = await canary
+    .runSupabaseEmailProofSupersessionCanary(
+      successfulAdapter({
+        async prepareScenario() {
+          return new Promise(() => {})
+        },
+        async cleanup(options: { cleanupDeadline: number }) {
+          cleanupCalls += 1
+          cleanupDeadline = options.cleanupDeadline
+        },
+      }),
+      completeRunOptions({
+        operationTimeoutMilliseconds: 200,
+        totalBudgetMilliseconds: 80,
+        cleanupBudgetMilliseconds: 30,
+      }),
+    )
+    .then(
+      () => ({ status: "resolved" as const, error: null }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    )
   expect(cleanupCalls).toBe(1)
   expect(cleanupDeadline).toBeGreaterThanOrEqual(Date.now())
   expect(Date.now() - startedAt).toBeLessThan(500)
-  expect(report.local_observation).toBe("incomplete")
-  expect(report.scenarios[0].execution).toBe("provider_error")
+  expect(outcome.status).toBe("rejected")
+  expect((outcome.error as Error).message).toBe(
+    "ff029_operation_unsettled_after_abort",
+  )
+  expect(
+    (outcome.error as { ff029RetainExclusiveOwnership?: boolean })
+      .ff029RetainExclusiveOwnership,
+  ).toBe(true)
 })
 
 test("bounds a cleanup operation that never settles", async () => {
   const startedAt = Date.now()
+  await expect(
+    canary.runSupabaseEmailProofSupersessionCanary(
+      successfulAdapter({
+        async cleanup() {
+          return new Promise(() => {})
+        },
+      }),
+      completeRunOptions({
+        totalBudgetMilliseconds: 100,
+        cleanupBudgetMilliseconds: 25,
+        cleanupAbortJoinMilliseconds: 25,
+      }),
+    ),
+  ).rejects.toThrow(/ff029_cleanup_unsettled_after_abort/)
+  expect(Date.now() - startedAt).toBeLessThan(500)
+})
+
+test("joins an aborted cleanup before returning and prevents late mutation", async () => {
+  const mutations: string[] = []
   const report = await canary.runSupabaseEmailProofSupersessionCanary(
     successfulAdapter({
-      async cleanup() {
-        return new Promise(() => {})
+      async cleanup(options: { signal: AbortSignal }) {
+        await new Promise<void>((resolvePromise) => {
+          const complete = () => {
+            setTimeout(() => {
+              mutations.push("cleanup-settled")
+              resolvePromise()
+            }, 10)
+          }
+          if (options.signal.aborted) complete()
+          else
+            options.signal.addEventListener("abort", complete, { once: true })
+        })
       },
     }),
     completeRunOptions({
       totalBudgetMilliseconds: 100,
       cleanupBudgetMilliseconds: 25,
+      cleanupAbortJoinMilliseconds: 100,
     }),
   )
-  expect(Date.now() - startedAt).toBeLessThan(500)
   expect(report.cleanup).toBe("failed")
-  expect(report.local_observation).toBe("incomplete")
+  expect(mutations).toEqual(["cleanup-settled"])
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 50))
+  expect(mutations).toEqual(["cleanup-settled"])
 })
 
 test("always cleans up when initialization or a scenario fails", async () => {
@@ -1483,9 +1762,20 @@ test("caps cleanup requests at the independent cleanup deadline", async () => {
     localExecutionLifecycle(),
   )
   const startedAt = Date.now()
-  await expect(
-    adapter.cleanup({ cleanupDeadline: Date.now() + 30 }),
-  ).rejects.toThrow(/ff029_cleanup_deadline_exhausted/)
+  const outcome = await adapter
+    .cleanup({ cleanupDeadline: Date.now() + 30 })
+    .then(
+      () => ({ status: "resolved" as const, error: null }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    )
+  expect(outcome.status).toBe("rejected")
+  expect((outcome.error as Error).message).toBe(
+    "ff029_operation_unsettled_after_abort",
+  )
+  expect(
+    (outcome.error as { ff029RetainExclusiveOwnership?: boolean })
+      .ff029RetainExclusiveOwnership,
+  ).toBe(true)
   expect(Date.now() - startedAt).toBeLessThan(500)
   expect(observedSignal?.aborted).toBe(true)
 })

@@ -11,12 +11,14 @@ const DEFAULT_REQUEST_TIMEOUT_MILLISECONDS = 5_000
 const DEFAULT_OPERATION_TIMEOUT_MILLISECONDS = 15_000
 const DEFAULT_TOTAL_BUDGET_MILLISECONDS = 240_000
 const DEFAULT_CLEANUP_BUDGET_MILLISECONDS = 60_000
+const DEFAULT_CLEANUP_ABORT_JOIN_MILLISECONDS = 5_000
 const AUTH_VERSION_PATTERN =
   /^v?\d+\.\d+\.\d+(?:[-+][A-Za-z0-9][A-Za-z0-9.-]{0,47})?$/
 const CLI_VERSION_PATTERN =
   /^\d+\.\d+\.\d+(?:-[A-Za-z0-9][A-Za-z0-9.-]{0,47})?$/
 const DIGEST_PATTERN = /^[0-9a-f]{64}$/
 const REVISION_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
+const HOSTED_STAGING_PROJECT_REF = "destjwstohzmufshfnuy"
 
 const FLOW_REDIRECT_PATHS = Object.freeze({
   advocate_proof_a: "/advocate-invitation",
@@ -236,12 +238,14 @@ const FAILURE_CATEGORIES = new Set([
   "harness_failure",
   "none",
   "not_exercised",
+  "rate_limited",
   "timeout",
   "unexpected_failure",
   "unknown_provider_failure",
 ])
 const PROVIDER_FAILURE_CATEGORIES = new Set([
   "email_rate_limited",
+  "rate_limited",
   "timeout",
   "unexpected_failure",
   "unknown_provider_failure",
@@ -253,6 +257,40 @@ const ERROR_FAILURE_CATEGORIES = new Set([
 
 function fixedError(code, cause) {
   return new Error(code, cause === undefined ? undefined : { cause })
+}
+
+function exclusiveOwnershipError(code, cause) {
+  const error = fixedError(code, cause)
+  Object.defineProperty(error, "ff029RetainExclusiveOwnership", {
+    configurable: false,
+    enumerable: false,
+    value: true,
+    writable: false,
+  })
+  return error
+}
+
+function cleanupUnsettledError() {
+  return exclusiveOwnershipError("ff029_cleanup_unsettled_after_abort")
+}
+
+export function requiresFf029ExclusiveOwnershipRetention(error) {
+  const visited = new Set()
+  function inspect(candidate, depth) {
+    if (!isObject(candidate) || depth > 8 || visited.has(candidate)) {
+      return false
+    }
+    visited.add(candidate)
+    if (candidate.ff029RetainExclusiveOwnership === true) return true
+    if (inspect(candidate.cause, depth + 1)) return true
+    const nestedErrors = Array.isArray(candidate.errors)
+      ? candidate.errors
+      : candidate instanceof AggregateError
+        ? [...candidate.errors]
+        : []
+    return nestedErrors.some((nested) => inspect(nested, depth + 1))
+  }
+  return inspect(error, 0)
 }
 
 function categorizedError(code, failureCategory, cause) {
@@ -283,6 +321,9 @@ function providerFailureCategory(error, visited, depth) {
   if (error.code === "over_email_send_rate_limit") {
     return "email_rate_limited"
   }
+  if (error.code === "over_request_rate_limit" && error.status === 429) {
+    return "rate_limited"
+  }
   if (
     error.code === "request_timeout" ||
     error.name === "AbortError" ||
@@ -308,6 +349,7 @@ export function classifySupabaseProviderFailure(error) {
 }
 
 function harnessFailureCategory(error) {
+  if (requiresFf029ExclusiveOwnershipRetention(error)) throw error
   if (
     isObject(error) &&
     ERROR_FAILURE_CATEGORIES.has(error.ff029FailureCategory)
@@ -343,34 +385,87 @@ function positiveDuration(value, fallback, code) {
   return duration
 }
 
-function withTimeout(operation, milliseconds, code, onTimeout) {
-  return new Promise((resolvePromise, rejectPromise) => {
-    let settled = false
-    const timer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      try {
-        onTimeout?.()
-      } catch {}
-      rejectPromise(fixedError(code))
-    }, milliseconds)
-    Promise.resolve()
-      .then(operation)
-      .then(
-        (value) => {
-          if (settled) return
-          settled = true
-          clearTimeout(timer)
-          resolvePromise(value)
-        },
-        (error) => {
-          if (settled) return
-          settled = true
-          clearTimeout(timer)
-          rejectPromise(error)
-        },
-      )
+function combinedAbortSignal(first, second) {
+  if (!(first instanceof AbortSignal) || !(second instanceof AbortSignal)) {
+    throw fixedError("ff029_operation_signal_invalid")
+  }
+  if (typeof AbortSignal.any === "function") {
+    return AbortSignal.any([first, second])
+  }
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  first.addEventListener("abort", abort, { once: true })
+  second.addEventListener("abort", abort, { once: true })
+  if (first.aborted || second.aborted) controller.abort()
+  return controller.signal
+}
+
+async function withTimeout(
+  operation,
+  milliseconds,
+  code,
+  onTimeout,
+  abortJoinMilliseconds = DEFAULT_CLEANUP_ABORT_JOIN_MILLISECONDS,
+  cancellationSignal,
+) {
+  if (
+    cancellationSignal !== undefined &&
+    !(cancellationSignal instanceof AbortSignal)
+  ) {
+    throw fixedError("ff029_operation_signal_invalid")
+  }
+  const operationPromise = Promise.resolve().then(operation)
+  const settledOperation = operationPromise.then(
+    (value) => Object.freeze({ status: "completed", value }),
+    (error) => Object.freeze({ status: "failed", error }),
+  )
+  let timeoutTimer
+  let cancellationListener
+  const interruption = new Promise((resolvePromise) => {
+    let resolved = false
+    const resolveOnce = (status) => {
+      if (resolved) return
+      resolved = true
+      resolvePromise(Object.freeze({ status }))
+    }
+    timeoutTimer = setTimeout(() => resolveOnce("timed_out"), milliseconds)
+    if (cancellationSignal) {
+      cancellationListener = () => resolveOnce("cancelled")
+      cancellationSignal.addEventListener("abort", cancellationListener, {
+        once: true,
+      })
+      if (cancellationSignal.aborted) resolveOnce("cancelled")
+    }
   })
+  const first = await Promise.race([settledOperation, interruption])
+  clearTimeout(timeoutTimer)
+  if (cancellationListener) {
+    cancellationSignal.removeEventListener("abort", cancellationListener)
+  }
+  if (first.status === "completed") return first.value
+  if (first.status === "failed") throw first.error
+
+  if (first.status === "timed_out") {
+    try {
+      onTimeout?.()
+    } catch {}
+  }
+  let joinTimer
+  const joinTimeout = new Promise((resolvePromise) => {
+    joinTimer = setTimeout(
+      () => resolvePromise(Object.freeze({ status: "join_timed_out" })),
+      Math.min(abortJoinMilliseconds, milliseconds),
+    )
+  })
+  const joined = await Promise.race([settledOperation, joinTimeout])
+  clearTimeout(joinTimer)
+  if (joined.status === "join_timed_out") {
+    void operationPromise.catch(() => {})
+    throw exclusiveOwnershipError("ff029_operation_unsettled_after_abort")
+  }
+  throw fixedError(
+    first.status === "cancelled" ? "ff029_operation_cancelled" : code,
+  )
 }
 
 export function createSupabaseProofDispatchBarrier(participantCount) {
@@ -585,6 +680,43 @@ const SANITIZED_REPORT_KEYS = Object.freeze([
   "schema_version",
   "scope",
 ])
+const SANITIZED_HOSTED_REPORT_KEYS = Object.freeze([
+  "cleanup",
+  "ff029_status",
+  "hosted_observation",
+  "project_ref",
+  "provenance",
+  "scenario_count",
+  "scenarios",
+  "schema_version",
+  "scope",
+])
+const HOSTED_EXPIRY_RESULT_KEYS = Object.freeze([
+  "authenticationMethod",
+  "failureCategory",
+  "outcome",
+])
+const HOSTED_EXPIRY_EVIDENCE_OUTCOMES = new Set(["provider_error", "rejected"])
+
+const LOCAL_V3_EVIDENCE_PROFILE = Object.freeze({
+  name: "local_v3",
+  schemaVersion: 3,
+})
+const HOSTED_V4_EVIDENCE_PROFILE = Object.freeze({
+  name: "hosted_v4",
+  schemaVersion: 4,
+  projectRef: HOSTED_STAGING_PROJECT_REF,
+})
+
+function resolveEvidenceProfile(value) {
+  if (value === undefined || value === LOCAL_V3_EVIDENCE_PROFILE.name) {
+    return LOCAL_V3_EVIDENCE_PROFILE
+  }
+  if (value === HOSTED_V4_EVIDENCE_PROFILE.name) {
+    return HOSTED_V4_EVIDENCE_PROFILE
+  }
+  throw fixedError("ff029_evidence_profile_invalid")
+}
 
 function hasExactKeys(value, expectedKeys) {
   if (!isObject(value)) return false
@@ -610,6 +742,7 @@ function safeScenarioEvidence(
   authenticationMethods,
   failureCategories,
   execution,
+  expiryOutcome = definition.expiryOutcome,
 ) {
   return Object.freeze({
     id: definition.id,
@@ -627,16 +760,23 @@ function safeScenarioEvidence(
     second_failure_category: failureCategories[1] ?? "not_exercised",
     first_authentication_method: authenticationMethods[0] ?? "not_exercised",
     second_authentication_method: authenticationMethods[1] ?? "not_exercised",
-    expiry_outcome: definition.expiryOutcome,
+    expiry_outcome: expiryOutcome,
     trial: definition.trial,
     execution,
   })
 }
 
-function assertCoherentScenarioEvidence(candidate, definition) {
+function assertCoherentScenarioEvidence(
+  candidate,
+  definition,
+  evidenceProfile,
+) {
   if (!hasExactKeys(candidate, SCENARIO_EVIDENCE_KEYS)) {
     throw fixedError("ff029_evidence_shape_invalid")
   }
+  const isHostedExpiryObservation =
+    evidenceProfile === HOSTED_V4_EVIDENCE_PROFILE &&
+    definition.id === "local_expiry_observation"
   if (
     candidate.id !== definition.id ||
     candidate.pair_id !== definition.pairId ||
@@ -645,7 +785,8 @@ function assertCoherentScenarioEvidence(candidate, definition) {
     candidate.consumption_order !== consumptionOrderLabel(definition) ||
     candidate.first_flow !== (definition.flows[0] ?? null) ||
     candidate.second_flow !== (definition.flows[1] ?? null) ||
-    candidate.expiry_outcome !== definition.expiryOutcome ||
+    (!isHostedExpiryObservation &&
+      candidate.expiry_outcome !== definition.expiryOutcome) ||
     candidate.trial !== definition.trial
   ) {
     throw fixedError("ff029_evidence_definition_mismatch")
@@ -667,6 +808,28 @@ function assertCoherentScenarioEvidence(candidate, definition) {
       failureCategory: candidate.second_failure_category,
     },
   ]
+
+  if (isHostedExpiryObservation) {
+    const hasOnlyUnexercisedProofOutcomes = proofOutcomes.every(
+      ({ issuance, consumption, authenticationMethod, failureCategory }) =>
+        issuance === "not_exercised" &&
+        consumption === "not_exercised" &&
+        authenticationMethod === "not_exercised" &&
+        failureCategory === "not_exercised",
+    )
+    if (
+      !hasOnlyUnexercisedProofOutcomes ||
+      !HOSTED_EXPIRY_EVIDENCE_OUTCOMES.has(candidate.expiry_outcome)
+    ) {
+      throw fixedError("ff029_evidence_outcome_invalid")
+    }
+    const expectedExecution =
+      candidate.expiry_outcome === "rejected" ? "observed" : "provider_error"
+    if (candidate.execution !== expectedExecution) {
+      throw fixedError("ff029_evidence_outcome_incoherent")
+    }
+    return
+  }
 
   if (definition.expiryOutcome === "not_exercised") {
     const hasOnlyUnexercisedOutcomes = proofOutcomes.every(
@@ -817,21 +980,55 @@ function assertCoherentProvenance(candidate, expected) {
 function hasCompleteCoherentProvenance(provenance) {
   return Boolean(
     provenance.auth_version !== "not_available" &&
-    provenance.cli_version !== "not_available" &&
-    provenance.config_digest !== "not_available" &&
-    provenance.harness_digest !== "not_available" &&
-    provenance.repo_revision !== "not_available" &&
-    provenance.started_at !== "not_available" &&
-    provenance.completed_at !== "not_available" &&
-    Date.parse(provenance.completed_at) - Date.parse(provenance.started_at) ===
-      provenance.execution_time_milliseconds,
+      provenance.cli_version !== "not_available" &&
+      provenance.config_digest !== "not_available" &&
+      provenance.harness_digest !== "not_available" &&
+      provenance.repo_revision !== "not_available" &&
+      provenance.started_at !== "not_available" &&
+      provenance.completed_at !== "not_available" &&
+      Date.parse(provenance.completed_at) -
+        Date.parse(provenance.started_at) ===
+        provenance.execution_time_milliseconds,
   )
 }
 
-function sanitizeReport(report) {
+/**
+ * @typedef {object} SanitizedEvidenceReport
+ * @property {3 | 4} schema_version
+ * @property {"local_mechanics_only" | "hosted_staging"} scope
+ * @property {"destjwstohzmufshfnuy"} [project_ref]
+ * @property {"open"} ff029_status
+ * @property {true} [hosted_evidence_required]
+ * @property {"observed" | "incomplete"} [local_observation]
+ * @property {"observed" | "incomplete"} [hosted_observation]
+ * @property {"completed" | "failed"} cleanup
+ * @property {Readonly<ReturnType<typeof safeProvenance>>} provenance
+ * @property {number} scenario_count
+ * @property {ReadonlyArray<ReturnType<typeof safeScenarioEvidence>>} scenarios
+ */
+
+/**
+ * @param {any} report
+ * @param {"local_v3" | "hosted_v4"} [requestedProfile]
+ * @returns {SanitizedEvidenceReport}
+ */
+function sanitizeReport(report, requestedProfile) {
+  const evidenceProfile =
+    requestedProfile === undefined &&
+    hasExactKeys(report, SANITIZED_HOSTED_REPORT_KEYS)
+      ? HOSTED_V4_EVIDENCE_PROFILE
+      : resolveEvidenceProfile(requestedProfile)
   const rawShape = hasExactKeys(report, RAW_REPORT_KEYS)
   const sanitizedShape = hasExactKeys(report, SANITIZED_REPORT_KEYS)
-  if (!rawShape && !sanitizedShape) {
+  const sanitizedHostedShape = hasExactKeys(
+    report,
+    SANITIZED_HOSTED_REPORT_KEYS,
+  )
+  const expectedSanitizedShape =
+    evidenceProfile === HOSTED_V4_EVIDENCE_PROFILE
+      ? sanitizedHostedShape
+      : sanitizedShape
+  if (!rawShape && !expectedSanitizedShape) {
     throw fixedError("ff029_evidence_shape_invalid")
   }
   if (!Array.isArray(report.scenarios)) {
@@ -850,7 +1047,7 @@ function sanitizeReport(report) {
     if (!definition || scenariosById.has(definition.id)) {
       throw fixedError("ff029_evidence_scenario_invalid")
     }
-    assertCoherentScenarioEvidence(candidate, definition)
+    assertCoherentScenarioEvidence(candidate, definition, evidenceProfile)
     scenariosById.set(definition.id, candidate)
   }
   const scenarios = FF029_EMAIL_PROOF_SUPERSESSION_MATRIX.map((definition) => {
@@ -866,17 +1063,56 @@ function sanitizeReport(report) {
       ],
       [candidate.first_failure_category, candidate.second_failure_category],
       candidate.execution,
+      evidenceProfile === HOSTED_V4_EVIDENCE_PROFILE &&
+        definition.id === "local_expiry_observation"
+        ? candidate.expiry_outcome
+        : definition.expiryOutcome,
     )
   })
   const cleanup = report.cleanup === "completed" ? "completed" : "failed"
   const provenance = safeProvenance(report.provenance)
-  const allObserved = scenarios.every(
-    (candidate) =>
-      candidate.execution === "observed" ||
-      (candidate.id === "local_expiry_observation" &&
-        candidate.execution === "not_exercised"),
-  )
+  const allObserved =
+    evidenceProfile === HOSTED_V4_EVIDENCE_PROFILE
+      ? scenarios.every((candidate) => candidate.execution === "observed")
+      : scenarios.every(
+          (candidate) =>
+            candidate.execution === "observed" ||
+            (candidate.id === "local_expiry_observation" &&
+              candidate.execution === "not_exercised"),
+        )
   const provenanceComplete = hasCompleteCoherentProvenance(provenance)
+  if (evidenceProfile === HOSTED_V4_EVIDENCE_PROFILE) {
+    const sanitized = Object.freeze({
+      schema_version: evidenceProfile.schemaVersion,
+      scope: "hosted_staging",
+      project_ref: evidenceProfile.projectRef,
+      ff029_status: "open",
+      hosted_observation:
+        allObserved && cleanup === "completed" && provenanceComplete
+          ? "observed"
+          : "incomplete",
+      cleanup,
+      provenance,
+      scenario_count: scenarios.length,
+      scenarios: Object.freeze(scenarios),
+    })
+    if (
+      sanitizedHostedShape &&
+      (report.schema_version !== sanitized.schema_version ||
+        report.scope !== sanitized.scope ||
+        report.project_ref !== sanitized.project_ref ||
+        report.ff029_status !== sanitized.ff029_status ||
+        report.hosted_observation !== sanitized.hosted_observation ||
+        report.cleanup !== sanitized.cleanup ||
+        report.scenario_count !== sanitized.scenario_count)
+    ) {
+      throw fixedError("ff029_evidence_report_incoherent")
+    }
+    if (sanitizedHostedShape) {
+      assertCoherentProvenance(report.provenance, provenance)
+    }
+    return sanitized
+  }
   const sanitized = Object.freeze({
     schema_version: 3,
     scope: "local_mechanics_only",
@@ -1003,12 +1239,101 @@ async function issueProof(
   }
 }
 
+async function issueConcurrentProofGroup(
+  adapter,
+  context,
+  definition,
+  callWithinExecutionBudget,
+) {
+  const groupController = new AbortController()
+  const groupCallWithinExecutionBudget = (operation) =>
+    callWithinExecutionBudget(operation, groupController.signal)
+  const dispatchBarrier = createSupabaseProofDispatchBarrier(
+    definition.flows.length,
+  )
+  const siblings = definition.flows.map((flow) =>
+    issueProof(
+      adapter,
+      context,
+      flow,
+      groupCallWithinExecutionBudget,
+      dispatchBarrier,
+    ).catch((error) => {
+      groupController.abort(error)
+      throw error
+    }),
+  )
+  const settledSiblings = await Promise.allSettled(siblings)
+  const rejectedSiblings = settledSiblings.filter(
+    (candidate) => candidate.status === "rejected",
+  )
+  const rejectedSibling =
+    rejectedSiblings.find(
+      (candidate) =>
+        candidate.status === "rejected" &&
+        requiresFf029ExclusiveOwnershipRetention(candidate.reason),
+    ) ?? rejectedSiblings[0]
+  if (rejectedSibling?.status === "rejected") {
+    throw rejectedSibling.reason
+  }
+  return settledSiblings.map((candidate) => candidate.value)
+}
+
 async function exerciseScenario(
   adapter,
   definition,
   callWithinExecutionBudget,
+  evidenceProfile,
 ) {
   if (definition.expiryOutcome === "not_exercised") {
+    if (evidenceProfile === HOSTED_V4_EVIDENCE_PROFILE) {
+      try {
+        const context = await callWithinExecutionBudget((lifecycle) =>
+          adapter.prepareScenario(definition, lifecycle),
+        )
+        const issuance = await issueProof(
+          adapter,
+          context,
+          "generic_sign_in",
+          callWithinExecutionBudget,
+          createSupabaseProofDispatchBarrier(1),
+        )
+        if (issuance.proof === null) {
+          throw fixedError("ff029_expiry_issuance_failed")
+        }
+        const result = await callWithinExecutionBudget((lifecycle) =>
+          adapter.observeExpiry(context, issuance.proof, lifecycle),
+        )
+        if (
+          !hasExactKeys(result, HOSTED_EXPIRY_RESULT_KEYS) ||
+          result.outcome !== "rejected" ||
+          result.authenticationMethod !== "not_available" ||
+          result.failureCategory !== "none"
+        ) {
+          throw fixedError("ff029_expiry_observation_invalid")
+        }
+        return safeScenarioEvidence(
+          definition,
+          ["not_exercised", "not_exercised"],
+          ["not_exercised", "not_exercised"],
+          ["not_exercised", "not_exercised"],
+          ["not_exercised", "not_exercised"],
+          "observed",
+          result.outcome,
+        )
+      } catch (error) {
+        if (requiresFf029ExclusiveOwnershipRetention(error)) throw error
+        return safeScenarioEvidence(
+          definition,
+          ["not_exercised", "not_exercised"],
+          ["not_exercised", "not_exercised"],
+          ["not_exercised", "not_exercised"],
+          ["not_exercised", "not_exercised"],
+          "provider_error",
+          "provider_error",
+        )
+      }
+    }
     return safeScenarioEvidence(
       definition,
       ["not_exercised", "not_exercised"],
@@ -1025,22 +1350,12 @@ async function exerciseScenario(
     )
     const issuanceResults =
       definition.issuanceMode === "concurrent"
-        ? await (() => {
-            const dispatchBarrier = createSupabaseProofDispatchBarrier(
-              definition.flows.length,
-            )
-            return Promise.all(
-              definition.flows.map((flow) =>
-                issueProof(
-                  adapter,
-                  context,
-                  flow,
-                  callWithinExecutionBudget,
-                  dispatchBarrier,
-                ),
-              ),
-            )
-          })()
+        ? await issueConcurrentProofGroup(
+            adapter,
+            context,
+            definition,
+            callWithinExecutionBudget,
+          )
         : await definition.flows.reduce(async (resultsPromise, flow) => {
             const resultsSoFar = await resultsPromise
             return [
@@ -1128,11 +1443,90 @@ function providerErrorScenarioEvidence(
   )
 }
 
+export async function runFf029CleanupWithAbortAndJoin(
+  adapter,
+  initialized,
+  cleanupBudgetMilliseconds,
+  cleanupAbortJoinMilliseconds,
+  absoluteTotalDeadline,
+  options = {},
+) {
+  const cleanupController = new AbortController()
+  const cleanupStartedAt = Date.now()
+  const requestedCleanupDeadline = cleanupStartedAt + cleanupBudgetMilliseconds
+  const cleanupDeadline = Number.isSafeInteger(absoluteTotalDeadline)
+    ? Math.min(requestedCleanupDeadline, absoluteTotalDeadline)
+    : requestedCleanupDeadline
+  const remainingCleanupMilliseconds = cleanupDeadline - cleanupStartedAt
+  if (remainingCleanupMilliseconds <= 0) {
+    return Object.freeze({
+      status: "failed",
+      error: fixedError("ff029_cleanup_timeout"),
+    })
+  }
+  const cleanupPromise = Promise.resolve().then(() =>
+    adapter.cleanup({
+      initialized,
+      cleanupDeadline,
+      retainRecoveryState: options.retainRecoveryState === true,
+      signal: cleanupController.signal,
+    }),
+  )
+  const settledCleanup = cleanupPromise.then(
+    () => Object.freeze({ status: "completed" }),
+    (error) => Object.freeze({ status: "failed", error }),
+  )
+  let cleanupTimer
+  const timedOut = new Promise((resolvePromise) => {
+    cleanupTimer = setTimeout(
+      () => resolvePromise(Object.freeze({ status: "timed_out" })),
+      remainingCleanupMilliseconds,
+    )
+  })
+  const first = await Promise.race([settledCleanup, timedOut])
+  clearTimeout(cleanupTimer)
+  if (first.status !== "timed_out") {
+    if (
+      first.status === "failed" &&
+      requiresFf029ExclusiveOwnershipRetention(first.error)
+    ) {
+      throw first.error
+    }
+    return first
+  }
+
+  cleanupController.abort(fixedError("ff029_cleanup_timeout"))
+  let joinTimer
+  const joinTimedOut = new Promise((resolvePromise) => {
+    joinTimer = setTimeout(
+      () => resolvePromise(Object.freeze({ status: "join_timed_out" })),
+      cleanupAbortJoinMilliseconds,
+    )
+  })
+  const joined = await Promise.race([settledCleanup, joinTimedOut])
+  clearTimeout(joinTimer)
+  if (joined.status === "join_timed_out") {
+    void cleanupPromise.catch(() => {})
+    throw cleanupUnsettledError()
+  }
+  if (
+    joined.status === "failed" &&
+    requiresFf029ExclusiveOwnershipRetention(joined.error)
+  ) {
+    throw joined.error
+  }
+  return Object.freeze({
+    status: "failed",
+    error: fixedError("ff029_cleanup_timeout"),
+  })
+}
+
 export async function runSupabaseEmailProofSupersessionCanary(
   adapter,
   options = {},
 ) {
   const startedAt = Date.now()
+  const evidenceProfile = resolveEvidenceProfile(options.evidenceProfile)
   const operationTimeoutMilliseconds = positiveDuration(
     options.operationTimeoutMilliseconds,
     DEFAULT_OPERATION_TIMEOUT_MILLISECONDS,
@@ -1148,26 +1542,73 @@ export async function runSupabaseEmailProofSupersessionCanary(
     DEFAULT_CLEANUP_BUDGET_MILLISECONDS,
     "ff029_cleanup_budget_invalid",
   )
+  const cleanupAbortJoinMilliseconds = positiveDuration(
+    options.cleanupAbortJoinMilliseconds,
+    DEFAULT_CLEANUP_ABORT_JOIN_MILLISECONDS,
+    "ff029_cleanup_abort_join_invalid",
+  )
   if (cleanupBudgetMilliseconds >= totalBudgetMilliseconds) {
     throw fixedError("ff029_cleanup_reserve_invalid")
   }
-  const executionDeadline =
-    startedAt + totalBudgetMilliseconds - cleanupBudgetMilliseconds
+  const requestedTotalDeadline = startedAt + totalBudgetMilliseconds
+  const absoluteTotalDeadline =
+    options.absoluteExecutionDeadline ?? options.absoluteTotalDeadline
+  if (
+    absoluteTotalDeadline !== undefined &&
+    (!Number.isSafeInteger(absoluteTotalDeadline) ||
+      absoluteTotalDeadline <= startedAt)
+  ) {
+    throw fixedError("ff029_absolute_total_deadline_invalid")
+  }
+  const totalDeadline =
+    absoluteTotalDeadline === undefined
+      ? requestedTotalDeadline
+      : Math.min(requestedTotalDeadline, absoluteTotalDeadline)
+  if (totalDeadline - startedAt <= cleanupBudgetMilliseconds) {
+    throw fixedError("ff029_cleanup_reserve_invalid")
+  }
+  const executionDeadline = totalDeadline - cleanupBudgetMilliseconds
   const executionController = new AbortController()
-  const callWithinExecutionBudget = (operation) => {
+  const callWithinExecutionBudget = (operation, cancellationSignal) => {
+    if (
+      cancellationSignal !== undefined &&
+      !(cancellationSignal instanceof AbortSignal)
+    ) {
+      throw fixedError("ff029_operation_signal_invalid")
+    }
     const remainingMilliseconds = executionDeadline - Date.now()
-    if (remainingMilliseconds <= 0) {
+    if (remainingMilliseconds <= 2) {
       throw fixedError("ff029_execution_budget_exhausted")
     }
+    const abortJoinMilliseconds = Math.max(
+      1,
+      Math.min(
+        cleanupAbortJoinMilliseconds,
+        Math.floor(remainingMilliseconds / 2),
+      ),
+    )
+    const operationBudgetMilliseconds = Math.max(
+      1,
+      Math.min(
+        operationTimeoutMilliseconds,
+        remainingMilliseconds - abortJoinMilliseconds,
+      ),
+    )
+    const operationSignal =
+      cancellationSignal === undefined
+        ? executionController.signal
+        : combinedAbortSignal(executionController.signal, cancellationSignal)
     return withTimeout(
       () =>
         operation({
           executionDeadline,
-          signal: executionController.signal,
+          signal: operationSignal,
         }),
-      Math.min(operationTimeoutMilliseconds, remainingMilliseconds),
+      operationBudgetMilliseconds,
       "ff029_operation_timeout",
       () => executionController.abort(),
+      abortJoinMilliseconds,
+      operationSignal,
     )
   }
   const scenarios = []
@@ -1175,6 +1616,7 @@ export async function runSupabaseEmailProofSupersessionCanary(
   let cleanup = "completed"
   let authVersion = options.provenance?.auth_version
   let terminalFailureCategory = "harness_failure"
+  let retainedOwnershipError = null
   try {
     const initialization = await callWithinExecutionBudget((lifecycle) =>
       adapter.initialize(lifecycle),
@@ -1183,26 +1625,61 @@ export async function runSupabaseEmailProofSupersessionCanary(
     if (AUTH_VERSION_PATTERN.test(initialization?.authVersion ?? "")) {
       authVersion = initialization.authVersion
     }
+    if (
+      evidenceProfile === HOSTED_V4_EVIDENCE_PROFILE &&
+      initialization?.projectRef !== evidenceProfile.projectRef
+    ) {
+      throw fixedError("ff029_hosted_project_ref_invalid")
+    }
     for (const definition of FF029_EMAIL_PROOF_SUPERSESSION_MATRIX) {
       if (Date.now() >= executionDeadline) break
       scenarios.push(
-        await exerciseScenario(adapter, definition, callWithinExecutionBudget),
+        await exerciseScenario(
+          adapter,
+          definition,
+          callWithinExecutionBudget,
+          evidenceProfile,
+        ),
       )
     }
   } catch (error) {
-    terminalFailureCategory = harnessFailureCategory(error)
+    if (requiresFf029ExclusiveOwnershipRetention(error)) {
+      retainedOwnershipError = error
+    } else {
+      terminalFailureCategory = harnessFailureCategory(error)
+    }
   } finally {
     executionController.abort()
-    const cleanupDeadline = Date.now() + cleanupBudgetMilliseconds
     try {
-      await withTimeout(
-        () => adapter.cleanup({ initialized, cleanupDeadline }),
-        cleanupBudgetMilliseconds,
-        "ff029_cleanup_timeout",
-      )
-    } catch {
+      adapter.assertNoUnsettledOperations?.()
+    } catch (error) {
+      if (requiresFf029ExclusiveOwnershipRetention(error)) {
+        retainedOwnershipError = error
+      } else {
+        throw error
+      }
+    }
+    const cleanupResult = await runFf029CleanupWithAbortAndJoin(
+      adapter,
+      initialized,
+      cleanupBudgetMilliseconds,
+      cleanupAbortJoinMilliseconds,
+      totalDeadline,
+      { retainRecoveryState: retainedOwnershipError !== null },
+    )
+    if (cleanupResult.status !== "completed") {
       cleanup = "failed"
     }
+    try {
+      adapter.assertNoUnsettledOperations?.()
+    } catch (error) {
+      if (requiresFf029ExclusiveOwnershipRetention(error)) {
+        retainedOwnershipError ??= error
+      } else {
+        throw error
+      }
+    }
+    if (retainedOwnershipError !== null) throw retainedOwnershipError
   }
   for (
     let scenarioIndex = scenarios.length;
@@ -1211,7 +1688,8 @@ export async function runSupabaseEmailProofSupersessionCanary(
   ) {
     const definition = FF029_EMAIL_PROOF_SUPERSESSION_MATRIX[scenarioIndex]
     scenarios.push(
-      definition.expiryOutcome === "not_exercised"
+      definition.expiryOutcome === "not_exercised" &&
+        evidenceProfile !== HOSTED_V4_EVIDENCE_PROFILE
         ? safeScenarioEvidence(
             definition,
             ["not_exercised", "not_exercised"],
@@ -1220,26 +1698,39 @@ export async function runSupabaseEmailProofSupersessionCanary(
             ["not_exercised", "not_exercised"],
             "not_exercised",
           )
-        : providerErrorScenarioEvidence(
-            definition,
-            Date.now() >= executionDeadline
-              ? "timeout"
-              : terminalFailureCategory,
-          ),
+        : definition.expiryOutcome === "not_exercised"
+          ? safeScenarioEvidence(
+              definition,
+              ["not_exercised", "not_exercised"],
+              ["not_exercised", "not_exercised"],
+              ["not_exercised", "not_exercised"],
+              ["not_exercised", "not_exercised"],
+              "provider_error",
+              "provider_error",
+            )
+          : providerErrorScenarioEvidence(
+              definition,
+              Date.now() >= executionDeadline
+                ? "timeout"
+                : terminalFailureCategory,
+            ),
     )
   }
   const completedAt = Date.now()
-  return sanitizeReport({
-    cleanup,
-    scenarios,
-    provenance: {
-      ...options.provenance,
-      auth_version: authVersion,
-      started_at: new Date(startedAt).toISOString(),
-      completed_at: new Date(completedAt).toISOString(),
-      execution_time_milliseconds: completedAt - startedAt,
+  return sanitizeReport(
+    {
+      cleanup,
+      scenarios,
+      provenance: {
+        ...options.provenance,
+        auth_version: authVersion,
+        started_at: new Date(startedAt).toISOString(),
+        completed_at: new Date(completedAt).toISOString(),
+        execution_time_milliseconds: completedAt - startedAt,
+      },
     },
-  })
+    evidenceProfile.name,
+  )
 }
 
 function recipientAddresses(message) {
@@ -1561,15 +2052,15 @@ export function verifiedIdentityMatchesScenario(
   const confirmedAt = user?.email_confirmed_at
   return Boolean(
     UUID_PATTERN.test(userId ?? "") &&
-    sessionUser?.id === userId &&
-    (proofUserId === null || proofUserId === userId) &&
-    user?.email === scenarioEmail &&
-    sessionUser?.email === scenarioEmail &&
-    confirmedEmailTimestamp(confirmedAt) &&
-    sessionUser?.email_confirmed_at === confirmedAt &&
-    claims !== "provider_error" &&
-    claims?.sub === userId &&
-    claims?.email === scenarioEmail,
+      sessionUser?.id === userId &&
+      (proofUserId === null || proofUserId === userId) &&
+      user?.email === scenarioEmail &&
+      sessionUser?.email === scenarioEmail &&
+      confirmedEmailTimestamp(confirmedAt) &&
+      sessionUser?.email_confirmed_at === confirmedAt &&
+      claims !== "provider_error" &&
+      claims?.sub === userId &&
+      claims?.email === scenarioEmail,
   )
 }
 
@@ -1607,11 +2098,12 @@ export async function createLocalSupabaseEmailProofAdapter(options) {
     "ff029_request_timeout_invalid",
   )
   let cleanupDeadline
+  let cleanupSignal
   let executionDeadline
   let executionSignal
   const activeDeadline = () => cleanupDeadline ?? executionDeadline
   const activeSignal = () =>
-    cleanupDeadline === undefined ? executionSignal : undefined
+    cleanupDeadline === undefined ? executionSignal : cleanupSignal
   const supabaseFetch = createRedirectRefusingLoopbackFetch(
     fetchImplementation,
     [supabaseOrigin],
@@ -1936,18 +2428,25 @@ export async function createLocalSupabaseEmailProofAdapter(options) {
     async cleanup(options = {}) {
       if (
         !Number.isSafeInteger(options.cleanupDeadline) ||
-        options.cleanupDeadline <= Date.now()
+        options.cleanupDeadline <= Date.now() ||
+        (options.signal !== undefined &&
+          !(options.signal instanceof AbortSignal))
       ) {
         throw fixedError("ff029_cleanup_deadline_invalid")
       }
       cleanupDeadline = options.cleanupDeadline
+      cleanupSignal = options.signal
       const requireCleanupTime = () => {
+        if (cleanupSignal?.aborted) {
+          throw fixedError("ff029_operation_cancelled")
+        }
         if (Date.now() >= cleanupDeadline) {
           throw fixedError("ff029_cleanup_deadline_exhausted")
         }
       }
       const cleanupFailures = []
       const recordCleanupFailure = (error) => {
+        if (requiresFf029ExclusiveOwnershipRetention(error)) throw error
         requireCleanupTime()
         cleanupFailures.push(error)
       }
@@ -2021,6 +2520,6 @@ export async function createLocalSupabaseEmailProofAdapter(options) {
 }
 
 export function localSupabaseEmailProofCanaryExitCode(report) {
-  const sanitized = sanitizeReport(report)
+  const sanitized = sanitizeReport(report, LOCAL_V3_EVIDENCE_PROFILE.name)
   return sanitized.local_observation === "observed" ? 0 : 1
 }

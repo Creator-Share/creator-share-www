@@ -25,6 +25,7 @@
     "test:advocate:publication-concurrency": "node tests/database/advocate-publication-concurrency.mjs",
     "test:email-proof-issuance-concurrency": "node tests/database/email-proof-issuance-concurrency.mjs",
     "canary:supabase-email-proof-supersession:local": "node tests/provider/supabase-email-proof-supersession-local.mjs",
+    "canary:supabase-email-proof-supersession:hosted": "node tests/provider/supabase-email-proof-supersession-hosted.mjs",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed"
   },
