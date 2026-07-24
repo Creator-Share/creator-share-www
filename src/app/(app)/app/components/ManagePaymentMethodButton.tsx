@@ -4,7 +4,7 @@ import { useRef, useState } from "react"
 import { MdCreditCard } from "react-icons/md"
 
 import { Button } from "@/components/ui/button"
-import { PAYPAL_MANAGE_URL } from "@/lib/payments/portals"
+import { resolvePayPalManageUrl } from "@/lib/payments/portals"
 import {
   isRecentVerificationRequiredResponse,
   requestFreshSponsorAuthentication,
@@ -15,10 +15,12 @@ const STRIPE_BILLING_PORTAL_ORIGIN = "https://billing.stripe.com"
 const STRIPE_MANAGEMENT_LABEL = "Update default payment method in Stripe."
 const PAYPAL_MANAGEMENT_LABEL = "Manage automatic payments in PayPal."
 const DESTINATION_KEYS = ["label", "url"] as const
+const PAYPAL_MANAGEMENT_URL = resolvePayPalManageUrl({
+  NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
+})
 
 type SafeDestination =
-  | { provider: "stripe"; url: string }
-  | { provider: "paypal"; url: typeof PAYPAL_MANAGE_URL }
+  { provider: "stripe"; url: string } | { provider: "paypal"; url: string }
 
 export function safePaymentMethodDestination(
   value: unknown,
@@ -35,9 +37,9 @@ export function safePaymentMethodDestination(
     return null
   }
 
-  if (record.url === PAYPAL_MANAGE_URL) {
+  if (record.url === PAYPAL_MANAGEMENT_URL) {
     return record.label === PAYPAL_MANAGEMENT_LABEL
-      ? { provider: "paypal", url: PAYPAL_MANAGE_URL }
+      ? { provider: "paypal", url: PAYPAL_MANAGEMENT_URL }
       : null
   }
 

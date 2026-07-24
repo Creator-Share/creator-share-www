@@ -195,6 +195,7 @@ export interface AdvocateInvitationEmailWorkerDependencies {
   transport: AdvocateInvitationEmailTransport
   crypto: SponsorshipCrypto
   canonicalOrigin: string
+  assertRecipientAllowed?: (recipientEmail: string) => void
   now?: () => number
 }
 
@@ -505,6 +506,7 @@ export async function processAdvocateInvitationEmail(options: {
     recipientEmail = dependencies.crypto.decryptRecipientEmail(
       fromSupabaseRpcBytea(job.recipientEmailCiphertext),
     )
+    dependencies.assertRecipientAllowed?.(recipientEmail)
     const secretPlaintext = dependencies.crypto.decryptSecretPayload(
       fromSupabaseRpcBytea(job.secretPayloadCiphertext),
     )

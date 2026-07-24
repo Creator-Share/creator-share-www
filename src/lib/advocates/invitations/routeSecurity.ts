@@ -3,6 +3,7 @@ import "server-only"
 import { NextResponse } from "next/server"
 
 import { ADVOCATE_INVITATION_MAXIMUM_REQUEST_BODY_LENGTH } from "@/lib/advocates/invitations/material"
+import { loadAdvocateInvitationEmailCanonicalOrigin } from "@/lib/advocates/invitations/emailConfig"
 import {
   type CheckoutRequestEnvironment,
   isTrustedCheckoutJsonRequest,
@@ -36,7 +37,13 @@ export function resolveTrustedAdvocateInvitationOrigin(options: {
     rawHost: options.rawHost,
     environment,
   })
-  if (origin === "https://creatorshare.com") return origin
+  try {
+    if (origin === loadAdvocateInvitationEmailCanonicalOrigin(environment)) {
+      return origin
+    }
+  } catch {
+    return null
+  }
   if (origin === null || environment.NODE_ENV === "production") return null
 
   const parsed = new URL(origin)

@@ -15,6 +15,7 @@ import {
   type EmailProofIssuanceGateRepository,
 } from "@/lib/auth/emailProofIssuanceGate"
 import { getSponsorClaimCanonicalOrigin } from "@/lib/sponsorships/accountClaim"
+import { assertAdvocateStagingEnvironmentEmailRecipientAllowed } from "@/lib/stagingOutboundEmail"
 import {
   createSponsorshipCryptoFromEnvironment,
   normalizeSponsorEmailV1,
@@ -328,6 +329,9 @@ function prepareExecution(options: {
   needsAnonymousProvider: boolean
 }): PreparedExecution | EmailProofIssuanceNonIssuedResult {
   try {
+    assertAdvocateStagingEnvironmentEmailRecipientAllowed(
+      options.normalizedEmail,
+    )
     assertSupabaseConfiguration({
       needsAnonymousProvider: options.needsAnonymousProvider,
       environment: process.env,

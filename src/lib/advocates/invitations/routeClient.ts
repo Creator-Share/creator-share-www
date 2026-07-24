@@ -3,6 +3,9 @@ import "server-only"
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextRequest, NextResponse } from "next/server"
 
+import { assertAdvocateStagingSupabaseBoundary } from "@/lib/advocates/stagingDeploymentBoundary"
+import { secureSupabaseAuthCookieOptions } from "@/utils/supabase/authCookieSecurity"
+
 type ResponseCookie = {
   name: string
   value: string
@@ -19,6 +22,13 @@ export function createAdvocateInvitationRouteClient(
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!supabaseUrl || !supabaseAnonKey) return null
+  try {
+    assertAdvocateStagingSupabaseBoundary(process.env, {
+      requireServiceRole: false,
+    })
+  } catch {
+    return null
+  }
 
   const pendingCookies: ResponseCookie[] = []
   const client = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -37,10 +47,13 @@ export function createAdvocateInvitationRouteClient(
     client,
     applyCookies(response: NextResponse): NextResponse {
       for (const { name, value, options } of pendingCookies) {
-        response.cookies.set(name, value, {
-          ...options,
-          secure: secureCookies,
-        })
+        response.cookies.set(
+          name,
+          value,
+          secureSupabaseAuthCookieOptions(options, {
+            forceSecure: secureCookies,
+          }),
+        )
       }
       return response
     },

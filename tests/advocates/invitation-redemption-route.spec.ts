@@ -20,6 +20,7 @@ const ADVOCATE_ID = "22222222-2222-4222-8222-222222222222"
 const MEMBERSHIP_ID = "33333333-3333-4333-8333-333333333333"
 const OPERATION_ID = "44444444-4444-4444-8444-444444444444"
 const ORIGIN = "https://creatorshare.com"
+const STAGING_ORIGIN = "https://advocate-staging.creatorshare.com"
 const MATERIAL = Object.freeze({
   capability: "a".repeat(64),
   authTokenHash: "Auth_hash.value~with-safe-characters_".repeat(2),
@@ -42,6 +43,7 @@ process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1 = Buffer.alloc(
 ).toString("base64")
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://supabase.example.test"
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key"
+process.env.VERCEL = "1"
 process.env.VERCEL_URL = "preview.example.test"
 
 let currentUserResult: {
@@ -149,7 +151,7 @@ function request(
     origin: ORIGIN,
     "sec-fetch-site": "same-origin",
     "content-type": "application/json; charset=utf-8",
-    "x-trace-id": "trace-123",
+    "x-vercel-id": "trace-123",
   })
   for (const [name, value] of Object.entries(headerOverrides)) {
     if (value === null) headers.delete(name)
@@ -270,6 +272,71 @@ test.describe("advocate invitation redemption route", () => {
     ])
     expect(JSON.stringify(payload)).not.toContain(MATERIAL.capability)
     expect(JSON.stringify(payload)).not.toContain(MATERIAL.authTokenHash)
+  })
+
+  test("marks staging redemption and recovery Supabase cookies Secure", async () => {
+    const previousBaseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    const previousCanonicalOrigin =
+      process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN
+    const previousSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const previousSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    process.env.NEXT_PUBLIC_BASE_URL = STAGING_ORIGIN
+    process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN = STAGING_ORIGIN
+    process.env.NEXT_PUBLIC_SUPABASE_URL =
+      "https://destjwstohzmufshfnuy.supabase.co"
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY =
+      "sb_publishable_" + "a".repeat(32)
+    writeRefreshedSessionCookie = true
+    try {
+      for (const [handler, body, path] of [
+        [
+          redeemPOST,
+          JSON.stringify(REDEMPTION_REQUEST),
+          "/api/auth/advocate-invitations/redeem",
+        ],
+        [
+          recoverPOST,
+          JSON.stringify(RECOVERY_REQUEST),
+          "/api/auth/advocate-invitations/recover",
+        ],
+      ] as const) {
+        const response = await handler(
+          request(
+            body,
+            {
+              host: "advocate-staging.creatorshare.com",
+              origin: STAGING_ORIGIN,
+            },
+            path,
+            STAGING_ORIGIN,
+          ),
+        )
+
+        expect(response.status).toBe(200)
+        expect(response.headers.get("set-cookie") ?? "").toMatch(
+          /sb-refreshed-auth-token=refreshed-session-cookie;[^,]*Secure/i,
+        )
+      }
+    } finally {
+      if (previousBaseUrl === undefined) delete process.env.NEXT_PUBLIC_BASE_URL
+      else process.env.NEXT_PUBLIC_BASE_URL = previousBaseUrl
+      if (previousCanonicalOrigin === undefined) {
+        delete process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN
+      } else {
+        process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN =
+          previousCanonicalOrigin
+      }
+      if (previousSupabaseUrl === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_URL
+      } else {
+        process.env.NEXT_PUBLIC_SUPABASE_URL = previousSupabaseUrl
+      }
+      if (previousSupabaseAnonKey === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      } else {
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = previousSupabaseAnonKey
+      }
+    }
   })
 
   test("requires the session before touching database redemption", async () => {

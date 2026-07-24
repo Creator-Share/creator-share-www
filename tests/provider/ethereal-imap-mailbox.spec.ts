@@ -144,6 +144,7 @@ test("accepts only fixed Ethereal IMAP configuration and tagged identities", asy
   const configuration = readEtherealImapMailboxEnvironment({
     FF029_ETHEREAL_IMAP_USER: "ff029-canary@ethereal.email",
     FF029_ETHEREAL_IMAP_PASSWORD: "fixture-password",
+    NODE_ENV: "test",
   })
   expect(configuration).toEqual({
     host: "imap.ethereal.email",
@@ -165,12 +166,14 @@ test("accepts only fixed Ethereal IMAP configuration and tagged identities", asy
     {
       FF029_ETHEREAL_IMAP_USER: "attacker@example.com",
       FF029_ETHEREAL_IMAP_PASSWORD: secret,
+      NODE_ENV: "test",
     },
     {
       FF029_ETHEREAL_IMAP_USER: "ff029-canary@ethereal.email",
       FF029_ETHEREAL_IMAP_PASSWORD: "bad password",
+      NODE_ENV: "test",
     },
-  ]) {
+  ] as const) {
     let error: unknown
     try {
       readEtherealImapMailboxEnvironment(environment)

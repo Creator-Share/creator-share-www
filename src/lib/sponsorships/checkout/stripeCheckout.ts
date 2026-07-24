@@ -4,6 +4,7 @@ import type Stripe from "stripe"
 
 import { MINIMUM_OPEN_SPONSORSHIP_CENTS } from "@/config/beneficiaryTypes"
 import {
+  ADVOCATE_STAGING_TENANT_ROOT,
   resolveAdvocateHost,
   type AdvocateHostResolution,
 } from "@/lib/advocates/host"
@@ -716,10 +717,14 @@ function allowedPrimaryHostname(
   resolution: AdvocateHostResolution,
   allowedPrimaryHostnames: ReadonlySet<string>,
   allowLocalhostDevelopment: boolean,
+  allowStagingEnvironment: boolean,
 ): string | null {
   if (resolution.kind !== "non-tenant") return null
 
   const hostname = resolution.normalizedHostname
+  if (allowStagingEnvironment) {
+    return hostname === ADVOCATE_STAGING_TENANT_ROOT ? hostname : null
+  }
   if (
     hostname === "creatorshare.com" ||
     hostname === "www.creatorshare.com" ||
@@ -741,11 +746,13 @@ export function resolveSponsorshipCheckoutHost(
   rawHost: string | null,
   options: {
     allowLocalhostDevelopment: boolean
+    allowStagingEnvironment?: boolean
     allowedPrimaryHostnames?: Iterable<string>
   },
 ): ResolvedSponsorshipCheckoutHost {
   const resolution = resolveAdvocateHost(rawHost, {
     allowLocalhostDevelopment: options.allowLocalhostDevelopment,
+    allowStagingEnvironment: options.allowStagingEnvironment,
   })
   if (resolution.kind === "invalid") throw checkoutError("invalid-host")
 
@@ -770,6 +777,7 @@ export function resolveSponsorshipCheckoutHost(
     resolution,
     allowedPrimaryHostnames,
     options.allowLocalhostDevelopment,
+    options.allowStagingEnvironment === true,
   )
   if (!hostname) throw checkoutError("invalid-host")
 

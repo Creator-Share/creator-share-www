@@ -133,6 +133,7 @@ export interface SponsorWelcomeEmailWorkerDependencies {
   transport: SponsorWelcomeEmailTransport
   crypto: SponsorshipCrypto
   canonicalOrigin: string
+  assertRecipientAllowed?: (recipientEmail: string) => void
   invocationDeadlineAt?: number
   now?: () => number
 }
@@ -266,6 +267,7 @@ export async function processSponsorWelcomeEmail(options: {
     const recipientEmail = dependencies.crypto.decryptRecipientEmail(
       fromSupabaseRpcBytea(job.recipientEmailCiphertext),
     )
+    dependencies.assertRecipientAllowed?.(recipientEmail)
     const secretPlaintext = dependencies.crypto.decryptSecretPayload(
       fromSupabaseRpcBytea(job.secretPayloadCiphertext),
     )

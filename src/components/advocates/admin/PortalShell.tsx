@@ -6,6 +6,13 @@ import type {
   AdvocatePortalPermission,
 } from "@/lib/advocates/admin/access"
 import { PortalNavigation } from "@/components/advocates/admin/PortalNavigation"
+import {
+  ADVOCATE_STAGING_CANARY_HOSTNAME,
+  ADVOCATE_STAGING_CANARY_LABEL,
+  isAdvocateStagingEnvironmentEnabled,
+  resolveAdvocateHost,
+  type AdvocateHostEnvironment,
+} from "@/lib/advocates/host"
 
 export type AdvocatePortalSection =
   | "overview"
@@ -112,13 +119,58 @@ export function activeAdvocatePublicPortalHref(
     | "publicationStatus"
     | "relationshipStatus"
   >,
+  environment: AdvocateHostEnvironment = process.env,
 ): string | null {
-  return portal.relationshipStatus === "active" &&
-    portal.publicationStatus === "active" &&
-    portal.domainStatus === "active" &&
-    portal.canonicalHostname
-    ? `https://${portal.canonicalHostname}`
+  if (
+    portal.relationshipStatus !== "active" ||
+    portal.publicationStatus !== "active" ||
+    portal.domainStatus !== "active"
+  ) {
+    return null
+  }
+  const hostname = advocatePublicPortalHostname(
+    portal.canonicalHostname,
+    environment,
+  )
+  return hostname === null ? null : `https://${hostname}`
+}
+
+export function advocatePublicPortalHostname(
+  canonicalHostname: string | null,
+  environment: AdvocateHostEnvironment = process.env,
+): string | null {
+  if (canonicalHostname === null) return null
+
+  if (!isAdvocateStagingEnvironmentEnabled(environment)) {
+    return canonicalHostname
+  }
+
+  const canonical = resolveAdvocateHost(canonicalHostname, {
+    allowLocalhostDevelopment: false,
+    allowStagingEnvironment: false,
+  })
+  return canonical.kind === "tenant-candidate" &&
+    canonical.environment === "production" &&
+    canonical.tenantLabel === ADVOCATE_STAGING_CANARY_LABEL
+    ? ADVOCATE_STAGING_CANARY_HOSTNAME
     : null
+}
+
+export function advocatePortalDisplayHostname(
+  canonicalHostname: string | null,
+  environment: AdvocateHostEnvironment = process.env,
+): string {
+  if (canonicalHostname === null) return "Not yet assigned"
+
+  const publicHostname = advocatePublicPortalHostname(
+    canonicalHostname,
+    environment,
+  )
+  if (publicHostname !== null) return publicHostname
+
+  return isAdvocateStagingEnvironmentEnabled(environment)
+    ? "Unavailable in this environment"
+    : canonicalHostname
 }
 
 function statusLabel(value: string): string {

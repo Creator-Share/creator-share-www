@@ -112,6 +112,11 @@ test("forwards refreshed Supabase and visitor cookies to the same request", asyn
     ]),
   )
   expect(
+    setCookies.find((cookie) =>
+      cookie.startsWith("sb-test-auth-token=refreshed-session"),
+    ),
+  ).toMatch(/; Secure/i)
+  expect(
     response.headers.get("x-middleware-request-x-middleware-request-attacker"),
   ).toBeNull()
 })

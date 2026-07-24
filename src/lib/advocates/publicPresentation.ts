@@ -2,6 +2,7 @@ import "server-only"
 
 import {
   ADVOCATE_LOCALHOST_ROOT,
+  ADVOCATE_STAGING_TENANT_ROOT,
   ADVOCATE_TENANT_ROOT,
   isReservedNonPrimaryHostname,
   resolveAdvocateHost,
@@ -536,10 +537,19 @@ function normalizeApprovedPrimaryHostname(value: string): string | null {
 function approvedPrimaryHostnames(
   options: ResolvePublicAdvocateRequestOptions,
 ): ReadonlySet<string> {
-  const approved = new Set<string>(DEFAULT_PRIMARY_HOSTNAMES)
+  const staging = options.allowStagingEnvironment === true
+  const approved = new Set<string>(
+    staging ? [ADVOCATE_STAGING_TENANT_ROOT] : DEFAULT_PRIMARY_HOSTNAMES,
+  )
   for (const configured of options.approvedPrimaryHostnames ?? []) {
     const hostname = normalizeApprovedPrimaryHostname(configured)
-    if (hostname !== null && !isReservedNonPrimaryHostname(hostname)) {
+    const approvedStagingRoot =
+      staging && hostname === ADVOCATE_STAGING_TENANT_ROOT
+    if (
+      hostname !== null &&
+      (approvedStagingRoot ||
+        (!staging && !isReservedNonPrimaryHostname(hostname)))
+    ) {
       approved.add(hostname)
     }
   }

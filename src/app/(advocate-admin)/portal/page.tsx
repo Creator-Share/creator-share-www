@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 
+import { advocatePortalDisplayHostname } from "@/components/advocates/admin/PortalShell"
 import { loadAuthenticatedAdvocatePortalSession } from "@/lib/advocates/admin/access"
 
 function publicationLabel(value: string): string {
@@ -55,7 +56,7 @@ export default async function AdvocatePortalIndexPage() {
                     Publication: {publicationLabel(portal.publicationStatus)}
                   </p>
                   <p className="mt-1 truncate text-sm text-gray-500">
-                    {portal.canonicalHostname ?? "Domain not yet assigned"}
+                    {advocatePortalDisplayHostname(portal.canonicalHostname)}
                   </p>
                 </Link>
               </li>

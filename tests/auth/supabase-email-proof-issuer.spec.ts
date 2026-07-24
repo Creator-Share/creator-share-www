@@ -174,6 +174,11 @@ nodeModule._load = function mockedModuleLoad(
 const testRequire = createRequire(
   resolve(process.cwd(), "tests/auth/supabase-email-proof-issuer.spec.ts"),
 )
+// Fully parallel suites may load the issuer through an email worker first.
+// Re-evaluate this unit under the dependency seams installed above.
+delete testRequire.cache[
+  testRequire.resolve("../../src/lib/auth/supabaseEmailProofIssuer")
+]
 const issuer = testRequire(
   "../../src/lib/auth/supabaseEmailProofIssuer",
 ) as IssuerModule
@@ -185,6 +190,11 @@ const previousEnvironment = {
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   NEXT_SERVICE_ROLE_KEY: process.env.NEXT_SERVICE_ROLE_KEY,
   SPONSORSHIP_CRYPTO_SECRET_V1: process.env.SPONSORSHIP_CRYPTO_SECRET_V1,
+  EMAIL_HOST: process.env.EMAIL_HOST,
+  EMAIL_PORT: process.env.EMAIL_PORT,
+  EMAIL_SECURE: process.env.EMAIL_SECURE,
+  EMAIL_USER: process.env.EMAIL_USER,
+  EMAIL_PASSWORD: process.env.EMAIL_PASSWORD,
 }
 
 function restoreEnvironment(
@@ -203,6 +213,18 @@ function validEnvironment(): void {
   process.env.SPONSORSHIP_CRYPTO_SECRET_V1 = Buffer.alloc(32, 31).toString(
     "base64",
   )
+}
+
+function validStagingEnvironment(): void {
+  validEnvironment()
+  process.env.NEXT_PUBLIC_BASE_URL = "https://advocate-staging.creatorshare.com"
+  process.env.NEXT_PUBLIC_SUPABASE_URL =
+    "https://destjwstohzmufshfnuy.supabase.co"
+  process.env.EMAIL_HOST = "smtp.ethereal.email"
+  process.env.EMAIL_PORT = "587"
+  process.env.EMAIL_SECURE = "false"
+  process.env.EMAIL_USER = "creator-share-staging@ethereal.email"
+  process.env.EMAIL_PASSWORD = "sandbox-password"
 }
 
 function context() {
@@ -977,6 +999,92 @@ test("rejects deterministic configuration failures before acquisition", async ()
     issuer.issueGenericSignInEmailProof(managementOptions()),
   ).rejects.toMatchObject({ name: "EmailProofIssuanceInputError" })
   expect(events).toHaveLength(0)
+})
+
+test("exact staging rejects every Supabase Auth issuance flow for a real recipient before the gate", async () => {
+  validStagingEnvironment()
+  const origin = "https://advocate-staging.creatorshare.com"
+  const management = {
+    recipientEmail: "real.person@example.com",
+    redirectTo: `${origin}/auth/confirm?next=%2Fapp`,
+    context: context(),
+  }
+  const claim = {
+    recipientEmail: "real.person@example.com",
+    redirectTo: `${origin}/auth/confirm?next=%2Fsponsor%2Fclaim`,
+    context: context(),
+  }
+  const calls: Array<() => Promise<unknown>> = [
+    () => issuer.issueGenericSignInEmailProof(management),
+    () => issuer.issueReauthenticationEmailProof(management),
+    () => issuer.issueInitialClaimEmailProof(claim),
+    () => issuer.issueAccountClaimEmailProof(claim),
+    () =>
+      issuer.issueRegistrationEmailProof({
+        recipientEmail: "real.person@example.com",
+        password: "Correct1!",
+        firstName: "Ada",
+        lastName: "Lovelace",
+        redirectTo: `${origin}/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding`,
+        context: context(),
+      }),
+    () =>
+      issuer.issuePasswordResetEmailProof({
+        recipientEmail: "real.person@example.com",
+        context: context(),
+      }),
+    () =>
+      issuer.issueCreatorShareAdminInvitationEmailProof({
+        recipientEmail: "real.person@example.com",
+        invitedByUserId: INVITER_ID,
+        redirectTo: `${origin}/set-password`,
+        context: context(),
+      }),
+    () =>
+      issuer.issueAdvocateInvitationEmailProof({
+        recipientEmail: "real.person@example.com",
+        outboxId: OUTBOX_ID,
+        redirectTo: `${origin}/advocate-invitation`,
+        context: context(),
+      }),
+  ]
+
+  for (const issue of calls) {
+    resetHarness()
+    await expect(issue()).resolves.toEqual({
+      status: "unavailable",
+      stage: "configuration",
+    })
+    expect(events).toEqual([])
+  }
+})
+
+test("exact staging permits only its Ethereal mailbox and FF029 canary contract", async () => {
+  validStagingEnvironment()
+  const origin = "https://advocate-staging.creatorshare.com"
+
+  await expect(
+    issuer.issueGenericSignInEmailProof({
+      recipientEmail: "creator-share-staging@ethereal.email",
+      redirectTo: `${origin}/auth/confirm?next=%2Fapp`,
+      context: context(),
+    }),
+  ).resolves.toEqual({ status: "issued" })
+  expect(events.filter((event) => event.kind === "signInWithOtp")).toHaveLength(
+    1,
+  )
+
+  resetHarness()
+  await expect(
+    issuer.issuePasswordResetEmailProof({
+      recipientEmail:
+        "creator-share-ff029-0123456789abcdef0123456789abcdef@example.com",
+      context: context(),
+    }),
+  ).resolves.toEqual({ status: "issued" })
+  expect(
+    events.filter((event) => event.kind === "resetPasswordForEmail"),
+  ).toHaveLength(1)
 })
 
 test("uses a fresh server operation and lease for separate issuance attempts", async () => {

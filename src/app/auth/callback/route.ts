@@ -5,11 +5,13 @@ import {
   advocateAttributionIdentityCookieSetHeaders,
   createAdvocateAttributionIdentityCookieValue,
 } from "@/lib/advocates/attributionIdentityCookie"
+import { assertAdvocateStagingSupabaseBoundary } from "@/lib/advocates/stagingDeploymentBoundary"
 import {
   buildSponsorClaimPageRedirect,
   getSponsorClaimCanonicalOrigin,
   isValidSupabaseAuthCode,
 } from "@/lib/sponsorships/accountClaim"
+import { secureSupabaseAuthCookieOptions } from "@/utils/supabase/authCookieSecurity"
 
 export const runtime = "nodejs"
 
@@ -62,6 +64,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    assertAdvocateStagingSupabaseBoundary(process.env, {
+      requireServiceRole: false,
+    })
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
@@ -69,7 +74,13 @@ export async function GET(request: NextRequest) {
         },
         setAll(cookiesToSet: ResponseCookie[]) {
           cookiesToSet.forEach(({ name, value, options }) =>
-            successResponse.cookies.set(name, value, options),
+            successResponse.cookies.set(
+              name,
+              value,
+              secureSupabaseAuthCookieOptions(options, {
+                trustedUrl: canonicalOrigin,
+              }),
+            ),
           )
         },
       },

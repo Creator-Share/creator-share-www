@@ -272,6 +272,32 @@ test.describe("advocate portal navigation", () => {
         relationshipStatus: "active",
       }),
     ).toBe("https://hope.creatorshare.com")
+    expect(
+      activeAdvocatePublicPortalHref(
+        {
+          canonicalHostname: "canary.creatorshare.com",
+          domainStatus: "active",
+          publicationStatus: "active",
+          relationshipStatus: "active",
+        },
+        {
+          NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+        },
+      ),
+    ).toBe("https://canary.advocate-staging.creatorshare.com")
+    expect(
+      activeAdvocatePublicPortalHref(
+        {
+          canonicalHostname: "hope.creatorshare.com",
+          domainStatus: "active",
+          publicationStatus: "active",
+          relationshipStatus: "active",
+        },
+        {
+          NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+        },
+      ),
+    ).toBeNull()
 
     for (const portal of [
       {

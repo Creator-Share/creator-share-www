@@ -2,7 +2,12 @@ import {
   COMMITTED_COOKIE_TRUST_POLICY,
   evaluateCookieTrustPolicy,
 } from "./cookieTrustInventory"
-import { ADVOCATE_TENANT_ROOT, resolveAdvocateHost } from "./host"
+import {
+  ADVOCATE_STAGING_TENANT_ROOT,
+  ADVOCATE_TENANT_ROOT,
+  isAdvocateStagingEnvironmentEnabled,
+  resolveAdvocateHost,
+} from "./host"
 
 export const CROSS_SUBDOMAIN_COOKIE_MODE_ENVIRONMENT_VARIABLE =
   "ADVOCATE_CROSS_SUBDOMAIN_COOKIE_MODE"
@@ -173,6 +178,19 @@ export function resolveCrossSubdomainCookieScope(
     resolution.kind === "tenant-candidate"
       ? resolution.requestHostname
       : resolution.normalizedHostname
+  const isolatedStagingHost =
+    isAdvocateStagingEnvironmentEnabled(environment) &&
+    (hostname === ADVOCATE_STAGING_TENANT_ROOT ||
+      hostname.endsWith(`.${ADVOCATE_STAGING_TENANT_ROOT}`))
+  if (isolatedStagingHost) {
+    return Object.freeze({
+      creatorShareHost: false,
+      cryptographicScope: `host:${hostname}` as const,
+      domain: undefined,
+      deleteHostOnlyBeforeWrite: false,
+      deleteParentDomainBeforeWrite: false,
+    })
+  }
   const creatorShareHost =
     hostname === ADVOCATE_TENANT_ROOT ||
     hostname.endsWith(`.${ADVOCATE_TENANT_ROOT}`)

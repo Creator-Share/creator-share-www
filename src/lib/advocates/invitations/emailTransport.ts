@@ -2,6 +2,8 @@ import "server-only"
 
 import nodemailer from "nodemailer"
 
+import { assertAdvocateStagingEmailRecipientAllowed } from "@/lib/stagingOutboundEmail"
+
 import { advocateInvitationMessageId } from "./emailMessageId"
 import type { AdvocateInvitationEmailTransportConfig } from "./emailConfig"
 import {
@@ -54,6 +56,19 @@ export function createNodemailerAdvocateInvitationEmailTransport(
           `advocate-invitation:${message.outboxId}`
       ) {
         throw new AdvocateInvitationEmailTransportError()
+      }
+      if (config.stagingRecipientPolicy !== undefined) {
+        try {
+          assertAdvocateStagingEmailRecipientAllowed(
+            message.recipientEmail,
+            config.stagingRecipientPolicy,
+          )
+        } catch {
+          throw new AdvocateInvitationEmailTransportError({
+            confirmedNotSent: true,
+            failureCode: "email_delivery_rejected",
+          })
+        }
       }
 
       try {

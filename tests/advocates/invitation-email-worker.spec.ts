@@ -844,6 +844,50 @@ test.describe("advocate invitation delivery worker", () => {
     expect(authCalled).toBe(false)
   })
 
+  test("rejects a staging-disallowed recipient before proof issuance or handoff", async () => {
+    const stages: string[] = []
+    let failureCode: string | null = null
+    const result = await processAdvocateInvitationEmail({
+      config,
+      job: claimedJob(),
+      context,
+      invocationDeadlineAt: NOW + 120_000,
+      dependencies: dependencies({
+        assertRecipientAllowed() {
+          stages.push("recipient-policy")
+          throw new Error("staging recipient rejected")
+        },
+        authProvider: {
+          async issueEmailProof() {
+            stages.push("auth")
+            throw new Error("must not issue")
+          },
+        },
+        repository: repository({
+          async beginDelivery() {
+            stages.push("begin")
+            throw new Error("must not begin")
+          },
+          async failDelivery(options) {
+            stages.push("fail")
+            failureCode = options.errorCode
+            return { retryable: false }
+          },
+        }),
+        transport: {
+          async send() {
+            stages.push("send")
+            throw new Error("must not send")
+          },
+        },
+      }),
+    })
+
+    expect(result.status).toBe("terminal_failed")
+    expect(failureCode).toBe("internal_error")
+    expect(stages).toEqual(["recipient-policy", "fail"])
+  })
+
   test("fences an unexpected issuer failure as ambiguous", async () => {
     let proofSettlement: Record<string, unknown> | null = null
     const result = await processAdvocateInvitationEmail({
@@ -1751,6 +1795,36 @@ test.describe("advocate invitation transport and route", () => {
     expect(loadAdvocateInvitationEmailCanonicalOrigin(environment)).toBe(
       "https://creatorshare.com",
     )
+    expect(
+      loadAdvocateInvitationEmailCanonicalOrigin({
+        ...environment,
+        NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+        ADVOCATE_INVITATION_CANONICAL_ORIGIN:
+          "https://advocate-staging.creatorshare.com",
+      }),
+    ).toBe("https://advocate-staging.creatorshare.com")
+    for (const stagingEnvironment of [
+      {
+        ...environment,
+        NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+      },
+      {
+        ...environment,
+        NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+        ADVOCATE_INVITATION_CANONICAL_ORIGIN: "https://creatorshare.com",
+      },
+    ]) {
+      expect(() =>
+        loadAdvocateInvitationEmailCanonicalOrigin(stagingEnvironment),
+      ).toThrow("Advocate invitation email worker is unavailable")
+    }
+    expect(() =>
+      loadAdvocateInvitationEmailCanonicalOrigin({
+        ...environment,
+        ADVOCATE_INVITATION_CANONICAL_ORIGIN:
+          "https://advocate-staging.creatorshare.com",
+      }),
+    ).toThrow("Advocate invitation email worker is unavailable")
     expect(
       isAuthorizedAdvocateInvitationEmailWorkerRequest(
         `Bearer ${SECRET}`,

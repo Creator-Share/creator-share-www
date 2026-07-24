@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSponsorshipCryptoFromEnvironment } from "@/lib/sponsorships/crypto"
+import { assertAdvocateStagingEmailRecipientAllowed } from "@/lib/stagingOutboundEmail"
 import { createServiceRoleClient } from "@/utils/supabase/server"
 
 import { createSharedAdvocateInvitationAuthProvider } from "./emailAuth"
@@ -21,6 +22,9 @@ export function createAdvocateInvitationEmailWorkerDependencies(options: {
   environment?: AdvocateInvitationEmailEnvironment
 }): AdvocateInvitationEmailWorkerDependencies {
   const environment = options.environment ?? process.env
+  const transportConfig =
+    loadAdvocateInvitationEmailTransportConfig(environment)
+  const stagingRecipientPolicy = transportConfig.stagingRecipientPolicy
   const serviceClient = createServiceRoleClient({
     requestTimeoutMilliseconds:
       options.config.serviceRequestTimeoutMilliseconds,
@@ -28,10 +32,19 @@ export function createAdvocateInvitationEmailWorkerDependencies(options: {
   return {
     repository: createSupabaseAdvocateInvitationEmailRepository(serviceClient),
     authProvider: createSharedAdvocateInvitationAuthProvider(),
-    transport: createNodemailerAdvocateInvitationEmailTransport(
-      loadAdvocateInvitationEmailTransportConfig(environment),
-    ),
+    transport:
+      createNodemailerAdvocateInvitationEmailTransport(transportConfig),
     crypto: createSponsorshipCryptoFromEnvironment(environment),
     canonicalOrigin: loadAdvocateInvitationEmailCanonicalOrigin(environment),
+    ...(stagingRecipientPolicy === undefined
+      ? {}
+      : {
+          assertRecipientAllowed(recipientEmail: string) {
+            assertAdvocateStagingEmailRecipientAllowed(
+              recipientEmail,
+              stagingRecipientPolicy,
+            )
+          },
+        }),
   }
 }

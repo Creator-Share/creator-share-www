@@ -27,6 +27,10 @@ import {
   type StripeSponsorshipCheckoutV2Dependencies,
 } from "@/lib/sponsorships/checkout/stripeCheckout"
 import {
+  ADVOCATE_STAGING_TENANT_ROOT,
+  isAdvocateStagingEnvironmentEnabled,
+} from "@/lib/advocates/host"
+import {
   createSponsorshipCryptoFromEnvironment,
   type SupabaseRpcBytea,
 } from "@/lib/sponsorships/crypto"
@@ -34,6 +38,7 @@ import {
   isTrustedCheckoutJsonRequest,
   resolveTrustedCheckoutRequestOrigin,
 } from "@/lib/sponsorships/checkout/requestSecurity"
+import { assertStagingStripePaymentEnvironment } from "@/lib/sponsorships/checkout/stagingPaymentBoundary"
 import { getStripeClient } from "@/lib/stripe/config"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
 import {
@@ -118,6 +123,9 @@ function hostnameFromConfiguredUrl(value: string | undefined): string | null {
 }
 
 function allowedPrimaryHostnames(): Set<string> {
+  if (isAdvocateStagingEnvironmentEnabled(process.env)) {
+    return new Set([ADVOCATE_STAGING_TENANT_ROOT])
+  }
   return new Set(
     [
       "creator-share-www.vercel.app",
@@ -794,6 +802,18 @@ export async function POST(request: Request) {
     )
   }
 
+  try {
+    assertStagingStripePaymentEnvironment(process.env)
+  } catch {
+    console.error("Stripe sponsorship checkout configuration rejected", {
+      requestId: context.requestId,
+    })
+    return NextResponse.json(
+      { error: "Stripe checkout is unavailable" },
+      { status: 503, headers: CHECKOUT_RESPONSE_HEADERS },
+    )
+  }
+
   const contentLength = Number(request.headers.get("content-length") ?? "0")
   if (Number.isFinite(contentLength) && contentLength > MAXIMUM_REQUEST_BYTES) {
     return NextResponse.json(
@@ -837,6 +857,7 @@ export async function POST(request: Request) {
   try {
     const host = resolveSponsorshipCheckoutHost(request.headers.get("host"), {
       allowLocalhostDevelopment: process.env.NODE_ENV !== "production",
+      allowStagingEnvironment: isAdvocateStagingEnvironmentEnabled(process.env),
       allowedPrimaryHostnames: allowedPrimaryHostnames(),
     })
     const supabase = createServiceRoleClient()

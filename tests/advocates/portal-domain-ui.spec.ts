@@ -4,6 +4,7 @@ import { resolve } from "node:path"
 import { expect, test } from "@playwright/test"
 
 import { buildAdvocateDomainStatusPresentation } from "../../src/components/advocates/admin/DomainStatus"
+import { advocatePortalDisplayHostname } from "../../src/components/advocates/admin/PortalShell"
 
 function portal(
   overrides: Partial<
@@ -29,10 +30,36 @@ test.describe("advocate domain status administrative UI contract", () => {
       summary: "The public portal is available on this domain.",
       publicHref: "https://hope.creatorshare.com",
     })
+    expect(
+      buildAdvocateDomainStatusPresentation(
+        portal({ canonicalHostname: "canary.creatorshare.com" }),
+        {
+          NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+        },
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        hostname: "canary.advocate-staging.creatorshare.com",
+        publicHref: "https://canary.advocate-staging.creatorshare.com",
+      }),
+    )
+    expect(
+      buildAdvocateDomainStatusPresentation(portal(), {
+        NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        hostname: "Unavailable in this environment",
+        publicHref: null,
+      }),
+    )
 
     expect(
       buildAdvocateDomainStatusPresentation(
-        portal({ domainStatus: "verifying", publicationStatus: "provisioning" }),
+        portal({
+          domainStatus: "verifying",
+          publicationStatus: "provisioning",
+        }),
       ),
     ).toEqual(
       expect.objectContaining({
@@ -87,7 +114,8 @@ test.describe("advocate domain status administrative UI contract", () => {
       },
       {
         overrides: { relationshipStatus: "archived" as const },
-        summary: "This portal is archived and its public domain is unavailable.",
+        summary:
+          "This portal is archived and its public domain is unavailable.",
       },
       {
         overrides: { relationshipStatus: "invited" as const },
@@ -126,10 +154,7 @@ test.describe("advocate domain status administrative UI contract", () => {
       "utf8",
     )
     const componentSource = readFileSync(
-      resolve(
-        process.cwd(),
-        "src/components/advocates/admin/DomainStatus.tsx",
-      ),
+      resolve(process.cwd(), "src/components/advocates/admin/DomainStatus.tsx"),
       "utf8",
     )
 
@@ -149,5 +174,39 @@ test.describe("advocate domain status administrative UI contract", () => {
       'aria-labelledby="advocate-domain-heading"',
     )
     expect(componentSource).not.toContain('"use client"')
+  })
+
+  test("uses the fail-closed display hostname on portal overview surfaces", () => {
+    const stagingEnvironment = {
+      NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+    }
+    expect(
+      advocatePortalDisplayHostname(
+        "canary.creatorshare.com",
+        stagingEnvironment,
+      ),
+    ).toBe("canary.advocate-staging.creatorshare.com")
+    expect(
+      advocatePortalDisplayHostname(
+        "hope.creatorshare.com",
+        stagingEnvironment,
+      ),
+    ).toBe("Unavailable in this environment")
+    expect(
+      advocatePortalDisplayHostname("hope.creatorshare.com", {
+        NEXT_PUBLIC_BASE_URL: "https://creatorshare.com",
+      }),
+    ).toBe("hope.creatorshare.com")
+
+    for (const pagePath of [
+      "src/app/(advocate-admin)/portal/page.tsx",
+      "src/app/(advocate-admin)/portal/[slug]/page.tsx",
+    ]) {
+      const source = readFileSync(resolve(process.cwd(), pagePath), "utf8")
+      expect(source).toContain("advocatePortalDisplayHostname")
+      expect(source).not.toMatch(
+        /\{portal\.canonicalHostname\s*\?\?\s*["'](?:Domain n|N)ot yet assigned["']\}/,
+      )
+    }
   })
 })

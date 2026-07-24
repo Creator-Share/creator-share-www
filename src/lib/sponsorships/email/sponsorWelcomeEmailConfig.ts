@@ -2,6 +2,10 @@ import "server-only"
 
 import { getSponsorClaimCanonicalOrigin } from "@/lib/sponsorships/accountClaim"
 import type { SponsorWelcomeEmailWorkerConfig } from "@/lib/sponsorships/email/sponsorWelcomeEmailWorker"
+import {
+  loadAdvocateStagingEmailRecipientPolicy,
+  type AdvocateStagingEmailRecipientPolicy,
+} from "@/lib/stagingOutboundEmail"
 
 export type SponsorWelcomeEmailEnvironment = Readonly<
   Record<string, string | undefined>
@@ -15,6 +19,7 @@ export interface SponsorWelcomeEmailTransportConfig {
   password: string
   fromAddress: string
   timeoutMilliseconds: number
+  stagingRecipientPolicy?: AdvocateStagingEmailRecipientPolicy
 }
 
 function configurationError(): never {
@@ -153,7 +158,7 @@ export function loadSponsorWelcomeEmailTransportConfig(
     configurationError()
   }
 
-  return {
+  const config = {
     host: requiredTrimmed(environment.EMAIL_HOST, 255),
     port: boundedInteger(environment.EMAIL_PORT, 587, 1, 65_535),
     secure: secureValue === "true",
@@ -166,6 +171,22 @@ export function loadSponsorWelcomeEmailTransportConfig(
       1_000,
       45_000,
     ),
+  }
+  let stagingRecipientPolicy: AdvocateStagingEmailRecipientPolicy | undefined
+  try {
+    stagingRecipientPolicy = loadAdvocateStagingEmailRecipientPolicy({
+      environment,
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      username: config.username,
+    })
+  } catch {
+    configurationError()
+  }
+  return {
+    ...config,
+    ...(stagingRecipientPolicy === undefined ? {} : { stagingRecipientPolicy }),
   }
 }
 

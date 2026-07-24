@@ -1,4 +1,10 @@
+import "server-only"
+
 import nodemailer from "nodemailer"
+import {
+  ADVOCATE_STAGING_CANONICAL_ORIGIN,
+  isAdvocateStagingEnvironmentEnabled,
+} from "@/lib/advocates/host"
 import {
   coerceRegion,
   getPortalUrl,
@@ -6,7 +12,7 @@ import {
 } from "@/lib/stripe/config"
 import {
   DEFAULT_STRIPE_PORTAL_URL,
-  PAYPAL_MANAGE_URL,
+  resolvePayPalManageUrl,
 } from "@/lib/payments/portals"
 import {
   filterExistingMediaRows,
@@ -15,6 +21,11 @@ import {
 } from "@/utils/supabase/media"
 import { createServiceRoleClient } from "@/utils/supabase/server"
 import { formatMoney } from "@/utils/currency"
+import {
+  advocateStagingLegacyEmailTransportSecurityOptions,
+  assertAdvocateStagingLegacyEmailAllowed,
+} from "@/lib/stagingOutboundEmail"
+import { getSponsorClaimCanonicalOrigin } from "@/lib/sponsorships/accountClaim"
 
 export type SponsorshipProvider = "STRIPE" | "PAYPAL"
 
@@ -33,15 +44,15 @@ function formatEmailAmount(
     options.chargedCurrency &&
     typeof options.chargedAmountMinor === "number"
   ) {
-    return formatMoney(
-      options.chargedAmountMinor,
-      options.chargedCurrency,
-    )
+    return formatMoney(options.chargedAmountMinor, options.chargedCurrency)
   }
   return formatMoney(canonicalUsdCents, "USD")
 }
 
 function resolveStripePortalUrl(region: StripeRegion): string {
+  if (isAdvocateStagingEnvironmentEnabled(process.env)) {
+    return `${ADVOCATE_STAGING_CANONICAL_ORIGIN}/app`
+  }
   return getPortalUrl(region) || DEFAULT_STRIPE_PORTAL_URL
 }
 
@@ -66,12 +77,13 @@ export function renderManagementSection({
   variant = "compact",
 }: ManagementLinkOptions & { variant?: "compact" | "prominent" }): string {
   if (provider === "PAYPAL") {
+    const paypalManageUrl = resolvePayPalManageUrl()
     return `
       <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
           <b>To update or cancel your recurring PayPal sponsorship,</b> sign in to your PayPal account and open <i>Payments → Automatic Payments</i>.
         </p>
-        <a href="${PAYPAL_MANAGE_URL}" style="display: inline-block; background-color: #0070BA; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Manage in PayPal</a>
+        <a href="${paypalManageUrl}" style="display: inline-block; background-color: #0070BA; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Manage in PayPal</a>
         <p style="font-size: 0.95rem; color: #475569; margin: 1.25rem 0 0 0;">
           If you need help, reply to this email and we'll take care of it.
         </p>
@@ -111,11 +123,12 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
+  ...advocateStagingLegacyEmailTransportSecurityOptions(),
 })
 
 /**
  * Email Deliverability Best Practices:
- * 
+ *
  * For optimal email deliverability, ensure your SMTP server is properly configured:
  * 1. SPF (Sender Policy Framework) records in DNS
  * 2. DKIM (DomainKeys Identified Mail) signatures
@@ -123,7 +136,7 @@ const transporter = nodemailer.createTransport({
  * 4. Reverse DNS (PTR) records pointing back to your domain
  * 5. Proper FROM address matching your domain
  * 6. Consistent sender reputation (avoid spam triggers)
- * 
+ *
  * The current configuration uses:
  * - Secure connections (TLS/SSL) via EMAIL_SECURE
  * - Proper FROM address from EMAIL_FROM env var
@@ -148,6 +161,13 @@ export const sendEmail = async ({
 }: SendEmailParams) => {
   const type = emailType || "generic"
 
+  try {
+    assertAdvocateStagingLegacyEmailAllowed(to)
+  } catch {
+    console.error("Email configuration is unavailable")
+    return { success: false, error: "Email service not configured" }
+  }
+
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
     console.error("Email configuration is missing")
     try {
@@ -161,7 +181,10 @@ export const sendEmail = async ({
         created_at: new Date().toISOString(),
       })
     } catch (logError) {
-      console.error("[Email] Failed to log missing email configuration:", logError)
+      console.error(
+        "[Email] Failed to log missing email configuration:",
+        logError,
+      )
     }
     return { success: false, error: "Email service not configured" }
   }
@@ -219,11 +242,13 @@ export const sendEmail = async ({
  * Get the first image URL for a beneficiary
  * Uses service role client for database access in webhook context
  */
-async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | null> {
+async function getBeneficiaryImageUrl(
+  beneficiaryId: string,
+): Promise<string | null> {
   try {
     // Use service role client for email operations (no user session in webhook context)
     const supabase = createServiceRoleClient()
-    
+
     // Query media table directly for images
     const { data: mediaData, error } = await supabase
       .from("media")
@@ -234,7 +259,10 @@ async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | n
       .limit(10)
 
     if (error) {
-      console.error(`[Email] Failed to fetch images for beneficiary ${beneficiaryId}:`, error)
+      console.error(
+        `[Email] Failed to fetch images for beneficiary ${beneficiaryId}:`,
+        error,
+      )
       return null
     }
 
@@ -248,17 +276,23 @@ async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | n
     )
     const firstImage = existingMedia[0]
     if (!firstImage) return null
-    
+
     // Try to generate public URL using the media utility
     try {
       const publicUrl = getExternalProfileImageUrl(firstImage)
       return publicUrl
     } catch (urlError) {
-      console.error(`[Email] Failed to generate public URL for beneficiary ${beneficiaryId}:`, urlError)
+      console.error(
+        `[Email] Failed to generate public URL for beneficiary ${beneficiaryId}:`,
+        urlError,
+      )
       return null
     }
   } catch (error) {
-    console.error(`[Email] Error fetching image for beneficiary ${beneficiaryId}:`, error)
+    console.error(
+      `[Email] Error fetching image for beneficiary ${beneficiaryId}:`,
+      error,
+    )
     return null
   }
 }
@@ -268,15 +302,16 @@ async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | n
  * Falls back to production URL if localhost is detected to ensure emails work
  */
 function getLogoUrl(): string {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://creator-share-www.vercel.app'
-  
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
+
   // If localhost is detected, use production URL instead
   // Email clients cannot access localhost URLs
-  if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
-    return 'https://creator-share-www.vercel.app/logo_text.png'
+  if (baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1")) {
+    return "https://creator-share-www.vercel.app/logo_text.png"
   }
-  
-  return `${baseUrl.replace(/\/$/, '')}/logo_text.png`
+
+  return `${baseUrl.replace(/\/$/, "")}/logo_text.png`
 }
 
 export const sendPartnershipConfirmationEmail = async (
@@ -290,7 +325,12 @@ export const sendPartnershipConfirmationEmail = async (
   const subject = `Thank you for partnering with Creator Share Foundation!`
 
   const formattedAmount = formatEmailAmount(amount, options)
-  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
+  const intervalText =
+    interval === "month"
+      ? "monthly"
+      : interval === "one_time"
+        ? "one-time"
+        : "yearly"
   const greeting = partnerName ? `Dear ${partnerName},` : "Dear Partner,"
   const logoUrl = getLogoUrl()
 
@@ -343,7 +383,12 @@ export const sendSponsorshipConfirmationEmail = async (
   const subject = `Thank you for sponsoring ${childName}!`
 
   const formattedAmount = formatEmailAmount(amount, options)
-  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
+  const intervalText =
+    interval === "month"
+      ? "monthly"
+      : interval === "one_time"
+        ? "one-time"
+        : "yearly"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
   const logoUrl = getLogoUrl()
   const managementSection = renderManagementSection(options)
@@ -363,7 +408,9 @@ export const sendSponsorshipConfirmationEmail = async (
         </div>
       `
     } else {
-      console.warn(`[Email] No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+      console.warn(
+        `[Email] No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`,
+      )
     }
   } else {
     console.warn(`[Email] No beneficiaryId provided for child: ${childName}`)
@@ -421,7 +468,12 @@ export const sendBlindSponsorshipConfirmationEmail = async (
   const subject = `Thank you for your blind sponsorship!`
 
   const formattedAmount = formatEmailAmount(amount, options)
-  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
+  const intervalText =
+    interval === "month"
+      ? "monthly"
+      : interval === "one_time"
+        ? "one-time"
+        : "yearly"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
   const logoUrl = getLogoUrl()
   const managementSection = renderManagementSection(options)
@@ -477,9 +529,15 @@ export const sendBlindSponsorshipMatchedEmail = async (
   const subject = `Great news! You've been matched with ${childName}!`
 
   const formattedAmount = (amount / 100).toFixed(2)
-  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
-  const profileUrl = childUsername 
+  const intervalText =
+    interval === "month"
+      ? "monthly"
+      : interval === "one_time"
+        ? "one-time"
+        : "yearly"
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
+  const profileUrl = childUsername
     ? `${baseUrl}/sponsorships/${childUsername}`
     : `${baseUrl}/sponsorships`
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
@@ -500,10 +558,14 @@ export const sendBlindSponsorshipMatchedEmail = async (
         </div>
       `
     } else {
-      console.warn(`[Email] Blind sponsorship matched - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+      console.warn(
+        `[Email] Blind sponsorship matched - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Blind sponsorship matched - No beneficiaryId provided for child: ${childName}`)
+    console.warn(
+      `[Email] Blind sponsorship matched - No beneficiaryId provided for child: ${childName}`,
+    )
   }
 
   const html = `
@@ -588,10 +650,14 @@ export const sendPaymentFailedEmail = async (
         </div>
       `
     } else {
-      console.warn(`[Email] Payment failed - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+      console.warn(
+        `[Email] Payment failed - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Payment failed - No beneficiaryId provided for child: ${childName}`)
+    console.warn(
+      `[Email] Payment failed - No beneficiaryId provided for child: ${childName}`,
+    )
   }
 
   const html = `
@@ -646,7 +712,9 @@ export const sendSubscriptionConfirmationEmail = async (
   beneficiaryId?: string | null,
 ) => {
   const subject = `You're subscribed to updates for ${beneficiaryName}!`
-  const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
+  const greeting = subscriberName
+    ? `Dear ${subscriberName},`
+    : "Dear Subscriber,"
   const logoUrl = getLogoUrl()
 
   // Fetch beneficiary image if beneficiaryId is provided
@@ -664,10 +732,14 @@ export const sendSubscriptionConfirmationEmail = async (
         </div>
       `
     } else {
-      console.warn(`[Email] Subscription confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`)
+      console.warn(
+        `[Email] Subscription confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Subscription confirmation - No beneficiaryId provided for beneficiary: ${beneficiaryName}`)
+    console.warn(
+      `[Email] Subscription confirmation - No beneficiaryId provided for beneficiary: ${beneficiaryName}`,
+    )
   }
 
   const html = `
@@ -717,7 +789,9 @@ export const sendActivityNotificationEmail = async (
   beneficiaryId?: string | null,
 ) => {
   const subject = `New update on ${beneficiary.name}`
-  const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
+  const greeting = subscriberName
+    ? `Dear ${subscriberName},`
+    : "Dear Subscriber,"
   const logoUrl = getLogoUrl()
 
   // Fetch beneficiary profile image if beneficiaryId is provided
@@ -735,12 +809,16 @@ export const sendActivityNotificationEmail = async (
         </div>
       `
     } else {
-      console.warn(`[Email] Activity notification - No profile image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiary.name}`)
+      console.warn(
+        `[Email] Activity notification - No profile image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiary.name}`,
+      )
     }
   } else {
-    console.warn(`[Email] Activity notification - No beneficiaryId provided for beneficiary: ${beneficiary.name}`)
+    console.warn(
+      `[Email] Activity notification - No beneficiaryId provided for beneficiary: ${beneficiary.name}`,
+    )
   }
-  
+
   // Generate image HTML if images are provided
   let imagesHtml = ""
   if (activity.imageUrls && activity.imageUrls.length > 0) {
@@ -750,14 +828,18 @@ export const sendActivityNotificationEmail = async (
     for (let i = 0; i < activity.imageUrls.length; i += imagesPerRow) {
       imageRows.push(activity.imageUrls.slice(i, i + imagesPerRow))
     }
-    
+
     imagesHtml = `
       <div style="margin: 1.5rem 0;">
         <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1C3C8C;">Photos:</h3>
         <table style="width: 100%; border-collapse: collapse;">
-          ${imageRows.map((row) => `
+          ${imageRows
+            .map(
+              (row) => `
             <tr>
-              ${row.map((imageUrl) => `
+              ${row
+                .map(
+                  (imageUrl) => `
                 <td style="padding: 0.5rem; width: 50%;">
                   <div style="border-radius: 0.5rem; overflow: hidden; border: 1px solid #e5e7eb; background-color: #f9fafb;">
                     <img 
@@ -767,10 +849,14 @@ export const sendActivityNotificationEmail = async (
                     />
                   </div>
                 </td>
-              `).join("")}
+              `,
+                )
+                .join("")}
               ${row.length < imagesPerRow ? `<td style="width: 50%;"></td>` : ""}
             </tr>
-          `).join("")}
+          `,
+            )
+            .join("")}
         </table>
       </div>
     `
@@ -811,13 +897,14 @@ export const sendActivityNotificationEmail = async (
         <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1C3C8C;">Documents:</h3>
         <ul style="list-style: none; padding: 0; margin: 0;">
           ${activity.documentUrls
-            .map(
-              (documentUrl, index) => {
-                // Extract filename from URL
-                const filename = documentUrl.split('/').pop()?.split('?')[0] || `Document ${index + 1}`
-                const decodedFilename = decodeURIComponent(filename)
-                
-                return `
+            .map((documentUrl, index) => {
+              // Extract filename from URL
+              const filename =
+                documentUrl.split("/").pop()?.split("?")[0] ||
+                `Document ${index + 1}`
+              const decodedFilename = decodeURIComponent(filename)
+
+              return `
                   <li style="margin-bottom: 0.75rem;">
                     <a 
                       href="${documentUrl}" 
@@ -829,14 +916,13 @@ export const sendActivityNotificationEmail = async (
                     </a>
                   </li>
                 `
-              },
-            )
+            })
             .join("")}
         </ul>
       </div>
     `
   }
-  
+
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
@@ -894,7 +980,9 @@ export const sendGoalFulfilledEmail = async (
         minimumFractionDigits: 2,
       })}`
     : "the goal amount"
-  const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
+  const greeting = subscriberName
+    ? `Dear ${subscriberName},`
+    : "Dear Subscriber,"
   const logoUrl = getLogoUrl()
 
   // Fetch beneficiary image if beneficiaryId is provided
@@ -912,10 +1000,14 @@ export const sendGoalFulfilledEmail = async (
         </div>
       `
     } else {
-      console.warn(`[Email] Goal fulfilled - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiary.name}`)
+      console.warn(
+        `[Email] Goal fulfilled - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiary.name}`,
+      )
     }
   } else {
-    console.warn(`[Email] Goal fulfilled - No beneficiaryId provided for beneficiary: ${beneficiary.name}`)
+    console.warn(
+      `[Email] Goal fulfilled - No beneficiaryId provided for beneficiary: ${beneficiary.name}`,
+    )
   }
 
   const html = `
@@ -971,6 +1063,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
   const formattedAmount = formatEmailAmount(amount, {})
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Friend,"
   const logoUrl = getLogoUrl()
+  const browseUrl = escapeHtmlAttribute(getSponsorClaimCanonicalOrigin())
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -987,10 +1080,14 @@ export const sendBudgetFulfilledRejectionEmail = async (
         </div>
       `
     } else {
-      console.warn(`[Email] Budget fulfilled rejection - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`)
+      console.warn(
+        `[Email] Budget fulfilled rejection - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Budget fulfilled rejection - No beneficiaryId provided for beneficiary: ${beneficiaryName}`)
+    console.warn(
+      `[Email] Budget fulfilled rejection - No beneficiaryId provided for beneficiary: ${beneficiaryName}`,
+    )
   }
 
   const html = `
@@ -1027,7 +1124,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
           While ${beneficiaryName}'s sponsorship needs have been met, there are many other wonderful children still waiting for a sponsor like you. Each child has their own unique story and dreams for the future.
         </p>
         <div style="text-align: center; margin-top: 1.5rem;">
-          <a href="https://creatorshare.com" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Explore Children Needing Support</a>
+          <a href="${browseUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Explore Children Needing Support</a>
         </div>
       </div>
       
@@ -1074,7 +1171,12 @@ export const sendManagerSponsorshipNotificationEmail = async (
 ) => {
   const subject = `New Sponsorship Received for ${childName}`
   const formattedAmount = formatEmailAmount(amount, options)
-  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
+  const intervalText =
+    interval === "month"
+      ? "monthly"
+      : interval === "one_time"
+        ? "one-time"
+        : "yearly"
   const logoUrl = getLogoUrl()
 
   // Fetch beneficiary image if beneficiaryId is provided
@@ -1092,10 +1194,14 @@ export const sendManagerSponsorshipNotificationEmail = async (
         </div>
       `
     } else {
-      console.warn(`[Email] Manager notification - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+      console.warn(
+        `[Email] Manager notification - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Manager notification - No beneficiaryId provided for child: ${childName}`)
+    console.warn(
+      `[Email] Manager notification - No beneficiaryId provided for child: ${childName}`,
+    )
   }
 
   const html = `
@@ -1113,8 +1219,8 @@ export const sendManagerSponsorshipNotificationEmail = async (
         <div style="background-color: white; padding: 1rem; border-radius: 0.375rem; margin: 1rem 0;">
           <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${childName}</p>
           <p style="margin: 0.5rem 0;"><strong>Amount:</strong> ${formattedAmount}/${intervalText}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${customerName || 'Not provided'}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${customerEmail || 'Not provided'}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${customerName || "Not provided"}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${customerEmail || "Not provided"}</p>
         </div>
       </div>
       
@@ -1168,10 +1274,14 @@ export const sendMonthlyPaymentConfirmationEmail = async (
         </div>
       `
     } else {
-      console.warn(`[Email] Monthly payment confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+      console.warn(
+        `[Email] Monthly payment confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Monthly payment confirmation - No beneficiaryId provided for child: ${childName}`)
+    console.warn(
+      `[Email] Monthly payment confirmation - No beneficiaryId provided for child: ${childName}`,
+    )
   }
 
   const html = `
@@ -1240,8 +1350,8 @@ export const sendSponsorshipCancellationNotificationEmail = async (
         
         <div style="background-color: white; padding: 1rem; border-radius: 0.375rem; margin: 1rem 0;">
           <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${childName}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${sponsorName || 'Not provided'}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${sponsorEmail || 'Not provided'}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${sponsorName || "Not provided"}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${sponsorEmail || "Not provided"}</p>
           <p style="margin: 0.5rem 0;"><strong>Amount:</strong> ${formattedAmount}</p>
           <p style="margin: 0.5rem 0; color: #dc2626; font-weight: 600;"><strong>Status:</strong> Child moved to "Sponsorship Cancelled" status</p>
         </div>

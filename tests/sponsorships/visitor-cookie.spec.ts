@@ -38,6 +38,8 @@ const {
   isStructurallyValidSponsorshipVisitorToken,
   readSponsorshipVisitorCookie: readScopedSponsorshipVisitorCookie,
   resolveSponsorshipVisitorCookie: resolveScopedSponsorshipVisitorCookie,
+  sponsorshipVisitorCookieRollbackHeaders,
+  sponsorshipVisitorCookieSetHeaders,
   SPONSORSHIP_VISITOR_COOKIE_MAX_AGE_SECONDS,
   SPONSORSHIP_VISITOR_COOKIE_NAME,
   verifySponsorshipVisitorToken: verifyScopedSponsorshipVisitorToken,
@@ -277,6 +279,57 @@ test("keeps preview and local cookies host only", () => {
   expect(preview.secure).toBe(true)
   expect(local.domain).toBeUndefined()
   expect(local.secure).toBe(false)
+})
+
+test("isolates staging visitor state without mutating production parent cookies", async () => {
+  const secret = Buffer.alloc(32, 29).toString("base64")
+  const stagingEnvironment = {
+    NODE_ENV: "production",
+    NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+    SPONSORSHIP_VISITOR_COOKIE_SECRET_V1: secret,
+  }
+  const stagingContext = {
+    rawHost: "advocate-staging.creatorshare.com",
+  }
+  const token = await createScopedSponsorshipVisitorToken(
+    stagingContext,
+    stagingEnvironment,
+  )
+  expect(token).not.toBeNull()
+  if (token === null) throw new Error("staging visitor token unavailable")
+
+  const setHeaders = sponsorshipVisitorCookieSetHeaders(
+    token,
+    stagingContext.rawHost,
+    true,
+    stagingEnvironment,
+  )
+  expect(setHeaders).toHaveLength(1)
+  expect(setHeaders[0]).toContain("Secure")
+  expect(setHeaders[0]).not.toContain("Domain=")
+
+  const productionToken = await createScopedSponsorshipVisitorToken(
+    { rawHost: "creatorshare.com" },
+    {
+      NODE_ENV: "production",
+      SPONSORSHIP_VISITOR_COOKIE_SECRET_V1: secret,
+    },
+  )
+  expect(
+    await verifyScopedSponsorshipVisitorToken(
+      productionToken,
+      stagingContext,
+      stagingEnvironment,
+    ),
+  ).toBe(false)
+  await expect(
+    sponsorshipVisitorCookieRollbackHeaders(
+      `${SPONSORSHIP_VISITOR_COOKIE_NAME}=${productionToken}`,
+      stagingContext.rawHost,
+      true,
+      stagingEnvironment,
+    ),
+  ).resolves.toEqual([])
 })
 
 test("fails closed to a host only cookie for malformed host input", () => {

@@ -1,5 +1,19 @@
 import type { NextConfig } from "next"
 
+import {
+  assertAdvocateStagingExternalProviderBoundary,
+  assertAdvocateStagingSupabaseBoundary,
+} from "./src/lib/advocates/stagingDeploymentBoundary"
+import {
+  assertStagingPayPalPaymentEnvironment,
+  assertStagingStripePaymentEnvironment,
+} from "./src/lib/sponsorships/checkout/stagingPaymentBoundary"
+
+assertAdvocateStagingSupabaseBoundary(process.env)
+assertAdvocateStagingExternalProviderBoundary(process.env)
+assertStagingStripePaymentEnvironment(process.env)
+assertStagingPayPalPaymentEnvironment(process.env)
+
 function configuredSupabaseImagePatterns() {
   const configured = process.env.NEXT_PUBLIC_SUPABASE_URL
   if (!configured || configured !== configured.trim()) return []

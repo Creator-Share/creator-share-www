@@ -5,6 +5,9 @@ import { expect, test } from "@playwright/test"
 import {
   ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_MAX_AGE_SECONDS,
   ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  advocateAttributionIdentityCookieClearHeaders,
+  advocateAttributionIdentityCookieRollbackHeaders,
+  advocateAttributionIdentityCookieSetHeaders,
   createAdvocateAttributionIdentityCookieValue as createScopedCookieValue,
   getAdvocateAttributionIdentityCookieOptions,
   readAdvocateAttributionIdentityCookie as readScopedCookie,
@@ -580,4 +583,64 @@ test("keeps production cookies host only while parent activation is unavailable"
       PRODUCTION_ENVIRONMENT,
     ).domain,
   ).toBeUndefined()
+})
+
+test("isolates staging identity state without mutating production parent cookies", () => {
+  const stagingEnvironment = {
+    NODE_ENV: "production",
+    NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+    ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1: CURRENT_SECRET,
+  }
+  const stagingContext = {
+    rawHost: "advocate-staging.creatorshare.com",
+  }
+  const stagingValue = createScopedCookieValue(
+    { authUserId: AUTH_USER_ID },
+    stagingContext,
+    stagingEnvironment,
+  )
+  expect(stagingValue).not.toBeNull()
+  if (stagingValue === null) {
+    throw new Error("staging identity cookie unavailable")
+  }
+
+  const setHeaders = advocateAttributionIdentityCookieSetHeaders(
+    stagingValue,
+    stagingContext.rawHost,
+    true,
+    stagingEnvironment,
+  )
+  expect(setHeaders).toHaveLength(1)
+  expect(setHeaders[0]).toContain("Secure")
+  expect(setHeaders[0]).not.toContain("Domain=")
+
+  const clearHeaders = advocateAttributionIdentityCookieClearHeaders(
+    stagingContext.rawHost,
+    true,
+    stagingEnvironment,
+  )
+  expect(clearHeaders).toHaveLength(1)
+  expect(clearHeaders[0]).toContain("Secure")
+  expect(clearHeaders[0]).not.toContain("Domain=")
+
+  const productionValue = createScopedCookieValue(
+    { authUserId: AUTH_USER_ID },
+    { rawHost: "creatorshare.com" },
+    PRODUCTION_ENVIRONMENT,
+  )
+  expect(
+    verifyScopedCookieValue(
+      productionValue,
+      stagingContext,
+      stagingEnvironment,
+    ),
+  ).toBeNull()
+  expect(
+    advocateAttributionIdentityCookieRollbackHeaders(
+      `${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=${productionValue}`,
+      stagingContext.rawHost,
+      true,
+      stagingEnvironment,
+    ),
+  ).toEqual([])
 })

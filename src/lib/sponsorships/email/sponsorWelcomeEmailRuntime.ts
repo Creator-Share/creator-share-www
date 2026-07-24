@@ -13,6 +13,7 @@ import {
   type SponsorWelcomeEmailWorkerConfig,
   type SponsorWelcomeEmailWorkerContext,
 } from "@/lib/sponsorships/email/sponsorWelcomeEmailWorker"
+import { assertAdvocateStagingEmailRecipientAllowed } from "@/lib/stagingOutboundEmail"
 import { createServiceRoleClient } from "@/utils/supabase/server"
 
 export async function runSponsorWelcomeEmailBatchFromEnvironment(options: {
@@ -21,17 +22,27 @@ export async function runSponsorWelcomeEmailBatchFromEnvironment(options: {
   context: SponsorWelcomeEmailWorkerContext
   invocationDeadlineAt: number
 }): Promise<SponsorWelcomeEmailBatchResult> {
+  const transportConfig = loadSponsorWelcomeEmailTransportConfig()
+  const stagingRecipientPolicy = transportConfig.stagingRecipientPolicy
   const crypto = createSponsorshipCryptoFromEnvironment()
   const dependencies = {
     repository: createSupabaseSponsorWelcomeEmailRepository(
       createServiceRoleClient(),
     ),
-    transport: createNodemailerSponsorWelcomeEmailTransport(
-      loadSponsorWelcomeEmailTransportConfig(),
-    ),
+    transport: createNodemailerSponsorWelcomeEmailTransport(transportConfig),
     crypto,
     canonicalOrigin: loadSponsorWelcomeEmailCanonicalOrigin(),
     invocationDeadlineAt: options.invocationDeadlineAt,
+    ...(stagingRecipientPolicy === undefined
+      ? {}
+      : {
+          assertRecipientAllowed(recipientEmail: string) {
+            assertAdvocateStagingEmailRecipientAllowed(
+              recipientEmail,
+              stagingRecipientPolicy,
+            )
+          },
+        }),
   }
   return runSponsorWelcomeEmailBatch({ dependencies, ...options })
 }

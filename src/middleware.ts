@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 
 import { ADVOCATE_EXPOSURE_BROKER_PATH } from "@/lib/advocates/exposureBrokerProtocol"
+import { isAdvocateStagingEnvironmentEnabled } from "@/lib/advocates/host"
 import {
   INTERNAL_ROUTE_SHELL_HEADER,
   isProductionPrimaryAliasHost,
@@ -170,6 +171,7 @@ export async function middleware(request: NextRequest) {
 
   if (
     (request.method === "GET" || request.method === "HEAD") &&
+    !isAdvocateStagingEnvironmentEnabled(process.env) &&
     isProductionPrimaryAliasHost(request.headers.get("host"))
   ) {
     const destination = request.nextUrl.clone()

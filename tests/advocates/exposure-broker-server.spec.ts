@@ -125,6 +125,55 @@ test("requires exact request methods and protocol headers", () => {
   }
 })
 
+test("accepts only the configured staging broker and canary origin", () => {
+  const environment = {
+    NODE_ENV: "production",
+    NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+  }
+  const valid = request("POST", {
+    ...COMMON_HEADERS,
+    host: "advocate-staging.creatorshare.com",
+    origin: "https://canary.advocate-staging.creatorshare.com",
+    "content-type": "application/json",
+    [protocol.ADVOCATE_EXPOSURE_BROKER_VERSION_HEADER]: "1",
+  })
+  expect(
+    server.resolveAdvocateExposureBrokerRequest(valid, environment),
+  ).toEqual({
+    advocateHostname: "canary.creatorshare.com",
+    allowedOrigin: "https://canary.advocate-staging.creatorshare.com",
+  })
+
+  for (const headers of [
+    {
+      host: "creatorshare.com",
+      origin: "https://canary.advocate-staging.creatorshare.com",
+    },
+    {
+      host: "advocate-staging.creatorshare.com",
+      origin: "https://hope.creatorshare.com",
+    },
+    {
+      host: "advocate-staging.creatorshare.com",
+      origin: "https://hope.advocate-staging.creatorshare.com",
+    },
+    {
+      host: "advocate-staging.creatorshare.com",
+      origin: "https://nested.canary.advocate-staging.creatorshare.com",
+    },
+  ]) {
+    const candidate = request("POST", {
+      ...COMMON_HEADERS,
+      ...headers,
+      "content-type": "application/json",
+      [protocol.ADVOCATE_EXPOSURE_BROKER_VERSION_HEADER]: "1",
+    })
+    expect(
+      server.resolveAdvocateExposureBrokerRequest(candidate, environment),
+    ).toBeNull()
+  }
+})
+
 test("parses only one bounded qualifying pagePath property", async () => {
   const headers = {
     ...COMMON_HEADERS,

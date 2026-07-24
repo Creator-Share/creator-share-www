@@ -4,7 +4,11 @@ import {
   resolvePublicAdvocateRequest,
   type PublicAdvocatePresentationRepository,
 } from "./publicPresentation"
-import { isReservedNonPrimaryHostname } from "./host"
+import {
+  ADVOCATE_STAGING_TENANT_ROOT,
+  isAdvocateStagingEnvironmentEnabled,
+  isReservedNonPrimaryHostname,
+} from "./host"
 import {
   createAdvocatePublicSite,
   createPrimaryPublicSite,
@@ -67,6 +71,11 @@ function hostnameFromConfiguredUrl(value: string | undefined): string | null {
 export function configuredPrimaryHostnames(
   environment: PublicSiteRequestEnvironment,
 ): readonly string[] {
+  const allowStagingEnvironment =
+    isAdvocateStagingEnvironmentEnabled(environment)
+  if (allowStagingEnvironment) {
+    return Object.freeze([ADVOCATE_STAGING_TENANT_ROOT])
+  }
   return Object.freeze(
     [
       hostnameFromConfiguredUrl(environment.NEXT_PUBLIC_BASE_URL),
@@ -74,7 +83,10 @@ export function configuredPrimaryHostnames(
       hostnameFromConfiguredUrl(environment.VERCEL_URL),
     ].filter(
       (hostname): hostname is string =>
-        hostname !== null && !isReservedNonPrimaryHostname(hostname),
+        hostname !== null &&
+        ((allowStagingEnvironment &&
+          hostname === ADVOCATE_STAGING_TENANT_ROOT) ||
+          !isReservedNonPrimaryHostname(hostname)),
     ),
   )
 }
@@ -91,11 +103,14 @@ export async function resolvePublicSiteRequest(options: {
 }): Promise<PublicSiteRequestResolution> {
   const environment = options.environment ?? process.env
   const allowLocalhostDevelopment = environment.NODE_ENV !== "production"
+  const allowStagingEnvironment =
+    isAdvocateStagingEnvironmentEnabled(environment)
   const resolution = await resolvePublicAdvocateRequest(
     options.rawHost,
     options.repository,
     {
       allowLocalhostDevelopment,
+      allowStagingEnvironment,
       allowInsecureLocalLogoOrigin: allowLocalhostDevelopment,
       logoPublicOrigin: environment.NEXT_PUBLIC_SUPABASE_URL ?? null,
       approvedPrimaryHostnames: configuredPrimaryHostnames(environment),

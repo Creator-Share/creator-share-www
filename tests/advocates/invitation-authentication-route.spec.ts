@@ -17,6 +17,7 @@ type NodeModuleLoader = (
 const AUTH_USER_ID = "11111111-1111-4111-8111-111111111111"
 const ACCESS_TOKEN = "verified-access-token"
 const ORIGIN = "https://creatorshare.com"
+const STAGING_ORIGIN = "https://advocate-staging.creatorshare.com"
 const AUTHENTICATION_REQUEST = Object.freeze({
   authTokenHash: "Auth_hash.value~with-safe-characters_".repeat(2),
   authType: "magiclink" as const,
@@ -252,6 +253,55 @@ test("establishes and returns the session before any tenant mutation request", a
   ])
   expect(getUserCalls).toEqual([])
   expect(authenticationReservationCalls).toHaveLength(1)
+})
+
+test("marks staging Supabase authentication cookies Secure", async () => {
+  const previousBaseUrl = process.env.NEXT_PUBLIC_BASE_URL
+  const previousCanonicalOrigin =
+    process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN
+  const previousSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const previousSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.NEXT_PUBLIC_BASE_URL = STAGING_ORIGIN
+  process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN = STAGING_ORIGIN
+  process.env.NEXT_PUBLIC_SUPABASE_URL =
+    "https://destjwstohzmufshfnuy.supabase.co"
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_" + "a".repeat(32)
+  try {
+    const response = await POST(
+      request(
+        JSON.stringify(AUTHENTICATION_REQUEST),
+        {
+          host: "advocate-staging.creatorshare.com",
+          origin: STAGING_ORIGIN,
+        },
+        "/api/auth/advocate-invitations/authenticate",
+        STAGING_ORIGIN,
+      ),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get("set-cookie") ?? "").toMatch(
+      /sb-test-auth-token=session-cookie-value;[^,]*Secure/i,
+    )
+  } finally {
+    if (previousBaseUrl === undefined) delete process.env.NEXT_PUBLIC_BASE_URL
+    else process.env.NEXT_PUBLIC_BASE_URL = previousBaseUrl
+    if (previousCanonicalOrigin === undefined) {
+      delete process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN
+    } else {
+      process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN = previousCanonicalOrigin
+    }
+    if (previousSupabaseUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL
+    } else {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = previousSupabaseUrl
+    }
+    if (previousSupabaseAnonKey === undefined) {
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    } else {
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = previousSupabaseAnonKey
+    }
+  }
 })
 
 test("passes a new-account signup proof to provider verification unchanged", async () => {

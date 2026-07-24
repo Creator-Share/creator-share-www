@@ -1,4 +1,4 @@
-import { resolveAdvocateHost } from "./host"
+import { ADVOCATE_STAGING_CANONICAL_ORIGIN, resolveAdvocateHost } from "./host"
 import {
   ADVOCATE_EXPOSURE_BROKER_PATH,
   ADVOCATE_EXPOSURE_BROKER_VERSION,
@@ -21,6 +21,7 @@ type ExposureFetch = (
 type Wait = (milliseconds: number) => Promise<void>
 
 export interface AdvocateExposureBrokerClientOptions {
+  allowStagingEnvironment?: boolean
   fetchImplementation?: ExposureFetch
   nodeEnvironment?: string
   retryDelaysMilliseconds?: readonly number[]
@@ -32,21 +33,26 @@ function defaultWait(milliseconds: number): Promise<void> {
 }
 
 /**
- * Production has one compile-time collector origin. Local development derives
- * only the validated numeric port from a one-label tenant.localhost host. No
- * configured URL, query parameter, DOM value, or response can replace the
- * canonical collector origin.
+ * Each hosted environment has one fixed collector origin. Staging requires an
+ * explicit exact deployment flag. Local development derives only the validated
+ * numeric port from a one-label tenant.localhost host. No request value or
+ * arbitrary configured URL can replace either canonical collector origin.
  */
 export function resolveAdvocateExposureBrokerUrl(
   rawPageHost: string,
   nodeEnvironment: string | undefined = process.env.NODE_ENV,
+  allowStagingEnvironment = false,
 ): string | null {
   const host = resolveAdvocateHost(rawPageHost, {
     allowLocalhostDevelopment: nodeEnvironment === "development",
+    allowStagingEnvironment,
   })
   if (host.kind !== "tenant-candidate") return null
 
   if (nodeEnvironment === "production") {
+    if (host.environment === "staging" && allowStagingEnvironment) {
+      return `${ADVOCATE_STAGING_CANONICAL_ORIGIN}${ADVOCATE_EXPOSURE_BROKER_PATH}`
+    }
     if (host.environment !== "production") return null
     return `${PRODUCTION_EXPOSURE_BROKER_ORIGIN}${ADVOCATE_EXPOSURE_BROKER_PATH}`
   }
@@ -85,6 +91,7 @@ export async function recordAdvocateExposureThroughBroker(
   const endpoint = resolveAdvocateExposureBrokerUrl(
     input.pageHost,
     options.nodeEnvironment,
+    options.allowStagingEnvironment === true,
   )
   if (endpoint === null) return false
 

@@ -1,5 +1,7 @@
 import "server-only"
 
+import { isAdvocateStagingEnvironmentEnabled } from "./host"
+
 export const PROVIDER_AUTOMATION_MODE_ENVIRONMENT_VARIABLE =
   "ADVOCATE_PROVIDER_AUTOMATION_MODE" as const
 
@@ -24,6 +26,12 @@ export function loadProviderAutomationMode(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): ProviderAutomationMode {
   const configured = environment[PROVIDER_AUTOMATION_MODE_ENVIRONMENT_VARIABLE]
+  if (
+    isAdvocateStagingEnvironmentEnabled(environment) &&
+    configured === "active"
+  ) {
+    throw new ProviderAutomationConfigurationError()
+  }
   if (configured === undefined) return "disabled"
   if (configured === "disabled" || configured === "active") return configured
   throw new ProviderAutomationConfigurationError()

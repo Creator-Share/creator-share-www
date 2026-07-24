@@ -99,6 +99,61 @@ test.describe("checkout request security", () => {
     ).toBe("http://alice.localhost:3000")
   })
 
+  test("accepts the isolated staging primary and canary only with exact base configuration", () => {
+    const environment = {
+      NODE_ENV: "production",
+      NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+    }
+    expect(
+      resolveTrustedCheckoutRequestOrigin({
+        rawHost: "advocate-staging.creatorshare.com",
+        environment,
+      }),
+    ).toBe("https://advocate-staging.creatorshare.com")
+    expect(
+      resolveTrustedCheckoutRequestOrigin({
+        rawHost: "canary.advocate-staging.creatorshare.com",
+        environment,
+      }),
+    ).toBe("https://canary.advocate-staging.creatorshare.com")
+
+    for (const rawHost of [
+      "advocate-staging.creatorshare.com",
+      "canary.advocate-staging.creatorshare.com",
+    ]) {
+      expect(
+        resolveTrustedCheckoutRequestOrigin({
+          rawHost,
+          environment: { NODE_ENV: "production" },
+        }),
+      ).toBeNull()
+    }
+  })
+
+  test("rejects production primary aliases and tenants from staging checkout", () => {
+    const environment = {
+      NODE_ENV: "production",
+      NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+      NEXT_PUBLIC_SITE_URL: "https://www.creatorshare.com",
+      VERCEL_URL: "creator-share-www-git-dev.example.vercel.app",
+    }
+    for (const rawHost of [
+      "creatorshare.com",
+      "www.creatorshare.com",
+      "creator-share-www.vercel.app",
+      "creator-share-www-git-dev.example.vercel.app",
+      "alice.creatorshare.com",
+      "hope.advocate-staging.creatorshare.com",
+    ]) {
+      expect(
+        resolveTrustedPrimaryRequestOrigin({ rawHost, environment }),
+      ).toBeNull()
+      expect(
+        resolveTrustedCheckoutRequestOrigin({ rawHost, environment }),
+      ).toBeNull()
+    }
+  })
+
   test("rejects foreign, malformed, reserved, or production localhost hosts", () => {
     for (const rawHost of [
       "attacker.example",

@@ -2,7 +2,9 @@ import { isValidBeneficiaryUsername } from "@/config/beneficiaryValidation"
 
 import {
   ADVOCATE_LOCALHOST_ROOT,
+  ADVOCATE_STAGING_TENANT_ROOT,
   ADVOCATE_TENANT_ROOT,
+  isAdvocateStagingEnvironmentEnabled,
   isReservedNonPrimaryHostname,
   resolveAdvocateHost,
 } from "./host"
@@ -28,6 +30,7 @@ const READ_METHODS = Object.freeze(["GET", "HEAD"] as const)
 const GET_METHOD = Object.freeze(["GET"] as const)
 const POST_METHOD = Object.freeze(["POST"] as const)
 const EXPOSURE_BROKER_METHODS = Object.freeze(["OPTIONS", "POST"] as const)
+const INTERNAL_WORKER_METHODS = Object.freeze(["GET", "POST"] as const)
 
 export type TenantRoutePolicyEnvironment = Readonly<
   Record<string, string | undefined>
@@ -38,6 +41,7 @@ type RouteAction =
   | "canonical-auth-callback"
   | "framework-asset"
   | "image-optimizer"
+  | "internal-worker"
   | "public-asset"
   | "sensitive-auth"
   | "webhook"
@@ -212,6 +216,44 @@ const STATIC_RULES = new Map<string, RouteRule>([
 ])
 
 for (const path of [
+  "/api/internal/advocates/invitations",
+  "/api/internal/advocates/lifecycle-cleanup",
+  "/api/internal/advocates/logo-reconciliation",
+  "/api/internal/advocates/provisioning",
+  "/api/internal/advocates/public-metrics",
+  "/api/internal/advocates/publication-canaries",
+  "/api/internal/advocates/publication-sentinel",
+  "/api/internal/payments/gateway-events",
+  "/api/internal/retention",
+  "/api/internal/sponsorships/subscription-cancellations",
+  "/api/internal/sponsorships/welcome-emails",
+]) {
+  STATIC_RULES.set(
+    path,
+    Object.freeze({
+      id: `internal-worker:${path}`,
+      action: "internal-worker",
+      hideMethodMismatch: true,
+      methods: INTERNAL_WORKER_METHODS,
+      tenantAllowed: false,
+      visitorSession: false,
+    } satisfies RouteRule),
+  )
+}
+
+STATIC_RULES.set(
+  "/api/internal/advocates/release-preflight",
+  Object.freeze({
+    id: "internal-worker:release-preflight",
+    action: "internal-worker",
+    hideMethodMismatch: true,
+    methods: POST_METHOD,
+    tenantAllowed: false,
+    visitorSession: false,
+  } satisfies RouteRule),
+)
+
+for (const path of [
   "/icon.ico",
   "/favicon.ico",
   "/logo_text.svg",
@@ -379,6 +421,11 @@ function configuredHostname(value: string | undefined): string | null {
 function approvedPrimaryHostnames(
   environment: TenantRoutePolicyEnvironment,
 ): ReadonlySet<string> {
+  const allowStagingEnvironment =
+    isAdvocateStagingEnvironmentEnabled(environment)
+  if (allowStagingEnvironment) {
+    return new Set([ADVOCATE_STAGING_TENANT_ROOT])
+  }
   const hostnames = new Set<string>([
     ADVOCATE_TENANT_ROOT,
     `www.${ADVOCATE_TENANT_ROOT}`,
@@ -400,7 +447,9 @@ function approvedPrimaryHostnames(
     if (isReservedNonPrimaryHostname(hostname)) continue
     const creatorShareSubdomain = hostname.endsWith(`.${ADVOCATE_TENANT_ROOT}`)
     const localSubdomain = hostname.endsWith(`.${ADVOCATE_LOCALHOST_ROOT}`)
-    if (creatorShareSubdomain || localSubdomain) continue
+    if (creatorShareSubdomain || localSubdomain) {
+      continue
+    }
     if (
       environment.NODE_ENV === "production" &&
       (hostname === ADVOCATE_LOCALHOST_ROOT ||
@@ -414,6 +463,37 @@ function approvedPrimaryHostnames(
   return hostnames
 }
 
+function approvedStagingInternalWorkerHost(options: {
+  rawHost: string | null | undefined
+  environment: TenantRoutePolicyEnvironment
+}): boolean {
+  if (
+    !isAdvocateStagingEnvironmentEnabled(options.environment) ||
+    options.environment.VERCEL_ENV !== "production"
+  ) {
+    return false
+  }
+
+  const resolution = resolveAdvocateHost(options.rawHost, {
+    allowLocalhostDevelopment: false,
+    allowStagingEnvironment: true,
+  })
+  if (resolution.kind !== "non-tenant") return false
+
+  const approvedGeneratedHostnames = new Set(
+    [
+      options.environment.VERCEL_URL,
+      options.environment.VERCEL_PROJECT_PRODUCTION_URL,
+    ]
+      .map(configuredHostname)
+      .filter(
+        (hostname): hostname is string =>
+          hostname !== null && hostname.endsWith(".vercel.app"),
+      ),
+  )
+  return approvedGeneratedHostnames.has(resolution.normalizedHostname)
+}
+
 type RequestHostScope =
   "approved-primary" | "restricted-tenant" | "negative-sentinel" | "rejected"
 
@@ -423,8 +503,11 @@ function classifyRequestHost(options: {
 }): RequestHostScope {
   const environment = options.environment ?? process.env
   const allowLocalhostDevelopment = environment.NODE_ENV !== "production"
+  const allowStagingEnvironment =
+    isAdvocateStagingEnvironmentEnabled(environment)
   const resolution = resolveAdvocateHost(options.rawHost, {
     allowLocalhostDevelopment,
+    allowStagingEnvironment,
   })
 
   if (resolution.kind === "invalid") return "rejected"
@@ -464,7 +547,12 @@ export type TenantRoutePolicyDecision =
   | Readonly<{
       kind: "bypass"
       routeId: string
-      reason: "framework-asset" | "public-asset" | "sensitive-auth" | "webhook"
+      reason:
+        | "framework-asset"
+        | "internal-worker"
+        | "public-asset"
+        | "sensitive-auth"
+        | "webhook"
     }>
   | Readonly<{
       kind: "allow"
@@ -497,6 +585,24 @@ export function resolveTenantRoutePolicy(options: {
   const method = options.method.toUpperCase()
   const rule = routeRule(options.pathname)
   const hostScope = classifyRequestHost(options)
+  const environment = options.environment ?? process.env
+
+  if (rule?.action === "internal-worker") {
+    const approvedWorkerHost =
+      hostScope === "approved-primary" ||
+      approvedStagingInternalWorkerHost({
+        rawHost: options.rawHost,
+        environment,
+      })
+    if (!approvedWorkerHost || !methodAllowed(rule, method)) {
+      return { kind: "deny", status: 404, allow: null }
+    }
+    return {
+      kind: "bypass",
+      routeId: rule.id,
+      reason: "internal-worker",
+    }
+  }
 
   if (hostScope === "rejected") {
     return { kind: "deny", status: 404, allow: null }
@@ -707,11 +813,16 @@ export function resolveCanonicalPrimaryOrigin(
 
     const host = resolveAdvocateHost(url.host, {
       allowLocalhostDevelopment: localDevelopment,
+      allowStagingEnvironment: isAdvocateStagingEnvironmentEnabled(environment),
     })
     if (host.kind === "invalid" || host.kind === "tenant-candidate") {
       return null
     }
+    const approvedStagingRoot =
+      isAdvocateStagingEnvironmentEnabled(environment) &&
+      url.hostname === ADVOCATE_STAGING_TENANT_ROOT
     if (
+      !approvedStagingRoot &&
       url.hostname.endsWith(`.${ADVOCATE_TENANT_ROOT}`) &&
       url.hostname !== `www.${ADVOCATE_TENANT_ROOT}`
     ) {

@@ -16,6 +16,7 @@ import {
   isTrustedCheckoutJsonRequest,
   resolveTrustedCheckoutRequestOrigin,
 } from "@/lib/sponsorships/checkout/requestSecurity"
+import { assertStagingPayPalPaymentEnvironment } from "@/lib/sponsorships/checkout/stagingPaymentBoundary"
 import {
   checkoutError,
   readSponsorshipVisitorCookie,
@@ -23,6 +24,10 @@ import {
   SponsorshipCheckoutError,
   type SponsorshipCheckoutRequestContext,
 } from "@/lib/sponsorships/checkout/stripeCheckout"
+import {
+  ADVOCATE_STAGING_TENANT_ROOT,
+  isAdvocateStagingEnvironmentEnabled,
+} from "@/lib/advocates/host"
 import { PayPalBillingCatalogProvisioningError } from "@/lib/paypal/billingCatalogProvisioner"
 import { PayPalSponsorshipCheckoutError } from "@/lib/paypal/sponsorshipCheckout"
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
@@ -76,6 +81,9 @@ function configuredHostname(value: string | undefined): string | null {
 }
 
 function allowedPrimaryHostnames(): Set<string> {
+  if (isAdvocateStagingEnvironmentEnabled(process.env)) {
+    return new Set([ADVOCATE_STAGING_TENANT_ROOT])
+  }
   return new Set(
     [
       "creator-share-www.vercel.app",
@@ -186,6 +194,17 @@ export async function POST(request: Request) {
       { status: 400, headers: RESPONSE_HEADERS },
     )
   }
+  try {
+    assertStagingPayPalPaymentEnvironment(process.env)
+  } catch {
+    console.error("PayPal sponsorship checkout configuration rejected", {
+      requestId: context.requestId,
+    })
+    return NextResponse.json(
+      { error: "PayPal checkout is unavailable" },
+      { status: 503, headers: RESPONSE_HEADERS },
+    )
+  }
   if (!isPayPalEnabled()) {
     return NextResponse.json(
       { error: "PayPal checkout is unavailable" },
@@ -198,6 +217,7 @@ export async function POST(request: Request) {
     if (!isRecord(body)) throw checkoutError("invalid-request")
     const host = resolveSponsorshipCheckoutHost(request.headers.get("host"), {
       allowLocalhostDevelopment: process.env.NODE_ENV !== "production",
+      allowStagingEnvironment: isAdvocateStagingEnvironmentEnabled(process.env),
       allowedPrimaryHostnames: allowedPrimaryHostnames(),
     })
     const serviceClient = createServiceRoleClient()

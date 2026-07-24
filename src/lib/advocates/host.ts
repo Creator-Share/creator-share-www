@@ -1,5 +1,9 @@
 export const ADVOCATE_TENANT_ROOT = "creatorshare.com"
 export const ADVOCATE_LOCALHOST_ROOT = "localhost"
+export const ADVOCATE_STAGING_TENANT_ROOT = "advocate-staging.creatorshare.com"
+export const ADVOCATE_STAGING_CANONICAL_ORIGIN = `https://${ADVOCATE_STAGING_TENANT_ROOT}`
+export const ADVOCATE_STAGING_CANARY_LABEL = "canary"
+export const ADVOCATE_STAGING_CANARY_HOSTNAME = `${ADVOCATE_STAGING_CANARY_LABEL}.${ADVOCATE_STAGING_TENANT_ROOT}`
 
 /**
  * These labels are platform infrastructure or product surfaces, not advocate
@@ -13,6 +17,7 @@ export const RESERVED_ADVOCATE_SUBDOMAINS = [
   "accounts",
   "admin",
   "advocate",
+  "advocate-staging",
   "advocates",
   "alpha",
   "analytics",
@@ -112,6 +117,7 @@ export const RESERVED_ADVOCATE_SUBDOMAINS = [
 
 const RESERVED_SUBDOMAIN_SET = new Set<string>(RESERVED_ADVOCATE_SUBDOMAINS)
 const RESERVED_NON_PRIMARY_HOSTNAME_SET = new Set<string>([
+  ADVOCATE_STAGING_TENANT_ROOT,
   `publication-sentinel.${ADVOCATE_TENANT_ROOT}`,
 ])
 
@@ -153,7 +159,7 @@ export type AdvocateHostResolution =
     }
   | {
       kind: "tenant-candidate"
-      environment: "production" | "local-development"
+      environment: "production" | "staging" | "local-development"
       requestHostname: string
       requestPort: number | null
       tenantLabel: string
@@ -166,6 +172,25 @@ export interface ResolveAdvocateHostOptions {
    * trusted runtime condition, such as NODE_ENV, never from request input.
    */
   allowLocalhostDevelopment?: boolean
+  /**
+   * The isolated staging root is denied by default. Callers may enable only
+   * the fixed Creator Share staging topology from trusted deployment config.
+   */
+  allowStagingEnvironment?: boolean
+}
+
+export type AdvocateHostEnvironment = Readonly<
+  Record<string, string | undefined>
+>
+
+/**
+ * Staging host support is intentionally bound to one exact canonical base URL.
+ * An arbitrary configured URL cannot create another trusted tenant root.
+ */
+export function isAdvocateStagingEnvironmentEnabled(
+  environment: AdvocateHostEnvironment = process.env,
+): boolean {
+  return environment.NEXT_PUBLIC_BASE_URL === ADVOCATE_STAGING_CANONICAL_ORIGIN
 }
 
 /**
@@ -272,7 +297,7 @@ function nonTenant(
 function resolveOneLabelTenant(
   parsed: ParsedHost,
   tenantLabel: string,
-  environment: "production" | "local-development",
+  environment: "production" | "staging" | "local-development",
 ): AdvocateHostResolution {
   if (tenantLabel.includes(".")) {
     return nonTenant(parsed, "nested-subdomain")
@@ -310,6 +335,28 @@ export function resolveAdvocateHost(
   if (!("hostname" in parsed)) return parsed
 
   if (parsed.loopback) return nonTenant(parsed, "loopback-address")
+
+  if (options.allowStagingEnvironment) {
+    if (parsed.hostname === ADVOCATE_STAGING_TENANT_ROOT) {
+      return nonTenant(parsed, "tenant-root")
+    }
+
+    const stagingSuffix = `.${ADVOCATE_STAGING_TENANT_ROOT}`
+    if (parsed.hostname.endsWith(stagingSuffix)) {
+      const tenantLabel = parsed.hostname.slice(0, -stagingSuffix.length)
+      if (tenantLabel !== ADVOCATE_STAGING_CANARY_LABEL) {
+        return nonTenant(parsed, "outside-tenant-root")
+      }
+      return resolveOneLabelTenant(parsed, tenantLabel, "staging")
+    }
+
+    if (
+      parsed.hostname === ADVOCATE_TENANT_ROOT ||
+      parsed.hostname.endsWith(`.${ADVOCATE_TENANT_ROOT}`)
+    ) {
+      return nonTenant(parsed, "outside-tenant-root")
+    }
+  }
 
   if (parsed.hostname === ADVOCATE_TENANT_ROOT) {
     return nonTenant(parsed, "tenant-root")

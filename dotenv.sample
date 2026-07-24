@@ -2,9 +2,17 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET=
+# When NEXT_PUBLIC_BASE_URL activates the isolated advocate staging deployment,
+# NEXT_PUBLIC_SUPABASE_URL must be this exact project origin. The build and
+# every shared Supabase client fail closed for any other project.
+# NEXT_PUBLIC_SUPABASE_URL=https://destjwstohzmufshfnuy.supabase.co
 NEXT_PUBLIC_MAPBOX_TOKEN=
 NEXT_PUBLIC_MAPTILER_KEY=
 NEXT_PUBLIC_BASE_URL=https://localhost:3000/
+# The isolated advocate staging deployment must instead use this exact origin,
+# without a trailing slash. This single value enables only the fixed staging
+# primary and one-label tenant topology.
+# NEXT_PUBLIC_BASE_URL=https://advocate-staging.creatorshare.com
 
 # Stripe accounts
 # When enabled, each region has its own Stripe account/dashboard; new
@@ -138,9 +146,11 @@ ADVOCATE_INVITATION_EMAIL_RETRY_AFTER_SECONDS=300
 ADVOCATE_INVITATION_EMAIL_SERVICE_REQUEST_TIMEOUT_MILLISECONDS=5000
 ADVOCATE_INVITATION_EMAIL_TRANSPORT_TIMEOUT_MILLISECONDS=20000
 ADVOCATE_INVITATION_EMAIL_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
-# Leave unset in production. If explicitly configured, only this exact value
-# is accepted. Local invitation delivery still generates the canonical link.
+# Leave unset on the primary production deployment. The isolated staging
+# deployment must set the staging value below together with its exact
+# NEXT_PUBLIC_BASE_URL. No other hosted invitation origin is accepted.
 # ADVOCATE_INVITATION_CANONICAL_ORIGIN=https://creatorshare.com
+# ADVOCATE_INVITATION_CANONICAL_ORIGIN=https://advocate-staging.creatorshare.com
 # Bounded provider cancellation batch. Retry timing is durable in the database.
 SUBSCRIPTION_CANCELLATION_BATCH_SIZE=4
 SUBSCRIPTION_CANCELLATION_CONCURRENCY=2
@@ -178,7 +188,8 @@ ADVOCATE_LOGO_RECONCILIATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
 # DNS. The CNAME must be DNS only and target Vercel's configured CNAME target.
 # Provider automation is a release-controlled master switch. Missing,
 # malformed, and explicit disabled values all prevent database claims and
-# provider traffic. Preview, test, and local environments stay disabled. A
+# provider traffic. Preview, test, local, and advocate staging environments
+# stay disabled. The exact advocate staging base URL rejects active mode. A
 # production release sets active only in a staged Production deployment with
 # automatic domain assignment disabled, then runs the authenticated preflight
 # against that exact build before promotion.

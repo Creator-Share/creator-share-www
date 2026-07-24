@@ -57,6 +57,7 @@ import {
   requireLegacyStripeDatabaseSuccess,
 } from "@/lib/sponsorships/gateways/legacyStripeWebhook"
 import { createLegacyStripeWebhookDependencies } from "@/lib/sponsorships/gateways/legacyStripeWebhookRuntime"
+import { getSponsorClaimCanonicalOrigin } from "@/lib/sponsorships/accountClaim"
 
 // Resolve provider for downstream emails / telegram notifications from
 // session or subscription metadata, defaulting to STRIPE. This handler only
@@ -115,9 +116,9 @@ function validateStripeCurrencyAmount(
 ): conversion is CurrencyConversion {
   return Boolean(
     conversion &&
-      actualCurrency?.toUpperCase() === conversion.chargedCurrency &&
-      actualAmountMinor === conversion.chargedAmountMinor &&
-      verifyCurrencyConversion(conversion),
+    actualCurrency?.toUpperCase() === conversion.chargedCurrency &&
+    actualAmountMinor === conversion.chargedAmountMinor &&
+    verifyCurrencyConversion(conversion),
   )
 }
 
@@ -230,9 +231,7 @@ async function handleStripeWebhookInternal(
         },
         {
           status:
-            safeError.code === "payload-too-large"
-              ? 413
-              : safeError.httpStatus,
+            safeError.code === "payload-too-large" ? 413 : safeError.httpStatus,
         },
       )
     }
@@ -324,8 +323,10 @@ async function handleStripeWebhookInternal(
     typeof createLegacyStripeWebhookDependencies
   > | null = null
   try {
-    serverIntentDependencies =
-      createServerIntentStripeWebhookDependencies(stripe, supabase)
+    serverIntentDependencies = createServerIntentStripeWebhookDependencies(
+      stripe,
+      supabase,
+    )
     financialAdjustmentDependencies =
       createStripeFinancialAdjustmentDependencies(stripe, supabase)
     if (!internalReplay) {
@@ -383,9 +384,7 @@ async function handleStripeWebhookInternal(
   try {
     validateStripeEventAccountEnvelope(event, expectedLivemode)
   } catch (error) {
-    return quarantinePermanentError(
-      asServerIntentStripeWebhookError(error),
-    )
+    return quarantinePermanentError(asServerIntentStripeWebhookError(error))
   }
 
   if (internalReplay) {
@@ -393,162 +392,162 @@ async function handleStripeWebhookInternal(
       throw new Error("Stored event is outside the retained Stripe lane")
     }
   } else {
-  if (isStripeFinancialAdjustmentEvent(event)) {
-    try {
-      validateServerIntentStripeEventEnvelope(event, expectedLivemode)
-    } catch (error) {
-      return quarantinePermanentError(
-        asServerIntentStripeWebhookError(error),
-      )
+    if (isStripeFinancialAdjustmentEvent(event)) {
+      try {
+        validateServerIntentStripeEventEnvelope(event, expectedLivemode)
+      } catch (error) {
+        return quarantinePermanentError(asServerIntentStripeWebhookError(error))
+      }
     }
-  }
 
-  try {
-    const adjustment = await ingestStripeFinancialAdjustment(
-      {
-        event,
-        region,
-        rawPayload: rawBody,
-        requestContext: verifiedRequestContext,
-      },
-      financialAdjustmentDependencies,
-    )
-    if (adjustment.handled) {
-      return NextResponse.json(
-        {
-          received: true,
-          duplicate: adjustment.isDuplicate,
-          ignored: !adjustment.ingested,
-        },
-        { status: 200 },
-      )
-    }
-  } catch (error) {
-    const safeError = asStripeFinancialAdjustmentError(error)
-    console.warn("[webhook] financial adjustment ingestion failed", {
-      code: safeError.code,
-      eventId: event.id,
-      eventType: event.type,
-      region,
-      requestId: requestContext.requestId,
-      retryable: safeError.retryable,
-    })
-    return quarantinePermanentError(
-      new ServerIntentStripeWebhookError(safeError.code, {
-        retryable: safeError.retryable,
-        httpStatus: safeError.httpStatus,
-      }),
-    )
-  }
-
-  let serverIntentClassification
-  try {
-    serverIntentClassification =
-      await classifyServerIntentStripeEventWithProviderLookup(
-        event,
-        serverIntentDependencies,
-      )
-  } catch (error) {
-    const safeError = asServerIntentStripeWebhookError(error)
-    console.warn("[webhook] server intent evidence rejected", {
-      code: safeError.code,
-      eventId: event.id,
-      eventType: event.type,
-      region,
-      requestId: requestContext.requestId,
-    })
-    return quarantinePermanentError(safeError)
-  }
-
-  if (serverIntentClassification.kind === "server-intent") {
     try {
-      validateServerIntentStripeEventEnvelope(event, expectedLivemode)
-      const result = await ingestServerIntentStripeEvent(
+      const adjustment = await ingestStripeFinancialAdjustment(
         {
           event,
           region,
           rawPayload: rawBody,
           requestContext: verifiedRequestContext,
-          classification: serverIntentClassification,
         },
-        serverIntentDependencies,
+        financialAdjustmentDependencies,
       )
-      if (!result.handled) {
+      if (adjustment.handled) {
         return NextResponse.json(
-          { error: "Verified webhook routing failed" },
-          { status: 500 },
+          {
+            received: true,
+            duplicate: adjustment.isDuplicate,
+            ignored: !adjustment.ingested,
+          },
+          { status: 200 },
         )
       }
-      return NextResponse.json(
-        { received: true, duplicate: result.isDuplicate },
-        { status: 200 },
-      )
     } catch (error) {
-      const safeError = asServerIntentStripeWebhookError(error)
-      console.warn("[webhook] server intent ingestion failed", {
+      const safeError = asStripeFinancialAdjustmentError(error)
+      console.warn("[webhook] financial adjustment ingestion failed", {
         code: safeError.code,
         eventId: event.id,
         eventType: event.type,
         region,
         requestId: requestContext.requestId,
         retryable: safeError.retryable,
+      })
+      return quarantinePermanentError(
+        new ServerIntentStripeWebhookError(safeError.code, {
+          retryable: safeError.retryable,
+          httpStatus: safeError.httpStatus,
+        }),
+      )
+    }
+
+    let serverIntentClassification
+    try {
+      serverIntentClassification =
+        await classifyServerIntentStripeEventWithProviderLookup(
+          event,
+          serverIntentDependencies,
+        )
+    } catch (error) {
+      const safeError = asServerIntentStripeWebhookError(error)
+      console.warn("[webhook] server intent evidence rejected", {
+        code: safeError.code,
+        eventId: event.id,
+        eventType: event.type,
+        region,
+        requestId: requestContext.requestId,
       })
       return quarantinePermanentError(safeError)
     }
-  }
 
-  if (isRetainedLegacyStripeEvent(event)) {
-    if (!legacyStripeDependencies) {
-      return NextResponse.json(
-        { error: "Webhook ingestion is temporarily unavailable" },
-        { status: 503 },
-      )
-    }
-    try {
-      const result = await captureVerifiedLegacyStripeEvent(
-        {
-          event,
-          region,
-          rawPayload: rawBody,
-          requestContext: verifiedRequestContext,
-        },
-        legacyStripeDependencies,
-      )
-      return NextResponse.json(
-        {
-          received: true,
-          captured: true,
-          duplicate: result.isDuplicate,
-        },
-        { status: 200 },
-      )
-    } catch (error) {
-      const safeError = asLegacyStripeWebhookError(error)
-      console.warn("[webhook] legacy Stripe capture failed", {
-        code: safeError.code,
-        eventId: event.id,
-        eventType: event.type,
-        region,
-        requestId: requestContext.requestId,
-        retryable: safeError.retryable,
-      })
-      if (safeError.code === "evidence-conflict") {
-        return NextResponse.json(
-          { error: "Verified webhook evidence conflicts with prior delivery" },
-          { status: 409 },
+    if (serverIntentClassification.kind === "server-intent") {
+      try {
+        validateServerIntentStripeEventEnvelope(event, expectedLivemode)
+        const result = await ingestServerIntentStripeEvent(
+          {
+            event,
+            region,
+            rawPayload: rawBody,
+            requestContext: verifiedRequestContext,
+            classification: serverIntentClassification,
+          },
+          serverIntentDependencies,
         )
+        if (!result.handled) {
+          return NextResponse.json(
+            { error: "Verified webhook routing failed" },
+            { status: 500 },
+          )
+        }
+        return NextResponse.json(
+          { received: true, duplicate: result.isDuplicate },
+          { status: 200 },
+        )
+      } catch (error) {
+        const safeError = asServerIntentStripeWebhookError(error)
+        console.warn("[webhook] server intent ingestion failed", {
+          code: safeError.code,
+          eventId: event.id,
+          eventType: event.type,
+          region,
+          requestId: requestContext.requestId,
+          retryable: safeError.retryable,
+        })
+        return quarantinePermanentError(safeError)
       }
-      if (safeError.retryable) {
+    }
+
+    if (isRetainedLegacyStripeEvent(event)) {
+      if (!legacyStripeDependencies) {
         return NextResponse.json(
           { error: "Webhook ingestion is temporarily unavailable" },
           { status: 503 },
         )
       }
-      return quarantinePermanentError(
-        new ServerIntentStripeWebhookError("boundary-mismatch"),
-      )
+      try {
+        const result = await captureVerifiedLegacyStripeEvent(
+          {
+            event,
+            region,
+            rawPayload: rawBody,
+            requestContext: verifiedRequestContext,
+          },
+          legacyStripeDependencies,
+        )
+        return NextResponse.json(
+          {
+            received: true,
+            captured: true,
+            duplicate: result.isDuplicate,
+          },
+          { status: 200 },
+        )
+      } catch (error) {
+        const safeError = asLegacyStripeWebhookError(error)
+        console.warn("[webhook] legacy Stripe capture failed", {
+          code: safeError.code,
+          eventId: event.id,
+          eventType: event.type,
+          region,
+          requestId: requestContext.requestId,
+          retryable: safeError.retryable,
+        })
+        if (safeError.code === "evidence-conflict") {
+          return NextResponse.json(
+            {
+              error: "Verified webhook evidence conflicts with prior delivery",
+            },
+            { status: 409 },
+          )
+        }
+        if (safeError.retryable) {
+          return NextResponse.json(
+            { error: "Webhook ingestion is temporarily unavailable" },
+            { status: 503 },
+          )
+        }
+        return quarantinePermanentError(
+          new ServerIntentStripeWebhookError("boundary-mismatch"),
+        )
+      }
     }
-  }
   }
 
   try {
@@ -559,27 +558,27 @@ async function handleStripeWebhookInternal(
         const type = session.metadata?.type
         const paymentType = session.metadata?.paymentType
         const customerEmail = session.customer_details?.email
-        const interval = paymentType === "subscription" ? "month" : paymentType === "one_time" ? "one_time" : "year"
+        const interval =
+          paymentType === "subscription"
+            ? "month"
+            : paymentType === "one_time"
+              ? "one_time"
+              : "year"
 
         // Platform-origin gate: only process sessions our Stripe route created.
         // Every session created through src/app/api/stripe/route.ts includes
         // creatorshare_platform: "true" in session metadata. Sessions from
         // other surfaces sharing this Stripe account are silently acknowledged.
         if (session.metadata?.creatorshare_platform !== "true") {
-          return NextResponse.json(
-            { received: true },
-            { status: 200 },
-          )
+          return NextResponse.json({ received: true }, { status: 200 })
         }
 
-        const {
-          data: processedTransaction,
-          error: processedTransactionError,
-        } = await supabase
-          .from("transaction_ledger")
-          .select("id")
-          .eq("provider_event_id", event.id)
-          .maybeSingle()
+        const { data: processedTransaction, error: processedTransactionError } =
+          await supabase
+            .from("transaction_ledger")
+            .select("id")
+            .eq("provider_event_id", event.id)
+            .maybeSingle()
         requireLegacyStripeDatabaseSuccess(
           internalReplay !== null,
           processedTransactionError,
@@ -627,10 +626,7 @@ async function handleStripeWebhookInternal(
               "[creatorshare] Partnership session missing required metadata:",
               session.metadata,
             )
-            return NextResponse.json(
-              { received: true },
-              { status: 200 },
-            )
+            return NextResponse.json({ received: true }, { status: 200 })
           }
 
           // Get payment method details
@@ -788,8 +784,7 @@ async function handleStripeWebhookInternal(
           }
 
           // Create transaction record for partnership
-          const partnershipReference =
-            session.invoice?.toString() || session.id
+          const partnershipReference = session.invoice?.toString() || session.id
           const {
             data: existingPartnershipTransaction,
             error: existingPartnershipTransactionError,
@@ -806,21 +801,19 @@ async function handleStripeWebhookInternal(
 
           const { error: transactionError } = existingPartnershipTransaction
             ? { error: null }
-            : await supabase
-            .from("transaction_ledger")
-            .insert({
-              description: `Partnership payment for ${project} project with amount of ${formatMoney(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
-              reference: partnershipReference,
-              credit: amount,
-              ...currencyPersistence,
-              subscription_type:
-                session.metadata?.paymentType === "one_time"
-                  ? "one_time"
-                  : "subscription",
-              tx_action: "PARTNERSHIP",
-              customer_name: session.customer_details?.name || null,
-              customer_email: email || null,
-            })
+            : await supabase.from("transaction_ledger").insert({
+                description: `Partnership payment for ${project} project with amount of ${formatMoney(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
+                reference: partnershipReference,
+                credit: amount,
+                ...currencyPersistence,
+                subscription_type:
+                  session.metadata?.paymentType === "one_time"
+                    ? "one_time"
+                    : "subscription",
+                tx_action: "PARTNERSHIP",
+                customer_name: session.customer_details?.name || null,
+                customer_email: email || null,
+              })
 
           if (transactionError) {
             console.error("Error creating transaction:", transactionError)
@@ -873,12 +866,8 @@ async function handleStripeWebhookInternal(
             "[creatorshare] Sponsorship session missing required metadata:",
             session.metadata,
           )
-          return NextResponse.json(
-            { received: true },
-            { status: 200 },
-          )
+          return NextResponse.json({ received: true }, { status: 200 })
         }
-
 
         // Hoisted variable: captures the new subscription UUID for the tledger
         // insert below. This must be declared before the `if` block because the
@@ -917,7 +906,7 @@ async function handleStripeWebhookInternal(
               .from("subscriptions")
               .insert({
                 stripe_subscription_id: session.subscription as string,
-                email: session.customer_details?.email || null,     // ← NEW
+                email: session.customer_details?.email || null, // ← NEW
                 user_id: userId,
                 beneficiary_id: beneficiaryId || null,
                 status: "complete",
@@ -933,8 +922,8 @@ async function handleStripeWebhookInternal(
                 payment_region: region,
                 ...currencyPersistence,
               })
-              .select("id")                        // ← NEW: select id back
-              .single()                            // ← NEW: single row
+              .select("id") // ← NEW: select id back
+              .single() // ← NEW: single row
 
             subscriptionError = result.error || null
             insertedSub = result.data
@@ -948,24 +937,28 @@ async function handleStripeWebhookInternal(
           // Step 2: Handle subscription insert errors
           if (subscriptionError) {
             console.error("Subscription insert failed:", subscriptionError)
-            
+
             // Check for beneficiary status rejection from trigger
-            if (subscriptionError.message?.includes('beneficiary_not_accepting_subscriptions')) {
-              
+            if (
+              subscriptionError.message?.includes(
+                "beneficiary_not_accepting_subscriptions",
+              )
+            ) {
               // Step 1: Fetch beneficiary name for emails
               const { data: beneficiaryData } = await supabase
                 .from("beneficiaries")
                 .select("name")
                 .eq("id", beneficiaryId)
                 .single()
-              
-              const beneficiaryName = beneficiaryData?.name || "Unknown Beneficiary"
-              
+
+              const beneficiaryName =
+                beneficiaryData?.name || "Unknown Beneficiary"
+
               // Track operation statuses
               let subscriptionCancelled = false
               let paymentRefunded = false
               let emailSent = false
-              
+
               // Step 2: Cancel the Stripe subscription
               try {
                 if (session.subscription) {
@@ -981,75 +974,90 @@ async function handleStripeWebhookInternal(
                   error: cancelError,
                   subscriptionId: session.subscription,
                   beneficiaryId,
-                  sessionId: session.id
+                  sessionId: session.id,
                 })
               }
-              
+
               // Step 3: Refund the payment
               try {
                 // Retrieve full session with expanded payment_intent if not already available
-                let paymentIntentId: string | null = session.payment_intent as string | null
-                
+                let paymentIntentId: string | null = session.payment_intent as
+                  string | null
+
                 if (!paymentIntentId) {
                   // Try to get payment intent from the session by retrieving it with expansion
                   try {
-                    const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
-                      expand: ['payment_intent', 'invoice.payment_intent']
-                    })
-                    paymentIntentId = expandedSession.payment_intent as string | null
-                    
+                    const expandedSession =
+                      await stripe.checkout.sessions.retrieve(session.id, {
+                        expand: ["payment_intent", "invoice.payment_intent"],
+                      })
+                    paymentIntentId = expandedSession.payment_intent as
+                      string | null
+
                     // If still not found, try from invoice
                     if (!paymentIntentId && expandedSession.invoice) {
-                      const invoice = typeof expandedSession.invoice === 'string' 
-                        ? await stripe.invoices.retrieve(expandedSession.invoice)
-                        : expandedSession.invoice
+                      const invoice =
+                        typeof expandedSession.invoice === "string"
+                          ? await stripe.invoices.retrieve(
+                              expandedSession.invoice,
+                            )
+                          : expandedSession.invoice
                       paymentIntentId = invoice.payment_intent as string | null
                     }
                   } catch (retrieveError) {
-                    console.error("Error retrieving session for payment_intent:", retrieveError)
+                    console.error(
+                      "Error retrieving session for payment_intent:",
+                      retrieveError,
+                    )
                   }
                 }
-                
+
                 if (paymentIntentId) {
                   await stripe.refunds.create(
                     {
                       payment_intent: paymentIntentId,
-                      reason: 'requested_by_customer',
+                      reason: "requested_by_customer",
                       metadata: {
                         beneficiaryId: beneficiaryId,
                         beneficiaryName: beneficiaryName,
                         sessionId: session.id,
-                        rejectionReason: 'beneficiary_already_fulfilled',
+                        rejectionReason: "beneficiary_already_fulfilled",
                         amount: amount.toString(),
-                        customerEmail: customerEmail || 'unknown'
-                      }
+                        customerEmail: customerEmail || "unknown",
+                      },
                     },
                     { idempotencyKey: `legacy-rejection-refund:${event.id}` },
                   )
                   paymentRefunded = true
                 } else {
-                  console.error("CRITICAL: No payment_intent available for refund:", {
-                    sessionId: session.id,
-                    beneficiaryId,
-                    amount,
-                    customerEmail,
-                    sessionPaymentIntent: session.payment_intent,
-                    sessionInvoice: session.invoice
-                  })
+                  console.error(
+                    "CRITICAL: No payment_intent available for refund:",
+                    {
+                      sessionId: session.id,
+                      beneficiaryId,
+                      amount,
+                      customerEmail,
+                      sessionPaymentIntent: session.payment_intent,
+                      sessionInvoice: session.invoice,
+                    },
+                  )
                 }
               } catch (refundError) {
                 console.error("CRITICAL: Failed to refund payment:", {
                   error: refundError,
-                  errorMessage: refundError instanceof Error ? refundError.message : String(refundError),
+                  errorMessage:
+                    refundError instanceof Error
+                      ? refundError.message
+                      : String(refundError),
                   paymentIntent: session.payment_intent,
                   beneficiaryId,
                   sessionId: session.id,
                   amount,
                   customerEmail,
-                  requiresManualIntervention: true
+                  requiresManualIntervention: true,
                 })
               }
-              
+
               // Step 4: Send rejection email
               if (customerEmail) {
                 try {
@@ -1060,39 +1068,48 @@ async function handleStripeWebhookInternal(
                     session.customer_details?.name || null,
                     beneficiaryId,
                   )
-                  
+
                   emailSent = emailResult.success
                 } catch (emailError) {
                   console.error("Failed to send rejection email:", {
                     error: emailError,
                     customerEmail,
-                    sessionId: session.id
+                    sessionId: session.id,
                   })
                 }
               }
-              
+
               // Step 5: Final logging (errors only)
               if (!paymentRefunded || !subscriptionCancelled || !emailSent) {
                 console.error("Beneficiary rejection flow partially failed:", {
                   beneficiaryId,
                   sessionId: session.id,
-                  operations: { subscriptionCancelled, paymentRefunded, emailSent },
-                  requiresManualIntervention: !paymentRefunded
+                  operations: {
+                    subscriptionCancelled,
+                    paymentRefunded,
+                    emailSent,
+                  },
+                  requiresManualIntervention: !paymentRefunded,
                 })
               }
-              
+
               // Step 6: Return success to Stripe
               return NextResponse.json(
                 {
-                  message: "Beneficiary fulfilled - subscription cancelled and payment refunded",
+                  message:
+                    "Beneficiary fulfilled - subscription cancelled and payment refunded",
                   rejected: true,
                   beneficiaryId,
-                  operations: { subscriptionCancelled, paymentRefunded, emailSent }
+                  operations: {
+                    subscriptionCancelled,
+                    paymentRefunded,
+                    emailSent,
+                  },
                 },
-                { status: 200 }
+                { status: 200 },
               )
             }
-            
+
             // Other database errors - re-throw
             throw subscriptionError
           }
@@ -1118,7 +1135,8 @@ async function handleStripeWebhookInternal(
             // Continue processing - this is not critical
           } else if (beneficiaryData?.name) {
             beneficiaryName = beneficiaryData.name
-            beneficiaryType = beneficiaryData.beneficiary_type || beneficiaryType
+            beneficiaryType =
+              beneficiaryData.beneficiary_type || beneficiaryType
           }
         }
 
@@ -1144,34 +1162,35 @@ async function handleStripeWebhookInternal(
 
         const { error: transactionError } = existingSponsorshipTransaction
           ? { error: null }
-          : await supabase
-          .from("transaction_ledger")
-          .insert({
-            beneficiary_id: beneficiaryId || null,
-            user_id: userId,
-            subscription_id: newSubscriptionId,         // ← NEW
-            description: `Sponsorship to ${beneficiaryName} with amount of ${formatMoney(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
-            reference: sponsorshipReference,
-            credit: amount,
-            ...currencyPersistence,
-            subscription_type:
-              session.metadata?.paymentType === "one_time"
-                ? "one_time"
-                : "subscription",
-            tx_action: "SPONSORSHIP",
-            customer_name: session.customer_details?.name || null,
-            customer_email: customerEmail || null,
-            customer_id: session.customer as string || null,    // ← NEW
-          })
+          : await supabase.from("transaction_ledger").insert({
+              beneficiary_id: beneficiaryId || null,
+              user_id: userId,
+              subscription_id: newSubscriptionId, // ← NEW
+              description: `Sponsorship to ${beneficiaryName} with amount of ${formatMoney(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
+              reference: sponsorshipReference,
+              credit: amount,
+              ...currencyPersistence,
+              subscription_type:
+                session.metadata?.paymentType === "one_time"
+                  ? "one_time"
+                  : "subscription",
+              tx_action: "SPONSORSHIP",
+              customer_name: session.customer_details?.name || null,
+              customer_email: customerEmail || null,
+              customer_id: (session.customer as string) || null, // ← NEW
+            })
 
         if (transactionError) {
-          console.error("CRITICAL: Transaction ledger insert failed (subscription already created):", {
-            beneficiaryId,
-            userId,
-            amount,
-            sessionId: session.id,
-            error: transactionError
-          })
+          console.error(
+            "CRITICAL: Transaction ledger insert failed (subscription already created):",
+            {
+              beneficiaryId,
+              userId,
+              amount,
+              sessionId: session.id,
+              error: transactionError,
+            },
+          )
           // Log but continue - subscription is already created successfully
         }
         requireLegacyStripeDatabaseSuccess(
@@ -1275,7 +1294,10 @@ async function handleStripeWebhookInternal(
         // Send Telegram notification for sponsorship
         try {
           await notifySponsorshipReceived({
-            sponsorName: session.customer_details?.name || customerEmail?.split('@')[0] || "Anonymous Sponsor",
+            sponsorName:
+              session.customer_details?.name ||
+              customerEmail?.split("@")[0] ||
+              "Anonymous Sponsor",
             sponsorEmail: customerEmail || "No email provided",
             amount: conversion.chargedAmountMinor,
             chargedCurrency: conversion.chargedCurrency,
@@ -1285,32 +1307,48 @@ async function handleStripeWebhookInternal(
             paymentMethod: providerLabel(sessionProvider),
             paymentReference: session.id,
             interval: interval,
-          });
+          })
         } catch (telegramError) {
-          console.error('Telegram sponsorship notification failed:', telegramError);
+          console.error(
+            "Telegram sponsorship notification failed:",
+            telegramError,
+          )
           // Don't fail the webhook if Telegram notification fails
         }
 
+        const stripeSubscriptionId =
+          typeof session.subscription === "string"
+            ? session.subscription
+            : session.subscription?.id
+
         // Step 6: Auto-match blind sponsorships
-        if (isBlindSponsorship && session.subscription) {
+        if (
+          isBlindSponsorship &&
+          stripeSubscriptionId &&
+          /^sub_[A-Za-z0-9]{8,251}$/.test(stripeSubscriptionId)
+        ) {
           try {
-            // Call the matching endpoint to automatically assign an available beneficiary
-            const matchResponse = await fetch(
-              `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/admin/blind-sponsorships/match?stripeSubscriptionId=${session.subscription}`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-              }
+            const matchUrl = new URL(
+              "/api/admin/blind-sponsorships/match",
+              getSponsorClaimCanonicalOrigin(),
             )
-            
+            matchUrl.searchParams.set(
+              "stripeSubscriptionId",
+              stripeSubscriptionId,
+            )
+            const matchResponse = await fetch(matchUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            })
+
             if (matchResponse.ok) {
               await matchResponse.json()
             } else {
               const errorData = await matchResponse.json()
               console.error("Blind sponsorship auto-match failed:", {
-                subscriptionId: session.subscription,
+                subscriptionId: stripeSubscriptionId,
                 status: matchResponse.status,
                 error: errorData.error,
               })
@@ -1318,8 +1356,11 @@ async function handleStripeWebhookInternal(
             }
           } catch (matchError) {
             console.error("Error auto-matching blind sponsorship:", {
-              subscriptionId: session.subscription,
-              error: matchError instanceof Error ? matchError.message : String(matchError),
+              subscriptionId: stripeSubscriptionId,
+              error:
+                matchError instanceof Error
+                  ? matchError.message
+                  : String(matchError),
             })
             // Don't fail the webhook - matching can be done manually later
           }
@@ -1375,7 +1416,7 @@ async function handleStripeWebhookInternal(
           .from("subscriptions")
           .update({
             status: "incomplete",
-            email: invoice.customer_email,           // ← NEW: keep denormalized copy fresh
+            email: invoice.customer_email, // ← NEW: keep denormalized copy fresh
           })
           .eq("stripe_subscription_id", subscriptionId)
 
@@ -1388,14 +1429,18 @@ async function handleStripeWebhookInternal(
           "failed_subscription_update",
         )
 
-        const { data: subscriptionData, error: subscriptionError } = await supabase
-          .from("subscriptions")
-          .select(`beneficiary_id, charged_amount, charged_currency, amount`)
-          .eq("stripe_subscription_id", subscriptionId)
-          .maybeSingle()
+        const { data: subscriptionData, error: subscriptionError } =
+          await supabase
+            .from("subscriptions")
+            .select(`beneficiary_id, charged_amount, charged_currency, amount`)
+            .eq("stripe_subscription_id", subscriptionId)
+            .maybeSingle()
 
         if (subscriptionError) {
-          console.error("Error fetching subscription for payment failed email:", subscriptionError)
+          console.error(
+            "Error fetching subscription for payment failed email:",
+            subscriptionError,
+          )
         }
 
         let beneficiaryName = "your sponsored beneficiary"
@@ -1407,7 +1452,10 @@ async function handleStripeWebhookInternal(
             .maybeSingle()
 
           if (beneficiaryError) {
-            console.error("Error fetching beneficiary for payment failed email:", beneficiaryError)
+            console.error(
+              "Error fetching beneficiary for payment failed email:",
+              beneficiaryError,
+            )
           }
 
           if (sponsorship) {
@@ -1423,7 +1471,7 @@ async function handleStripeWebhookInternal(
             if (invoice.customer) {
               try {
                 const customer = await stripe.customers.retrieve(
-                  invoice.customer as string
+                  invoice.customer as string,
                 )
                 if (!customer.deleted && "name" in customer && customer.name) {
                   customerName = customer.name
@@ -1432,7 +1480,7 @@ async function handleStripeWebhookInternal(
                 console.error("Error fetching customer name:", err)
               }
             }
-            
+
             // invoice.metadata is not auto-populated from session or
             // subscription metadata, so reading provider from it is illusory.
             // Hardcode STRIPE here: this entire handler only fires for
@@ -1501,11 +1549,17 @@ async function handleStripeWebhookInternal(
         let dbStatus = "complete"
         if (subscription.status === "active") {
           dbStatus = "complete"
-        } else if (subscription.status === "past_due" || subscription.status === "unpaid") {
+        } else if (
+          subscription.status === "past_due" ||
+          subscription.status === "unpaid"
+        ) {
           dbStatus = "incomplete"
         } else if (subscription.status === "canceled") {
           dbStatus = "cancelled"
-        } else if (subscription.status === "incomplete" || subscription.status === "incomplete_expired") {
+        } else if (
+          subscription.status === "incomplete" ||
+          subscription.status === "incomplete_expired"
+        ) {
           dbStatus = "incomplete"
         }
 
@@ -1572,15 +1626,13 @@ async function handleStripeWebhookInternal(
             // Check partnerships too (email-keyed), then bail if neither matches.
             const email = subscription.metadata?.email
             if (email) {
-              const {
-                data: knownPartnership,
-                error: knownPartnershipError,
-              } = await supabase
-                .from("partnerships")
-                .select("id")
-                .eq("email", email)
-                .eq("status", "complete")
-                .maybeSingle()
+              const { data: knownPartnership, error: knownPartnershipError } =
+                await supabase
+                  .from("partnerships")
+                  .select("id")
+                  .eq("email", email)
+                  .eq("status", "complete")
+                  .maybeSingle()
               requireLegacyStripeDatabaseSuccess(
                 internalReplay !== null,
                 knownPartnershipError,
@@ -1670,24 +1722,29 @@ async function handleStripeWebhookInternal(
 
         // Check if beneficiary has any active subscriptions and update status if needed
         if (subscriptionData?.beneficiary_id) {
-          const { data: activeSubscriptions, error: activeError } = await supabase
-            .from("subscriptions")
-            .select("id")
-            .eq("beneficiary_id", subscriptionData.beneficiary_id)
-            .eq("status", "complete")
+          const { data: activeSubscriptions, error: activeError } =
+            await supabase
+              .from("subscriptions")
+              .select("id")
+              .eq("beneficiary_id", subscriptionData.beneficiary_id)
+              .eq("status", "complete")
           requireLegacyStripeDatabaseSuccess(
             internalReplay !== null,
             activeError,
             "subscription_delete_active_lookup",
           )
 
-          if (!activeError && (!activeSubscriptions || activeSubscriptions.length === 0)) {
+          if (
+            !activeError &&
+            (!activeSubscriptions || activeSubscriptions.length === 0)
+          ) {
             // No active subscriptions - check current status and update if needed
-            const { data: beneficiary, error: beneficiaryError } = await supabase
-              .from("beneficiaries")
-              .select("id, name, status")
-              .eq("id", subscriptionData.beneficiary_id)
-              .single()
+            const { data: beneficiary, error: beneficiaryError } =
+              await supabase
+                .from("beneficiaries")
+                .select("id, name, status")
+                .eq("id", subscriptionData.beneficiary_id)
+                .single()
             requireLegacyStripeDatabaseSuccess(
               internalReplay !== null,
               beneficiaryError,
@@ -1707,7 +1764,10 @@ async function handleStripeWebhookInternal(
                   .eq("id", subscriptionData.beneficiary_id)
 
                 if (statusUpdateError) {
-                  console.error("Error updating beneficiary status:", statusUpdateError)
+                  console.error(
+                    "Error updating beneficiary status:",
+                    statusUpdateError,
+                  )
                 } else {
                   // Send email notification
                   try {
@@ -1716,23 +1776,36 @@ async function handleStripeWebhookInternal(
                     let customerName: string | null = null
                     if (subscription.customer) {
                       try {
-                        const customer = await stripe.customers.retrieve(subscription.customer as string)
-                        if (customer && !customer.deleted && typeof customer === 'object' && 'email' in customer) {
+                        const customer = await stripe.customers.retrieve(
+                          subscription.customer as string,
+                        )
+                        if (
+                          customer &&
+                          !customer.deleted &&
+                          typeof customer === "object" &&
+                          "email" in customer
+                        ) {
                           customerEmail = customer.email || null
                           customerName = customer.name || null
                         }
                       } catch (customerError) {
-                        console.error("Error fetching customer from Stripe:", customerError)
+                        console.error(
+                          "Error fetching customer from Stripe:",
+                          customerError,
+                        )
                       }
                     }
                     await sendSponsorshipCancellationNotificationEmail(
                       beneficiary.name,
                       customerEmail,
                       customerName,
-                      subscriptionData.amount
+                      subscriptionData.amount,
                     )
                   } catch (emailError) {
-                    console.error("Error sending cancellation notification email:", emailError)
+                    console.error(
+                      "Error sending cancellation notification email:",
+                      emailError,
+                    )
                   }
                 }
                 requireLegacyStripeDatabaseSuccess(
@@ -1760,14 +1833,12 @@ async function handleStripeWebhookInternal(
 
         if (subscriptionId) {
           // Check if this is an application subscription by querying our database
-          const {
-            data: subscriptionData,
-            error: subscriptionLookupError,
-          } = await supabase
-            .from("subscriptions")
-            .select("id, amount, charged_amount, charged_currency")
-            .eq("stripe_subscription_id", subscriptionId)
-            .maybeSingle()
+          const { data: subscriptionData, error: subscriptionLookupError } =
+            await supabase
+              .from("subscriptions")
+              .select("id, amount, charged_amount, charged_currency")
+              .eq("stripe_subscription_id", subscriptionId)
+              .maybeSingle()
           requireLegacyStripeDatabaseSuccess(
             internalReplay !== null,
             subscriptionLookupError,
@@ -1825,7 +1896,7 @@ async function handleStripeWebhookInternal(
             .from("subscriptions")
             .update({
               status: "complete",
-              email: invoice.customer_email,          // ← NEW: keep denormalized copy fresh
+              email: invoice.customer_email, // ← NEW: keep denormalized copy fresh
             })
             .eq("stripe_subscription_id", subscriptionId)
           requireLegacyStripeDatabaseSuccess(
@@ -1839,14 +1910,20 @@ async function handleStripeWebhookInternal(
           // subscription_cycle = regular recurring payment
           // subscription_update = subscription was updated (amount, items, etc.)
           // subscription_create = first payment (already handled by checkout.session.completed)
-          if (invoice.billing_reason === "subscription_cycle" || invoice.billing_reason === "subscription_update") {
+          if (
+            invoice.billing_reason === "subscription_cycle" ||
+            invoice.billing_reason === "subscription_update"
+          ) {
             try {
               // Get subscription details to find beneficiary and customer email
-              const { data: subscriptionData, error: subscriptionError } = await supabase
-                .from("subscriptions")
-                .select("beneficiary_id, user_id, amount, charged_amount, charged_currency")
-                .eq("stripe_subscription_id", subscriptionId)
-                .maybeSingle()
+              const { data: subscriptionData, error: subscriptionError } =
+                await supabase
+                  .from("subscriptions")
+                  .select(
+                    "beneficiary_id, user_id, amount, charged_amount, charged_currency",
+                  )
+                  .eq("stripe_subscription_id", subscriptionId)
+                  .maybeSingle()
 
               if (subscriptionError) {
                 console.error("Error fetching subscription:", subscriptionError)
@@ -1854,14 +1931,18 @@ async function handleStripeWebhookInternal(
 
               if (subscriptionData?.beneficiary_id) {
                 // Get beneficiary name
-                const { data: beneficiaryData, error: beneficiaryError } = await supabase
-                  .from("beneficiaries")
-                  .select("name")
-                  .eq("id", subscriptionData.beneficiary_id)
-                  .maybeSingle()
+                const { data: beneficiaryData, error: beneficiaryError } =
+                  await supabase
+                    .from("beneficiaries")
+                    .select("name")
+                    .eq("id", subscriptionData.beneficiary_id)
+                    .maybeSingle()
 
                 if (beneficiaryError) {
-                  console.error("Error fetching beneficiary for payment confirmation:", beneficiaryError)
+                  console.error(
+                    "Error fetching beneficiary for payment confirmation:",
+                    beneficiaryError,
+                  )
                 }
 
                 // Get customer email and name from invoice (available directly on invoice object)
@@ -1874,27 +1955,33 @@ async function handleStripeWebhookInternal(
                     // See note on sendPaymentFailedEmail above: invoice
                     // metadata is empty by default, so hardcode STRIPE.
                     await sendMonthlyPaymentConfirmationEmail(
-                        customerEmail,
-                        beneficiaryData.name,
-                        subscriptionData.amount,
-                        customerName,
-                        subscriptionData.beneficiary_id,
-                        {
-                          provider: "STRIPE",
-                          region,
-                          chargedAmountMinor: invoice.amount_paid,
-                          chargedCurrency:
-                            invoice.currency?.toUpperCase() ||
-                            subscriptionData.charged_currency,
-                        },
-                      )
+                      customerEmail,
+                      beneficiaryData.name,
+                      subscriptionData.amount,
+                      customerName,
+                      subscriptionData.beneficiary_id,
+                      {
+                        provider: "STRIPE",
+                        region,
+                        chargedAmountMinor: invoice.amount_paid,
+                        chargedCurrency:
+                          invoice.currency?.toUpperCase() ||
+                          subscriptionData.charged_currency,
+                      },
+                    )
                   } catch (emailError) {
-                    console.error("Error sending monthly payment confirmation email:", emailError)
+                    console.error(
+                      "Error sending monthly payment confirmation email:",
+                      emailError,
+                    )
                   }
                 }
               }
             } catch (error) {
-              console.error("Error processing monthly payment confirmation:", error)
+              console.error(
+                "Error processing monthly payment confirmation:",
+                error,
+              )
               // Don't fail the webhook - payment was successful
             }
           }
@@ -1917,19 +2004,22 @@ async function handleStripeWebhookInternal(
       case "checkout.session.async_payment_failed": {
         return NextResponse.json(
           { message: "Payment failed or expired" },
-          { status: 200 }
+          { status: 200 },
         )
       }
 
       default:
         // Silently acknowledge unhandled event types
-        return NextResponse.json(
-          { received: true },
-          { status: 200 },
-        )
+        return NextResponse.json({ received: true }, { status: 200 })
     }
   } catch (error) {
-    console.warn("[webhook]", region, event?.id || "?", "error=", error instanceof Error ? error.message : String(error))
+    console.warn(
+      "[webhook]",
+      region,
+      event?.id || "?",
+      "error=",
+      error instanceof Error ? error.message : String(error),
+    )
     if (internalReplay) throw error
     return NextResponse.json(
       { error: "Webhook processing is temporarily unavailable" },

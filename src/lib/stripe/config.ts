@@ -1,5 +1,6 @@
 import Stripe from "stripe"
 import { normalizePublicStripePortalUrl } from "@/lib/payments/portals"
+import { assertStagingStripePaymentEnvironment } from "@/lib/sponsorships/checkout/stagingPaymentBoundary"
 import {
   ALL_STRIPE_REGIONS,
   isValidStripeRegion,
@@ -88,6 +89,7 @@ export function coerceRegion(value: string | null | undefined): StripeRegion {
 export function getStripeConfig(
   region: StripeRegion = STRIPE_DEFAULT_REGION,
 ): StripeRegionConfig {
+  assertStagingStripePaymentEnvironment(process.env)
   const config = REGION_ENV_MAP[region]
   if (!config.secretKey) {
     throw new Error(

@@ -581,6 +581,65 @@ test.describe("checkout host and visitor classification", () => {
     })
   })
 
+  test("maps the isolated canary host to its canonical database domain only when enabled", () => {
+    expect(
+      resolveSponsorshipCheckoutHost(
+        "canary.advocate-staging.creatorshare.com",
+        {
+          allowLocalhostDevelopment: false,
+          allowStagingEnvironment: true,
+        },
+      ),
+    ).toEqual({
+      source: "advocate_domain",
+      advocateHostname: "canary.creatorshare.com",
+      checkoutBaseUrl: "https://canary.advocate-staging.creatorshare.com",
+    })
+    expect(() =>
+      resolveSponsorshipCheckoutHost(
+        "canary.advocate-staging.creatorshare.com",
+        {
+          allowLocalhostDevelopment: false,
+        },
+      ),
+    ).toThrowError(SponsorshipCheckoutError)
+  })
+
+  test("rejects production primary aliases and tenants from staging gateway resolution", () => {
+    const options = {
+      allowLocalhostDevelopment: false,
+      allowStagingEnvironment: true,
+      allowedPrimaryHostnames: [
+        "advocate-staging.creatorshare.com",
+        "www.creatorshare.com",
+        "creator-share-www.vercel.app",
+        "creator-share-www-git-dev.example.vercel.app",
+      ],
+    }
+    expect(
+      resolveSponsorshipCheckoutHost(
+        "advocate-staging.creatorshare.com",
+        options,
+      ),
+    ).toEqual({
+      source: "primary_site",
+      advocateHostname: null,
+      checkoutBaseUrl: "https://advocate-staging.creatorshare.com",
+    })
+    for (const rawHost of [
+      "creatorshare.com",
+      "www.creatorshare.com",
+      "creator-share-www.vercel.app",
+      "creator-share-www-git-dev.example.vercel.app",
+      "alice.creatorshare.com",
+      "hope.advocate-staging.creatorshare.com",
+    ]) {
+      expect(() =>
+        resolveSponsorshipCheckoutHost(rawHost, options),
+      ).toThrowError(SponsorshipCheckoutError)
+    }
+  })
+
   test("uses conceptual primary source only for an explicit primary host", () => {
     expect(
       resolveSponsorshipCheckoutHost("creator-share-www.vercel.app", {

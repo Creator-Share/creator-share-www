@@ -99,6 +99,9 @@ enabled = true
 # in emails.
 site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
+# This is a local-development superset. Never push the entire list to a hosted
+# project. Production and advocate staging each use only their own four exact
+# redirects documented in the release runbook.
 additional_redirect_urls = [
   "https://127.0.0.1:3000",
   "http://127.0.0.1:3000/auth/confirm?next=%2Fapp",
@@ -113,6 +116,10 @@ additional_redirect_urls = [
   "https://creatorshare.com/auth/confirm?next=%2Fsponsor%2Fclaim",
   "https://creatorshare.com/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding",
   "https://creatorshare.com/advocate-invitation",
+  "https://advocate-staging.creatorshare.com/auth/confirm?next=%2Fapp",
+  "https://advocate-staging.creatorshare.com/auth/confirm?next=%2Fsponsor%2Fclaim",
+  "https://advocate-staging.creatorshare.com/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding",
+  "https://advocate-staging.creatorshare.com/advocate-invitation",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600

@@ -2,6 +2,7 @@ import "server-only"
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
+import { assertAdvocateStagingSupabaseBoundary } from "@/lib/advocates/stagingDeploymentBoundary"
 import { createAbortingServiceRoleFetch } from "@/utils/supabase/server"
 
 export interface StatelessSponsorEmailAuthClientOptions {
@@ -21,6 +22,13 @@ export function createStatelessSponsorEmailAuthClient(
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("sponsor_email_auth_unavailable")
+  }
+  try {
+    assertAdvocateStagingSupabaseBoundary(process.env, {
+      requireServiceRole: false,
+    })
+  } catch {
     throw new Error("sponsor_email_auth_unavailable")
   }
 

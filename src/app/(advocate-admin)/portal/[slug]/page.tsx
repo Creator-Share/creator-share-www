@@ -4,6 +4,7 @@ import {
   findAdvocatePortalAccessBySlug,
   loadAuthenticatedAdvocatePortalSession,
 } from "@/lib/advocates/admin/access"
+import { advocatePortalDisplayHostname } from "@/components/advocates/admin/PortalShell"
 
 function readableStatus(value: string): string {
   return value
@@ -25,7 +26,7 @@ export default async function AdvocatePortalOverviewPage({
   const details = [
     ["Relationship", readableStatus(portal.relationshipStatus)],
     ["Publication", readableStatus(portal.publicationStatus)],
-    ["Domain", portal.canonicalHostname ?? "Not yet assigned"],
+    ["Domain", advocatePortalDisplayHostname(portal.canonicalHostname)],
     [
       "Domain status",
       portal.domainStatus

@@ -1,4 +1,8 @@
 import { isQualifyingAdvocateExposurePagePath } from "./publicBrowsePaths"
+import {
+  ADVOCATE_STAGING_TENANT_ROOT,
+  isAdvocateStagingEnvironmentEnabled,
+} from "./host"
 
 export const ADVOCATE_EXPOSURE_BROKER_PATH = "/api/advocates/exposure"
 export const ADVOCATE_EXPOSURE_BROKER_VERSION_HEADER =
@@ -18,7 +22,12 @@ export function isCanonicalAdvocateExposureBrokerHost(
 ): boolean {
   if (rawHost === null) return false
   if (environment.NODE_ENV !== "development") {
-    return rawHost === "creatorshare.com"
+    return (
+      rawHost ===
+      (isAdvocateStagingEnvironmentEnabled(environment)
+        ? ADVOCATE_STAGING_TENANT_ROOT
+        : "creatorshare.com")
+    )
   }
   const match = LOCAL_APEX_HOST_PATTERN.exec(rawHost)
   if (!match) return false

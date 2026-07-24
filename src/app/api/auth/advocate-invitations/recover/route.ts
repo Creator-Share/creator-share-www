@@ -71,7 +71,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  const secureCookies = trustedOrigin === "https://creatorshare.com"
+  const secureCookies = new URL(trustedOrigin).protocol === "https:"
   const routeClient = createAdvocateInvitationRouteClient(
     request,
     secureCookies,

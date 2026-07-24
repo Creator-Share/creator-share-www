@@ -6,7 +6,10 @@ import { resolve } from "node:path"
 import { expect, test } from "@playwright/test"
 import { NextRequest } from "next/server"
 
-import { PAYPAL_MANAGE_URL } from "../../src/lib/payments/portals"
+import {
+  PAYPAL_MANAGE_URL,
+  PAYPAL_SANDBOX_MANAGE_URL,
+} from "../../src/lib/payments/portals"
 import {
   isRecentVerificationRequiredResponse,
   requestFreshSponsorAuthentication,
@@ -254,6 +257,7 @@ function dependencies(
       hasDefaultSourceOverride: boolean
     }
     portalUrl?: string | null
+    paypalManagementUrl?: string
   } = {},
 ) {
   const calls: Array<{ name: string; args?: unknown }> = []
@@ -304,6 +308,9 @@ function dependencies(
         calls.push({ name: "portalConfigurationId", args: region })
         return region === "us" ? US_CONFIGURATION_ID : UK_CONFIGURATION_ID
       },
+      ...(overrides.paypalManagementUrl === undefined
+        ? {}
+        : { paypalManagementUrl: overrides.paypalManagementUrl }),
       returnUrl: `${ORIGIN}/app`,
     },
   }
@@ -717,6 +724,19 @@ test.describe("Stripe payment method management", () => {
         NEXT_PUBLIC_BASE_URL: "https://user:secret@creatorshare.com",
       }),
     ).toThrow(PaymentMethodManagementError)
+    expect(
+      getSponsorPaymentManagementReturnUrl({
+        NODE_ENV: "production",
+        NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+      }),
+    ).toBe("https://advocate-staging.creatorshare.com/app")
+    expect(
+      getSponsorPaymentManagementReturnUrl({
+        NODE_ENV: "production",
+        NEXT_PUBLIC_BASE_URL:
+          "https://advocate-staging.creatorshare.com/ignored",
+      }),
+    ).toBe(`${ORIGIN}/app`)
   })
 })
 
@@ -737,6 +757,41 @@ test.describe("PayPal payment method management", () => {
     expect(setup.calls.some((call) => call.name === "stripeForRegion")).toBe(
       false,
     )
+  })
+
+  test("returns only the exact sandbox destination when staging injects it", async () => {
+    const setup = dependencies({
+      resolution: paypalResolution(),
+      paypalManagementUrl: PAYPAL_SANDBOX_MANAGE_URL,
+    })
+    await expect(
+      createSponsorPaymentMethodDestination(
+        ACCOUNT_ID,
+        SUBSCRIPTION_ID,
+        setup.value,
+      ),
+    ).resolves.toEqual({
+      url: PAYPAL_SANDBOX_MANAGE_URL,
+      label: PAYPAL_PAYMENT_METHOD_MANAGEMENT_LABEL,
+    })
+
+    for (const paypalManagementUrl of [
+      "https://www.sandbox.paypal.com/myaccount/autopay/connect/",
+      "https://www.sandbox.paypal.com.evil.test/myaccount/autopay/",
+      `${PAYPAL_SANDBOX_MANAGE_URL}?continue=https://evil.test`,
+    ]) {
+      const rejected = dependencies({
+        resolution: paypalResolution(),
+        paypalManagementUrl,
+      })
+      await expect(
+        createSponsorPaymentMethodDestination(
+          ACCOUNT_ID,
+          SUBSCRIPTION_ID,
+          rejected.value,
+        ),
+      ).rejects.toMatchObject({ code: "unavailable", httpStatus: 503 })
+    }
   })
 })
 

@@ -7,6 +7,7 @@ import {
   advocateAttributionIdentityCookieSetHeaders,
   createAdvocateAttributionIdentityCookieValue,
 } from "@/lib/advocates/attributionIdentityCookie"
+import { assertAdvocateStagingSupabaseBoundary } from "@/lib/advocates/stagingDeploymentBoundary"
 import { getSponsorClaimCanonicalOrigin } from "@/lib/sponsorships/accountClaim"
 import {
   isTrustedCheckoutJsonRequest,
@@ -145,6 +146,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   )
   const secureAuthCookies = new URL(canonicalOrigin).protocol === "https:"
   try {
+    assertAdvocateStagingSupabaseBoundary(process.env, {
+      requireServiceRole: false,
+    })
     const serviceClient = createServiceRoleClient()
     const verificationAllowed =
       await reserveSponsorPasswordlessVerificationAttempt({

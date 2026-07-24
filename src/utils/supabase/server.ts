@@ -1,6 +1,8 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { cookies } from "next/headers"
+import { assertAdvocateStagingSupabaseBoundary } from "@/lib/advocates/stagingDeploymentBoundary"
+import { secureSupabaseAuthCookieOptions } from "@/utils/supabase/authCookieSecurity"
 
 const MIN_SERVICE_ROLE_REQUEST_TIMEOUT_MILLISECONDS = 1_000
 const MAX_SERVICE_ROLE_REQUEST_TIMEOUT_MILLISECONDS = 45_000
@@ -12,6 +14,9 @@ export type SupabaseClientOptions = {
 export type ServiceRoleClientOptions = SupabaseClientOptions
 
 export async function createClient(options: SupabaseClientOptions = {}) {
+  assertAdvocateStagingSupabaseBoundary(process.env, {
+    requireServiceRole: false,
+  })
   const cookieStore = await cookies()
   const global =
     options.requestTimeoutMilliseconds === undefined
@@ -39,7 +44,11 @@ export async function createClient(options: SupabaseClientOptions = {}) {
         ) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options),
+              cookieStore.set(
+                name,
+                value,
+                secureSupabaseAuthCookieOptions(options),
+              ),
             )
           } catch {
             // The `setAll` method was called from a Server Component.
@@ -88,6 +97,7 @@ export function createAbortingServiceRoleFetch(
 export function createServiceRoleClient(
   options: ServiceRoleClientOptions = {},
 ) {
+  assertAdvocateStagingSupabaseBoundary(process.env)
   const global =
     options.requestTimeoutMilliseconds === undefined
       ? undefined

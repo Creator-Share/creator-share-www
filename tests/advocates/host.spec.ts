@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test"
 
 import {
+  ADVOCATE_STAGING_CANONICAL_ORIGIN,
+  ADVOCATE_STAGING_TENANT_ROOT,
   ADVOCATE_TENANT_ROOT,
+  isAdvocateStagingEnvironmentEnabled,
   isReservedNonPrimaryHostname,
   RESERVED_ADVOCATE_SUBDOMAINS,
   resolveAdvocateHost,
@@ -32,6 +35,7 @@ test.describe("advocate tenant host resolution", () => {
   })
 
   test("keeps platform and infrastructure subdomains out of tenant lookup", () => {
+    expect(RESERVED_ADVOCATE_SUBDOMAINS).toContain("advocate-staging")
     expect(RESERVED_ADVOCATE_SUBDOMAINS).toContain("publication-sentinel")
     expect(new Set(RESERVED_ADVOCATE_SUBDOMAINS).size).toBe(
       RESERVED_ADVOCATE_SUBDOMAINS.length,
@@ -64,6 +68,103 @@ test.describe("advocate tenant host resolution", () => {
     ]) {
       expect(isReservedNonPrimaryHostname(hostname)).toBe(false)
     }
+  })
+
+  test("enables only the fixed staging root through exact deployment configuration", () => {
+    expect(
+      isAdvocateStagingEnvironmentEnabled({
+        NEXT_PUBLIC_BASE_URL: ADVOCATE_STAGING_CANONICAL_ORIGIN,
+      }),
+    ).toBe(true)
+    for (const value of [
+      undefined,
+      "https://advocate-staging.creatorshare.com/",
+      "http://advocate-staging.creatorshare.com",
+      "https://other.creatorshare.com",
+    ]) {
+      expect(
+        isAdvocateStagingEnvironmentEnabled({
+          NEXT_PUBLIC_BASE_URL: value,
+        }),
+      ).toBe(false)
+    }
+  })
+
+  test("maps one staging label to the canonical production-shaped database hostname", () => {
+    expect(
+      resolveAdvocateHost(`Canary.${ADVOCATE_STAGING_TENANT_ROOT}.`, {
+        allowStagingEnvironment: true,
+      }),
+    ).toEqual({
+      kind: "tenant-candidate",
+      environment: "staging",
+      requestHostname: "canary.advocate-staging.creatorshare.com",
+      requestPort: null,
+      tenantLabel: "canary",
+      domainLookup: {
+        hostname: "canary.creatorshare.com",
+        requiredStatus: "active",
+      },
+    })
+
+    expect(
+      resolveAdvocateHost(ADVOCATE_STAGING_TENANT_ROOT, {
+        allowStagingEnvironment: true,
+      }),
+    ).toEqual({
+      kind: "non-tenant",
+      reason: "tenant-root",
+      normalizedHostname: ADVOCATE_STAGING_TENANT_ROOT,
+      port: null,
+    })
+    expect(
+      resolveAdvocateHost(`hope.${ADVOCATE_STAGING_TENANT_ROOT}`, {
+        allowStagingEnvironment: true,
+      }),
+    ).toEqual({
+      kind: "non-tenant",
+      reason: "outside-tenant-root",
+      normalizedHostname: "hope.advocate-staging.creatorshare.com",
+      port: null,
+    })
+  })
+
+  test("keeps the staging and production host namespaces mutually exclusive", () => {
+    for (const hostname of [
+      "creatorshare.com",
+      "www.creatorshare.com",
+      "alice.creatorshare.com",
+      "creator-share-www.vercel.app",
+      "creator-share-www-git-dev.example.vercel.app",
+    ]) {
+      expect(
+        resolveAdvocateHost(hostname, {
+          allowStagingEnvironment: true,
+        }),
+      ).toEqual({
+        kind: "non-tenant",
+        reason: "outside-tenant-root",
+        normalizedHostname: hostname,
+        port: null,
+      })
+    }
+  })
+
+  test("keeps the staging topology closed unless explicitly enabled", () => {
+    expect(resolveAdvocateHost(ADVOCATE_STAGING_TENANT_ROOT)).toEqual({
+      kind: "non-tenant",
+      reason: "reserved-subdomain",
+      normalizedHostname: ADVOCATE_STAGING_TENANT_ROOT,
+      port: null,
+    })
+    expect(
+      resolveAdvocateHost(`canary.${ADVOCATE_STAGING_TENANT_ROOT}`),
+    ).toEqual({
+      kind: "non-tenant",
+      reason: "nested-subdomain",
+      normalizedHostname: "canary.advocate-staging.creatorshare.com",
+      port: null,
+    })
   })
 
   test("accepts only one label directly beneath the tenant root", () => {

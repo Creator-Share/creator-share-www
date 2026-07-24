@@ -3,7 +3,10 @@
 import { useEffect, useRef } from "react"
 import { usePathname } from "next/navigation"
 
-import { resolveAdvocateHost } from "@/lib/advocates/host"
+import {
+  isAdvocateStagingEnvironmentEnabled,
+  resolveAdvocateHost,
+} from "@/lib/advocates/host"
 import { recordAdvocateExposureThroughBroker } from "@/lib/advocates/exposureBrokerClient"
 import { createAdvocateExposurePageRetryController } from "@/lib/advocates/exposureBrokerTracker"
 import { isQualifyingAdvocateExposurePagePath } from "@/lib/advocates/publicBrowsePaths"
@@ -17,8 +20,12 @@ export function AdvocateExposureTracker() {
   useEffect(() => {
     if (window.self !== window.top) return
 
+    const allowStagingEnvironment = isAdvocateStagingEnvironmentEnabled({
+      NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
+    })
     const host = resolveAdvocateHost(window.location.host, {
       allowLocalhostDevelopment: process.env.NODE_ENV === "development",
+      allowStagingEnvironment,
     })
     if (host.kind !== "tenant-candidate") return
     if (completedPaths.current.has(pathname)) return
@@ -30,10 +37,13 @@ export function AdvocateExposureTracker() {
       const existingRequest = pendingPaths.current.get(pathname)
       if (existingRequest !== undefined) return existingRequest
 
-      const request = recordAdvocateExposureThroughBroker({
-        pageHost,
-        pagePath: pathname,
-      })
+      const request = recordAdvocateExposureThroughBroker(
+        {
+          pageHost,
+          pagePath: pathname,
+        },
+        { allowStagingEnvironment },
+      )
         .catch(() => false)
         .then((accepted) => {
           if (accepted) completedPaths.current.add(pathname)

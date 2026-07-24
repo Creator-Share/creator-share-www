@@ -13,7 +13,9 @@ test.describe.configure({ mode: "serial" })
 
 test("PayPal API configuration accepts only the exact trusted origins", () => {
   const original = process.env.PAYPAL_API_URL
+  const originalBaseUrl = process.env.NEXT_PUBLIC_BASE_URL
   try {
+    process.env.NEXT_PUBLIC_BASE_URL = "https://creatorshare.com"
     delete process.env.PAYPAL_API_URL
     expect(getPayPalApiUrl()).toBe(PAYPAL_LIVE_API_URL)
 
@@ -35,6 +37,8 @@ test("PayPal API configuration accepts only the exact trusted origins", () => {
   } finally {
     if (original === undefined) delete process.env.PAYPAL_API_URL
     else process.env.PAYPAL_API_URL = original
+    if (originalBaseUrl === undefined) delete process.env.NEXT_PUBLIC_BASE_URL
+    else process.env.NEXT_PUBLIC_BASE_URL = originalBaseUrl
   }
 })
 

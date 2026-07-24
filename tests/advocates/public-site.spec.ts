@@ -64,6 +64,11 @@ const PRODUCTION_ENVIRONMENT = {
   NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",
   VERCEL_URL: "creator-share-git-feature.vercel.app",
 }
+const STAGING_ENVIRONMENT = {
+  ...PRODUCTION_ENVIRONMENT,
+  NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+  NEXT_PUBLIC_SITE_URL: "https://advocate-staging.creatorshare.com",
+}
 
 const ACTIVE_PRESENTATION_SOURCE = {
   domain: {
@@ -182,6 +187,78 @@ test.describe("public site request shell", () => {
     })
 
     expect(JSON.stringify(result)).not.toContain(ADVOCATE_ID)
+  })
+
+  test("maps the isolated staging root and canary host only when the exact staging base is configured", async () => {
+    const stagingSource = {
+      ...ACTIVE_PRESENTATION_SOURCE,
+      domain: {
+        ...ACTIVE_PRESENTATION_SOURCE.domain,
+        hostname: "canary.creatorshare.com",
+      },
+      advocate: {
+        ...ACTIVE_PRESENTATION_SOURCE.advocate,
+        slug: "canary",
+      },
+    }
+    const enabled = repositoryFor(stagingSource)
+
+    await expect(
+      resolvePublicSiteRequest({
+        rawHost: "advocate-staging.creatorshare.com",
+        repository: enabled.repository,
+        environment: STAGING_ENVIRONMENT,
+      }),
+    ).resolves.toMatchObject({
+      kind: "ready",
+      site: {
+        kind: "primary",
+        canonicalHostname: "advocate-staging.creatorshare.com",
+      },
+    })
+    await expect(
+      resolvePublicSiteRequest({
+        rawHost: "canary.advocate-staging.creatorshare.com",
+        repository: enabled.repository,
+        environment: STAGING_ENVIRONMENT,
+      }),
+    ).resolves.toMatchObject({
+      kind: "ready",
+      site: {
+        kind: "advocate",
+        canonicalHostname: "canary.creatorshare.com",
+        slug: "canary",
+      },
+    })
+    expect(enabled.calls).toEqual(["canary.creatorshare.com"])
+
+    const disabled = repositoryFor(stagingSource)
+    await expect(
+      resolvePublicSiteRequest({
+        rawHost: "canary.advocate-staging.creatorshare.com",
+        repository: disabled.repository,
+        environment: PRODUCTION_ENVIRONMENT,
+      }),
+    ).resolves.toEqual({
+      kind: "not-found",
+      reason: "rejected-host",
+      hostname: "canary.advocate-staging.creatorshare.com",
+    })
+    expect(disabled.calls).toEqual([])
+
+    const nonCanary = repositoryFor(stagingSource)
+    await expect(
+      resolvePublicSiteRequest({
+        rawHost: "hope.advocate-staging.creatorshare.com",
+        repository: nonCanary.repository,
+        environment: STAGING_ENVIRONMENT,
+      }),
+    ).resolves.toEqual({
+      kind: "not-found",
+      reason: "rejected-host",
+      hostname: "hope.advocate-staging.creatorshare.com",
+    })
+    expect(nonCanary.calls).toEqual([])
   })
 
   test("fails closed for rejected, inactive, and unavailable tenant hosts", async () => {

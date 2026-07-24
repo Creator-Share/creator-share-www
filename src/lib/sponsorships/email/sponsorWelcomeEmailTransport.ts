@@ -8,6 +8,7 @@ import {
   SponsorWelcomeEmailTransportError,
   type SponsorWelcomeEmailTransport,
 } from "@/lib/sponsorships/email/sponsorWelcomeEmailWorker"
+import { assertAdvocateStagingEmailRecipientAllowed } from "@/lib/stagingOutboundEmail"
 
 interface NodemailerTransport {
   sendMail(message: Record<string, unknown>): Promise<{
@@ -54,6 +55,12 @@ export function createNodemailerSponsorWelcomeEmailTransport(
         const messageId = sponsorWelcomeMessageId(message.outboxId)
         if (message.providerMessageId !== messageId) {
           throw new SponsorWelcomeEmailTransportError()
+        }
+        if (config.stagingRecipientPolicy !== undefined) {
+          assertAdvocateStagingEmailRecipientAllowed(
+            message.recipientEmail,
+            config.stagingRecipientPolicy,
+          )
         }
         const result = await Promise.race([
           transport.sendMail({

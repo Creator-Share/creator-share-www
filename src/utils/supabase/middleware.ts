@@ -18,6 +18,8 @@ import {
   sponsorshipVisitorCookieSetHeaders,
   type SponsorshipVisitorCookieEnvironment,
 } from "@/lib/sponsorships/visitorCookieToken"
+import { assertAdvocateStagingSupabaseBoundary } from "@/lib/advocates/stagingDeploymentBoundary"
+import { secureSupabaseAuthCookieOptions } from "@/utils/supabase/authCookieSecurity"
 
 type ResponseCookieMutation = {
   name: string
@@ -256,6 +258,9 @@ export async function updateSession(
   request: NextRequest,
   options: MiddlewareRequestForwardingOptions = {},
 ) {
+  assertAdvocateStagingSupabaseBoundary(process.env, {
+    requireServiceRole: false,
+  })
   const cookiePlan = await ensureSponsorshipVisitor(
     request,
     options.cookieEnvironment,
@@ -285,7 +290,12 @@ export async function updateSession(
         ) {
           cookiesToSet.forEach((cookie) => {
             request.cookies.set(cookie.name, cookie.value)
-            cookiePlan.mutations.push(cookie)
+            cookiePlan.mutations.push({
+              ...cookie,
+              options: secureSupabaseAuthCookieOptions(cookie.options, {
+                trustedUrl: request.url,
+              }),
+            })
           })
           supabaseResponse = applyCookies(nextResponse(request, options))
         },

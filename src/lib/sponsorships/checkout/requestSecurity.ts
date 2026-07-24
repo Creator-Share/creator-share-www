@@ -1,6 +1,10 @@
 import "server-only"
 
-import { resolveAdvocateHost } from "@/lib/advocates/host"
+import {
+  ADVOCATE_STAGING_TENANT_ROOT,
+  isAdvocateStagingEnvironmentEnabled,
+  resolveAdvocateHost,
+} from "@/lib/advocates/host"
 
 export type CheckoutRequestEnvironment = Readonly<
   Record<string, string | undefined>
@@ -19,6 +23,11 @@ function hostnameFromConfiguredUrl(value: string | undefined): string | null {
 function configuredPrimaryHostnames(
   environment: CheckoutRequestEnvironment,
 ): Set<string> {
+  const allowStagingEnvironment =
+    isAdvocateStagingEnvironmentEnabled(environment)
+  if (allowStagingEnvironment) {
+    return new Set([ADVOCATE_STAGING_TENANT_ROOT])
+  }
   return new Set(
     [
       "creatorshare.com",
@@ -37,8 +46,12 @@ function primaryOrigin(options: {
 }): string | null {
   const allowLocalhostDevelopment =
     options.environment.NODE_ENV !== "production"
+  const allowStagingEnvironment = isAdvocateStagingEnvironmentEnabled(
+    options.environment,
+  )
   const resolution = resolveAdvocateHost(options.rawHost, {
     allowLocalhostDevelopment,
+    allowStagingEnvironment,
   })
   if (resolution.kind !== "non-tenant") return null
 
@@ -80,8 +93,11 @@ export function resolveTrustedCheckoutRequestOrigin(options: {
 }): string | null {
   const environment = options.environment ?? process.env
   const allowLocalhostDevelopment = environment.NODE_ENV !== "production"
+  const allowStagingEnvironment =
+    isAdvocateStagingEnvironmentEnabled(environment)
   const resolution = resolveAdvocateHost(options.rawHost, {
     allowLocalhostDevelopment,
+    allowStagingEnvironment,
   })
   if (resolution.kind === "invalid") return null
 

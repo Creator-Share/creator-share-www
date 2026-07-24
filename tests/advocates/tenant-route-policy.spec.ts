@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { resolve } from "node:path"
 
 import { expect, test } from "@playwright/test"
@@ -19,6 +19,12 @@ const PRODUCTION_ENVIRONMENT: TenantRoutePolicyEnvironment = Object.freeze({
   NEXT_PUBLIC_SITE_URL: "https://www.creatorshare.com",
   NEXT_PUBLIC_SUPABASE_URL: "https://project-ref.supabase.co",
   VERCEL_URL: "creator-share-www-git-dev.example.vercel.app",
+})
+const STAGING_ENVIRONMENT: TenantRoutePolicyEnvironment = Object.freeze({
+  ...PRODUCTION_ENVIRONMENT,
+  NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+  NEXT_PUBLIC_SITE_URL: "https://advocate-staging.creatorshare.com",
+  VERCEL_ENV: "production",
 })
 
 const TENANT_HOST = "hope.creatorshare.com"
@@ -485,6 +491,152 @@ test.describe("advocate tenant route policy", () => {
     }
   })
 
+  test("opens only the exact configured staging primary and one-label canary tenant", () => {
+    expect(
+      decide(
+        "/admin",
+        "GET",
+        "advocate-staging.creatorshare.com",
+        STAGING_ENVIRONMENT,
+      ),
+    ).toEqual({ kind: "pass-through" })
+    expect(
+      decide(
+        "/",
+        "GET",
+        "canary.advocate-staging.creatorshare.com",
+        STAGING_ENVIRONMENT,
+      ),
+    ).toMatchObject({
+      kind: "allow",
+      routeId: "browse-page",
+    })
+    expect(
+      isRestrictedAdvocateHost({
+        rawHost: "canary.advocate-staging.creatorshare.com",
+        environment: STAGING_ENVIRONMENT,
+      }),
+    ).toBe(true)
+
+    for (const rawHost of [
+      "advocate-staging.creatorshare.com",
+      "canary.advocate-staging.creatorshare.com",
+    ]) {
+      expect(decide("/", "GET", rawHost, PRODUCTION_ENVIRONMENT)).toEqual({
+        kind: "deny",
+        status: 404,
+        allow: null,
+      })
+    }
+    expect(
+      decide(
+        "/",
+        "GET",
+        "nested.canary.advocate-staging.creatorshare.com",
+        STAGING_ENVIRONMENT,
+      ),
+    ).toEqual({
+      kind: "deny",
+      status: 404,
+      allow: null,
+    })
+  })
+
+  test("rejects every production namespace host from the staging deployment", () => {
+    for (const rawHost of [
+      "creatorshare.com",
+      "www.creatorshare.com",
+      "creator-share-www.vercel.app",
+      "creator-share-www-git-dev.example.vercel.app",
+      "hope.creatorshare.com",
+      "hope.advocate-staging.creatorshare.com",
+    ]) {
+      expect(
+        isRestrictedAdvocateHost({
+          rawHost,
+          environment: STAGING_ENVIRONMENT,
+        }),
+      ).toBe(false)
+      expect(decide("/", "GET", rawHost, STAGING_ENVIRONMENT)).toEqual({
+        kind: "deny",
+        status: 404,
+        allow: null,
+      })
+      expect(decide("/admin", "GET", rawHost, STAGING_ENVIRONMENT)).toEqual({
+        kind: "deny",
+        status: 404,
+        allow: null,
+      })
+    }
+  })
+
+  test("admits only declared internal workers on the exact staging production alias", () => {
+    const generatedHost = STAGING_ENVIRONMENT.VERCEL_URL!
+    const vercelConfig = JSON.parse(
+      readFileSync(resolve(process.cwd(), "vercel.json"), "utf8"),
+    ) as { crons: Array<{ path: string }> }
+
+    for (const { path } of vercelConfig.crons) {
+      expect(
+        decide(path, "GET", generatedHost, STAGING_ENVIRONMENT),
+      ).toMatchObject({
+        kind: "bypass",
+        reason: "internal-worker",
+      })
+      expect(
+        decide(path, "POST", generatedHost, STAGING_ENVIRONMENT),
+      ).toMatchObject({
+        kind: "bypass",
+        reason: "internal-worker",
+      })
+      expect(
+        decide(`${path}/extra`, "GET", generatedHost, STAGING_ENVIRONMENT),
+      ).toEqual({
+        kind: "deny",
+        status: 404,
+        allow: null,
+      })
+    }
+
+    for (const [pathname, method] of [
+      ["/", "GET"],
+      ["/admin", "GET"],
+      ["/api/stripe", "POST"],
+      ["/api/internal/advocates/provisioning", "DELETE"],
+    ] as const) {
+      expect(
+        decide(pathname, method, generatedHost, STAGING_ENVIRONMENT),
+      ).toEqual({
+        kind: "deny",
+        status: 404,
+        allow: null,
+      })
+    }
+
+    expect(
+      decide("/api/internal/advocates/provisioning", "GET", generatedHost, {
+        ...STAGING_ENVIRONMENT,
+        VERCEL_ENV: "preview",
+      }),
+    ).toEqual({
+      kind: "deny",
+      status: 404,
+      allow: null,
+    })
+    expect(
+      decide(
+        "/api/internal/advocates/provisioning",
+        "GET",
+        `${generatedHost}.attacker.example`,
+        STAGING_ENVIRONMENT,
+      ),
+    ).toEqual({
+      kind: "deny",
+      status: 404,
+      allow: null,
+    })
+  })
+
   test("opens only the fixed negative sentinel root to the application 404", () => {
     const sentinel = "publication-sentinel.creatorshare.com"
     expect(
@@ -657,6 +809,9 @@ test.describe("tenant canonical origin and exposure boundary", () => {
         NEXT_PUBLIC_BASE_URL: "http://localhost:3000",
       }),
     ).toBe("http://localhost:3000")
+    expect(resolveCanonicalPrimaryOrigin(STAGING_ENVIRONMENT)).toBe(
+      "https://advocate-staging.creatorshare.com",
+    )
 
     for (const value of [
       "http://creatorshare.com",

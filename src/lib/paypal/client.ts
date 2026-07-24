@@ -2,8 +2,13 @@
 // PayPal has no regional-account split today — the architectural decision is
 // single PayPal account, multi-region Stripe.
 
+import {
+  ADVOCATE_STAGING_PAYPAL_API_ORIGIN,
+  assertStagingPayPalPaymentEnvironment,
+} from "@/lib/sponsorships/checkout/stagingPaymentBoundary"
+
 export const PAYPAL_LIVE_API_URL = "https://api-m.paypal.com"
-export const PAYPAL_SANDBOX_API_URL = "https://api-m.sandbox.paypal.com"
+export const PAYPAL_SANDBOX_API_URL = ADVOCATE_STAGING_PAYPAL_API_ORIGIN
 
 // Function rather than module-load const so server-side toggles take effect
 // without a process restart (e.g. flipping PayPal on/off via an env update on
@@ -20,6 +25,7 @@ export function isPayPalEnabled(): boolean {
 // DB while the live subscription kept billing. Sandbox is now strictly opt-in
 // via PAYPAL_API_URL=https://api-m.sandbox.paypal.com.
 export function getPayPalApiUrl(): string {
+  assertStagingPayPalPaymentEnvironment(process.env)
   const configuredUrl = process.env.PAYPAL_API_URL
   if (!configuredUrl) return PAYPAL_LIVE_API_URL
   if (

@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test"
 
 import {
+  buildPublicPortalLinks,
   buildStripePortalLinks,
   DEFAULT_STRIPE_PORTAL_URL,
   normalizePublicStripePortalUrl,
+  PAYPAL_SANDBOX_MANAGE_URL,
 } from "../src/lib/payments/portals"
 
 test.describe("public portal links", () => {
@@ -90,6 +92,27 @@ test.describe("public portal links", () => {
         provider: "STRIPE",
         href: DEFAULT_STRIPE_PORTAL_URL,
         label: "Manage Subscription",
+      },
+    ])
+  })
+
+  test("never exposes production Stripe portals from exact staging", () => {
+    expect(
+      buildPublicPortalLinks({
+        environment: {
+          NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+        },
+        paypalConfigured: true,
+        stripePortalUrls: {
+          us: "https://billing.stripe.com/p/login/copied-production-us",
+          uk: "https://stripe.creatorshare.com",
+        },
+      }),
+    ).toEqual([
+      {
+        provider: "PAYPAL",
+        href: PAYPAL_SANDBOX_MANAGE_URL,
+        label: "Manage in PayPal",
       },
     ])
   })

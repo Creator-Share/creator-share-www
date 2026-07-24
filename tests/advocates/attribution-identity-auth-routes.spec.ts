@@ -71,6 +71,18 @@ nodeModule._load = function mockedModuleLoad(
           auth: {
             async exchangeCodeForSession() {
               exchangeCalls += 1
+              options?.cookies?.setAll([
+                {
+                  name: DEFAULT_SUPABASE_AUTH_COOKIE,
+                  value: "refreshed-auth-session",
+                  options: {
+                    path: "/",
+                    httpOnly: true,
+                    sameSite: "lax",
+                    secure: false,
+                  },
+                },
+              ])
               return {
                 data: { user: exchangeUser },
                 error: exchangeError,
@@ -265,10 +277,14 @@ test("successful auth completion issues a signed host-only exclusion signal", as
       header.startsWith(`${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=`) &&
       !header.includes("Max-Age=0"),
   )
+  const authCookie = setCookieHeaders(response).find((header) =>
+    header.startsWith(`${DEFAULT_SUPABASE_AUTH_COOKIE}=`),
+  )
 
   expect(response.status).toBe(303)
   expect(response.headers.get("location")).toContain("state=ready")
   expect(exchangeCalls).toBe(1)
+  expect(authCookie).toMatch(/; Secure/i)
   expect(identityCookie).toBeDefined()
   expect(identityCookie).not.toContain("Domain=")
   expect(identityCookie).toContain("Path=/")

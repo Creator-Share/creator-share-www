@@ -2,6 +2,8 @@ import "server-only"
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
+import { assertAdvocateStagingSupabaseBoundary } from "@/lib/advocates/stagingDeploymentBoundary"
+
 import { createBoundedAdvocateLogoReconciliationFetch } from "./boundedFetch"
 
 function serviceConfigurationError(): never {
@@ -41,9 +43,13 @@ export function createAdvocateLogoReconciliationServiceClient(options: {
   now?: () => number
   fetchImplementation?: typeof fetch
 }): SupabaseClient {
-  const { url, serviceRoleKey } = loadServiceEnvironment(
-    options.environment ?? process.env,
-  )
+  const environment = options.environment ?? process.env
+  try {
+    assertAdvocateStagingSupabaseBoundary(environment)
+  } catch {
+    serviceConfigurationError()
+  }
+  const { url, serviceRoleKey } = loadServiceEnvironment(environment)
   const boundedFetch = createBoundedAdvocateLogoReconciliationFetch({
     requestTimeoutMilliseconds: options.requestTimeoutMilliseconds,
     invocationDeadlineAt: options.invocationDeadlineAt,

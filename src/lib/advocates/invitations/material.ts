@@ -1,3 +1,5 @@
+import { ADVOCATE_STAGING_CANONICAL_ORIGIN } from "../host"
+
 export const ADVOCATE_INVITATION_PATH = "/advocate-invitation"
 export const ADVOCATE_INVITATION_AUTHENTICATE_PATH =
   "/api/auth/advocate-invitations/authenticate"
@@ -130,6 +132,7 @@ export function buildAdvocateInvitationLink(options: {
     origin.protocol === "https:" &&
     origin.hostname === "creatorshare.com" &&
     origin.port === ""
+  const isStagingOrigin = origin.origin === ADVOCATE_STAGING_CANONICAL_ORIGIN
   const isDevelopmentOrigin =
     options.allowDevelopmentLoopback === true &&
     origin.protocol === "http:" &&
@@ -143,7 +146,7 @@ export function buildAdvocateInvitationLink(options: {
     origin.hash !== "" ||
     origin.username !== "" ||
     origin.password !== "" ||
-    (!isProductionOrigin && !isDevelopmentOrigin)
+    (!isProductionOrigin && !isStagingOrigin && !isDevelopmentOrigin)
   ) {
     throw new AdvocateInvitationMaterialError()
   }

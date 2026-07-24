@@ -228,6 +228,47 @@ test.describe("sponsor welcome delivery worker", () => {
     expect(sent).toBe(false)
   })
 
+  test("rejects a staging-disallowed recipient before verification or handoff", async () => {
+    const stages: string[] = []
+    let failureCode: string | null = null
+    const result = await processSponsorWelcomeEmail({
+      job: claimedJob(),
+      retryAfterSeconds: 300,
+      context,
+      dependencies: {
+        crypto,
+        canonicalOrigin: "https://advocate-staging.creatorshare.com",
+        assertRecipientAllowed() {
+          stages.push("recipient-policy")
+          throw new Error("staging recipient rejected")
+        },
+        repository: repository({
+          async verifyDeliveryMaterial() {
+            stages.push("verify")
+          },
+          async beginDeliveryHandoff() {
+            stages.push("handoff")
+          },
+          async failDelivery(options) {
+            stages.push("fail")
+            failureCode = options.errorSummary
+            return { retryable: false }
+          },
+        }),
+        transport: {
+          async send() {
+            stages.push("send")
+            throw new Error("must not send")
+          },
+        },
+      },
+    })
+
+    expect(result.status).toBe("terminal_failed")
+    expect(failureCode).toBe("welcome_email_material_invalid")
+    expect(stages).toEqual(["recipient-policy", "fail"])
+  })
+
   test("quarantines a provider failure after the durable SMTP handoff", async () => {
     let failed = false
     const result = await processSponsorWelcomeEmail({

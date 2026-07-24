@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr"
 import { NextRequest, NextResponse } from "next/server"
 
 import { advocateAttributionIdentityCookieClearHeaders } from "@/lib/advocates/attributionIdentityCookie"
+import { assertAdvocateStagingSupabaseBoundary } from "@/lib/advocates/stagingDeploymentBoundary"
 import { getSponsorClaimCanonicalOrigin } from "@/lib/sponsorships/accountClaim"
 import {
   isTrustedCheckoutJsonRequest,
@@ -322,6 +323,9 @@ export async function POST(request: NextRequest) {
   let cookieAdapter: ReturnType<typeof createPendingSupabaseCookieAdapter>
   let authentication: unknown
   try {
+    assertAdvocateStagingSupabaseBoundary(process.env, {
+      requireServiceRole: false,
+    })
     cookieAdapter = createPendingSupabaseCookieAdapter({
       initialCookies: initialRecoveryCookies,
       authCookieName: recoveryCookie.name,

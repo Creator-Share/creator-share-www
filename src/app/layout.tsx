@@ -9,6 +9,7 @@ import { PublicSiteProvider } from "@/components/advocates/PublicSiteProvider"
 import { Toaster } from "@/components/ui/toaster"
 import { Analytics } from "@vercel/analytics/next"
 import { getCurrentPublicSiteResolution } from "@/lib/advocates/currentPublicSite"
+import { isAdvocateStagingEnvironmentEnabled } from "@/lib/advocates/host"
 import {
   createPaymentPublicSite,
   type PublicSite,
@@ -24,6 +25,8 @@ const redditSans = Reddit_Sans({
   variable: "--font-reddit-sans",
   display: "swap",
 })
+const ENABLE_VERCEL_ANALYTICS =
+  !isAdvocateStagingEnvironmentEnabled(process.env)
 
 export const dynamic = "force-dynamic"
 
@@ -107,7 +110,9 @@ export default async function RootLayout({
             <Toaster />
           </PublicSiteProvider>
         </Providers>
-        {site.kind === "primary" ? <Analytics /> : null}
+        {site.kind === "primary" && ENABLE_VERCEL_ANALYTICS ? (
+          <Analytics />
+        ) : null}
       </body>
     </html>
   )

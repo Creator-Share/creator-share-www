@@ -4,9 +4,20 @@
 // server-side email rendering.
 
 import { ALL_STRIPE_REGIONS, type StripeRegion } from "@/lib/stripe/region"
+import { isAdvocateStagingEnvironmentEnabled } from "@/lib/advocates/host"
 
 export const DEFAULT_STRIPE_PORTAL_URL = "https://stripe.creatorshare.com"
 export const PAYPAL_MANAGE_URL = "https://www.paypal.com/myaccount/autopay/"
+export const PAYPAL_SANDBOX_MANAGE_URL =
+  "https://www.sandbox.paypal.com/myaccount/autopay/"
+
+export function resolvePayPalManageUrl(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): typeof PAYPAL_MANAGE_URL | typeof PAYPAL_SANDBOX_MANAGE_URL {
+  return isAdvocateStagingEnvironmentEnabled(environment)
+    ? PAYPAL_SANDBOX_MANAGE_URL
+    : PAYPAL_MANAGE_URL
+}
 
 const APPROVED_STRIPE_PORTAL_HOSTS = new Set([
   "billing.stripe.com",
@@ -116,16 +127,32 @@ export function buildStripePortalLinks(
   })
 }
 
-export function getPublicPortalLinks(): PortalLink[] {
-  const links = buildStripePortalLinks(PUBLIC_PORTAL_URLS)
+export function buildPublicPortalLinks(options: {
+  environment: Readonly<Record<string, string | undefined>>
+  paypalConfigured: boolean
+  stripePortalUrls: Record<StripeRegion, string | undefined>
+}): PortalLink[] {
+  const links = isAdvocateStagingEnvironmentEnabled(options.environment)
+    ? []
+    : buildStripePortalLinks(options.stripePortalUrls)
 
-  if (process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID) {
+  if (options.paypalConfigured) {
     links.push({
       provider: "PAYPAL",
-      href: PAYPAL_MANAGE_URL,
+      href: resolvePayPalManageUrl(options.environment),
       label: "Manage in PayPal",
     })
   }
 
   return links
+}
+
+export function getPublicPortalLinks(): PortalLink[] {
+  return buildPublicPortalLinks({
+    environment: {
+      NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
+    },
+    paypalConfigured: Boolean(process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID),
+    stripePortalUrls: PUBLIC_PORTAL_URLS,
+  })
 }

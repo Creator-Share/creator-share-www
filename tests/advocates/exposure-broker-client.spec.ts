@@ -17,6 +17,28 @@ test("uses one fixed production broker and derives only a safe local port", () =
   expect(
     resolveAdvocateExposureBrokerUrl("hope.localhost:4317", "development"),
   ).toBe(`http://localhost:4317${ADVOCATE_EXPOSURE_BROKER_PATH}`)
+  expect(
+    resolveAdvocateExposureBrokerUrl(
+      "canary.advocate-staging.creatorshare.com",
+      "production",
+      true,
+    ),
+  ).toBe(
+    `https://advocate-staging.creatorshare.com${ADVOCATE_EXPOSURE_BROKER_PATH}`,
+  )
+  expect(
+    resolveAdvocateExposureBrokerUrl(
+      "canary.advocate-staging.creatorshare.com",
+      "production",
+    ),
+  ).toBeNull()
+  expect(
+    resolveAdvocateExposureBrokerUrl(
+      "hope.advocate-staging.creatorshare.com",
+      "production",
+      true,
+    ),
+  ).toBeNull()
 
   for (const [host, environment] of [
     ["creatorshare.com", "production"],
@@ -71,6 +93,31 @@ test("sends one bounded credentialed request with the exact protocol", async () 
         ADVOCATE_EXPOSURE_BROKER_VERSION,
     }),
   )
+})
+
+test("sends staging exposure only to the exact configured staging broker", async () => {
+  const calls: Array<string | URL | Request> = []
+  await expect(
+    recordAdvocateExposureThroughBroker(
+      {
+        pageHost: "canary.advocate-staging.creatorshare.com",
+        pagePath: "/",
+      },
+      {
+        allowStagingEnvironment: true,
+        nodeEnvironment: "production",
+        retryDelaysMilliseconds: [0],
+        fetchImplementation: async (input) => {
+          calls.push(input)
+          return new Response(null, { status: 204 })
+        },
+        wait: async () => undefined,
+      },
+    ),
+  ).resolves.toBe(true)
+  expect(calls).toEqual([
+    `https://advocate-staging.creatorshare.com${ADVOCATE_EXPOSURE_BROKER_PATH}`,
+  ])
 })
 
 test("retries only bounded transient outcomes and succeeds only on 204", async () => {

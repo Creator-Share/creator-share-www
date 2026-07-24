@@ -5,6 +5,14 @@ import {
   advocateInvitationInvocationHeadroomMilliseconds,
   type AdvocateInvitationEmailWorkerConfig,
 } from "./emailWorker"
+import {
+  ADVOCATE_STAGING_CANONICAL_ORIGIN,
+  isAdvocateStagingEnvironmentEnabled,
+} from "../host"
+import {
+  loadAdvocateStagingEmailRecipientPolicy,
+  type AdvocateStagingEmailRecipientPolicy,
+} from "@/lib/stagingOutboundEmail"
 
 export type AdvocateInvitationEmailEnvironment = Readonly<
   Record<string, string | undefined>
@@ -18,6 +26,7 @@ export interface AdvocateInvitationEmailTransportConfig {
   password: string
   fromAddress: string
   timeoutMilliseconds: number
+  stagingRecipientPolicy?: AdvocateStagingEmailRecipientPolicy
 }
 
 function configurationError(): never {
@@ -160,7 +169,7 @@ export function loadAdvocateInvitationEmailTransportConfig(
   ) {
     configurationError()
   }
-  return {
+  const config = {
     host: requiredTrimmed(environment.EMAIL_HOST, 255),
     port: boundedInteger(environment.EMAIL_PORT, 587, 1, 65_535),
     secure: secureValue === "true",
@@ -174,14 +183,39 @@ export function loadAdvocateInvitationEmailTransportConfig(
       30_000,
     ),
   }
+  let stagingRecipientPolicy: AdvocateStagingEmailRecipientPolicy | undefined
+  try {
+    stagingRecipientPolicy = loadAdvocateStagingEmailRecipientPolicy({
+      environment,
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      username: config.username,
+    })
+  } catch {
+    configurationError()
+  }
+  return {
+    ...config,
+    ...(stagingRecipientPolicy === undefined ? {} : { stagingRecipientPolicy }),
+  }
 }
 
 export function loadAdvocateInvitationEmailCanonicalOrigin(
   environment: AdvocateInvitationEmailEnvironment = process.env,
-): "https://creatorshare.com" {
-  const value =
-    environment.ADVOCATE_INVITATION_CANONICAL_ORIGIN ??
-    "https://creatorshare.com"
-  if (value !== "https://creatorshare.com") configurationError()
+): "https://creatorshare.com" | typeof ADVOCATE_STAGING_CANONICAL_ORIGIN {
+  const stagingEnabled = isAdvocateStagingEnvironmentEnabled(environment)
+  const configured = environment.ADVOCATE_INVITATION_CANONICAL_ORIGIN
+  if (stagingEnabled && configured === undefined) configurationError()
+  const value = configured ?? "https://creatorshare.com"
+  if (
+    value !== "https://creatorshare.com" &&
+    (value !== ADVOCATE_STAGING_CANONICAL_ORIGIN || !stagingEnabled)
+  ) {
+    configurationError()
+  }
+  if (stagingEnabled && value !== ADVOCATE_STAGING_CANONICAL_ORIGIN) {
+    configurationError()
+  }
   return value
 }

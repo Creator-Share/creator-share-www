@@ -1,6 +1,9 @@
 import "server-only"
 
-import { resolveAdvocateHost } from "./host"
+import {
+  isAdvocateStagingEnvironmentEnabled,
+  resolveAdvocateHost,
+} from "./host"
 import {
   ADVOCATE_EXPOSURE_BROKER_VERSION,
   ADVOCATE_EXPOSURE_BROKER_VERSION_HEADER,
@@ -89,8 +92,11 @@ function resolveAllowedTenantOrigin(
 
   const localPort = localApexPort(rawApexHost, environment)
   const allowLocalhostDevelopment = localPort !== undefined
+  const allowStagingEnvironment =
+    isAdvocateStagingEnvironmentEnabled(environment)
   const host = resolveAdvocateHost(origin.host, {
     allowLocalhostDevelopment,
+    allowStagingEnvironment,
   })
   if (host.kind !== "tenant-candidate") return null
 
@@ -104,7 +110,7 @@ function resolveAllowedTenantOrigin(
     }
   } else if (
     origin.protocol !== "https:" ||
-    host.environment !== "production" ||
+    host.environment !== (allowStagingEnvironment ? "staging" : "production") ||
     host.requestPort !== null
   ) {
     return null

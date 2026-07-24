@@ -60,6 +60,18 @@ test.describe("provider automation safety gate", () => {
         ADVOCATE_PROVIDER_AUTOMATION_MODE: "active",
       }),
     ).toBe("active")
+    expect(() =>
+      providerAutomation.loadProviderAutomationMode({
+        ADVOCATE_PROVIDER_AUTOMATION_MODE: "active",
+        NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+      }),
+    ).toThrow(providerAutomation.ProviderAutomationConfigurationError)
+    expect(
+      providerAutomation.loadProviderAutomationMode({
+        ADVOCATE_PROVIDER_AUTOMATION_MODE: "disabled",
+        NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+      }),
+    ).toBe("disabled")
 
     for (const configured of [
       "",
@@ -83,6 +95,10 @@ test.describe("provider automation safety gate", () => {
       {},
       { ADVOCATE_PROVIDER_AUTOMATION_MODE: "disabled" },
       { ADVOCATE_PROVIDER_AUTOMATION_MODE: "malformed" },
+      {
+        ADVOCATE_PROVIDER_AUTOMATION_MODE: "active",
+        NEXT_PUBLIC_BASE_URL: "https://advocate-staging.creatorshare.com",
+      },
     ]) {
       let workCalls = 0
       const execution =

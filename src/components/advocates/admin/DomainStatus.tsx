@@ -1,5 +1,9 @@
 import type { AdvocatePortalAccess } from "@/lib/advocates/admin/access"
-import { activeAdvocatePublicPortalHref } from "@/components/advocates/admin/PortalShell"
+import {
+  activeAdvocatePublicPortalHref,
+  advocatePortalDisplayHostname,
+} from "@/components/advocates/admin/PortalShell"
+import type { AdvocateHostEnvironment } from "@/lib/advocates/host"
 
 type DomainStatusPortal = Pick<
   AdvocatePortalAccess,
@@ -61,15 +65,19 @@ function domainSummary(portal: DomainStatusPortal): string {
 
 export function buildAdvocateDomainStatusPresentation(
   portal: DomainStatusPortal,
+  environment: AdvocateHostEnvironment = process.env,
 ): AdvocateDomainStatusPresentation {
   return Object.freeze({
-    hostname: portal.canonicalHostname ?? "Not yet assigned",
+    hostname: advocatePortalDisplayHostname(
+      portal.canonicalHostname,
+      environment,
+    ),
     domainStatusLabel: portal.domainStatus
       ? readableStatus(portal.domainStatus)
       : "Not yet assigned",
     publicationStatusLabel: readableStatus(portal.publicationStatus),
     summary: domainSummary(portal),
-    publicHref: activeAdvocatePublicPortalHref(portal),
+    publicHref: activeAdvocatePublicPortalHref(portal, environment),
   })
 }
 

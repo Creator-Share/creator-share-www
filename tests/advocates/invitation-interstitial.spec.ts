@@ -99,6 +99,15 @@ test.describe("advocate invitation secret transport", () => {
     expect(parseAdvocateInvitationFragment(signupFragment)).toEqual(
       SIGNUP_MATERIAL,
     )
+
+    expect(
+      buildAdvocateInvitationLink({
+        canonicalOrigin: "https://advocate-staging.creatorshare.com",
+        material: MATERIAL,
+      }),
+    ).toMatch(
+      /^https:\/\/advocate-staging\.creatorshare\.com\/advocate-invitation#/,
+    )
   })
 
   test("rejects malformed, duplicate, extra, and noncanonical material", () => {
@@ -291,6 +300,44 @@ test.describe("advocate invitation interstitial", () => {
       )
       expect(denied.status).toBe(404)
       expect(await denied.text()).toBe("")
+    }
+  })
+
+  test("serves the staging invitation origin only with exact canonical deployment config", async () => {
+    const previousBaseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    const previousInvitationOrigin =
+      process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN
+    try {
+      process.env.NEXT_PUBLIC_BASE_URL =
+        "https://advocate-staging.creatorshare.com"
+      process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN =
+        "https://advocate-staging.creatorshare.com"
+      const enabled = await invitationRoute.GET(
+        new Request("https://internal.example/advocate-invitation", {
+          headers: { host: "advocate-staging.creatorshare.com" },
+        }),
+      )
+      expect(enabled.status).toBe(200)
+
+      process.env.NEXT_PUBLIC_BASE_URL = "https://creatorshare.com"
+      const disabled = await invitationRoute.GET(
+        new Request("https://internal.example/advocate-invitation", {
+          headers: { host: "advocate-staging.creatorshare.com" },
+        }),
+      )
+      expect(disabled.status).toBe(404)
+    } finally {
+      if (previousBaseUrl === undefined) {
+        delete process.env.NEXT_PUBLIC_BASE_URL
+      } else {
+        process.env.NEXT_PUBLIC_BASE_URL = previousBaseUrl
+      }
+      if (previousInvitationOrigin === undefined) {
+        delete process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN
+      } else {
+        process.env.ADVOCATE_INVITATION_CANONICAL_ORIGIN =
+          previousInvitationOrigin
+      }
     }
   })
 

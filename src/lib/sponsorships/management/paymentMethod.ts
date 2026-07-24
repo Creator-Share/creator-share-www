@@ -1,10 +1,18 @@
 import "server-only"
 
 import {
+  ADVOCATE_STAGING_CANONICAL_ORIGIN,
+  isAdvocateStagingEnvironmentEnabled,
+} from "@/lib/advocates/host"
+import {
   getSponsorClaimCanonicalOrigin,
   SPONSOR_ACCOUNT_MANAGEMENT_PAGE_PATH,
 } from "@/lib/sponsorships/accountClaim"
-import { PAYPAL_MANAGE_URL } from "@/lib/payments/portals"
+import {
+  PAYPAL_MANAGE_URL,
+  PAYPAL_SANDBOX_MANAGE_URL,
+  resolvePayPalManageUrl,
+} from "@/lib/payments/portals"
 import { getStripeClient } from "@/lib/stripe/config"
 import type { StripeRegion } from "@/lib/stripe/region"
 
@@ -112,6 +120,7 @@ export interface PaymentMethodManagementDependencies {
   serviceClient: PaymentMethodManagementRpcClient
   stripeForRegion(region: StripeRegion): StripePaymentMethodOperations
   portalConfigurationId(region: StripeRegion): string
+  paypalManagementUrl?: string
   returnUrl: string
 }
 
@@ -347,6 +356,12 @@ export function getStripeBillingPortalConfigurationId(
 export function getSponsorPaymentManagementReturnUrl(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): string {
+  if (isAdvocateStagingEnvironmentEnabled(environment)) {
+    return new URL(
+      SPONSOR_ACCOUNT_MANAGEMENT_PAGE_PATH,
+      ADVOCATE_STAGING_CANONICAL_ORIGIN,
+    ).toString()
+  }
   if (environment.NODE_ENV === "production") {
     return SPONSOR_PAYMENT_MANAGEMENT_PRODUCTION_RETURN_URL
   }
@@ -441,8 +456,15 @@ export async function createSponsorPaymentMethodDestination(
   const resolved = parseResolution(resolution.data)
 
   if (resolved.provider === "PAYPAL") {
+    const managementUrl = dependencies.paypalManagementUrl ?? PAYPAL_MANAGE_URL
+    if (
+      managementUrl !== PAYPAL_MANAGE_URL &&
+      managementUrl !== PAYPAL_SANDBOX_MANAGE_URL
+    ) {
+      throw new PaymentMethodManagementError("unavailable", 503)
+    }
     return {
-      url: PAYPAL_MANAGE_URL,
+      url: managementUrl,
       label: PAYPAL_PAYMENT_METHOD_MANAGEMENT_LABEL,
     }
   }
@@ -508,6 +530,7 @@ export async function createSponsorPaymentMethodDestinationFromRuntime(options: 
       stripeForRegion: createStripePaymentMethodOperations,
       portalConfigurationId: (region) =>
         getStripeBillingPortalConfigurationId(region),
+      paypalManagementUrl: resolvePayPalManageUrl(),
       returnUrl: getSponsorPaymentManagementReturnUrl(),
     },
   )
