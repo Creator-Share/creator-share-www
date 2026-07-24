@@ -275,6 +275,16 @@ async function fillPublicationForm(page: Page): Promise<void> {
   await publication.getByLabel(/Type PUBLISH alpha/).fill("PUBLISH alpha")
 }
 
+/**
+ * Waits until the harness has hydrated. Filling a controlled input before
+ * hydration loses the value when React takes over, which leaves the dependent
+ * submit button disabled for the rest of the test. The failure only appears on
+ * a slow runner, so every navigation and reload passes through here.
+ */
+async function waitForHarnessHydration(page: Page): Promise<void> {
+  await expect(page.locator('main[data-harness-hydrated="true"]')).toBeVisible()
+}
+
 test.beforeAll(async () => {
   await removeHarnessArtifacts()
   const port = await reservePort()
@@ -313,6 +323,7 @@ test.afterAll(async () => {
 
 test.beforeEach(async ({ page }) => {
   await page.goto(harnessOrigin)
+  await waitForHarnessHydration(page)
 })
 
 test("lifecycle state resets when navigation changes only the portal identity", async ({
@@ -321,6 +332,7 @@ test("lifecycle state resets when navigation changes only the portal identity", 
   const submissions: SubmittedRequest[] = []
   await installControlResponses(page, submissions)
   await page.reload()
+  await waitForHarnessHydration(page)
 
   const controls = page.getByRole("region", { name: "Lifecycle controls" })
   await controls.getByLabel("Administrative reason").fill("Alpha suspension")
@@ -361,6 +373,7 @@ test("lifecycle state accepts a refreshed snapshot after completion", async ({
   const submissions: SubmittedRequest[] = []
   await installControlResponses(page, submissions)
   await page.reload()
+  await waitForHarnessHydration(page)
 
   const controls = page.getByRole("region", { name: "Lifecycle controls" })
   await controls.getByLabel("Administrative reason").fill("First suspension")
@@ -391,6 +404,7 @@ test("cleanup recovery resets across portals and sends commands to the new porta
   const submissions: SubmittedRequest[] = []
   await installControlResponses(page, submissions)
   await page.reload()
+  await waitForHarnessHydration(page)
 
   const controls = page.getByRole("region", {
     name: "Retry protected cleanup",
@@ -436,6 +450,7 @@ test("cleanup recovery accepts refreshed props with an exact private command", a
   const submissions: SubmittedRequest[] = []
   await installControlResponses(page, submissions)
   await page.reload()
+  await waitForHarnessHydration(page)
 
   const controls = page.getByRole("region", {
     name: "Retry protected cleanup",
@@ -485,6 +500,7 @@ test("ownership state resets across portals with matching candidate sets", async
   const submissions: SubmittedRequest[] = []
   await installControlResponses(page, submissions)
   await page.reload()
+  await waitForHarnessHydration(page)
 
   const controls = page.getByRole("region", { name: "Ownership transfer" })
   await controls.getByLabel("Administrative reason").fill("Alpha owner change")
@@ -525,6 +541,7 @@ test("ownership state accepts refreshed owner and candidate props", async ({
   const submissions: SubmittedRequest[] = []
   await installControlResponses(page, submissions)
   await page.reload()
+  await waitForHarnessHydration(page)
 
   const controls = page.getByRole("region", { name: "Ownership transfer" })
   await controls.getByLabel("Administrative reason").fill("First owner change")
@@ -607,6 +624,7 @@ test("onboarding restores one privacy-limited operation after reload", async ({
   )
 
   await page.reload()
+  await waitForHarnessHydration(page)
   await expect(page.getByText("A previous result is unresolved.")).toBeVisible()
   await fillOnboardingForm(page)
   await page
@@ -666,6 +684,7 @@ test("onboarding retains the saved operation through authentication loss", async
   }, ONBOARDING_STORAGE_KEY)
   expect(stored).toEqual({ version: 1, operationId: submittedOperationId })
   await page.reload()
+  await waitForHarnessHydration(page)
   await expect(page.getByText("A previous result is unresolved.")).toBeVisible()
 })
 
@@ -873,6 +892,7 @@ test("initial owner reissue retains retry identity through authentication loss",
     expectedVersion: 7,
   })
   await page.reload()
+  await waitForHarnessHydration(page)
   await expect(
     page
       .getByRole("region", { name: "Reissue initial owner invitation" })
@@ -1024,6 +1044,7 @@ test("publication recovers a lost first response with the exact saved request", 
   })
 
   await page.reload()
+  await waitForHarnessHydration(page)
   await expect(publication.getByRole("status")).toContainText(
     "Publication committed",
   )
@@ -1179,6 +1200,7 @@ test("publication retains its operation through authentication loss and reload",
   ).not.toBeNull()
 
   await page.reload()
+  await waitForHarnessHydration(page)
   await expect(publication.getByRole("status")).toContainText(
     "Publication committed",
   )
@@ -1302,6 +1324,7 @@ test("publication fails closed when same-tab recovery storage is blocked", async
     }
   }, "creator-share:advocate-publication-operation:v1:")
   await page.reload()
+  await waitForHarnessHydration(page)
 
   await fillPublicationForm(page)
   const publication = page.getByRole("region", {
@@ -1327,6 +1350,7 @@ test("publication cannot start again when exact success storage cleanup fails", 
     }
   }, "creator-share:advocate-publication-operation:v1:")
   await page.reload()
+  await waitForHarnessHydration(page)
   await page.route(/\/publish$/, async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>
     await route.fulfill({
@@ -1402,6 +1426,7 @@ test("publication never adopts another portal's saved operation", async ({
     })
   })
   await page.reload()
+  await waitForHarnessHydration(page)
   await expect.poll(() => submissions.length).toBe(1)
 
   await page.getByRole("button", { name: "Navigate to beta portal" }).click()
@@ -1474,6 +1499,7 @@ test("publication ignores a delayed old-portal response after navigation", async
   })
 
   await page.reload()
+  await waitForHarnessHydration(page)
   await expect.poll(() => requestReceived).toBe(true)
   await page.getByRole("button", { name: "Navigate to beta portal" }).click()
   releaseResponse()

@@ -54,6 +54,15 @@ export default function AdvocateControlRerenderHarness() {
   })
   const portal = PORTALS[portalKey]
   const refreshed = snapshotRevision > 0
+  // Marks the point where React has hydrated and controlled inputs will retain
+  // what a test types. Typing before this flips resets the value during
+  // hydration, which leaves submit buttons permanently disabled. Fast machines
+  // hide the race; a loaded CI runner does not.
+  const [hydrated, setHydrated] = useState(false)
+
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
 
   useEffect(() => {
     try {
@@ -85,7 +94,7 @@ export default function AdvocateControlRerenderHarness() {
   }, [])
 
   return (
-    <main>
+    <main data-harness-hydrated={hydrated ? "true" : "false"}>
       <div aria-label="Harness controls">
         <button type="button" onClick={() => setPortalKey("beta")}>
           Navigate to beta portal
