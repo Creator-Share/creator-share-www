@@ -78,7 +78,10 @@ let appDirectory: string | null = null
 let appOrigin = ""
 let appOutput = ""
 
-test.describe.configure({ mode: "serial" })
+// Served by `next dev`, so the first interaction with a not-yet-compiled route
+// pays the compile cost inside the test. A shared CI runner is slow enough for
+// that to exceed the 30 second default.
+test.describe.configure({ mode: "serial", timeout: 120_000 })
 
 function assertRecord(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {

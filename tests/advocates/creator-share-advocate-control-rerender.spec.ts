@@ -32,7 +32,12 @@ let harnessProcess: ChildProcessWithoutNullStreams | null = null
 let harnessOrigin = ""
 let harnessOutput = ""
 
-test.describe.configure({ mode: "serial" })
+// This suite drives a harness served by `next dev`, which compiles routes on
+// demand. The first interaction with a not-yet-compiled route pays that compile
+// cost inside the test, and a shared CI runner is slow enough for that to
+// exceed the 30 second default. The work is real, not a hang, so the file gets
+// a timeout sized for a cold compile rather than a fast developer machine.
+test.describe.configure({ mode: "serial", timeout: 120_000 })
 
 async function removeHarnessArtifacts(): Promise<void> {
   await Promise.all([
@@ -1043,7 +1048,9 @@ test("publication recovers a lost first response with the exact saved request", 
 test("publication times out after response headers when the body stalls", async ({
   page,
 }) => {
-  test.setTimeout(45_000)
+  // Intentionally no narrower timeout here. This test was raised to 45 seconds
+  // against the old 30 second default; the file-level timeout is now larger, so
+  // re-declaring 45 seconds would only shrink the budget on a slow runner.
 
   await fillPublicationForm(page)
   const publication = page.getByRole("region", {

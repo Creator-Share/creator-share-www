@@ -26,7 +26,10 @@ let harnessProcess: ChildProcessWithoutNullStreams | null = null
 let harnessOrigin = ""
 let harnessOutput = ""
 
-test.describe.configure({ mode: "serial" })
+// Served by `next dev`, so the first interaction with a not-yet-compiled route
+// pays the compile cost inside the test. A shared CI runner is slow enough for
+// that to exceed the 30 second default.
+test.describe.configure({ mode: "serial", timeout: 120_000 })
 
 async function removeHarnessArtifacts(): Promise<void> {
   await Promise.all([
