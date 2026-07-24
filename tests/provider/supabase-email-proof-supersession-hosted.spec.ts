@@ -2392,9 +2392,16 @@ test("paces one explicit two-request measurement group at actual dispatch", asyn
   ])
   expect(groupedReservations).toEqual([{ adminSlots: 2, emailSlots: 0 }])
   expect(providerDispatches).toHaveLength(2)
+  // Both requests must leave as one burst rather than being paced apart. An
+  // exact same-millisecond assertion is a coin flip on a loaded runner, where
+  // two genuinely concurrent dispatches can straddle a clock tick. The
+  // documented sequential refill is 360 per hour, one dispatch every 10
+  // seconds, so this bound still separates a burst from serialized pacing by
+  // roughly two orders of magnitude. Serialization is caught outright anyway:
+  // the sequential pacer stubs above throw whenever they are used at all.
   expect(
     Math.max(...providerDispatches) - Math.min(...providerDispatches),
-  ).toBe(0)
+  ).toBeLessThanOrEqual(250)
   const mixedContext = await adapter.prepareScenario(
     {
       accountState: "new",
