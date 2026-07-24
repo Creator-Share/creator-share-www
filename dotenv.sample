@@ -89,6 +89,13 @@ EMAIL_PORT=587
 EMAIL_SECURE=false
 EMAIL_FROM="Creator Share" <noreply@creatorshare.com>
 
+# FF-029 hosted email proof canary only. Load these from protected credential
+# storage for the canary process, never from a committed environment file.
+# The account is fixed to Ethereal's TLS IMAP endpoint. Its matching SMTP
+# credentials are configured directly in the isolated Supabase project.
+FF029_ETHEREAL_IMAP_USER=
+FF029_ETHEREAL_IMAP_PASSWORD=
+
 # Vercel sends CRON_SECRET as a Bearer token to each scheduled GET endpoint.
 # Generate at least 32 random characters. The payment and welcome workers use
 # this value unless a nonempty worker-specific override is configured for an

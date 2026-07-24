@@ -287,6 +287,10 @@ The release gate function is deployment evidence. It is not a per request featur
 
 The generic SMTP paths for sponsor welcome and advocate invitation mail quarantine every provider acceptance ambiguity before a stale lease can retry it. They do not provide exact once delivery. A deterministic message ID supports operator investigation, but it is not an idempotency guarantee. Never describe either worker or its canaries as exact once.
 
+### FF-029 hosted mailbox contract
+
+The hosted FF-029 mailbox seam uses `tests/provider/support/ethereal-imap-mailbox.mjs`. It accepts only the fixed TLS endpoint at `imap.ethereal.email:993`, requires credentials through `FF029_ETHEREAL_IMAP_USER` and `FF029_ETHEREAL_IMAP_PASSWORD`, and suppresses client logging. Every canary recipient must match the random `creator-share-ff029-<32 lowercase hex characters>@example.com` identity contract. Retrieval snapshots the exact recipient before Auth dispatch and accepts only a later mailbox UID for that recipient. Cleanup deletes a message only when every visible recipient belongs to the tracked canary set. A mixed-recipient message is preserved and cleanup fails closed. The local Mailpit runner remains unchanged and remains local mechanics evidence. The Ethereal mailbox seam alone does not convert schema v3 evidence into hosted release evidence.
+
 ### Advocate invitation SMTP ambiguity procedure
 
 1. Escalate every nonzero invitation `manualReview` or `settlementUnknown` count to the release owner. Do not place the recipient, capability, authentication proof, ciphertext, or target account identifier in the incident record.
