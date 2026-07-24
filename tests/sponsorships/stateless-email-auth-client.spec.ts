@@ -70,9 +70,32 @@ if (previouslyCachedServerModule) {
 } else {
   delete testRequire.cache[serverModulePath]
 }
-const statelessAuth = testRequire(
+// The module under test must be built while the loader stub above is
+// installed. A Playwright worker runs many spec files in one process, so
+// another spec may already have loaded this module, or @supabase/supabase-js,
+// against the real client. Requiring a cached module never re-enters the stub,
+// so the assertions would silently observe a real SupabaseClient. Evicting
+// both entries first makes this spec independent of file execution order.
+const statelessAuthModulePath = testRequire.resolve(
   "../../src/lib/sponsorships/management/statelessAuth",
+)
+const supabaseModulePath = testRequire.resolve("@supabase/supabase-js")
+const previouslyCachedModules = new Map(
+  [statelessAuthModulePath, supabaseModulePath].map((path) => [
+    path,
+    testRequire.cache[path],
+  ]),
+)
+for (const path of previouslyCachedModules.keys()) {
+  delete testRequire.cache[path]
+}
+const statelessAuth = testRequire(
+  statelessAuthModulePath,
 ) as StatelessAuthModule
+for (const [path, cached] of previouslyCachedModules) {
+  if (cached) testRequire.cache[path] = cached
+  else delete testRequire.cache[path]
+}
 nodeModule._load = originalModuleLoad
 
 const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL

@@ -11,7 +11,13 @@ on:
       - "src/lib/auth/passwordRecoveryClient.ts"
       - "tests/auth/password-recovery-browser.spec.ts"
       - "tests/advocates/portal-catalog-browser.spec.ts"
-      - "tests/fixtures/advocate-catalog-harness/**"
+      - "tests/advocates/invitation-interstitial.spec.ts"
+      - "tests/release-manifest.json"
+      - "tests/fixtures/**"
+      - "scripts/run-release-lane.mjs"
+      - "scripts/verify-release-manifest.mjs"
+      - "src/app/advocate-invitation/**"
+      - "src/lib/advocates/invitations/**"
       - "playwright.config.ts"
       - ".nvmrc"
       - "package.json"
@@ -49,18 +55,23 @@ jobs:
       - name: Verify catalog recovery
         run: yarn test:advocate:webkit
 
-      - name: Verify password recovery in Chromium
+      - name: Verify every test file is assigned to a required lane
+        run: yarn verify:release-manifest
+
+      - name: Verify WebKit lane in Chromium
         run: >-
-          yarn playwright test
-          tests/auth/password-recovery-browser.spec.ts
+          node scripts/run-release-lane.mjs webkit-browser
           --workers=1
           --retries=0
 
-      - name: Verify password recovery in WebKit
-        env:
-          RUN_WEBKIT_BROWSER_INTEGRATION: "1"
-        run: >-
-          yarn playwright test
-          tests/auth/password-recovery-browser.spec.ts
-          --workers=1
-          --retries=0
+      - name: Verify WebKit lane in WebKit
+        run: yarn test:lane:webkit
+
+      - name: Upload WebKit lane failure artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-webkit-lane-artifacts
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7

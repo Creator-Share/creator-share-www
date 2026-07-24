@@ -5,185 +5,25 @@ on:
     branches:
       - dev
     paths:
-      - "supabase/migrations/*.sql"
-      - "supabase/tests/*publication*.sql"
-      - "supabase/tests/**/*publication*"
-      - "supabase/tests/*initial_owner*.sql"
-      - "supabase/tests/**/*initial_owner*"
-      - "supabase/tests/*invitation*.sql"
-      - "supabase/tests/**/*invitation*"
-      - "supabase/tests/*email_proof*.sql"
-      - "supabase/tests/**/*email_proof*"
-      - "supabase/tests/*password_recovery*.sql"
-      - "supabase/tests/**/*password_recovery*"
-      - "supabase/tests/sponsor_recent_authentication_management.test.sql"
-      - "supabase/tests/persistent_sponsor_account_claim_links.test.sql"
-      - "supabase/tests/sponsor_passwordless_email_delivery_limits.test.sql"
-      - "supabase/tests/advocate_attribution_settlement_integration.test.sql"
-      - "supabase/tests/advocate_admin_settings_boundary.test.sql"
-      - "supabase/tests/advocate_logo_upload_reservations.test.sql"
-      - "supabase/tests/postgrest_role_claim_compatibility.test.sql"
-      - "tests/database/**/*publication*"
-      - "tests/database/**/*initial-owner*"
-      - "tests/database/**/*invitation*"
-      - "tests/database/**/*email-proof*"
-      - "tests/database/advocate-branding-authority-*.mjs"
-      - "tests/database/postgrest-role-claim-http.mjs"
-      - "tests/database/postgrest-role-claim-http-termination.mjs"
-      - "tests/database/fixtures/advocate-branding-authority-concurrency.sql"
-      - "tests/database/support/*.mjs"
-      - "tests/provider/**"
-      - "tests/advocates/provisioning*.spec.ts"
-      - "tests/advocates/tenant-payment-browser.spec.ts"
-      - "tests/fixtures/advocate-checkout-harness/**"
-      - "tests/advocates/publication-canary-*.spec.ts"
-      - "tests/advocates/exposure-attribution-identity.spec.ts"
-      - "tests/advocates/exposure-broker-client.spec.ts"
-      - "tests/advocates/exposure-broker-server.spec.ts"
-      - "tests/advocates/exposure-broker-tracker.spec.ts"
-      - "tests/advocates/portal-analytics.spec.ts"
-      - "tests/advocates/portal-public-metrics-*.spec.ts"
-      - "tests/advocates/public-metric-release-worker.spec.ts"
-      - "tests/advocates/public-presentation*.spec.ts"
-      - "tests/advocates/public-impact-metrics.spec.ts"
-      - "tests/sponsorships/exposure.spec.ts"
-      - "tests/sponsorships/stripe-checkout*.spec.ts"
-      - "tests/sponsorships/stripe-provider-request.spec.ts"
-      - "tests/sponsorships/paypal-browser-payload.spec.ts"
-      - "tests/sponsorships/paypal-checkout-v2.spec.ts"
-      - "tests/sponsorships/paypal-provider-request.spec.ts"
-      - "tests/sponsorships/paypal-sponsorship-checkout.spec.ts"
-      - "tests/sponsorships/*webhook-ingestion.spec.ts"
-      - "tests/sponsorships/payment-gateway-event-worker.spec.ts"
-      - "tests/sponsorships/sponsor-welcome-email-worker.spec.ts"
-      - "src/lib/advocates/attributionIdentityCookie.ts"
-      - "src/lib/advocates/attributionIdentity*.ts"
-      - "src/lib/advocates/exposureBroker*.ts"
-      - "src/lib/advocates/provisioning/**"
-      - "src/lib/advocates/publicationCanary/**"
-      - "src/lib/advocates/admin/access.ts"
-      - "src/lib/advocates/admin/analytics.ts"
-      - "src/lib/advocates/admin/branding.ts"
-      - "src/lib/advocates/admin/brandingForm.ts"
-      - "src/lib/advocates/admin/logo.ts"
-      - "src/lib/advocates/admin/logoReservation.ts"
-      - "src/lib/advocates/admin/publicMetrics*.ts"
-      - "src/lib/advocates/admin/settings.ts"
-      - "src/lib/advocates/publicMetrics/**"
-      - "src/lib/advocates/publicPresentation*.ts"
-      - "src/lib/advocates/publicSite*.ts"
-      - "src/lib/advocates/richText.ts"
-      - "src/lib/auth/emailProof*.ts"
-      - "src/lib/auth/creatorShareAdminInvitationContracts.ts"
-      - "src/lib/auth/supabaseEmailProofIssuer.ts"
-      - "src/lib/advocates/invitations/email*.ts"
-      - "src/lib/advocates/invitations/requestContext.ts"
-      - "src/lib/advocates/creatorShareAdmin/routeSecurity.ts"
-      - "src/lib/auth/passwordRecoveryClient.ts"
-      - "src/lib/sponsorships/accountClaim.ts"
-      - "src/lib/sponsorships/checkout/**"
-      - "src/lib/sponsorships/crypto.ts"
-      - "src/lib/sponsorships/email/**"
-      - "src/lib/sponsorships/exposure.ts"
-      - "src/lib/sponsorships/gateways/**"
-      - "src/lib/sponsorships/management/passwordlessAccess.ts"
-      - "src/lib/sponsorships/management/passwordlessRateLimit.ts"
-      - "src/lib/sponsorships/management/responseBoundSupabaseCookies.ts"
-      - "src/lib/sponsorships/management/sponsorEmailConfirmation.ts"
-      - "src/lib/sponsorships/visitorCookie.ts"
-      - "src/lib/stripe/**"
-      - "src/lib/paypal/**"
-      - "src/app/api/auth/passwordless/route.ts"
-      - "src/app/api/auth/registration/route.ts"
-      - "src/app/api/auth/reset-password/route.ts"
-      - "src/app/api/auth/verify-otp/route.ts"
-      - "src/app/api/auth/change-password/route.ts"
-      - "src/app/api/admin/users/invite/route.ts"
-      - "src/app/(admin)/admin/users/components/InviteUserDialog.tsx"
-      - "src/app/(advocate-admin)/portal/*/domain/**"
-      - "src/app/(advocate-admin)/portal/*/branding/**"
-      - "src/app/(advocate-admin)/portal/*/analytics/**"
-      - "src/app/(advocate-admin)/portal/*/public-metrics/**"
-      - "src/app/(advocate-admin)/portal/*/layout.tsx"
-      - "src/app/.well-known/creator-share/advocate-publication-canary/**"
-      - "src/app/api/admin/advocates/*/provisioning/**"
-      - "src/app/api/admin/advocates/*/publish/**"
-      - "src/app/api/advocates/exposure/**"
-      - "src/app/api/internal/advocates/invitations/route.ts"
-      - "src/app/api/internal/advocates/provisioning/**"
-      - "src/app/api/internal/advocates/publication-canaries/**"
-      - "src/app/api/internal/advocates/publication-sentinel/**"
-      - "src/app/api/internal/advocates/public-metrics/**"
-      - "src/app/api/internal/payments/gateway-events/**"
-      - "src/app/api/internal/sponsorships/welcome-emails/**"
-      - "src/app/api/paypal/**"
-      - "src/app/api/portal/*/branding/**"
-      - "src/app/api/portal/*/logo/**"
-      - "src/app/api/portal/*/public-metrics/**"
-      - "src/app/api/portal/*/team/invitations/**"
-      - "src/app/api/stripe/**"
-      - "src/app/api/webhooks/stripe/**"
-      - "src/app/api/sponsor-account/reauth/start/route.ts"
-      - "src/app/api/sponsor-account/start/route.ts"
-      - "src/app/api/sponsor-account/complete/route.ts"
-      - "src/app/auth/confirm/route.ts"
-      - "src/app/forgot-password/**"
-      - "src/app/page.tsx"
-      - "src/app/register/page.tsx"
-      - "src/app/sponsorships/components/SponsorshipModal/**"
-      - "src/app/verifyAccount/page.tsx"
-      - "supabase/templates/sponsor_email_confirmation.html"
-      - "src/lib/sponsorships/management/statelessAuth.ts"
-      - "src/utils/passwordValidation.ts"
-      - "src/utils/admin/creatorShareRoles.ts"
-      - "src/utils/auth/requireSuperAdmin.ts"
-      - "src/utils/supabase/server.ts"
-      - "src/utils/supabase/middleware.ts"
-      - "src/store/userManagementStore.ts"
-      - "src/types/admin.types.ts"
-      - "src/components/advocates/admin/DomainStatus.tsx"
-      - "src/components/advocates/admin/BrandingSettingsClient.tsx"
-      - "src/components/advocates/admin/AnalyticsDashboard.tsx"
-      - "src/components/advocates/admin/PublicMetricSettingsClient.tsx"
-      - "src/components/advocates/AdvocateImpactMetrics.tsx"
-      - "src/components/advocates/admin/PortalNavigation.tsx"
-      - "src/components/advocates/admin/PortalShell.tsx"
-      - "tests/auth/*email-proof*.spec.ts"
-      - "tests/auth/password-recovery-client.spec.ts"
-      - "tests/auth/password-reset-request-route.spec.ts"
-      - "tests/auth/verify-otp.spec.ts"
-      - "tests/auth/change-password.spec.ts"
-      - "tests/auth/creator-share-admin-invitation-route.spec.ts"
-      - "tests/advocates/attribution-identity-auth-routes.spec.ts"
-      - "tests/advocates/attribution-identity-session-auth-routes.spec.ts"
-      - "tests/advocates/invitation-email-worker.spec.ts"
-      - "tests/advocates/invitation-rollout-safety.spec.ts"
-      - "tests/advocates/portal-invitation-route.spec.ts"
-      - "tests/advocates/portal-access.spec.ts"
-      - "tests/advocates/portal-domain-ui.spec.ts"
-      - "tests/advocates/portal-branding.spec.ts"
-      - "tests/advocates/portal-branding-route.spec.ts"
-      - "tests/advocates/portal-logo-reservation.spec.ts"
-      - "tests/advocates/portal-logo-route.spec.ts"
-      - "tests/advocates/service-role-client-timeout.spec.ts"
-      - "docs/advocate-domain-publication-runbook.md"
-      - "docs/advocate-payment-release-runbook.md"
-      - "docs/advocate-platform-roadmap.md"
-      - "tests/auth/supabase-email-proof-issuer.spec.ts"
-      - "tests/sponsorships/passwordless-access.spec.ts"
-      - "tests/sponsorships/passwordless-rate-limit.spec.ts"
-      - "tests/sponsorships/account-claim.spec.ts"
-      - "tests/sponsorships/sponsor-claim-routes.spec.ts"
-      - "tests/sponsorships/sponsor-email-confirmation.spec.ts"
-      - "tests/sponsorships/stateless-email-auth-client.spec.ts"
-      - "supabase/config.toml"
-      - "supabase/seed.sql"
-      - ".nvmrc"
+      # Broad by design. The previous enumeration is what allowed test files and
+      # implementation surfaces to drift out of required CI: a new file simply
+      # never matched a path, so the gate stayed green without running it.
+      # tests/release-manifest.json plus scripts/verify-release-manifest.mjs
+      # enforce lane assignment; these globs make sure the gate actually runs.
+      - "src/**"
+      - "tests/**"
+      - "supabase/**"
+      - "scripts/**"
+      - "docs/**"
+      - ".github/workflows/**"
+      - "middleware.ts"
+      - "next.config.*"
+      - "playwright.config.ts"
       - "vercel.json"
+      - ".nvmrc"
       - "package.json"
       - "package-lock.json"
       - "yarn.lock"
-      - ".github/workflows/advocate-publication-db-gate.yml"
   workflow_dispatch:
 
 permissions:
@@ -227,45 +67,23 @@ jobs:
               env "PATH=$PATH" "HOME=$HOME" \
               yarn test:provider:supabase-email-proof-contract
 
-      - name: Verify shared email proof issuer boundary
-        env:
-          PW_NO_WEBSERVER: "1"
-        run: >-
-          yarn playwright test
-          tests/auth/email-proof-issuance-gate.spec.ts
-          tests/auth/supabase-email-proof-issuer.spec.ts
-          tests/auth/email-proof-provider-inventory.spec.ts
-          tests/auth/password-recovery-client.spec.ts
-          tests/auth/password-reset-request-route.spec.ts
-          tests/auth/verify-otp.spec.ts
-          tests/auth/change-password.spec.ts
-          tests/auth/creator-share-admin-invitation-route.spec.ts
-          tests/advocates/attribution-identity-auth-routes.spec.ts
-          tests/advocates/attribution-identity-session-auth-routes.spec.ts
-          tests/advocates/invitation-email-worker.spec.ts
-          tests/advocates/invitation-rollout-safety.spec.ts
-          tests/advocates/portal-invitation-route.spec.ts
-          tests/advocates/service-role-client-timeout.spec.ts
-          tests/sponsorships/passwordless-access.spec.ts
-          tests/sponsorships/passwordless-rate-limit.spec.ts
-          tests/sponsorships/account-claim.spec.ts
-          tests/sponsorships/sponsor-claim-routes.spec.ts
-          tests/sponsorships/sponsor-email-confirmation.spec.ts
-          tests/sponsorships/stateless-email-auth-client.spec.ts
-          --workers=1
-          --retries=0
+      - name: Verify every test file is assigned to a required lane
+        run: yarn verify:release-manifest
 
       - name: Install Playwright Chromium
         run: yarn playwright install --with-deps chromium
 
-      - name: Verify advocate checkout browser parity
-        run: yarn test:advocate:checkout-browser-parity
+      - name: Run provider-free offline lane
+        run: yarn test:lane:offline
 
-      - name: Upload checkout browser parity failure artifacts
+      - name: Run dev server lane
+        run: yarn test:lane:dev-server
+
+      - name: Upload Playwright failure artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v6
         with:
-          name: advocate-checkout-browser-parity-artifacts
+          name: advocate-playwright-lane-artifacts
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
@@ -276,72 +94,6 @@ jobs:
           --driver bridge
           --opt com.docker.network.bridge.host_binding_ipv4=127.0.0.1
           "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
-
-      - name: Verify advocate portal administration
-        env:
-          PW_NO_WEBSERVER: "1"
-        run: >-
-          yarn playwright test
-          tests/advocates/portal-access.spec.ts
-          tests/advocates/portal-domain-ui.spec.ts
-          tests/advocates/portal-branding.spec.ts
-          tests/advocates/portal-branding-route.spec.ts
-          tests/advocates/portal-logo-reservation.spec.ts
-          tests/advocates/portal-logo-route.spec.ts
-          --workers=1
-          --retries=0
-
-      - name: Verify provider-free provisioning and publication boundary
-        env:
-          PW_NO_WEBSERVER: "1"
-        run: >-
-          yarn playwright test
-          tests/advocates/provisioning-start.spec.ts
-          tests/advocates/provisioning.spec.ts
-          tests/advocates/publication-canary-challenge.spec.ts
-          tests/advocates/publication-canary-client-operation.spec.ts
-          tests/advocates/publication-canary-database.spec.ts
-          tests/advocates/publication-canary-execute.spec.ts
-          tests/advocates/publication-canary-operation.spec.ts
-          tests/advocates/publication-canary-route.spec.ts
-          tests/advocates/publication-canary-runner.spec.ts
-          tests/advocates/publication-canary-runtime.spec.ts
-          tests/advocates/publication-canary-sentinel-bootstrap.spec.ts
-          tests/advocates/publication-canary-sentinel.spec.ts
-          tests/advocates/publication-canary-worker.spec.ts
-          --workers=1
-          --retries=0
-
-      - name: Verify attribution settlement application boundary
-        env:
-          PW_NO_WEBSERVER: "1"
-        run: >-
-          yarn playwright test
-          tests/advocates/exposure-attribution-identity.spec.ts
-          tests/advocates/exposure-broker-client.spec.ts
-          tests/advocates/exposure-broker-server.spec.ts
-          tests/advocates/exposure-broker-tracker.spec.ts
-          tests/sponsorships/exposure.spec.ts
-          tests/sponsorships/stripe-checkout.spec.ts
-          tests/sponsorships/stripe-checkout-v2.spec.ts
-          tests/sponsorships/stripe-provider-request.spec.ts
-          tests/sponsorships/paypal-browser-payload.spec.ts
-          tests/sponsorships/paypal-checkout-v2.spec.ts
-          tests/sponsorships/paypal-provider-request.spec.ts
-          tests/sponsorships/paypal-sponsorship-checkout.spec.ts
-          tests/sponsorships/stripe-webhook-ingestion.spec.ts
-          tests/sponsorships/paypal-webhook-ingestion.spec.ts
-          tests/sponsorships/payment-gateway-event-worker.spec.ts
-          tests/advocates/portal-analytics.spec.ts
-          tests/advocates/portal-public-metrics-route.spec.ts
-          tests/advocates/portal-public-metrics-ui.spec.ts
-          tests/advocates/public-metric-release-worker.spec.ts
-          tests/advocates/public-presentation-repository.spec.ts
-          tests/advocates/public-presentation.spec.ts
-          tests/advocates/public-impact-metrics.spec.ts
-          tests/sponsorships/sponsor-welcome-email-worker.spec.ts
-          --workers=1
-          --retries=0
 
       - name: Start local Supabase
         run: >-
@@ -374,11 +126,19 @@ jobs:
             fi
           done
 
-      - name: Run PostgREST role claim compatibility database tests
+      - name: Run the complete pgTAP suite
         run: >-
           yarn supabase test db
           --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
-          supabase/tests/postgrest_role_claim_compatibility.test.sql
+
+      - name: Run local Supabase HTTP integration lane
+        env:
+          RUN_LOCAL_SUPABASE_HTTP_INTEGRATION: "1"
+        run: >-
+          yarn playwright test
+          tests/advocates/portal-catalog-supabase-http.spec.ts
+          --workers=1
+          --retries=0
 
       - name: Run loopback PostgREST role claim compatibility gate
         env:
@@ -396,20 +156,6 @@ jobs:
           path: ${{ runner.temp }}/advocate-postgrest-role-http-evidence.json
           if-no-files-found: error
           retention-days: 30
-
-      - name: Run focused initial owner database tests
-        run: |
-          yarn supabase test db \
-            --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK" \
-            supabase/tests/advocate_initial_owner_onboarding.test.sql \
-            supabase/tests/advocate_invitation_email_delivery.test.sql \
-            supabase/tests/advocate_invitation_authentication_rate_limit.test.sql
-
-      - name: Run invitation proof settlement database tests
-        run: >-
-          yarn supabase test db
-          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
-          supabase/tests/advocate_invitation_email_proof_settlement.test.sql
 
       - name: Run invitation proof quarantine concurrency harness
         env:
@@ -439,16 +185,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      - name: Run focused publication database tests
-        run: |
-          yarn supabase test db \
-            --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK" \
-            supabase/tests/advocate_publication_approval_boundary.test.sql \
-            supabase/tests/advocate_publication_canary_reports.test.sql \
-            supabase/tests/advocate_publication_from_canary.test.sql \
-            supabase/tests/advocate_publication_operation_recovery.test.sql \
-            supabase/tests/advocate_publication_sentinel_reservation.test.sql
-
       - name: Run publication concurrency harness
         env:
           ADVOCATE_PUBLICATION_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-publication-concurrency-evidence.json
@@ -462,39 +198,6 @@ jobs:
           path: ${{ runner.temp }}/advocate-publication-concurrency-evidence.json
           if-no-files-found: ignore
           retention-days: 30
-
-      - name: Run shared email proof issuance database tests
-        run: >-
-          yarn supabase test db
-          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
-          supabase/tests/shared_email_proof_issuance_gate.test.sql
-
-      - name: Run password recovery authorization database tests
-        run: >-
-          yarn supabase test db
-          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
-          supabase/tests/sponsor_recent_authentication_management.test.sql
-          supabase/tests/password_recovery_receipt_consumption.test.sql
-
-      - name: Run sponsor account claim database tests
-        run: >-
-          yarn supabase test db
-          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
-          supabase/tests/persistent_sponsor_account_claim_links.test.sql
-          supabase/tests/sponsor_passwordless_email_delivery_limits.test.sql
-
-      - name: Run attribution settlement integration gate
-        run: >-
-          yarn supabase test db
-          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
-          supabase/tests/advocate_attribution_settlement_integration.test.sql
-
-      - name: Run branding authority database tests
-        run: >-
-          yarn supabase test db
-          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
-          supabase/tests/advocate_admin_settings_boundary.test.sql
-          supabase/tests/advocate_logo_upload_reservations.test.sql
 
       - name: Run branding authority concurrency harness
         env:
