@@ -77,14 +77,10 @@ jobs:
         run: yarn test:lane:offline
 
       - name: Run dev server lane
-        # The dev server needs the public Supabase settings to boot. These are
-        # deliberate placeholders: every spec in this lane intercepts its own
-        # network, so pointing at a real project would add risk without adding
-        # coverage. A developer machine supplies these through .env.local,
-        # which is why this lane can pass locally and still fail here.
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-browser-anon-key"
+        # This step intentionally sets no Supabase environment. The FF-029
+        # contract forbids this workflow from ever naming a Supabase key
+        # variable, so the dev server's loopback placeholders live in
+        # playwright.config.ts instead.
         run: yarn test:lane:dev-server
 
       - name: Upload Playwright failure artifacts
