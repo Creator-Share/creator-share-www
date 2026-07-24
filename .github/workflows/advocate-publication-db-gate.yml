@@ -34,6 +34,8 @@ on:
       - "tests/database/support/*.mjs"
       - "tests/provider/**"
       - "tests/advocates/provisioning*.spec.ts"
+      - "tests/advocates/tenant-payment-browser.spec.ts"
+      - "tests/fixtures/advocate-checkout-harness/**"
       - "tests/advocates/publication-canary-*.spec.ts"
       - "tests/advocates/exposure-attribution-identity.spec.ts"
       - "tests/advocates/exposure-broker-client.spec.ts"
@@ -214,13 +216,16 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Verify email proof supersession harness safety
-        env:
-          PW_NO_WEBSERVER: "1"
-        run: >-
-          yarn playwright test
-          tests/provider/supabase-email-proof-supersession.spec.ts
-          --workers=1
-          --retries=0
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo unshare --net -- \
+            setpriv \
+              --reuid="$(id -u)" \
+              --regid="$(id -g)" \
+              --init-groups \
+              env "PATH=$PATH" "HOME=$HOME" \
+              yarn test:provider:supabase-email-proof-contract
 
       - name: Verify shared email proof issuer boundary
         env:
@@ -249,6 +254,21 @@ jobs:
           tests/sponsorships/stateless-email-auth-client.spec.ts
           --workers=1
           --retries=0
+
+      - name: Install Playwright Chromium
+        run: yarn playwright install --with-deps chromium
+
+      - name: Verify advocate checkout browser parity
+        run: yarn test:advocate:checkout-browser-parity
+
+      - name: Upload checkout browser parity failure artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-checkout-browser-parity-artifacts
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Create loopback-only Docker network
         run: >-

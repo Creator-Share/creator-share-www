@@ -189,7 +189,11 @@ export function loadOrCreateCheckoutOperation(options: {
     // an operation ID, but a page reload cannot recover that local retry key.
   }
 
-  const operationId = (options.createOperationId ?? crypto.randomUUID)()
+  // crypto.randomUUID must be invoked on crypto; an unbound reference throws
+  // "Illegal invocation" in browsers.
+  const operationId = options.createOperationId
+    ? options.createOperationId()
+    : crypto.randomUUID()
   if (!UUID_V4_PATTERN.test(operationId)) {
     throw new Error("Invalid checkout operation identifier")
   }

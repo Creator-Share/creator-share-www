@@ -1919,6 +1919,14 @@ test("keeps the FF-029 workflow loopback only, ephemeral, and observational", as
   expect(bindingVerification).toContain('"::1"')
   expect(bindingVerification).toContain("exit 1")
 
+  const offlineContract = step("Verify email proof supersession harness safety")
+  expect(offlineContract).toContain("sudo unshare --net")
+  expect(offlineContract).toContain("setpriv")
+  expect(offlineContract).toContain(
+    "yarn test:provider:supabase-email-proof-contract",
+  )
+  expect(offlineContract).not.toContain("continue-on-error")
+
   const credentialLoad = step("Load local Supabase canary credentials")
   expect(credentialLoad).toContain(
     'node_modules/.bin/supabase status -o env > "$status_file"',

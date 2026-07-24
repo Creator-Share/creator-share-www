@@ -349,6 +349,21 @@ The legacy `partnerships` table remains a compatibility projection for pre-v2 St
 
 Pending claim links remain valid for 400 days. The encrypted recipient and claim envelope remains available for delivery for no more than 90 days, then the retention worker redacts it. Extending the claim link does not extend plaintext or ciphertext contact retention.
 
+## Advocate checkout browser parity gate
+
+Checkout behavior and payment scope must stay identical on the primary Creator Share origin and on a branded advocate subdomain. Module-level tests cannot prove that, because the risk lives in what the real browser does: which origin it stamps on the request, which identifier it mints per checkout, and what it leaves in web storage before handing off to a provider.
+
+`yarn test:advocate:checkout-browser-parity` runs `tests/advocates/tenant-payment-browser.spec.ts` against the isolated fixture in `tests/fixtures/advocate-checkout-harness/`, which renders the production `SponsorshipModal` and nothing else. The fixture is built and served in production mode from a worker-scoped build directory. It is deliberately not `next dev`: lazy compilation serves transient manifest failures, and the development error overlay is itself a dialog, so a broken page can masquerade as a healthy modal.
+
+For each of Stripe and PayPal, on both a primary `localhost` origin and an advocate `*.localhost` subdomain origin, the gate proves in a real Chromium page that:
+
+1. The checkout initiation is a same-origin request issued by the app document. `Origin` and `Referer` both equal the page origin. `Sec-Fetch-*` is added by the browser network service after route interception, so it is not observable at this seam and is not asserted here. The apex broker gate in the visitor attribution release boundary carries the Fetch Metadata evidence.
+2. The request body is identical across the two origins apart from the checkout operation identifier, and that identifier is a distinct version 4 UUID per checkout.
+3. The provider handoff is a real top-level document navigation to the provider URL. The suite aborts it with `net::ERR_ABORTED`, which Chromium does not commit as an error document, so the originating page and its storage survive inspection. `ERR_BLOCKED_BY_CLIENT` would replace the document and destroy the evidence.
+4. Session storage holds only the noncontact operation binding and the opaque receipt. The sponsor email address and both provider URLs must be absent from every local and session storage value.
+
+Treat a failure of this gate as a payment-scope divergence between the primary experience and an advocate subdomain, not as test flake. The gate runs in the advocate publication database workflow and is triggered by changes to the spec, the fixture, `SponsorshipModal`, the checkout client state library, and the Stripe and PayPal route surfaces.
+
 ## Checkout contact erasure scope
 
 The checkout contact erasure boundary removes the server-owned provider request ciphertext after canonical settlement and any applicable welcome materialization, or after exact terminal no-payment evidence. Partnership settlement is eligible without a welcome because partnership payments intentionally do not create a claim or welcome outbox.
@@ -391,6 +406,7 @@ Retain the following with the release record:
 - Migration list and database commit identity.
 - Full pgTAP result.
 - Typecheck, lint, unit, integration, and browser test results.
+- Advocate checkout browser parity gate result covering Stripe and PayPal on both a primary and an advocate subdomain origin.
 - Release gate output before and after final legacy revocation.
 - Stripe US and UK canary object IDs in a protected operator record.
 - Worker batch health and manual review counts.

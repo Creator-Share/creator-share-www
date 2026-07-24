@@ -834,6 +834,11 @@ test("exposes the bounded hosted runner through the repository script", async ()
     await readFile(resolve(process.cwd(), "package.json"), "utf8"),
   )
   expect(
+    packageJson.scripts?.["test:provider:supabase-email-proof-contract"],
+  ).toBe(
+    "PW_NO_WEBSERVER=1 playwright test tests/provider/supabase-email-proof-supersession.spec.ts tests/provider/supabase-email-proof-supersession-hosted.spec.ts tests/provider/ethereal-imap-mailbox.spec.ts --workers=1 --retries=0",
+  )
+  expect(
     packageJson.scripts?.["canary:supabase-email-proof-supersession:hosted"],
   ).toBe("node tests/provider/supabase-email-proof-supersession-hosted.mjs")
 })

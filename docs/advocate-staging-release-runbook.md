@@ -88,6 +88,20 @@ Stop before the next write if any of these conditions occurs:
 
 Never repair migration history to make a mismatch disappear. Never restore the retired invitation claim signature. Never continue by deploying a partially compatible application.
 
+Before creating or inspecting any hosted resource, run the complete offline
+email-proof provider contract:
+
+```sh
+yarn test:provider:supabase-email-proof-contract
+```
+
+The gate must report exactly 99 passing tests with one worker and no retry. The
+pull request workflow runs the same command inside a Linux network namespace
+with no network interface. This proves the hosted runner, Ethereal adapter, and
+shared evidence contract without calling Supabase, Ethereal, Vercel, or any
+other provider. A passing offline gate does not replace the separately
+authorized hosted canary.
+
 ## Pre-Step: create the isolated Vercel project and audit every possible caller
 
 Create the dedicated `creator-share-advocate-staging` Vercel project before Step 0 so its complete lifetime can be audited. Record the project ID, team ID, creation time, exact project-creation audit event, and initial zero results for deployments, domains, invocations, and cron schedules without recording credentials. Stop if the project already exists, the creation event is missing or ambiguous, or any initial zero result is nonzero until its complete prior lifetime is reconciled.
