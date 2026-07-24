@@ -16,7 +16,7 @@
     "format": "npx prettier --write .",
     "test": "playwright test",
     "verify:release-manifest": "node scripts/verify-release-manifest.mjs",
-    "test:lane:offline": "node scripts/run-release-lane.mjs offline-playwright --workers=4 --retries=0",
+    "test:lane:offline": "node scripts/run-release-lane.mjs offline-playwright --retries=0",
     "test:lane:dev-server": "node scripts/run-release-lane.mjs dev-server-playwright --workers=1 --retries=0",
     "test:lane:seeded-database": "node scripts/run-release-lane.mjs seeded-database-playwright --workers=1 --retries=0",
     "test:lane:webkit": "RUN_WEBKIT_BROWSER_INTEGRATION=1 node scripts/run-release-lane.mjs webkit-browser --workers=1 --retries=0",
