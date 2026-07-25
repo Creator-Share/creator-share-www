@@ -384,6 +384,94 @@ test.describe("PayPal webhook trust boundary", () => {
     expect(calls.verificationBodies).toEqual([body])
   })
 
+  test("refuses a signature the provider does not confirm", async () => {
+    // The only verification coverage asserted the SUCCESS path, so the
+    // negative verdict was unproven. FAILURE is the verdict an attacker
+    // produces, and it must resolve to an explicit refusal.
+    const context = requestContext()
+    const { value } = dependencies()
+
+    const result = await verifyPayPalWebhookSignature(
+      {
+        rawBody: `{"id":"${EVENT_ID}"}`,
+        headers: context.headers,
+        configuredWebhookId: "5BW96656R1645",
+      },
+      {
+        ...value,
+        async verifyWebhookSignature() {
+          return {
+            ok: true,
+            status: 200,
+            body: '{"verification_status":"FAILURE"}',
+          }
+        },
+      },
+    )
+
+    expect(result.verified).toBe(false)
+  })
+
+  test("fails closed on any verdict that is not exactly SUCCESS or FAILURE", async () => {
+    // Anything outside the two known verdicts throws a retryable error, which
+    // the route maps to unavailable rather than treating as authentic. The
+    // lowercase case matters: a case-insensitive comparison here would let
+    // "success" authenticate a forged event.
+    const context = requestContext()
+    const { value } = dependencies()
+
+    for (const verification_status of ["", "success", "Success", "UNKNOWN"]) {
+      await expect(
+        verifyPayPalWebhookSignature(
+          {
+            rawBody: `{"id":"${EVENT_ID}"}`,
+            headers: context.headers,
+            configuredWebhookId: "5BW96656R1645",
+          },
+          {
+            ...value,
+            async verifyWebhookSignature() {
+              return {
+                ok: true,
+                status: 200,
+                body: JSON.stringify({ verification_status }),
+              }
+            },
+          },
+        ),
+        `verification_status ${JSON.stringify(verification_status)} must not verify`,
+      ).rejects.toThrow(PayPalWebhookError)
+    }
+  })
+
+  test("refuses a verification the provider could not answer", async () => {
+    const context = requestContext()
+    const { value } = dependencies()
+
+    for (const response of [
+      { ok: false, status: 401, body: "{}" },
+      { ok: true, status: 200, body: "not-json" },
+      { ok: true, status: 200, body: "{}" },
+    ]) {
+      await expect(
+        verifyPayPalWebhookSignature(
+          {
+            rawBody: `{"id":"${EVENT_ID}"}`,
+            headers: context.headers,
+            configuredWebhookId: "5BW96656R1645",
+          },
+          {
+            ...value,
+            async verifyWebhookSignature() {
+              return response
+            },
+          },
+        ),
+        `response ${JSON.stringify(response)} must never verify`,
+      ).rejects.toThrow(PayPalWebhookError)
+    }
+  })
+
   test("bounds required headers and rejects a cross-environment certificate", () => {
     const valid = new Headers({
       "paypal-transmission-id": "69cd13f0-d67a-11e5-baa3-778b53f4ae55",
