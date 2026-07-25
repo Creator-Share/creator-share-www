@@ -101,6 +101,7 @@
         "tests/auth/creator-share-admin-invitation-route.spec.ts",
         "tests/auth/email-proof-issuance-gate.spec.ts",
         "tests/auth/email-proof-provider-inventory.spec.ts",
+        "tests/auth/local-phone-authentication-lock.spec.ts",
         "tests/auth/password-recovery-client.spec.ts",
         "tests/auth/password-reset-request-route.spec.ts",
         "tests/auth/supabase-email-proof-issuer.spec.ts",

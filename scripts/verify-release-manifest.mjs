@@ -30,10 +30,15 @@ const EXECUTION_LANES = [
 const OVERLAY_LANES = ["webkit-browser", "local-supabase-integration"]
 
 function trackedFiles(...paths) {
-  return execFileSync("git", ["ls-files", ...paths], {
-    cwd: workspace,
-    encoding: "utf8",
-  })
+  // --others --exclude-standard includes new, not-yet-committed test files.
+  // Without it a brand-new spec passes this gate locally and only fails after
+  // it has been committed, which defeats the point of catching it in the same
+  // change that introduces it. Ignored files stay excluded.
+  return execFileSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", ...paths],
+    { cwd: workspace, encoding: "utf8" },
+  )
     .split("\n")
     .filter(Boolean)
 }
