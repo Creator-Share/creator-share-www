@@ -66,7 +66,11 @@ Automated WebKit coverage is browser-engine emulation with an iPhone profile. It
 4. Return after process eviction.
 5. Confirm no sponsor, contact, or payment data appears in browser storage at any point.
 
-Note that four tests in `tests/advocates/portal-catalog-browser.spec.ts` are skipped in WebKit because Playwright's WebKit never emits native `beforeunload` or history `confirm` dialogs. Real Mobile Safari does present these prompts, so **this manual pass is the only evidence covering that behavior on a real device.** It is not optional.
+Note the exact shape of the automated coverage, because it is narrower than it first appears. `tests/advocates/portal-catalog-browser.spec.ts` holds 15 tests, and exactly one of them runs under WebKit: `recovers version-bound drafts after mobile WebKit back and forward traversal`. The other 14, including every `beforeunload` and history-confirm guard, run in Chromium only. Playwright's WebKit never emits native `beforeunload` or history `confirm` dialogs, and real Mobile Safari does present them.
+
+**This manual pass is therefore the only evidence covering the unsaved-change guard on the target engine.** It is not optional.
+
+(This corrects an earlier note here that said four tests were skipped in WebKit. That described the lane before the FF-049 revert; one test runs in WebKit today.)
 
 ---
 
