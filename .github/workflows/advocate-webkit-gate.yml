@@ -55,6 +55,33 @@ jobs:
       - name: Verify catalog recovery
         run: yarn test:advocate:webkit
 
+      # FF-049 diagnostic, deliberately non-gating.
+      #
+      # tests/advocates/portal-catalog-browser.spec.ts passes when the narrow
+      # script runs one test with --grep and fails intermittently when the whole
+      # file runs inside the four-file WebKit lane. Five hypotheses about why
+      # have failed, and both contexts pass locally, so the discriminating
+      # evidence can only come from the runner.
+      #
+      # This runs the WHOLE file ALONE in WebKit: no --grep, no sibling spec
+      # files. If it is reliably green here while the lane is intermittently
+      # red, the cause is the lane context rather than the file. If it is
+      # intermittently red here too, the cause is running the whole file rather
+      # than one test. Either result eliminates a hypothesis.
+      #
+      # continue-on-error so a diagnostic never blocks the gate. Remove this
+      # step once FF-049 is resolved.
+      - name: FF-049 diagnostic, whole catalog file alone in WebKit
+        continue-on-error: true
+        env:
+          PW_NO_WEBSERVER: "1"
+          RUN_WEBKIT_BROWSER_INTEGRATION: "1"
+        run: >-
+          yarn playwright test
+          tests/advocates/portal-catalog-browser.spec.ts
+          --workers=1
+          --retries=0
+
       - name: Verify every test file is assigned to a required lane
         run: yarn verify:release-manifest
 
