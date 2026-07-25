@@ -8,6 +8,7 @@ import { NextRequest } from "next/server"
 
 import {
   ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME,
+  createAdvocateAttributionIdentityCookieValue,
   verifyAdvocateAttributionIdentityCookieValue,
 } from "../../src/lib/advocates/attributionIdentityCookie"
 import { completeAdvocateAttributionIdentitySignal } from "../../src/lib/advocates/attributionIdentityCompletion"
@@ -21,6 +22,8 @@ type CompletionRouteModule =
   typeof import("../../src/app/api/auth/attribution-identity/route")
 
 const AUTH_USER_ID = "97000000-0000-4000-8000-000000000001"
+/** A previous occupant of the same browser. */
+const OTHER_USER_ID = "97000000-0000-4000-8000-000000000002"
 const CURRENT_SECRET = Buffer.alloc(32, 67).toString("base64")
 const ORIGINAL_ENVIRONMENT = {
   NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
@@ -128,6 +131,64 @@ test("completes a client-created session with a host-only signal", async () => {
       rawHost: "creatorshare.com",
     })?.signal.authUserId,
   ).toBe(AUTH_USER_ID)
+})
+
+test("replaces an identity signal belonging to a different account", async () => {
+  // Completion only re-issued the cookie when the existing one failed
+  // normalization or freshness, and whether it belonged to the account that
+  // just authenticated was asserted nowhere. A mutation accepting any
+  // well-formed cookie left the suite green. On a shared or previously used
+  // browser that leaves user A's signed identity in place while user B is the
+  // one authenticated, and the apex broker then attributes B's activity to A.
+  const foreignCookie = createAdvocateAttributionIdentityCookieValue(
+    { authUserId: OTHER_USER_ID },
+    { rawHost: "creatorshare.com" },
+  )
+  expect(foreignCookie).not.toBeNull()
+
+  const response = await POST(
+    request({
+      cookie: `${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=${foreignCookie}`,
+    }),
+  )
+
+  expect(response.status).toBe(200)
+
+  const identityCookie = setCookies(response).find(
+    (cookie) =>
+      cookie.startsWith(`${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=`) &&
+      !cookie.includes("Max-Age=0"),
+  )
+  // The decisive assertion: a replacement must be issued, and it must name the
+  // authenticated account rather than the browser's previous occupant.
+  expect(identityCookie, "a foreign identity must be replaced").toBeDefined()
+
+  const value = identityCookie?.slice(
+    identityCookie.indexOf("=") + 1,
+    identityCookie.indexOf(";"),
+  )
+  expect(
+    verifyAdvocateAttributionIdentityCookieValue(value, {
+      rawHost: "creatorshare.com",
+    })?.signal.authUserId,
+  ).toBe(AUTH_USER_ID)
+})
+
+test("leaves a matching identity signal untouched", async () => {
+  // The reverse case, so the assertion above cannot be satisfied by re-issuing
+  // on every request, which would defeat the point of the check.
+  const ownCookie = createAdvocateAttributionIdentityCookieValue(
+    { authUserId: AUTH_USER_ID },
+    { rawHost: "creatorshare.com" },
+  )
+  const response = await POST(
+    request({
+      cookie: `${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=${ownCookie}`,
+    }),
+  )
+
+  expect(response.status).toBe(200)
+  expect(setCookies(response)).toEqual([])
 })
 
 test("requires exact same-origin authenticated completion", async () => {
