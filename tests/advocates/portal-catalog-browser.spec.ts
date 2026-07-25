@@ -122,6 +122,15 @@ async function removeBlockedSelections(page: Page): Promise<void> {
     .click()
 }
 
+async function waitForHarnessHydration(page: Page): Promise<void> {
+  // Safe after a bfcache restore too: the marker survives on the restored
+  // document, so this resolves immediately rather than waiting for a
+  // re-hydration that never happens.
+  await expect(page.locator('html[data-harness-hydrated="true"]')).toHaveCount(
+    1,
+  )
+}
+
 async function answerHistoryConfirmation(
   page: Page,
   direction: "back" | "forward",
@@ -803,6 +812,7 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
 
   await page.evaluate(() => window.history.forward())
   await expect(page).toHaveURL(harnessOrigin + "/")
+  await waitForHarnessHydration(page)
   await expect(
     page.getByText(
       "Recovered unsaved catalog changes from this browser tab. Review and save them, or reset to the saved catalog.",
@@ -819,6 +829,7 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
   await expect(page).toHaveURL(`${harnessOrigin}/other`)
   await page.evaluate(() => window.history.back())
   await expect(page).toHaveURL(harnessOrigin + "/")
+  await waitForHarnessHydration(page)
   await catalog
     .getByRole("button", {
       name: "Remove Unavailable selection 333333333333",
