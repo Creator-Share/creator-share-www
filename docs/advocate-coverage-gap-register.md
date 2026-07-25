@@ -1,6 +1,6 @@
 # Advocate Coverage Gap Register
 
-Five places where a deliberate, compiling change to production TypeScript passes the entire required suite.
+Three places where a deliberate, compiling change to production TypeScript passes the entire required suite.
 
 ## Read this first
 
@@ -38,6 +38,7 @@ The agents' own adversarial screen judged 23 of 23 proposals uncatchable. That u
 | The qualified-exposure key test was named for the advocate but never varied it, so dropping the hostname from the digest would collide two tenants' exposures for one visitor             | `tests/sponsorships/exposure.spec.ts`                            |
 | The intent-versus-attempt parity gate on the Stripe webhook was unasserted, so a webhook could record a sponsorship at terms the sponsor's intent never authorized                        | `tests/sponsorships/stripe-webhook-ingestion.spec.ts`            |
 | The provisioning worker's evidence value contract and its publish-eligibility term for provision and reconcile jobs were both unasserted                                                  | `tests/advocates/provisioning-validation.spec.ts`                |
+| The WCAG luminance coefficients and the cross-module logo bucket contract were both unasserted, and neither is detectable by a test that reuses the implementation's own arithmetic       | `tests/advocates/public-site-contrast.spec.ts`                   |
 
 The activities route was not among the agents' findings. It surfaced from enumerating the whole class of routes that make the advocate-versus-primary loader choice, which is the more reliable move: fix the class, not the instances.
 
@@ -49,9 +50,7 @@ Ordered by the proposer's severity label. I have not independently audited each 
 | --- | ----------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1   | correctness | `src/app/api/auth/attribution-identity/route.ts`              | Session completion stops checking that the existing attribution identity cookie belongs to the account that just authenticated. On a shared or previou |
 | 2   | correctness | `src/components/advocates/admin/InvitationSettingsClient.tsx` | Editing the recipient email no longer clears the retained idempotencyKey. The key is set before the POST and only cleared on a fully successful respon |
-| 3   | correctness | `src/lib/advocates/publicPresentation.ts`                     | Every advocate portal's logo URL is now composed against the wrong Storage bucket: safeLogoUrl emits `<origin>/storage/v1/object/public/media/logos/<s |
-| 4   | correctness | `src/lib/advocates/publicSiteTheme.ts`                        | Swapping the WCAG red and blue luminance coefficients silently breaks every accessible-color derivation for tenant branding. `deriveAccessibleForegrou |
-| 5   | correctness | `src/lib/sponsorships/checkout/clientState.ts`                | Starting a new checkout operation no longer discards the bearer receipt of the previous one. A sponsor who completes one checkout, then changes benefi |
+| 3   | correctness | `src/lib/sponsorships/checkout/clientState.ts`                | Starting a new checkout operation no longer discards the bearer receipt of the previous one. A sponsor who completes one checkout, then changes benefi |
 
 ## The one file still untested
 
