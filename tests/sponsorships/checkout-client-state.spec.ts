@@ -103,6 +103,83 @@ test.describe("sponsorship checkout client retry state", () => {
     }
   })
 
+  test("discards the previous receipt when the terms change", () => {
+    // Creating a new operation was asserted, but discarding the bearer receipt
+    // of the previous one was not, so a mutation dropping the removal left the
+    // suite green. A sponsor who completes one checkout and then changes
+    // beneficiary, cadence, amount, currency, or gateway would keep the first
+    // receipt in tab storage, where a later recovery could present it for a
+    // checkout it never belonged to.
+    for (const changedScope of [
+      { ...scope, provider: "paypal" as const },
+      { ...scope, paymentType: "one_time" as const },
+      { ...scope, baseAmountUsdCents: 4500 },
+      { ...scope, currency: "GBP" as const },
+      { ...scope, beneficiaryId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+    ]) {
+      const storage = new MemoryStorage()
+      loadOrCreateCheckoutOperation({
+        storage,
+        scope,
+        now: NOW,
+        createOperationId: () => FIRST_ID,
+      })
+      expect(
+        persistCheckoutReceipt({
+          storage,
+          provider: "stripe",
+          operationId: FIRST_ID,
+          receipt: RECEIPT,
+          now: NOW,
+        }),
+      ).toBe(true)
+
+      loadOrCreateCheckoutOperation({
+        storage,
+        scope: changedScope,
+        now: NOW,
+        createOperationId: () => SECOND_ID,
+      })
+
+      expect(
+        readCheckoutReceipt({ storage, now: NOW }),
+        `${JSON.stringify(changedScope)} must not retain the previous receipt`,
+      ).toBeNull()
+    }
+  })
+
+  test("keeps the receipt when the identical terms are reloaded", () => {
+    // The reverse case: a reload with unchanged terms reuses the operation, so
+    // the receipt must survive. Without this the assertion above could be
+    // satisfied by clearing the receipt on every call.
+    const storage = new MemoryStorage()
+    loadOrCreateCheckoutOperation({
+      storage,
+      scope,
+      now: NOW,
+      createOperationId: () => FIRST_ID,
+    })
+    persistCheckoutReceipt({
+      storage,
+      provider: "stripe",
+      operationId: FIRST_ID,
+      receipt: RECEIPT,
+      now: NOW,
+    })
+
+    loadOrCreateCheckoutOperation({
+      storage,
+      scope,
+      now: NOW,
+      createOperationId: () => SECOND_ID,
+    })
+
+    expect(readCheckoutReceipt({ storage, now: NOW })).toMatchObject({
+      receipt: RECEIPT,
+      operationId: FIRST_ID,
+    })
+  })
+
   test("expires stale or malformed retry state instead of adopting it", () => {
     const storage = new MemoryStorage()
     loadOrCreateCheckoutOperation({
