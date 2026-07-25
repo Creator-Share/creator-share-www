@@ -98,13 +98,21 @@ Stating this plainly matters more than the count above.
 - **The 99-case provider contract runs in a network namespace with no outbound interface.** That makes it a genuine offline contract and explicitly not hosted evidence.
 - **FF-049 is open.** It is a WebKit lane instability, documented with the CI run history that refuted my first hypothesis. `tests/advocates/portal-catalog-browser.spec.ts` should not be modified and should not be returned to the `webkit-browser` lane until the failing context is discriminated.
 
-## A systematic search for what is left
+## A systematic search for what is left, and what it got wrong
 
-The gap that produced `tests/sponsorships/checkout-host-authorization.spec.ts` was found by a heuristic worth repeating: an authorization function whose name appears nowhere in any test file. That search was then run across the whole surface — 288 files under `src/app/api`, `src/lib/advocates`, and `src/lib/sponsorships` — matching every function whose name suggests a boundary decision against the full text of every file under `tests/` and `supabase/tests/`.
+An earlier revision of this section claimed a repository-wide search had surfaced no further uncovered boundary, and concluded the repository-side work was finished. **That conclusion was wrong, and the method behind it was too weak to support it.**
 
-It surfaced no further uncovered boundary. The remaining matches are internal row parsers and field validators such as `requiredUuid` and `requiredInteger`, which are exercised through their callers; a name absent from test text is not the same as behavior absent from a test. The two matches that do map to release gates, `resolveTenantRoutePolicy` and the exposure broker's origin authorization, each already have a dedicated spec — `tests/advocates/tenant-route-policy.spec.ts` and `tests/advocates/exposure-broker-server.spec.ts`.
+The search matched function names against the text of test files. That finds a function nothing mentions; it cannot find a function that is mentioned but never actually exercised, and it cannot find a behavior whose only coverage is a check that reads the source and asserts it contains a symbol name.
 
-Recording the negative result matters as much as the positives: it is the basis for saying the repository-side work is finished rather than merely that no one has found the next hole.
+A stronger method replaced it: propose a concrete edit to production TypeScript, then **mechanically apply it and run the suite**. A mutation that compiles and leaves every lane green is a missing assertion as a matter of fact. Twenty-three proposals were run this way. All twenty-three survived.
+
+A reachability probe then established what that meant, by appending a throwing statement to each of the 19 distinct files and re-running the complete offline lane. **Fifteen were reached**, so their surviving mutations are genuine, specific assertion gaps. **Four were loaded by no test at all.**
+
+Three of those four are now closed, and the class matters more than the instances: four public routes choose between an advocate-scoped loader and the platform-wide primary loader by reading `site.kind`, and only `beneficiaries/get` was covered. `beneficiaries/[id]/activities` was not among the proposals at all; it surfaced from enumerating the class. The PayPal webhook route had no test of its authentication boundary, though the Stripe route had gained exactly that coverage earlier the same day.
+
+The remaining twenty are recorded in `docs/advocate-coverage-gap-register.md`, with the controls that make the verdicts trustworthy and the caveat that every entry is a missing assertion rather than a live defect.
+
+**The honest position is therefore narrower than the one I first stated.** The release gates in the table above are enforced. What is not true is that nothing further could be found from inside the repository; a better method found twenty more places in a single pass, and the method has not been run to exhaustion.
 
 ## On the earlier traceability sweep
 
@@ -120,6 +128,8 @@ Two of the sweep's specific claims were wrong on inspection. The legacy invitati
 ## The answer
 
 **Merging to `dev` is a decision about process, not about evidence.** Both required gates are green, every test file in the repository is assigned to a lane, and the manifest gate fails the build if that stops being true.
+
+That said, do not read this document as saying the repository work is exhausted. It is not. `docs/advocate-coverage-gap-register.md` lists twenty places where a deliberate regression would ship silently. None of them blocks a merge, because none is a live defect, but the register is real work and it is not finished.
 
 Two things are worth settling first, and both are yours to decide:
 
