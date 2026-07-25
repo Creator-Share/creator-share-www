@@ -174,6 +174,7 @@ function baseDependencies(
     beginReplayed?: boolean
     baseAmountUsdCents?: number
     chargedAmountMinor?: number
+    quoteExpiresAt?: string
   } = {},
 ): {
   dependencies: StripeSponsorshipCheckoutV2Dependencies
@@ -226,7 +227,7 @@ function baseDependencies(
         chargedAmountMinor: options.chargedAmountMinor ?? 2466,
         chargedCurrency: "GBP",
         conversionRate: 0.74,
-        expiresAt: QUOTE_EXPIRES_AT,
+        expiresAt: options.quoteExpiresAt ?? QUOTE_EXPIRES_AT,
       }
     },
     async beginPayment(input) {
@@ -607,6 +608,38 @@ test.describe("v2 partnership Stripe checkout", () => {
     expect(calls.prepare).toHaveLength(0)
     expect(calls.begin).toHaveLength(0)
     expect(calls.stripe).toHaveLength(0)
+  })
+
+  test("refuses an expired quote before sealing a provider request or calling Stripe", async () => {
+    // PayPal has had this gate asserted since its own v2 work; Stripe never
+    // did. A mutation replacing the expiry comparison with a parse check left
+    // the whole suite green, which means a recovered operation carrying an
+    // already-expired quote could be sealed and sent at a conversion rate the
+    // server itself had judged stale.
+    const stale = baseDependencies({
+      quoteExpiresAt: "2026-07-18T07:59:59.000Z",
+    })
+
+    await expect(
+      createStripeSponsorshipCheckoutV2(checkoutInput(), stale.dependencies),
+    ).rejects.toMatchObject({ code: "sponsorship-unavailable" })
+
+    // The refusal must land before anything durable or provider facing.
+    expect(stale.calls.begin).toHaveLength(0)
+    expect(stale.calls.stripe).toHaveLength(0)
+    expect(stale.calls.settle).toHaveLength(0)
+  })
+
+  test("accepts a quote that has not yet expired", async () => {
+    // Establishes that the refusal above turns on expiry rather than on the
+    // option merely being set, so the boundary is asserted from both sides.
+    const fresh = baseDependencies({
+      quoteExpiresAt: "2026-07-18T08:00:01.000Z",
+    })
+
+    await createStripeSponsorshipCheckoutV2(checkoutInput(), fresh.dependencies)
+
+    expect(fresh.calls.stripe).toHaveLength(1)
   })
 
   test("rejects project and amount tampering without creating a provider object", async () => {

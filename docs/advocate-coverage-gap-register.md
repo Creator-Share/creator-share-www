@@ -1,6 +1,6 @@
 # Advocate Coverage Gap Register
 
-Nineteen places where a deliberate, compiling change to production TypeScript passes the entire required suite.
+Eighteen places where a deliberate, compiling change to production TypeScript passes the entire required suite.
 
 ## Read this first
 
@@ -27,6 +27,7 @@ The agents' own adversarial screen judged 23 of 23 proposals uncatchable. That u
 | `beneficiaries/images/[id]`, `beneficiaries/get/username/[username]`, and `beneficiaries/[id]/activities` chose their loader by `site.kind` with no test loading any of them | `tests/advocates/public-beneficiary-detail-host-routing.spec.ts` |
 | The PayPal webhook route's authentication boundary had no test, though the Stripe one did                                                                                    | `tests/sponsorships/paypal-webhook-signature-gate.spec.ts`       |
 | The amount, currency, quantity, and recurrence sent to Stripe were asserted nowhere, so multiplying every line item by one hundred passed the whole suite                    | `tests/sponsorships/stripe-hosted-session-amount.spec.ts`        |
+| Stripe never asserted quote expiry though PayPal did, so a recovered operation could seal and send an already-expired quote at a stale conversion rate                       | `tests/sponsorships/stripe-checkout-v2.spec.ts`                  |
 
 The activities route was not among the agents' findings. It surfaced from enumerating the whole class of routes that make the advocate-versus-primary loader choice, which is the more reliable move: fix the class, not the instances.
 
@@ -41,20 +42,19 @@ Ordered by the proposer's severity label. I have not independently audited each 
 | 3   | security    | `src/lib/advocates/publicationCanary/runtime.ts`              | isAllowedPublicAddress() loses its IPv6 global-unicast (2000::/3) restriction, so any AAAA answer outside the documentation prefixes is accepted as a  |
 | 4   | security    | `src/middleware.ts`                                           | Beneficiary profile documents on advocate tenant hosts (/sponsorships/<username>, the page carrying the sponsorship call to action) are served without |
 | 5   | money       | `src/lib/advocates/exposureBrokerServer.ts`                   | The bot and missing-user-agent rejection becomes unreachable (an empty user agent never matches the bot regex, so the expression is constantly false). |
-| 6   | money       | `src/lib/sponsorships/checkout/stripeCheckout.ts`             | createStripeSponsorshipCheckoutV2 stops enforcing quote expiry. A recovered operation (the client keeps one for 35 minutes) whose server-issued paymen |
-| 7   | money       | `src/lib/sponsorships/exposure.ts`                            | The qualified-exposure idempotency key stops binding to the advocate hostname. One visitor who views the same page path on two different advocate tena |
-| 8   | money       | `src/lib/sponsorships/gateways/paypalWebhook.ts`              | adjustmentFacts (the PAYMENT.CAPTURE.REFUNDED / .REVERSED / PAYMENT.SALE.REFUNDED / .REVERSED path) stops requiring the refund currency to match the o |
-| 9   | money       | `src/lib/sponsorships/gateways/stripeWebhookRuntime.ts`       | The intent-vs-attempt amount parity gate becomes vacuous. validateBoundary in stripeWebhook.ts rejects with boundary-mismatch when boundary.intentChar |
-| 10  | privacy     | `src/lib/advocates/admin/analytics.ts`                        | Disables the k-anonymity floor on every private analytics cell (official summary, observed summary, and each attribution segment). A cell built from a |
-| 11  | privacy     | `src/lib/advocates/admin/analytics.ts`                        | Removes the paired-withholding invariant on the USD summary cells. A cell may now publish grossCollectedUsdCents while renewalCollectedUsdCents is wit |
-| 12  | privacy     | `src/lib/advocates/admin/analytics.ts`                        | Same paired-withholding invariant removed from the original-currency table. A currency row may now show grossCollectedMinor while renewalCollectedMino |
-| 13  | privacy     | `src/lib/advocates/provisioning/validation.ts`                | assertSafeProviderEvidence() keeps its key allowlist but stops validating the values under allowed keys. sanitizeEvidenceString enforces length 1..500 |
-| 14  | correctness | `src/app/api/auth/attribution-identity/route.ts`              | Session completion stops checking that the existing attribution identity cookie belongs to the account that just authenticated. On a shared or previou |
-| 15  | correctness | `src/components/advocates/admin/InvitationSettingsClient.tsx` | Editing the recipient email no longer clears the retained idempotencyKey. The key is set before the POST and only cleared on a fully successful respon |
-| 16  | correctness | `src/lib/advocates/provisioning/validation.ts`                | assertContextMatchesJob() stops enforcing advocateCanPublish (relationshipStatus === 'active' && publicationStatus !== 'suspended') for reconcile jobs |
-| 17  | correctness | `src/lib/advocates/publicPresentation.ts`                     | Every advocate portal's logo URL is now composed against the wrong Storage bucket: safeLogoUrl emits `<origin>/storage/v1/object/public/media/logos/<s |
-| 18  | correctness | `src/lib/advocates/publicSiteTheme.ts`                        | Swapping the WCAG red and blue luminance coefficients silently breaks every accessible-color derivation for tenant branding. `deriveAccessibleForegrou |
-| 19  | correctness | `src/lib/sponsorships/checkout/clientState.ts`                | Starting a new checkout operation no longer discards the bearer receipt of the previous one. A sponsor who completes one checkout, then changes benefi |
+| 6   | money       | `src/lib/sponsorships/exposure.ts`                            | The qualified-exposure idempotency key stops binding to the advocate hostname. One visitor who views the same page path on two different advocate tena |
+| 7   | money       | `src/lib/sponsorships/gateways/paypalWebhook.ts`              | adjustmentFacts (the PAYMENT.CAPTURE.REFUNDED / .REVERSED / PAYMENT.SALE.REFUNDED / .REVERSED path) stops requiring the refund currency to match the o |
+| 8   | money       | `src/lib/sponsorships/gateways/stripeWebhookRuntime.ts`       | The intent-vs-attempt amount parity gate becomes vacuous. validateBoundary in stripeWebhook.ts rejects with boundary-mismatch when boundary.intentChar |
+| 9   | privacy     | `src/lib/advocates/admin/analytics.ts`                        | Disables the k-anonymity floor on every private analytics cell (official summary, observed summary, and each attribution segment). A cell built from a |
+| 10  | privacy     | `src/lib/advocates/admin/analytics.ts`                        | Removes the paired-withholding invariant on the USD summary cells. A cell may now publish grossCollectedUsdCents while renewalCollectedUsdCents is wit |
+| 11  | privacy     | `src/lib/advocates/admin/analytics.ts`                        | Same paired-withholding invariant removed from the original-currency table. A currency row may now show grossCollectedMinor while renewalCollectedMino |
+| 12  | privacy     | `src/lib/advocates/provisioning/validation.ts`                | assertSafeProviderEvidence() keeps its key allowlist but stops validating the values under allowed keys. sanitizeEvidenceString enforces length 1..500 |
+| 13  | correctness | `src/app/api/auth/attribution-identity/route.ts`              | Session completion stops checking that the existing attribution identity cookie belongs to the account that just authenticated. On a shared or previou |
+| 14  | correctness | `src/components/advocates/admin/InvitationSettingsClient.tsx` | Editing the recipient email no longer clears the retained idempotencyKey. The key is set before the POST and only cleared on a fully successful respon |
+| 15  | correctness | `src/lib/advocates/provisioning/validation.ts`                | assertContextMatchesJob() stops enforcing advocateCanPublish (relationshipStatus === 'active' && publicationStatus !== 'suspended') for reconcile jobs |
+| 16  | correctness | `src/lib/advocates/publicPresentation.ts`                     | Every advocate portal's logo URL is now composed against the wrong Storage bucket: safeLogoUrl emits `<origin>/storage/v1/object/public/media/logos/<s |
+| 17  | correctness | `src/lib/advocates/publicSiteTheme.ts`                        | Swapping the WCAG red and blue luminance coefficients silently breaks every accessible-color derivation for tenant branding. `deriveAccessibleForegrou |
+| 18  | correctness | `src/lib/sponsorships/checkout/clientState.ts`                | Starting a new checkout operation no longer discards the bearer receipt of the previous one. A sponsor who completes one checkout, then changes benefi |
 
 ## The one file still untested
 
@@ -64,6 +64,6 @@ Ordered by the proposer's severity label. I have not independently audited each 
 
 The money and security rows deserve attention first. The row that stood out, a mutation multiplying every Stripe Hosted Checkout line item by one hundred, is now closed and removed from the table above. `buildHostedStripeSessionParams` is asserted against five independent mutations covering scaling in both directions, quantity, currency substitution, and a dropped yearly interval.
 
-The next highest-value row is the missing Stripe quote-expiry gate. PayPal has an explicit counterpart test and Stripe has none, so a recovered operation carrying an expired quote can be sealed and sent at a conversion rate the server itself considered stale.
+The Stripe quote-expiry gate is now closed too, asserted from both sides so the boundary turns on expiry rather than on a flag being set.
 
 Nothing here blocks a merge to `dev`. Each row is a place where a future regression would ship silently, which is a reason to close them deliberately rather than urgently.
