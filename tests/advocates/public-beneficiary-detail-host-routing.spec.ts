@@ -36,20 +36,27 @@ const PRIMARY_HOST = "creatorshare.com"
 const BENEFICIARY_ID = "11111111-1111-4111-8111-111111111111"
 const BENEFICIARY_USERNAME = "hopechild"
 
+// Media URLs are composed from the configured Supabase origin.
+process.env.NEXT_PUBLIC_SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://example.supabase.co"
+
 interface RepositoryCall {
   method: string
   args: readonly unknown[]
 }
 
 const calls: RepositoryCall[] = []
+/** When set, the activities loaders return this instead of an absent record. */
+let activitiesPayload: unknown = null
 let resolvedSiteKind: "advocate" | "primary" | "not-found" = "primary"
 
 function recorder(method: string) {
   return async (...args: readonly unknown[]) => {
     calls.push({ method, args })
-    // Null is "no such record" to every public catalog parser, which keeps
-    // these tests about routing rather than payload shape.
-    return null
+    // Null is "no such record" to every public catalog parser, which keeps the
+    // routing tests about routing. The activities loaders can be given a real
+    // payload when a test is about projection instead.
+    return method.includes("Activities") ? activitiesPayload : null
   }
 }
 
@@ -145,6 +152,7 @@ function detailRequest(host: string, path: string): Request {
 test.beforeEach(() => {
   calls.length = 0
   resolvedSiteKind = "primary"
+  activitiesPayload = null
 })
 
 test.describe("public beneficiary detail Host routing", () => {
@@ -253,6 +261,77 @@ test.describe("public beneficiary detail Host routing", () => {
         args: [BENEFICIARY_ID],
       },
     ])
+  })
+
+  test("publishes only image and video media, never documents", async () => {
+    // The host-scoping tests above assert which tenant's data this route
+    // serves. They assert nothing about what it projects, so folding DOCUMENT
+    // media into the public images array went undetected. Activity documents
+    // are things like school reports, medical notes, and signed paperwork for
+    // a child, and this endpoint is unauthenticated on every advocate
+    // subdomain and on the primary host.
+    resolvedSiteKind = "advocate"
+    const ACTIVITY_ID = "66666666-6666-4666-8666-666666666666"
+    // Activity media hangs off the activity, not the beneficiary.
+    const media = (type: "IMAGE" | "VIDEO" | "DOCUMENT", id: string) => ({
+      id,
+      parent_id: ACTIVITY_ID,
+      extension: type === "DOCUMENT" ? "pdf" : "jpg",
+      type,
+      weight: 1,
+      created_at: "2026-07-18T00:00:00+00:00",
+    })
+    activitiesPayload = {
+      hasMore: false,
+      items: [
+        {
+          id: ACTIVITY_ID,
+          created_at: "2026-07-18T00:00:00+00:00",
+          description: "A school update",
+          beneficiary_id: BENEFICIARY_ID,
+          title: "Term report",
+          activity_type: "UPDATE",
+          media: [
+            media("IMAGE", "77777777-7777-4777-8777-777777777777"),
+            media("VIDEO", "88888888-8888-4888-8888-888888888888"),
+            media("DOCUMENT", "99999999-9999-4999-8999-999999999999"),
+          ],
+        },
+      ],
+    }
+
+    const response = await activitiesRoute.GET(
+      detailRequest(
+        ADVOCATE_HOST,
+        `/api/beneficiaries/${BENEFICIARY_ID}/activities`,
+      ),
+      { params: Promise.resolve({ id: BENEFICIARY_ID }) },
+    )
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      activities: {
+        images_url: string[]
+        videos_url: string[]
+        media?: unknown
+      }[]
+    }
+
+    expect(body.activities).toHaveLength(1)
+    const [activity] = body.activities
+    expect(activity.images_url).toHaveLength(1)
+    expect(activity.videos_url).toHaveLength(1)
+
+    // The decisive assertion: the document must appear in neither array, and
+    // its identifier must not survive anywhere in the delivered payload.
+    const delivered = JSON.stringify(body)
+    expect(
+      delivered,
+      "a document attached to an activity must not be published",
+    ).not.toContain("99999999-9999-4999-8999-999999999999")
+
+    // The raw media array carries provider detail and must not cross either.
+    expect(activity.media).toBeUndefined()
   })
 
   test("an unresolvable Host reaches no loader on any detail route", async () => {
