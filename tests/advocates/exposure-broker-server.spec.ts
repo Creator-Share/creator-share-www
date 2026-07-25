@@ -59,6 +59,62 @@ const COMMON_HEADERS = {
   "user-agent": "Mozilla/5.0 Mobile Safari/605.1.15",
 } as const
 
+test("refuses automated and identity-less callers before granting broker authority", () => {
+  // Attribution decides which advocate is credited for a sponsorship, so a
+  // crawler or a header-less script that satisfies the Fetch Metadata contract
+  // must not manufacture exposure. The bot and missing-user-agent rejection
+  // was asserted nowhere: a mutation turning its `or` into an `and` made the
+  // whole branch unreachable and left the suite green.
+  const base = {
+    ...COMMON_HEADERS,
+    host: "creatorshare.com",
+    origin: "https://hope.creatorshare.com",
+    "content-type": "application/json",
+    [protocol.ADVOCATE_EXPOSURE_BROKER_VERSION_HEADER]: "1",
+  }
+
+  // A genuine browser is accepted, so the refusals below are about the caller
+  // rather than about the rest of the contract being wrong.
+  expect(
+    server.resolveAdvocateExposureBrokerRequest(request("POST", base), {}),
+  ).not.toBeNull()
+
+  for (const userAgent of [
+    "",
+    "Googlebot/2.1 (+http://www.google.com/bot.html)",
+    "Mozilla/5.0 (compatible; bingbot/2.0)",
+    "facebookexternalhit/1.1",
+    "Slackbot-LinkExpanding 1.0",
+    "WhatsApp/2.23",
+    "HeadlessChrome/120.0.0.0",
+    "Chrome-Lighthouse",
+  ]) {
+    expect(
+      server.resolveAdvocateExposureBrokerRequest(
+        request("POST", { ...base, "user-agent": userAgent }),
+        {},
+      ),
+      `${userAgent || "(absent user agent)"} must not be granted broker authority`,
+    ).toBeNull()
+  }
+
+  // Speculative navigations are the same class and must also be refused.
+  const speculativeSignals: Record<string, string>[] = [
+    { purpose: "prefetch" },
+    { "sec-purpose": "prefetch;prerender" },
+    { "next-router-prefetch": "1" },
+  ]
+  for (const speculative of speculativeSignals) {
+    expect(
+      server.resolveAdvocateExposureBrokerRequest(
+        request("POST", { ...base, ...speculative }),
+        {},
+      ),
+      `${JSON.stringify(speculative)} must not be granted broker authority`,
+    ).toBeNull()
+  }
+})
+
 test("accepts a local broker only for a same-port one-label tenant in development", () => {
   const environment = { NODE_ENV: "development" }
   const valid = request("POST", {
