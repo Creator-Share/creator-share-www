@@ -181,13 +181,11 @@
       ]
     },
     "webkit-browser": {
-      "description": "Specs that must additionally run in mobile WebKit. tests/advocates/portal-catalog-browser.spec.ts is covered in WebKit by the narrower test:advocate:webkit script instead of this lane: its unsaved-change guard asserts a beforeunload dialog, which Playwright's WebKit never fires, so the whole file cannot run there. Tracked as FF-047.",
+      "description": "Specs that must additionally run in mobile WebKit. Tests depending on a native beforeunload or history confirm dialog are individually skipped in WebKit, which never emits them; each carries its reason inline and WebKit traversal behavior is asserted instead by the mobile WebKit draft recovery test. See FF-049. This lane carries no baked environment: the browser engine is chosen by the invoking script, so the same file list runs once in Chromium and once in WebKit. Baking RUN_WEBKIT_BROWSER_INTEGRATION here would silently make the Chromium pass a second WebKit pass.",
       "runner": "playwright-webkit",
-      "env": {
-        "RUN_WEBKIT_BROWSER_INTEGRATION": "1"
-      },
       "files": [
         "tests/advocates/invitation-interstitial.spec.ts",
+        "tests/advocates/portal-catalog-browser.spec.ts",
         "tests/auth/password-recovery-browser.spec.ts"
       ]
     },
