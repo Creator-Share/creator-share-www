@@ -102,6 +102,23 @@ shared evidence contract without calling Supabase, Ethereal, Vercel, or any
 other provider. A passing offline gate does not replace the separately
 authorized hosted canary.
 
+### Vercel CLI operating constraints
+
+These were established by direct observation and cost a wasted cycle each. Follow them before any Vercel step.
+
+1. Use the Vercel CLI on **Node 24**. Under Node 26.4.0 every API request fails with `TypeError: fetch failed`, including telemetry, even though a plain `fetch` to `https://api.vercel.com` from the same Node build succeeds and even when a token is supplied. This is not a credential problem, so it does not indicate a lost keyring session. CLI 56.5.0 on Node 24.18.0 authenticates normally.
+2. Older CLI versions on this machine cannot see the credentials at all. Vercel CLI 39.2.0 and 50.9.6 report `No existing credentials found` because they predate native keyring storage. Do not interpret that as a logged-out session and do not start a new login flow.
+3. **Never use `vercel curl` to probe the API.** It is not a general API client. With an absolute URL it sends no authentication, so an unauthenticated `not_found` or `forbidden` can be mistaken for a plan limitation. With a relative path it resolves against the _linked project's deployment_, and it will link the current directory and create a Vercel project named after that directory as a side effect. An empty project created this way was observed and removed. Prefer explicit read-only subcommands such as `vercel projects ls` and `vercel teams ls`.
+4. Confirm the scope is `CreatorShare Org` before every write, and never link a worktree to the existing `creator-share-www` project.
+
+### Unresolved: project-creation audit evidence
+
+The pre-step below requires recording the exact project-creation audit event and stopping if that event is missing or ambiguous. Vercel audit logs could not be retrieved with the CLI alone, and no sound read-only probe for them has been established. Do not create the isolated staging project until one of the following is settled:
+
+- Audit-log availability on this team's plan is confirmed along with a supported way to query it, or
+- The creation event is captured from the Vercel dashboard and stored as the evidence artifact, or
+- This runbook is explicitly amended to accept CLI-observable project metadata, with the audit-log gap recorded as a documented exception.
+
 ## Pre-Step: create the isolated Vercel project and audit every possible caller
 
 Create the dedicated `creator-share-advocate-staging` Vercel project before Step 0 so its complete lifetime can be audited. Record the project ID, team ID, creation time, exact project-creation audit event, and initial zero results for deployments, domains, invocations, and cron schedules without recording credentials. Stop if the project already exists, the creation event is missing or ambiguous, or any initial zero result is nonzero until its complete prior lifetime is reconciled.
