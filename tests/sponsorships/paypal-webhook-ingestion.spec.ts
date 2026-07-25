@@ -760,6 +760,58 @@ test.describe("PayPal webhook trust boundary", () => {
     })
   })
 
+  test("refuses a refund denominated in a different currency than the capture", async () => {
+    // The refund path compared amounts but its currency check was unasserted,
+    // so a mutation dropping it left the suite green. A 5.00 EUR refund
+    // against a 12.00 USD capture would then be recorded as 500 minor units
+    // against a USD movement, understating the refund and corrupting both the
+    // net collected figure and the advocate's reported funds.
+    const raw = rawEvent("PAYMENT.CAPTURE.REFUNDED", "refund", {
+      id: REFUND_ID,
+      status: "COMPLETED",
+      amount: { value: "5.00", currency_code: "EUR" },
+      supplementary_data: { related_ids: { capture_id: CAPTURE_ID } },
+    })
+    const { calls, value } = dependencies()
+
+    await expect(
+      ingestVerifiedPayPalEvent(
+        {
+          event: parsePayPalWebhookEvent(raw),
+          rawPayload: raw,
+          requestContext: requestContext(),
+        },
+        value,
+      ),
+    ).rejects.toMatchObject({ code: "provider-fact-mismatch" })
+
+    // No financial adjustment may be written from a mismatched fact.
+    expect(calls.adjustments).toHaveLength(0)
+  })
+
+  test("refuses a refund larger than the original capture", async () => {
+    // The other half of the same guard, which the amount comparison enforces.
+    const raw = rawEvent("PAYMENT.CAPTURE.REFUNDED", "refund", {
+      id: REFUND_ID,
+      status: "COMPLETED",
+      amount: { value: "12.01", currency_code: "USD" },
+      supplementary_data: { related_ids: { capture_id: CAPTURE_ID } },
+    })
+    const { calls, value } = dependencies()
+
+    await expect(
+      ingestVerifiedPayPalEvent(
+        {
+          event: parsePayPalWebhookEvent(raw),
+          rawPayload: raw,
+          requestContext: requestContext(),
+        },
+        value,
+      ),
+    ).rejects.toMatchObject({ code: "provider-fact-mismatch" })
+    expect(calls.adjustments).toHaveLength(0)
+  })
+
   test("creates one partial dispute debit and preserves a durable duplicate", async () => {
     const raw = rawEvent(
       "CUSTOMER.DISPUTE.CREATED",
