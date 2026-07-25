@@ -447,6 +447,22 @@ test.describe("advocate release preflight", () => {
         environment.SPONSORSHIP_VISITOR_COOKIE_SECRET_V1 =
           environment.SPONSORSHIP_CRYPTO_SECRET_V1
       },
+      // The release gate requires the visitor signing secret to differ from
+      // every payment secret, not only from the contact encryption secret.
+      // The separation check is generic, but the gate names payment keys, so
+      // they are instantiated here rather than left implied.
+      (environment: Record<string, string>) => {
+        environment.SPONSORSHIP_VISITOR_COOKIE_SECRET_V1 =
+          environment.STRIPE_SECRET_KEY_US
+      },
+      (environment: Record<string, string>) => {
+        environment.SPONSORSHIP_VISITOR_COOKIE_SECRET_V1 =
+          environment.PAYPAL_CLIENT_SECRET
+      },
+      (environment: Record<string, string>) => {
+        environment.SPONSORSHIP_VISITOR_COOKIE_SECRET_V1 =
+          environment.STRIPE_WEBHOOK_SECRET_UK
+      },
       (environment: Record<string, string>) => {
         environment.NEXT_PUBLIC_SUPABASE_ANON_KEY =
           environment.NEXT_SERVICE_ROLE_KEY
