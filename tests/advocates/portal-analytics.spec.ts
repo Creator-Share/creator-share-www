@@ -261,6 +261,114 @@ test.describe("advocate private analytics projection", () => {
     ).toBeNull()
   })
 
+  test("enforces the sponsor contact floor on every cell", () => {
+    // The complement floor above is asserted, but the floor on
+    // unique_sponsor_contacts itself was not: a mutation lowering it from five
+    // to one left the suite green. A cell built from a single sponsor contact
+    // reidentifies that sponsor's giving to any portal member who can open the
+    // analytics page. verified_sponsor_accounts is null throughout so the
+    // verified-account floors cannot be what rejects these.
+    for (const contacts of [1, 2, 3, 4]) {
+      expect(
+        analytics.parseAdvocateAnalyticsSnapshot(
+          snapshot({
+            official: visibleCell({
+              unique_sponsor_contacts: contacts,
+              verified_sponsor_accounts: null,
+            }),
+          }),
+        ),
+        `a cell built from ${contacts} sponsor contacts must not be published`,
+      ).toBeNull()
+    }
+
+    // Five is the documented minimum and must still be accepted, so the
+    // assertion turns on the boundary rather than on rejecting everything.
+    expect(
+      analytics.parseAdvocateAnalyticsSnapshot(
+        snapshot({
+          official: visibleCell({
+            unique_sponsor_contacts: 5,
+            verified_sponsor_accounts: null,
+          }),
+        }),
+      ),
+    ).not.toBeNull()
+  })
+
+  test("withholds gross and renewal together in the USD summary", () => {
+    // Initial is always visible and gross is initial plus renewal, so
+    // publishing one of the pair while withholding the other republishes the
+    // suppressed number by subtraction.
+    expect(
+      analytics.parseAdvocateAnalyticsSnapshot(
+        snapshot({
+          official: visibleCell({ gross_collected_usd_cents: null }),
+        }),
+      ),
+    ).toBeNull()
+
+    expect(
+      analytics.parseAdvocateAnalyticsSnapshot(
+        snapshot({
+          official: visibleCell({
+            renewal_collected_usd_cents: null,
+            net_collected_usd_cents: null,
+          }),
+        }),
+      ),
+    ).toBeNull()
+  })
+
+  test("withholds gross and renewal together in each original currency row", () => {
+    // The same invariant on the per-currency table, which is a separate
+    // validator and was likewise unasserted.
+    //
+    // Each case uses a single currency row deliberately. A two-row fixture is
+    // rejected by a cross-row consistency rule before this invariant is
+    // reached, which made an earlier version of this test pass while the
+    // invariant it named was removable. One row isolates it.
+    const base = snapshot()
+    const row = (base.original_currency as Record<string, unknown>[])[0]
+
+    expect(
+      analytics.parseAdvocateAnalyticsSnapshot({
+        ...base,
+        original_currency: [{ ...row, gross_collected_minor: null }],
+      }),
+    ).toBeNull()
+
+    expect(
+      analytics.parseAdvocateAnalyticsSnapshot({
+        ...base,
+        original_currency: [
+          {
+            ...row,
+            renewal_collected_minor: null,
+            net_collected_minor: null,
+          },
+        ],
+      }),
+    ).toBeNull()
+
+    // The same single row, withheld as a pair, is accepted. Without this the
+    // two assertions above would be satisfied by any rule that rejects a
+    // one-row table.
+    expect(
+      analytics.parseAdvocateAnalyticsSnapshot({
+        ...base,
+        original_currency: [
+          {
+            ...row,
+            renewal_collected_minor: null,
+            gross_collected_minor: null,
+            net_collected_minor: null,
+          },
+        ],
+      }),
+    ).not.toBeNull()
+  })
+
   test("rejects annualized commitment when either cadence is withheld", () => {
     for (const invalid of [
       visibleCell({ active_monthly_commitment_usd_cents: null }),

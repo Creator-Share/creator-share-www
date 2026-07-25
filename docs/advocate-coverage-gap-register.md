@@ -1,6 +1,6 @@
 # Advocate Coverage Gap Register
 
-Fifteen places where a deliberate, compiling change to production TypeScript passes the entire required suite.
+Twelve places where a deliberate, compiling change to production TypeScript passes the entire required suite.
 
 ## Read this first
 
@@ -31,6 +31,7 @@ The agents' own adversarial screen judged 23 of 23 proposals uncatchable. That u
 | The advocate display name reached the invitation email HTML with no escaping asserted anywhere, so an operator-supplied name could deliver live markup on a trusted transactional message | `tests/advocates/invitation-email-escaping.spec.ts`              |
 | The canary DNS address allowlist was asserted for four IPv4 addresses and no IPv6 at all, so a tenant AAAA record could pin internal address space                                        | `tests/advocates/publication-canary-runtime.spec.ts`             |
 | The logo route's lifecycle test set relationship and publication status to suspended together, so neither predicate was independently asserted and dropping either left the suite green   | `tests/advocates/portal-logo-route.spec.ts`                      |
+| The private analytics k-anonymity floor on sponsor contacts and the paired gross/renewal withholding invariants on both the USD summary and the per-currency table were unasserted        | `tests/advocates/portal-analytics.spec.ts`                       |
 
 The activities route was not among the agents' findings. It surfaced from enumerating the whole class of routes that make the advocate-versus-primary loader choice, which is the more reliable move: fix the class, not the instances.
 
@@ -45,16 +46,13 @@ Ordered by the proposer's severity label. I have not independently audited each 
 | 3   | money       | `src/lib/sponsorships/exposure.ts`                            | The qualified-exposure idempotency key stops binding to the advocate hostname. One visitor who views the same page path on two different advocate tena |
 | 4   | money       | `src/lib/sponsorships/gateways/paypalWebhook.ts`              | adjustmentFacts (the PAYMENT.CAPTURE.REFUNDED / .REVERSED / PAYMENT.SALE.REFUNDED / .REVERSED path) stops requiring the refund currency to match the o |
 | 5   | money       | `src/lib/sponsorships/gateways/stripeWebhookRuntime.ts`       | The intent-vs-attempt amount parity gate becomes vacuous. validateBoundary in stripeWebhook.ts rejects with boundary-mismatch when boundary.intentChar |
-| 6   | privacy     | `src/lib/advocates/admin/analytics.ts`                        | Disables the k-anonymity floor on every private analytics cell (official summary, observed summary, and each attribution segment). A cell built from a |
-| 7   | privacy     | `src/lib/advocates/admin/analytics.ts`                        | Removes the paired-withholding invariant on the USD summary cells. A cell may now publish grossCollectedUsdCents while renewalCollectedUsdCents is wit |
-| 8   | privacy     | `src/lib/advocates/admin/analytics.ts`                        | Same paired-withholding invariant removed from the original-currency table. A currency row may now show grossCollectedMinor while renewalCollectedMino |
-| 9   | privacy     | `src/lib/advocates/provisioning/validation.ts`                | assertSafeProviderEvidence() keeps its key allowlist but stops validating the values under allowed keys. sanitizeEvidenceString enforces length 1..500 |
-| 10  | correctness | `src/app/api/auth/attribution-identity/route.ts`              | Session completion stops checking that the existing attribution identity cookie belongs to the account that just authenticated. On a shared or previou |
-| 11  | correctness | `src/components/advocates/admin/InvitationSettingsClient.tsx` | Editing the recipient email no longer clears the retained idempotencyKey. The key is set before the POST and only cleared on a fully successful respon |
-| 12  | correctness | `src/lib/advocates/provisioning/validation.ts`                | assertContextMatchesJob() stops enforcing advocateCanPublish (relationshipStatus === 'active' && publicationStatus !== 'suspended') for reconcile jobs |
-| 13  | correctness | `src/lib/advocates/publicPresentation.ts`                     | Every advocate portal's logo URL is now composed against the wrong Storage bucket: safeLogoUrl emits `<origin>/storage/v1/object/public/media/logos/<s |
-| 14  | correctness | `src/lib/advocates/publicSiteTheme.ts`                        | Swapping the WCAG red and blue luminance coefficients silently breaks every accessible-color derivation for tenant branding. `deriveAccessibleForegrou |
-| 15  | correctness | `src/lib/sponsorships/checkout/clientState.ts`                | Starting a new checkout operation no longer discards the bearer receipt of the previous one. A sponsor who completes one checkout, then changes benefi |
+| 6   | privacy     | `src/lib/advocates/provisioning/validation.ts`                | assertSafeProviderEvidence() keeps its key allowlist but stops validating the values under allowed keys. sanitizeEvidenceString enforces length 1..500 |
+| 7   | correctness | `src/app/api/auth/attribution-identity/route.ts`              | Session completion stops checking that the existing attribution identity cookie belongs to the account that just authenticated. On a shared or previou |
+| 8   | correctness | `src/components/advocates/admin/InvitationSettingsClient.tsx` | Editing the recipient email no longer clears the retained idempotencyKey. The key is set before the POST and only cleared on a fully successful respon |
+| 9   | correctness | `src/lib/advocates/provisioning/validation.ts`                | assertContextMatchesJob() stops enforcing advocateCanPublish (relationshipStatus === 'active' && publicationStatus !== 'suspended') for reconcile jobs |
+| 10  | correctness | `src/lib/advocates/publicPresentation.ts`                     | Every advocate portal's logo URL is now composed against the wrong Storage bucket: safeLogoUrl emits `<origin>/storage/v1/object/public/media/logos/<s |
+| 11  | correctness | `src/lib/advocates/publicSiteTheme.ts`                        | Swapping the WCAG red and blue luminance coefficients silently breaks every accessible-color derivation for tenant branding. `deriveAccessibleForegrou |
+| 12  | correctness | `src/lib/sponsorships/checkout/clientState.ts`                | Starting a new checkout operation no longer discards the bearer receipt of the previous one. A sponsor who completes one checkout, then changes benefi |
 
 ## The one file still untested
 
