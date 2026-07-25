@@ -149,6 +149,7 @@
         "tests/sponsorships/stripe-checkout-v2.spec.ts",
         "tests/sponsorships/stripe-checkout.spec.ts",
         "tests/sponsorships/stripe-financial-adjustments.spec.ts",
+        "tests/sponsorships/stripe-hosted-session-amount.spec.ts",
         "tests/sponsorships/stripe-payment-method-inventory.spec.ts",
         "tests/sponsorships/stripe-provider-request.spec.ts",
         "tests/sponsorships/stripe-webhook-ingestion.spec.ts",

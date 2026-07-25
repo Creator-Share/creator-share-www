@@ -1,6 +1,6 @@
 # Advocate Coverage Gap Register
 
-Twenty places where a deliberate, compiling change to production TypeScript passes the entire required suite.
+Nineteen places where a deliberate, compiling change to production TypeScript passes the entire required suite.
 
 ## Read this first
 
