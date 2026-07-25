@@ -535,6 +535,78 @@ test("ownership state resets across portals with matching candidate sets", async
   )
 })
 
+test("ownership transfer requires the exact confirmation phrase", async ({
+  page,
+}) => {
+  // Every existing test types the correct phrase, so nothing asserted that a
+  // wrong one is refused. The only coverage was a source-text check that the
+  // file contains the phrase template, which cannot see a changed comparison.
+  // Transferring sole ownership hands over branding, catalog, and payout
+  // configuration, and this typed phrase is the deliberate friction.
+  const submissions: SubmittedRequest[] = []
+  await installControlResponses(page, submissions)
+  await page.reload()
+  await waitForHarnessHydration(page)
+
+  const controls = page.getByRole("region", { name: "Ownership transfer" })
+  await controls.getByLabel("Administrative reason").fill("Alpha owner change")
+  const confirmation = controls.getByLabel(/Type TRANSFER alpha/)
+  const submit = controls.getByRole("button", { name: "Transfer ownership" })
+
+  for (const wrong of [
+    "",
+    "TRANSFER",
+    "TRANSFER beta",
+    "transfer alpha",
+    "TRANSFER alpha ",
+    "TRANSFER  alpha",
+  ]) {
+    await confirmation.fill(wrong)
+    await expect(
+      submit,
+      `${JSON.stringify(wrong)} must not enable an ownership transfer`,
+    ).toBeDisabled()
+  }
+
+  // The exact phrase still works, so this is a boundary rather than a blanket
+  // refusal.
+  await confirmation.fill("TRANSFER alpha")
+  await expect(submit).toBeEnabled()
+  await submit.click()
+  await expect(controls.getByRole("status")).toHaveText(
+    "Ownership transferred to Bailey Builder.",
+  )
+  expect(submissions).toHaveLength(1)
+})
+
+test("archiving requires the exact confirmation phrase", async ({ page }) => {
+  // Archive is irreversible, and its phrase had the same source-text-only
+  // coverage.
+  const submissions: SubmittedRequest[] = []
+  await installControlResponses(page, submissions)
+  await page.reload()
+  await waitForHarnessHydration(page)
+
+  const controls = page.getByRole("region", { name: "Lifecycle controls" })
+  await controls.getByLabel("Action").selectOption("archive")
+  await controls.getByLabel("Administrative reason").fill("Alpha archive")
+  const confirmation = controls.getByLabel(/Type ARCHIVE alpha/)
+  const submit = controls.getByRole("button", { name: /Archive/ })
+
+  for (const wrong of ["", "ARCHIVE", "ARCHIVE beta", "archive alpha", "yes"]) {
+    await confirmation.fill(wrong)
+    await expect(
+      submit,
+      `${JSON.stringify(wrong)} must not enable an irreversible archive`,
+    ).toBeDisabled()
+  }
+
+  await confirmation.fill("ARCHIVE alpha")
+  await expect(submit).toBeEnabled()
+  await submit.click()
+  await expect.poll(() => submissions.length).toBe(1)
+})
+
 test("ownership state accepts refreshed owner and candidate props", async ({
   page,
 }) => {
