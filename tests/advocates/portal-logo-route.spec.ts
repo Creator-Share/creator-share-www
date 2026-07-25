@@ -337,6 +337,56 @@ test.describe("advocate portal logo route", () => {
     expect(uploadCalls).toHaveLength(0)
   })
 
+  test("rejects every non-active relationship even when the portal is published", async () => {
+    // The suspended-portal test above sets BOTH statuses, so it cannot show
+    // which predicate does the work. A mutation dropping the relationship
+    // check entirely therefore left the suite green. These vary one field at a
+    // time: the portal is publication-active throughout, so only the
+    // relationship lifecycle can refuse the request.
+    for (const relationshipStatus of ["invited", "suspended", "archived"]) {
+      serviceClientCalls = 0
+      uploadCalls.length = 0
+      portalAccess = {
+        ...accessRow(),
+        relationship_status: relationshipStatus,
+        publication_status: "active",
+      }
+
+      const response = await post(await request())
+
+      expect(
+        response.status,
+        `relationship ${relationshipStatus} must not mutate branding`,
+      ).toBe(403)
+      expect(await json(response)).toMatchObject({
+        ok: false,
+        code: "forbidden",
+      })
+      // The refusal must land before the service-role client exists, because
+      // past this gate the route reserves an upload, decodes attacker-supplied
+      // image bytes, and writes into the tenant asset bucket.
+      expect(serviceClientCalls).toBe(0)
+      expect(uploadCalls).toHaveLength(0)
+    }
+  })
+
+  test("rejects a suspended publication even when the relationship is active", async () => {
+    // The other half of the same pair, varied independently.
+    serviceClientCalls = 0
+    uploadCalls.length = 0
+    portalAccess = {
+      ...accessRow(),
+      relationship_status: "active",
+      publication_status: "suspended",
+    }
+
+    const response = await post(await request())
+
+    expect(response.status).toBe(403)
+    expect(serviceClientCalls).toBe(0)
+    expect(uploadCalls).toHaveLength(0)
+  })
+
   test("rejects stale editors before decoding or privileged storage access", async () => {
     const response = await post(await request({ expectedVersion: "6" }))
     expect(response.status).toBe(409)
