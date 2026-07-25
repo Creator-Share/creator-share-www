@@ -183,6 +183,32 @@ test.describe("advocate tenant middleware", () => {
     expect(response.headers.get("x-frame-options")).toBe("DENY")
   })
 
+  test("denies framing on every tenant document route, not just the landing page", async () => {
+    // Framing protection was asserted only for "/", /payments/success, and
+    // /auth/callback. Removing the beneficiary profile from the set of
+    // framing-denied document routes therefore left the suite green, and
+    // next.config.ts sets no headers() at all, so this middleware is the only
+    // source of that protection. The profile page carries the sponsorship call
+    // to action, which makes it the one worth clickjacking.
+    for (const pathname of [
+      "/",
+      "/sponsorships",
+      "/sponsorships/hopechild",
+      "/payments/success",
+    ]) {
+      const response = await middleware(request(pathname))
+
+      expect(
+        response.headers.get("content-security-policy"),
+        `${pathname} must refuse framing`,
+      ).toBe("frame-ancestors 'none'")
+      expect(
+        response.headers.get("x-frame-options"),
+        `${pathname} must refuse framing`,
+      ).toBe("DENY")
+    }
+  })
+
   test("rotates forged and duplicate visitor cookies before forwarding", async () => {
     const first = await createSponsorshipVisitorToken()
     const second = await createSponsorshipVisitorToken()
