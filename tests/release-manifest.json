@@ -41,6 +41,7 @@
         "tests/advocates/invitation-administration.spec.ts",
         "tests/advocates/invitation-authentication-rate-limit.spec.ts",
         "tests/advocates/invitation-authentication-route.spec.ts",
+        "tests/advocates/invitation-email-escaping.spec.ts",
         "tests/advocates/invitation-email-worker.spec.ts",
         "tests/advocates/invitation-redemption-route.spec.ts",
         "tests/advocates/invitation-rollout-safety.spec.ts",
