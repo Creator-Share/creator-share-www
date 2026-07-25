@@ -7,7 +7,12 @@ import pg from "pg"
 
 const { Client } = pg
 
-const DEFAULT_DISCOVERY_TIMEOUT_MILLISECONDS = 10_000
+// The Supabase CLI shells out to Docker, so a status probe on a loaded CI
+// runner can take well over ten seconds. This budget only bounds a hang: a
+// stack that is genuinely down exits non-zero quickly and raises
+// local_supabase_status_failed instead, so a larger value cannot mask a real
+// outage. Ten seconds failed the required gate at b4d6db5.
+const DEFAULT_DISCOVERY_TIMEOUT_MILLISECONDS = 30_000
 const DEFAULT_CLONE_TIMEOUT_MILLISECONDS = 180_000
 const DEFAULT_CONNECTION_TIMEOUT_MILLISECONDS = 5_000
 const DEFAULT_QUERY_TIMEOUT_MILLISECONDS = 20_000

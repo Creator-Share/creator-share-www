@@ -5,7 +5,8 @@ import { relative, resolve } from "node:path"
 
 import { discoverLocalSupabase } from "./local-supabase.mjs"
 
-const DISCOVERY_TIMEOUT_MILLISECONDS = 10_000
+// Matches the database helper's discovery budget; see the note there.
+const DISCOVERY_TIMEOUT_MILLISECONDS = 30_000
 const MIGRATION_ORACLE_TIMEOUT_MILLISECONDS = 60_000
 const MAXIMUM_PROCESS_OUTPUT_BYTES = 1024 * 1024
 const MAXIMUM_RESPONSE_BYTES = 64 * 1024
@@ -24,8 +25,7 @@ const COMPONENT_IMAGE_PATTERNS = Object.freeze({
   auth: /^public\.ecr\.aws\/supabase\/gotrue:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/,
   postgrest:
     /^public\.ecr\.aws\/supabase\/postgrest:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/,
-  database:
-    /^public\.ecr\.aws\/supabase\/postgres:[0-9][A-Za-z0-9._-]{0,127}$/,
+  database: /^public\.ecr\.aws\/supabase\/postgres:[0-9][A-Za-z0-9._-]{0,127}$/,
 })
 const LOOPBACK_HTTP_HOST = "127.0.0.1"
 const LOOPBACK_DATABASE_HOSTS = new Set([
@@ -57,9 +57,7 @@ FROM supabase_migrations.schema_migrations
 `
 
 function fixedError(code, cause) {
-  return cause === undefined
-    ? new Error(code)
-    : new Error(code, { cause })
+  return cause === undefined ? new Error(code) : new Error(code, { cause })
 }
 
 function isRecord(value) {
@@ -93,9 +91,7 @@ function runBoundedProcess(executable, args, options) {
     encoding: "utf8",
     maxBuffer: MAXIMUM_PROCESS_OUTPUT_BYTES,
     timeout: options.timeoutMilliseconds ?? DISCOVERY_TIMEOUT_MILLISECONDS,
-    ...(options.environment === undefined
-      ? {}
-      : { env: options.environment }),
+    ...(options.environment === undefined ? {} : { env: options.environment }),
   })
   if (result.error || result.status !== 0) {
     throw fixedError(options.code, result.error)
@@ -130,7 +126,10 @@ function requireLoopbackHttpUrl(value, expectedPath, code) {
 
 function decodeJwtClaims(value, expectedRole, code) {
   const segments = value.split(".")
-  if (segments.length !== 3 || segments.some((segment) => segment.length === 0)) {
+  if (
+    segments.length !== 3 ||
+    segments.some((segment) => segment.length === 0)
+  ) {
     throw fixedError(code)
   }
   const claims = parseJson(
@@ -577,11 +576,7 @@ export async function discoverLocalSupabaseHttp(options = {}) {
     "local_supabase_http_api_url_invalid",
   )
   const restUrl = requireLoopbackHttpUrl(
-    requiredString(
-      status,
-      "REST_URL",
-      "local_supabase_http_rest_url_missing",
-    ),
+    requiredString(status, "REST_URL", "local_supabase_http_rest_url_missing"),
     "/rest/v1",
     "local_supabase_http_rest_url_invalid",
   )
@@ -609,11 +604,7 @@ export async function discoverLocalSupabaseHttp(options = {}) {
     "SECRET_KEY",
     "local_supabase_http_secret_key_invalid",
   )
-  decodeJwtClaims(
-    legacyAnonKey,
-    "anon",
-    "local_supabase_http_anon_key_invalid",
-  )
+  decodeJwtClaims(legacyAnonKey, "anon", "local_supabase_http_anon_key_invalid")
   decodeJwtClaims(
     legacyServiceRoleKey,
     "service_role",
@@ -632,37 +623,29 @@ export async function discoverLocalSupabaseHttp(options = {}) {
     throw fixedError("local_supabase_http_secret_key_invalid")
   }
   if (
-    new Set([
-      legacyAnonKey,
-      legacyServiceRoleKey,
-      publishableKey,
-      secretKey,
-    ]).size !== 4
+    new Set([legacyAnonKey, legacyServiceRoleKey, publishableKey, secretKey])
+      .size !== 4
   ) {
     throw fixedError("local_supabase_http_keys_not_distinct")
   }
 
-  const [
-    cliVersion,
-    supabaseJsVersion,
-    components,
-    postgresqlMajorVersion,
-  ] = await Promise.all([
-    readPackageVersion(
-      workspace,
-      "node_modules/supabase/package.json",
-      "supabase",
-      "local_supabase_http_cli_metadata_invalid",
-    ),
-    readPackageVersion(
-      workspace,
-      "node_modules/@supabase/supabase-js/package.json",
-      "@supabase/supabase-js",
-      "local_supabase_http_sdk_metadata_invalid",
-    ),
-    readComponentImages(workspace, database.projectId),
-    readPostgresqlMajorVersion(database),
-  ])
+  const [cliVersion, supabaseJsVersion, components, postgresqlMajorVersion] =
+    await Promise.all([
+      readPackageVersion(
+        workspace,
+        "node_modules/supabase/package.json",
+        "supabase",
+        "local_supabase_http_cli_metadata_invalid",
+      ),
+      readPackageVersion(
+        workspace,
+        "node_modules/@supabase/supabase-js/package.json",
+        "@supabase/supabase-js",
+        "local_supabase_http_sdk_metadata_invalid",
+      ),
+      readComponentImages(workspace, database.projectId),
+      readPostgresqlMajorVersion(database),
+    ])
   const imagePostgresqlMajorVersion = Number(
     /^public\.ecr\.aws\/supabase\/postgres:([0-9]+)\./.exec(
       components.database,
@@ -800,14 +783,10 @@ export async function loadLocalSupabaseHttpProvenance(stack, options = {}) {
     [options.compatibilityTestPath],
     "local_supabase_http_compatibility_digest_failed",
   )
-  const sourceRevision = runBoundedProcess(
-    "git",
-    ["rev-parse", "HEAD"],
-    {
-      cwd: workspace,
-      code: "local_supabase_http_source_revision_failed",
-    },
-  ).trim()
+  const sourceRevision = runBoundedProcess("git", ["rev-parse", "HEAD"], {
+    cwd: workspace,
+    code: "local_supabase_http_source_revision_failed",
+  }).trim()
   if (!SHA_REVISION_PATTERN.test(sourceRevision)) {
     throw fixedError("local_supabase_http_source_revision_invalid")
   }
