@@ -95,6 +95,14 @@ Stating this plainly matters more than the count above.
 - **The 99-case provider contract runs in a network namespace with no outbound interface.** That makes it a genuine offline contract and explicitly not hosted evidence.
 - **FF-049 is open.** It is a WebKit lane instability, documented with the CI run history that refuted my first hypothesis. `tests/advocates/portal-catalog-browser.spec.ts` should not be modified and should not be returned to the `webkit-browser` lane until the failing context is discriminated.
 
+## A systematic search for what is left
+
+The gap that produced `tests/sponsorships/checkout-host-authorization.spec.ts` was found by a heuristic worth repeating: an authorization function whose name appears nowhere in any test file. That search was then run across the whole surface — 288 files under `src/app/api`, `src/lib/advocates`, and `src/lib/sponsorships` — matching every function whose name suggests a boundary decision against the full text of every file under `tests/` and `supabase/tests/`.
+
+It surfaced no further uncovered boundary. The remaining matches are internal row parsers and field validators such as `requiredUuid` and `requiredInteger`, which are exercised through their callers; a name absent from test text is not the same as behavior absent from a test. The two matches that do map to release gates, `resolveTenantRoutePolicy` and the exposure broker's origin authorization, each already have a dedicated spec — `tests/advocates/tenant-route-policy.spec.ts` and `tests/advocates/exposure-broker-server.spec.ts`.
+
+Recording the negative result matters as much as the positives: it is the basis for saying the repository-side work is finished rather than merely that no one has found the next hole.
+
 ## On the earlier traceability sweep
 
 An earlier automated sweep classified the release gates as 14 automated, 32 partial, 12 hosted-only, 5 uncovered. **Treat that partial count as a classification artefact, not a backlog**, and treat the aggregate verdicts of both large sweeps as unreliable in both directions:
