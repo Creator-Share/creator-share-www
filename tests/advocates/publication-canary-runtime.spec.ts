@@ -254,6 +254,64 @@ test.describe("publication canary production runtime", () => {
     }
   })
 
+  test("rejects unsafe IPv6 pinned addresses", async () => {
+    // The unsafe-address coverage above is IPv4 only. A mutation removing the
+    // IPv6 global-unicast restriction therefore left the suite green, which
+    // would let a tenant AAAA record pin an internal address. The canary
+    // worker dials pinned addresses holding a service-role client and a live
+    // challenge bearer, so that turns it into an SSRF probe against private
+    // network space, and a succeeded report could be produced by an
+    // attacker-controlled internal host.
+    for (const unsafeAddress of [
+      "fd00::1", // unique local
+      "fe80::1", // link local
+      "::1", // loopback
+      "::ffff:169.254.169.254", // IPv4-mapped cloud metadata
+      "2001:db8::1", // documentation, explicitly excluded
+      "2002::1", // 6to4, explicitly excluded
+      "ff02::1", // multicast
+      "fc00::1", // unique local, lower half
+    ]) {
+      await expect(
+        runtime.observePublicationCanaryDns(
+          { hostname: HOSTNAME, timeoutMs: 10_000 },
+          {
+            expectedCnameTarget: TARGET,
+            resolverFactory: () =>
+              dnsResolver({
+                hostCnames: [TARGET],
+                hostIpv6: [unsafeAddress],
+              }),
+            now: () => NOW,
+          },
+        ),
+        `${unsafeAddress} must not be accepted as a pinned address`,
+      ).rejects.toThrow("publication_canary_dns_target_mismatch")
+    }
+  })
+
+  test("accepts a global unicast IPv6 pinned address", async () => {
+    // The negative cases above would all pass if the predicate rejected every
+    // IPv6 address, so the boundary is asserted from both sides.
+    const pinned: unknown[] = []
+    const observation = await runtime.observePublicationCanaryDns(
+      { hostname: HOSTNAME, timeoutMs: 10_000 },
+      {
+        expectedCnameTarget: TARGET,
+        resolverFactory: () =>
+          dnsResolver({
+            hostCnames: [TARGET],
+            hostIpv6: ["2606:4700::6810:1"],
+          }),
+        now: () => NOW,
+        onPinnedAddresses: (addresses) => pinned.push(...addresses),
+      },
+    )
+
+    expect(observation.resolved).toBe(true)
+    expect(pinned).toEqual([{ address: "2606:4700::6810:1", family: 6 }])
+  })
+
   test("proves random sibling DNS absence only from empty answers or exact absence codes", async () => {
     const aliasQueries: string[] = []
     const resolver: PublicationCanaryDnsResolver = {
