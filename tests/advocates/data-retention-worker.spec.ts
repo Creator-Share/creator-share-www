@@ -170,6 +170,30 @@ test.describe("data retention worker authentication and configuration", () => {
         DATA_RETENTION_WORKER_SECRET: "d".repeat(48),
       }),
     ).toThrow("Data retention worker configuration is unavailable")
+
+    // The length floor was unasserted, so lowering it was accepted. This
+    // endpoint holds a service-role client and drives every erasure and
+    // redaction, so a truncated or misconfigured environment variable would
+    // otherwise turn it into something an unauthenticated caller can reach by
+    // guessing a short bearer. Both edges are pinned so the assertion cannot
+    // be satisfied by rejecting everything.
+    for (const tooShort of ["", "x", "a".repeat(31)]) {
+      expect(
+        () => config.loadDataRetentionWorkerSecret({ CRON_SECRET: tooShort }),
+        `a ${tooShort.length} character secret must fail closed`,
+      ).toThrow("Data retention worker configuration is unavailable")
+    }
+    expect(
+      config.loadDataRetentionWorkerSecret({ CRON_SECRET: "a".repeat(32) }),
+    ).toBe("a".repeat(32))
+    expect(
+      config.loadDataRetentionWorkerSecret({ CRON_SECRET: "a".repeat(1_024) }),
+    ).toBe("a".repeat(1_024))
+    expect(() =>
+      config.loadDataRetentionWorkerSecret({
+        CRON_SECRET: "a".repeat(1_025),
+      }),
+    ).toThrow("Data retention worker configuration is unavailable")
   })
 
   test("enforces the database batch and full invocation time bounds", () => {
