@@ -693,6 +693,40 @@ test.describe("verified server intent Stripe webhook ingestion", () => {
     expect(ingested.payloadCiphertext).not.toContain("private.sponsor")
   })
 
+  test("fails closed when the intent and the attempt disagree on terms", async () => {
+    // The webhook trusts the payment attempt for the facts it records, and the
+    // sponsorship intent is the authority the sponsor actually approved. The
+    // parity gate between them was unasserted, so a mutation reading both
+    // sides from the attempt row made the comparison vacuous while the suite
+    // stayed green. Drift, a checkout bug, or a tampered attempt row would
+    // then be ingested at an amount the intent never authorized.
+    const divergences = [
+      { intentChargedAmountMinor: 1201 },
+      { intentBaseAmountUsdCents: 1201 },
+      { intentChargedCurrency: "GBP" as const },
+      { intentConversionRate: 0.5 },
+      { intentPaymentMode: "recurring" as const },
+    ]
+
+    for (const divergence of divergences) {
+      const metadata = stripeMetadata("one_time", 1200)
+      const session = checkoutSession(metadata)
+      const { dependencies, calls } = dependenciesFor(boundary(divergence))
+
+      await expect(
+        ingestFixture(
+          event("checkout.session.completed", session),
+          JSON.stringify({ id: "evt_parity", data: { object: session } }),
+          dependencies,
+        ),
+        `${JSON.stringify(divergence)} must fail closed`,
+      ).rejects.toMatchObject({ code: "boundary-mismatch" })
+
+      // Nothing may be recorded from a boundary the intent does not agree with.
+      expect(calls.ingested).toHaveLength(0)
+    }
+  })
+
   test("maps recurring Checkout success and retrieves only the missing invoice facts", async () => {
     const metadata = stripeMetadata("recurring", 1200)
     const session = checkoutSession(metadata, {
