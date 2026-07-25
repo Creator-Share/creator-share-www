@@ -191,6 +191,97 @@ test("leaves a matching identity signal untouched", async () => {
   expect(setCookies(response)).toEqual([])
 })
 
+test("normalizes a browser carrying more than one identity cookie", async () => {
+  // Timestamps must be near the present: an earlier draft used a fixed value
+  // that is in the future, so both cookies failed verification, the signal
+  // resolved to null, and the test passed without exercising normalization at
+  // all. Measured resolution for this header is a non-null signal with
+  // requiresNormalization true, which is what makes this case decisive.
+  const issuedAt = Math.floor(Date.now() / 1_000) - 100
+  const first = createAdvocateAttributionIdentityCookieValue(
+    { authUserId: AUTH_USER_ID, issuedAtSeconds: issuedAt },
+    { rawHost: "creatorshare.com" },
+  )
+  const second = createAdvocateAttributionIdentityCookieValue(
+    { authUserId: AUTH_USER_ID, issuedAtSeconds: issuedAt + 50 },
+    { rawHost: "creatorshare.com" },
+  )
+  expect(first).not.toBe(second)
+
+  const response = await POST(
+    request({
+      cookie:
+        `${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=${first}; ` +
+        `${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=${second}`,
+    }),
+  )
+
+  expect(response.status).toBe(200)
+  expect(
+    setCookies(response).some(
+      (cookie) =>
+        cookie.startsWith(`${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=`) &&
+        !cookie.includes("Max-Age=0"),
+    ),
+    "a browser holding two identities must be collapsed to one",
+  ).toBe(true)
+})
+
+test("re-signs an identity that still verifies only against the previous secret", async () => {
+  // Key rotation. The cookie must be re-signed while it still verifies,
+  // otherwise it stops working the moment the retired secret is removed.
+  //
+  // Note this case cannot distinguish the route's two guard terms: a rotated
+  // cookie resolves with requiresRefresh true, and requiresNormalization is
+  // defined to include requiresRefresh, so either term alone already forces
+  // the re-issue. The behaviour is asserted here; the redundancy is recorded
+  // in the coverage gap register.
+  const retiredSecret = Buffer.alloc(32, 11).toString("base64")
+  process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1 = retiredSecret
+  delete process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1_PREVIOUS
+  const rotatedCookie = createAdvocateAttributionIdentityCookieValue(
+    {
+      authUserId: AUTH_USER_ID,
+      issuedAtSeconds: Math.floor(Date.now() / 1_000) - 100,
+    },
+    { rawHost: "creatorshare.com" },
+  )
+  process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1 = CURRENT_SECRET
+  process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1_PREVIOUS =
+    retiredSecret
+
+  try {
+    const response = await POST(
+      request({
+        cookie: `${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=${rotatedCookie}`,
+      }),
+    )
+    expect(response.status).toBe(200)
+
+    const reissued = setCookies(response).find(
+      (cookie) =>
+        cookie.startsWith(`${ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_NAME}=`) &&
+        !cookie.includes("Max-Age=0"),
+    )
+    expect(
+      reissued,
+      "a previous-secret identity must be re-signed",
+    ).toBeDefined()
+
+    const value = reissued?.slice(
+      reissued.indexOf("=") + 1,
+      reissued.indexOf(";"),
+    )
+    const verified = verifyAdvocateAttributionIdentityCookieValue(value, {
+      rawHost: "creatorshare.com",
+    })
+    expect(verified?.signal.authUserId).toBe(AUTH_USER_ID)
+    expect(verified?.requiresRefresh).toBe(false)
+  } finally {
+    delete process.env.ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1_PREVIOUS
+  }
+})
+
 test("requires exact same-origin authenticated completion", async () => {
   const crossOrigin = await POST(request({ origin: "https://evil.example" }))
   expect(crossOrigin.status).toBe(400)
