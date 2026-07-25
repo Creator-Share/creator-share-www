@@ -147,6 +147,7 @@
         "tests/sponsorships/stripe-provider-request.spec.ts",
         "tests/sponsorships/stripe-webhook-ingestion.spec.ts",
         "tests/sponsorships/stripe-webhook-secret-topology.spec.ts",
+        "tests/sponsorships/stripe-webhook-signature-gate.spec.ts",
         "tests/sponsorships/subscription-cancellation-worker.spec.ts",
         "tests/sponsorships/subscription-cancellation.spec.ts",
         "tests/sponsorships/subscription-presentation.spec.ts",
