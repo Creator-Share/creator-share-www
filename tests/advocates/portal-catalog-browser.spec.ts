@@ -228,6 +228,7 @@ test.afterAll(async () => {
 
 test.beforeEach(async ({ page }) => {
   await page.goto(harnessOrigin)
+  await waitForHarnessHydration(page)
   // Typing before hydration is discarded when React takes over, which leaves
   // Save disabled for the rest of the test. Only reproducible on a slow runner.
   await expect(page.locator('html[data-harness-hydrated="true"]')).toHaveCount(
@@ -794,6 +795,7 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
     await dialog.accept()
   })
   await page.goto(harnessOrigin)
+  await waitForHarnessHydration(page)
   await page.getByRole("link", { name: "Analytics", exact: true }).click()
   await page.getByRole("link", { name: "Child catalog" }).click()
 
