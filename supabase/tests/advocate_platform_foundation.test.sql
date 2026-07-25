@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(75);
+SELECT extensions.plan(78);
 
 SELECT extensions.is(
   (
@@ -246,6 +246,57 @@ SELECT extensions.ok(
   ),
   'legacy role names are unique without case ambiguity'
 );
+
+-- The tenancy invariant's source of truth.
+--
+-- "Each advocate is one tenant with one portal route" rests on two unique
+-- indexes, and neither was asserted anywhere: grep for advocates_slug_uidx and
+-- advocate_domains_one_primary_uidx across tests returned nothing, while
+-- sibling indexes such as roles_name_case_insensitive_uidx above and
+-- advocate_membership_roles_one_owner_uidx are covered exactly this way.
+-- Dropping either index would have broken the invariant with the whole
+-- required suite still green.
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM pg_indexes index_definition
+    WHERE index_definition.schemaname = 'public'
+      AND index_definition.tablename = 'advocates'
+      AND index_definition.indexname = 'advocates_slug_uidx'
+  ),
+  'one advocate per slug is enforced by a unique index'
+);
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM pg_indexes index_definition
+    WHERE index_definition.schemaname = 'public'
+      AND index_definition.tablename = 'advocate_domains'
+      AND index_definition.indexname = 'advocate_domains_one_primary_uidx'
+  ),
+  'one primary hostname per advocate is enforced by a unique index'
+);
+
+-- Existence alone would pass against a non-unique index, so prove the
+-- behaviour: a second advocate on a taken slug must be rejected by the
+-- database itself rather than by application validation. Self-contained so it
+-- does not depend on whatever rows earlier assertions happen to have left.
+INSERT INTO public.advocates (slug, display_name)
+VALUES ('tenancy-uniqueness-probe', 'Tenancy Uniqueness Probe');
+
+SELECT extensions.throws_ok(
+  $slug_collision$
+    INSERT INTO public.advocates (slug, display_name)
+    VALUES ('tenancy-uniqueness-probe', 'Duplicate Slug Advocate')
+  $slug_collision$,
+  '23505',
+  NULL,
+  'a second advocate cannot take an existing slug'
+);
+
+DELETE FROM public.advocates WHERE slug = 'tenancy-uniqueness-probe';
 
 SELECT extensions.is(
   (
