@@ -105,6 +105,20 @@ If you want work to continue while you are away, two things need to be set up, b
 
 ---
 
+## A note on the release-gate traceability sweep
+
+A parallel sweep classified the roadmap release gates as 14 automated, 32 partial, 12 hosted-only, and 5 uncovered. Treat the partial count as conservative rather than as a work queue.
+
+Five of the five originally uncovered gates have now been addressed, and spot checks of the partial ones keep finding them substantially covered already:
+
+- Retention cleanup jobs: the hourly `17 * * * *` schedule is asserted against `vercel.json`, and `sponsor_authentication` is a first-class retention step with failure-path assertions.
+- Webhook idempotency: duplicate replay returning the exact durable result is asserted for both providers.
+- Visitor secret separation: the generic pairwise check was already asserted; only the payment-key instances were added.
+
+Two of the sweep's specific claims were wrong on inspection. The legacy invitation branch it flagged as an escalation risk is an intentional compatibility path documented by FF-042 that still requires a fresh `otp` session, and its real defect was missing coverage rather than missing enforcement. A claimed PayPal weakness turned out to be my test being wrong and the implementation being stricter than assumed.
+
+**So: verify every remaining partial against source before writing anything.** The residual in most of them is hosted verification, which belongs on the manual list above rather than in CI.
+
 ## Explicitly not on this list
 
 The following are automated and enforced, and need no manual verification:
