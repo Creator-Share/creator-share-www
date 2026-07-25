@@ -77,6 +77,7 @@
         "tests/advocates/public-metric-release-worker.spec.ts",
         "tests/advocates/public-presentation-repository.spec.ts",
         "tests/advocates/public-presentation.spec.ts",
+        "tests/advocates/public-site-branding-browser.spec.ts",
         "tests/advocates/public-site.spec.ts",
         "tests/advocates/publication-canary-challenge.spec.ts",
         "tests/advocates/publication-canary-client-operation.spec.ts",
