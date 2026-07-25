@@ -4,6 +4,8 @@ Everything on this list requires a human. Each item is here because it needs a c
 
 Anything not on this list is already automated and enforced in required CI.
 
+The gate-by-gate traceability behind that claim is in `docs/advocate-mvp-completion-audit.md`, which names the asserting test file for every release gate and states plainly where the automated evidence stops.
+
 ---
 
 ## 1. Blocking: Vercel project-creation audit evidence
