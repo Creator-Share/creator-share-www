@@ -762,7 +762,12 @@ async function startIsolatedApp(): Promise<void> {
   appOrigin = `http://127.0.0.1:${port}`
   appOutput = ""
   appDirectory = await mkdtemp(join(tmpdir(), "creator-share-catalog-page-"))
-  for (const directory of ["src", "public"]) {
+  // config/ is required: src/lib/advocates/crossSubdomainAttributionGate.ts
+  // imports config/creator-share-cookie-trust.json, and that module is reached
+  // from src/middleware.ts, so omitting it makes every route in the isolated
+  // app fail to compile. This suite self-skipped until it was added to CI,
+  // which is why the incomplete copy went unnoticed.
+  for (const directory of ["src", "public", "config"]) {
     await cp(resolve(WORKSPACE, directory), resolve(appDirectory, directory), {
       recursive: true,
     })
