@@ -72,6 +72,7 @@
         "tests/advocates/provisioning-start.spec.ts",
         "tests/advocates/provisioning.spec.ts",
         "tests/advocates/public-brand-ui.spec.ts",
+        "tests/advocates/public-catalog-host-routing.spec.ts",
         "tests/advocates/public-catalog.spec.ts",
         "tests/advocates/public-impact-metrics.spec.ts",
         "tests/advocates/public-metric-release-worker.spec.ts",
