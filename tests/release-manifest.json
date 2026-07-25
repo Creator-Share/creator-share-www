@@ -112,6 +112,7 @@
         "tests/auth/local-phone-authentication-lock.spec.ts",
         "tests/auth/password-recovery-client.spec.ts",
         "tests/auth/password-reset-request-route.spec.ts",
+        "tests/auth/password-validation.spec.ts",
         "tests/auth/supabase-email-proof-issuer.spec.ts",
         "tests/auth/verify-otp.spec.ts",
         "tests/beneficiary-validation.spec.ts",
