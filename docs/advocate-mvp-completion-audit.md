@@ -10,8 +10,8 @@ Every number below was produced by a command, and the source is named so it can 
 
 | Measurement                      | Value                          | Produced by                                         |
 | -------------------------------- | ------------------------------ | --------------------------------------------------- |
-| Test files assigned to a lane    | 238                            | `node scripts/verify-release-manifest.mjs`          |
-| Offline Playwright lane          | 143 files, 1,551 tests passing | `CI=true yarn test:lane:offline`                    |
+| Test files assigned to a lane    | 245                            | `node scripts/verify-release-manifest.mjs`          |
+| Offline Playwright lane          | 150 files, 1,609 tests passing | `CI=true yarn test:lane:offline`                    |
 | pgTAP suite from a clean reset   | 63 files, 2,131 tests passing  | Advocate publication database gate, run 30166556179 |
 | Dev-server Playwright lane       | 9 files                        | release manifest                                    |
 | Seeded-database Playwright lane  | 4 files                        | release manifest                                    |
@@ -21,6 +21,14 @@ Every number below was produced by a command, and the source is named so it can 
 | Opt-in integration, not required | 1 file                         | release manifest                                    |
 
 The manifest is a gate, not a listing. `scripts/verify-release-manifest.mjs` discovers every test-shaped file in the repository, including untracked ones, and fails the build if any file is unassigned, assigned twice, missing from disk, or sitting outside an expected directory. It was verified to fail in all four directions.
+
+## What changed after this audit was first written
+
+The numbers above were refreshed after a mutation campaign measured how much of the suite is load-bearing. Twenty-three deliberate, compiling edits to production TypeScript passed every lane. All twenty-three are now resolved: twenty-two are covered by a test that fails when its mutation is applied, and one was reclassified as redundant logic no test could catch.
+
+`docs/advocate-coverage-gap-register.md` holds the record, including the three controls that make those verdicts trustworthy: a known-bad mutation that reported caught, a known-harmless one that reported survived, and a reachability probe that appended a throwing statement to each file to prove the suite actually loads it.
+
+The gate table below is unchanged by that work. Those gaps were missing assertions, not failing gates: the committed code was correct in every case, and each row records only that a future regression there would have shipped silently.
 
 ## Status vocabulary
 
