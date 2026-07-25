@@ -233,6 +233,19 @@ test.afterAll(async () => {
 test.beforeEach(async ({ page }) => {
   await page.goto(harnessOrigin)
   await waitForHarnessHydration(page)
+  // Every test in this file shares one page and one origin, and several of them
+  // write catalog drafts to sessionStorage. Nothing cleared that between tests,
+  // so a test inherited whatever the previous one left behind. That is why the
+  // draft recovery test passed when run alone by the narrow WebKit script and
+  // failed intermittently when the whole file ran as a lane: it runs last and
+  // saw residue. Clearing storage and reloading gives every test the same
+  // starting state regardless of what ran before it.
+  await page.evaluate(() => {
+    window.sessionStorage.clear()
+    window.localStorage.clear()
+  })
+  await page.reload()
+  await waitForHarnessHydration(page)
 })
 
 test("operates every catalog mode and repairs, searches, reorders, and features real rendered controls", async ({
