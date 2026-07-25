@@ -1685,6 +1685,168 @@ SELECT extensions.throws_ok(
   'delivery queue lifecycle fields cannot be edited directly'
 );
 
+-- Legacy delegate compatibility branch.
+--
+-- public.redeem_advocate_invitation returns early into
+-- private.redeem_advocate_invitation_once_legacy when the invitation is a
+-- delegate invitation and redemption_operation_id is NULL. FF-042 documents
+-- that path for legacy nonbrowser delegate callers, but nothing exercised it:
+-- every other redemption assertion in this file supplies an explicit operation
+-- id, so the branch had no coverage and its single-use property was unproven
+-- even though the branch returns before the replay-receipt fence.
+
+INSERT INTO auth.users (
+  id,
+  aud,
+  role,
+  email,
+  email_confirmed_at,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at,
+  is_anonymous
+)
+VALUES (
+  '95000000-0000-4000-8000-000000000104'::uuid,
+  'authenticated',
+  'authenticated',
+  'legacy-delegate@example.test',
+  now(),
+  '{}'::jsonb,
+  '{"first_name":"Lee","last_name":"Legacy"}'::jsonb,
+  now(),
+  now(),
+  false
+);
+
+INSERT INTO auth.sessions (id, user_id, created_at, updated_at, aal, not_after)
+VALUES (
+  '95000000-0000-4000-8000-000000000984'::uuid,
+  '95000000-0000-4000-8000-000000000104'::uuid,
+  clock_timestamp(),
+  clock_timestamp(),
+  'aal1',
+  clock_timestamp() + interval '1 hour'
+);
+
+-- Issuance is a service-role boundary, matching every other issuance here.
+SELECT set_config('request.jwt.claims', '{}', true);
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
+WITH issued AS (
+  SELECT *
+  FROM public.issue_advocate_invitation_email(
+    (SELECT value FROM invitation_test_ids WHERE key = 'advocate'),
+    '95000000-0000-4000-8000-000000000101'::uuid,
+    'legacy-delegate@example.test',
+    ARRAY['analytics_viewer'],
+    'invitation-request-0009',
+    extensions.digest(repeat('9', 64), 'sha256'),
+    decode(repeat('91', 64), 'hex'),
+    extensions.digest('legacy-delegate@example.test', 'sha256'),
+    decode(repeat('92', 96), 'hex'),
+    1::smallint,
+    1::smallint,
+    1::smallint,
+    'Exercise the legacy delegate redemption compatibility branch'
+  )
+)
+INSERT INTO invitation_test_ids (key, value)
+SELECT 'invitation_legacy', invitation_id FROM issued;
+
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '95000000-0000-4000-8000-000000000104',
+  true
+);
+SELECT set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '95000000-0000-4000-8000-000000000104',
+    'role', 'authenticated',
+    'iat', extract(epoch FROM clock_timestamp())::bigint,
+    'aal', 'aal1',
+    'session_id', '95000000-0000-4000-8000-000000000984',
+    'amr', jsonb_build_array(
+      jsonb_build_object(
+        'method', 'otp',
+        'timestamp', extract(epoch FROM clock_timestamp())::bigint
+      )
+    )
+  )::text,
+  true
+);
+
+WITH redeemed AS (
+  SELECT *
+  FROM public.redeem_advocate_invitation(
+    plaintext_capability => repeat('9', 64),
+    change_reason => 'Accept through the legacy delegate branch',
+    request_id => 'invitation-request-0009',
+    trace_id => 'trace-legacy-delegate',
+    session_id => 'session-legacy-delegate',
+    client_ip => '192.0.2.44',
+    user_agent => 'legacy-delegate-test-agent',
+    redemption_operation_id => NULL
+  )
+)
+INSERT INTO invitation_test_ids (key, value)
+SELECT 'membership_legacy', membership_id FROM redeemed;
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1
+    FROM public.advocate_memberships membership
+    WHERE membership.id = (
+        SELECT value FROM invitation_test_ids WHERE key = 'membership_legacy'
+      )
+      AND membership.advocate_id = (
+        SELECT value FROM invitation_test_ids WHERE key = 'advocate'
+      )
+      AND membership.user_id =
+        '95000000-0000-4000-8000-000000000104'::uuid
+      AND membership.status = 'active'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM public.advocate_invitations invitation
+    WHERE invitation.id = (
+        SELECT value FROM invitation_test_ids WHERE key = 'invitation_legacy'
+      )
+      AND invitation.accepted_by_user_id =
+        '95000000-0000-4000-8000-000000000104'::uuid
+      AND invitation.accepted_at IS NOT NULL
+  ),
+  'the legacy delegate branch creates exactly the invited membership and consumes its invitation'
+);
+
+-- The load-bearing assertion. This branch returns before the operation-identity
+-- validation and before the replay-receipt fence, so single use has to come from
+-- the legacy function itself. Without this, a regression there would silently
+-- permit an unfenced replay.
+SELECT extensions.throws_ok(
+  $legacy_replay$
+    SELECT public.redeem_advocate_invitation(
+      plaintext_capability => repeat('9', 64),
+      change_reason => 'Replay the legacy delegate branch',
+      request_id => 'invitation-request-0009',
+      trace_id => 'trace-legacy-delegate-replay',
+      session_id => 'session-legacy-delegate',
+      client_ip => '192.0.2.44',
+      user_agent => 'legacy-delegate-test-agent',
+      redemption_operation_id => NULL
+    )
+  $legacy_replay$,
+  '42501',
+  'Invitation is invalid or unavailable',
+  'the legacy delegate branch remains single use without an operation identity'
+);
+
+SELECT set_config('request.jwt.claims', '{}', true);
+
 SELECT * FROM extensions.finish();
 
 ROLLBACK;
