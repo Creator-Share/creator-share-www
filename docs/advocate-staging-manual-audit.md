@@ -117,7 +117,11 @@ Five of the five originally uncovered gates have now been addressed, and spot ch
 
 Two of the sweep's specific claims were wrong on inspection. The legacy invitation branch it flagged as an escalation risk is an intentional compatibility path documented by FF-042 that still requires a fresh `otp` session, and its real defect was missing coverage rather than missing enforcement. A claimed PayPal weakness turned out to be my test being wrong and the implementation being stricter than assumed.
 
-**So: verify every remaining partial against source before writing anything.** The residual in most of them is hosted verification, which belongs on the manual list above rather than in CI.
+**A follow-up adjudication has now settled this.** The sixteen highest-value partial gates were each re-examined against source, with instructions to name the exact missing assertion if one existed. All sixteen came back covered, with specific files, line numbers, and quoted assertion text rather than inference from file names. The gates adjudicated were: two-response invitation redemption and its exact proof type, `verifyOtp` consuming that type, single-use under concurrency, explicit continuation before redemption, no session on page load or scanner fetch, magic links across cookie jars, no token leak into URLs or referrers or storage or analytics or history or logs, account creation limited to a validated claim or bounded registration, cancellation and payment-method management requiring an unexpired receipt bound to a live session, passwordless limiter partitioning with a separate verification limiter, webhook idempotency and authority, RLS and least-privilege grants on exposed tables, advocate roles being unable to read sponsor contact or raw tracking data, audit redaction and append-only protections, and browser lifecycle forensics privacy and 90 day removal.
+
+Because a clean sixteen out of sixteen invites suspicion, one verdict was independently re-checked by hand: the passwordless partitioning claim cites `supabase/tests/sponsor_passwordless_email_delivery_limits.test.sql` asserting that exhausting the public recipient pool still preserves capacity for a validated initial claim. Those assertions exist verbatim at the cited lines. The evidence is real.
+
+**Conclusion: the partial count was a classification artefact, not a backlog.** The residual work in these gates is hosted verification, which belongs on the manual list above rather than in CI.
 
 ## Explicitly not on this list
 
