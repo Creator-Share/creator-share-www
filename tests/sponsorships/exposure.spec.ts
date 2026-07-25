@@ -128,8 +128,36 @@ test("binds exposure identity to advocate, path, and signed-in user", () => {
     observedAt,
   })
 
+  // This test was named for the advocate but never varied it, which is why a
+  // mutation dropping the hostname from the digest survived. One visitor
+  // viewing the same page path on two tenants inside one five-minute window
+  // would then produce the identical event key, so the second tenant's
+  // exposure is silently discarded as a replay and that advocate loses the
+  // attribution the sponsorship should have credited.
+  const changedAdvocate = createQualifiedExposureEventKey({
+    visitorDigest,
+    advocateHostname: "second.creatorshare.com",
+    pagePath: "/sponsorships/amina",
+    authUserId: null,
+    observedAt,
+  })
+
+  // The visitor is the remaining input, and a key that ignored it would
+  // collapse every visitor on a tenant into one exposure.
+  const changedVisitor = createQualifiedExposureEventKey({
+    visitorDigest: Uint8Array.from(visitorDigest, (byte, index) =>
+      index === 0 ? byte ^ 1 : byte,
+    ),
+    advocateHostname: "hope.creatorshare.com",
+    pagePath: "/sponsorships/amina",
+    authUserId: null,
+    observedAt,
+  })
+
   expect(changedPath).not.toBe(base)
   expect(changedUser).not.toBe(base)
+  expect(changedAdvocate).not.toBe(base)
+  expect(changedVisitor).not.toBe(base)
 })
 
 test("module is explicitly poisoned against browser imports", async () => {
