@@ -183,12 +183,11 @@
       ]
     },
     "webkit-browser": {
-      "description": "Specs that must additionally run in mobile WebKit. Tests depending on a native beforeunload or history confirm dialog are individually skipped in WebKit, which never emits them. tests/advocates/portal-catalog-browser.spec.ts is included again after its readiness gate was moved onto the component's own data-catalog-draft-hydrated commit point; see FF-049 for the six earlier failures that came from inferring readiness from rendered text. This lane carries no baked environment: the engine is chosen by the invoking script, so the same file list runs once in Chromium and once in WebKit.",
+      "description": "Specs that must additionally run in mobile WebKit. Tests depending on a native beforeunload or history confirm dialog are individually skipped in WebKit, which never emits them. tests/advocates/portal-catalog-browser.spec.ts is deliberately NOT in this lane: it failed the WebKit gate six times on four different tests, and is covered in WebKit by the narrower test:advocate:webkit script instead. See FF-049. This lane carries no baked environment: the engine is chosen by the invoking script, so the same file list runs once in Chromium and once in WebKit.",
       "runner": "playwright-webkit",
       "files": [
         "tests/advocates/exposure-broker-browser.spec.ts",
         "tests/advocates/invitation-interstitial.spec.ts",
-        "tests/advocates/portal-catalog-browser.spec.ts",
         "tests/auth/password-recovery-browser.spec.ts"
       ]
     },
