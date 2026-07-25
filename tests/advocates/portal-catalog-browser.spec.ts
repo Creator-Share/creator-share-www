@@ -123,12 +123,16 @@ async function removeBlockedSelections(page: Page): Promise<void> {
 }
 
 async function waitForHarnessHydration(page: Page): Promise<void> {
-  // Safe after a bfcache restore too: the marker survives on the restored
-  // document, so this resolves immediately rather than waiting for a
-  // re-hydration that never happens.
+  // Two signals, in order. The harness marker proves React hydrated the page.
+  // The catalog attribute proves CatalogSettingsClient committed its initial
+  // state, which is the point after which a fill will stick. Both survive a
+  // bfcache restore, so each resolves immediately on a restored document.
   await expect(page.locator('html[data-harness-hydrated="true"]')).toHaveCount(
     1,
   )
+  await expect(
+    page.locator('section[data-catalog-draft-hydrated="true"]'),
+  ).toHaveCount(1)
 }
 
 async function answerHistoryConfirmation(
@@ -229,16 +233,6 @@ test.afterAll(async () => {
 test.beforeEach(async ({ page }) => {
   await page.goto(harnessOrigin)
   await waitForHarnessHydration(page)
-  // Hydration is necessary but not sufficient. The catalog still has to
-  // evaluate its own settings before a fill will stick, and typing earlier is
-  // discarded when React takes over, leaving Save disabled for the rest of the
-  // test. Patching this per test did not converge: five cold CI runs surfaced
-  // it in five different tests. The unavailable-selection alert is the
-  // earliest signal that the component has computed state from its settings,
-  // so every test now starts from a settled catalog.
-  await expect(
-    page.getByRole("region", { name: "Child catalog" }).getByRole("alert"),
-  ).toBeVisible()
 })
 
 test("operates every catalog mode and repairs, searches, reorders, and features real rendered controls", async ({
