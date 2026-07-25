@@ -750,17 +750,7 @@ export function CatalogSettingsClient({
           : null
 
   return (
-    // data-catalog-draft-hydrated reflects this component's own initialisation
-    // commit point. The draft restore attempt sets draftHydrated in a finally,
-    // so the attribute flips once state is settled whether or not a draft was
-    // recovered. It is exposed so a test can wait for readiness directly.
-    // Inferring readiness from rendered text does not work here: the
-    // unavailable-selection alert renders from settings, before the draft
-    // restore commits, so it can be visible while a fill would still be lost.
-    <section
-      aria-labelledby="catalog-settings-title"
-      data-catalog-draft-hydrated={draftHydrated ? "true" : "false"}
-    >
+    <section aria-labelledby="catalog-settings-title">
       <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
         <h2
           ref={catalogHeading}

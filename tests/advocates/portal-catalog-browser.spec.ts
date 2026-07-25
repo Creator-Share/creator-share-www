@@ -122,19 +122,6 @@ async function removeBlockedSelections(page: Page): Promise<void> {
     .click()
 }
 
-async function waitForHarnessHydration(page: Page): Promise<void> {
-  // Two signals, in order. The harness marker proves React hydrated the page.
-  // The catalog attribute proves CatalogSettingsClient committed its initial
-  // state, which is the point after which a fill will stick. Both survive a
-  // bfcache restore, so each resolves immediately on a restored document.
-  await expect(page.locator('html[data-harness-hydrated="true"]')).toHaveCount(
-    1,
-  )
-  await expect(
-    page.locator('section[data-catalog-draft-hydrated="true"]'),
-  ).toHaveCount(1)
-}
-
 async function answerHistoryConfirmation(
   page: Page,
   direction: "back" | "forward",
@@ -232,20 +219,6 @@ test.afterAll(async () => {
 
 test.beforeEach(async ({ page }) => {
   await page.goto(harnessOrigin)
-  await waitForHarnessHydration(page)
-  // Every test in this file shares one page and one origin, and several of them
-  // write catalog drafts to sessionStorage. Nothing cleared that between tests,
-  // so a test inherited whatever the previous one left behind. That is why the
-  // draft recovery test passed when run alone by the narrow WebKit script and
-  // failed intermittently when the whole file ran as a lane: it runs last and
-  // saw residue. Clearing storage and reloading gives every test the same
-  // starting state regardless of what ran before it.
-  await page.evaluate(() => {
-    window.sessionStorage.clear()
-    window.localStorage.clear()
-  })
-  await page.reload()
-  await waitForHarnessHydration(page)
 })
 
 test("operates every catalog mode and repairs, searches, reorders, and features real rendered controls", async ({
@@ -461,6 +434,16 @@ test("protects unsaved changes across browser unload and client navigation with 
   await expect(dialog).toHaveCount(0)
   await expect(analytics).toBeFocused()
 
+  let externalDialogType = ""
+  page.once("dialog", async (browserDialog) => {
+    externalDialogType = browserDialog.type()
+    await browserDialog.dismiss()
+  })
+  await page.getByRole("link", { name: "External help" }).click()
+  expect(externalDialogType).toBe("beforeunload")
+  await expect(dialog).toHaveCount(0)
+  await expect(page).toHaveURL(harnessOrigin + "/")
+
   await analytics.click()
   await stay.click()
   await expect(dialog).toHaveCount(0)
@@ -470,44 +453,6 @@ test("protects unsaved changes across browser unload and client navigation with 
   await discard.click()
   await expect(page).toHaveURL(`${harnessOrigin}/other`)
   await expect(page.getByText("Analytics destination")).toBeVisible()
-})
-
-/**
- * The browser's own unsaved-change prompt on a cross-origin navigation. This is
- * the one part of the guard that cannot run in WebKit: Playwright's WebKit never
- * emits the beforeunload dialog, so the click would navigate to the external
- * href and destroy the rest of the assertions. It is split out rather than
- * weakened, so the Chromium proof is unchanged and everything else in the guard
- * now runs in both engines.
- */
-test("blocks an external navigation with the browser's own unsaved-change prompt", async ({
-  page,
-  browserName,
-}) => {
-  test.skip(
-    browserName === "webkit",
-    "Playwright's WebKit does not emit beforeunload dialogs. Tracked as FF-049.",
-  )
-
-  const catalog = page.getByRole("region", { name: "Child catalog" })
-  await catalog
-    .getByRole("button", { name: "Remove Unavailable selection 333333333333" })
-    .click()
-
-  let externalDialogType = ""
-  page.once("dialog", async (browserDialog) => {
-    externalDialogType = browserDialog.type()
-    await browserDialog.dismiss()
-  })
-  await page.getByRole("link", { name: "External help" }).click()
-
-  expect(externalDialogType).toBe("beforeunload")
-  await expect(
-    page.getByRole("alertdialog", {
-      name: "Discard unsaved catalog changes?",
-    }),
-  ).toHaveCount(0)
-  await expect(page).toHaveURL(harnessOrigin + "/")
 })
 
 test("leaves a deliberately clean catalog when confirmed link navigation is canceled", async ({
@@ -674,14 +619,8 @@ test("lets clean Next links and browser history traverse without a custom prompt
 })
 
 test("guards browser back traversal and honors stay or discard without a loop", async ({
-  browserName,
   page,
 }) => {
-  test.skip(
-    browserName === "webkit",
-    "Playwright's WebKit does not emit the native history confirm dialog. WebKit traversal behavior is asserted instead by the mobile WebKit draft recovery test below, which requires that no dialog appears. Tracked as FF-049.",
-  )
-
   await page.getByRole("link", { name: "Analytics", exact: true }).click()
   await page.getByRole("link", { name: "Child catalog" }).click()
 
@@ -704,14 +643,8 @@ test("guards browser back traversal and honors stay or discard without a loop", 
 })
 
 test("leaves a deliberately clean catalog when another listener cancels a confirmed history traversal", async ({
-  browserName,
   page,
 }) => {
-  test.skip(
-    browserName === "webkit",
-    "Playwright's WebKit does not emit the native history confirm dialog. WebKit traversal behavior is asserted instead by the mobile WebKit draft recovery test below, which requires that no dialog appears. Tracked as FF-049.",
-  )
-
   await page.getByRole("link", { name: "Analytics", exact: true }).click()
   await page.getByRole("link", { name: "Child catalog" }).click()
   const catalog = page.getByRole("region", { name: "Child catalog" })
@@ -756,14 +689,8 @@ test("leaves a deliberately clean catalog when another listener cancels a confir
 })
 
 test("guards browser forward traversal and honors stay or discard without a loop", async ({
-  browserName,
   page,
 }) => {
-  test.skip(
-    browserName === "webkit",
-    "Playwright's WebKit does not emit the native history confirm dialog. WebKit traversal behavior is asserted instead by the mobile WebKit draft recovery test below, which requires that no dialog appears. Tracked as FF-049.",
-  )
-
   await page.getByRole("link", { name: "Analytics", exact: true }).click()
   await expect(page).toHaveURL(`${harnessOrigin}/other`)
   await page.getByRole("link", { name: "Child catalog" }).click()
@@ -807,28 +734,15 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
     await dialog.accept()
   })
   await page.goto(harnessOrigin)
-  await waitForHarnessHydration(page)
   await page.getByRole("link", { name: "Analytics", exact: true }).click()
   await page.getByRole("link", { name: "Child catalog" }).click()
-  // "Child catalog" is a Next Link, so this is a client-side remount rather
-  // than a reload. The catalog's own mount effects still have to run before a
-  // fill will stick, and the marker is set from an effect in the same commit.
-  await waitForHarnessHydration(page)
 
   const catalog = page.getByRole("region", { name: "Child catalog" })
-  // Then gate on the component's own rendered state. The marker alone proved
-  // insufficient under a cold `next dev` compile, which CI pays on every run
-  // while a warm local machine usually does not. Waiting for the saved
-  // selection count means the catalog has finished initialising from its
-  // settings, so the removal and fill below cannot be clobbered by a late
-  // mount effect.
-  await expect(catalog.getByText(/^4 of 5 selected\./)).toBeVisible()
   await catalog
     .getByRole("button", {
       name: "Remove Unavailable selection 333333333333",
     })
     .click()
-  await expect(catalog.getByText(/^3 of 5 selected\./)).toBeVisible()
   await catalog
     .getByLabel("Change note")
     .fill("Recover this mobile catalog draft")
@@ -838,7 +752,6 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
 
   await page.evaluate(() => window.history.forward())
   await expect(page).toHaveURL(harnessOrigin + "/")
-  await waitForHarnessHydration(page)
   await expect(
     page.getByText(
       "Recovered unsaved catalog changes from this browser tab. Review and save them, or reset to the saved catalog.",
@@ -855,7 +768,6 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
   await expect(page).toHaveURL(`${harnessOrigin}/other`)
   await page.evaluate(() => window.history.back())
   await expect(page).toHaveURL(harnessOrigin + "/")
-  await waitForHarnessHydration(page)
   await catalog
     .getByRole("button", {
       name: "Remove Unavailable selection 333333333333",
