@@ -71,6 +71,7 @@
         "tests/advocates/portal-team.spec.ts",
         "tests/advocates/provider-automation.spec.ts",
         "tests/advocates/provisioning-start.spec.ts",
+        "tests/advocates/provisioning-validation.spec.ts",
         "tests/advocates/provisioning.spec.ts",
         "tests/advocates/public-beneficiary-detail-host-routing.spec.ts",
         "tests/advocates/public-brand-ui.spec.ts",
