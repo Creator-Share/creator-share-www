@@ -1,6 +1,6 @@
 # Advocate Coverage Gap Register
 
-One place where a deliberate, compiling change to production TypeScript passes the entire required suite.
+**Every row in this register is now closed.** Of the twenty-three mutations that originally survived the full suite, twenty-two are covered by a test that fails when the mutation is applied, and one was reclassified as redundant logic that no test could ever catch. The closed table and the redundancy note below are the record.
 
 ## Read this first
 
@@ -41,16 +41,13 @@ The agents' own adversarial screen judged 23 of 23 proposals uncatchable. That u
 | The WCAG luminance coefficients and the cross-module logo bucket contract were both unasserted, and neither is detectable by a test that reuses the implementation's own arithmetic                 | `tests/advocates/public-site-contrast.spec.ts`                   |
 | Starting a checkout on changed terms was asserted to mint a new operation but never to discard the previous bearer receipt                                                                          | `tests/sponsorships/checkout-client-state.spec.ts`               |
 | Session completion never checked that an existing attribution identity cookie belonged to the account that just authenticated, and never asserted normalization of a browser holding two identities | `tests/advocates/attribution-identity-completion.spec.ts`        |
+| Editing a mistyped invitation recipient did not discard the retained idempotency key, so a corrected address would replay the original invitation and never be invited                              | `tests/advocates/invitation-settings-browser.spec.ts`            |
 
 The activities route was not among the agents' findings. It surfaced from enumerating the whole class of routes that make the advocate-versus-primary loader choice, which is the more reliable move: fix the class, not the instances.
 
 ## Open register
 
-Ordered by the proposer's severity label. I have not independently audited each claim's severity; the empirical fact recorded here is only that the mutation compiles and the suite stays green.
-
-| #   | Severity    | File                                                          | What would break undetected                                                                                                                            |
-| --- | ----------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | correctness | `src/components/advocates/admin/InvitationSettingsClient.tsx` | Editing the recipient email no longer clears the retained idempotencyKey. The key is set before the POST and only cleared on a fully successful respon |
+None. The table that stood here is empty; each row moved to the closed table above as its test landed, and the single reclassified row is described under "A redundant condition, not a gap".
 
 ## The one file still untested
 

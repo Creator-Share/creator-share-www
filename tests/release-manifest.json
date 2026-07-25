@@ -45,6 +45,7 @@
         "tests/advocates/invitation-email-worker.spec.ts",
         "tests/advocates/invitation-redemption-route.spec.ts",
         "tests/advocates/invitation-rollout-safety.spec.ts",
+        "tests/advocates/invitation-settings-browser.spec.ts",
         "tests/advocates/lifecycle-cleanup-worker.spec.ts",
         "tests/advocates/logo-reconciliation-worker.spec.ts",
         "tests/advocates/middleware-matcher.spec.ts",
