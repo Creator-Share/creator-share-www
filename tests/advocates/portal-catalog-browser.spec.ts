@@ -798,13 +798,25 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
   await waitForHarnessHydration(page)
   await page.getByRole("link", { name: "Analytics", exact: true }).click()
   await page.getByRole("link", { name: "Child catalog" }).click()
+  // "Child catalog" is a Next Link, so this is a client-side remount rather
+  // than a reload. The catalog's own mount effects still have to run before a
+  // fill will stick, and the marker is set from an effect in the same commit.
+  await waitForHarnessHydration(page)
 
   const catalog = page.getByRole("region", { name: "Child catalog" })
+  // Then gate on the component's own rendered state. The marker alone proved
+  // insufficient under a cold `next dev` compile, which CI pays on every run
+  // while a warm local machine usually does not. Waiting for the saved
+  // selection count means the catalog has finished initialising from its
+  // settings, so the removal and fill below cannot be clobbered by a late
+  // mount effect.
+  await expect(catalog.getByText(/^4 of 5 selected\./)).toBeVisible()
   await catalog
     .getByRole("button", {
       name: "Remove Unavailable selection 333333333333",
     })
     .click()
+  await expect(catalog.getByText(/^3 of 5 selected\./)).toBeVisible()
   await catalog
     .getByLabel("Change note")
     .fill("Recover this mobile catalog draft")
