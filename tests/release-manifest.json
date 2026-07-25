@@ -117,6 +117,7 @@
         "tests/provider/supabase-email-proof-supersession.spec.ts",
         "tests/sponsorships/account-claim.spec.ts",
         "tests/sponsorships/checkout-client-state.spec.ts",
+        "tests/sponsorships/checkout-host-authorization.spec.ts",
         "tests/sponsorships/checkout-status-poller.spec.ts",
         "tests/sponsorships/checkout-status.spec.ts",
         "tests/sponsorships/crypto.spec.ts",
