@@ -219,6 +219,11 @@ test.afterAll(async () => {
 
 test.beforeEach(async ({ page }) => {
   await page.goto(harnessOrigin)
+  // Typing before hydration is discarded when React takes over, which leaves
+  // Save disabled for the rest of the test. Only reproducible on a slow runner.
+  await expect(page.locator('html[data-harness-hydrated="true"]')).toHaveCount(
+    1,
+  )
 })
 
 test("operates every catalog mode and repairs, searches, reorders, and features real rendered controls", async ({

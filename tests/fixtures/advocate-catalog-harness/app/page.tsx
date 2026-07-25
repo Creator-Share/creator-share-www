@@ -2,6 +2,8 @@ import Link from "next/link"
 
 import { CatalogSettingsClient } from "@/components/advocates/admin/CatalogSettingsClient"
 
+import { HarnessHydrated } from "./HarnessHydrated"
+
 const ALPHA_ID = "11111111-1111-4111-8111-111111111111"
 const BETA_ID = "22222222-2222-4222-8222-222222222222"
 const FORMER_ID = "33333333-3333-4333-8333-333333333333"
@@ -69,6 +71,7 @@ const SETTINGS = Object.freeze({
 export default function AdvocateCatalogHarness() {
   return (
     <main>
+      <HarnessHydrated />
       <nav aria-label="Portal navigation">
         <Link href="/other">Analytics</Link>
         <a href="#catalog-settings-title">Catalog heading</a>
