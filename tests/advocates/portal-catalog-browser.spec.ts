@@ -229,11 +229,16 @@ test.afterAll(async () => {
 test.beforeEach(async ({ page }) => {
   await page.goto(harnessOrigin)
   await waitForHarnessHydration(page)
-  // Typing before hydration is discarded when React takes over, which leaves
-  // Save disabled for the rest of the test. Only reproducible on a slow runner.
-  await expect(page.locator('html[data-harness-hydrated="true"]')).toHaveCount(
-    1,
-  )
+  // Hydration is necessary but not sufficient. The catalog still has to
+  // evaluate its own settings before a fill will stick, and typing earlier is
+  // discarded when React takes over, leaving Save disabled for the rest of the
+  // test. Patching this per test did not converge: five cold CI runs surfaced
+  // it in five different tests. The unavailable-selection alert is the
+  // earliest signal that the component has computed state from its settings,
+  // so every test now starts from a settled catalog.
+  await expect(
+    page.getByRole("region", { name: "Child catalog" }).getByRole("alert"),
+  ).toBeVisible()
 })
 
 test("operates every catalog mode and repairs, searches, reorders, and features real rendered controls", async ({

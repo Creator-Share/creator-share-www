@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(73);
+SELECT extensions.plan(75);
 
 SELECT extensions.is(
   (
@@ -1467,6 +1467,65 @@ SELECT extensions.ok(
       AND event.reason = 'Foundation role replacement test'
   ),
   'global role replacement records actor, target, tool, request, and reason'
+);
+
+-- A global Creator Share role must not confer advocate portal access.
+--
+-- Every existing zero-access assertion covers actors who already hold an
+-- advocate_memberships row: suspended, revoked, or archived. Nothing covered
+-- the actor who holds only a global role and no membership at all, which is
+-- exactly the shape a Creator Share staff account takes. Without this, a
+-- change that widened get_my_advocate_portal_access() to consider global
+-- role_assignments would pass the whole suite.
+
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '90000000-0000-4000-8000-000000000099',
+  true
+);
+
+SELECT extensions.is(
+  (SELECT count(*) FROM public.get_my_advocate_portal_access()),
+  0::bigint,
+  'a global Creator Share role grants no advocate portal access'
+);
+
+-- Repeat with the most privileged global role. Super administrator is the
+-- account most likely to be mistaken for an advocate authority.
+SELECT set_config('request.jwt.claim.role', '', true);
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '3de44111-9900-4f04-815d-aeb42828229a',
+  true
+);
+
+SELECT count(*)
+FROM public.replace_creator_share_user_roles(
+  '90000000-0000-4000-8000-000000000099'::uuid,
+  ARRAY['7363a1c9-5336-4a6d-a1df-16136313d385'::uuid],
+  'Foundation super administrator portal isolation test',
+  'request-foundation-role-2'
+);
+
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '90000000-0000-4000-8000-000000000099',
+  true
+);
+
+SELECT extensions.is(
+  (SELECT count(*) FROM public.get_my_advocate_portal_access()),
+  0::bigint,
+  'a global super administrator role still grants no advocate portal access'
+);
+
+SELECT set_config('request.jwt.claim.role', '', true);
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '3de44111-9900-4f04-815d-aeb42828229a',
+  true
 );
 
 SELECT extensions.throws_ok(
