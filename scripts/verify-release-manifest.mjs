@@ -44,12 +44,29 @@ function trackedFiles(...paths) {
 }
 
 function discoverTestFiles() {
-  const specs = trackedFiles("tests").filter((f) => f.endsWith(".spec.ts"))
-  const pgtap = trackedFiles("supabase/tests").filter((f) => f.endsWith(".sql"))
-  const harnesses = trackedFiles("tests/database", "tests/provider").filter(
-    (f) => f.endsWith(".mjs"),
-  )
-  return [...specs, ...pgtap, ...harnesses]
+  // Scan the whole repository, not a fixed set of directories. Restricting the
+  // scan to tests/ and supabase/tests/ made this gate correct only for the
+  // current layout: a spec added under src/, or a pgTAP file placed outside
+  // supabase/tests/, would simply never be discovered and would look assigned
+  // when it was not. Recognising test-shaped files anywhere means a future
+  // layout change surfaces as a gate failure rather than as silent coverage
+  // loss.
+  const everything = trackedFiles()
+  return everything.filter((file) => {
+    if (/\.(spec|test)\.(ts|tsx|js|jsx)$/.test(file)) return true
+    if (/\.test\.sql$/.test(file)) return true
+    if (file.startsWith("supabase/tests/") && file.endsWith(".sql")) return true
+    // Node harnesses under tests/, excluding fixture application config such as
+    // a fixture's own next.config.mjs, which is scaffolding rather than a test.
+    if (
+      file.startsWith("tests/") &&
+      !file.startsWith("tests/fixtures/") &&
+      file.endsWith(".mjs")
+    ) {
+      return true
+    }
+    return false
+  })
 }
 
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"))
