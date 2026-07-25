@@ -171,15 +171,14 @@
       ]
     },
     "seeded-database-playwright": {
-      "description": "Legacy public catalog specs that require the dev server plus a seeded local Supabase database. Declared so the files cannot be silently unassigned, but not yet wired into a required CI step: they fail today with 'Public catalog request failed' because no CI step seeds beneficiary data. Tracked as FF-050. Do not mark required until a seeding step exists and the lane is proven green.",
+      "description": "Public catalog specs that require the dev server plus a reachable local Supabase database. Run in CI by scripts/run-seeded-catalog-lane.mjs after supabase start. They need a reachable database, not seeded beneficiary rows: the catalog assertions accept an empty result, so the earlier 'Public catalog request failed' was the API being unable to reach any database at all.",
       "runner": "playwright-webserver-seeded",
       "files": [
         "tests/embed.spec.ts",
         "tests/filters.spec.ts",
         "tests/homepage.spec.ts",
         "tests/infinite-scroll.spec.ts"
-      ],
-      "required": false
+      ]
     },
     "webkit-browser": {
       "description": "Specs that must additionally run in mobile WebKit. tests/advocates/portal-catalog-browser.spec.ts is covered in WebKit by the narrower test:advocate:webkit script instead of this lane: its unsaved-change guard asserts a beforeunload dialog, which Playwright's WebKit never fires, so the whole file cannot run there. Tracked as FF-047.",

@@ -135,6 +135,9 @@ jobs:
           yarn supabase test db
           --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
 
+      - name: Run public catalog lane
+        run: yarn test:lane:public-catalog
+
       - name: Run local Supabase HTTP integration lane
         env:
           RUN_LOCAL_SUPABASE_HTTP_INTEGRATION: "1"

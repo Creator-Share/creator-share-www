@@ -19,6 +19,7 @@
     "test:lane:offline": "node scripts/run-release-lane.mjs offline-playwright --retries=0",
     "test:lane:dev-server": "node scripts/run-release-lane.mjs dev-server-playwright --workers=1 --retries=0",
     "test:lane:seeded-database": "node scripts/run-release-lane.mjs seeded-database-playwright --workers=1 --retries=0",
+    "test:lane:public-catalog": "node scripts/run-seeded-catalog-lane.mjs",
     "test:lane:webkit": "RUN_WEBKIT_BROWSER_INTEGRATION=1 node scripts/run-release-lane.mjs webkit-browser --workers=1 --retries=0",
     "test:pgtap:all": "supabase test db",
     "test:advocate:webkit": "PW_NO_WEBSERVER=1 RUN_WEBKIT_BROWSER_INTEGRATION=1 playwright test tests/advocates/portal-catalog-browser.spec.ts --grep \"recovers version-bound drafts after mobile WebKit\" --workers=1 --retries=0",
