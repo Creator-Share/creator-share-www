@@ -763,6 +763,18 @@ test("validates the provider user and exact JWT session before recording proof",
       data: { user: verifiedUser({ banned_until: "not-a-date" }) },
       error: null,
     },
+    // An actively banned account. The unparseable case above is rejected by
+    // the timestamp parse alone, so it cannot tell whether the ban itself is
+    // honoured. Without this, a suspended sponsor completes recovery
+    // verification and is issued a password-recovery receipt.
+    {
+      data: {
+        user: verifiedUser({
+          banned_until: new Date(Date.now() + 86_400_000).toISOString(),
+        }),
+      },
+      error: null,
+    },
     {
       data: { user: verifiedUser({ deleted_at: "2026-07-20T00:00:00Z" }) },
       error: null,
@@ -779,6 +791,32 @@ test("validates the provider user and exact JWT session before recording proof",
     )
     expect(receiptCalls).toEqual([])
   }
+
+  // A lapsed ban must not block recovery, so the assertion above turns on the
+  // ban still being in force rather than on the field being present.
+  receiptCalls.length = 0
+  authenticatedResult = {
+    data: {
+      user: verifiedUser({
+        banned_until: new Date(Date.now() - 86_400_000).toISOString(),
+      }),
+    },
+    error: null,
+  }
+  providerResult = {
+    data: {
+      user: { id: AUTH_USER_ID },
+      session: usableSession(
+        AUTH_USER_ID,
+        "55555555-5555-4555-8555-555555555555",
+      ),
+    },
+    error: null,
+  }
+  expect((await POST(requestFor(VALID_BODY))).status).toBe(200)
+  // Leave the recorder clean so the original assertion below still reads its
+  // own receipt rather than this one.
+  receiptCalls.length = 0
 
   authenticatedResult = { data: { user: verifiedUser() }, error: null }
   providerResult = {
