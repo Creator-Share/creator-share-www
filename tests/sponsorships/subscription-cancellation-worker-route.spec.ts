@@ -79,10 +79,32 @@ const testRequire = createRequire(
     "tests/sponsorships/subscription-cancellation-worker-route.spec.ts",
   ),
 )
+/**
+ * Another spec loads this same route with its own stubs, and Node's require
+ * cache is shared across specs in one worker process. Whichever loads first
+ * would otherwise bind the module for the other, so this purges anything it
+ * adds and anything already cached for the same paths. Without it, the route
+ * stays bound to this file's secret and a legitimately authorized request
+ * elsewhere is answered 401.
+ */
+const routeSpecifier =
+  "../../src/app/api/internal/sponsorships/subscription-cancellations/route"
+const moduleCache = testRequire.cache as Record<string, unknown>
+
+function purgeLoadedModules(previousKeys: ReadonlySet<string>): void {
+  for (const key of Object.keys(moduleCache)) {
+    if (!previousKeys.has(key)) delete moduleCache[key]
+  }
+}
+
+const cachedBeforeLoad = new Set(Object.keys(moduleCache))
+// Drop any instance another spec already bound, so this one is stubbed here.
+delete moduleCache[testRequire.resolve(routeSpecifier)]
 const route = testRequire(
-  "../../src/app/api/internal/sponsorships/subscription-cancellations/route",
+  routeSpecifier,
 ) as typeof import("../../src/app/api/internal/sponsorships/subscription-cancellations/route")
 nodeModule._load = originalModuleLoad
+purgeLoadedModules(cachedBeforeLoad)
 
 function workerRequest(headers: Record<string, string> = {}): NextRequest {
   return new NextRequest(
