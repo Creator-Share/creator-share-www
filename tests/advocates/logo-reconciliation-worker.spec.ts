@@ -941,6 +941,97 @@ test.describe("advocate logo reconciliation route", () => {
     }
   })
 
+  test("treats permanently failed and unsettled deletions as incidents", async () => {
+    // Quarantine was the only incident asserted, so a mutation reducing the
+    // attention condition to quarantine alone left the suite green. This cron
+    // runs every minute and deletes advocate logo objects. When jobs exhaust
+    // every attempt, or a deletion succeeded in storage while the settlement
+    // call threw, the object is orphaned or already gone with the job still
+    // looking live, and the 503 plus alert is the only channel that says so.
+    const scenarios = [
+      {
+        label: "exhausted",
+        repository: {
+          async fail() {
+            return { status: "exhausted" as const, nextAttemptAt: null }
+          },
+        },
+        // The failure path only runs when the deletion itself fails, so the
+        // storage double must throw for fail() to be reached at all.
+        storage: {
+          async deleteObject() {
+            throw new Error(`provider-body:${OBJECT_PATH}`)
+          },
+        },
+        expected: { exhausted: 1 },
+      },
+      {
+        label: "settlementUnknown",
+        repository: {
+          async complete() {
+            throw new Error(`database-body:${LEASE_TOKEN}`)
+          },
+        },
+        storage: undefined,
+        expected: { settlementUnknown: 1 },
+      },
+    ]
+
+    for (const scenario of scenarios) {
+      const errorCalls: unknown[][] = []
+      const originalError = console.error
+      console.error = (...args: unknown[]) => errorCalls.push(args)
+      try {
+        const response = await route.handleAdvocateLogoReconciliationRequest(
+          authorizedRequest(),
+          {
+            environment: {
+              ADVOCATE_LOGO_RECONCILIATION_WORKER_SECRET: SECRET,
+            },
+            now: () => NOW,
+            requestId: () => REQUEST_ID,
+            workerId: () => WORKER_ID,
+            createWorkerDependencies() {
+              return {
+                repository: repositoryDouble(scenario.repository),
+                storage: scenario.storage ?? storageDouble(),
+                now: () => NOW,
+              }
+            },
+          },
+        )
+        const body = await response.json()
+
+        expect(
+          response.status,
+          `${scenario.label} must raise an incident`,
+        ).toBe(503)
+        expect(body).toMatchObject({
+          ok: false,
+          code: "worker_batch_requires_attention",
+          ...scenario.expected,
+        })
+        // The alert is the operator-facing half and must actually be emitted.
+        expect(
+          errorCalls.some(
+            (call) =>
+              call[0] === "ADVOCATE_LOGO_RECONCILIATION_REQUIRES_ATTENTION",
+          ),
+          `${scenario.label} must emit the attention alert`,
+        ).toBe(true)
+
+        const rendered = JSON.stringify({ body, errorCalls })
+        expect(rendered).not.toContain(OBJECT_PATH)
+        expect(rendered).not.toContain(LEASE_TOKEN)
+        expect(rendered).not.toContain(JOB_ID)
+        expect(rendered).not.toContain("database-body")
+        expect(rendered).not.toContain("provider-body")
+      } finally {
+        console.error = originalError
+      }
+    }
+  })
+
   test("keeps execution failures and unauthorized responses aggregate only", async () => {
     const sharedDependencies = {
       environment: {
