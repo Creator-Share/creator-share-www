@@ -4,8 +4,7 @@ import { resolveAdvocateHost } from "@/lib/advocates/host"
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-const PROVISIONING_REQUEST_NAMESPACE =
-  "9b087b09-b7f0-5e7e-bc80-9c5b746b5bfd"
+const PROVISIONING_REQUEST_NAMESPACE = "9b087b09-b7f0-5e7e-bc80-9c5b746b5bfd"
 
 export const MAX_PROVISIONING_START_BODY_BYTES = 4_096
 

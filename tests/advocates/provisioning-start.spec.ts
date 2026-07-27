@@ -24,9 +24,9 @@ const JOB_IDS = [
 test.describe("advocate provisioning start boundary", () => {
   test("uses an exact JSON media type", () => {
     expect(isJsonRequestContentType("application/json")).toBe(true)
-    expect(
-      isJsonRequestContentType(" Application/JSON ; charset=utf-8"),
-    ).toBe(true)
+    expect(isJsonRequestContentType(" Application/JSON ; charset=utf-8")).toBe(
+      true,
+    )
     expect(isJsonRequestContentType("application/jsonp")).toBe(false)
     expect(isJsonRequestContentType("text/json")).toBe(false)
     expect(isJsonRequestContentType(null)).toBe(false)
@@ -72,20 +72,26 @@ test.describe("advocate provisioning start boundary", () => {
   test("bounds and strictly decodes the streamed request body", async () => {
     await expect(
       readBoundedProvisioningStartBody(
-        new Request("https://creatorshare.com/api/admin/advocates/id/provisioning", {
-          method: "POST",
-          body: '{"expectedVersion":7}',
-        }),
+        new Request(
+          "https://creatorshare.com/api/admin/advocates/id/provisioning",
+          {
+            method: "POST",
+            body: '{"expectedVersion":7}',
+          },
+        ),
       ),
     ).resolves.toBe('{"expectedVersion":7}')
 
     const oversized = "x".repeat(MAX_PROVISIONING_START_BODY_BYTES + 1)
     await expect(
       readBoundedProvisioningStartBody(
-        new Request("https://creatorshare.com/api/admin/advocates/id/provisioning", {
-          method: "POST",
-          body: oversized,
-        }),
+        new Request(
+          "https://creatorshare.com/api/admin/advocates/id/provisioning",
+          {
+            method: "POST",
+            body: oversized,
+          },
+        ),
       ),
     ).resolves.toBeNull()
 

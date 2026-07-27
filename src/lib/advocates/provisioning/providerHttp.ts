@@ -97,9 +97,7 @@ export async function fetchProviderJson(options: {
   const providerRequestId = requestIdForProvider(options.provider, response)
   const evidence: SafeProviderEvidence = {
     http_status: response.status,
-    ...(providerRequestId
-      ? { provider_request_id: providerRequestId }
-      : {}),
+    ...(providerRequestId ? { provider_request_id: providerRequestId } : {}),
   }
 
   const payload = await readBoundedJson(response)

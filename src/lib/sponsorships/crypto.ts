@@ -63,10 +63,8 @@ const CANONICAL_BASE64_PATTERN =
 const OPAQUE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const LOCAL_PART_PATTERN =
-  /^[\p{L}\p{N}!#$%&'*+\-/=?^_`{|}~.]+$/u
-const DOMAIN_LABEL_PATTERN =
-  /^[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?$/u
+const LOCAL_PART_PATTERN = /^[\p{L}\p{N}!#$%&'*+\-/=?^_`{|}~.]+$/u
+const DOMAIN_LABEL_PATTERN = /^[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?$/u
 
 export type SponsorshipCryptoErrorCode =
   | "invalid-app-secret"
@@ -132,9 +130,7 @@ export interface SponsorshipCrypto {
   digestEmail(email: string): VersionedEmailDigest
   encryptRecipientEmail(email: string): VersionedEncryptedEnvelope
   decryptRecipientEmail(envelope: Uint8Array): string
-  encryptSecretPayload(
-    payload: string | Uint8Array,
-  ): VersionedEncryptedEnvelope
+  encryptSecretPayload(payload: string | Uint8Array): VersionedEncryptedEnvelope
   decryptSecretPayload(envelope: Uint8Array): Buffer
   generateOpaqueToken(): OpaqueToken
   deriveCheckoutReceipt(operationId: string): OpaqueToken
@@ -159,8 +155,7 @@ function hasValidDomain(domain: string): boolean {
 
   const labels = domain.split(".")
   return labels.every(
-    (label) =>
-      utf8ByteLength(label) <= 63 && DOMAIN_LABEL_PATTERN.test(label),
+    (label) => utf8ByteLength(label) <= 63 && DOMAIN_LABEL_PATTERN.test(label),
   )
 }
 
@@ -234,13 +229,7 @@ function decodeAppSecret(appSecretBase64: unknown): Buffer {
 
 function deriveKey(appSecret: Buffer, info: Buffer): Buffer {
   return Buffer.from(
-    hkdfSync(
-      "sha256",
-      appSecret,
-      KEY_DERIVATION_SALT,
-      info,
-      AES_256_KEY_BYTES,
-    ),
+    hkdfSync("sha256", appSecret, KEY_DERIVATION_SALT, info, AES_256_KEY_BYTES),
   )
 }
 
@@ -411,10 +400,7 @@ export function toSupabaseRpcBytea(value: Uint8Array): SupabaseRpcBytea {
 }
 
 export function fromSupabaseRpcBytea(value: string): Buffer {
-  if (
-    typeof value !== "string" ||
-    !/^\\x(?:[0-9a-fA-F]{2})*$/.test(value)
-  ) {
+  if (typeof value !== "string" || !/^\\x(?:[0-9a-fA-F]{2})*$/.test(value)) {
     throw fail("invalid-bytea", "Invalid binary value")
   }
 
@@ -488,14 +474,22 @@ export function createSponsorshipCrypto(
       )
 
       try {
-        const email = new TextDecoder("utf-8", { fatal: true }).decode(plaintext)
+        const email = new TextDecoder("utf-8", { fatal: true }).decode(
+          plaintext,
+        )
         const normalizedEmail = normalizeSponsorEmailV1(email)
         if (normalizedEmail !== email) {
-          throw fail("invalid-envelope", "Invalid sponsorship encryption envelope")
+          throw fail(
+            "invalid-envelope",
+            "Invalid sponsorship encryption envelope",
+          )
         }
         return normalizedEmail
       } catch {
-        throw fail("invalid-envelope", "Invalid sponsorship encryption envelope")
+        throw fail(
+          "invalid-envelope",
+          "Invalid sponsorship encryption envelope",
+        )
       } finally {
         plaintext.fill(0)
       }

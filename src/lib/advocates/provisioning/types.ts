@@ -4,22 +4,13 @@ export type SupportedDomainProvider =
   (typeof SUPPORTED_DOMAIN_PROVIDERS)[number]
 
 export type DomainProvisioningProvider =
-  | SupportedDomainProvider
-  | "stripe_us"
-  | "stripe_uk"
-  | "paypal"
+  SupportedDomainProvider | "stripe_us" | "stripe_uk" | "paypal"
 
 export type DomainProvisioningJobKind =
-  | "provision"
-  | "reconcile"
-  | "deprovision"
+  "provision" | "reconcile" | "deprovision"
 
 export type ReconciliationOutcome =
-  | "not_found"
-  | "matches_intent"
-  | "needs_apply"
-  | "conflict"
-  | "inconclusive"
+  "not_found" | "matches_intent" | "needs_apply" | "conflict" | "inconclusive"
 
 export interface ClaimedDomainProvisioningJob {
   jobId: string

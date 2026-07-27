@@ -193,17 +193,14 @@ export async function POST(
                     ),
                   },
                   () =>
-                    processNextPublicationCanaryExecution(
-                      deploymentIdentity,
-                      {
-                        database: workerDatabase,
-                        runnerDependencies:
-                          createPublicationCanaryRuntimeDependencies({
-                            serviceRoleClient,
-                            deploymentIdentity,
-                          }),
-                      },
-                    ),
+                    processNextPublicationCanaryExecution(deploymentIdentity, {
+                      database: workerDatabase,
+                      runnerDependencies:
+                        createPublicationCanaryRuntimeDependencies({
+                          serviceRoleClient,
+                          deploymentIdentity,
+                        }),
+                    }),
                 )
                 return { sentinel, requestReferenceSha256 }
               },

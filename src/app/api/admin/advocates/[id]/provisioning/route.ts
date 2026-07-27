@@ -73,10 +73,7 @@ export async function POST(
       requestId,
       code: "invalid_identity",
     })
-    return response(
-      { ok: false, code: "provisioning_failed", requestId },
-      500,
-    )
+    return response({ ok: false, code: "provisioning_failed", requestId }, 500)
   }
   requestId = deterministicRequestId
 
@@ -112,10 +109,7 @@ export async function POST(
       requestId,
       code: "invalid_result",
     })
-    return response(
-      { ok: false, code: "provisioning_failed", requestId },
-      500,
-    )
+    return response({ ok: false, code: "provisioning_failed", requestId }, 500)
   }
 
   return response({ ok: true, requestId, provisioning: result }, 202)

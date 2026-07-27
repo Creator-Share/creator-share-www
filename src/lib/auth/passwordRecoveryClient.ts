@@ -2,20 +2,13 @@ const LOCAL_PART_PATTERN = /^[\p{L}\p{N}!#$%&'*+\-/=?^_`{|}~.]+$/u
 const DOMAIN_LABEL_PATTERN = /^[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?$/u
 
 export type PasswordRecoveryRequestDisposition =
-  | "accepted"
-  | "rejected"
-  | "ambiguous"
+  "accepted" | "rejected" | "ambiguous"
 
 export type PasswordRecoveryVerificationDisposition =
-  | "accepted"
-  | "rejected"
-  | "ambiguous"
+  "accepted" | "rejected" | "ambiguous"
 
 export type PasswordChangeDisposition =
-  | "accepted"
-  | "rejected"
-  | "unauthorized"
-  | "ambiguous"
+  "accepted" | "rejected" | "unauthorized" | "ambiguous"
 
 function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
   const actual = Object.keys(value).sort()

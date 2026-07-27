@@ -22,9 +22,7 @@ export const ADVOCATE_RICH_TEXT_ALLOWED_TAGS = Object.freeze([
 ] as const)
 
 export type AdvocateRichTextValidationCode =
-  | "invalid_type"
-  | "input_too_large"
-  | "not_canonical"
+  "invalid_type" | "input_too_large" | "not_canonical"
 
 export type AdvocateRichTextValidationResult =
   | { ok: true; value: string }

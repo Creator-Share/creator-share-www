@@ -5,8 +5,7 @@ import { resolve } from "node:path"
 
 import { expect, test } from "@playwright/test"
 
-type RouteModule =
-  typeof import("../../src/app/api/admin/users/invite/route")
+type RouteModule = typeof import("../../src/app/api/admin/users/invite/route")
 type NodeModuleLoader = (
   request: string,
   parent: unknown,
@@ -39,10 +38,7 @@ let issuanceResult: IssuanceResult = {
   userId: INVITED_USER_ID,
 }
 let issuanceThrows = false
-let roleCatalogData: unknown = [
-  { id: ROLE_ONE_ID },
-  { id: ROLE_TWO_ID },
-]
+let roleCatalogData: unknown = [{ id: ROLE_ONE_ID }, { id: ROLE_TWO_ID }]
 let roleCatalogError: { code?: string } | null = null
 let roleRpcData: unknown = [
   { role_id: ROLE_ONE_ID, role_name: "EDITOR", secret: "not public" },
@@ -124,7 +120,8 @@ nodeModule._load = function mockedModuleLoad(
         options: Record<string, unknown>,
       ) {
         issuerCalls.push(options)
-        if (issuanceThrows) throw new Error("provider payload must stay private")
+        if (issuanceThrows)
+          throw new Error("provider payload must stay private")
         return issuanceResult
       },
     }
@@ -240,9 +237,9 @@ test.describe("Creator Share administrator invitation route", () => {
     ) as {
       functions: Record<string, { maxDuration?: number }>
     }
-    expect(
-      vercel.functions["src/app/api/admin/users/invite/route.ts"],
-    ).toEqual({ maxDuration: 120 })
+    expect(vercel.functions["src/app/api/admin/users/invite/route.ts"]).toEqual(
+      { maxDuration: 120 },
+    )
 
     const dialog = readFileSync(
       resolve(
@@ -370,7 +367,9 @@ test.describe("Creator Share administrator invitation route", () => {
     expect(unavailable.headers.get("retry-after")).toBe("3900")
     expect((await json(unavailable)).code).toBe("invitation_unavailable")
     expect(issuerCalls).toHaveLength(0)
-    expect(JSON.stringify(calls)).not.toMatch(/invitee@example|role_one|provider/i)
+    expect(JSON.stringify(calls)).not.toMatch(
+      /invitee@example|role_one|provider/i,
+    )
   })
 
   test("normalizes the email and assigns exact roles under one server request id", async () => {
@@ -387,9 +386,7 @@ test.describe("Creator Share administrator invitation route", () => {
     expect(JSON.stringify(payload)).not.toMatch(
       /email|user|role|sent|provider|secret/i,
     )
-    expect(createClientOptions).toEqual([
-      { requestTimeoutMilliseconds: 8_000 },
-    ])
+    expect(createClientOptions).toEqual([{ requestTimeoutMilliseconds: 8_000 }])
 
     expect(issuerCalls).toEqual([
       {
@@ -478,7 +475,9 @@ test.describe("Creator Share administrator invitation route", () => {
     })
     expect(new Set(observed.map((value) => JSON.stringify(value))).size).toBe(1)
     expect(roleRpcCalls).toHaveLength(0)
-    expect(JSON.stringify(calls)).not.toMatch(/invitee@example|configuration|acquire|begin/i)
+    expect(JSON.stringify(calls)).not.toMatch(
+      /invitee@example|configuration|acquire|begin/i,
+    )
   })
 
   test("makes provider ambiguity externally identical to accepted success", async () => {
@@ -495,7 +494,9 @@ test.describe("Creator Share administrator invitation route", () => {
       code: "invitation_accepted",
     })
     expect(roleRpcCalls).toHaveLength(0)
-    expect(JSON.stringify(calls)).not.toMatch(/invitee@example|ambiguous|provider/i)
+    expect(JSON.stringify(calls)).not.toMatch(
+      /invitee@example|ambiguous|provider/i,
+    )
   })
 
   test("accepts malformed issued identity and role failure for manual attention without retry", async () => {

@@ -5,7 +5,8 @@ import { resolve } from "node:path"
 
 import { expect, test } from "@playwright/test"
 
-type SponsorshipCryptoModule = typeof import("../../src/lib/sponsorships/crypto")
+type SponsorshipCryptoModule =
+  typeof import("../../src/lib/sponsorships/crypto")
 type NodeModuleLoader = (
   request: string,
   parent: unknown,
@@ -92,9 +93,7 @@ test.describe("sponsor email normalization and HMAC", () => {
     expect(normalizeSponsorEmailV1("First.Last+tag@gmail.com")).toBe(
       "first.last+tag@gmail.com",
     )
-    expect(normalizeSponsorEmailV1("Usér@Exämple.com")).toBe(
-      "usér@exämple.com",
-    )
+    expect(normalizeSponsorEmailV1("Usér@Exämple.com")).toBe("usér@exämple.com")
   })
 
   test("enforces practical email syntax and UTF-8 octet bounds", () => {
@@ -107,7 +106,7 @@ test.describe("sponsor email normalization and HMAC", () => {
       "two..dots@example.com",
       "space inside@example.com",
       "line@example.com\nBcc: victim@example.com",
-      "quoted\"local@example.com",
+      'quoted"local@example.com',
       "local@[127.0.0.1]",
       "user@-example.com",
       "user@example-.com",
@@ -130,9 +129,7 @@ test.describe("sponsor email normalization and HMAC", () => {
       appSecretBase64: OTHER_APP_SECRET,
     }).digestEmail("sponsor+news@example.com")
 
-    expect(first.normalizationVersion).toBe(
-      SPONSOR_EMAIL_NORMALIZATION_VERSION,
-    )
+    expect(first.normalizationVersion).toBe(SPONSOR_EMAIL_NORMALIZATION_VERSION)
     expect(first.hmacKeyVersion).toBe(SPONSORSHIP_CRYPTO_KEY_VERSION)
     expect(first.normalizedEmail).toBe("sponsor+news@example.com")
     expect(first.digest).toHaveLength(32)
@@ -208,12 +205,7 @@ test.describe("versioned AES-256-GCM envelopes", () => {
     expect(first.envelopeVersion).toBe(SPONSORSHIP_ENVELOPE_VERSION)
     expect(first.encryptionKeyVersion).toBe(SPONSORSHIP_CRYPTO_KEY_VERSION)
     expect([...first.ciphertext.subarray(0, 6)]).toEqual([
-      0x43,
-      0x53,
-      1,
-      1,
-      1,
-      12,
+      0x43, 0x53, 1, 1, 1, 12,
     ])
     expect(first.ciphertext.equals(second.ciphertext)).toBe(false)
     expect(
@@ -224,9 +216,7 @@ test.describe("versioned AES-256-GCM envelopes", () => {
     expect(crypto.decryptRecipientEmail(first.ciphertext)).toBe(
       "family+one@example.com",
     )
-    expect(first.ciphertextRpcBytea).toBe(
-      toSupabaseRpcBytea(first.ciphertext),
-    )
+    expect(first.ciphertextRpcBytea).toBe(toSupabaseRpcBytea(first.ciphertext))
   })
 
   test("round trips text and binary secret payloads", () => {
@@ -242,22 +232,14 @@ test.describe("versioned AES-256-GCM envelopes", () => {
     )
 
     expect([...textEnvelope.ciphertext.subarray(0, 6)]).toEqual([
-      0x43,
-      0x53,
-      1,
-      1,
-      2,
-      12,
+      0x43, 0x53, 1, 1, 2, 12,
     ])
-    expect(crypto.decryptSecretPayload(textEnvelope.ciphertext).toString()).toBe(
-      '{"claimToken":"opaque-value"}',
+    expect(
+      crypto.decryptSecretPayload(textEnvelope.ciphertext).toString(),
+    ).toBe('{"claimToken":"opaque-value"}')
+    expect([...crypto.decryptSecretPayload(binaryEnvelope.ciphertext)]).toEqual(
+      [0, 1, 2, 255],
     )
-    expect([...crypto.decryptSecretPayload(binaryEnvelope.ciphertext)]).toEqual([
-      0,
-      1,
-      2,
-      255,
-    ])
   })
 
   test("binds authentication to the envelope purpose", () => {
@@ -397,9 +379,9 @@ test.describe("opaque tokens, digests, and Supabase bytea", () => {
     expect(constantTimeDigestEqual(first, same)).toBe(true)
     expect(constantTimeDigestEqual(first, other)).toBe(false)
     expect(constantTimeDigestEqual(first, Buffer.alloc(31))).toBe(false)
-    expect(
-      constantTimeDigestEqual(null as unknown as Uint8Array, other),
-    ).toBe(false)
+    expect(constantTimeDigestEqual(null as unknown as Uint8Array, other)).toBe(
+      false,
+    )
   })
 
   test("encodes canonical PostgreSQL bytea through JSON without ambiguity", () => {

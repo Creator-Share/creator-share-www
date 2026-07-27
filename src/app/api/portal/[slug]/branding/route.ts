@@ -122,18 +122,15 @@ export async function POST(
     const serviceClient = createServiceRoleClient({
       requestTimeoutMilliseconds: BRANDING_REQUEST_TIMEOUT_MILLISECONDS,
     })
-    const advocateVersion = await updateAdvocateBranding(
-      serviceClient,
-      {
-        advocateId: portal.advocateId,
-        actorUserId: user.id,
-        input,
-        logoUploadReservationId: null,
-        requestId,
-        traceId: boundedTraceId(request),
-        sessionId: null,
-      },
-    )
+    const advocateVersion = await updateAdvocateBranding(serviceClient, {
+      advocateId: portal.advocateId,
+      actorUserId: user.id,
+      input,
+      logoUploadReservationId: null,
+      requestId,
+      traceId: boundedTraceId(request),
+      sessionId: null,
+    })
     return response({ ok: true, requestId, advocateVersion }, 200)
   } catch (error) {
     const postgresCode =

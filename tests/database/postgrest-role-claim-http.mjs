@@ -171,9 +171,7 @@ const SPONSOR_RPCS = Object.freeze([
 ])
 
 function fixedError(code, cause) {
-  return cause === undefined
-    ? new Error(code)
-    : new Error(code, { cause })
+  return cause === undefined ? new Error(code) : new Error(code, { cause })
 }
 
 function isRecord(value) {
@@ -192,11 +190,7 @@ function exactKeys(value, keys) {
 
 function resolveOptionalPath(value, code) {
   if (value === null || value === undefined) return null
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    value.includes("\0")
-  ) {
+  if (typeof value !== "string" || value.length === 0 || value.includes("\0")) {
     throw fixedError(code)
   }
   return resolve(value)
@@ -215,7 +209,10 @@ function decodeAccessToken(value) {
     throw fixedError("postgrest_role_auth_token_invalid")
   }
   const segments = value.split(".")
-  if (segments.length !== 3 || segments.some((segment) => segment.length === 0)) {
+  if (
+    segments.length !== 3 ||
+    segments.some((segment) => segment.length === 0)
+  ) {
     throw fixedError("postgrest_role_auth_token_invalid")
   }
   const claims = parseJson(
@@ -564,10 +561,7 @@ async function invokeRawRpc(state, definition, credentials) {
       body: JSON.stringify(definition.body),
     },
   )
-  const body = await readJsonResponse(
-    response,
-    "postgrest_role_rpc_response",
-  )
+  const body = await readJsonResponse(response, "postgrest_role_rpc_response")
   if (typeof body.code !== "string" || typeof body.message !== "string") {
     throw fixedError("postgrest_role_rpc_response_shape_invalid")
   }
@@ -1075,8 +1069,7 @@ export async function runPostgrestRoleClaimHttpGate(options = {}) {
     sourceRevision: provenance.sourceRevision,
     migrationBoundary: provenance.migrationBoundary,
     migrationSetSha256: provenance.migrationSetSha256,
-    appliedMigrationLedgerSha256:
-      provenance.appliedMigrationLedgerSha256,
+    appliedMigrationLedgerSha256: provenance.appliedMigrationLedgerSha256,
     harnessSha256: provenance.harnessSha256,
     compatibilityTestSha256: provenance.compatibilityTestSha256,
     versions: provenance.versions,

@@ -78,8 +78,7 @@ export type PublicationCanaryEnvironment = Readonly<
   Record<string, string | undefined>
 >
 
-export interface PublicationCanaryClaims
-  extends PublicationCanaryTargetIdentity {
+export interface PublicationCanaryClaims extends PublicationCanaryTargetIdentity {
   schemaVersion: 1
   purpose: typeof TOKEN_PURPOSE
   keyId: typeof KEY_ID
@@ -91,16 +90,14 @@ export interface PublicationCanaryClaims
   expiresAt: number
 }
 
-export interface PublicationCanaryTokenInput
-  extends PublicationCanaryTargetIdentity {
+export interface PublicationCanaryTokenInput extends PublicationCanaryTargetIdentity {
   runId: string
   deploymentId: string
   revision: string
   ttlSeconds?: number
 }
 
-export interface PublicationCanaryResponseBody
-  extends PublicationCanaryTargetIdentity {
+export interface PublicationCanaryResponseBody extends PublicationCanaryTargetIdentity {
   schemaVersion: 1
   purpose: typeof RESPONSE_PURPOSE
   keyId: typeof KEY_ID

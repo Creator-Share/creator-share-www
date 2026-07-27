@@ -30,3 +30,8 @@ package-lock.json
 # OS files
 .DS_Store
 Thumbs.db
+
+# Next rewrites each isolated harness tsconfig during a production build,
+# expanding arrays that Prettier collapses. Formatting these guarantees the
+# next build re-dirties the tree, so leave them in whatever shape Next writes.
+tests/fixtures/*/tsconfig.json

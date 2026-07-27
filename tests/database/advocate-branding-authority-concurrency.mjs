@@ -26,9 +26,7 @@ const ACTOR_MEMBERSHIP_ID = "ba200000-0000-4000-8000-000000000002"
 const BRAND_EDITOR_ROLE_ID = "00000000-0000-4000-8000-000000000003"
 const EVIDENCE_OUTPUT_PATH = process.env
   .ADVOCATE_BRANDING_AUTHORITY_CONCURRENCY_EVIDENCE_PATH
-  ? resolve(
-      process.env.ADVOCATE_BRANDING_AUTHORITY_CONCURRENCY_EVIDENCE_PATH,
-    )
+  ? resolve(process.env.ADVOCATE_BRANDING_AUTHORITY_CONCURRENCY_EVIDENCE_PATH)
   : null
 const TERMINATION_PROBE_MODE =
   process.env.ADVOCATE_BRANDING_AUTHORITY_TERMINATION_PROBE
@@ -122,7 +120,9 @@ function assertSanitizedFf048Evidence(scenarios) {
   const observedScenarioNames = new Set()
   for (const scenario of scenarios) {
     assert.equal(
-      typeof scenario === "object" && scenario !== null && !Array.isArray(scenario),
+      typeof scenario === "object" &&
+        scenario !== null &&
+        !Array.isArray(scenario),
       true,
     )
     const schema = FF048_EVIDENCE_SCENARIO_SCHEMA[scenario.scenario]
@@ -137,7 +137,10 @@ function assertSanitizedFf048Evidence(scenarios) {
         assert.equal(scenario[key], expectation)
       }
       if (expectation === "number") {
-        assert.equal(Number.isSafeInteger(scenario[key]) && scenario[key] >= 0, true)
+        assert.equal(
+          Number.isSafeInteger(scenario[key]) && scenario[key] >= 0,
+          true,
+        )
       }
     }
   }
@@ -1348,9 +1351,7 @@ async function main() {
     process.stdout.write(
       "ok branding authority mutation before membership suspension\n",
     )
-    scenarios.push(
-      await membershipSuspensionBlocksThenDeniesBranding(database),
-    )
+    scenarios.push(await membershipSuspensionBlocksThenDeniesBranding(database))
     process.stdout.write(
       "ok branding authority pending membership suspension before mutation\n",
     )

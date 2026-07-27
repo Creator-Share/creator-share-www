@@ -980,15 +980,14 @@ function assertCoherentProvenance(candidate, expected) {
 function hasCompleteCoherentProvenance(provenance) {
   return Boolean(
     provenance.auth_version !== "not_available" &&
-      provenance.cli_version !== "not_available" &&
-      provenance.config_digest !== "not_available" &&
-      provenance.harness_digest !== "not_available" &&
-      provenance.repo_revision !== "not_available" &&
-      provenance.started_at !== "not_available" &&
-      provenance.completed_at !== "not_available" &&
-      Date.parse(provenance.completed_at) -
-        Date.parse(provenance.started_at) ===
-        provenance.execution_time_milliseconds,
+    provenance.cli_version !== "not_available" &&
+    provenance.config_digest !== "not_available" &&
+    provenance.harness_digest !== "not_available" &&
+    provenance.repo_revision !== "not_available" &&
+    provenance.started_at !== "not_available" &&
+    provenance.completed_at !== "not_available" &&
+    Date.parse(provenance.completed_at) - Date.parse(provenance.started_at) ===
+      provenance.execution_time_milliseconds,
   )
 }
 
@@ -2052,15 +2051,15 @@ export function verifiedIdentityMatchesScenario(
   const confirmedAt = user?.email_confirmed_at
   return Boolean(
     UUID_PATTERN.test(userId ?? "") &&
-      sessionUser?.id === userId &&
-      (proofUserId === null || proofUserId === userId) &&
-      user?.email === scenarioEmail &&
-      sessionUser?.email === scenarioEmail &&
-      confirmedEmailTimestamp(confirmedAt) &&
-      sessionUser?.email_confirmed_at === confirmedAt &&
-      claims !== "provider_error" &&
-      claims?.sub === userId &&
-      claims?.email === scenarioEmail,
+    sessionUser?.id === userId &&
+    (proofUserId === null || proofUserId === userId) &&
+    user?.email === scenarioEmail &&
+    sessionUser?.email === scenarioEmail &&
+    confirmedEmailTimestamp(confirmedAt) &&
+    sessionUser?.email_confirmed_at === confirmedAt &&
+    claims !== "provider_error" &&
+    claims?.sub === userId &&
+    claims?.email === scenarioEmail,
   )
 }
 

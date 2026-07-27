@@ -64,7 +64,9 @@ function ShieldIcon({ success = false }: { success?: boolean }) {
     <span
       aria-hidden="true"
       className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${
-        success ? "bg-emerald-100 text-emerald-700" : "bg-blue-50 text-[#1c3c8c]"
+        success
+          ? "bg-emerald-100 text-emerald-700"
+          : "bg-blue-50 text-[#1c3c8c]"
       }`}
     >
       {success ? (
@@ -233,7 +235,8 @@ export default function ClaimAccountClient() {
     body = "This should take only a moment."
   } else if (view === "completing") {
     heading = "Linking your sponsorships"
-    body = "We are securely connecting your sponsorship history to your account."
+    body =
+      "We are securely connecting your sponsorship history to your account."
   } else if (view === "check-email") {
     heading = "Check your email"
     body =

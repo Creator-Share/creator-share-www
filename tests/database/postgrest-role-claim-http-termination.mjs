@@ -18,9 +18,7 @@ const READY_POLL_MILLISECONDS = 50
 const FIXED_ERROR_PATTERN = /^[a-z0-9_]{1,180}$/
 
 function fixedError(code, cause) {
-  return cause === undefined
-    ? new Error(code)
-    : new Error(code, { cause })
+  return cause === undefined ? new Error(code) : new Error(code, { cause })
 }
 
 function safeFailureCode(error) {
@@ -233,20 +231,8 @@ export async function runPostgrestRoleClaimTerminationGate(options = {}) {
       "auth_fixture_ready",
       "evidence_write_started",
     ]) {
-      await runSignalScenario(
-        database,
-        root,
-        "SIGINT",
-        130,
-        terminationPhase,
-      )
-      await runSignalScenario(
-        database,
-        root,
-        "SIGTERM",
-        143,
-        terminationPhase,
-      )
+      await runSignalScenario(database, root, "SIGINT", 130, terminationPhase)
+      await runSignalScenario(database, root, "SIGTERM", 143, terminationPhase)
     }
   } finally {
     await rm(root, { recursive: true, force: true })

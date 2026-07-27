@@ -16,21 +16,14 @@ const CURRENCY_PATTERN = /^[A-Z]{3}$/
 export type CheckoutOperationProvider = "stripe" | "paypal"
 export type CheckoutOperationSubject = "standard" | "blind" | "partnership"
 export type CheckoutOperationPaymentType =
-  | "subscription"
-  | "payment"
-  | "one_time"
+  "subscription" | "payment" | "one_time"
 
 export interface CheckoutOperationScope {
   provider: CheckoutOperationProvider
   subject: CheckoutOperationSubject
   beneficiaryId: string | null
   partnershipProject:
-    | "emergency"
-    | "education"
-    | "shelter"
-    | "nutrition"
-    | "general"
-    | null
+    "emergency" | "education" | "shelter" | "nutrition" | "general" | null
   paymentType: CheckoutOperationPaymentType
   baseAmountUsdCents: number
   currency: string

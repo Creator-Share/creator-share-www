@@ -119,11 +119,16 @@ const FF042_EVIDENCE_SCENARIO_SCHEMA = Object.freeze({
 })
 
 function assertSanitizedFf042Evidence(scenarios) {
-  assert.equal(scenarios.length, Object.keys(FF042_EVIDENCE_SCENARIO_SCHEMA).length)
+  assert.equal(
+    scenarios.length,
+    Object.keys(FF042_EVIDENCE_SCENARIO_SCHEMA).length,
+  )
   const observedScenarioNames = new Set()
   for (const scenario of scenarios) {
     assert.equal(
-      typeof scenario === "object" && scenario !== null && !Array.isArray(scenario),
+      typeof scenario === "object" &&
+        scenario !== null &&
+        !Array.isArray(scenario),
       true,
     )
     const schema = FF042_EVIDENCE_SCENARIO_SCHEMA[scenario.scenario]
@@ -138,7 +143,10 @@ function assertSanitizedFf042Evidence(scenarios) {
         assert.equal(scenario[key], expectation)
       }
       if (expectation === "number") {
-        assert.equal(Number.isSafeInteger(scenario[key]) && scenario[key] >= 0, true)
+        assert.equal(
+          Number.isSafeInteger(scenario[key]) && scenario[key] >= 0,
+          true,
+        )
       }
     }
   }
@@ -451,7 +459,10 @@ async function createLegacyCandidates(database) {
 
       return Object.freeze({
         legacy,
-        settlement: Object.freeze({ ...settlement, leaseToken: settlementLease }),
+        settlement: Object.freeze({
+          ...settlement,
+          leaseToken: settlementLease,
+        }),
       })
     },
   )
@@ -1044,9 +1055,7 @@ async function concurrentQuarantine(database, candidates) {
       assert.deepEqual(replayResult, original)
 
       const conflict = await settled(
-        serviceRoleCall(replay, () =>
-          queryQuarantine(replay, "conflict", 2),
-        ),
+        serviceRoleCall(replay, () => queryQuarantine(replay, "conflict", 2)),
       )
       rejected(
         conflict,
@@ -1155,9 +1164,12 @@ async function concurrentQuarantine(database, candidates) {
 }
 
 async function assertExactFenceBoundary(database) {
-  return withPgClients(database, ["ff042_boundary_assertion"], async (client) => {
-    const result = await client.query(
-      `SELECT
+  return withPgClients(
+    database,
+    ["ff042_boundary_assertion"],
+    async (client) => {
+      const result = await client.query(
+        `SELECT
          private.legacy_advocate_invitation_proof_may_be_live(
            '2026-01-01 00:00:00+00'::timestamptz,
            '2026-01-01 01:05:00+00'::timestamptz
@@ -1169,42 +1181,47 @@ async function assertExactFenceBoundary(database) {
          (SELECT fence_expires_at = executed_at + interval '3900 seconds'
           FROM private.advocate_invitation_legacy_email_proof_quarantine)
            AS receipt_boundary_exact`,
-    )
-    assert.deepEqual(result.rows[0], {
-      live_at_boundary: false,
-      live_before_boundary: true,
-      receipt_boundary_exact: true,
-    })
-    return {
-      scenario: "exact_recipient_fence_boundary",
-      fixedFenceSeconds: 3900,
-      activeOneMicrosecondBefore: true,
-      expiredAtBoundary: true,
-    }
-  })
+      )
+      assert.deepEqual(result.rows[0], {
+        live_at_boundary: false,
+        live_before_boundary: true,
+        receipt_boundary_exact: true,
+      })
+      return {
+        scenario: "exact_recipient_fence_boundary",
+        fixedFenceSeconds: 3900,
+        activeOneMicrosecondBefore: true,
+        expiredAtBoundary: true,
+      }
+    },
+  )
 }
 
 async function assertFunctionCutover(database) {
-  return withPgClients(database, ["ff042_cutover_assertion"], async (client) => {
-    const result = await client.query(
-      `SELECT
+  return withPgClients(
+    database,
+    ["ff042_cutover_assertion"],
+    async (client) => {
+      const result = await client.query(
+        `SELECT
          to_regprocedure(
            'public.claim_advocate_invitation_email_jobs(text,integer,text,text)'
          ) IS NULL AS legacy_removed,
          to_regprocedure(
            'public.claim_advocate_invitation_email_jobs(text,smallint,integer,text,text)'
          ) IS NOT NULL AS shared_present`,
-    )
-    assert.deepEqual(result.rows[0], {
-      legacy_removed: true,
-      shared_present: true,
-    })
-    return {
-      scenario: "claim_signature_cutover",
-      legacyClaimFunctions: 0,
-      sharedIssuerClaimFunctions: 1,
-    }
-  })
+      )
+      assert.deepEqual(result.rows[0], {
+        legacy_removed: true,
+        shared_present: true,
+      })
+      return {
+        scenario: "claim_signature_cutover",
+        legacyClaimFunctions: 0,
+        sharedIssuerClaimFunctions: 1,
+      }
+    },
+  )
 }
 
 async function main() {
@@ -1264,7 +1281,9 @@ async function main() {
         settlementFirst.candidates.settlement,
       ),
     )
-    process.stdout.write("ok FF-042 settlement-first exclusive busy and retry\n")
+    process.stdout.write(
+      "ok FF-042 settlement-first exclusive busy and retry\n",
+    )
     await database.dispose()
     database = undefined
 
@@ -1278,13 +1297,10 @@ async function main() {
       "revocation-target",
       0x64,
     )
-    scenarios.push(
-      await revocationFirstQuarantine(
-        database,
-        revocationTarget,
-      ),
+    scenarios.push(await revocationFirstQuarantine(database, revocationTarget))
+    process.stdout.write(
+      "ok FF-042 revocation-first exclusive busy and retry\n",
     )
-    process.stdout.write("ok FF-042 revocation-first exclusive busy and retry\n")
     await database.dispose()
     database = undefined
 
@@ -1298,9 +1314,7 @@ async function main() {
       "lifecycle-target",
       0x65,
     )
-    scenarios.push(
-      await lifecycleFirstQuarantine(database, lifecycleTarget),
-    )
+    scenarios.push(await lifecycleFirstQuarantine(database, lifecycleTarget))
     process.stdout.write("ok FF-042 lifecycle-first exclusive busy and retry\n")
 
     assert.equal(scenarios.length, 9)

@@ -18,22 +18,13 @@ export type CreatorShareAdvocateLifecycleAction =
   (typeof CREATOR_SHARE_ADVOCATE_LIFECYCLE_ACTIONS)[number]
 
 export type CreatorShareAdvocateRelationshipStatus =
-  | "invited"
-  | "active"
-  | "suspended"
-  | "archived"
+  "invited" | "active" | "suspended" | "archived"
 
 export type CreatorShareAdvocatePublicationStatus =
-  | "draft"
-  | "provisioning"
-  | "active"
-  | "failed"
-  | "suspended"
+  "draft" | "provisioning" | "active" | "failed" | "suspended"
 
 export type CreatorShareAdvocateMembershipStatus =
-  | "active"
-  | "suspended"
-  | "revoked"
+  "active" | "suspended" | "revoked"
 
 export interface CreatorShareAdvocateLifecycleRequest {
   action: CreatorShareAdvocateLifecycleAction

@@ -32,9 +32,7 @@ function hasExactKeys(
 
 function isCanonicalUuid(value: unknown): value is string {
   return (
-    typeof value === "string" &&
-    value !== ZERO_UUID &&
-    UUID_PATTERN.test(value)
+    typeof value === "string" && value !== ZERO_UUID && UUID_PATTERN.test(value)
   )
 }
 
@@ -121,9 +119,7 @@ export function parseCreatorShareAdminInvitationRequest(
   }
   if (!isRecord(value)) return null
   const expectedKeys =
-    "reason" in value
-      ? ["email", "reason", "role_ids"]
-      : ["email", "role_ids"]
+    "reason" in value ? ["email", "reason", "role_ids"] : ["email", "role_ids"]
   if (!hasExactKeys(value, expectedKeys)) return null
 
   let email: string
