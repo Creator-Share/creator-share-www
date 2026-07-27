@@ -145,6 +145,7 @@
         "tests/sponsorships/paypal-sponsorship-checkout.spec.ts",
         "tests/sponsorships/paypal-webhook-ingestion.spec.ts",
         "tests/sponsorships/paypal-webhook-signature-gate.spec.ts",
+        "tests/sponsorships/sponsor-account-history-route.spec.ts",
         "tests/sponsorships/sponsor-account-history.spec.ts",
         "tests/sponsorships/sponsor-claim-routes.spec.ts",
         "tests/sponsorships/sponsor-email-confirmation.spec.ts",
