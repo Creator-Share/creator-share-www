@@ -55,6 +55,20 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      # No required gate built the application, so a production build that
+      # stopped compiling would pass every check and reach dev. This runs
+      # early, before the long database work, so a broken build fails fast.
+      # yarn build also runs scripts/verify-advocate-build.mjs, which is the
+      # Edge middleware selection gate the roadmap requires.
+      - name: Build the production application
+        run: yarn build
+        env:
+          # No Supabase key variable is named here. The FF-029 contract forbids
+          # this workflow from mentioning one, and a build with only the
+          # loopback URL was verified to succeed, so none is needed.
+          NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
+          NEXT_TELEMETRY_DISABLED: "1"
+
       - name: Verify email proof supersession harness safety
         shell: bash
         run: |
