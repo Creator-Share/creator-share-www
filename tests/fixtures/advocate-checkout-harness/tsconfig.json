@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -19,23 +23,30 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["../../../src/*"]
+      "@/*": [
+        "../../../src/*"
+      ]
     },
     "target": "ES2017"
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx",
-    ".next-worker-0/types/**/*.ts",
-    ".next/types/**/*.ts",
-    "next-env.d.ts",
-    ".next-worker-2/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx",
+    "**/*.tsx",
+    ".next-worker-0/types/**/*.ts",
+    ".next-worker-0/types/**/*.ts",
+    ".next-worker-1/types/**/*.ts",
+    ".next-worker-12/types/**/*.ts",
+    ".next-worker-13/types/**/*.ts",
+    ".next-worker-2/types/**/*.ts",
+    ".next/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-worker-0/types/**/*.ts",
-    ".next-worker-1/types/**/*.ts"
+    "next-env.d.ts",
+    ".next-worker-14/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }
