@@ -62,4 +62,8 @@ The obvious shortcut does not work. Importing a component into a plain Playwrigh
 
 That is why the component coverage in this repository goes through an isolated Next fixture that is built and served in production mode, as in `tests/fixtures/advocate-invitation-settings-harness` and `tests/fixtures/advocate-public-site-harness`. Closing these four means one fixture each, or one fixture rendering several components, on that pattern.
 
+**A fixture was attempted for the history display and hit a second obstacle, recorded here so the next attempt does not repeat it.** Building an isolated Next fixture whose layout wraps the component in `ChakraProvider value={defaultSystem}` fails during configuration collection with `datePickerAnatomy.extendWith is not a function`, an Ark and Chakra version skew evaluated while the theme is constructed. The application itself builds cleanly, and the production build runs green in the required gates, so this is specific to bundling Chakra inside the isolated fixture rather than a repository-wide problem.
+
+The two fixtures that already work, `advocate-invitation-settings-harness` and `advocate-public-site-harness`, render components that do not pull in the Chakra theme. That is the difference to solve first: either give the fixture a Chakra setup that matches the application's resolution, or render these components through a fixture that reuses the application's own provider tree rather than constructing one.
+
 The highest value of the four is the history display. Its mutation swaps the net amount for the original charge in the primary figure, so a sponsor whose sponsorship was refunded is told the charity still holds the money, and the row contradicts itself by reading "Net $25.00" above "Originally $25.00".
