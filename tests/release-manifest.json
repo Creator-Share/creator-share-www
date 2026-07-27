@@ -151,6 +151,7 @@
         "tests/sponsorships/sponsor-claim-routes.spec.ts",
         "tests/sponsorships/sponsor-email-confirmation.spec.ts",
         "tests/sponsorships/sponsor-recurring-sponsorships.spec.ts",
+        "tests/sponsorships/sponsor-welcome-email-runtime.spec.ts",
         "tests/sponsorships/sponsor-welcome-email-worker.spec.ts",
         "tests/sponsorships/staging-payment-boundary.spec.ts",
         "tests/sponsorships/stateless-email-auth-client.spec.ts",
