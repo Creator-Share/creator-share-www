@@ -1045,6 +1045,105 @@ test.describe("data retention route and scheduler", () => {
     expect(executorCreations).toBe(0)
   })
 
+  test("sanitizes the trace header before it reaches the database", async () => {
+    // The trace header is attacker-influenced and is forwarded verbatim into
+    // the retention run row as trace_id. Removing the sanitization was
+    // unasserted, so whatever an upstream caller sent would be persisted.
+    // Values containing a newline, carriage return, or null byte are absent
+    // deliberately: the Headers implementation refuses to construct them, so
+    // asserting them here would test the HTTP layer rather than this
+    // sanitizer. Everything below is a header a caller can actually send.
+    const hostile = [
+      "trace with spaces",
+      "trace\twith\ttabs",
+      "é-non-ascii",
+      "x".repeat(256),
+      "",
+      "   ",
+    ]
+
+    for (const value of hostile) {
+      let observedTraceId: string | null | undefined
+      const originalError = console.error
+      console.error = () => undefined
+      try {
+        await route.handleDataRetentionRequest(
+          new Request("https://creatorshare.com/api/internal/retention", {
+            headers: {
+              authorization: `Bearer ${SECRET}`,
+              "x-trace-id": value,
+            },
+          }),
+          {
+            environment: { DATA_RETENTION_WORKER_SECRET: SECRET },
+            requestId: () => REQUEST_ID,
+            runId: () => RUN_ID,
+            now: () => NOW,
+            createExecutor: () => ({
+              async startRun(_batchSize, _signal, context) {
+                observedTraceId = context.traceId
+                throw new Error("stop_after_context_capture")
+              },
+              async executeStep() {
+                throw new Error("must not run")
+              },
+              async finishRun() {
+                throw new Error("must not run")
+              },
+            }),
+          },
+        )
+      } finally {
+        console.error = originalError
+      }
+
+      expect(
+        observedTraceId,
+        `${JSON.stringify(value)} must not be persisted as a trace id`,
+      ).toBeNull()
+    }
+  })
+
+  test("carries a well formed trace header through to the run", async () => {
+    // The other side of the boundary, so the refusals above cannot be
+    // satisfied by discarding every trace id.
+    let observedTraceId: string | null | undefined
+    const originalError = console.error
+    console.error = () => undefined
+    try {
+      await route.handleDataRetentionRequest(
+        new Request("https://creatorshare.com/api/internal/retention", {
+          headers: {
+            authorization: `Bearer ${SECRET}`,
+            "x-trace-id": "1a2b3c4d-vercel-iad1",
+          },
+        }),
+        {
+          environment: { DATA_RETENTION_WORKER_SECRET: SECRET },
+          requestId: () => REQUEST_ID,
+          runId: () => RUN_ID,
+          now: () => NOW,
+          createExecutor: () => ({
+            async startRun(_batchSize, _signal, context) {
+              observedTraceId = context.traceId
+              throw new Error("stop_after_context_capture")
+            },
+            async executeStep() {
+              throw new Error("must not run")
+            },
+            async finishRun() {
+              throw new Error("must not run")
+            },
+          }),
+        },
+      )
+    } finally {
+      console.error = originalError
+    }
+
+    expect(observedTraceId).toBe("1a2b3c4d-vercel-iad1")
+  })
+
   test("returns safe identifiers, aggregates, failures, and backlog", async () => {
     const originalError = console.error
     console.error = () => undefined
