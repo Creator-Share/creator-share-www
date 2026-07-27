@@ -750,7 +750,17 @@ export function CatalogSettingsClient({
           : null
 
   return (
-    <section aria-labelledby="catalog-settings-title">
+    <section
+      aria-labelledby="catalog-settings-title"
+      /**
+       * Reflects the draft restore attempt, which flips in a `finally` whether
+       * or not a draft was recovered. Interacting before this is true sets an
+       * input's DOM value with no React handler attached, so the keystrokes are
+       * never persisted. Measured under CPU load: the persisted draft carried
+       * an empty change note immediately after a fill. Tests must wait on it.
+       */
+      data-catalog-draft-hydrated={draftHydrated ? "true" : "false"}
+    >
       <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
         <h2
           ref={catalogHeading}

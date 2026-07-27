@@ -151,6 +151,28 @@ async function readCatalogDrafts(
   )
 }
 
+/**
+ * The catalog persists its draft from React's change handler. Interacting
+ * before the client component has hydrated sets an input's DOM value with no
+ * handler attached, so the keystrokes are never persisted and the draft keeps
+ * whatever the previous interaction wrote.
+ *
+ * This is measured, not assumed. Under CPU contention the persisted draft read
+ * immediately after a fill, and before any traversal, carried an empty change
+ * note while still holding the selections written by the preceding click. That
+ * is the failure the WebKit gate has been showing intermittently.
+ *
+ * `draftHydrated` flips in a `finally`, so it is true once the restore attempt
+ * completes whether or not a draft was recovered, which makes it the correct
+ * signal to wait on rather than any rendered text derived from settings.
+ */
+async function waitForCatalogHydration(page: Page): Promise<void> {
+  await expect(page.locator("[data-catalog-draft-hydrated]")).toHaveAttribute(
+    "data-catalog-draft-hydrated",
+    "true",
+  )
+}
+
 async function installSuccessfulCatalogEndpoint(
   page: Page,
   submissions: SubmittedCatalogRequest[],
@@ -738,6 +760,7 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
   await page.getByRole("link", { name: "Child catalog" }).click()
 
   const catalog = page.getByRole("region", { name: "Child catalog" })
+  await waitForCatalogHydration(page)
   await catalog
     .getByRole("button", {
       name: "Remove Unavailable selection 333333333333",
@@ -768,6 +791,7 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
   await expect(page).toHaveURL(`${harnessOrigin}/other`)
   await page.evaluate(() => window.history.back())
   await expect(page).toHaveURL(harnessOrigin + "/")
+  await waitForCatalogHydration(page)
   await catalog
     .getByRole("button", {
       name: "Remove Unavailable selection 333333333333",
