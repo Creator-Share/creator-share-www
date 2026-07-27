@@ -53,3 +53,13 @@ Two rows have the worst failure modes and should be closed first.
 `src/components/advocates/creatorShareAdmin/AdvocateOwnershipTransfer.tsx` filters ownership-transfer targets on server-computed eligibility. Widening it to "not the current owner" offers suspended and revoked memberships as valid targets for handing over a live portal, and directly contradicts the copy rendered above the form.
 
 Also worth naming: `src/app/api/beneficiaries/[id]/activities/route.ts` already has a test, which asserts _which tenant's_ data it serves. It asserts nothing about _what it projects_, so folding DOCUMENT media into the public images array is undetected. Covering a route's host scoping is not the same as covering its payload.
+
+## The four remaining rows need a Next fixture, and here is why
+
+Every remaining row is a React component that no lane loads: `app/page.tsx`, the administrator advocate detail page, the portal team page, and the one-time sponsorship history display.
+
+The obvious shortcut does not work. Importing a component into a plain Playwright spec and rendering it with `renderToStaticMarkup` fails, because Playwright transpiles imported `.tsx` with its own JSX runtime and emits objects shaped `{__pw_type, type, props, key}` that React refuses as children. This was measured rather than assumed: nested `createElement` calls on plain tags render correctly in the same spec, so the failure is specific to imported components.
+
+That is why the component coverage in this repository goes through an isolated Next fixture that is built and served in production mode, as in `tests/fixtures/advocate-invitation-settings-harness` and `tests/fixtures/advocate-public-site-harness`. Closing these four means one fixture each, or one fixture rendering several components, on that pattern.
+
+The highest value of the four is the history display. Its mutation swaps the net amount for the original charge in the primary figure, so a sponsor whose sponsorship was refunded is told the charity still holds the money, and the row contradicts itself by reading "Net $25.00" above "Originally $25.00".
