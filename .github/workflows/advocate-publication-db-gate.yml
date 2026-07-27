@@ -69,6 +69,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
           NEXT_TELEMETRY_DISABLED: "1"
 
+      # The build fails on lint errors but not on warnings, so "lint with zero
+      # warnings", which the pull request claims as release evidence, needs its
+      # own step. Verified in both directions: it passes on the current tree
+      # and fails when a single warning is introduced.
+      - name: Lint with zero warnings
+        run: yarn lint --max-warnings=0
+
       - name: Verify email proof supersession harness safety
         shell: bash
         run: |
