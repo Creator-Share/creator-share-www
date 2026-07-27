@@ -1,8 +1,12 @@
+import { readFile } from "node:fs/promises"
+import { resolve } from "node:path"
+
 import { expect, test } from "@playwright/test"
 import {
   getPlaceholderImageUrl,
   PERSON_PLACEHOLDER_PATH,
 } from "../src/utils/placeholders"
+import { STORAGE_BUCKET } from "../src/utils/supabase/buckets"
 import {
   getBrowserImageSrc,
   getExternalActivityImageUrl,
@@ -22,6 +26,30 @@ const media = {
 test.describe("media URL policy", () => {
   test.beforeEach(() => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co"
+  })
+
+  test("composes every media URL from the bucket the policies protect", async () => {
+    // The bucket name is a cross-module contract: this constant composes every
+    // public media URL, and the storage row level security policies name the
+    // same bucket literally. Changing one alone yields well-formed URLs that
+    // resolve to nothing, or policies that protect a bucket nobody reads, and
+    // no test of URL shape can see either.
+    expect(STORAGE_BUCKET).toBe("media")
+    expect(getDirectMediaUrl(media)).toContain(
+      `/storage/v1/object/public/${STORAGE_BUCKET}/`,
+    )
+
+    const hardening = await readFile(
+      resolve(
+        process.cwd(),
+        "supabase/migrations/20260716133003_storage_access_hardening.sql",
+      ),
+      "utf8",
+    )
+    expect(
+      hardening,
+      "the storage policies must protect the bucket these URLs are composed from",
+    ).toContain(`bucket_id = '${STORAGE_BUCKET}'`)
   })
 
   test("browser image sources use direct storage URLs", () => {

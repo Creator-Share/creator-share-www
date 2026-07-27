@@ -885,6 +885,27 @@ test.describe("sponsor welcome transport, authorization, and config", () => {
         CRON_SECRET: environment.CRON_SECRET,
       }),
     ).toThrow("Sponsor welcome email configuration is unavailable")
+
+    // The length floor was unasserted, so lowering it was accepted. The bearer
+    // check for this worker enforces no length of its own, which makes this
+    // the only entropy requirement on a secret that guards a service-role
+    // worker. Both edges are pinned so the assertion is a boundary rather than
+    // a blanket refusal.
+    for (const tooShort of ["", "x", "a".repeat(31)]) {
+      expect(
+        () => loadSponsorWelcomeEmailWorkerSecret({ CRON_SECRET: tooShort }),
+        `a ${tooShort.length} character secret must fail closed`,
+      ).toThrow("Sponsor welcome email configuration is unavailable")
+    }
+    expect(
+      loadSponsorWelcomeEmailWorkerSecret({ CRON_SECRET: "a".repeat(32) }),
+    ).toBe("a".repeat(32))
+    expect(
+      loadSponsorWelcomeEmailWorkerSecret({ CRON_SECRET: "a".repeat(1_024) }),
+    ).toBe("a".repeat(1_024))
+    expect(() =>
+      loadSponsorWelcomeEmailWorkerSecret({ CRON_SECRET: "a".repeat(1_025) }),
+    ).toThrow("Sponsor welcome email configuration is unavailable")
     expect(loadSponsorWelcomeEmailCanonicalOrigin(environment)).toBe(
       "https://creatorshare.com",
     )
