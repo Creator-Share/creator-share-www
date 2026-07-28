@@ -16,7 +16,7 @@ Three controls make the verdicts meaningful:
 
 1. **A known-bad control.** Dropping the `publication_status` predicate from checkout authorization was correctly reported CAUGHT.
 2. **A known-harmless control.** A log-wording change was correctly reported SURVIVED. The harness discriminates in both directions.
-3. **A reachability probe.** "Survived" is worthless if no test loads the file. A throwing statement was appended to each of the 19 files and the complete offline lane re-run. **15 of 19 were reached**, so their surviving mutations are genuine, specific assertion gaps. The 4 that were never loaded had no test at all; three of those are now closed.
+3. **A reachability probe.** "Survived" is worthless if no test loads the file. A throwing statement was appended to each of the 19 files and the complete offline lane re-run. **15 of 19 were reached**, so their surviving mutations are genuine, specific assertion gaps. The 4 that were never loaded had no test at all; all four are now closed, the last being `InvitationSettingsClient.tsx` through the real browser fixture in `tests/advocates/invitation-settings-browser.spec.ts`.
 
 The agents' own adversarial screen judged 23 of 23 proposals uncatchable. That unanimity was not trusted, and it should not be cited as evidence. The empirical run is the evidence.
 
