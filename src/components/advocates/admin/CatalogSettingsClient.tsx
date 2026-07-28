@@ -178,6 +178,7 @@ export function CatalogSettingsClient({
   const navigationDialogOpen = useRef(false)
   const removeButtons = useRef(new Map<string, HTMLButtonElement>())
   const beneficiarySearch = useRef<HTMLInputElement | null>(null)
+  const changeNoteInput = useRef<HTMLInputElement | null>(null)
   const catalogHeading = useRef<HTMLHeadingElement | null>(null)
   const navigationDialog = useRef<HTMLDialogElement | null>(null)
   const stayButton = useRef<HTMLButtonElement | null>(null)
@@ -300,6 +301,18 @@ export function CatalogSettingsClient({
   }, [clearCatalogDraft, savedMode, savedSelections])
 
   useEffect(() => {
+    /**
+     * The server renders this form complete and interactive looking, so a
+     * person on a slow connection can type a change note before the client
+     * bundle arrives. Their keystrokes reach the DOM but no React handler
+     * exists yet, and React discards them on its first controlled render.
+     *
+     * Measured against a production build: the field ends empty, nothing is
+     * persisted, and nothing tells the person their text is gone. The ref
+     * still holds what they typed at this point, because React clears it on a
+     * later render, so this is the last moment it can be recovered.
+     */
+    const typedBeforeHydration = changeNoteInput.current?.value ?? ""
     try {
       const serializedDraft = window.sessionStorage.getItem(draftStorageKey)
       if (serializedDraft !== null) {
@@ -324,12 +337,20 @@ export function CatalogSettingsClient({
           latestSerializedDraft.current = serializedDraft
           setMode(draft.mode)
           setSelections(freezeSelections(draft.selections))
-          setChangeReason(draft.changeReason)
+          // Selections come from the draft, but a note the person is typing
+          // right now is the more recent intent, so it outranks the stored one.
+          setChangeReason(
+            typedBeforeHydration !== ""
+              ? typedBeforeHydration
+              : draft.changeReason,
+          )
           setMessage({
             kind: "success",
             text: "Recovered unsaved catalog changes from this browser tab. Review and save them, or reset to the saved catalog.",
           })
         }
+      } else if (typedBeforeHydration !== "") {
+        setChangeReason(typedBeforeHydration)
       }
       setDraftPersistenceAvailable(true)
     } catch {
@@ -1043,6 +1064,7 @@ export function CatalogSettingsClient({
             Change note
             <input
               type="text"
+              ref={changeNoteInput}
               value={changeReason}
               onChange={(event) => updateChangeReason(event.target.value)}
               minLength={1}

@@ -811,3 +811,95 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
   )
   expect(unexpectedDialogs).toEqual([])
 })
+
+/**
+ * Holds every client bundle until released, so the document renders from the
+ * server but React cannot hydrate. This is the only way to reach the window a
+ * person on a slow connection reaches naturally.
+ */
+async function gateClientBundles(page: Page): Promise<() => void> {
+  let release!: () => void
+  const released = new Promise<void>((resolvePromise) => {
+    release = resolvePromise
+  })
+  await page.route("**/_next/static/**", async (route) => {
+    await released
+    await route.continue()
+  })
+  return release
+}
+
+async function assertNotYetHydrated(page: Page): Promise<void> {
+  // Without this the test passes vacuously whenever the bundle is served from
+  // cache, which would quietly retire the coverage it exists to provide.
+  expect(
+    await page.evaluate(
+      () => document.documentElement.dataset.harnessHydrated ?? "absent",
+    ),
+    "the page must be unhydrated here or this test proves nothing",
+  ).toBe("absent")
+  await expect(page.locator("[data-catalog-draft-hydrated]")).toHaveAttribute(
+    "data-catalog-draft-hydrated",
+    "false",
+  )
+}
+
+test("keeps a change note typed before the client bundle arrives", async ({
+  page,
+}) => {
+  // The server renders this form complete and interactive looking. Typing into
+  // it before the bundle lands used to be discarded silently when React took
+  // over: measured against a production build, the field ended empty and
+  // nothing was persisted.
+  const releaseBundles = await gateClientBundles(page)
+  await page.goto(harnessOrigin, { waitUntil: "domcontentloaded" })
+
+  const catalog = page.getByRole("region", { name: "Child catalog" })
+  const note = catalog.getByLabel("Change note")
+  await expect(note).toBeVisible()
+  await assertNotYetHydrated(page)
+
+  await note.pressSequentially("Typed before the bundle arrived", { delay: 10 })
+  await expect(note).toHaveValue("Typed before the bundle arrived")
+
+  releaseBundles()
+  await waitForCatalogHydration(page)
+
+  // The decisive assertion. React's first controlled render must not discard
+  // what the person already typed.
+  await expect(note).toHaveValue("Typed before the bundle arrived")
+})
+
+test("a note typed before hydration outranks the note in a recovered draft", async ({
+  page,
+}) => {
+  await waitForCatalogHydration(page)
+  const catalog = page.getByRole("region", { name: "Child catalog" })
+  await catalog
+    .getByRole("button", {
+      name: "Remove Unavailable selection 333333333333",
+    })
+    .click()
+  await catalog.getByLabel("Change note").fill("Note stored in the draft")
+  expect(JSON.stringify(await readCatalogDrafts(page))).toContain(
+    "Note stored in the draft",
+  )
+
+  const releaseBundles = await gateClientBundles(page)
+  await page.reload({ waitUntil: "domcontentloaded" })
+
+  const note = catalog.getByLabel("Change note")
+  await expect(note).toBeVisible()
+  await assertNotYetHydrated(page)
+  // The server render carries no draft, so the field starts empty.
+  await expect(note).toHaveValue("")
+
+  await note.pressSequentially("Note typed while waiting", { delay: 10 })
+  releaseBundles()
+  await waitForCatalogHydration(page)
+
+  // Selections still come from the recovered draft, but the note the person
+  // was typing a moment ago is the more recent intent and must survive.
+  await expect(catalog.getByText(/^3 of 5 selected\./)).toBeVisible()
+  await expect(note).toHaveValue("Note typed while waiting")
+})
