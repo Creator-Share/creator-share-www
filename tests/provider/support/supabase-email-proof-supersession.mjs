@@ -407,6 +407,7 @@ async function withTimeout(
   onTimeout,
   abortJoinMilliseconds = DEFAULT_CLEANUP_ABORT_JOIN_MILLISECONDS,
   cancellationSignal,
+  recordJoin,
 ) {
   if (
     cancellationSignal !== undefined &&
@@ -438,6 +439,7 @@ async function withTimeout(
     }
   })
   const first = await Promise.race([settledOperation, interruption])
+  const interruptedAt = Date.now()
   clearTimeout(timeoutTimer)
   if (cancellationListener) {
     cancellationSignal.removeEventListener("abort", cancellationListener)
@@ -458,7 +460,39 @@ async function withTimeout(
     )
   })
   const joined = await Promise.race([settledOperation, joinTimeout])
+  const joinResolvedAt = Date.now()
   clearTimeout(joinTimer)
+  /**
+   * Whether an interrupted operation was joined or abandoned is the one fact
+   * that separates a correct ordering from an inverted one, and until now both
+   * outcomes were erased before any test could see them. A joined operation
+   * was flattened into a generic failure category, and an abandoned one was
+   * out-ranked by an earlier sibling's rejection. This records the distinction
+   * so a rare failure explains itself on infrastructure no debugger can reach.
+   *
+   * A recorder that throws must never change what the harness does, so its
+   * failure is contained here.
+   */
+  try {
+    recordJoin?.(
+      Object.freeze({
+        interruption: first.status,
+        join: joined.status,
+        joinedWithinBudget: joined.status !== "join_timed_out",
+        // The effective budget, not the configured one. It is clamped against
+        // the operation budget here and shrinks again as the execution budget
+        // depletes, which the configured value alone would hide.
+        effectiveJoinBudgetMilliseconds: Math.min(
+          abortJoinMilliseconds,
+          milliseconds,
+        ),
+        operationBudgetMilliseconds: milliseconds,
+        interruptedAt,
+        joinResolvedAt,
+        joinWaitMilliseconds: joinResolvedAt - interruptedAt,
+      }),
+    )
+  } catch {}
   if (joined.status === "join_timed_out") {
     void operationPromise.catch(() => {})
     throw exclusiveOwnershipError("ff029_operation_unsettled_after_abort")
@@ -1608,6 +1642,7 @@ export async function runSupabaseEmailProofSupersessionCanary(
       () => executionController.abort(),
       abortJoinMilliseconds,
       operationSignal,
+      options.recordOperationJoin,
     )
   }
   const scenarios = []

@@ -20,6 +20,22 @@ import { pathToFileURL } from "node:url"
 
 import { expect, test } from "@playwright/test"
 
+/**
+ * What the harness records when an interrupted operation stops being waited
+ * for. `joinedWithinBudget` false means the join budget expired, which is the
+ * only mechanism that can invert the ordering this file asserts.
+ */
+interface Ff029JoinRecord {
+  interruption: string
+  join: string
+  joinedWithinBudget: boolean
+  effectiveJoinBudgetMilliseconds: number
+  operationBudgetMilliseconds: number
+  interruptedAt: number
+  joinResolvedAt: number
+  joinWaitMilliseconds: number
+}
+
 const ADAPTER_PATH = resolve(
   process.cwd(),
   "tests/provider/support/hosted-supabase-email-proof-adapter.mjs",
@@ -2728,6 +2744,12 @@ test("joins every concurrent issuance sibling before cleanup can close recovery 
   let siblingTrackError: unknown = null
   let cleanupStartedAt = 0
   let cleanupCompletedAt = 0
+  /**
+   * Why an interrupted sibling stopped being waited for. This assertion fails
+   * roughly once per hundred runs and only on CI, which no local campaign has
+   * reproduced, so the failure has to carry its own explanation.
+   */
+  const joinRecords: Ff029JoinRecord[] = []
   let cleanupSnapshot: { trackedUserIds: readonly string[] } | null = null
   let settledAt = 0
   let markSiblingStarted!: () => void
@@ -2797,6 +2819,9 @@ test("joins every concurrent issuance sibling before cleanup can close recovery 
         totalBudgetMilliseconds: 1_500,
         cleanupBudgetMilliseconds: 300,
         cleanupAbortJoinMilliseconds: 250,
+        recordOperationJoin: (record: Ff029JoinRecord) => {
+          joinRecords.push(record)
+        },
         provenance: hostedProvenance(sourceRevision),
       },
     )
@@ -2843,8 +2868,24 @@ test("joins every concurrent issuance sibling before cleanup can close recovery 
     expect.soft(siblingTrackError).toBeNull()
     expect.soft(siblingRecordedAt).toBeGreaterThanOrEqual(providerCreatedAt)
     expect.soft(settledAt).toBeGreaterThanOrEqual(providerCreatedAt)
+    // An empty diagnostic would mean the recorder was never wired, which would
+    // leave a rare failure just as unexplained as before. Fail loudly instead.
+    expect(
+      joinRecords.length,
+      "the join recorder must be wired or the diagnostic below is empty",
+    ).toBeGreaterThan(0)
     expect
-      .soft(cleanupStartedAt === 0 || cleanupStartedAt >= siblingRecordedAt)
+      .soft(
+        cleanupStartedAt === 0 || cleanupStartedAt >= siblingRecordedAt,
+        `cleanup must not close recovery state before the sibling was recorded. ${JSON.stringify(
+          {
+            cleanupStartedAt,
+            siblingRecordedAt,
+            inversionMilliseconds: siblingRecordedAt - cleanupStartedAt,
+            joinRecords,
+          },
+        )}`,
+      )
       .toBe(true)
     expect.soft(finalTrackedUserIds).toContain(userId)
     expect(outcome.status).toBe("rejected")
@@ -2874,6 +2915,13 @@ test("keeps recovery state durable when a concurrent sibling cannot join", async
 
   let targetPrepared = false
   let siblingObservedAbort = false
+  /**
+   * This scenario forces a sibling that can never settle, so it is the
+   * deterministic anchor for the abandoned branch. Recording it here proves the
+   * diagnostic distinguishes a join from an abandonment rather than merely
+   * reporting the happy path.
+   */
+  const abandonedJoinRecords: Ff029JoinRecord[] = []
   let cleanupCompleted = false
   const startedAt = Date.now()
   const outcome = await core
@@ -2928,6 +2976,9 @@ test("keeps recovery state durable when a concurrent sibling cannot join", async
         totalBudgetMilliseconds: 180,
         cleanupBudgetMilliseconds: 60,
         cleanupAbortJoinMilliseconds: 25,
+        recordOperationJoin: (record: Ff029JoinRecord) => {
+          abandonedJoinRecords.push(record)
+        },
         provenance: hostedProvenance(sourceRevision),
       },
     )
@@ -2938,6 +2989,18 @@ test("keeps recovery state durable when a concurrent sibling cannot join", async
 
   try {
     expect(Date.now() - startedAt).toBeLessThan(500)
+    // The decisive half of the diagnostic contract: a sibling that never
+    // settles must be recorded as abandoned, not as joined.
+    expect(
+      abandonedJoinRecords.length,
+      "the join recorder must be wired",
+    ).toBeGreaterThan(0)
+    expect(
+      abandonedJoinRecords.some(
+        (record) => record.joinedWithinBudget === false,
+      ),
+      `a never settling sibling must record an expired join budget. ${JSON.stringify(abandonedJoinRecords)}`,
+    ).toBe(true)
     expect(outcome.status).toBe("rejected")
     expect(
       (outcome.error as { ff029RetainExclusiveOwnership?: boolean })
