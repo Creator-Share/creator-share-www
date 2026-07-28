@@ -12,6 +12,8 @@ import {
   type Route,
 } from "@playwright/test"
 
+import { preserveFile } from "../support/preserve-file"
+
 const devPort = process.env.PLAYWRIGHT_DEV_PORT ?? "3000"
 const tenantOrigin = `http://payment-shell-e2e.localhost:${devPort}`
 const workspace = process.cwd()
@@ -40,6 +42,7 @@ let checkoutHarnessOutput = ""
 let checkoutHarnessBuildDirectory = ""
 let primaryCheckoutHarnessOrigin = ""
 let tenantCheckoutHarnessOrigin = ""
+let restoreCheckoutHarnessConfig: () => Promise<void> = async () => {}
 
 function checkoutHarnessEnv(distDirectory: string) {
   return {
@@ -401,6 +404,9 @@ test.beforeAll(async ({}, workerInfo) => {
   // transient manifest 500s, and its error overlay matches role=dialog.
   test.setTimeout(300_000)
   checkoutHarnessOutput = ""
+  restoreCheckoutHarnessConfig = await preserveFile(
+    resolve(checkoutHarnessDirectory, "tsconfig.json"),
+  )
   // A worker-scoped build directory keeps parallel workers from corrupting a
   // shared .next while another worker is still writing it.
   const distDirectory = `.next-worker-${workerInfo.workerIndex}`
@@ -443,6 +449,7 @@ test.beforeAll(async ({}, workerInfo) => {
   } catch (error) {
     await stopCheckoutHarness()
     await rm(checkoutHarnessBuildDirectory, { recursive: true, force: true })
+    await restoreCheckoutHarnessConfig()
     throw error
   }
 })
@@ -452,6 +459,7 @@ test.afterAll(async () => {
     await stopCheckoutHarness()
   } finally {
     await rm(checkoutHarnessBuildDirectory, { recursive: true, force: true })
+    await restoreCheckoutHarnessConfig()
   }
 })
 

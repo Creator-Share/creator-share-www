@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import Module from "node:module"
 import { resolve } from "node:path"
@@ -171,6 +172,44 @@ test.describe("advocate portal access boundary", () => {
       stage: "access_shape",
       message: "advocate_portal_access_unavailable",
     })
+  })
+
+  test("keeps team viewing, management, and invitations as separate capabilities", () => {
+    expect(
+      access.deriveAdvocateTeamCapabilities([
+        "portal.members.view",
+        "portal.view",
+      ]),
+    ).toEqual({
+      canView: true,
+      canManage: false,
+      canInvite: false,
+    })
+    expect(
+      access.deriveAdvocateTeamCapabilities([
+        "portal.members.invite",
+        "portal.members.manage",
+        "portal.members.view",
+        "portal.view",
+      ]),
+    ).toEqual({
+      canView: true,
+      canManage: true,
+      canInvite: true,
+    })
+
+    const pageSource = readFileSync(
+      resolve(
+        process.cwd(),
+        "src/app/(advocate-admin)/portal/[slug]/team/page.tsx",
+      ),
+      "utf8",
+    )
+    expect(pageSource).toContain(
+      "deriveAdvocateTeamCapabilities(portal.permissions)",
+    )
+    expect(pageSource).toContain("canManage={capabilities.canManage}")
+    expect(pageSource).toContain("canInvite={capabilities.canInvite}")
   })
 })
 

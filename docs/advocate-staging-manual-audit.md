@@ -2,25 +2,26 @@
 
 Everything on this list requires a human. Each item is here because it needs a credential, a console, a physical device, or a judgment call that cannot be automated or verified from the repository. Items are ordered so that the blocking ones come first.
 
-Anything not on this list is already automated and enforced in required CI.
+The repository classifies every test-shaped file. Required lanes run in CI. Optional provider canaries and imported harness support modules are inventoried separately and are not misrepresented as required tests.
 
 The gate-by-gate traceability behind that claim is in `docs/advocate-mvp-completion-audit.md`, which names the asserting test file for every release gate and states plainly where the automated evidence stops.
 
----
+***
 
-## 1. Blocking: Vercel project-creation audit evidence
+## 1. Completed: Vercel project creation and activity evidence
 
-**Why it is blocking.** The runbook Pre-Step requires recording the exact project-creation audit event for `creator-share-advocate-staging`, and says to stop if that event is missing or ambiguous. The isolated staging project cannot be created until this is settled.
+Vercel CLI 56.5.0 now exposes the Activity Log through `vercel activity`. Vercel documents the Activity Log as available on all plans and includes `project-created` in its event catalog.
 
-**What could not be determined automatically.** Vercel audit logs could not be retrieved with the CLI. `vercel curl` is not a general API client: with an absolute URL it sends no authentication, and with a relative path it targets the linked project's deployment rather than the API. An earlier `not_found` from that route was therefore not valid evidence of anything, and is not being relied on.
+The isolated project was created on July 27, 2026 at 23:27:07 UTC. Its fixed identifiers are:
 
-**What to do.** Choose one:
+- Project: `creator-share-advocate-staging`
+- Project ID: `prj_VUIMdQxm5ag0AvIOFtlEgRMtI21L`
+- Team ID: `team_YVI1da4WtdrJDU5lPeTBABeS`
+- Activity event ID: `uev_0fTM7969BgaYC8q7q4SbD7XE`
 
-- Confirm whether audit logs are available on this team's plan, and if so, the supported way to query them. Audit logs are generally an Enterprise feature.
-- Capture the creation event from the Vercel dashboard at creation time and store it as the evidence artifact.
-- Decide explicitly to amend the runbook so that CLI-observable project metadata, meaning project ID, team ID, creation time, and zero inventory, is sufficient, with the audit-log gap recorded as a documented exception.
+The initial inventory recorded zero deployments, zero environment variables, zero custom domains, no Git link, and no analytics configuration. Vercel created one intrinsic `creator-share-advocate-staging.vercel.app` project domain. It has no deployment behind it. Automatic custom-domain assignment is disabled, automatic system environment variables are enabled, the function region is `sfo1`, and the project uses Node 24, Next.js, `yarn build`, and `yarn install --frozen-lockfile`.
 
-**Answer needed:** which of the three, so the Pre-Step can proceed.
+Sources: [Vercel Activity Log](https://vercel.com/docs/activity-log) and [Vercel CLI Activity Log announcement](https://vercel.com/changelog/activity-log-now-available-in-vercel-cli).
 
 ---
 
@@ -133,8 +134,8 @@ Because a clean sixteen out of sixteen invites suspicion, one verdict was indepe
 
 The following are automated and enforced, and need no manual verification:
 
-- Every repository test file is assigned to a required CI lane, enforced by `scripts/verify-release-manifest.mjs`, which fails the build on any unassigned file.
-- The complete pgTAP suite, 63 files and 2,124 tests, from a clean reset.
+- Every test-shaped file is classified, with required, optional, support, and overlay lanes represented honestly.
+- The complete pgTAP suite, 63 files and 2,131 tests, from a clean reset.
 - Checkout parity across Stripe and PayPal on both a primary origin and an advocate subdomain, in a real browser.
 - The 99-test offline provider contract, executed inside a network namespace with no outbound interface.
 - Provider automation cannot be set to `active` in staging: it throws, and that is test-locked.

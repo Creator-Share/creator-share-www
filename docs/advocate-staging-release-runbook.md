@@ -111,17 +111,15 @@ These were established by direct observation and cost a wasted cycle each. Follo
 3. **Never use `vercel curl` to probe the API.** It is not a general API client. With an absolute URL it sends no authentication, so an unauthenticated `not_found` or `forbidden` can be mistaken for a plan limitation. With a relative path it resolves against the _linked project's deployment_, and it will link the current directory and create a Vercel project named after that directory as a side effect. An empty project created this way was observed and removed. Prefer explicit read-only subcommands such as `vercel projects ls` and `vercel teams ls`.
 4. Confirm the scope is `CreatorShare Org` before every write, and never link a worktree to the existing `creator-share-www` project.
 
-### Unresolved: project-creation audit evidence
+### Resolved: project-creation activity evidence
 
-The pre-step below requires recording the exact project-creation audit event and stopping if that event is missing or ambiguous. Vercel audit logs could not be retrieved with the CLI alone, and no sound read-only probe for them has been established. Do not create the isolated staging project until one of the following is settled:
+Vercel CLI 56.5.0 provides `vercel activity`. Vercel documents the Activity Log as available on all plans and lists `project-created` as a supported event. This is distinct from the Enterprise Audit Log export.
 
-- Audit-log availability on this team's plan is confirmed along with a supported way to query it, or
-- The creation event is captured from the Vercel dashboard and stored as the evidence artifact, or
-- This runbook is explicitly amended to accept CLI-observable project metadata, with the audit-log gap recorded as a documented exception.
+The isolated project was created on July 27, 2026 at 23:27:07 UTC. Project ID `prj_VUIMdQxm5ag0AvIOFtlEgRMtI21L`, team ID `team_YVI1da4WtdrJDU5lPeTBABeS`, and activity event ID `uev_0fTM7969BgaYC8q7q4SbD7XE` identify the creation evidence. The initial inventory recorded zero deployments, zero environment variables, zero custom domains, no Git link, and no analytics configuration. Vercel also created the intrinsic `creator-share-advocate-staging.vercel.app` project domain. It has no deployment behind it and is not a custom production hostname.
 
 ## Pre-Step: create the isolated Vercel project and audit every possible caller
 
-Create the dedicated `creator-share-advocate-staging` Vercel project before Step 0 so its complete lifetime can be audited. Record the project ID, team ID, creation time, exact project-creation audit event, and initial zero results for deployments, domains, invocations, and cron schedules without recording credentials. Stop if the project already exists, the creation event is missing or ambiguous, or any initial zero result is nonzero until its complete prior lifetime is reconciled.
+Create the dedicated `creator-share-advocate-staging` Vercel project before Step 0 so its complete lifetime can be audited. Record the project ID, team ID, creation time, exact project-creation activity event, and initial zero results for deployments, custom domains, invocations, and cron schedules without recording credentials. Vercel creates one intrinsic `<project>.vercel.app` domain at project creation; record it separately and require that it has no deployment. Stop if the project already exists, the creation event is missing or ambiguous, or any other initial zero result is nonzero until its complete prior lifetime is reconciled.
 
 Configure these project controls before any Production deployment:
 

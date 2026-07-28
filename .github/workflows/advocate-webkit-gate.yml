@@ -55,7 +55,7 @@ jobs:
       - name: Verify catalog recovery
         run: yarn test:advocate:webkit
 
-      - name: Verify every test file is assigned to a required lane
+      - name: Verify every test-shaped file is classified
         run: yarn verify:release-manifest
 
       - name: Verify WebKit lane in Chromium

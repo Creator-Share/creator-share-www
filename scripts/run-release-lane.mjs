@@ -10,7 +10,7 @@
  */
 
 import { spawnSync } from "node:child_process"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 
 const workspace = resolve(import.meta.dirname, "..")
@@ -49,13 +49,23 @@ if (definition.runner === "supabase-test-db" || definition.runner === "node") {
 }
 
 const env = { ...process.env, ...(definition.env ?? {}) }
-const args = ["playwright", "test", ...definition.files, ...extraArgs]
+const playwrightCli = resolve(
+  workspace,
+  "node_modules/@playwright/test/cli.js",
+)
+if (!existsSync(playwrightCli)) {
+  console.error(
+    "The pinned Playwright CLI is missing. Install the repository dependencies first.",
+  )
+  process.exit(2)
+}
+const args = [playwrightCli, "test", ...definition.files, ...extraArgs]
 
 console.log(
   `Lane "${lane}": ${definition.files.length} file(s). ${definition.description}`,
 )
 
-const result = spawnSync("npx", args, {
+const result = spawnSync(process.execPath, args, {
   cwd: workspace,
   env,
   stdio: "inherit",

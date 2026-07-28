@@ -74,6 +74,22 @@ export interface AuthenticatedAdvocatePortalSession {
   portals: readonly AdvocatePortalAccess[]
 }
 
+export interface AdvocateTeamCapabilities {
+  canView: boolean
+  canManage: boolean
+  canInvite: boolean
+}
+
+export function deriveAdvocateTeamCapabilities(
+  permissions: readonly AdvocatePortalPermission[],
+): AdvocateTeamCapabilities {
+  return {
+    canView: permissions.includes("portal.members.view"),
+    canManage: permissions.includes("portal.members.manage"),
+    canInvite: permissions.includes("portal.members.invite"),
+  }
+}
+
 export interface AdvocatePortalAccessRepository {
   listForCurrentUser(): Promise<readonly AdvocatePortalAccess[]>
 }

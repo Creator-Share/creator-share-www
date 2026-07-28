@@ -29,6 +29,7 @@ type NodeModuleLoader = (
 ) => unknown
 
 const ADVOCATE_HOST = "alice.creatorshare.com"
+const originalCryptoSecret = process.env.SPONSORSHIP_CRYPTO_SECRET_V1
 
 // The route builds its sponsorship cryptography from the environment before it
 // authorizes anything, so a key must exist for the request to reach the
@@ -153,10 +154,19 @@ const testRequire = createRequire(
     "tests/sponsorships/checkout-host-authorization.spec.ts",
   ),
 )
+const moduleCacheBeforeRouteImport = new Set(Object.keys(testRequire.cache))
 const route = testRequire(
   "../../src/app/api/stripe/route",
 ) as typeof import("../../src/app/api/stripe/route")
 nodeModule._load = originalModuleLoad
+for (const modulePath of Object.keys(testRequire.cache)) {
+  if (
+    !moduleCacheBeforeRouteImport.has(modulePath) &&
+    modulePath.startsWith(resolve(process.cwd(), "src"))
+  ) {
+    delete testRequire.cache[modulePath]
+  }
+}
 
 function checkoutRequest(host: string): Request {
   return new Request(`https://${host}/api/stripe`, {
@@ -190,6 +200,14 @@ test.beforeEach(() => {
   stripeClientRequested = false
   domainRow = { advocate_id: ADVOCATE_ID }
   advocateRow = { id: ADVOCATE_ID }
+})
+
+test.afterAll(() => {
+  if (originalCryptoSecret === undefined) {
+    delete process.env.SPONSORSHIP_CRYPTO_SECRET_V1
+  } else {
+    process.env.SPONSORSHIP_CRYPTO_SECRET_V1 = originalCryptoSecret
+  }
 })
 
 test.describe("checkout host authorization", () => {

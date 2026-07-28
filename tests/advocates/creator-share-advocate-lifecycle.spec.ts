@@ -1,5 +1,6 @@
 import { createRequire } from "node:module"
 import Module from "node:module"
+import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 
 import { expect, test } from "@playwright/test"
@@ -794,6 +795,65 @@ test.describe("Creator Share advocate control projections", () => {
         },
       ]),
     ).toBeNull()
+  })
+
+  test("offers ownership transfer only to server-eligible memberships", () => {
+    const options =
+      lifecycle.selectCreatorShareAdvocateOwnershipTransferOptions({
+        candidates: [
+          {
+            membershipId: OWNER_MEMBERSHIP_ID,
+            displayName: "Aubrey F.",
+            status: "active",
+            isCurrentOwner: true,
+            isEligible: false,
+          },
+          {
+            membershipId: TARGET_MEMBERSHIP_ID,
+            displayName: "Taylor R.",
+            status: "active",
+            isCurrentOwner: false,
+            isEligible: true,
+          },
+          {
+            membershipId: "66666666-6666-4666-8666-666666666666",
+            displayName: "Suspended M.",
+            status: "suspended",
+            isCurrentOwner: false,
+            isEligible: false,
+          },
+          {
+            membershipId: "77777777-7777-4777-8777-777777777777",
+            displayName: "Revoked M.",
+            status: "revoked",
+            isCurrentOwner: false,
+            isEligible: false,
+          },
+        ],
+        hasMore: true,
+      })
+
+    expect(options).toEqual({
+      currentOwnerMembershipId: OWNER_MEMBERSHIP_ID,
+      candidates: [
+        {
+          membershipId: TARGET_MEMBERSHIP_ID,
+          displayName: "Taylor R.",
+        },
+      ],
+      candidateListMayBeIncomplete: true,
+    })
+
+    const pageSource = readFileSync(
+      resolve(
+        process.cwd(),
+        "src/app/(admin)/admin/advocates/[id]/page.tsx",
+      ),
+      "utf8",
+    )
+    expect(pageSource).toContain(
+      "selectCreatorShareAdvocateOwnershipTransferOptions(ownershipPage)",
+    )
   })
 
   test("uses a canonical opaque keyset cursor", () => {

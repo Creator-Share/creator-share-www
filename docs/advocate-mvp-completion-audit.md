@@ -2,7 +2,7 @@
 
 This answers one question: **is the Advocate Platform ready for final manual testing and a merge to `dev`?**
 
-The short answer is that the repository work is complete and the automated evidence is enforced, and what remains cannot be closed from inside the repository. Every remaining item needs a live provider, a hosted deployment, a physical device, or your decision. Those are enumerated in `docs/advocate-staging-manual-audit.md`; this document is the traceability record that justifies that claim gate by gate.
+The automated repository gates are green on the audited branch. The release is not complete. It still needs the isolated hosted deployment, live provider evidence, the historical caller decision, and a physical iOS pass. Those items are enumerated in `docs/advocate-staging-manual-audit.md`.
 
 ## What is measured, not asserted
 
@@ -10,25 +10,28 @@ Every number below was produced by a command, and the source is named so it can 
 
 | Measurement                      | Value                          | Produced by                                         |
 | -------------------------------- | ------------------------------ | --------------------------------------------------- |
-| Test files assigned to a lane    | 245                            | `node scripts/verify-release-manifest.mjs`          |
-| Offline Playwright lane          | 150 files, 1,609 tests passing | `CI=true yarn test:lane:offline`                    |
-| pgTAP suite from a clean reset   | 63 files, 2,131 tests passing  | Advocate publication database gate, run 30166556179 |
+| Test-shaped files classified     | 253                            | `node scripts/verify-release-manifest.mjs`          |
+| Files in required primary lanes  | 242                            | `node scripts/verify-release-manifest.mjs`          |
+| Offline Playwright lane          | 158 files, 1,657 passed, 2 skipped | `yarn test:lane:offline`                         |
+| pgTAP suite from a clean reset   | 63 files, 2,131 tests passing  | Advocate publication database gate, run 30258462061 |
 | Dev-server Playwright lane       | 9 files                        | release manifest                                    |
 | Seeded-database Playwright lane  | 4 files                        | release manifest                                    |
 | WebKit browser overlay           | 3 files                        | release manifest                                    |
 | Local Supabase HTTP lane         | 1 file                         | release manifest                                    |
-| Database harness lane            | 18 files                       | release manifest                                    |
+| Required database harness lane   | 8 files                        | release manifest                                    |
+| Optional provider canaries       | 2 files                        | release manifest                                    |
+| Imported harness support modules | 8 files                        | release manifest                                    |
 | Opt-in integration, not required | 1 file                         | release manifest                                    |
 
-The manifest is a gate, not a listing. `scripts/verify-release-manifest.mjs` discovers every test-shaped file in the repository, including untracked ones, and fails the build if any file is unassigned, assigned twice, missing from disk, or sitting outside an expected directory. It was verified to fail in all four directions.
+The manifest is a classification gate. `scripts/verify-release-manifest.mjs` discovers test-shaped files anywhere in the repository, including untracked files, and fails when a file is unclassified, classified twice, missing from disk, or placed in an overlay without a primary classification. Every lane declares whether it is required. The verifier does not pretend that optional provider canaries or imported support modules run in required CI.
 
 ## What changed after this audit was first written
 
-The numbers above were refreshed after a mutation campaign measured how much of the suite is load-bearing. Twenty-three deliberate, compiling edits to production TypeScript passed every lane. All twenty-three are now resolved: twenty-two are covered by a test that fails when its mutation is applied, and one was reclassified as redundant logic no test could catch.
+The numbers above were refreshed after a mutation campaign measured how much of the suite is load-bearing. Twenty-three deliberate, compiling edits to production TypeScript passed every lane. All twenty-three are resolved: twenty-two are covered by a test that fails when its mutation is applied, and one was reclassified as redundant logic.
 
 `docs/advocate-coverage-gap-register.md` holds the record, including the three controls that make those verdicts trustworthy: a known-bad mutation that reported caught, a known-harmless one that reported survived, and a reachability probe that appended a throwing statement to each file to prove the suite actually loads it.
 
-The gate table below is unchanged by that work. Those gaps were missing assertions, not failing gates: the committed code was correct in every case, and each row records only that a future regression there would have shipped silently.
+The second mutation register is also closed. Its final four component decisions now delegate to tested pure seams for recurring-sponsorship status, ownership eligibility, team permissions, and net financial presentation. Their page and component wiring is asserted without introducing a separate Chakra runtime that differs from the application.
 
 ## Status vocabulary
 

@@ -3,7 +3,7 @@
 import { Badge, Box, Button, Flex, Heading, Text } from "@chakra-ui/react"
 
 import type { SponsorOneTimeHistoryItem } from "@/lib/sponsorships/sponsorAccountHistory"
-import { formatMoney, formatUsdCents } from "@/utils/currency"
+import { presentSponsorHistoryMoney } from "@/lib/sponsorships/sponsorHistoryPresentation"
 
 function sponsorshipLabel(item: SponsorOneTimeHistoryItem): string {
   if (item.subjectKind === "standard") {
@@ -73,18 +73,7 @@ export function OneTimeSponsorshipHistory({
       )}
       <Flex direction="column" gap={3}>
         {items.map((item) => {
-          const netCharged = formatMoney(
-            item.netChargedAmountMinor,
-            item.chargedCurrency,
-          )
-          const netBase = formatUsdCents(item.netBaseAmountUsdCents)
-          const grossCharged = formatMoney(
-            item.chargedAmountMinor,
-            item.chargedCurrency,
-          )
-          const hasAdjustment =
-            item.netChargedAmountMinor !== item.chargedAmountMinor ||
-            item.netBaseAmountUsdCents !== item.baseAmountUsdCents
+          const money = presentSponsorHistoryMoney(item)
           return (
             <Box
               key={item.sponsorshipIntentId}
@@ -111,16 +100,16 @@ export function OneTimeSponsorshipHistory({
                 <Flex align="center" gap={3}>
                   <Box textAlign={{ base: "left", md: "right" }}>
                     <Text fontWeight="semibold">
-                      {hasAdjustment ? `Net ${netCharged}` : netCharged}
+                      {money.primaryAmount}
                     </Text>
-                    {item.chargedCurrency !== "USD" && (
+                    {money.normalizedNetAmount && (
                       <Text fontSize="xs" color="gray.500">
-                        {netBase} normalized net
+                        {money.normalizedNetAmount}
                       </Text>
                     )}
-                    {hasAdjustment && (
+                    {money.originalAmount && (
                       <Text fontSize="xs" color="gray.500">
-                        Originally {grossCharged}
+                        {money.originalAmount}
                       </Text>
                     )}
                   </Box>

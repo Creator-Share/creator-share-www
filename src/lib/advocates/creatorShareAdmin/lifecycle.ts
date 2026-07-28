@@ -202,6 +202,37 @@ export interface CreatorShareAdvocateOwnershipCandidatePage {
   hasMore: boolean
 }
 
+export interface CreatorShareAdvocateOwnershipTransferOptions {
+  currentOwnerMembershipId: string | null
+  candidates: readonly Readonly<{
+    membershipId: string
+    displayName: string
+  }>[]
+  candidateListMayBeIncomplete: boolean
+}
+
+/**
+ * Keeps the page from reinterpreting server-owned eligibility. Inactive,
+ * revoked, and otherwise ineligible memberships must never reach the transfer
+ * control merely because they are not the current owner.
+ */
+export function selectCreatorShareAdvocateOwnershipTransferOptions(
+  page: CreatorShareAdvocateOwnershipCandidatePage,
+): CreatorShareAdvocateOwnershipTransferOptions {
+  return {
+    currentOwnerMembershipId:
+      page.candidates.find((candidate) => candidate.isCurrentOwner)
+        ?.membershipId ?? null,
+    candidates: page.candidates
+      .filter((candidate) => candidate.isEligible)
+      .map((candidate) => ({
+        membershipId: candidate.membershipId,
+        displayName: candidate.displayName,
+      })),
+    candidateListMayBeIncomplete: page.hasMore,
+  }
+}
+
 export interface CreatorShareAdvocateLifecycleResult {
   advocateId: string
   advocateVersion: number

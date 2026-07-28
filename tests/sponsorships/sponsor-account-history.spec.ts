@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
+
 import { expect, test } from "@playwright/test"
 
 import {
@@ -7,6 +10,7 @@ import {
   SponsorAccountHistoryError,
   SponsorAccountHistoryRequestError,
 } from "../../src/lib/sponsorships/sponsorAccountHistory"
+import { presentSponsorHistoryMoney } from "../../src/lib/sponsorships/sponsorHistoryPresentation"
 
 const STANDARD_INTENT_ID = "11111111-1111-4111-8111-111111111111"
 const BENEFICIARY_ID = "22222222-2222-4222-8222-222222222222"
@@ -83,6 +87,45 @@ test.describe("sponsor one time history boundary", () => {
       financialStatus: "provider_reversed",
     })
     expect(parsed[3].financialStatus).toBe("funds_withheld")
+  })
+
+  test("presents net money first and original money only as adjustment evidence", () => {
+    const [refunded, foreignPaid] = parseSponsorAccountHistoryRpcResult([
+      standardRow({
+        financial_status: "refunded",
+        net_base_amount_usd_cents: 0,
+        net_charged_amount_minor: 0,
+      }),
+      standardRow({
+        sponsorship_intent_id: "99999999-9999-4999-8999-999999999999",
+        base_amount_usd_cents: 2500,
+        charged_amount_minor: 3500,
+        charged_currency: "AUD",
+        net_base_amount_usd_cents: 2500,
+        net_charged_amount_minor: 3500,
+      }),
+    ])
+
+    expect(presentSponsorHistoryMoney(refunded)).toEqual({
+      primaryAmount: "Net $0.00",
+      normalizedNetAmount: null,
+      originalAmount: "Originally $25.00",
+    })
+    expect(presentSponsorHistoryMoney(foreignPaid)).toEqual({
+      primaryAmount: "A$35.00",
+      normalizedNetAmount: "$25.00 normalized net",
+      originalAmount: null,
+    })
+
+    const componentSource = readFileSync(
+      resolve(
+        process.cwd(),
+        "src/app/(app)/app/components/OneTimeSponsorshipHistory.tsx",
+      ),
+      "utf8",
+    )
+    expect(componentSource).toContain("presentSponsorHistoryMoney(item)")
+    expect(componentSource).toContain("{money.primaryAmount}")
   })
 
   test("sanitizes harmless legacy display text without dropping the page", () => {

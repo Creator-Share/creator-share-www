@@ -10,7 +10,10 @@ import { BeneficiarySelectionModal } from "./components/BeneficiarySelectionModa
 import { OneTimeSponsorshipHistory } from "./components/OneTimeSponsorshipHistory"
 import type { SponsorOneTimeHistoryItem } from "@/lib/sponsorships/sponsorAccountHistory"
 import { presentSubscriptionSubject } from "@/lib/sponsorships/subscriptionPresentation"
-import { parseSponsorRecurringSponsorships } from "@/lib/sponsorships/sponsorRecurringSponsorships"
+import {
+  parseSponsorRecurringSponsorships,
+  summarizeSponsorRecurringSponsorships,
+} from "@/lib/sponsorships/sponsorRecurringSponsorships"
 
 interface SponsorHistoryPageResponse {
   items: SponsorOneTimeHistoryItem[]
@@ -137,26 +140,17 @@ const UserDashboard = () => {
     return <div>Loading...</div>
   }
 
-  const completedSubscriptions = subscriptions.filter(
-    (subscription) => subscription.status === "complete",
-  )
   const subjectFor = (subscription: Subscription) =>
     presentSubscriptionSubject({
       subjectKind: subscription.subject_kind,
       partnershipProject: subscription.partnership_project,
       beneficiaryId: subscription.beneficiary_id,
     })
-  const blindSponsorships = completedSubscriptions.filter(
-    (subscription) => subjectFor(subscription).subjectKind === "blind",
-  )
-  const partnershipSubscriptions = completedSubscriptions.filter(
-    (subscription) => subjectFor(subscription).subjectKind === "partnership",
-  )
-  const matchedSponsorships = completedSubscriptions.filter(
-    (subscription) =>
-      subjectFor(subscription).subjectKind === "standard" &&
-      subscription.beneficiary_id !== null,
-  )
+  const sponsorshipSummary =
+    summarizeSponsorRecurringSponsorships(subscriptions)
+  const blindSponsorships = sponsorshipSummary.blind
+  const partnershipSubscriptions = sponsorshipSummary.partnerships
+  const matchedSponsorships = sponsorshipSummary.matched
 
   return (
     <Box className="container mx-auto py-8">

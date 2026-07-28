@@ -30,6 +30,8 @@ type NodeModuleLoader = (
 
 const API_URL = "https://api-m.sandbox.paypal.com"
 const WEBHOOK_ID = "WH8SANDBOXWEBHOOKID0001"
+const originalPayPalWebhookId = process.env.PAYPAL_WEBHOOK_ID
+const originalCryptoSecret = process.env.SPONSORSHIP_CRYPTO_SECRET_V1
 
 let effectReached = false
 let verificationCalled = false
@@ -98,10 +100,19 @@ const testRequire = createRequire(
     "tests/sponsorships/paypal-webhook-signature-gate.spec.ts",
   ),
 )
+const moduleCacheBeforeRouteImport = new Set(Object.keys(testRequire.cache))
 const route = testRequire(
   "../../src/app/api/paypal/webhook/route",
 ) as typeof import("../../src/app/api/paypal/webhook/route")
 nodeModule._load = originalModuleLoad
+for (const modulePath of Object.keys(testRequire.cache)) {
+  if (
+    !moduleCacheBeforeRouteImport.has(modulePath) &&
+    modulePath.startsWith(resolve(process.cwd(), "src"))
+  ) {
+    delete testRequire.cache[modulePath]
+  }
+}
 
 let cachedCrypto: unknown = null
 function sponsorshipCrypto() {
@@ -152,6 +163,19 @@ test.beforeEach(() => {
     ok: true,
     status: 200,
     body: JSON.stringify({ verification_status: "SUCCESS" }),
+  }
+})
+
+test.afterAll(() => {
+  if (originalPayPalWebhookId === undefined) {
+    delete process.env.PAYPAL_WEBHOOK_ID
+  } else {
+    process.env.PAYPAL_WEBHOOK_ID = originalPayPalWebhookId
+  }
+  if (originalCryptoSecret === undefined) {
+    delete process.env.SPONSORSHIP_CRYPTO_SECRET_V1
+  } else {
+    process.env.SPONSORSHIP_CRYPTO_SECRET_V1 = originalCryptoSecret
   }
 })
 

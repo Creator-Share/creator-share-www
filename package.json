@@ -2,6 +2,7 @@
   "name": "creator-share-www",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "yarn@1.22.22",
   "engines": {
     "node": "24.x"
   },
@@ -16,7 +17,7 @@
     "format": "npx prettier --write .",
     "test": "playwright test",
     "verify:release-manifest": "node scripts/verify-release-manifest.mjs",
-    "test:lane:offline": "node scripts/run-release-lane.mjs offline-playwright --retries=0",
+    "test:lane:offline": "node scripts/run-release-lane.mjs offline-playwright --workers=1 --retries=0",
     "test:lane:dev-server": "node scripts/run-release-lane.mjs dev-server-playwright --workers=1 --retries=0",
     "test:lane:seeded-database": "node scripts/run-release-lane.mjs seeded-database-playwright --workers=1 --retries=0",
     "test:lane:public-catalog": "node scripts/run-seeded-catalog-lane.mjs",

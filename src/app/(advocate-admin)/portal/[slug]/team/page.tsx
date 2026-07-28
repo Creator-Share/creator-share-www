@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import { InvitationSettingsClient } from "@/components/advocates/admin/InvitationSettingsClient"
 import { TeamSettingsClient } from "@/components/advocates/admin/TeamSettingsClient"
 import {
+  deriveAdvocateTeamCapabilities,
   findAdvocatePortalAccessBySlug,
   loadAuthenticatedAdvocatePortalSession,
 } from "@/lib/advocates/admin/access"
@@ -20,7 +21,11 @@ export default async function AdvocateTeamPage({
 
   const { slug } = await params
   const portal = findAdvocatePortalAccessBySlug(session.portals, slug)
-  if (portal === null || !portal.permissions.includes("portal.members.view")) {
+  const capabilities =
+    portal === null
+      ? null
+      : deriveAdvocateTeamCapabilities(portal.permissions)
+  if (portal === null || capabilities === null || !capabilities.canView) {
     notFound()
   }
 
@@ -35,12 +40,12 @@ export default async function AdvocateTeamPage({
       <TeamSettingsClient
         slug={portal.slug}
         initialMembers={members}
-        canManage={portal.permissions.includes("portal.members.manage")}
+        canManage={capabilities.canManage}
       />
       <InvitationSettingsClient
         slug={portal.slug}
         initialInvitations={invitations}
-        canInvite={portal.permissions.includes("portal.members.invite")}
+        canInvite={capabilities.canInvite}
       />
     </>
   )

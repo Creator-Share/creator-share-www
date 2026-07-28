@@ -11,6 +11,7 @@ import type { CreatorShareAdvocateLifecycleAction } from "@/lib/advocates/creato
 import {
   createCreatorShareAdvocateControlRepository,
   CreatorShareAdvocateControlRepositoryError,
+  selectCreatorShareAdvocateOwnershipTransferOptions,
   type CreatorShareAdvocateControlSnapshot,
   type CreatorShareAdvocateOwnershipCandidatePage,
 } from "@/lib/advocates/creatorShareAdmin/lifecycle"
@@ -101,15 +102,8 @@ export default async function CreatorShareAdvocateControlDetailPage({
     throw error
   }
 
-  const currentOwner = ownershipPage.candidates.find(
-    (candidate) => candidate.isCurrentOwner,
-  )
-  const eligibleCandidates = ownershipPage.candidates
-    .filter((candidate) => candidate.isEligible)
-    .map((candidate) => ({
-      membershipId: candidate.membershipId,
-      displayName: candidate.displayName,
-    }))
+  const ownershipTransfer =
+    selectCreatorShareAdvocateOwnershipTransferOptions(ownershipPage)
   const availableActions: CreatorShareAdvocateLifecycleAction[] = []
   if (snapshot.ownershipStatus === "owner_active" && snapshot.canSuspend) {
     availableActions.push("suspend")
@@ -295,9 +289,13 @@ export default async function CreatorShareAdvocateControlDetailPage({
             advocateId={snapshot.advocateId}
             slug={snapshot.slug}
             currentOwnerDisplayName={snapshot.ownerDisplayName!}
-            expectedOwnerMembershipId={currentOwner?.membershipId ?? null}
-            candidates={eligibleCandidates}
-            candidateListMayBeIncomplete={ownershipPage.hasMore}
+            expectedOwnerMembershipId={
+              ownershipTransfer.currentOwnerMembershipId
+            }
+            candidates={ownershipTransfer.candidates}
+            candidateListMayBeIncomplete={
+              ownershipTransfer.candidateListMayBeIncomplete
+            }
           />
         )}
       </div>

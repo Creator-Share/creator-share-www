@@ -77,10 +77,19 @@ const testRequire = createRequire(
     "tests/sponsorships/stripe-webhook-signature-gate.spec.ts",
   ),
 )
+const moduleCacheBeforeHandlerImport = new Set(Object.keys(testRequire.cache))
 const { handleStripeWebhook } = testRequire(
   "../../src/app/api/webhooks/stripe/handler",
 ) as typeof import("../../src/app/api/webhooks/stripe/handler")
 nodeModule._load = originalModuleLoad
+for (const modulePath of Object.keys(testRequire.cache)) {
+  if (
+    !moduleCacheBeforeHandlerImport.has(modulePath) &&
+    modulePath.startsWith(resolve(process.cwd(), "src"))
+  ) {
+    delete testRequire.cache[modulePath]
+  }
+}
 
 const PAYLOAD = JSON.stringify({
   id: "evt_signature_gate",
@@ -106,6 +115,13 @@ function webhookRequest(headers: Record<string, string>): Request {
 
 test.beforeEach(() => {
   databaseReachedFor = false
+})
+
+test.afterAll(() => {
+  for (const [name, value] of previousEnvironment) {
+    if (value === undefined) delete process.env[name]
+    else process.env[name] = value
+  }
 })
 
 test.describe("Stripe webhook signature gate", () => {

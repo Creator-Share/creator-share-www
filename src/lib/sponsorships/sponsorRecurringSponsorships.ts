@@ -1,6 +1,8 @@
-import type {
-  SubscriptionPartnershipProject,
-  SubscriptionSubjectKind,
+import {
+  presentSubscriptionSubject,
+  type SubscriptionPartnershipProject,
+  type SubscriptionSubjectPresentation,
+  type SubscriptionSubjectKind,
 } from "@/lib/sponsorships/subscriptionPresentation"
 
 const UUID_PATTERN =
@@ -44,6 +46,46 @@ export interface SponsorRecurringSponsorship {
     name: string
     username: string | null
   } | null
+}
+
+export interface SponsorRecurringSponsorshipSummary {
+  completed: readonly SponsorRecurringSponsorship[]
+  blind: readonly SponsorRecurringSponsorship[]
+  partnerships: readonly SponsorRecurringSponsorship[]
+  matched: readonly SponsorRecurringSponsorship[]
+}
+
+function subjectFor(
+  subscription: SponsorRecurringSponsorship,
+): SubscriptionSubjectPresentation {
+  return presentSubscriptionSubject({
+    subjectKind: subscription.subject_kind,
+    partnershipProject: subscription.partnership_project,
+    beneficiaryId: subscription.beneficiary_id,
+  })
+}
+
+export function summarizeSponsorRecurringSponsorships(
+  subscriptions: readonly SponsorRecurringSponsorship[],
+): SponsorRecurringSponsorshipSummary {
+  const completed = subscriptions.filter(
+    (subscription) => subscription.status === "complete",
+  )
+  return {
+    completed,
+    blind: completed.filter(
+      (subscription) => subjectFor(subscription).subjectKind === "blind",
+    ),
+    partnerships: completed.filter(
+      (subscription) =>
+        subjectFor(subscription).subjectKind === "partnership",
+    ),
+    matched: completed.filter(
+      (subscription) =>
+        subjectFor(subscription).subjectKind === "standard" &&
+        subscription.beneficiary_id !== null,
+    ),
+  }
 }
 
 export class SponsorRecurringSponsorshipError extends Error {

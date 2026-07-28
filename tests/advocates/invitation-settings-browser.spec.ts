@@ -6,6 +6,8 @@ import { resolve } from "node:path"
 
 import { expect, test } from "@playwright/test"
 
+import { preserveFile } from "../support/preserve-file"
+
 /**
  * The invitation idempotency key, and what happens when an operator corrects a
  * mistyped recipient.
@@ -38,6 +40,7 @@ let harnessProcess: ChildProcessWithoutNullStreams | null = null
 let harnessOutput = ""
 let harnessBuildDirectory = ""
 let harnessOrigin = ""
+let restoreHarnessConfig: () => Promise<void> = async () => {}
 
 function harnessEnvironment(distDirectory: string) {
   return {
@@ -116,6 +119,9 @@ test.describe.configure({ mode: "serial" })
 test.beforeAll(async ({}, workerInfo) => {
   test.setTimeout(300_000)
   harnessOutput = ""
+  restoreHarnessConfig = await preserveFile(
+    resolve(harnessDirectory, "tsconfig.json"),
+  )
   const distDirectory = `.next-worker-${workerInfo.workerIndex}`
   harnessBuildDirectory = resolve(harnessDirectory, distDirectory)
   await rm(harnessBuildDirectory, { recursive: true, force: true })
@@ -165,6 +171,7 @@ test.beforeAll(async ({}, workerInfo) => {
   } catch (error) {
     await stopHarness()
     await rm(harnessBuildDirectory, { recursive: true, force: true })
+    await restoreHarnessConfig()
     throw error
   }
 })
@@ -174,6 +181,7 @@ test.afterAll(async () => {
     await stopHarness()
   } finally {
     await rm(harnessBuildDirectory, { recursive: true, force: true })
+    await restoreHarnessConfig()
   }
 })
 

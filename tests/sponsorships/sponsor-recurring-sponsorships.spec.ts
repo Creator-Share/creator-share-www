@@ -13,10 +13,13 @@ const testRequire = createRequire(
     "tests/sponsorships/sponsor-recurring-sponsorships.spec.ts",
   ),
 )
-const { parseSponsorRecurringSponsorships, SponsorRecurringSponsorshipError } =
-  testRequire(
-    "../../src/lib/sponsorships/sponsorRecurringSponsorships",
-  ) as ProjectionModule
+const {
+  parseSponsorRecurringSponsorships,
+  SponsorRecurringSponsorshipError,
+  summarizeSponsorRecurringSponsorships,
+} = testRequire(
+  "../../src/lib/sponsorships/sponsorRecurringSponsorships",
+) as ProjectionModule
 
 const SAFE_ROW = {
   subscription_id: "9d000000-0000-4000-8000-000000000101",
@@ -63,12 +66,62 @@ test("recurring sponsorship projection rejects silent contact or provider expans
   }
 })
 
+test("sponsor dashboard counts only completed recurring sponsorships", () => {
+  const sponsorships = parseSponsorRecurringSponsorships([
+    SAFE_ROW,
+    {
+      ...SAFE_ROW,
+      subscription_id: "9d000000-0000-4000-8000-000000000102",
+      subscription_status: "incomplete",
+      beneficiary_id: null,
+      beneficiary_name: null,
+      beneficiary_username: null,
+      subject_kind: "partnership",
+      partnership_project: "education",
+    },
+    {
+      ...SAFE_ROW,
+      subscription_id: "9d000000-0000-4000-8000-000000000103",
+      subscription_status: "complete",
+      beneficiary_id: null,
+      beneficiary_name: null,
+      beneficiary_username: null,
+      subject_kind: "blind",
+    },
+    {
+      ...SAFE_ROW,
+      subscription_id: "9d000000-0000-4000-8000-000000000104",
+      subscription_status: "complete",
+      beneficiary_id: null,
+      beneficiary_name: null,
+      beneficiary_username: null,
+      subject_kind: "partnership",
+      partnership_project: "nutrition",
+    },
+  ])
+
+  const summary = summarizeSponsorRecurringSponsorships(sponsorships)
+  expect(summary.completed).toHaveLength(3)
+  expect(summary.matched.map((item) => item.id)).toEqual([
+    SAFE_ROW.subscription_id,
+  ])
+  expect(summary.blind.map((item) => item.id)).toEqual([
+    "9d000000-0000-4000-8000-000000000103",
+  ])
+  expect(summary.partnerships.map((item) => item.id)).toEqual([
+    "9d000000-0000-4000-8000-000000000104",
+  ])
+})
+
 test("sponsor dashboard uses the authenticated projection instead of the base table", async () => {
   const source = await readFile(
     resolve(process.cwd(), "src/app/(app)/app/page.tsx"),
     "utf8",
   )
   expect(source).toContain('rpc(\n    "list_my_recurring_sponsorships"')
+  expect(source).toContain(
+    "summarizeSponsorRecurringSponsorships(subscriptions)",
+  )
   expect(source).not.toContain('.from("subscriptions")')
   expect(source).not.toContain("select(\n          `\n          *")
 })
