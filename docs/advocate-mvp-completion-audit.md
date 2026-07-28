@@ -119,11 +119,11 @@ A stronger method replaced it: propose a concrete edit to production TypeScript,
 
 A reachability probe then established what that meant, by appending a throwing statement to each of the 19 distinct files and re-running the complete offline lane. **Fifteen were reached**, so their surviving mutations are genuine, specific assertion gaps. **Four were loaded by no test at all.**
 
-Three of those four are now closed, and the class matters more than the instances: four public routes choose between an advocate-scoped loader and the platform-wide primary loader by reading `site.kind`, and only `beneficiaries/get` was covered. `beneficiaries/[id]/activities` was not among the proposals at all; it surfaced from enumerating the class. The PayPal webhook route had no test of its authentication boundary, though the Stripe route had gained exactly that coverage earlier the same day.
+All four files that the reachability probe found untested are now loaded by tests. The class matters more than the instances: four public routes choose between an advocate-scoped loader and the platform-wide primary loader by reading `site.kind`, and only `beneficiaries/get` was covered. `beneficiaries/[id]/activities` was not among the proposals at all; it surfaced from enumerating the class. The PayPal webhook route had no test of its authentication boundary, though the Stripe route had gained exactly that coverage earlier the same day. The invitation settings client is now exercised through a browser fixture that asserts its idempotency-key lifecycle.
 
-The remaining twenty are recorded in `docs/advocate-coverage-gap-register.md`, with the controls that make the verdicts trustworthy and the caveat that every entry is a missing assertion rather than a live defect.
+The remaining twenty gaps were recorded in `docs/advocate-coverage-gap-register.md` and are now closed. The register retains the original findings, the tests that catch each mutation, and the controls that make the verdicts trustworthy.
 
-**The honest position is therefore narrower than the one I first stated.** The release gates in the table above are enforced. What is not true is that nothing further could be found from inside the repository; a better method found twenty more places in a single pass, and the method has not been run to exhaustion.
+The release gates in the table above are enforced, and the mutation campaign has no known open gap. That does not prove the repository has been tested to exhaustion. It means every concrete regression found by this campaign is now caught or was shown to be behaviorally redundant.
 
 ## On the earlier traceability sweep
 
@@ -140,11 +140,11 @@ Two of the sweep's specific claims were wrong on inspection. The legacy invitati
 
 **Merging to `dev` is a decision about process, not about evidence.** Both required gates are green, every test file in the repository is assigned to a lane, and the manifest gate fails the build if that stops being true.
 
-That said, do not read this document as saying the repository work is exhausted. It is not. `docs/advocate-coverage-gap-register.md` lists twenty places where a deliberate regression would ship silently. None of them blocks a merge, because none is a live defect, but the register is real work and it is not finished.
+Do not read this document as claiming exhaustive proof. `docs/advocate-coverage-gap-register.md` records the twenty-three deliberate regressions found by the mutation campaign. Twenty-two are now caught by tests, and one was shown to be behaviorally redundant. The register has no open row.
 
 Two things are worth settling first, and both are yours to decide:
 
 1. `dev` has **no branch protection and no required-check ruleset**. Every gate built for this pull request runs, but nothing prevents a merge that ignores them. Suggested required checks are `Publication authority database tests` and `Catalog recovery in WebKit`. I have deliberately not changed this.
-2. The **physical iOS smoke test** (manual item 4) is required for release and is the only evidence for the four WebKit-skipped dialog behaviors. It does not block a merge to `dev`, but it does block a release.
+2. The **physical iOS smoke test** (manual item 4) is required for release and is the only evidence for the unsaved-change guard on Mobile Safari. It does not block a merge to `dev`, but it does block a release.
 
-Everything else on `docs/advocate-staging-manual-audit.md` is hosted or provider work that begins after the staging project exists, and that is itself blocked on the project-creation audit evidence in manual item 1.
+The remaining hosted, provider, and operator decisions are enumerated in `docs/advocate-staging-manual-audit.md`.

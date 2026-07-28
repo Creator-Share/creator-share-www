@@ -49,9 +49,9 @@ The activities route was not among the agents' findings. It surfaced from enumer
 
 None. The table that stood here is empty; each row moved to the closed table above as its test landed, and the single reclassified row is described under "A redundant condition, not a gap".
 
-## The one file still untested
+## The formerly untested client component
 
-`src/components/advocates/admin/InvitationSettingsClient.tsx` is loaded by no test in any lane. Unlike the routes above it is a client component, so covering it needs a browser fixture rather than a direct handler invocation.
+`src/components/advocates/admin/InvitationSettingsClient.tsx` is now loaded through `tests/fixtures/advocate-invitation-settings-harness/` and exercised by `tests/advocates/invitation-settings-browser.spec.ts`. The browser test proves that correcting a recipient or changing invitation roles or reason discards the retained idempotency key, while an exact retry reuses it.
 
 ## Suggested order
 
@@ -59,7 +59,7 @@ The money and security rows deserve attention first. The row that stood out, a m
 
 The Stripe quote-expiry gate is now closed too, asserted from both sides so the boundary turns on expiry rather than on a flag being set.
 
-Nothing here blocks a merge to `dev`. Each row is a place where a future regression would ship silently, which is a reason to close them deliberately rather than urgently.
+Nothing in this register blocks a merge to `dev`. Every identified gap is closed or reclassified.
 
 ## A redundant condition, not a gap
 
