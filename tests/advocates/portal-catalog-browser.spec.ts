@@ -781,9 +781,11 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
     ),
   ).toBeVisible()
   await expect(catalog.getByText(/^3 of 5 selected\./)).toBeVisible()
-  await expect(catalog.getByLabel("Change note")).toHaveValue(
-    "Recover this mobile catalog draft",
-  )
+  const draftsBeforeFirstAssertion = await readCatalogDrafts(page)
+  await expect(
+    catalog.getByLabel("Change note"),
+    `persisted draft at assertion time: ${JSON.stringify(draftsBeforeFirstAssertion)}`,
+  ).toHaveValue("Recover this mobile catalog draft")
   await catalog.getByRole("button", { name: "Reset to saved catalog" }).click()
   await expect(catalog.getByText(/^4 of 5 selected\./)).toBeVisible()
 
@@ -806,9 +808,20 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
   await page.evaluate(() => window.history.back())
   await expect(page).toHaveURL(harnessOrigin + "/")
   await expect(catalog.getByText(/^3 of 5 selected\./)).toBeVisible()
-  await expect(catalog.getByLabel("Change note")).toHaveValue(
-    "Recover this forward navigation draft",
-  )
+  /**
+   * This assertion still fails on CI roughly once in seven runs and has never
+   * reproduced locally, including 171 runs under heavy CPU load. Guessing at a
+   * cause is what produced six failed fixes before, so the persisted draft is
+   * captured here instead. If it already lacks the note at this point, the
+   * write was lost earlier and no amount of waiting would have helped; if it
+   * carries the note, the restore is at fault. That single fact separates the
+   * two remaining explanations and cannot be obtained after the run ends.
+   */
+  const draftsBeforeFinalAssertion = await readCatalogDrafts(page)
+  await expect(
+    catalog.getByLabel("Change note"),
+    `persisted draft at assertion time: ${JSON.stringify(draftsBeforeFinalAssertion)}`,
+  ).toHaveValue("Recover this forward navigation draft")
   expect(unexpectedDialogs).toEqual([])
 })
 
