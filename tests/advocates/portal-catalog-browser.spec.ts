@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises"
 import { createServer } from "node:net"
 import { resolve } from "node:path"
 
-import { expect, test, type Page } from "@playwright/test"
+import { expect, test, type Page, type Locator } from "@playwright/test"
 
 const HARNESS_DIRECTORY = resolve(
   process.cwd(),
@@ -166,6 +166,34 @@ async function readCatalogDrafts(
  * completes whether or not a draft was recovered, which makes it the correct
  * signal to wait on rather than any rendered text derived from settings.
  */
+/**
+ * Types a change note and does not continue until the note has actually been
+ * persisted.
+ *
+ * `fill` is not reliable here, and that is measured rather than suspected. In
+ * roughly one run in two hundred it completes without any `input` event ever
+ * reaching the document: a capture-phase listener installed before React sees
+ * nothing, and the draft that should carry the note carries only the preceding
+ * click's write. The DOM value is set, so checking the field would not detect
+ * it; the only observable difference is that the change handler never ran and
+ * nothing was persisted.
+ *
+ * Retrying until the persisted draft carries the note asserts exactly the
+ * precondition every later assertion in these tests already depends on, and
+ * fails loudly rather than silently proceeding with text the application never
+ * received. No assertion is weakened: the recovery assertions are unchanged.
+ */
+async function fillChangeNote(
+  page: Page,
+  catalog: Locator,
+  note: string,
+): Promise<void> {
+  await expect(async () => {
+    await catalog.getByLabel("Change note").fill(note)
+    expect(JSON.stringify(await readCatalogDrafts(page))).toContain(note)
+  }).toPass({ timeout: 15_000 })
+}
+
 async function waitForCatalogHydration(page: Page): Promise<void> {
   await expect(page.locator("[data-catalog-draft-hydrated]")).toHaveAttribute(
     "data-catalog-draft-hydrated",
@@ -766,9 +794,7 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
       name: "Remove Unavailable selection 333333333333",
     })
     .click()
-  await catalog
-    .getByLabel("Change note")
-    .fill("Recover this mobile catalog draft")
+  await fillChangeNote(page, catalog, "Recover this mobile catalog draft")
   await page.evaluate(() => window.history.back())
   await expect(page).toHaveURL(`${harnessOrigin}/other`)
   await expect(page.getByText("Analytics destination")).toBeVisible()
@@ -799,9 +825,7 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
       name: "Remove Unavailable selection 333333333333",
     })
     .click()
-  await catalog
-    .getByLabel("Change note")
-    .fill("Recover this forward navigation draft")
+  await fillChangeNote(page, catalog, "Recover this forward navigation draft")
 
   await page.evaluate(() => window.history.forward())
   await expect(page).toHaveURL(`${harnessOrigin}/other`)
