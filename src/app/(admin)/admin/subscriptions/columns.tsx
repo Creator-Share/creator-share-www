@@ -3,6 +3,10 @@ import { Button } from "@/components/ui/button"
 import { LuArrowUpDown } from "react-icons/lu"
 import { MdCancelPresentation } from "react-icons/md"
 import { Badge } from "@chakra-ui/react"
+import type {
+  SubscriptionPartnershipProject,
+  SubscriptionSubjectKind,
+} from "@/lib/sponsorships/subscriptionPresentation"
 
 export type AdminSubscription = {
   id: string
@@ -19,6 +23,8 @@ export type AdminSubscription = {
   user_id: string
   sponsorship_method: "STRIPE" | "PAYPAL" | null
   payment_region: "us" | "uk"
+  subject_kind?: SubscriptionSubjectKind | null
+  partnership_project?: SubscriptionPartnershipProject | null
   // Transformed fields
   child_name: string
   child_username: string
@@ -51,7 +57,7 @@ export const columns = (actions: ColumnActions): ColumnDef<AdminSubscription>[] 
         variant="ghost"
         onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
-        Child Name
+        Sponsorship
         <LuArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
@@ -61,7 +67,9 @@ export const columns = (actions: ColumnActions): ColumnDef<AdminSubscription>[] 
       return (
         <div>
           <div className="font-medium">{childName}</div>
-          <div className="text-sm text-gray-500">@{childUsername}</div>
+          {childUsername ? (
+            <div className="text-sm text-gray-500">@{childUsername}</div>
+          ) : null}
         </div>
       )
     },
@@ -226,9 +234,7 @@ export const columns = (actions: ColumnActions): ColumnDef<AdminSubscription>[] 
             <Button
               onClick={(e) => {
                 e.stopPropagation()
-                if (confirm("Are you sure you want to cancel this subscription? This action cannot be undone.")) {
-                  actions.onCancelSubscription(subscription.id)
-                }
+                actions.onCancelSubscription(subscription.id)
               }}
               size="sm"
               variant="outline"

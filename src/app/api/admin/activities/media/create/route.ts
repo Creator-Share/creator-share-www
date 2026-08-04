@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { isValidPublicMediaExtension } from "@/config/beneficiaryValidation"
 import { createClient } from "@/utils/supabase/server"
 import { getStorageKey } from "@/utils/supabase/media"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
@@ -39,14 +40,37 @@ export async function POST(req: Request) {
     const { activityId, media } = body
 
     if (!activityId) {
-      return NextResponse.json(
-        { error: "Missing activityId" },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "Missing activityId" }, { status: 400 })
     }
     if (!Array.isArray(media) || media.length === 0) {
       return NextResponse.json(
         { error: "Missing or empty media array" },
+        { status: 400 },
+      )
+    }
+
+    const normalizedMedia = media.map((item) => ({
+      ...item,
+      extension:
+        typeof item?.extension === "string"
+          ? item.extension.replace(/^\./, "").toLowerCase()
+          : "",
+    }))
+    if (
+      normalizedMedia.some(
+        (item) =>
+          !item ||
+          (item.type !== "IMAGE" &&
+            item.type !== "VIDEO" &&
+            item.type !== "DOCUMENT") ||
+          !isValidPublicMediaExtension(item.extension) ||
+          typeof item.contentType !== "string" ||
+          item.contentType.length === 0 ||
+          item.contentType.length > 255,
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Invalid media metadata" },
         { status: 400 },
       )
     }
@@ -62,21 +86,17 @@ export async function POST(req: Request) {
       contentType: string
     }> = []
 
-    for (const item of media) {
+    for (const item of normalizedMedia) {
       const { type, extension, contentType } = item
-      const normalizedExt = extension.replace(/^\./, "").toLowerCase()
 
       const { data: mediaInserted, error: mediaInsertErr } = await supabase
         .from("media")
-        .insert([{ parent_id: activityId, extension: normalizedExt, type }])
+        .insert([{ parent_id: activityId, extension, type }])
         .select()
         .single()
 
       if (mediaInsertErr || !mediaInserted) {
-        console.error(
-          "❌ [ACTIVITY MEDIA] DB insert failed:",
-          mediaInsertErr,
-        )
+        console.error("❌ [ACTIVITY MEDIA] DB insert failed:", mediaInsertErr)
         continue
       }
 

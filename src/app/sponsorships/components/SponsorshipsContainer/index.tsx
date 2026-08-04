@@ -21,6 +21,8 @@ import {
   ROUTE_TO_TYPE,
   getApiTypes,
 } from "@/config/beneficiaryTypes"
+import { usePublicSite } from "@/components/advocates/PublicSiteProvider"
+import { notifyPublicPathChange } from "@/lib/advocates/publicPathChanges"
 
 /** Set of pathname values that are "type landing pages" (the modal push uses pushState, not router). */
 const TYPE_ROUTE_PATHS = new Set([
@@ -65,6 +67,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
   activeType,
   onTypeChange,
 }) => {
+  const publicSite = usePublicSite()
   const pathname = usePathname()
   const filtersRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -151,6 +154,11 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
 
   // Fetch sponsored beneficiaries once on mount (all types, not filtered by activeType).
   useEffect(() => {
+    if (publicSite.kind === "advocate") {
+      setSponsored([])
+      return
+    }
+
     let cancelled = false
 
     const refresh = () => {
@@ -160,10 +168,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
         })
         .catch((err) => {
           if (cancelled) return
-          console.warn(
-            "[SponsorshipsContainer] fetchAllSponsored failed:",
-            err,
-          )
+          console.warn("[SponsorshipsContainer] fetchAllSponsored failed:", err)
         })
     }
 
@@ -178,7 +183,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
       cancelled = true
       unsubscribe()
     }
-  }, [])
+  }, [publicSite.kind])
 
   // On mount: read the real browser URL (window.location.pathname) and notify
   // the parent if a specific type route is active.  This handles /street, /care,
@@ -268,6 +273,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
           "",
           `/sponsorships/${beneficiary.username}`,
         )
+        notifyPublicPathChange()
         bumpUrlSync()
       }
     },
@@ -284,6 +290,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
         currentPath !== "/sponsorships/checkout"
       ) {
         window.history.replaceState({}, "", previousUrlRef.current || "/")
+        notifyPublicPathChange()
       }
       previousUrlRef.current = null
       bumpUrlSync()

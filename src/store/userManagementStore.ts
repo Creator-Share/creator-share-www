@@ -56,7 +56,8 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
         throw new Error(errorData.error || "Failed to invite user")
       }
 
-      await get().fetchUsers()
+      // A successful response means the request was accepted. Provider delivery
+      // or role assignment may still require manual review.
       set({ loading: false })
       return true
     } catch (error) {
@@ -218,4 +219,4 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
   clearError: () => {
     set({ error: null })
   },
-})) 
+}))

@@ -1,18 +1,65 @@
 import type { NextConfig } from "next"
 
+import {
+  assertAdvocateStagingExternalProviderBoundary,
+  assertAdvocateStagingSupabaseBoundary,
+} from "./src/lib/advocates/stagingDeploymentBoundary"
+import {
+  assertStagingPayPalPaymentEnvironment,
+  assertStagingStripePaymentEnvironment,
+} from "./src/lib/sponsorships/checkout/stagingPaymentBoundary"
+
+assertAdvocateStagingSupabaseBoundary(process.env)
+assertAdvocateStagingExternalProviderBoundary(process.env)
+assertStagingStripePaymentEnvironment(process.env)
+assertStagingPayPalPaymentEnvironment(process.env)
+
+function configuredSupabaseImagePatterns() {
+  const configured = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!configured || configured !== configured.trim()) return []
+
+  try {
+    const url = new URL(configured)
+    const localDevelopment =
+      process.env.NODE_ENV !== "production" &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+    if (
+      (url.protocol !== "https:" &&
+        !(localDevelopment && url.protocol === "http:")) ||
+      url.username !== "" ||
+      url.password !== "" ||
+      url.pathname !== "/" ||
+      url.search !== "" ||
+      url.hash !== ""
+    ) {
+      return []
+    }
+
+    const origin = {
+      protocol:
+        url.protocol === "http:" ? ("http" as const) : ("https" as const),
+      hostname: url.hostname,
+      port: url.port,
+    }
+    return [
+      {
+        ...origin,
+        pathname: "/storage/v1/object/public/media/**",
+      },
+      {
+        ...origin,
+        pathname: "/storage/v1/object/public/advocate-assets/**",
+      },
+    ]
+  } catch {
+    return []
+  }
+}
+
 const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["@chakra-ui/react"],
-  },
-
-  async redirects() {
-    return [
-      {
-        source: "/sponsorships",
-        destination: "/",
-        permanent: true,
-      },
-    ]
+    globalNotFound: true,
   },
 
   /**
@@ -53,10 +100,7 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "media.istockphoto.com",
       },
-      {
-        protocol: "https",
-        hostname: "*.supabase.co",
-      },
+      ...configuredSupabaseImagePatterns(),
     ],
   },
 

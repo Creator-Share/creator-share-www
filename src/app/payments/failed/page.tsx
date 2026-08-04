@@ -11,8 +11,11 @@ import {
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, Suspense } from "react"
 import NextLink from "next/link"
+import { usePublicSite } from "@/components/advocates/PublicSiteProvider"
 
 const FailedPageContent = () => {
+  const publicSite = usePublicSite()
+  const neutralPaymentShell = publicSite.kind === "payment"
   const router = useRouter()
   const searchParams = useSearchParams()
   const [, setChildDetails] = useState({
@@ -25,7 +28,7 @@ const FailedPageContent = () => {
   useEffect(() => {
     const fetchSessionDetails = async () => {
       const sessionId = searchParams.get("session_id")
-      if (!sessionId) {
+      if (neutralPaymentShell || !sessionId) {
         setIsLoading(false)
         return
       }
@@ -49,7 +52,6 @@ const FailedPageContent = () => {
           name: session.metadata?.childName || "this beneficiary",
           location: session.metadata?.childLocation || "",
         })
-
       } catch (error) {
         console.error("Error fetching session:", error)
         // Even if we can't get the session, we can still show the failed page
@@ -59,7 +61,7 @@ const FailedPageContent = () => {
     }
 
     fetchSessionDetails()
-  }, [searchParams, retryCount])
+  }, [neutralPaymentShell, searchParams, retryCount])
 
   if (isLoading) {
     return (
@@ -115,16 +117,26 @@ const FailedPageContent = () => {
         {/* Message */}
         <Text mb={6} color="gray.600" fontSize="sm" className="text-center">
           You can always{" "}
-          <Link as={NextLink} href="/sponsorships" color="blue.500">
-            click here
-          </Link>{" "}
+          {neutralPaymentShell ? (
+            <Link href="/sponsorships" color="blue.500">
+              click here
+            </Link>
+          ) : (
+            <Link as={NextLink} href="/sponsorships" color="blue.500">
+              click here
+            </Link>
+          )}{" "}
           to see other ways you can share with our children or work
         </Text>
 
         {/* Buttons */}
         <VStack gap={4} mb={6}>
           <Button
-            onClick={() => router.back()}
+            onClick={() =>
+              neutralPaymentShell
+                ? window.location.assign("/sponsorships")
+                : router.back()
+            }
             colorScheme="blue"
             size="md"
             width="full"
@@ -134,17 +146,23 @@ const FailedPageContent = () => {
             color={"#FFFFFF"}
             fontWeight={"semibold"}
           >
-            Retry Payment
+            {neutralPaymentShell ? "Return to sponsorships" : "Retry Payment"}
           </Button>
 
-          <Link
-            as={NextLink}
-            href="/sponsorships"
-            fontSize="sm"
-            fontWeight="medium"
-          >
-            &lt;&lt; Back to Beneficiaries listing
-          </Link>
+          {neutralPaymentShell ? (
+            <Link href="/sponsorships" fontSize="sm" fontWeight="medium">
+              &lt;&lt; Back to Beneficiaries listing
+            </Link>
+          ) : (
+            <Link
+              as={NextLink}
+              href="/sponsorships"
+              fontSize="sm"
+              fontWeight="medium"
+            >
+              &lt;&lt; Back to Beneficiaries listing
+            </Link>
+          )}
         </VStack>
 
         {/* Support Info */}
@@ -157,11 +175,18 @@ const FailedPageContent = () => {
           <Link href="mailto:support@sharetanzania.co.uk" color="blue.500">
             support@sharetanzania.co.uk
           </Link>{" "}
-          or visit our{" "}
-          <Link href="/help" color="blue.500">
-            Help Center
-          </Link>
-          .
+          {neutralPaymentShell ? (
+            "."
+          ) : (
+            <>
+              {" "}
+              or visit our{" "}
+              <Link href="/help" color="blue.500">
+                Help Center
+              </Link>
+              .
+            </>
+          )}
         </Text>
       </Box>
     </Center>

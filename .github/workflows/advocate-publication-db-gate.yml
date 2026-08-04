@@ -1,0 +1,314 @@
+name: Advocate publication database gate
+
+on:
+  pull_request:
+    branches:
+      - dev
+    paths:
+      # Broad by design. The previous enumeration is what allowed test files and
+      # implementation surfaces to drift out of required CI: a new file simply
+      # never matched a path, so the gate stayed green without running it.
+      # tests/release-manifest.json plus scripts/verify-release-manifest.mjs
+      # enforce lane assignment; these globs make sure the gate actually runs.
+      - "src/**"
+      - "tests/**"
+      - "supabase/**"
+      - "scripts/**"
+      - "docs/**"
+      - ".github/workflows/**"
+      - "middleware.ts"
+      - "next.config.*"
+      - "playwright.config.ts"
+      - "vercel.json"
+      - ".nvmrc"
+      - "package.json"
+      - "package-lock.json"
+      - "yarn.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ADVOCATE_PUBLICATION_DOCKER_NETWORK: advocate-publication-gate-${{ github.run_id }}
+
+concurrency:
+  group: advocate-publication-db-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publication-authority:
+    name: Publication authority database tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # No required gate built the application, so a production build that
+      # stopped compiling would pass every check and reach dev. This runs
+      # early, before the long database work, so a broken build fails fast.
+      # yarn build also runs scripts/verify-advocate-build.mjs, which is the
+      # Edge middleware selection gate the roadmap requires.
+      - name: Build the production application
+        run: yarn build
+        env:
+          # No Supabase key variable is named here. The FF-029 contract forbids
+          # this workflow from mentioning one, and a build with only the
+          # loopback URL was verified to succeed, so none is needed.
+          NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      # The build fails on lint errors but not on warnings, so "lint with zero
+      # warnings", which the pull request claims as release evidence, needs its
+      # own step. Verified in both directions: it passes on the current tree
+      # and fails when a single warning is introduced.
+      - name: Lint with zero warnings
+        run: yarn lint --max-warnings=0
+
+      - name: Verify email proof supersession harness safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo unshare --net -- \
+            setpriv \
+              --reuid="$(id -u)" \
+              --regid="$(id -g)" \
+              --init-groups \
+              env "PATH=$PATH" "HOME=$HOME" \
+              yarn test:provider:supabase-email-proof-contract
+
+      - name: Verify every test-shaped file is classified
+        run: yarn verify:release-manifest
+
+      - name: Install Playwright Chromium
+        run: yarn playwright install --with-deps chromium
+
+      - name: Run provider-free offline lane
+        run: yarn test:lane:offline
+
+      - name: Run dev server lane
+        # This step intentionally sets no Supabase environment. The FF-029
+        # contract forbids this workflow from ever naming a Supabase key
+        # variable, so the dev server's loopback placeholders live in
+        # playwright.config.ts instead.
+        run: yarn test:lane:dev-server
+
+      - name: Upload Playwright failure artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-playwright-lane-artifacts
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Create loopback-only Docker network
+        run: >-
+          docker network create
+          --driver bridge
+          --opt com.docker.network.bridge.host_binding_ipv4=127.0.0.1
+          "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+
+      - name: Start local Supabase
+        run: >-
+          yarn supabase start
+          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+
+      - name: Verify Supabase ports are loopback only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t published_bindings < <(
+            docker ps \
+              --filter "label=com.supabase.cli.project=creator-share-www" \
+              --quiet |
+              while read -r container; do
+                docker inspect "$container" \
+                  --format '{{range $port, $bindings := .NetworkSettings.Ports}}{{range $bindings}}{{println .HostIp}}{{end}}{{end}}'
+              done |
+              sed '/^$/d' |
+              sort -u
+          )
+          if (( ${#published_bindings[@]} == 0 )); then
+            echo "No local Supabase ports were published" >&2
+            exit 1
+          fi
+          for host_ip in "${published_bindings[@]}"; do
+            if [[ "$host_ip" != "127.0.0.1" && "$host_ip" != "::1" ]]; then
+              echo "Local Supabase published a non-loopback port" >&2
+              exit 1
+            fi
+          done
+
+      - name: Run the complete pgTAP suite
+        run: >-
+          yarn supabase test db
+          --network-id "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+
+      - name: Run public catalog lane
+        run: yarn test:lane:public-catalog
+
+      - name: Run local Supabase HTTP integration lane
+        env:
+          RUN_LOCAL_SUPABASE_HTTP_INTEGRATION: "1"
+        run: >-
+          yarn playwright test
+          tests/advocates/portal-catalog-supabase-http.spec.ts
+          --workers=1
+          --retries=0
+
+      - name: Run loopback PostgREST role claim compatibility gate
+        env:
+          ADVOCATE_POSTGREST_ROLE_HTTP_EVIDENCE_PATH: ${{ runner.temp }}/advocate-postgrest-role-http-evidence.json
+          ADVOCATE_POSTGREST_ROLE_HTTP_SOURCE_REVISION: ${{ github.sha }}
+        run: yarn test:advocate:postgrest-role-http
+
+      - name: Verify PostgREST role claim forced termination cleanup
+        run: yarn test:advocate:postgrest-role-http-termination
+
+      - name: Upload sanitized PostgREST role claim compatibility evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-postgrest-role-http-evidence
+          path: ${{ runner.temp }}/advocate-postgrest-role-http-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Run invitation proof quarantine concurrency harness
+        env:
+          ADVOCATE_INVITATION_PROOF_QUARANTINE_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-invitation-proof-quarantine-concurrency-evidence.json
+        run: yarn test:advocate:invitation-proof-quarantine-concurrency
+
+      - name: Upload sanitized invitation proof quarantine concurrency evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-invitation-proof-quarantine-concurrency-evidence
+          path: ${{ runner.temp }}/advocate-invitation-proof-quarantine-concurrency-evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Run initial owner concurrency harness
+        env:
+          ADVOCATE_INITIAL_OWNER_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-initial-owner-concurrency-evidence.json
+        run: yarn test:advocate:initial-owner-concurrency
+
+      - name: Upload sanitized initial owner concurrency evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-initial-owner-concurrency-evidence
+          path: ${{ runner.temp }}/advocate-initial-owner-concurrency-evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Run publication concurrency harness
+        env:
+          ADVOCATE_PUBLICATION_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-publication-concurrency-evidence.json
+        run: yarn test:advocate:publication-concurrency
+
+      - name: Upload sanitized concurrency evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-publication-concurrency-evidence
+          path: ${{ runner.temp }}/advocate-publication-concurrency-evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Run branding authority concurrency harness
+        env:
+          ADVOCATE_BRANDING_AUTHORITY_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-branding-authority-concurrency-evidence.json
+        run: yarn test:advocate:branding-authority-concurrency
+
+      - name: Verify branding authority forced termination cleanup
+        run: yarn test:advocate:branding-authority-termination
+
+      - name: Upload sanitized branding authority concurrency evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-branding-authority-concurrency-evidence
+          path: ${{ runner.temp }}/advocate-branding-authority-concurrency-evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Run shared email proof issuance concurrency harness
+        env:
+          EMAIL_PROOF_ISSUANCE_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/email-proof-issuance-concurrency-evidence.json
+        run: yarn test:email-proof-issuance-concurrency
+
+      - name: Upload sanitized email proof issuance concurrency evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: email-proof-issuance-concurrency-evidence
+          path: ${{ runner.temp }}/email-proof-issuance-concurrency-evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Load local Supabase canary credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          status_file="$RUNNER_TEMP/ff029-supabase-status.env"
+          credentials_file="$RUNNER_TEMP/ff029-supabase-credentials.env"
+          trap 'rm -f "$status_file"' EXIT
+          node_modules/.bin/supabase status -o env > "$status_file"
+          set -a
+          source "$status_file"
+          set +a
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          umask 077
+          {
+            printf 'FF029_LOCAL_SUPABASE_ANON_KEY=%q\n' "$ANON_KEY"
+            printf 'FF029_LOCAL_SUPABASE_SERVICE_ROLE_KEY=%q\n' "$SERVICE_ROLE_KEY"
+          } > "$credentials_file"
+
+      - name: Observe local email proof supersession behavior
+        continue-on-error: true
+        shell: bash
+        env:
+          FF029_SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          credentials_file="$RUNNER_TEMP/ff029-supabase-credentials.env"
+          trap 'rm -f "$credentials_file"' EXIT
+          set -a
+          source "$credentials_file"
+          set +a
+          yarn canary:supabase-email-proof-supersession:local
+
+      - name: Upload sanitized email proof supersession evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: supabase-email-proof-supersession-evidence
+          path: test-results/provider/ff029-supabase-email-proof-supersession.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Stop local Supabase
+        if: ${{ always() }}
+        run: |
+          rm -f "$RUNNER_TEMP/ff029-supabase-credentials.env"
+          yarn supabase stop --no-backup
+
+      - name: Remove loopback-only Docker network
+        if: ${{ always() }}
+        run: |
+          if docker network inspect "$ADVOCATE_PUBLICATION_DOCKER_NETWORK" >/dev/null 2>&1; then
+            docker network rm "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
+          fi

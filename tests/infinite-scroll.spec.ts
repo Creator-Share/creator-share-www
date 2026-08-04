@@ -20,13 +20,19 @@ test.describe("Infinite Scroll Tests", () => {
       }
     })
 
-    await page.goto("http://localhost:3000")
-
-    // Wait for initial load
-    await page.waitForResponse((response) =>
-      response.url().includes("/api/beneficiaries/get")
+    const initialResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/beneficiaries/get") &&
+        response.request().method() === "GET",
     )
-    await page.waitForTimeout(1000)
+    const documentResponse = await page.goto("http://localhost:3000", {
+      waitUntil: "domcontentloaded",
+    })
+    expect(documentResponse?.status()).toBe(200)
+    expect((await initialResponse).status()).toBe(200)
+    await expect(
+      page.getByRole("heading", { name: /One child at a time/i }),
+    ).toBeVisible()
 
     // Count initial beneficiary cards - they're in a SimpleGrid with rounded-[20px] class
     const initialCards = await page
@@ -38,54 +44,49 @@ test.describe("Infinite Scroll Tests", () => {
       .locator(".rounded-\\[20px\\].bg-white")
       .evaluateAll((elements) => elements.map((el) => el.id).filter((id) => id))
 
-    // Scroll to bottom to trigger infinite scroll
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
-
-    // Wait for next page to load
-    try {
-      const response = await page.waitForResponse(
+    const nextPageResponse = page
+      .waitForResponse(
         (response) =>
           response.url().includes("/api/beneficiaries/get") &&
           response.url().includes("cursor="),
-        { timeout: 5000 }
+        { timeout: 5_000 },
       )
+      .catch(() => null)
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
 
-      await page.waitForTimeout(1500)
+    const response = await nextPageResponse
+    if (response !== null) {
+      expect(response.status()).toBe(200)
 
-      // Count cards after scroll
       const afterScrollCards = await page
         .locator(".rounded-\\[20px\\].bg-white")
         .count()
 
-      // Get all IDs after scroll
       const afterScrollIds = await page
         .locator(".rounded-\\[20px\\].bg-white")
         .evaluateAll((elements) =>
-          elements.map((el) => el.id).filter((id) => id)
+          elements.map((el) => el.id).filter((id) => id),
         )
 
-      // Check for duplicate IDs in the DOM
       const idSet = new Set(afterScrollIds)
       if (idSet.size !== afterScrollIds.length) {
         const duplicates = afterScrollIds.filter(
-          (id, index) => afterScrollIds.indexOf(id) !== index
+          (id, index) => afterScrollIds.indexOf(id) !== index,
         )
         console.error(`🚨 DUPLICATE IDs IN DOM:`, duplicates)
         throw new Error(
           `Found ${
             afterScrollIds.length - idSet.size
-          } duplicate ID(s) in the DOM: ${duplicates.join(", ")}`
+          } duplicate ID(s) in the DOM: ${duplicates.join(", ")}`,
         )
       }
 
-      // Should have more cards (or same if no more data)
       expect(afterScrollCards).toBeGreaterThanOrEqual(initialCards)
 
-      // Check for duplicate key errors
       const duplicateKeyErrors = consoleErrors.filter(
         (error) =>
           error.includes("Encountered two children with the same key") ||
-          error.includes("duplicate")
+          error.includes("duplicate"),
       )
 
       if (duplicateKeyErrors.length > 0) {
@@ -94,22 +95,25 @@ test.describe("Infinite Scroll Tests", () => {
       }
 
       expect(duplicateKeyErrors).toHaveLength(0)
-    } catch (error) {
-      // If no more data to load, that's okay
     }
   })
 
   test("loading spinner appears during load", async ({ page }) => {
-    await page.goto("http://localhost:3000")
+    const beneficiaryResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/beneficiaries/get"),
+    )
+    const documentResponse = await page.goto("http://localhost:3000", {
+      waitUntil: "domcontentloaded",
+    })
 
-    // Initial load should show spinner briefly
     const spinner = page.locator('[data-scope="spinner"]').first()
 
-    // Wait for page to settle
-    await page.waitForLoadState("networkidle")
-    await page.waitForTimeout(1000)
+    expect(documentResponse?.status()).toBe(200)
+    expect((await beneficiaryResponse).status()).toBe(200)
+    await expect(
+      page.getByRole("heading", { name: /One child at a time/i }),
+    ).toBeVisible()
 
-    // Spinner should be gone after load
     await expect(spinner).not.toBeVisible()
   })
 })

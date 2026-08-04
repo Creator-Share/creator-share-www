@@ -4,72 +4,100 @@ import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import { Beneficiaries, Status, isBeneficiaryType } from "@/types/admin.types"
 import { notifyChildCreated } from "@/services/telegram"
 import { calculateAge } from "@/utils/ageCalculator"
+import {
+  findInvalidPublicBeneficiaryProjectionField,
+  isValidBeneficiaryUsername,
+} from "@/config/beneficiaryValidation"
 
 export async function POST(req: Request) {
   const supabase = await createClient()
   const auth = await requireSuperAdmin(supabase)
   if (!auth.ok) return auth.response
   try {
-    let body;
+    let body
     try {
-      body = await req.json();
+      body = await req.json()
     } catch (parseError) {
-      console.error('JSON parse error:', parseError);
+      console.error("JSON parse error:", parseError)
       return NextResponse.json(
-        { error: 'Invalid JSON in request body' },
-        { status: 400 }
-      );
+        { error: "Invalid JSON in request body" },
+        { status: 400 },
+      )
     }
 
     // Validate required fields
-    const requiredFields = ['name', 'username', 'gender', 'biography'];
-    const missingFields = requiredFields.filter(field => !body[field]);
+    const requiredFields = ["name", "username", "gender", "biography"]
+    const missingFields = requiredFields.filter((field) => !body[field])
     if (missingFields.length > 0) {
       return NextResponse.json(
-        { error: `Missing required fields: ${missingFields.join(', ')}` },
-        { status: 400 }
-      );
+        { error: `Missing required fields: ${missingFields.join(", ")}` },
+        { status: 400 },
+      )
+    }
+
+    const normalizedUsername =
+      typeof body.username === "string" ? body.username.trim() : ""
+    if (!isValidBeneficiaryUsername(normalizedUsername)) {
+      return NextResponse.json(
+        { error: "Invalid beneficiary username" },
+        { status: 400 },
+      )
     }
 
     const birthDateIsEstimate =
       Boolean(body.birth_date_is_estimate) ||
       Boolean(body.metadata?.birth_date_is_estimate)
 
-    const requestedType = body.beneficiary_type ?? 'CHILD_LABORER'
+    const requestedType = body.beneficiary_type ?? "CHILD_LABORER"
     if (!isBeneficiaryType(requestedType)) {
       return NextResponse.json(
         { error: `Invalid beneficiary_type: ${requestedType}` },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
     // Sanitize and validate input data
     const data: Partial<Beneficiaries> = {
       name: String(body.name).trim(),
-      username: String(body.username).trim(),
-      gender: body.gender === 'Boy' || body.gender === 'Girl' ? body.gender : 'Boy',
+      username: normalizedUsername,
+      gender:
+        body.gender === "Boy" || body.gender === "Girl" ? body.gender : "Boy",
       birth_date: body.birth_date || undefined,
       biography: String(body.biography).trim(),
-      budget_goal: Number(body.budget_goal) === -1 ? -1 : Math.max(0, Number(body.budget_goal) || 0),
+      budget_goal:
+        Number(body.budget_goal) === -1
+          ? -1
+          : Math.max(0, Number(body.budget_goal) || 0),
       budget_raised: Math.max(0, Number(body.budget_raised) || 0),
-      status: (body.status || 'New') as Status,
-      country: body.country ? String(body.country).trim() : 'Unknown Country',
-      location_str: body.location_str ? String(body.location_str).trim() : 'Unknown Location',
+      status: (body.status || "New") as Status,
+      country: body.country ? String(body.country).trim() : "Unknown Country",
+      location_str: body.location_str
+        ? String(body.location_str).trim()
+        : "Unknown Location",
       location_geo: body.location_geo || null,
-      video_url: body.video_url ? String(body.video_url).trim() : '',
+      video_url: body.video_url ? String(body.video_url).trim() : "",
       active_subscriptions: 0,
       metadata: {
         ...(body.metadata || {}),
         birth_date_is_estimate: birthDateIsEstimate,
       },
       beneficiary_type: requestedType,
-      introduction: String(body.biography).trim()
+      introduction: String(body.biography).trim(),
+    }
+    const invalidProjectionField = findInvalidPublicBeneficiaryProjectionField(
+      data as unknown as Record<string, unknown>,
+    )
+    if (invalidProjectionField !== null) {
+      return NextResponse.json(
+        { error: `Invalid beneficiary ${invalidProjectionField}` },
+        { status: 400 },
+      )
     }
     const insertData = { ...data }
     if (!insertData.status) insertData.status = "New"
     if (!insertData.country) insertData.country = "Unknown Country"
     if (!insertData.location_str) insertData.location_str = "Unknown Location"
-    
+
     const { data: inserted, error } = await supabase
       .from("beneficiaries")
       .insert([insertData])
@@ -84,29 +112,41 @@ export async function POST(req: Request) {
     if (inserted.beneficiary_type === "CHILD") {
       try {
         // Calculate age from birth_date using existing utility
-        const age = inserted.birth_date ? calculateAge(inserted.birth_date) : null;
+        const age = inserted.birth_date
+          ? calculateAge(inserted.birth_date)
+          : null
 
         const notificationData = {
           ...inserted,
-          age
-        };
+          age,
+        }
 
         // Send notification asynchronously (don't wait for it)
-        notifyChildCreated(notificationData).catch(error => {
-          console.error('Telegram notification failed for child:', inserted.id, error);
-        });
+        notifyChildCreated(notificationData).catch((error) => {
+          console.error(
+            "Telegram notification failed for child:",
+            inserted.id,
+            error,
+          )
+        })
       } catch (notificationError) {
-        console.error('Error preparing Telegram notification:', notificationError);
+        console.error(
+          "Error preparing Telegram notification:",
+          notificationError,
+        )
         // Don't fail the main operation if notification fails
       }
     }
 
     // TODO: Handle file uploads (images and videos) here
     // For now, just return the created beneficiary
-    return NextResponse.json({ 
-      beneficiary: inserted, 
-      beneficiaryId: inserted.id 
-    }, { status: 201 })
+    return NextResponse.json(
+      {
+        beneficiary: inserted,
+        beneficiaryId: inserted.id,
+      },
+      { status: 201 },
+    )
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error"
     return NextResponse.json({ error: errorMessage }, { status: 500 })

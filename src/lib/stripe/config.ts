@@ -1,4 +1,6 @@
 import Stripe from "stripe"
+import { normalizePublicStripePortalUrl } from "@/lib/payments/portals"
+import { assertStagingStripePaymentEnvironment } from "@/lib/sponsorships/checkout/stagingPaymentBoundary"
 import {
   ALL_STRIPE_REGIONS,
   isValidStripeRegion,
@@ -8,10 +10,13 @@ import {
 export type { StripeRegion }
 export { ALL_STRIPE_REGIONS, isValidStripeRegion }
 
+export const STRIPE_API_VERSION = "2025-02-24.acacia" as const
+
 export interface StripeRegionConfig {
   secretKey: string
   publishableKey: string
   webhookSecret: string
+  previousWebhookSecret: string
   portalUrl: string
   label: string
 }
@@ -47,6 +52,7 @@ const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
     secretKey: process.env.STRIPE_SECRET_KEY_US || "",
     publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US || "",
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_US || "",
+    previousWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET_US_PREVIOUS || "",
     portalUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_US || "",
     label: "Creator Share US",
   },
@@ -54,6 +60,7 @@ const REGION_ENV_MAP: Record<StripeRegion, StripeRegionConfig> = {
     secretKey: process.env.STRIPE_SECRET_KEY_UK || "",
     publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK || "",
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_UK || "",
+    previousWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET_UK_PREVIOUS || "",
     portalUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_URL_UK || "",
     label: "Creator Share UK",
   },
@@ -75,15 +82,14 @@ export const isValidRegion = isValidStripeRegion
 // downstream lookups against the wrong account fail closed with a
 // cleanly worded error. Do not use this function as an authorization
 // boundary.
-export function coerceRegion(
-  value: string | null | undefined,
-): StripeRegion {
+export function coerceRegion(value: string | null | undefined): StripeRegion {
   return isValidStripeRegion(value) ? value : STRIPE_DEFAULT_REGION
 }
 
 export function getStripeConfig(
   region: StripeRegion = STRIPE_DEFAULT_REGION,
 ): StripeRegionConfig {
+  assertStagingStripePaymentEnvironment(process.env)
   const config = REGION_ENV_MAP[region]
   if (!config.secretKey) {
     throw new Error(
@@ -99,7 +105,9 @@ export function getStripeClient(
   const cached = clientCache.get(region)
   if (cached) return cached
   const config = getStripeConfig(region)
-  const client = new Stripe(config.secretKey)
+  const client = new Stripe(config.secretKey, {
+    apiVersion: STRIPE_API_VERSION,
+  })
   clientCache.set(region, client)
   return client
 }
@@ -120,10 +128,81 @@ export function getWebhookSecret(region: StripeRegion): string {
   return secret
 }
 
+export interface StripeWebhookSecretCandidate {
+  secret: string
+  version: "current" | "previous"
+}
+
+export interface ScopedStripeWebhookSecretCandidate extends StripeWebhookSecretCandidate {
+  region: StripeRegion
+}
+
+/**
+ * A signing secret must identify exactly one regional Stripe account. If the
+ * same secret is configured for two regions, signature verification alone
+ * cannot determine which provider account owns the event.
+ */
+export function assertUnambiguousStripeWebhookSecrets(
+  candidates: readonly ScopedStripeWebhookSecretCandidate[],
+): void {
+  const ownerBySecret = new Map<string, StripeRegion>()
+  for (const candidate of candidates) {
+    if (
+      !isValidStripeRegion(candidate.region) ||
+      (candidate.version !== "current" && candidate.version !== "previous") ||
+      typeof candidate.secret !== "string" ||
+      candidate.secret.length < 16 ||
+      candidate.secret.length > 255 ||
+      /\s/.test(candidate.secret)
+    ) {
+      throw new Error("Stripe webhook signing configuration is invalid")
+    }
+    const owner = ownerBySecret.get(candidate.secret)
+    if (owner !== undefined && owner !== candidate.region) {
+      throw new Error("Stripe webhook signing configuration is ambiguous")
+    }
+    ownerBySecret.set(candidate.secret, candidate.region)
+  }
+}
+
+export function getWebhookSecretCandidates(
+  region: StripeRegion,
+): StripeWebhookSecretCandidate[] {
+  const config = getStripeConfig(region)
+  const candidates: StripeWebhookSecretCandidate[] = []
+  if (config.webhookSecret) {
+    candidates.push({ secret: config.webhookSecret, version: "current" })
+  }
+  if (
+    config.previousWebhookSecret &&
+    config.previousWebhookSecret !== config.webhookSecret
+  ) {
+    candidates.push({
+      secret: config.previousWebhookSecret,
+      version: "previous",
+    })
+  }
+  if (candidates.length === 0) {
+    throw new Error(
+      `Stripe region "${region}" has no configured webhook signing secret`,
+    )
+  }
+  return candidates
+}
+
+export function getStripeAccountLivemode(region: StripeRegion): boolean {
+  const secretKey = getStripeConfig(region).secretKey
+  if (/^(?:sk|rk)_live_/.test(secretKey)) return true
+  if (/^(?:sk|rk)_test_/.test(secretKey)) return false
+  throw new Error(
+    `Stripe region "${region}" has an unrecognized server key environment`,
+  )
+}
+
 export function getPortalUrl(
   region: StripeRegion = STRIPE_DEFAULT_REGION,
 ): string {
-  return getStripeConfig(region).portalUrl
+  return normalizePublicStripePortalUrl(getStripeConfig(region).portalUrl) ?? ""
 }
 
 export function getAvailableRegions(): StripeRegion[] {

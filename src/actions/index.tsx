@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/client"
-import { Beneficiaries, Subscription } from "@/types"
+import { Beneficiaries } from "@/types"
 
 /** @deprecated Use SponsoredBeneficiary instead */
 export type SponsoredWithActivity = Beneficiaries & { last_activity_at: string }
@@ -10,31 +10,29 @@ export type SponsoredWithActivity = Beneficiaries & { last_activity_at: string }
  */
 export type SponsoredBeneficiary = Beneficiaries & { last_activity_at: string | null }
 
+export interface PublicBeneficiarySponsorshipMilestone {
+  beneficiary_id: string
+  sponsorship_count_floor: number
+}
+
 export async function fetchSponsorshipDetailsByBeneficiaryId(
   beneficiaryId: string,
-): Promise<Subscription[]> {
-  if (!beneficiaryId) return []
+): Promise<PublicBeneficiarySponsorshipMilestone | null> {
+  if (!beneficiaryId) return null
 
   const supabase = createClient()
   const { data, error } = await supabase
-    .from("subscriptions")
-    .select(
-      `
-      *,
-      beneficiary:beneficiaries(
-        name
-      )
-    `,
-    )
+    .from("public_beneficiary_sponsorship_milestones")
+    .select("beneficiary_id, sponsorship_count_floor")
     .eq("beneficiary_id", beneficiaryId)
-    .order("created_at", { ascending: false })
+    .maybeSingle()
 
   if (error) {
-    console.error("Error fetching subscriptions:", error)
-    return []
+    console.error("Error fetching public sponsorship totals:", error)
+    return null
   }
 
-  return data || []
+  return (data as PublicBeneficiarySponsorshipMilestone | null) ?? null
 }
 
 /**
@@ -83,7 +81,7 @@ export async function fetchAllSponsored(
   const supabase = createClient()
 
   let query = supabase
-    .from("beneficiaries")
+    .from("public_beneficiaries")
     .select("*")
     .eq("status", "Budget Fulfilled")
     .order("name", { ascending: true })
@@ -102,9 +100,8 @@ export async function fetchAllSponsored(
   const ids = beneficiaries.map((b) => b.id).filter(Boolean)
 
   const { data: activities } = await supabase
-    .from("activities")
+    .from("public_activities")
     .select("beneficiary_id, created_at")
-    .eq("is_public", true)
     .in("beneficiary_id", ids)
     .order("created_at", { ascending: false })
 
@@ -135,9 +132,8 @@ export async function fetchSponsoredWithRecentActivity(): Promise<SponsoredWithA
 
   // Step 1: get public activities ordered by recency to determine display order.
   const { data: activities, error: activitiesError } = await supabase
-    .from("activities")
+    .from("public_activities")
     .select("beneficiary_id, created_at")
-    .eq("is_public", true)
     .order("created_at", { ascending: false })
 
   if (activitiesError) {
@@ -165,7 +161,7 @@ export async function fetchSponsoredWithRecentActivity(): Promise<SponsoredWithA
 
   // Step 2: fetch only the beneficiaries that are fully sponsored.
   const { data: beneficiaries, error: beneficiariesError } = await supabase
-    .from("beneficiaries")
+    .from("public_beneficiaries")
     .select("*")
     .in("id", orderedIds)
     .eq("status", "Budget Fulfilled")

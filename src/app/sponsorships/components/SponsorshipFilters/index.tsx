@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react"
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button is referenced only by the currently commented-out All | Sponsored toggle below; keeping the import so the restore is one uncomment.
 import { Box, Button, Text, Input, IconButton } from "@chakra-ui/react"
-import { Slider } from "@/components/ui/slider"
+import { Slider, type SliderProps } from "@/components/ui/slider"
 import {
   SelectRoot,
   SelectTrigger,
@@ -18,6 +18,13 @@ import { beneficiaryTypes, genders, status as statusOptions } from "./config"
 import { IoClose, IoSearchOutline } from "react-icons/io5"
 import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
 import { ALL_STATUSES, PUBLIC_STATUSES } from "@/config/beneficiaryStatuses"
+
+const AGE_RANGE_SLIDER_ACCESSIBILITY_PROPS: Pick<
+  SliderProps,
+  "aria-label"
+> = {
+  "aria-label": ["Minimum age", "Maximum age"],
+}
 
 const SponsorshipFilters: React.FC<
   FiltersProps & {
@@ -269,6 +276,7 @@ const SponsorshipFilters: React.FC<
           {onTypeChange && (
             <Box minW={0}>
               <SelectRoot
+                id="sponsorship-beneficiary-type-filter"
                 collection={beneficiaryTypes}
                 value={activeType ? [activeType] : [""]}
                 onValueChange={(details) => {
@@ -304,6 +312,7 @@ const SponsorshipFilters: React.FC<
           {!isAnimal && (
             <Box minW={0}>
               <SelectRoot
+                id="sponsorship-gender-filter"
                 collection={genders}
                 value={selectedGender ? [selectedGender] : [""]}
                 onValueChange={(details) => {
@@ -344,10 +353,12 @@ const SponsorshipFilters: React.FC<
                 textAlign="center"
                 color="gray.600"
               >
-                Age: {minAge}–{maxAge} yrs
+                Age: {minAge} to {maxAge} yrs
               </Text>
               <Box mt="-2px">
                 <Slider
+                  {...AGE_RANGE_SLIDER_ACCESSIBILITY_PROPS}
+                  id="sponsorship-age-range-filter"
                   size="sm"
                   value={[minAge, maxAge]}
                   min={0}
@@ -388,6 +399,7 @@ const SponsorshipFilters: React.FC<
             <Tooltip content="Filter by funding status (Admin Only)">
               <Box minW={0}>
                 <SelectRoot
+                  id="sponsorship-status-filter"
                   collection={statusOptions}
                   value={selectedStatus}
                   onValueChange={(details) => {

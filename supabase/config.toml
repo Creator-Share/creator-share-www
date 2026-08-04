@@ -99,7 +99,28 @@ enabled = true
 # in emails.
 site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# This is a local-development superset. Never push the entire list to a hosted
+# project. Production and advocate staging each use only their own four exact
+# redirects documented in the release runbook.
+additional_redirect_urls = [
+  "https://127.0.0.1:3000",
+  "http://127.0.0.1:3000/auth/confirm?next=%2Fapp",
+  "http://127.0.0.1:3000/auth/confirm?next=%2Fsponsor%2Fclaim",
+  "http://127.0.0.1:3000/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding",
+  "http://localhost:3000/auth/confirm?next=%2Fapp",
+  "http://localhost:3000/auth/confirm?next=%2Fsponsor%2Fclaim",
+  "http://localhost:3000/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding",
+  "http://localhost:3000/advocate-invitation",
+  "http://127.0.0.1:3000/advocate-invitation",
+  "https://creatorshare.com/auth/confirm?next=%2Fapp",
+  "https://creatorshare.com/auth/confirm?next=%2Fsponsor%2Fclaim",
+  "https://creatorshare.com/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding",
+  "https://creatorshare.com/advocate-invitation",
+  "https://advocate-staging.creatorshare.com/auth/confirm?next=%2Fapp",
+  "https://advocate-staging.creatorshare.com/auth/confirm?next=%2Fsponsor%2Fclaim",
+  "https://advocate-staging.creatorshare.com/auth/confirm?next=%2Fapp%2Fmain%2Fonboarding",
+  "https://advocate-staging.creatorshare.com/advocate-invitation",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # If disabled, the refresh token will never expire.
@@ -126,7 +147,7 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -146,10 +167,16 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# Sponsor signup confirmation and existing-account magic links both carry the
+# one-time token hash in the URL fragment. The canonical interstitial removes
+# the fragment before any request and verifies it only after a deliberate click.
+[auth.email.template.confirmation]
+subject = "Welcome to Creator Share"
+content_path = "./supabase/templates/sponsor_email_confirmation.html"
+
+[auth.email.template.magic_link]
+subject = "Your secure Creator Share sign-in link"
+content_path = "./supabase/templates/sponsor_email_confirmation.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { isValidPublicMediaExtension } from "@/config/beneficiaryValidation"
 import { generatePublicUrl, uploadFile } from "@/utils/supabase/media"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 import type { Database } from "@/lib/types/db.types"
@@ -26,12 +27,18 @@ export async function POST(req: Request) {
       )
     }
 
-    if (!videoFile) {
+    if (!(videoFile instanceof File)) {
       return NextResponse.json({ error: "No video provided" }, { status: 400 })
     }
 
     const extPart = videoFile.name.split(".").pop() || ""
     const extension = extPart.toLowerCase()
+    if (!isValidPublicMediaExtension(extension)) {
+      return NextResponse.json(
+        { error: "Invalid video file extension" },
+        { status: 400 },
+      )
+    }
 
     // Insert media row first
     const { data: inserted, error: insertErr } = await supabase

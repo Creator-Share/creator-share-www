@@ -1,0 +1,77 @@
+name: Advocate WebKit gate
+
+on:
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - "src/components/advocates/admin/CatalogSettingsClient.tsx"
+      - "src/lib/advocates/admin/catalogForm.ts"
+      - "src/app/forgot-password/**"
+      - "src/lib/auth/passwordRecoveryClient.ts"
+      - "tests/auth/password-recovery-browser.spec.ts"
+      - "tests/advocates/portal-catalog-browser.spec.ts"
+      - "tests/advocates/invitation-interstitial.spec.ts"
+      - "tests/release-manifest.json"
+      - "tests/fixtures/**"
+      - "scripts/run-release-lane.mjs"
+      - "scripts/verify-release-manifest.mjs"
+      - "src/app/advocate-invitation/**"
+      - "src/lib/advocates/invitations/**"
+      - "playwright.config.ts"
+      - ".nvmrc"
+      - "package.json"
+      - "yarn.lock"
+      - ".github/workflows/advocate-webkit-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-recovery:
+    name: Catalog recovery in WebKit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-browser-anon-key"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install browser runtimes
+        run: yarn playwright install --with-deps chromium webkit
+
+      - name: Verify catalog recovery
+        run: yarn test:advocate:webkit
+
+      - name: Verify every test-shaped file is classified
+        run: yarn verify:release-manifest
+
+      - name: Verify WebKit lane in Chromium
+        run: >-
+          node scripts/run-release-lane.mjs webkit-browser
+          --workers=1
+          --retries=0
+
+      - name: Verify WebKit lane in WebKit
+        run: yarn test:lane:webkit
+
+      - name: Upload WebKit lane failure artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-webkit-lane-artifacts
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7

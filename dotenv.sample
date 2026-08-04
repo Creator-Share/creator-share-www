@@ -2,9 +2,17 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET=
+# When NEXT_PUBLIC_BASE_URL activates the isolated advocate staging deployment,
+# NEXT_PUBLIC_SUPABASE_URL must be this exact project origin. The build and
+# every shared Supabase client fail closed for any other project.
+# NEXT_PUBLIC_SUPABASE_URL=https://destjwstohzmufshfnuy.supabase.co
 NEXT_PUBLIC_MAPBOX_TOKEN=
 NEXT_PUBLIC_MAPTILER_KEY=
 NEXT_PUBLIC_BASE_URL=https://localhost:3000/
+# The isolated advocate staging deployment must instead use this exact origin,
+# without a trailing slash. This single value enables only the fixed staging
+# primary and one-label tenant topology.
+# NEXT_PUBLIC_BASE_URL=https://advocate-staging.creatorshare.com
 
 # Stripe accounts
 # When enabled, each region has its own Stripe account/dashboard; new
@@ -21,27 +29,36 @@ STRIPE_DEFAULT_REGION=us
 STRIPE_SECRET_KEY_US=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US=
 STRIPE_WEBHOOK_SECRET_US=
+STRIPE_WEBHOOK_SECRET_US_PREVIOUS=
 NEXT_PUBLIC_STRIPE_PORTAL_URL_US=
+STRIPE_BILLING_PORTAL_CONFIGURATION_ID_US=
+ADVOCATE_STRIPE_CANARY_RECURRING_PRICE_ID_US=
 STRIPE_SECRET_KEY_UK=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK=
 STRIPE_WEBHOOK_SECRET_UK=
+STRIPE_WEBHOOK_SECRET_UK_PREVIOUS=
 NEXT_PUBLIC_STRIPE_PORTAL_URL_UK=
+STRIPE_BILLING_PORTAL_CONFIGURATION_ID_UK=
+ADVOCATE_STRIPE_CANARY_RECURRING_PRICE_ID_UK=
+ADVOCATE_PAYPAL_CANARY_RECURRING_PLAN_ID=
 #
 # NEXT_PUBLIC_STRIPE_PORTAL_URL_* powers the public Footer / FAQ / About
 # "Manage Subscription" links and server-rendered email template links.
 # These URLs are not secrets, so use the same NEXT_PUBLIC values for both
 # browser and server surfaces.
 #
-# Webhook endpoints:
-#   /api/webhooks/stripe/{region}     preferred, validates against the
-#                                     STRIPE_WEBHOOK_SECRET_<REGION> for the
-#                                     account that sent the event.
-#   /api/webhooks/stripe              legacy back-compat shim that delegates
-#                                     to STRIPE_DEFAULT_REGION. Stripe
-#                                     dashboards pointed here for a non-
-#                                     default account will fail signature
-#                                     verification; migrate them to the
-#                                     per-region URL once both regions ship.
+# STRIPE_BILLING_PORTAL_CONFIGURATION_ID_* must identify an enabled Customer
+# Portal configuration in that same regional Stripe account. Sponsor account
+# management uses it only for short lived payment_method_update sessions.
+#
+# Webhook endpoint:
+#   /api/webhooks/stripe              shared by both regional Stripe accounts.
+#                                     It verifies each signed event against the
+#                                     configured current and previous secret for
+#                                     every region, rejects ambiguous secret
+#                                     reuse, and derives the account scope only
+#                                     from the successful signature candidate.
+# Configure this exact URL in both Stripe dashboards.
 
 # DEPRECATED, Global sponsorship amount override (dollars in cents integer string).
 # Superseded by per-type vars below (NEXT_PUBLIC_SPONSORSHIP_AMOUNT_*).
@@ -77,8 +94,164 @@ EMAIL_HOST=
 EMAIL_USER=
 EMAIL_PASSWORD=
 EMAIL_PORT=587
-EMAIL_SECURE=true
+EMAIL_SECURE=false
 EMAIL_FROM="Creator Share" <noreply@creatorshare.com>
+
+# FF-029 hosted email proof canary only. Load these from protected credential
+# storage for the canary process, never from a committed environment file.
+# The account is fixed to Ethereal's TLS IMAP endpoint. Its matching SMTP
+# credentials are configured directly in the isolated Supabase project.
+FF029_ETHEREAL_IMAP_USER=
+FF029_ETHEREAL_IMAP_PASSWORD=
+
+# Vercel sends CRON_SECRET as a Bearer token to each scheduled GET endpoint.
+# Generate at least 32 random characters. The payment and welcome workers use
+# this value unless a nonempty worker-specific override is configured for an
+# external scheduler.
+CRON_SECRET=
+# PAYMENT_GATEWAY_EVENT_WORKER_SECRET=
+# SPONSOR_WELCOME_EMAIL_WORKER_SECRET=
+# SUBSCRIPTION_CANCELLATION_WORKER_SECRET=
+# Advocate invitation delivery only. External schedulers may use this dedicated
+# value. Leave it unset for Vercel Cron, which sends CRON_SECRET.
+# ADVOCATE_INVITATION_EMAIL_WORKER_SECRET=
+# Advocate logo cleanup only. External schedulers may use this dedicated value.
+# Leave it unset for Vercel Cron, which sends CRON_SECRET.
+# ADVOCATE_LOGO_RECONCILIATION_WORKER_SECRET=
+# Weekly public metric releases. External schedulers may use this dedicated
+# value. Leave it unset for Vercel Cron, which sends CRON_SECRET.
+# ADVOCATE_PUBLIC_METRIC_RELEASE_WORKER_SECRET=
+# Archived advocate domain cleanup coordinates durable provider jobs only.
+# External schedulers may use this dedicated value. Leave it unset for Vercel
+# Cron, which sends CRON_SECRET.
+# ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_WORKER_SECRET=
+# External scheduler only. Leave unset for Vercel Cron, which sends CRON_SECRET.
+# DATA_RETENTION_WORKER_SECRET=
+PAYMENT_GATEWAY_EVENT_BATCH_SIZE=20
+PAYMENT_GATEWAY_EVENT_CONCURRENCY=4
+SPONSOR_WELCOME_EMAIL_BATCH_SIZE=4
+SPONSOR_WELCOME_EMAIL_CONCURRENCY=4
+# Base retry delay. Provider handoff failures back off exponentially from this
+# value, capped at one day and never scheduled beyond contact retention.
+SPONSOR_WELCOME_EMAIL_RETRY_AFTER_SECONDS=300
+# Hard SMTP deadline and invocation response reserve. Their sum must not exceed
+# 55 seconds inside the 60 second Vercel route.
+SPONSOR_WELCOME_EMAIL_TRANSPORT_TIMEOUT_MILLISECONDS=20000
+SPONSOR_WELCOME_EMAIL_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+# Advocate invitation delivery uses five bounded database calls and one SMTP
+# call in each 60 second invocation. Concurrency cannot exceed the batch size.
+ADVOCATE_INVITATION_EMAIL_BATCH_SIZE=2
+ADVOCATE_INVITATION_EMAIL_CONCURRENCY=2
+ADVOCATE_INVITATION_EMAIL_RETRY_AFTER_SECONDS=300
+ADVOCATE_INVITATION_EMAIL_SERVICE_REQUEST_TIMEOUT_MILLISECONDS=5000
+ADVOCATE_INVITATION_EMAIL_TRANSPORT_TIMEOUT_MILLISECONDS=20000
+ADVOCATE_INVITATION_EMAIL_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+# Leave unset on the primary production deployment. The isolated staging
+# deployment must set the staging value below together with its exact
+# NEXT_PUBLIC_BASE_URL. No other hosted invitation origin is accepted.
+# ADVOCATE_INVITATION_CANONICAL_ORIGIN=https://creatorshare.com
+# ADVOCATE_INVITATION_CANONICAL_ORIGIN=https://advocate-staging.creatorshare.com
+# Bounded provider cancellation batch. Retry timing is durable in the database.
+SUBSCRIPTION_CANCELLATION_BATCH_SIZE=4
+SUBSCRIPTION_CANCELLATION_CONCURRENCY=2
+SUBSCRIPTION_CANCELLATION_PROVIDER_TIMEOUT_MILLISECONDS=15000
+SUBSCRIPTION_CANCELLATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+# Privacy releases process at most this many active advocate portals per weekly
+# invocation. The database owns cadence, embargo, and idempotency decisions.
+ADVOCATE_PUBLIC_METRIC_RELEASE_BATCH_SIZE=100
+ADVOCATE_PUBLIC_METRIC_RELEASE_RPC_TIMEOUT_MILLISECONDS=45000
+# Each invocation coordinates at most this many archived domains. After the
+# database-owned quiescence interval, Cloudflare DNS removal must be durably
+# verified before Vercel and hosted payment-path cleanup proceeds in sequence.
+ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_BATCH_SIZE=25
+ARCHIVED_ADVOCATE_DOMAIN_CLEANUP_RPC_TIMEOUT_MILLISECONDS=45000
+# Hourly bounded cleanup at minute 17 UTC for advocate tracking, encrypted
+# gateway payloads, welcome email contact, checkout contact envelopes, and raw
+# audit forensics. Each run records durable start, step, and final evidence.
+# Five cleanup deadlines, two fixed 2 second control deadlines, and the response
+# reserve must fit within 55 seconds. Checkout contact cleanup remains capped at
+# 500 rows per run even when the general batch is larger.
+DATA_RETENTION_BATCH_SIZE=5000
+DATA_RETENTION_RPC_TIMEOUT_MILLISECONDS=7500
+DATA_RETENTION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+
+# Durable cleanup of unattached advocate logo uploads. The one-minute schedule
+# is declared in vercel.json but must not be promoted until its operational
+# canary passes. Concurrency cannot exceed the batch size. The Storage timeout
+# plus response reserve must not exceed 55 seconds.
+ADVOCATE_LOGO_RECONCILIATION_BATCH_SIZE=4
+ADVOCATE_LOGO_RECONCILIATION_CONCURRENCY=2
+ADVOCATE_LOGO_RECONCILIATION_STORAGE_TIMEOUT_MILLISECONDS=15000
+ADVOCATE_LOGO_RECONCILIATION_INVOCATION_SAFETY_MARGIN_MILLISECONDS=5000
+
+# Automated advocate domain provisioning. Cloudflare remains authoritative
+# DNS. The CNAME must be DNS only and target Vercel's configured CNAME target.
+# Provider automation is a release-controlled master switch. Missing,
+# malformed, and explicit disabled values all prevent database claims and
+# provider traffic. Preview, test, local, and advocate staging environments
+# stay disabled. The exact advocate staging base URL rejects active mode. A
+# production release sets active only in a staged Production deployment with
+# automatic domain assignment disabled, then runs the authenticated preflight
+# against that exact build before promotion.
+ADVOCATE_PROVIDER_AUTOMATION_MODE=disabled
+ADVOCATE_CLOUDFLARE_API_TOKEN=
+ADVOCATE_CLOUDFLARE_ZONE_ID=
+# Discover the project specific target through Vercel's domain configuration
+# API. Do not assume the legacy generic CNAME target.
+# The publication runner also uses these same scoped credentials to reconcile
+# the fixed reserved publication-sentinel.creatorshare.com negative control.
+# That hostname is intentionally fixed and has no environment override.
+ADVOCATE_CLOUDFLARE_CNAME_TARGET=
+ADVOCATE_CLOUDFLARE_TTL_SECONDS=300
+ADVOCATE_VERCEL_API_TOKEN=
+ADVOCATE_VERCEL_PROJECT_ID=
+ADVOCATE_VERCEL_TEAM_ID=
+ADVOCATE_PROVISIONING_BATCH_SIZE=3
+ADVOCATE_RECONCILIATION_BATCH_SIZE=20
+ADVOCATE_PROVISIONING_LEASE_SECONDS=300
+# Provider configuration ceiling. The one-minute worker further clamps each
+# request to its shared invocation deadline and a hard 10 second call limit.
+ADVOCATE_PROVISIONING_REQUEST_TIMEOUT_MS=15000
+# ADVOCATE_PROVISIONING_WORKER_SECRET=
+# Protected exact-host publication challenge only. Generate exactly 32 random
+# bytes and store their canonical base64 encoding. This key must be unique to
+# each environment and must not be reused by any worker or sponsorship system.
+ADVOCATE_PUBLICATION_CANARY_SECRET_V1=
+# Publication checks create one live hosted Stripe subscription Session with
+# the regional recurring Price above, never expose its URL, and expire it
+# immediately. PayPal publication checks create one unapproved live recurring
+# Subscription with the branded return URLs and discard its approval URL.
+# Routine reconciliation does not run these canaries.
+
+# Sponsor identity HMACs, account-claim tokens, and encrypted email outbox
+# payloads. Server only. Generate one canonical base64 value containing at
+# least 32 random bytes, use a different value in each environment, and never
+# expose it through a NEXT_PUBLIC variable. Keep prior numbered keys available
+# during rotation.
+SPONSORSHIP_CRYPTO_SECRET_V1=
+# Passwordless email delivery throttling only. Server only. Generate a
+# different canonical base64 value with at least 32 random bytes in every
+# environment. It HMACs purpose-separated trusted ingress source signals for
+# passwordless delivery and verification limits. It must not equal any
+# sponsorship, visitor, attribution, worker, or provider secret.
+SPONSOR_PASSWORDLESS_RATE_LIMIT_SECRET_V1=
+# Advocate invitation email proof throttling only. Server only. Generate a
+# dedicated canonical base64 value with at least 32 random bytes in every
+# environment. It must differ from every other secret. Advance the numbered
+# environment key and database key version together for a planned rotation.
+# Preserve the prior 24 hour quota evidence during that rotation.
+ADVOCATE_INVITATION_AUTHENTICATION_RATE_LIMIT_SECRET_V1=
+# First party visitor cookie signing only. Server only. Generate a different
+# canonical base64 value with at least 32 random bytes in every environment.
+# This value must not equal SPONSORSHIP_CRYPTO_SECRET_V1.
+SPONSORSHIP_VISITOR_COOKIE_SECRET_V1=
+# Cross-subdomain attribution self-exclusion only. Server only. Generate a
+# different canonical base64 value with at least 32 random bytes in every
+# environment. It must not equal either sponsorship secret above. During a
+# planned rotation, move the former current value to the optional previous
+# slot until every 400-day signal has been refreshed or expired.
+ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1=
+# ADVOCATE_ATTRIBUTION_IDENTITY_COOKIE_SECRET_V1_PREVIOUS=
 
 
 # AI Proofreading (OpenAI-Compatible API)

@@ -1,520 +1,292 @@
+import { randomUUID } from "node:crypto"
+
 import { NextResponse } from "next/server"
-import { isPayPalEnabled, paypalFetch } from "@/lib/paypal/client"
-import { createServiceRoleClient } from "@/utils/supabase/server"
+
+import { isPayPalEnabled } from "@/lib/paypal/client"
 import {
-  coerceSupportedCurrency,
-  convertUsdCentsToCurrency,
-  dollarsToCents,
-  formatMoney,
-  verifyCurrencyConversion,
-} from "@/utils/currency"
+  capturePayPalSponsorshipCheckoutV2,
+  createPayPalSponsorshipCheckoutV2,
+} from "@/lib/sponsorships/checkout/paypalCheckout"
 import {
-  encodePayPalPaymentContext,
-  parsePayPalPaymentContext,
-} from "@/utils/paypalCurrencyContext"
+  createCapturePayPalSponsorshipDependencies,
+  createPayPalSponsorshipCheckoutV2Dependencies,
+  PayPalCheckoutRuntimeError,
+} from "@/lib/sponsorships/checkout/paypalCheckoutRuntime"
+import {
+  isTrustedCheckoutJsonRequest,
+  resolveTrustedCheckoutRequestOrigin,
+} from "@/lib/sponsorships/checkout/requestSecurity"
+import { assertStagingPayPalPaymentEnvironment } from "@/lib/sponsorships/checkout/stagingPaymentBoundary"
+import {
+  checkoutError,
+  readSponsorshipVisitorCookie,
+  resolveSponsorshipCheckoutHost,
+  SponsorshipCheckoutError,
+  type SponsorshipCheckoutRequestContext,
+} from "@/lib/sponsorships/checkout/stripeCheckout"
+import {
+  ADVOCATE_STAGING_TENANT_ROOT,
+  isAdvocateStagingEnvironmentEnabled,
+} from "@/lib/advocates/host"
+import { PayPalBillingCatalogProvisioningError } from "@/lib/paypal/billingCatalogProvisioner"
+import { PayPalSponsorshipCheckoutError } from "@/lib/paypal/sponsorshipCheckout"
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
 
-interface PayPalError {
-  message?: string
-  error?: {
-    message?: string
+export const runtime = "nodejs"
+
+const MAXIMUM_REQUEST_BYTES = 16 * 1024
+const RESPONSE_HEADERS = {
+  "Cache-Control": "no-store, max-age=0",
+  Pragma: "no-cache",
+  "Referrer-Policy": "no-referrer",
+  Vary: "Host, Origin, Cookie",
+  "X-Content-Type-Options": "nosniff",
+} as const
+
+function boundedHeader(
+  request: Request,
+  headerName: string,
+  maximumLength: number,
+): string | null {
+  const value = request.headers.get(headerName)?.trim()
+  return value ? value.slice(0, maximumLength) : null
+}
+
+function requestContext(request: Request): SponsorshipCheckoutRequestContext {
+  return {
+    requestId: randomUUID(),
+    traceId:
+      boundedHeader(request, "x-vercel-id", 255) ??
+      boundedHeader(request, "cf-ray", 255) ??
+      boundedHeader(request, "traceparent", 255) ??
+      boundedHeader(request, "x-trace-id", 255),
+    clientIp:
+      boundedHeader(request, "cf-connecting-ip", 256) ??
+      boundedHeader(request, "x-vercel-forwarded-for", 256) ??
+      boundedHeader(request, "x-forwarded-for", 256) ??
+      boundedHeader(request, "x-real-ip", 256),
+    userAgent: boundedHeader(request, "user-agent", 1024),
   }
 }
 
-interface PayPalOrderData {
-  id: string
-  status: string
-  payer?: {
-    email_address?: string
-    payer_id?: string
-    name?: {
-      given_name?: string
-      surname?: string
-    }
-  }
-  purchase_units?: Array<{
-    custom_id?: string
-    amount?: {
-      value?: string
-      currency_code?: string
-    }
-  }>
-}
-
-interface PayPalCaptureData {
-  id: string
-  status: string
-  purchase_units: Array<{
-    payments?: {
-      captures?: Array<{
-        id: string
-        status: string
-        amount?: {
-          value?: string
-          currency_code?: string
-        }
-      }>
-    }
-  }>
-}
-
-function parsePayPalAmountMinor(value: string | undefined) {
-  const val = Number(value)
-  return Number.isFinite(val) ? Number(dollarsToCents(val)) : null
-}
-
-function toMajorAmountString(amountMinor: number) {
-  return (amountMinor / 100).toFixed(2)
-}
-
-async function persistPayPalOneTimeTransaction({
-  orderId,
-  captureId,
-  beneficiaryId,
-  beneficiaryName,
-  userId,
-  sponsorEmail,
-  payer,
-  conversion,
-}: {
-  orderId: string
-  captureId: string | null | undefined
-  beneficiaryId: string | null | undefined
-  beneficiaryName: string | null | undefined
-  userId: string | null | undefined
-  sponsorEmail: string | null | undefined
-  payer: PayPalOrderData["payer"] | undefined
-  conversion: ReturnType<typeof convertUsdCentsToCurrency>
-}) {
-  const supabase = createServiceRoleClient()
-  const providerEventId = captureId || orderId
-  const { data: existingByEvent } = await supabase
-    .from("transaction_ledger")
-    .select("id")
-    .eq("provider_event_id", providerEventId)
-    .maybeSingle()
-
-  if (existingByEvent) return
-
-  const { data: existingByReference } = await supabase
-    .from("transaction_ledger")
-    .select("id")
-    .eq("reference", orderId)
-    .eq("tx_action", "SPONSORSHIP")
-    .maybeSingle()
-
-  if (existingByReference) return
-
-  const payerName = payer?.name
-    ? `${payer.name.given_name || ""} ${payer.name.surname || ""}`.trim()
-    : null
-  const payerEmail = payer?.email_address || sponsorEmail || null
-  const { error } = await supabase.from("transaction_ledger").insert({
-    beneficiary_id: /^[0-9a-fA-F-]{36}$/.test(beneficiaryId || "")
-      ? beneficiaryId
-      : null,
-    user_id: userId || null,
-    description: `PayPal one-time sponsorship to ${beneficiaryName || beneficiaryId || "Unknown Beneficiary"} with amount of ${formatMoney(conversion.chargedAmountMinor, conversion.chargedCurrency)}`,
-    reference: orderId,
-    credit: conversion.baseAmountUsdCents,
-    charged_amount: conversion.chargedAmountMinor,
-    charged_currency: conversion.chargedCurrency,
-    conversion_rate: conversion.conversionRate,
-    provider_event_id: providerEventId,
-    subscription_type: "one_time",
-    tx_action: "SPONSORSHIP",
-    customer_name: payerName,
-    customer_email: payerEmail,
-    customer_id: payer?.payer_id || null,
-    payment_intent: captureId || null,
-    payment_method_id: null,
-  })
-
-  if (error) {
-    console.error("Error creating PayPal approval transaction:", error)
-    throw new Error("Failed to record PayPal transaction")
+function configuredHostname(value: string | undefined): string | null {
+  if (!value) return null
+  try {
+    return new URL(
+      value.includes("://") ? value : `https://${value}`,
+    ).hostname.toLowerCase()
+  } catch {
+    return null
   }
 }
 
-async function createPayPalOrder(
-  baseAmountUsdCents: number,
-  currencyCode: string | null | undefined,
-  beneficiaryId?: string,
-) {
-  const conversion = convertUsdCentsToCurrency(
-    baseAmountUsdCents,
-    coerceSupportedCurrency(currencyCode),
+function allowedPrimaryHostnames(): Set<string> {
+  if (isAdvocateStagingEnvironmentEnabled(process.env)) {
+    return new Set([ADVOCATE_STAGING_TENANT_ROOT])
+  }
+  return new Set(
+    [
+      "creator-share-www.vercel.app",
+      configuredHostname(process.env.NEXT_PUBLIC_BASE_URL),
+      configuredHostname(process.env.NEXT_PUBLIC_SITE_URL),
+      configuredHostname(process.env.VERCEL_URL),
+    ].filter((value): value is string => Boolean(value)),
   )
-  const response = await paypalFetch("/v2/checkout/orders", {
-    method: "POST",
-    body: JSON.stringify({
-      intent: "CAPTURE",
-      purchase_units: [
-        {
-          reference_id: beneficiaryId || undefined,
-          custom_id: encodePayPalPaymentContext(
-            beneficiaryId || null,
-            conversion,
-          ),
-          amount: {
-            currency_code: conversion.chargedCurrency,
-            value: toMajorAmountString(
-              conversion.chargedAmountMinor,
-            ),
-          },
-        },
-      ],
-    }),
-  })
-
-  const responseText = await response.text()
-  let data: PayPalOrderData
-  try {
-    const parsedData = responseText ? JSON.parse(responseText) : null
-    if (!parsedData || !parsedData.id || !parsedData.status) {
-      console.error("Invalid PayPal response:", parsedData)
-      throw new Error("Invalid response format from PayPal")
-    }
-    data = parsedData
-  } catch {
-    console.error("Error parsing PayPal response:", responseText)
-    throw new Error("Invalid response from PayPal")
-  }
-
-  if (!response.ok) {
-    const errorData = data as unknown as PayPalError
-    console.error("PayPal order creation error:", errorData)
-    throw new Error(
-      errorData.message ||
-        errorData.error?.message ||
-        "Failed to create PayPal order",
-    )
-  }
-
-  return data
 }
 
-async function capturePayPalOrder(orderID: string) {
-  const response = await paypalFetch(`/v2/checkout/orders/${orderID}/capture`, {
-    method: "POST",
-  })
+async function authenticatedCheckoutUser() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+  if (error || !user?.email || !user.email_confirmed_at) return null
+  return { id: user.id, email: user.email }
+}
 
-  const responseText = await response.text()
-  let data: PayPalCaptureData
-  try {
-    const parsedData = responseText ? JSON.parse(responseText) : null
-    if (!parsedData || !parsedData.id || !parsedData.status) {
-      console.error("Invalid PayPal response:", parsedData)
-      throw new Error("Invalid response format from PayPal")
-    }
-    data = parsedData
-  } catch {
-    console.error("Error parsing PayPal response:", responseText)
-    throw new Error("Invalid response from PayPal")
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function captureBody(value: Record<string, unknown>): {
+  operationId: string
+  checkoutReceipt: string
+} {
+  if (
+    Object.keys(value).length !== 3 ||
+    value.action !== "capture" ||
+    typeof value.checkoutRequestId !== "string" ||
+    typeof value.checkoutReceipt !== "string"
+  ) {
+    throw checkoutError("invalid-request")
   }
+  return {
+    operationId: value.checkoutRequestId,
+    checkoutReceipt: value.checkoutReceipt,
+  }
+}
 
-  if (!response.ok) {
-    const errorData = data as unknown as PayPalError
-    console.error("PayPal capture error:", errorData)
-    throw new Error(
-      errorData.message ||
-        errorData.error?.message ||
-        "Failed to capture PayPal order",
+function safeCheckoutError(error: unknown): SponsorshipCheckoutError {
+  if (error instanceof SponsorshipCheckoutError) return error
+  if (error instanceof PayPalCheckoutRuntimeError) {
+    switch (error.databaseCode) {
+      case "22023":
+      case "22P02":
+        return checkoutError("invalid-request")
+      case "23503":
+      case "23505":
+      case "23514":
+      case "55P03":
+        return checkoutError("sponsorship-unavailable")
+      default:
+        return checkoutError("checkout-failed")
+    }
+  }
+  if (error instanceof PayPalBillingCatalogProvisioningError) {
+    return error.code === "catalog-unavailable" ||
+      error.code === "provider-rejected"
+      ? checkoutError("sponsorship-unavailable")
+      : checkoutError("checkout-failed")
+  }
+  if (error instanceof PayPalSponsorshipCheckoutError) {
+    return error.code === "invalid-request"
+      ? checkoutError("invalid-request")
+      : checkoutError("checkout-failed")
+  }
+  return checkoutError("checkout-failed")
+}
+
+async function readBody(request: Request): Promise<unknown> {
+  const contentLength = Number(request.headers.get("content-length") ?? "0")
+  if (Number.isFinite(contentLength) && contentLength > MAXIMUM_REQUEST_BYTES) {
+    throw new SponsorshipCheckoutError(
+      "invalid-request",
+      "Checkout request is too large",
+      413,
     )
   }
-
-  return data
+  const serialized = await request.text()
+  if (Buffer.byteLength(serialized, "utf8") > MAXIMUM_REQUEST_BYTES) {
+    throw new SponsorshipCheckoutError(
+      "invalid-request",
+      "Checkout request is too large",
+      413,
+    )
+  }
+  try {
+    return JSON.parse(serialized) as unknown
+  } catch {
+    throw checkoutError("invalid-request")
+  }
 }
 
 export async function POST(request: Request) {
+  const context = requestContext(request)
+  const expectedOrigin = resolveTrustedCheckoutRequestOrigin({
+    rawHost: request.headers.get("host"),
+  })
+  if (
+    !expectedOrigin ||
+    !isTrustedCheckoutJsonRequest(request.headers, expectedOrigin)
+  ) {
+    return NextResponse.json(
+      { error: "Invalid checkout request" },
+      { status: 400, headers: RESPONSE_HEADERS },
+    )
+  }
+  try {
+    assertStagingPayPalPaymentEnvironment(process.env)
+  } catch {
+    console.error("PayPal sponsorship checkout configuration rejected", {
+      requestId: context.requestId,
+    })
+    return NextResponse.json(
+      { error: "PayPal checkout is unavailable" },
+      { status: 503, headers: RESPONSE_HEADERS },
+    )
+  }
   if (!isPayPalEnabled()) {
     return NextResponse.json(
-      { error: "PayPal integration is not enabled" },
-      { status: 501 },
+      { error: "PayPal checkout is unavailable" },
+      { status: 503, headers: RESPONSE_HEADERS },
     )
   }
 
   try {
-    const body = await request.json()
+    const body = await readBody(request)
+    if (!isRecord(body)) throw checkoutError("invalid-request")
+    const host = resolveSponsorshipCheckoutHost(request.headers.get("host"), {
+      allowLocalhostDevelopment: process.env.NODE_ENV !== "production",
+      allowStagingEnvironment: isAdvocateStagingEnvironmentEnabled(process.env),
+      allowedPrimaryHostnames: allowedPrimaryHostnames(),
+    })
+    const serviceClient = createServiceRoleClient()
 
-    const {
-      beneficiaryId,
-      beneficiaryName,
-      amount,
-      base_amount_usd_cents,
-      currency_code,
-      orderID,
-      plan_id,
-      userId,
-      email,
-      subscriber_email,
-      subscriber_name,
-    } = body
-
-    const baseAmountUsdCents = Number.isFinite(Number(base_amount_usd_cents))
-      ? Math.round(Number(base_amount_usd_cents))
-      : Math.round(Number(amount || 0) * 100)
-    const requestedCurrency = coerceSupportedCurrency(currency_code)
-    const conversion = convertUsdCentsToCurrency(
-      baseAmountUsdCents,
-      requestedCurrency,
-    )
-
-    // If creating a subscription
-    if (plan_id) {
-      try {
-        type PayPalSubscriber = {
-          email_address?: string
-          name?: {
-            given_name: string
-            surname: string
-          }
-        }
-        const subscriber: PayPalSubscriber = {}
-        if (subscriber_email) subscriber.email_address = subscriber_email
-        if (subscriber_name) {
-          const [given_name, ...surnameArr] = subscriber_name.split(" ")
-          subscriber.name = {
-            given_name,
-            surname: surnameArr.join(" ") || "",
-          }
-        }
-
-        const subscriptionPayload = {
-          plan_id,
-          custom_id: encodePayPalPaymentContext(
-            beneficiaryId || null,
-            conversion,
-          ),
-          subscriber,
-          application_context: {
-            brand_name: "Creator Share",
-            locale: "en-US",
-            shipping_preference: "NO_SHIPPING",
-            user_action: "SUBSCRIBE_NOW",
-            payment_method: {
-              payer_selected: "PAYPAL",
-              payee_preferred: "IMMEDIATE_PAYMENT_REQUIRED",
-            },
-            return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/success?sponsorship_id=${beneficiaryId}&currency=${conversion.chargedCurrency}`,
-            cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payments/failed?currency=${conversion.chargedCurrency}`,
-          },
-        }
-
-        const response = await paypalFetch("/v1/billing/subscriptions", {
-          method: "POST",
-          body: JSON.stringify(subscriptionPayload),
-        })
-
-        const data = await response.json()
-
-        if (!response.ok) {
-          console.error("PayPal subscription creation error:", data)
-          return NextResponse.json(
-            {
-              error: data,
-              message: `PayPal API Error: ${data.message || "Unknown error"}`,
-              details: data.details || null,
-            },
-            { status: 400 },
-          )
-        }
-        return NextResponse.json({ subscription: data })
-      } catch (subscriptionError) {
-        console.error("Error creating PayPal subscription:", subscriptionError)
-        return NextResponse.json(
-          {
-            error:
-              subscriptionError instanceof Error
-                ? subscriptionError.message
-                : "Subscription creation failed",
-            details: subscriptionError,
-          },
-          { status: 500 },
-        )
-      }
-    }
-
-    if (orderID) {
-      try {
-        const orderResponse = await paypalFetch(
-          `/v2/checkout/orders/${orderID}`,
-          { method: "GET" },
-        )
-
-        if (!orderResponse.ok) {
-          const errorText = await orderResponse.text()
-          console.error("PayPal order status error:", errorText)
-          throw new Error("Failed to check order status")
-        }
-
-        const orderData = (await orderResponse.json()) as PayPalOrderData
-        if (!orderData.status) {
-          console.error("Invalid order data:", orderData)
-          throw new Error("Invalid order status response")
-        }
-
-        const purchaseUnit = orderData.purchase_units?.[0]
-        const orderContext = parsePayPalPaymentContext(purchaseUnit?.custom_id)
-        const orderConversion =
-          orderContext.conversion ||
-          convertUsdCentsToCurrency(baseAmountUsdCents, requestedCurrency)
-        const orderCurrency = coerceSupportedCurrency(
-          purchaseUnit?.amount?.currency_code,
-        )
-        const orderAmountMinor = parsePayPalAmountMinor(
-          purchaseUnit?.amount?.value,
-        )
-        if (
-          orderCurrency !== orderConversion.chargedCurrency ||
-          orderAmountMinor !== orderConversion.chargedAmountMinor ||
-          !verifyCurrencyConversion(orderConversion)
-        ) {
-          console.error("PAYMENT_CURRENCY_RECONCILIATION_FAILED", {
-            provider: "paypal",
-            orderID,
-            expected: orderConversion,
-            actualCurrency: purchaseUnit?.amount?.currency_code,
-            actualAmount: purchaseUnit?.amount?.value,
-          })
-          return NextResponse.json({
-            success: false,
-            message: "Payment currency reconciliation failed",
-            acknowledged: true,
-          })
-        }
-
-        if (orderData.status === "COMPLETED") {
-          await persistPayPalOneTimeTransaction({
-            orderId: orderID,
-            captureId: orderID,
-            beneficiaryId: orderContext.beneficiaryId || beneficiaryId,
-            beneficiaryName,
-            userId,
-            sponsorEmail: email,
-            payer: orderData.payer,
-            conversion: orderConversion,
-          })
-          return NextResponse.json({
-            success: true,
-            message: "Payment already captured",
-            data: {
-              beneficiaryId: orderContext.beneficiaryId || beneficiaryId,
-              beneficiaryName,
-              amount: orderConversion.baseAmountUsdCents,
-              chargedAmount: orderConversion.chargedAmountMinor,
-              chargedCurrency: orderConversion.chargedCurrency,
-              orderID,
-              captureStatus: orderData.status,
-            },
-          })
-        }
-
-        const captureData = await capturePayPalOrder(orderID)
-
-        if (captureData.status !== "COMPLETED") {
-          return NextResponse.json(
-            {
-              error: `Payment capture failed with status: ${captureData.status}`,
-            },
-            { status: 400 },
-          )
-        }
-
-        const capture = captureData.purchase_units?.[0]?.payments?.captures?.[0]
-        const captureCurrency = coerceSupportedCurrency(capture?.amount?.currency_code)
-        const captureAmountMinor = parsePayPalAmountMinor(
-          capture?.amount?.value,
-        )
-        if (
-          captureCurrency !== orderConversion.chargedCurrency ||
-          captureAmountMinor !== orderConversion.chargedAmountMinor
-        ) {
-          console.error("PAYMENT_CURRENCY_RECONCILIATION_FAILED", {
-            provider: "paypal",
-            orderID,
-            captureId: capture?.id,
-            expected: orderConversion,
-            actualCurrency: capture?.amount?.currency_code,
-            actualAmount: capture?.amount?.value,
-          })
-          return NextResponse.json({
-            success: false,
-            message: "Payment currency reconciliation failed",
-            acknowledged: true,
-          })
-        }
-
-        await persistPayPalOneTimeTransaction({
-          orderId: orderID,
-          captureId: capture?.id || captureData.id,
-          beneficiaryId: orderContext.beneficiaryId || beneficiaryId,
-          beneficiaryName,
-          userId,
-          sponsorEmail: email,
-          payer: orderData.payer,
-          conversion: orderConversion,
-        })
-
-        return NextResponse.json({
-          success: true,
-          message: "Payment captured successfully",
-          data: {
-            beneficiaryId: orderContext.beneficiaryId || beneficiaryId,
-            beneficiaryName,
-            amount: orderConversion.baseAmountUsdCents,
-            chargedAmount: orderConversion.chargedAmountMinor,
-            chargedCurrency: orderConversion.chargedCurrency,
-            chargedDisplay: formatMoney(
-              orderConversion.chargedAmountMinor,
-              orderConversion.chargedCurrency,
-            ),
-            orderID,
-            captureID: captureData.id,
-            captureStatus: captureData.status,
-          },
-        })
-      } catch (error: unknown) {
-        console.error("Error processing PayPal capture:", error)
-        const errorMessage =
-          error instanceof Error ? error.message : "Failed to process payment"
-        return NextResponse.json({ error: errorMessage }, { status: 400 })
-      }
-    }
-
-    const orderData = await createPayPalOrder(
-      baseAmountUsdCents,
-      requestedCurrency,
-      beneficiaryId,
-    )
-
-    if (orderData.status !== "CREATED") {
+    if (body.action === "capture") {
+      const capture = captureBody(body)
+      const result = await capturePayPalSponsorshipCheckoutV2(
+        { ...capture, host, requestContext: context },
+        createCapturePayPalSponsorshipDependencies(serviceClient),
+      )
       return NextResponse.json(
-        { error: `Order creation failed with status: ${orderData.status}` },
-        { status: 400 },
+        {
+          checkoutReceipt: result.checkoutReceipt,
+          processing: true,
+          replayed: result.replayed,
+          url: result.statusUrl,
+        },
+        { headers: RESPONSE_HEADERS },
       )
     }
 
-    return NextResponse.json({
-      orderID: orderData.id,
-      status: orderData.status,
-    })
-  } catch (error: unknown) {
-    console.error("PayPal API Error:", error)
+    const result = await createPayPalSponsorshipCheckoutV2(
+      {
+        body,
+        host,
+        authenticatedUser: await authenticatedCheckoutUser(),
+        visitorToken: await readSponsorshipVisitorCookie(
+          request.headers.get("cookie"),
+          { rawHost: request.headers.get("host") },
+        ),
+        requestContext: context,
+      },
+      createPayPalSponsorshipCheckoutV2Dependencies(serviceClient),
+    )
+    if (result.kind === "order") {
+      return NextResponse.json(
+        {
+          checkoutReceipt: result.checkoutReceipt,
+          orderID: result.orderId,
+        },
+        { headers: RESPONSE_HEADERS },
+      )
+    }
+    if (result.kind === "approval_redirect") {
+      return NextResponse.json(
+        {
+          approvalUrl: result.approvalUrl,
+          checkoutReceipt: result.checkoutReceipt,
+        },
+        { headers: RESPONSE_HEADERS },
+      )
+    }
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Internal server error",
+        checkoutReceipt: result.checkoutReceipt,
+        processing: true,
+        url: result.statusUrl,
       },
-      { status: 500 },
+      { headers: RESPONSE_HEADERS },
     )
-  }
-}
-
-export async function GET() {
-  if (!isPayPalEnabled()) {
+  } catch (error) {
+    const safeError = safeCheckoutError(error)
+    console.error("PayPal sponsorship checkout failed", {
+      code: safeError.code,
+      requestId: context.requestId,
+    })
     return NextResponse.json(
-      { error: "PayPal integration is not enabled" },
-      { status: 501 },
+      { error: safeError.message },
+      { status: safeError.httpStatus, headers: RESPONSE_HEADERS },
     )
   }
-  return NextResponse.json({ message: "PayPal API endpoint" }, { status: 200 })
 }

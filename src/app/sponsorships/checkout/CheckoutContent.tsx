@@ -8,9 +8,19 @@ import {
   EmbeddedCheckoutProvider,
 } from "@stripe/react-stripe-js"
 import { loadStripe, type Stripe } from "@stripe/stripe-js"
+import { isAllowedEmbeddedStripeCheckoutMaterial } from "@/lib/sponsorships/checkout/stagingPaymentBoundary"
 
 const FALLBACK_PUBLISHABLE_KEY =
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
+const CHECKOUT_ENVIRONMENT = {
+  NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US:
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_US,
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK:
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_UK,
+}
 
 export default function CheckoutContent() {
   const searchParams = useSearchParams()
@@ -18,10 +28,8 @@ export default function CheckoutContent() {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
-  const [ ,setBeneficiaryId] = useState<string | null>(null)
-  const [publishableKey, setPublishableKey] = useState<string>(
-    FALLBACK_PUBLISHABLE_KEY,
-  )
+  const [, setBeneficiaryId] = useState<string | null>(null)
+  const [publishableKey, setPublishableKey] = useState<string | null>(null)
 
   // Stripe.js requires a stable promise reference for the lifetime of the
   // checkout. Recompute only when the publishable key actually changes.
@@ -33,14 +41,22 @@ export default function CheckoutContent() {
   useEffect(() => {
     const secret = searchParams.get("client_secret")
     const bId = searchParams.get("beneficiary_id")
-    const pk = searchParams.get("publishable_key")
-    if (pk) setPublishableKey(pk)
-    if (secret) {
+    const candidatePublishableKey =
+      searchParams.get("publishable_key") || FALLBACK_PUBLISHABLE_KEY
+    if (
+      secret &&
+      isAllowedEmbeddedStripeCheckoutMaterial({
+        clientSecret: secret,
+        environment: CHECKOUT_ENVIRONMENT,
+        publishableKey: candidatePublishableKey,
+      })
+    ) {
+      setPublishableKey(candidatePublishableKey)
       setClientSecret(secret)
       setBeneficiaryId(bId)
       setLoading(false)
     } else {
-      setError("No client secret provided")
+      setError("Invalid checkout information")
       setLoading(false)
     }
   }, [searchParams])

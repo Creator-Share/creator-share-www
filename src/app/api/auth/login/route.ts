@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server"
+
+import {
+  advocateAttributionIdentityCookieSetHeaders,
+  createAdvocateAttributionIdentityCookieValue,
+} from "@/lib/advocates/attributionIdentityCookie"
 import { createClient } from "@/utils/supabase/server"
 
 export async function POST(request: Request) {
@@ -9,7 +14,7 @@ export async function POST(request: Request) {
   if (!email || !password) {
     return NextResponse.json(
       { error: "Email and password are required." },
-      { status: 400 }
+      { status: 400 },
     )
   }
 
@@ -23,7 +28,7 @@ export async function POST(request: Request) {
     if (signInError) {
       return NextResponse.json(
         { error: signInError.message || "Invalid credentials." },
-        { status: 401 }
+        { status: 401 },
       )
     }
 
@@ -32,7 +37,7 @@ export async function POST(request: Request) {
     if (!userId) {
       return NextResponse.json(
         { error: "User ID not found after login." },
-        { status: 500 }
+        { status: 500 },
       )
     }
     // Verify user has role assignments
@@ -41,19 +46,32 @@ export async function POST(request: Request) {
       .select(
         `
         roles:roles!role_assignments_role_id_fkey(name)
-      `
+      `,
       )
       .eq("user_id", userId)
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       { message: "Login successful.", redirect: "/" },
-      { status: 200 }
+      { status: 200 },
     )
+    const identitySignal = createAdvocateAttributionIdentityCookieValue(
+      {
+        authUserId: userId,
+      },
+      { rawHost: request.headers.get("host") },
+    )
+    if (identitySignal) {
+      for (const header of advocateAttributionIdentityCookieSetHeaders(
+        identitySignal,
+        request.headers.get("host"),
+        new URL(request.url).protocol === "https:",
+      )) {
+        response.headers.append("Set-Cookie", header)
+      }
+    }
+    return response
   } catch (error) {
     console.error("Error logging in:", error)
-    return NextResponse.json(
-      { error: "Failed to login." },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to login." }, { status: 500 })
   }
 }

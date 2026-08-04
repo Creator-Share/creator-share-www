@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { isValidPublicMediaExtension } from "@/config/beneficiaryValidation"
 import { MediaRow, getDirectMediaUrl, uploadFile } from "@/utils/supabase/media"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
 
@@ -29,21 +30,35 @@ export async function POST(req: Request) {
 
     // Validate file sizes (50MB max per file)
     const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+    const extensions: string[] = []
     for (const file of imageFiles) {
+      if (!(file instanceof File)) {
+        return NextResponse.json(
+          { error: "Invalid image upload" },
+          { status: 400 },
+        )
+      }
       if (file.size > MAX_FILE_SIZE) {
         return NextResponse.json(
           { error: `File ${file.name} is too large. Maximum size is 50MB.` },
           { status: 413 },
         )
       }
+      const extension = (file.name.split(".").pop() || "").toLowerCase()
+      if (!isValidPublicMediaExtension(extension)) {
+        return NextResponse.json(
+          { error: "Invalid image file extension" },
+          { status: 400 },
+        )
+      }
+      extensions.push(extension)
     }
 
     const responses: Array<Record<string, unknown>> = []
 
     for (let i = 0; i < imageFiles.length; i++) {
       const file = imageFiles[i]
-      const extPart = file.name.split(".").pop() || ""
-      const extension = extPart.toLowerCase()
+      const extension = extensions[i]
 
       // Insert media row first
       const { data: inserted, error: insertErr } = await supabase
