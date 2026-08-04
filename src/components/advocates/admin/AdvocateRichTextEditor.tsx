@@ -115,7 +115,7 @@ export function AdvocateRichTextEditor({
   onChange: (value: string) => void
 }) {
   const editorRef = useRef<HTMLDivElement>(null)
-  const initialValue = useRef(value).current
+  const renderedValueRef = useRef(value)
   const labelId = useId()
   const descriptionId = useId()
 
@@ -126,6 +126,7 @@ export function AdvocateRichTextEditor({
       document.activeElement !== editor &&
       editor.innerHTML !== value
     ) {
+      renderedValueRef.current = value
       editor.innerHTML = value
     }
   }, [value])
@@ -137,6 +138,7 @@ export function AdvocateRichTextEditor({
       editor.innerHTML,
       heading,
     )
+    renderedValueRef.current = canonical
     onChange(canonical)
     if (resetEditor && editor.innerHTML !== canonical) {
       editor.innerHTML = canonical
@@ -205,7 +207,7 @@ export function AdvocateRichTextEditor({
         }}
         onDrop={(event) => event.preventDefault()}
         className="min-h-36 rounded-b-md border border-gray-300 bg-white px-4 py-3 text-base leading-7 text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 aria-[readonly=true]:cursor-not-allowed aria-[readonly=true]:bg-gray-100 aria-[readonly=true]:text-gray-600 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-bold [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6"
-        dangerouslySetInnerHTML={{ __html: initialValue }}
+        dangerouslySetInnerHTML={{ __html: renderedValueRef.current }}
       />
     </div>
   )

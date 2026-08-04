@@ -239,6 +239,13 @@ test.describe("advocate branding administrative UI contract", () => {
       ),
       "utf8",
     )
+    const editorSource = readFileSync(
+      resolve(
+        process.cwd(),
+        "src/components/advocates/admin/AdvocateRichTextEditor.tsx",
+      ),
+      "utf8",
+    )
 
     expect(pageSource).toContain("createAdvocateAdminSettingsRepository")
     expect(pageSource).toContain("resolveAdvocateBrandingEditability")
@@ -249,6 +256,11 @@ test.describe("advocate branding administrative UI contract", () => {
     expect(clientSource).toContain('window.addEventListener("beforeunload"')
     expect(clientSource).toContain("version_conflict")
     expect(clientSource).toContain("Live preview")
+    expect(editorSource).toContain("renderedValueRef.current = canonical")
+    expect(editorSource).toContain(
+      "dangerouslySetInnerHTML={{ __html: renderedValueRef.current }}",
+    )
+    expect(editorSource).not.toContain("useRef(value).current")
     expect(`${pageSource}\n${clientSource}`).not.toMatch(
       /sponsor_email|sponsor_identity_id|contact_email|visitor_id|provider_customer_id/i,
     )
