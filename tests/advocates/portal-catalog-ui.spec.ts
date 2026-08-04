@@ -79,6 +79,7 @@ test.describe("advocate catalog administrative UI contract", () => {
       "Stay on this page",
       "Discard changes",
       "Reset to saved catalog",
+      "Add a change note before saving. The note is recorded in the audit history.",
       "Recovered unsaved catalog changes from this browser tab",
       "This browser is blocking tab recovery",
       "version_conflict",
@@ -114,6 +115,10 @@ test.describe("advocate catalog administrative UI contract", () => {
     expect(clientSource).not.toContain("precommitHandler")
     expect(clientSource).toContain("dialog.showModal()")
     expect(clientSource).toContain("maxLength={500}")
+    expect(clientSource).toContain('content={saveDisabledReason ?? ""}')
+    expect(clientSource).toContain(
+      "tabIndex={saveDisabledReason ? 0 : undefined}",
+    )
     expect(clientSource).toContain('type="text"')
     expect(clientSource).not.toContain("<textarea")
     expect(clientSource).toContain('aria-live="polite"')

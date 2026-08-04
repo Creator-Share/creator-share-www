@@ -20,6 +20,7 @@ import {
   type AdvocateCatalogMode,
   type AdvocateCatalogSelection,
 } from "@/lib/advocates/admin/catalogForm"
+import { Tooltip } from "@/components/ui/tooltip"
 
 export interface AdvocateCatalogSettingsViewModel {
   advocateId: string
@@ -769,6 +770,25 @@ export function CatalogSettingsClient({
         : ineligibleSelections.length > 0
           ? "Remove every unavailable child before saving. Existing public settings remain unchanged until you save."
           : null
+  const saveDisabledReason = canSubmit
+    ? null
+    : saving
+      ? "The child catalog is being saved."
+      : staleLocked
+        ? "Reload the latest catalog settings before saving."
+        : !dirty
+          ? "Make a catalog change before saving."
+          : ineligibleSelections.length > 0
+            ? "Remove every unavailable child before saving."
+            : !validConfiguration
+              ? mode === "all_featured"
+                ? "Choose at least one child to feature before saving."
+                : "Choose at least one child for this portal before saving."
+              : normalizedReason.length < 1
+                ? "Add a change note before saving. The note is recorded in the audit history."
+                : normalizedReason.length > 500
+                  ? "Shorten the change note to 500 characters or fewer."
+                  : "Complete the required catalog settings before saving."
 
   return (
     <section
@@ -1109,13 +1129,29 @@ export function CatalogSettingsClient({
           ) : null}
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="min-h-11 rounded-md bg-blue-700 px-5 py-2 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+            <Tooltip
+              content={saveDisabledReason ?? ""}
+              disabled={saveDisabledReason === null}
+              showArrow
             >
-              {saving ? "Saving..." : "Save child catalog"}
-            </button>
+              <span
+                className="inline-flex"
+                tabIndex={saveDisabledReason ? 0 : undefined}
+                aria-label={
+                  saveDisabledReason
+                    ? `Save child catalog unavailable: ${saveDisabledReason}`
+                    : undefined
+                }
+              >
+                <button
+                  type="submit"
+                  disabled={!canSubmit}
+                  className="min-h-11 rounded-md bg-blue-700 px-5 py-2 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+                >
+                  {saving ? "Saving..." : "Save child catalog"}
+                </button>
+              </span>
+            </Tooltip>
             {dirty ? (
               <button
                 type="button"
