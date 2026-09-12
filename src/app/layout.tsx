@@ -14,8 +14,34 @@ const redditSans = Reddit_Sans({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://creatorshare.com"),
   title: "Creator Share",
-  description: "",
+  description: "Sponsor a child in Tanzania. Where love meets opportunity.",
+  openGraph: {
+    type: "website",
+    siteName: "Creator Share",
+    title: "Where love meets opportunity | Creator Share",
+    description: "Sponsor a child in Tanzania.",
+    images: [
+      {
+        url: "/social/where-love-meets-opportunity.png",
+        width: 1200,
+        height: 630,
+        alt: "A smiling child alongside the words: Where love meets opportunity. Sponsor a child in Tanzania.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Where love meets opportunity | Creator Share",
+    description: "Sponsor a child in Tanzania.",
+    images: [
+      {
+        url: "/social/where-love-meets-opportunity.png",
+        alt: "A smiling child alongside the words: Where love meets opportunity. Sponsor a child in Tanzania.",
+      },
+    ],
+  },
 }
 
 export default function RootLayout({
