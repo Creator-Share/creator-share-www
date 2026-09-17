@@ -1,3 +1,4 @@
+import { readRequestForensics } from "@/lib/requestForensics"
 import { randomUUID } from "node:crypto"
 
 import { NextResponse } from "next/server"
@@ -86,29 +87,10 @@ function getPublicSiteBaseUrl(): string {
   return base.replace(/\/$/, "")
 }
 
-function boundedHeader(
-  request: Request,
-  headerName: string,
-  maximumLength: number,
-): string | null {
-  const value = request.headers.get(headerName)?.trim()
-  return value ? value.slice(0, maximumLength) : null
-}
-
 function requestContext(request: Request): SponsorshipCheckoutRequestContext {
   return {
     requestId: randomUUID(),
-    traceId:
-      boundedHeader(request, "x-vercel-id", 255) ??
-      boundedHeader(request, "cf-ray", 255) ??
-      boundedHeader(request, "traceparent", 255) ??
-      boundedHeader(request, "x-trace-id", 255),
-    clientIp:
-      boundedHeader(request, "cf-connecting-ip", 256) ??
-      boundedHeader(request, "x-vercel-forwarded-for", 256) ??
-      boundedHeader(request, "x-forwarded-for", 256) ??
-      boundedHeader(request, "x-real-ip", 256),
-    userAgent: boundedHeader(request, "user-agent", 1024),
+    ...readRequestForensics(request.headers),
   }
 }
 

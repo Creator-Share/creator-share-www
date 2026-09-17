@@ -1,3 +1,4 @@
+import { readRequestForensics } from "@/lib/requestForensics"
 import { randomUUID } from "node:crypto"
 
 import { NextResponse } from "next/server"
@@ -18,15 +19,6 @@ import {
   getConfiguredPayPalApiUrl,
 } from "@/lib/sponsorships/gateways/paypalWebhookRuntime"
 import { isPayPalEnabled } from "@/lib/paypal/client"
-
-function boundedHeader(
-  request: Request,
-  name: string,
-  maximumLength: number,
-): string | null {
-  const value = request.headers.get(name)?.trim()
-  return value ? value.slice(0, maximumLength) : null
-}
 
 function unavailable() {
   return NextResponse.json(
@@ -94,15 +86,7 @@ export async function POST(request: Request) {
 
   const requestContext: PayPalWebhookRequestContext = {
     requestId,
-    traceId:
-      boundedHeader(request, "x-vercel-id", 255) ??
-      boundedHeader(request, "cf-ray", 255) ??
-      boundedHeader(request, "traceparent", 255),
-    clientIp:
-      boundedHeader(request, "cf-connecting-ip", 256) ??
-      boundedHeader(request, "x-vercel-forwarded-for", 256) ??
-      boundedHeader(request, "x-forwarded-for", 256),
-    userAgent: boundedHeader(request, "user-agent", 1024),
+    ...readRequestForensics(request.headers),
     headers: paypalHeaders,
     verificationResponseSha256: verification.responseSha256,
   }

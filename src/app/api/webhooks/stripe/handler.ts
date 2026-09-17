@@ -1,3 +1,4 @@
+import { readRequestForensics } from "@/lib/requestForensics"
 import { randomUUID } from "node:crypto"
 
 import { NextResponse } from "next/server"
@@ -122,29 +123,12 @@ function validateStripeCurrencyAmount(
   )
 }
 
-function boundedWebhookHeader(
-  request: Request,
-  name: string,
-  maximumLength: number,
-): string | null {
-  const value = request.headers.get(name)?.trim()
-  return value ? value.slice(0, maximumLength) : null
-}
-
 function stripeWebhookRequestContext(
   request: Request,
 ): StripeWebhookRequestContext {
   return {
     requestId: randomUUID(),
-    traceId:
-      boundedWebhookHeader(request, "x-vercel-id", 255) ??
-      boundedWebhookHeader(request, "cf-ray", 255) ??
-      boundedWebhookHeader(request, "traceparent", 255),
-    clientIp:
-      boundedWebhookHeader(request, "cf-connecting-ip", 256) ??
-      boundedWebhookHeader(request, "x-vercel-forwarded-for", 256) ??
-      boundedWebhookHeader(request, "x-forwarded-for", 256),
-    userAgent: boundedWebhookHeader(request, "user-agent", 1024),
+    ...readRequestForensics(request.headers),
     signatureHeader: null,
     webhookSecretVersion: null,
   }

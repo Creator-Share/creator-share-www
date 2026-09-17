@@ -1,3 +1,4 @@
+import { readRequestForensics } from "@/lib/requestForensics"
 import { NextResponse } from "next/server"
 import { WAITING_STATUSES } from "@/config/beneficiaryStatuses"
 import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
@@ -80,30 +81,8 @@ type MatchMode =
   | "automatic"
   | "specific_beneficiary"
 
-function boundedHeader(
-  request: Request,
-  headerName: string,
-  maximumLength: number,
-): string | null {
-  const value = request.headers.get(headerName)?.trim()
-  return value ? value.slice(0, maximumLength) : null
-}
-
 function getRequestContext(request: Request): RequestContext {
-  return {
-    requestId:
-      boundedHeader(request, "x-request-id", 255) ?? crypto.randomUUID(),
-    traceId:
-      boundedHeader(request, "traceparent", 255) ??
-      boundedHeader(request, "x-trace-id", 255) ??
-      boundedHeader(request, "x-vercel-id", 255),
-    clientIp:
-      boundedHeader(request, "cf-connecting-ip", 256) ??
-      boundedHeader(request, "x-vercel-forwarded-for", 256) ??
-      boundedHeader(request, "x-forwarded-for", 256) ??
-      boundedHeader(request, "x-real-ip", 256),
-    userAgent: boundedHeader(request, "user-agent", 1024),
-  }
+  return { requestId: crypto.randomUUID(), ...readRequestForensics(request.headers) }
 }
 
 function readSingleQueryParameter(

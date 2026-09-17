@@ -1,3 +1,4 @@
+import { readRequestForensics } from "@/lib/requestForensics"
 import { NextResponse } from "next/server"
 import { sendBlindSponsorshipMatchedEmail } from "@/utils/email"
 import { createClient } from "@/utils/supabase/server"
@@ -18,33 +19,8 @@ interface AssignmentResult {
   was_already_assigned: boolean
 }
 
-function boundedHeader(
-  request: Request,
-  headerName: string,
-  maximumLength: number,
-): string | null {
-  const value = request.headers.get(headerName)?.trim()
-  return value ? value.slice(0, maximumLength) : null
-}
-
 function requestContext(request: Request) {
-  const requestId =
-    boundedHeader(request, "x-request-id", 255) ?? crypto.randomUUID()
-  const traceId =
-    boundedHeader(request, "traceparent", 255) ??
-    boundedHeader(request, "x-trace-id", 255)
-  const clientIp =
-    boundedHeader(request, "cf-connecting-ip", 256) ??
-    boundedHeader(request, "x-vercel-forwarded-for", 256) ??
-    boundedHeader(request, "x-forwarded-for", 256) ??
-    boundedHeader(request, "x-real-ip", 256)
-
-  return {
-    requestId,
-    traceId,
-    clientIp,
-    userAgent: boundedHeader(request, "user-agent", 1024),
-  }
+  return { requestId: crypto.randomUUID(), ...readRequestForensics(request.headers) }
 }
 
 function errorResponseForAssignment(code: string | undefined) {

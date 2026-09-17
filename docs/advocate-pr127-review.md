@@ -195,3 +195,15 @@ Applied it to fresh conversion, both sealed provider request validators, shared 
 ## Hosted validation of checkout retirement and retention
 
 [Publication workflow 35183888657](https://github.com/Creator-Share/creator-share-www/actions/runs/35183888657) and [WebKit workflow 35183888681](https://github.com/Creator-Share/creator-share-www/actions/runs/35183888681) passed on `bb92a25`. All 63 pgTAP files passed with 2,110 assertions, followed by the HTTP integration and all required concurrency and cleanup harnesses. The application gate passed 1,676 offline tests, 65 dev-server tests, and the 99-test provider contract. FF-070 and FF-071 are complete. The decimal arithmetic candidate `30a2370` requires its own hosted validation, and the partial-adjustment finding FF-072 remains open.
+
+## Payment audit ingress consistency candidate
+
+Six payment and sponsorship routes preferred `cf-connecting-ip` even though the approved Cloudflare topology is DNS-only. Executing the original Stripe context reader with conflicting headers selected the forged Cloudflare address instead of the Vercel address. A shared forensic reader now records a validated single `x-vercel-forwarded-for` address and bounded `x-vercel-id` only in the Vercel runtime. Other proxy assertions are not fallback evidence. User-agent metadata is byte bounded and control-character checked. Matching and self-assignment now generate request IDs instead of accepting an arbitrary client header.
+
+This aligns the affected routes with the existing invitation and cancellation trust model and [Vercel's request-header documentation](https://vercel.com/docs/headers/request-headers#x-vercel-forwarded-for). Four new regressions cover competing headers, absent trusted ingress, invalid or multiple addresses, IPv6, byte limits, and control characters. All 1,584 selected server-free tests, TypeScript, and lint pass. This protects audit evidence; no authorization or rate-limit bypass was established. Hosted validation remains pending under FF-074.
+
+## Partial adjustment failure consequences
+
+The unrepresentable foreign-currency adjustment fails after provider payment evidence is verified. Both webhook routes quarantine permanent evidence failures and acknowledge receipt. The provider's refund is not prevented or reversed by this application failure; the local financial movement is missing until the issue is repaired and the retained event is reconciled. This can overstate locally reported net funds. The correction needs a recovery path for already quarantined events, not only acceptance of future deliveries.
+
+The settlement function already serializes adjustments by original movement using `pg_advisory_xact_lock`; its later row share lock is not evidence of a missing concurrency fence. Preserve that lock and committed replay behavior when changing allocation. A naive cumulative net calculation also needs care around interleaved dispute credit: debit one AUD cent, refund one cent, then restore the disputed cent can otherwise restore a different USD amount than the original dispute debit. That policy detail remains part of the owner decision and coordinated ledger design.

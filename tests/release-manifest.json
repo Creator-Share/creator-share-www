@@ -125,6 +125,7 @@
         "tests/provider/supabase-email-proof-supersession-hosted.spec.ts",
         "tests/provider/supabase-email-proof-supersession.spec.ts",
         "tests/release-manifest-tooling.spec.ts",
+        "tests/request-forensics.spec.ts",
         "tests/sponsorships/account-claim.spec.ts",
         "tests/sponsorships/checkout-client-state.spec.ts",
         "tests/sponsorships/checkout-host-authorization.spec.ts",
