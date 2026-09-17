@@ -99,6 +99,8 @@ FF-029 now has one canonical 99-test offline provider contract covering the host
 
 | FF-086 | in_progress | P2 | Sponsor presentation after an Auth ban | Retained authenticated claims could still invoke recurring, one-time-history, and legacy PayPal presentation RPCs and read their own profile after an Auth ban. Full-schema execution reproduces an owned recurring row remaining readable. All three functions and the profile policy now require the existing live account-state predicate, preserving active access and denying banned or soft-deleted accounts. Ten additional database assertions and the retained-JWT HTTP regression cover the change. In-process before/after evidence passes; hosted validation remains pending. |
 
+| FF-087 | in_progress | P2 | Shared legacy SMTP error disclosure | The legacy email helper logged raw transport and logging errors, persisted provider messages, and returned raw errors to callers. Two regressions reproduce disclosure on the former code. Normalize delivery failure to a fixed result, use one outcome-log write, preserve accepted delivery when logging fails, and make no provider call for missing credentials. Three focused contracts pass with adjacent email tests. Hosted validation remains pending. Existing contact fields and historical log retention are unchanged; this is not a claim that every legacy handler's logging is sanitized. |
+
 ## Entry requirements
 
 Every new entry must include:

@@ -209,3 +209,9 @@ Against review baseline `0380658`, local revision `6b6b41f` changes 248 tracked 
 The last fully validated revision remains `231c0d7`. Later snapshot and sponsor-access changes need a complete successful hosted gate; passing individual files or an application-only job does not establish that result.
 
 The same review also found a direct profile self-read policy that relied only on retained user identity. With the in-process Auth stub granted schema usage, an ordinary database role read its own profile both before and after a ban. The candidate now uses the shared account-state predicate in that policy: active reads remain available and banned reads return no rows. Two additional database assertions and the HTTP regression cover this extension. Strict comparison changes only that policy and preserves legacy data. Hosted evidence remains pending.
+
+## Shared legacy email error disclosure
+
+**P2 privacy defect (FF-087):** `sendEmail` logged the complete SMTP exception, persisted arbitrary exception messages in `email_logs.error`, and returned the raw exception to callers. Its logging-error handlers also emitted raw database exceptions. A fixture containing a marked provider response and rejected recipient fails both new privacy regressions against the former code.
+
+The candidate returns a fixed delivery-failure message, writes only that fixed error, and logs fixed operational messages. One shared outcome write replaces three repeated blocks, removing 30 net application lines. Three contracts cover transport disclosure, accepted delivery despite a logging exception, and missing credentials without a provider call. Existing recipient and subject fields in the email log remain unchanged, as does historical data; no broad claim about other legacy handlers or log erasure is made. Hosted validation remains pending.

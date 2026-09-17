@@ -168,74 +168,43 @@ export const sendEmail = async ({
     return { success: false, error: "Email service not configured" }
   }
 
+  let result: { success: true; messageId: string } | { success: false; error: string }
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
     console.error("Email configuration is missing")
+    result = { success: false, error: "Email service not configured" }
+  } else {
     try {
-      const supabase = createServiceRoleClient()
-      await supabase.from("email_logs").insert({
-        email: to,
+      const info = await transporter.sendMail({
+        from: process.env.EMAIL_FROM || '"Creator Share" <noreply@yourapp.com>',
+        to,
         subject,
-        status: "failed",
-        error: "Email service not configured",
-        email_type: type,
-        created_at: new Date().toISOString(),
+        text,
+        html,
       })
-    } catch (logError) {
-      console.error(
-        "[Email] Failed to log missing email configuration:",
-        logError,
-      )
+      result = { success: true, messageId: info.messageId }
+    } catch {
+      // SMTP failures can contain recipient addresses and provider response text.
+      // Keep transport material out of callers, application logs, and error fields.
+      console.error("[Email] Delivery failed")
+      result = { success: false, error: "Email delivery failed" }
     }
-    return { success: false, error: "Email service not configured" }
   }
 
   try {
-    const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM || '"Creator Share" <noreply@yourapp.com>',
-      to,
+    const supabase = createServiceRoleClient()
+    await supabase.from("email_logs").insert({
+      email: to,
       subject,
-      text,
-      html,
+      status: result.success ? "sent" : "failed",
+      error: result.success ? null : result.error,
+      ...(result.success ? { message_id: result.messageId } : {}),
+      email_type: type,
+      created_at: new Date().toISOString(),
     })
-
-    try {
-      const supabase = createServiceRoleClient()
-      await supabase.from("email_logs").insert({
-        email: to,
-        subject,
-        status: "sent",
-        error: null,
-        message_id: info.messageId,
-        email_type: type,
-        created_at: new Date().toISOString(),
-      })
-    } catch (logError) {
-      console.error("[Email] Failed to log successful email send:", logError)
-    }
-
-    return { success: true, messageId: info.messageId }
-  } catch (error) {
-    console.error("Error sending email - full details:", error)
-    try {
-      const supabase = createServiceRoleClient()
-      await supabase.from("email_logs").insert({
-        email: to,
-        subject,
-        status: "failed",
-        error:
-          error instanceof Error
-            ? error.message
-            : typeof error === "string"
-              ? error
-              : JSON.stringify(error),
-        email_type: type,
-        created_at: new Date().toISOString(),
-      })
-    } catch (logError) {
-      console.error("[Email] Failed to log failed email send:", logError)
-    }
-    return { success: false, error }
+  } catch {
+    console.error("[Email] Failed to record delivery outcome")
   }
+  return result
 }
 
 /**
