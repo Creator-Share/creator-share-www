@@ -431,3 +431,7 @@ Run 35202180401 passed the corrected dispute-recovery test and the new sponsor a
 ## Legacy email failure privacy and simplification
 
 Two new regressions fail on the former shared email helper because transport and log-write exceptions escape into application logs, stored error fields, or caller results. The repair uses a fixed delivery failure and one shared outcome insert, preserving success after an accepted delivery even if logging throws. A third contract proves missing credentials perform no transport call. The change removes 30 net application lines. Fourteen focused tests pass; hosted validation remains pending. No email was sent and no local service was started.
+
+## Sponsor and snapshot hosted validation
+
+Publication 35202955091 and WebKit 35202955007 passed at dbf6ded. The full gate includes 2,169 assertions across 65 pgTAP files, all three real Supabase HTTP tests, 1,707 offline tests, 66 dev-server tests, 99 provider contracts, 15 catalog tests, and required concurrency and cleanup harnesses. This closes FF-086 and validates both the snapshot simplification and out-of-order dispute recovery regression after the documented fixture corrections. The subsequent email helper change needs a separate hosted result.
