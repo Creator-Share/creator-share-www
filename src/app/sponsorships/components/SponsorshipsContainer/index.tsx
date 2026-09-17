@@ -27,6 +27,7 @@ const TYPE_ROUTE_PATHS = new Set([
   "/",
   "/child_laborers",
   "/special_needs",
+  "/immediate_need",
   "/in_our_care",
   "/dogs",
 ])
@@ -429,7 +430,7 @@ const SponsorshipsContainer: React.FC<SponsorshipsContainerProps> = ({
           <SponsorshipFilters
             onFilterChange={handleFilterChangeAndScroll}
             isSticky={isFiltersSticky}
-            beneficiaryType={activeType === "ANIMAL" ? "ANIMAL" : "CHILD"}
+            beneficiaryType={activeType ?? "CHILD"}
             activeType={activeType}
             onTypeChange={handleTypeChange}
             resultCount={totalCount ?? beneficiaries.length}

@@ -24,6 +24,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/child_laborers", destination: "/" },
       { source: "/special_needs", destination: "/" },
+      { source: "/immediate_need", destination: "/" },
       { source: "/in_our_care", destination: "/" },
       { source: "/dogs", destination: "/" },
       { source: "/about", destination: "/" },
