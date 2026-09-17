@@ -23,6 +23,14 @@ The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b0
 
 At `87399c7`, the review changes remove 25,835 lines and add 3,697, a net reduction of 22,138 across 126 files. This includes removal of the redundant 10,056-line npm lockfile. It is not a claim that 22,138 lines of application logic were eliminated. No product capability has been removed.
 
+## Newly confirmed financial correctness findings
+
+**P1: legitimate partial foreign-currency refunds can be rejected (FF-072).** The active Stripe adjustment helper rejects a two-cent AUD refund on a 3,500-cent AUD payment whose original normalized amount is 2,500 USD cents at the configured rate of 1.4. One USD cent converts to one AUD cent; two USD cents convert to three AUD cents. No integer input produces the required two cents. PayPal uses the same requirement, and SQL ingestion and settlement enforce it independently. This is not solved by relaxing the browser or one provider adapter. An existing test explicitly accepts rejection of unrepresentable currency slices, so green tests do not establish full refund parity.
+
+The recommended repair preserves provider minor units exactly and allocates normalized USD cents cumulatively under the original-payment lock. It must allow zero-USD-cent deltas where appropriate and reconcile full refunds, repeated small refunds, dispute debits and credits, replay, and concurrent delivery. Independent rounding of each adjustment can overstate the total. An owner question about the accounting policy is pending; no financial policy change has been made.
+
+**P2: decimal and binary checkout rounding disagree at valid rates (FF-073).** JavaScript computes `Math.round(2500 * 0.6134)` as 1,533, while PostgreSQL numeric computes 1,534. The same mismatch occurs for 3,000 at 0.6255. Application conversion and recovery must agree with the database's immutable amount checks. This was reproduced with both runtimes, but not with the four currently configured rates. The repair must cover conversion, sealed request validation, recovery, and PayPal boundaries together. It is still pending.
+
 ## Remaining implementation review
 
 The application uses v2 checkout RPCs. A new candidate removes four public first-generation prepare, quote, begin, and attach wrappers that originated inside the undeployed PR. Shared private implementations remain unchanged. Existing unit fixtures call those cores; public privilege assertions target v2, and dedicated assertions require the retired wrappers to be absent and their cores inaccessible to API roles. Structural replay and 1,576 server-free tests pass; hosted validation is pending under FF-070. Pre-PR customer return endpoints remain. Their old removal criterion was also corrected: a server-instance drain does not establish that no customer will return from an older provider session.
