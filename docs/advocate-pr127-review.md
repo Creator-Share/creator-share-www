@@ -231,3 +231,9 @@ Removed 413 net SQL lines by retaining final definitions and their grants at val
 ## PostCSS issue closure
 
 The dependency refresh resolves the application and sanitize-html to the same installed PostCSS 8.5.28 package. Complete publication and WebKit logs for `7cae034` contain no `Package postcss can't be external` warning. The hosted production build, dev-server lane, and both browser overlays passed. FF-061 is complete; its earlier recommendation to retain the warning until a deliberate dependency refresh is superseded by this measured result.
+
+## Private analytics longitudinal disclosure reproduction
+
+Executed the actual private analytics function against the existing fixture structure with five unique historical contacts contributing 100 USD cents each and a sixth contributing 733 cents in the next reporting day. The initial official snapshot returned five contacts and 500 cents, unsuppressed; advancing only the function's reporting cutoff by one day returned six contacts and 1,233 cents, also unsuppressed. The difference discloses the sixth contribution exactly. This is an in-process SQL reproduction, not hosted authorization evidence. No identity is directly returned. FF-034 now tracks this as a current MVP P1; a reporting freshness/privacy decision is pending.
+
+The preceding `e1f811e` checkpoint passed publication run 35185951229 and WebKit run 35185951267. FF-074 is complete. The 413-line final-definition cleanup still requires its own hosted run.
