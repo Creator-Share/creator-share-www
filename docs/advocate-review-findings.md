@@ -203,7 +203,7 @@ These require explicit handling of provider losses beyond the attributed princip
 
 **P2 operational recovery gap (FF-085):** the database increments the attempt count when claiming, but future claims require that count to remain below the maximum even after the ten-minute processing lease expires. A worker crash on its final claim can therefore strand a `processing` event. `runPaymentGatewayEventBatch` and its route derive terminal failure health only from the current batch, so a later empty batch can return success without inspecting that retained event. This conclusion follows from the active claim predicate, transition trigger, and batch implementation; it is not a live crash canary.
 
-The payment runbook now supplies a protected aggregate query covering exhausted `failed` events and expired final `processing` leases. Persistent monitoring and an audited resolution boundary remain required. Quarantine acknowledgment must remain separate from replay or financial reconciliation. No automatic financial retry or service health behavior was changed by this documentation.
+The payment runbook now supplies a protected aggregate query covering exhausted `failed` events and expired final `processing` leases. Persistent monitoring and an audited resolution boundary remain required. Quarantine acknowledgment must remain separate from replay or financial reconciliation. No automatic financial retry or service health behavior was changed by this documentation. The payment runbook now contains a proposed inventory, acknowledgment, resolution, and recovery contract, with separate unresolved and unacknowledged counts. The owner paging-policy question remains pending; the proposal is not an implemented repair.
 
 ## Sponsor read authority after an account ban
 

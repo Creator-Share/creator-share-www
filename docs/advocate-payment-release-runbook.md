@@ -204,6 +204,25 @@ GROUP BY provider, provider_account_scope, processing_status;
 
 FF-085 tracks the missing persistent health and audited resolution boundary. Do not reset attempt counters, delete an event, or directly edit its status to force replay. Alert acknowledgment must be distinguishable from financial reconciliation, preserve the original evidence, and never authorize replay by itself. A scheduled monitoring query and delivered alert must be proven in the authorized environment; this SQL snippet is not evidence that monitoring is configured. An always-failing worker flag without a resolution contract is not a complete repair.
 
+#### Proposed durable review contract
+
+Status: design proposal, not implemented. The owner paging-policy question is pending. The following boundaries apply under either notification policy:
+
+| Operation | Required authority and evidence | Financial effect |
+| --- | --- | --- |
+| Inventory | Service-only aggregate query over stored quarantines, exhausted failures, and expired final-attempt leases, independent of the current batch | None |
+| Acknowledge | Currently healthy Creator Share super administrator, exact event and observed failure version, server-issued operation identity, approved reason code, immutable review receipt | None; the event remains unresolved |
+| Resolve | Verified disposition tied to immutable provider evidence and committed settlement or a reviewed no-effect decision | Only the existing authenticated ingestion and settlement boundaries may create a movement |
+| Recover | Revalidate retained evidence or freshly authenticated provider facts, preserve provider-account and movement identities, use the original-payment concurrency fence | Replay cannot create a second movement or rewrite prior attribution |
+
+Store review receipts separately from payment-event processing state. An acknowledgment must not change `processing_status`, `requires_operational_review`, attempt counts, leases, financial amounts, or payload retention. Do not overload `ignored` to mean an operator read the alert. Expose separate unresolved and unacknowledged counts; if acknowledgment stops paging, the unresolved count still remains visible. A stale acknowledgment must not cover a later failure or different evidence for the same event.
+
+Use one transaction to lock and revalidate the actor, observed event state, and receipt idempotency. Do not let acknowledgment or resolution race an active settlement lease. Retained receipts contain only the identifiers, categorical disposition, protected evidence digest, actor, and timestamps needed to audit the action; they do not copy payloads or sponsor contact data. Payload-expiry monitoring remains distinct from acknowledgment so an acknowledged case cannot silently lose its recovery evidence.
+
+Acceptance requires a crash after the final claim, a later empty batch, duplicate and stale acknowledgments, authority revocation during review, settlement racing review, provider-account mismatch, duplicate financial recovery, and payload erasure before recovery. Prove that monitoring still reports unresolved work and that no acknowledgment changes the ledger. Prove the configured alert destination and chosen paging policy separately. Existing source-level backlog queries and ordinary worker tests do not establish these guarantees.
+
+This design depends on the approved FF-072/FF-084 accounting repair for events whose provider facts the current implementation cannot represent. Do not ship a generic administrator amount override or retry-counter reset as a substitute. An operator acknowledgment can be designed independently; financial reconciliation cannot be declared complete before those accounting semantics are settled.
+
 The encrypted payload is eligible for erasure 90 days after ingestion, including quarantined events. Investigate before that deadline; preserve the approved privacy retention boundary. Do not log decrypted payloads, change status directly, or promise that resending the provider webhook will repair a quarantined record. Reconciliation needs an explicitly reviewed, audited path that preserves provider identity, original immutable evidence, and settlement idempotency. FF-072 requires this recovery design together with the partial-adjustment accounting repair.
 
 
