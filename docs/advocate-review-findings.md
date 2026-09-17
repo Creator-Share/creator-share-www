@@ -2,7 +2,7 @@
 
 Status: review in progress, September 17, 2026. No merge into `dev` is authorized. This report does not approve production activation.
 
-The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `8fecade`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, and application dead-code removal. The quarantine signal and worker trace consolidation await hosted validation. Existing local checkouts were left intact; local services remain stopped.
+The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `b812f8c`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction awaits hosted validation; configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
 
 ## Repaired defects and unnecessary complexity
 
@@ -41,7 +41,7 @@ The prior fast-follow treated this as future hardening before adding filters or 
 
 ## Gateway quarantine operations
 
-**P2 observability repair pending validation (FF-075).** Verified gateway quarantines are acknowledged with HTTP 200 and stored as terminal `ignored` events. The ordinary worker excludes them, so its success does not establish an empty quarantine. The new candidate emits a sanitized signal only after a newly committed quarantine; it exposes no financial or provider-object details. Two regressions fail on the old implementation, and all 1,586 selected server-free tests, TypeScript, and lint pass. Hosted validation and configured alert-delivery evidence remain pending.
+**P2 observability repair, monitoring delivery still pending (FF-075).** Verified gateway quarantines are acknowledged with HTTP 200 and stored as terminal `ignored` events. The ordinary worker excludes them, so its success does not establish an empty quarantine. The new candidate emits a sanitized signal only after a newly committed quarantine; it exposes no financial or provider-object details. Two regressions fail on the old implementation, and all 1,586 selected server-free tests, TypeScript, and lint pass. Hosted validation passed on `b812f8c`; configured alert-delivery evidence remains pending.
 
 Encrypted gateway payloads, including quarantined ones, expire after 90 days. The payment runbook now provides a protected aggregate inventory and requires operator investigation before expiry. The accounting repair still needs an audited reconciliation path; neither log monitoring nor provider redelivery alone is a demonstrated recovery mechanism.
 
@@ -105,3 +105,5 @@ The later [publication workflow 35183888657](https://github.com/Creator-Share/cr
 [Publication workflow 35186695547](https://github.com/Creator-Share/creator-share-www/actions/runs/35186695547) and [WebKit workflow 35186695502](https://github.com/Creator-Share/creator-share-www/actions/runs/35186695502) passed on `ff01da5`, validating the final-definition migration cleanup. The subsequent application cleanup requires its own hosted run. Neither result resolves FF-072 or FF-034.
 
 [Publication workflow 35187383041](https://github.com/Creator-Share/creator-share-www/actions/runs/35187383041) and [WebKit workflow 35187383042](https://github.com/Creator-Share/creator-share-www/actions/runs/35187383042) passed on `8fecade`, validating the application dead-code removal. The pending worker follow-up removes seven duplicate trace readers and passes 1,588 selected server-free tests, including the quarantine signal regressions. Hosted validation of that follow-up remains outstanding.
+
+[Publication workflow 35188193933](https://github.com/Creator-Share/creator-share-www/actions/runs/35188193933) and [WebKit workflow 35188193834](https://github.com/Creator-Share/creator-share-www/actions/runs/35188193834) passed on `b812f8c`, validating the quarantine signal and worker trace consolidation. The later database forensic correction still needs its own hosted gate.

@@ -279,3 +279,7 @@ Measured the dedicated application surfaces and checked shared dependencies befo
 The audit identity reader prioritizes auth.uid over context actor identity when present; this review did not establish an actor-identity bypass. A separate capture defect was reproduced: explicit empty application IP and user-agent context still produced a forensic row containing synthetic PostgREST hop headers. Removing those fallbacks makes the same trigger execution produce no forensic row while preserving the business audit event.
 
 Strict replay changes only audit.capture_row_change among 5,280 catalog entries and leaves representative legacy data identical. Added two pgTAP assertions for absent context and explicit application evidence with its exact 90-day expiry. This does not claim hosted authorization validation; the next database gate must run those assertions. FF-076 records the pending correction, and the roadmap now distinguishes row-audit context from infrastructure transport logs.
+
+## Hosted operational evidence
+
+Publication run 35188193933 and WebKit run 35188193834 passed on `b812f8c`, including both independent jobs and the aggregate gate. The quarantine signal and shared worker trace parsing are hosted-validated. FF-075 remains open for actual configured alert-delivery evidence; the database forensic correction FF-076 needs the next hosted database gate.
