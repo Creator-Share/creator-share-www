@@ -1,3 +1,5 @@
+import { readBoundedResponseText } from "@/lib/readBoundedResponseText"
+
 import {
   loadPayPalPaymentPathConfig,
   loadStripePaymentPathConfig,
@@ -74,39 +76,8 @@ function isExactReconciliationEvidence(
 }
 
 async function readBoundedJson(response: Response): Promise<unknown> {
-  const contentLength = response.headers.get("content-length")
-  if (
-    contentLength !== null &&
-    /^\d+$/.test(contentLength) &&
-    Number(contentLength) > MAX_PROBE_RESPONSE_BYTES
-  ) {
-    throw new DomainProvisioningError({
-      code: "payment_path_invalid_response",
-      retryable: true,
-      evidence: { http_status: response.status },
-    })
-  }
-
-  let text: string
   try {
-    text = await response.text()
-  } catch {
-    throw new DomainProvisioningError({
-      code: "payment_path_invalid_response",
-      retryable: true,
-      evidence: { http_status: response.status },
-    })
-  }
-
-  if (new TextEncoder().encode(text).byteLength > MAX_PROBE_RESPONSE_BYTES) {
-    throw new DomainProvisioningError({
-      code: "payment_path_invalid_response",
-      retryable: true,
-      evidence: { http_status: response.status },
-    })
-  }
-
-  try {
+    const text = await readBoundedResponseText(response, MAX_PROBE_RESPONSE_BYTES)
     return JSON.parse(text) as unknown
   } catch {
     throw new DomainProvisioningError({

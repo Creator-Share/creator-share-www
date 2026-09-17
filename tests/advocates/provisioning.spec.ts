@@ -1,3 +1,4 @@
+import { readBoundedResponseText, ResponseBodyLimitError } from "../../src/lib/readBoundedResponseText"
 import { expect, test } from "@playwright/test"
 
 import { isAuthorizedDomainWorkerRequest } from "../../src/lib/advocates/provisioning/auth"
@@ -2770,4 +2771,34 @@ test("provider response bounds count streamed bytes and cancel before buffering 
   })).rejects.toMatchObject({ code: "provider_response_too_large" })
   expect(cancelled).toBe(true)
   expect(chunks).toBeLessThanOrEqual(3)
+})
+
+
+test("bounded provider text preserves split UTF-8 and accepts the exact byte limit", async () => {
+  const bytes = new TextEncoder().encode('"é"')
+  const response = new Response(new ReadableStream({
+    start(controller) {
+      for (const byte of bytes) controller.enqueue(new Uint8Array([byte]))
+      controller.close()
+    },
+  }))
+  expect(await readBoundedResponseText(response, bytes.length)).toBe('"é"')
+  expect(await readBoundedResponseText(new Response(null), 0)).toBe("")
+})
+
+test("bounded provider text rejects oversized declared lengths without pulling", async () => {
+  let cancelled = false
+  const response = new Response(new ReadableStream({
+    cancel() { cancelled = true },
+  }), { headers: { "content-length": "100" } })
+  await expect(readBoundedResponseText(response, 99)).rejects.toBeInstanceOf(ResponseBodyLimitError)
+  expect(cancelled).toBe(true)
+})
+
+test("bounded provider text preserves stream failures for caller classification", async () => {
+  const reason = new DOMException("provider timeout", "TimeoutError")
+  const response = new Response(new ReadableStream({
+    start(controller) { controller.error(reason) },
+  }))
+  await expect(readBoundedResponseText(response, 99)).rejects.toBe(reason)
 })

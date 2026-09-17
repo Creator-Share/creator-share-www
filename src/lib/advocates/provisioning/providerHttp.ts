@@ -1,3 +1,5 @@
+import { readBoundedResponseText, ResponseBodyLimitError } from "@/lib/readBoundedResponseText"
+
 import {
   DomainProvisioningError,
   type SafeProviderEvidence,
@@ -36,44 +38,16 @@ function requestIdForProvider(
 }
 
 async function readBoundedJson(response: Response): Promise<unknown> {
-  const contentLength = response.headers.get("content-length")
-  if (
-    contentLength &&
-    /^\d+$/.test(contentLength) &&
-    Number(contentLength) > MAX_PROVIDER_RESPONSE_BYTES
-  ) {
-    void response.body?.cancel().catch(() => undefined)
+  let text: string
+  try {
+    text = await readBoundedResponseText(response, MAX_PROVIDER_RESPONSE_BYTES)
+  } catch (error) {
+    if (!(error instanceof ResponseBodyLimitError)) throw error
     throw new DomainProvisioningError({
       code: "provider_response_too_large",
       retryable: true,
       evidence: { http_status: response.status },
     })
-  }
-
-  const reader = response.body?.getReader()
-  if (!reader) return null
-  const decoder = new TextDecoder()
-  let text = ""
-  let bytes = 0
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      bytes += value.byteLength
-      if (bytes > MAX_PROVIDER_RESPONSE_BYTES) {
-        throw new DomainProvisioningError({
-          code: "provider_response_too_large",
-          retryable: true,
-          evidence: { http_status: response.status },
-        })
-      }
-      text += decoder.decode(value, { stream: true })
-    }
-    text += decoder.decode()
-  } finally {
-    // Do not let cancellation failure conceal the bounded-read result.
-    void reader.cancel().catch(() => undefined)
-    reader.releaseLock()
   }
   if (!text) return null
 

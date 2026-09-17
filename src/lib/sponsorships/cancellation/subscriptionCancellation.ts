@@ -1,5 +1,7 @@
 import "server-only"
 
+import { readBoundedResponseText } from "@/lib/readBoundedResponseText"
+
 import { createHash } from "node:crypto"
 import { isIP } from "node:net"
 
@@ -674,8 +676,8 @@ async function readSafePayPalError(
 ): Promise<SafePayPalError> {
   let value: unknown
   try {
-    const body = await response.text()
-    value = body.length <= 16 * 1024 ? JSON.parse(body) : null
+    const body = await readBoundedResponseText(response, 16 * 1024)
+    value = JSON.parse(body)
   } catch {
     value = null
   }

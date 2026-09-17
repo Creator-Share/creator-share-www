@@ -1,5 +1,7 @@
 import "server-only"
 
+import { readBoundedResponseText, ResponseBodyLimitError } from "@/lib/readBoundedResponseText"
+
 import { paypalFetch } from "@/lib/paypal/client"
 import { isSupportedCurrency, type SupportedCurrency } from "@/utils/currency"
 
@@ -181,9 +183,12 @@ export function buildPayPalBillingPlanRequest(
 }
 
 async function readProviderResponse(response: Response): Promise<unknown> {
-  const body = await response.text()
-  if (Buffer.byteLength(body, "utf8") > MAXIMUM_PROVIDER_RESPONSE_BYTES) {
-    fail("invalid-provider-response")
+  let body: string
+  try {
+    body = await readBoundedResponseText(response, MAXIMUM_PROVIDER_RESPONSE_BYTES)
+  } catch (error) {
+    if (error instanceof ResponseBodyLimitError) fail("invalid-provider-response")
+    throw error
   }
   if (!response.ok) {
     if (response.status === 404 || response.status === 410) {

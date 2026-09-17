@@ -1,5 +1,7 @@
 import "server-only"
 
+import { readBoundedResponseText, ResponseBodyLimitError } from "@/lib/readBoundedResponseText"
+
 import { getPayPalApiUrl, paypalFetch } from "@/lib/paypal/client"
 import { createSponsorshipCryptoFromEnvironment } from "@/lib/sponsorships/crypto"
 import {
@@ -126,21 +128,12 @@ function exactlyOneRow(data: unknown): Record<string, unknown> {
 }
 
 async function readBoundedResponse(response: Response): Promise<string> {
-  const declaredLength = response.headers.get("content-length")
-  if (declaredLength && /^[0-9]+$/.test(declaredLength)) {
-    const parsed = Number(declaredLength)
-    if (
-      !Number.isSafeInteger(parsed) ||
-      parsed > MAXIMUM_PROVIDER_RESPONSE_BYTES
-    ) {
-      throw providerUnavailable()
-    }
+  try {
+    return await readBoundedResponseText(response, MAXIMUM_PROVIDER_RESPONSE_BYTES)
+  } catch (error) {
+    if (error instanceof ResponseBodyLimitError) throw providerUnavailable()
+    throw error
   }
-  const body = await response.text()
-  if (Buffer.byteLength(body, "utf8") > MAXIMUM_PROVIDER_RESPONSE_BYTES) {
-    throw providerUnavailable()
-  }
-  return body
 }
 
 async function retrieveProviderJson(path: string): Promise<unknown> {

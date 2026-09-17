@@ -1,3 +1,5 @@
+import { readBoundedResponseText } from "@/lib/readBoundedResponseText"
+
 import "server-only"
 
 import { createHash } from "node:crypto"
@@ -226,15 +228,12 @@ async function readBoundedJson(
 
   let body: string
   try {
-    body = await response.text()
+    body = await readBoundedResponseText(response, MAX_CANARY_RESPONSE_BYTES)
   } catch {
     invalidResponse(provider, response)
   }
 
-  if (
-    body.length < 1 ||
-    new TextEncoder().encode(body).byteLength > MAX_CANARY_RESPONSE_BYTES
-  ) {
+  if (body.length < 1) {
     invalidResponse(provider, response)
   }
 
