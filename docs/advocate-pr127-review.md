@@ -119,3 +119,7 @@ Stripe Checkout and PayPal approval validators compared protocol and hostname bu
 ## Hosted validation of d42eb98
 
 [Publication workflow 35179157120](https://github.com/Creator-Share/creator-share-www/actions/runs/35179157120) and [WebKit workflow 35179159010](https://github.com/Creator-Share/creator-share-www/actions/runs/35179159010) passed. Both independent application and database jobs completed successfully, including the provider-free and dev-server lanes, second migration consolidation, complete pgTAP suite, HTTP integration, all required concurrency harnesses, and forced cleanup. This also verifies the invitation form's delayed-JavaScript regression. Later helper removal, cancellation, cookie fallback, exact-origin, and currency changes await their own hosted revision.
+
+## Shared strict request decoding
+
+Thirteen request readers now share one bounded UTF-8 stream implementation. Each route retains its original Content-Length grammar, byte limit, and empty-body behavior. The helper rejects malformed UTF-8, counts streamed bytes, releases reader locks, and does not wait for producer cancellation after rejecting a body. This removes repeated chunk buffering and byte-array concatenation. Regression coverage checks split characters, truncated and malformed UTF-8, byte limits, locked and failed streams, and a cancellation callback that never settles. All 1,572 selected server-free tests, TypeScript, and lint passed. Hosted validation remains required for this revision.

@@ -1,3 +1,4 @@
+import { readBoundedUtf8Stream } from "@/lib/readBoundedUtf8Stream"
 import { normalizeSponsorEmailV1 } from "@/lib/sponsorships/crypto"
 
 const UUID_PATTERN =
@@ -64,40 +65,10 @@ export async function readBoundedCreatorShareAdminInvitationBody(
   }
 
   if (request.body === null) return ""
-  let reader: ReadableStreamDefaultReader<Uint8Array>
-  try {
-    reader = request.body.getReader()
-  } catch {
-    return null
-  }
-  const chunks: Uint8Array[] = []
-  let totalBytes = 0
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      totalBytes += value.byteLength
-      if (totalBytes > MAXIMUM_CREATOR_SHARE_ADMIN_INVITATION_BODY_BYTES) {
-        await reader.cancel()
-        return null
-      }
-      chunks.push(value)
-    }
-  } catch {
-    return null
-  }
-
-  const body = new Uint8Array(totalBytes)
-  let offset = 0
-  for (const chunk of chunks) {
-    body.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(body)
-  } catch {
-    return null
-  }
+  return readBoundedUtf8Stream(
+    request.body,
+    MAXIMUM_CREATOR_SHARE_ADMIN_INVITATION_BODY_BYTES,
+  )
 }
 
 export function parseCreatorShareAdminInvitationRequest(

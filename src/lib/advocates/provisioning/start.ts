@@ -1,3 +1,4 @@
+import { readBoundedUtf8Stream } from "@/lib/readBoundedUtf8Stream"
 import { createHash } from "node:crypto"
 
 import { resolveAdvocateHost } from "@/lib/advocates/host"
@@ -94,37 +95,7 @@ export async function readBoundedProvisioningStartBody(
   }
   if (request.body === null) return ""
 
-  const reader = request.body.getReader()
-  const chunks: Uint8Array[] = []
-  let totalBytes = 0
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      totalBytes += value.byteLength
-      if (totalBytes > MAX_PROVISIONING_START_BODY_BYTES) {
-        await reader.cancel()
-        return null
-      }
-      chunks.push(value)
-    }
-  } catch {
-    return null
-  } finally {
-    reader.releaseLock()
-  }
-
-  const body = new Uint8Array(totalBytes)
-  let offset = 0
-  for (const chunk of chunks) {
-    body.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(body)
-  } catch {
-    return null
-  }
+  return readBoundedUtf8Stream(request.body, MAX_PROVISIONING_START_BODY_BYTES)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

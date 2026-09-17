@@ -1,3 +1,4 @@
+import { readBoundedUtf8Stream } from "../../src/lib/readBoundedUtf8Stream"
 import { createRequire } from "node:module"
 import Module from "node:module"
 import { resolve } from "node:path"
@@ -270,4 +271,46 @@ test.describe("advocate portal branding boundary", () => {
       code: "branding_update_failed",
     })
   })
+})
+
+
+test("bounded UTF-8 decoding preserves split characters and rejects malformed input", async () => {
+  const stream = (...chunks: number[][]) => new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(new Uint8Array(chunk))
+      controller.close()
+    },
+  })
+  const valid = stream([0xe2], [0x82, 0xac])
+  expect(await readBoundedUtf8Stream(valid, 3)).toBe("€")
+  expect(valid.locked).toBe(false)
+  expect(await readBoundedUtf8Stream(stream([0xe2, 0x82]), 3)).toBeNull()
+  expect(await readBoundedUtf8Stream(stream([0xff]), 1)).toBeNull()
+  expect(await readBoundedUtf8Stream(stream([0xe2, 0x82, 0xac]), 2)).toBeNull()
+})
+
+test("oversized request rejection does not await stalled stream cancellation", async () => {
+  let cancelled = false
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) { controller.enqueue(new Uint8Array(3)) },
+    cancel() {
+      cancelled = true
+      return new Promise<void>(() => {})
+    },
+  })
+  expect(await readBoundedUtf8Stream(body, 2)).toBeNull()
+  expect(cancelled).toBe(true)
+  expect(body.locked).toBe(false)
+})
+
+test("bounded request decoding rejects locked and failed streams", async () => {
+  const locked = new ReadableStream<Uint8Array>()
+  const reader = locked.getReader()
+  expect(await readBoundedUtf8Stream(locked, 10)).toBeNull()
+  reader.releaseLock()
+  const failed = new ReadableStream<Uint8Array>({
+    start(controller) { controller.error(new Error("transport failed")) },
+  })
+  expect(await readBoundedUtf8Stream(failed, 10)).toBeNull()
+  expect(failed.locked).toBe(false)
 })

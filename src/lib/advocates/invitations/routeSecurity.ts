@@ -1,5 +1,7 @@
 import "server-only"
 
+import { readBoundedUtf8Stream } from "@/lib/readBoundedUtf8Stream"
+
 import { NextResponse } from "next/server"
 
 import { ADVOCATE_INVITATION_MAXIMUM_REQUEST_BODY_LENGTH } from "@/lib/advocates/invitations/material"
@@ -90,26 +92,8 @@ export async function readBoundedAdvocateInvitationBody(
   }
   if (request.body === null) return null
 
-  const reader = request.body.getReader()
-  const chunks: Uint8Array[] = []
-  let totalBytes = 0
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      totalBytes += value.byteLength
-      if (totalBytes > ADVOCATE_INVITATION_MAXIMUM_REQUEST_BODY_LENGTH) {
-        await reader.cancel()
-        return null
-      }
-      chunks.push(value)
-    }
-    return new TextDecoder("utf-8", { fatal: true }).decode(
-      Buffer.concat(chunks),
-    )
-  } catch {
-    return null
-  } finally {
-    reader.releaseLock()
-  }
+  return readBoundedUtf8Stream(
+    request.body,
+    ADVOCATE_INVITATION_MAXIMUM_REQUEST_BODY_LENGTH,
+  )
 }

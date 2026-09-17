@@ -1,3 +1,4 @@
+import { readBoundedUtf8Stream } from "@/lib/readBoundedUtf8Stream"
 import {
   ADVOCATE_DELEGATE_ROLE_KEYS,
   type AdvocateDelegateRoleKey,
@@ -318,26 +319,8 @@ export async function readBoundedAdvocateInvitationBody(
   }
   if (request.body === null) return null
 
-  const reader = request.body.getReader()
-  const chunks: Uint8Array[] = []
-  let totalBytes = 0
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      totalBytes += value.byteLength
-      if (totalBytes > MAXIMUM_INVITATION_MUTATION_BODY_BYTES) {
-        await reader.cancel()
-        return null
-      }
-      chunks.push(value)
-    }
-    return new TextDecoder("utf-8", { fatal: true }).decode(
-      Buffer.concat(chunks),
-    )
-  } catch {
-    return null
-  } finally {
-    reader.releaseLock()
-  }
+  return readBoundedUtf8Stream(
+    request.body,
+    MAXIMUM_INVITATION_MUTATION_BODY_BYTES,
+  )
 }

@@ -1,5 +1,7 @@
 import "server-only"
 
+import { readBoundedUtf8Stream } from "@/lib/readBoundedUtf8Stream"
+
 import {
   isAdvocateStagingEnvironmentEnabled,
   resolveAdvocateHost,
@@ -186,35 +188,10 @@ async function readBoundedUtf8Body(request: Request): Promise<string | null> {
   }
   if (request.body === null) return null
 
-  const reader = request.body.getReader()
-  const chunks: Uint8Array[] = []
-  let byteLength = 0
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      byteLength += value.byteLength
-      if (byteLength > ADVOCATE_EXPOSURE_MAXIMUM_BODY_BYTES) {
-        await reader.cancel()
-        return null
-      }
-      chunks.push(value)
-    }
-  } catch {
-    return null
-  }
-
-  const body = new Uint8Array(byteLength)
-  let offset = 0
-  for (const chunk of chunks) {
-    body.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(body)
-  } catch {
-    return null
-  }
+  return readBoundedUtf8Stream(
+    request.body,
+    ADVOCATE_EXPOSURE_MAXIMUM_BODY_BYTES,
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
