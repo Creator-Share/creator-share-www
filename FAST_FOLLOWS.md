@@ -105,7 +105,7 @@ FF-029 now has one canonical 99-test offline provider contract covering the host
 
 | FF-089 | completed | P2 | Sponsor contact markup in legacy email templates | Sponsor greetings and administrator contact fields were interpolated into HTML without escaping. Reuse the existing HTML encoder at text insertion points, preserving plain subjects and recipient addresses. A mocked-transport regression renders sponsor, manager, and cancellation templates; it fails on the former helper and passes on the candidate. Publication 35206039312 and WebKit 35206039210 passed at c3f4b44. The implementation also encodes child names, plain activity content, decoded filenames, and quoted media attributes. Five focused contracts pass; this does not replace URL-origin validation. |
 
-| FF-090 | in_progress | P3 | Returned email-log database errors were silent | The shared helper caught thrown logging failures but ignored Supabase insert results containing an error. Check that result and emit the existing fixed diagnostic without changing accepted delivery or retrying SMTP. The expanded regression fails before the fix and passes afterward. Hosted validation remains pending. |
+| FF-090 | completed | P3 | Returned email-log database errors were silent | The shared helper caught thrown logging failures but ignored Supabase insert results containing an error. Check that result and emit the existing fixed diagnostic without changing accepted delivery or retrying SMTP. The expanded regression fails before the fix and passes afterward. Publication 35207992284 and WebKit 35207992280 passed at 0470e36. |
 
 ## Entry requirements
 
