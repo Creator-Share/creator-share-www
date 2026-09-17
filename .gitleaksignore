@@ -1,0 +1,6 @@
+# Historical Telegram credential, removed before this PR.
+# Rotation is recorded in commit 91db88d; this is not fresh provider verification.
+# Exact historical fingerprints only. Any reintroduction must still fail.
+324d15fa8dfd946f49a09bad0dc3492e5d0ab5a7:docs/telegram-bot-setup.md:telegram-bot-api-token:44
+324d15fa8dfd946f49a09bad0dc3492e5d0ab5a7:src/config/telegram.ts:telegram-bot-api-token:3
+324d15fa8dfd946f49a09bad0dc3492e5d0ab5a7:src/app/test-telegram/page.tsx:telegram-bot-api-token:189

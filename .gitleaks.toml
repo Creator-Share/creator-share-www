@@ -1,0 +1,37 @@
+title = "Creator Share secret detection"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public template, metric, and environment variable names are not credentials"
+targetRules = ["generic-api-key"]
+regexes = ['''^(advocate_delegate_invitation_v1|advocate_initial_owner_invitation_v1|observed_30_365_days|SPONSORSHIP_CRYPTO_SECRET_V1)$''']
+
+[[allowlists]]
+description = "Exact noncredential catalog idempotency fixture"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^supabase/tests/public_advocate_catalog_boundary\.test\.sql$''']
+regexes = ['''^advocate-animal-reject-0001$''']
+
+[[allowlists]]
+description = "Exact synthetic Stripe account inventory fixtures"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/sponsorships/stripe-payment-method-inventory\.spec\.ts$''']
+regexes = ['''^sk_live_(us_inventory_secret_123456789|uk_inventory_secret_987654321)$''']
+
+[[allowlists]]
+description = "Exact invalid production key used to prove staging rejection"
+targetRules = ["stripe-access-token"]
+condition = "AND"
+paths = ['''^tests/sponsorships/staging-payment-boundary\.spec\.ts$''']
+regexes = ['''^sk_live_production$''']
+
+[[allowlists]]
+description = "Cookie trust inventory completeness enum, not a Cloudflare credential"
+targetRules = ["cloudflare-api-key"]
+condition = "AND"
+paths = ['''^tests/advocates/cookie-trust-inventory\.spec\.ts$''']
+regexes = ['''^all_records_in_creator_share_tenant_zone$''']
