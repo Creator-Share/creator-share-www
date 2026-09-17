@@ -435,3 +435,7 @@ Two new regressions fail on the former shared email helper because transport and
 ## Sponsor and snapshot hosted validation
 
 Publication 35202955091 and WebKit 35202955007 passed at dbf6ded. The full gate includes 2,169 assertions across 65 pgTAP files, all three real Supabase HTTP tests, 1,707 offline tests, 66 dev-server tests, 99 provider contracts, 15 catalog tests, and required concurrency and cleanup harnesses. This closes FF-086 and validates both the snapshot simplification and out-of-order dispute recovery regression after the documented fixture corrections. The subsequent email helper change needs a separate hosted result.
+
+## Activity notification result contract
+
+Reviewing callers of the email helper found discarded delivery results and an unchecked activity/child pairing. The route now returns accurate aggregate outcomes, stops on unavailable audience data, and requires the activity to belong to the requested child. The administration UI reads that outcome and warns before any operator resend. Removing impossible null-email fallback work and unused unselected-sponsor work deletes 80 net application lines. Four route tests pass, and controlled mutations of the count and child-binding logic fail the respective regressions. Hosted validation is pending under FF-088.

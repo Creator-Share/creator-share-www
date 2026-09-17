@@ -219,3 +219,13 @@ The candidate returns a fixed delivery-failure message, writes only that fixed e
 ## Current complete hosted checkpoint
 
 Publication run [35202955091](https://github.com/Creator-Share/creator-share-www/actions/runs/35202955091) and WebKit run [35202955007](https://github.com/Creator-Share/creator-share-www/actions/runs/35202955007) passed at `dbf6ded`. Evidence includes 1,707 offline tests, 66 dev-server tests, 99 provider contracts, 65 pgTAP files with 2,169 assertions, 15 catalog tests, three local Supabase HTTP tests, and every required concurrency and cleanup harness. This validates the snapshot simplification, corrected out-of-order dispute recovery scenario, and sponsor/profile account-state checks. FF-086 is complete. The later legacy email privacy repair remains pending its own hosted validation.
+
+## Activity notification reporting and subject binding
+
+**P2 correctness defect (FF-088):** the legacy activity notification route discarded delivery outcomes and reported the audience size as `emailsSent`, while its administration UI ignored both response status and body. The route also retrieved an activity by ID without confirming it belonged to the requested child whose audience would receive it. This is an authorized-administrator workflow defect, not a demonstrated unauthenticated exploit.
+
+The candidate binds activity and child, stops before sending on audience lookup failure, counts accepted versus failed or rejected outcomes, and makes the UI warn when delivery cannot be confirmed. It does not retry automatically. Removing the unreachable fallback for null emails already excluded by the database query, unused default sponsor lookup, and duplicate audience mapping reduces these application files by 80 net lines. Four route contracts pass; mutations restoring the former count behavior or removing child binding each fail their regression. Counts describe transport acceptance, not inbox delivery. No live email or local server was used, and no end-to-end browser proof is claimed for this UI change.
+
+## Email privacy hosted checkpoint
+
+Publication [35203991700](https://github.com/Creator-Share/creator-share-www/actions/runs/35203991700) and WebKit [35203991580](https://github.com/Creator-Share/creator-share-www/actions/runs/35203991580) passed at `d32f82e`, validating the shared legacy email privacy repair and closing FF-087. The later activity notification changes still require their own hosted result.

@@ -16,6 +16,7 @@
         "PW_NO_WEBSERVER": "1"
       },
       "files": [
+        "tests/admin/activity-notification-route.spec.ts",
         "tests/admin/beneficiary-deletion-route.spec.ts",
         "tests/advocates/attribution-identity-auth-routes.spec.ts",
         "tests/advocates/attribution-identity-completion.spec.ts",
