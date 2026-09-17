@@ -2,7 +2,7 @@
 
 Status: review in progress, September 17, 2026. The PR is not ready to ship: foreign-currency adjustment accounting, dispute loss bounds, and longitudinal private-analytics disclosure remain P1 blockers, and external release evidence is incomplete. No merge into `dev` is authorized.
 
-The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `dbf6ded`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction, retention-index change, and password-login correction are hosted-validated. Sponsor assignment and diagnostic authorization are also hosted-validated. The shared administrator guard is also hosted-validated; atomic beneficiary deletion is now hosted-validated, while configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
+The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `d32f82e`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction, retention-index change, and password-login correction are hosted-validated. Sponsor assignment and diagnostic authorization are also hosted-validated. The shared administrator guard is also hosted-validated; atomic beneficiary deletion is now hosted-validated, while configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
 
 ## Repaired defects and unnecessary complexity
 
@@ -229,3 +229,9 @@ The candidate binds activity and child, stops before sending on audience lookup 
 ## Email privacy hosted checkpoint
 
 Publication [35203991700](https://github.com/Creator-Share/creator-share-www/actions/runs/35203991700) and WebKit [35203991580](https://github.com/Creator-Share/creator-share-www/actions/runs/35203991580) passed at `d32f82e`, validating the shared legacy email privacy repair and closing FF-087. The later activity notification changes still require their own hosted result.
+
+## Legacy email content boundaries
+
+**P2 confirmed markup injection (FF-089):** sponsor names were inserted into HTML greetings and administrator contact fields without escaping. A mocked-transport regression passes a name containing an external link to the sponsor confirmation, manager notification, and cancellation notification templates. The original helper emits the link as markup; the candidate emits the literal text using the existing encoder. Recipient routing and plain email subjects are unchanged. Four focused email contracts, all 1,615 selected server-free tests, TypeScript, and lint pass. Hosted validation remains pending. This is an email-content injection finding, not proof of JavaScript execution in an email client. Other legacy content and URL insertion points remain under review.
+
+The public child-update enrollment route also exposes existing enrollment through a distinct 409 response and activates enrollment without recipient verification. The underlying RPC explicitly delegates double opt-in and rate limiting to the application; neither appears in this route. This extends the evidence for existing FF-018 rather than creating a duplicate finding. Deployed edge controls have not been verified, and no abuse against a live recipient was attempted.

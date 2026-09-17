@@ -8,7 +8,7 @@ const marker = "PRIVATE_PROVIDER_RESPONSE"
 const testRequire = createRequire(resolve(process.cwd(), "tests/auth/legacy-email-error-privacy.spec.ts"))
 const loader = Module as unknown as { _load: (name: string, ...args: unknown[]) => unknown }
 
-async function exercise(deliveryFails: boolean, loggingFails = false, configured = true) {
+async function exercise(deliveryFails: boolean, loggingFails = false, configured = true, renderTemplates = false) {
   const originalLoad = loader._load
   const originalConsole = console.error
   const cachedBefore = new Set(Object.keys(testRequire.cache))
@@ -19,6 +19,7 @@ async function exercise(deliveryFails: boolean, loggingFails = false, configured
   const originalPassword = process.env.EMAIL_PASSWORD
   const records: Array<Record<string, unknown>> = []
   const logs: unknown[][] = []
+  const messages: Array<{ html?: string; subject?: string }> = []
   let transportCalls = 0
   const failure = Object.assign(new Error(marker), {
     response: marker,
@@ -32,7 +33,8 @@ async function exercise(deliveryFails: boolean, loggingFails = false, configured
     loader._load = (name, ...args) => {
       if (name === "server-only") return {}
       if (name === "nodemailer") return { createTransport: () => ({
-        sendMail: async () => {
+        sendMail: async (message: { html?: string; subject?: string }) => {
+          messages.push(message)
           transportCalls += 1
           if (deliveryFails) throw failure
           return { messageId: "fixture-message" }
@@ -53,9 +55,16 @@ async function exercise(deliveryFails: boolean, loggingFails = false, configured
       }
       return originalLoad.call(Module, name, ...args)
     }
-    const { sendEmail } = testRequire("../../src/utils/email") as typeof import("../../src/utils/email")
+    const email = testRequire("../../src/utils/email") as typeof import("../../src/utils/email")
+    const { sendEmail } = email
+    if (renderTemplates) {
+      const name = '<a href="https://untrusted.example">Pay here</a> & Friends'
+      await email.sendBlindSponsorshipConfirmationEmail("recipient@example.test", 2500, "month", "children", name, { provider: "PAYPAL" })
+      await email.sendManagerSponsorshipNotificationEmail("Child", 2500, "month", "recipient@example.test", name)
+      await email.sendSponsorshipCancellationNotificationEmail("Child", "recipient@example.test", name, 2500)
+    }
     const result = await sendEmail({ to: "recipient@example.test", subject: "Fixture", text: "Fixture" })
-    return { result, records, transportCalls, logs: inspect(logs) }
+    return { result, records, messages, transportCalls, logs: inspect(logs) }
   } finally {
     if (previousEmailModule) testRequire.cache[emailModule] = previousEmailModule
     else delete testRequire.cache[emailModule]
@@ -92,4 +101,14 @@ test("missing credentials record a failure without attempting delivery", async (
   expect(transportCalls).toBe(0)
   expect(records).toHaveLength(1)
   expect(records[0]).toMatchObject({ status: "failed", error: "Email service not configured" })
+})
+
+
+test("sponsor names remain text in sponsor and administrator email templates", async () => {
+  const { messages } = await exercise(false, false, true, true)
+  for (const message of messages.slice(0, 3)) {
+    expect(message.html).not.toContain('<a href="https://untrusted.example">')
+    expect(message.html).toContain('&lt;a href=&quot;https://untrusted.example&quot;&gt;Pay here&lt;/a&gt; &amp; Friends')
+  }
+  expect(messages).toHaveLength(4)
 })

@@ -103,6 +103,8 @@ FF-029 now has one canonical 99-test offline provider contract covering the host
 
 | FF-088 | in_progress | P2 | Activity notification outcomes and subject binding | The route reported the audience size as sent regardless of transport outcomes, the UI ignored the response, and activity lookup did not bind the requested child. Count actual accepted outcomes, warn on unconfirmed delivery without automatic retry, bind activity to child, and stop before sending if audience lookup fails. Remove unreachable null-email fallback work. Four route contracts and two detected behavior mutations pass; hosted validation remains pending. These counts do not prove inbox delivery or exactly-once sending. |
 
+| FF-089 | in_progress | P2 | Sponsor contact markup in legacy email templates | Sponsor greetings and administrator contact fields were interpolated into HTML without escaping. Reuse the existing HTML encoder at text insertion points, preserving plain subjects and recipient addresses. A mocked-transport regression renders sponsor, manager, and cancellation templates; it fails on the former helper and passes on the candidate. Hosted validation is pending. Other legacy content and URL interpolation need separate review. |
+
 ## Entry requirements
 
 Every new entry must include:

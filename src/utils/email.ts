@@ -56,7 +56,8 @@ function resolveStripePortalUrl(region: StripeRegion): string {
   return getPortalUrl(region) || DEFAULT_STRIPE_PORTAL_URL
 }
 
-function escapeHtmlAttribute(value: string): string {
+// Use at HTML text and quoted attribute boundaries, never on plain email subjects.
+function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
     .replaceAll('"', "&quot;")
@@ -91,7 +92,7 @@ export function renderManagementSection({
     `
   }
 
-  const portalUrl = escapeHtmlAttribute(
+  const portalUrl = escapeHtml(
     resolveStripePortalUrl(coerceRegion(region)),
   )
   if (variant === "prominent") {
@@ -311,7 +312,7 @@ export const sendPartnershipConfirmationEmail = async (
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Partnership!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to support our ${project} project.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your partnership makes a significant difference in helping us provide safety, healing, and a future full of promise for some of the most vulnerable children in the world.</p>
       </div>
@@ -395,7 +396,7 @@ export const sendSponsorshipConfirmationEmail = async (
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to sponsor ${childName}.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your support makes a significant difference in providing education and opportunities for children in need.</p>
       </div>
@@ -455,7 +456,7 @@ export const sendBlindSponsorshipConfirmationEmail = async (
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to support ${blindLabel}.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">We'll match you with a child who needs support, and you'll receive updates as soon as your sponsorship is matched.</p>
       </div>
@@ -547,7 +548,7 @@ export const sendBlindSponsorshipMatchedEmail = async (
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #22c55e;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">You've Been Matched! 🎉</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Great news! We've matched your blind sponsorship with <strong style="color: #1C3C8C;">${childName}</strong>.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your ${intervalText} contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> will now go directly to supporting ${childName}'s education and well-being.</p>
       </div>
@@ -639,7 +640,7 @@ export const sendPaymentFailedEmail = async (
       
       <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">
         <h2 style="color: #dc2626; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Payment Failed</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">We were unable to process your sponsorship payment of <strong>${formattedAmount}</strong>.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${nextAttemptText}</p>
       </div>
@@ -719,7 +720,7 @@ export const sendSubscriptionConfirmationEmail = async (
       ${childImageHtml}
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Subscription Confirmed!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for subscribing to updates for <strong>${beneficiaryName}</strong>.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">You'll receive an email whenever there's a new activity or update for this beneficiary.</p>
         <p style="font-size: 1rem; line-height: 1.5;">You can unsubscribe at any time by contacting us.</p>
@@ -902,7 +903,7 @@ export const sendActivityNotificationEmail = async (
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">New Update for ${
           beneficiary.name
         }</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">A new activity has been posted for <strong>${
           beneficiary.name
         }</strong>:</p>
@@ -949,7 +950,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
   const formattedAmount = formatEmailAmount(amount, {})
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Friend,"
   const logoUrl = getLogoUrl()
-  const browseUrl = escapeHtmlAttribute(getSponsorClaimCanonicalOrigin())
+  const browseUrl = escapeHtml(getSponsorClaimCanonicalOrigin())
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -986,7 +987,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #10b981;">
         <h2 style="color: #10b981; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Good News - ${beneficiaryName} is Fully Sponsored!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
           Thank you for your generous heart in wanting to sponsor <strong>${beneficiaryName}</strong>.
         </p>
@@ -1105,8 +1106,8 @@ export const sendManagerSponsorshipNotificationEmail = async (
         <div style="background-color: white; padding: 1rem; border-radius: 0.375rem; margin: 1rem 0;">
           <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${childName}</p>
           <p style="margin: 0.5rem 0;"><strong>Amount:</strong> ${formattedAmount}/${intervalText}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${customerName || "Not provided"}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${customerEmail || "Not provided"}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${escapeHtml(customerName || "Not provided")}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${escapeHtml(customerEmail || "Not provided")}</p>
         </div>
       </div>
       
@@ -1180,7 +1181,7 @@ export const sendMonthlyPaymentConfirmationEmail = async (
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Payment Confirmed</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your monthly sponsorship payment of <strong style="color: #1C3C8C;">${formattedAmount}</strong> for <strong>${childName}</strong> has been successfully processed.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your continued support in making a difference in ${childName}'s life.</p>
       </div>
@@ -1236,8 +1237,8 @@ export const sendSponsorshipCancellationNotificationEmail = async (
         
         <div style="background-color: white; padding: 1rem; border-radius: 0.375rem; margin: 1rem 0;">
           <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${childName}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${sponsorName || "Not provided"}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${sponsorEmail || "Not provided"}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${escapeHtml(sponsorName || "Not provided")}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${escapeHtml(sponsorEmail || "Not provided")}</p>
           <p style="margin: 0.5rem 0;"><strong>Amount:</strong> ${formattedAmount}</p>
           <p style="margin: 0.5rem 0; color: #dc2626; font-weight: 600;"><strong>Status:</strong> Child moved to "Sponsorship Cancelled" status</p>
         </div>
