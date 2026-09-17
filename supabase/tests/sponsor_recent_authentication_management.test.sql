@@ -602,8 +602,7 @@ VALUES (
 
 SELECT pg_temp.set_sponsor_service_jwt();
 
-SET LOCAL ROLE service_role;
-
+-- Seed legacy payment state as the database owner; private cores are not API RPCs.
 INSERT INTO recent_management_context
 SELECT 'quote', payment_quote_id
 FROM private.issue_sponsorship_payment_quote_core_v1(
@@ -636,6 +635,8 @@ FROM private.attach_sponsorship_payment_provider_object_core_v1(
   target_provider_object_type => 'checkout_session',
   target_provider_object_id => 'cs_test_recent_management_0001'
 );
+
+SET LOCAL ROLE service_role;
 
 INSERT INTO recent_management_context
 SELECT 'gateway_event', gateway_event_id
