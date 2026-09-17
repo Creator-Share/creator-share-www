@@ -12,7 +12,6 @@ export const LOCAL_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME = "cs_sponsor_claim_v1"
 export const LEGACY_SPONSOR_ACCOUNT_CLAIM_COOKIE_NAME =
   "creator_share_sponsor_claim_v1"
 export const SPONSOR_ACCOUNT_CLAIM_COOKIE_MAX_AGE_SECONDS = 30 * 60
-export const SPONSOR_ACCOUNT_CLAIM_CALLBACK_PATH = "/auth/callback"
 export const SPONSOR_ACCOUNT_EMAIL_CONFIRMATION_PATH = "/auth/confirm"
 export const SPONSOR_ACCOUNT_CLAIM_PAGE_PATH = "/sponsor/claim"
 export const SPONSOR_ACCOUNT_MANAGEMENT_PAGE_PATH = "/app"

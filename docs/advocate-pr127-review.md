@@ -241,3 +241,9 @@ The preceding `e1f811e` checkpoint passed publication run 35185951229 and WebKit
 ## Existing-contact privacy counterexamples
 
 The same production analytics query also discloses isolated refunds and renewals after five contacts already support the measure. With no new sponsorship or contact, the refund execution changed disclosed refunds from 50 to 57 cents and net from 450 to 443. The renewal execution changed renewals from 50 to 57 and gross/net from 550 to 557. Both snapshots remained unsuppressed. This rules out a repair that gates only new contacts or hides only a single financial field while leaving its complement visible. Reporting behavior remains unchanged pending the owner decision.
+
+## Unused application export cleanup
+
+A repository-wide identifier and import review found three unimported modules: the old PayPal financial metadata encoder/parser, image-transformation helpers, and unused icons. It also found an uncalled goal-fulfilled email template, unused media wrappers, two constants, two type aliases, and an unused default PayPal dependency object. Removing them and their unused imports reduces application code by 449 net lines. Generated database types remain intact, and active pre-PR payment-return handlers are unchanged.
+
+All 1,584 selected server-free tests, TypeScript, lint, and Git whitespace checks pass. No new service, browser server, provider, or email was started. Hosted validation remains pending for this application cleanup. The existing invitation and payment compatibility contracts remain required.

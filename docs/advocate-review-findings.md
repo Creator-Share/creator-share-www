@@ -47,6 +47,8 @@ A retention candidate also rejects obsolete cleanup responses that omit current 
 
 A refreshed inventory found seven repeated function groups. Two retention vocabulary groups now consolidate safely, removing 189 net lines with exact final catalog and legacy fixture equality. The remaining groups now have a further 413-line cleanup candidate: functions are defined once at valid dependency sites, with unchanged final bodies and privileges. Only the initial and final audit actor-context implementations remain, because migration-time callers precede the final implementation's transport table. Both consolidation candidates preserve the final catalog and legacy fixture bytes. Hosted validation passed for the 189-line pass on `e1f811e`; the 413-line pass remains pending.
 
+A separate application cleanup removes 449 net lines of uncalled helpers, obsolete PayPal metadata encoding, an unused email template, and unimported media/icon modules. Repository caller inspection, all 1,584 selected server-free tests, TypeScript, and lint pass. Hosted validation remains pending. Generated database types and active legacy payment-return handlers remain intact.
+
 ## Release evidence still missing
 
 | Gate | Why green repository checks are insufficient | Required next evidence |

@@ -82,10 +82,6 @@ export interface PayPalPublicationPaymentCanaryEvidence extends PublicationPayme
   create_http_status: 200 | 201
 }
 
-export type PublicationPaymentCanaryEvidence =
-  | StripePublicationPaymentCanaryEvidence
-  | PayPalPublicationPaymentCanaryEvidence
-
 interface CanaryJsonResponse {
   payload: unknown
   status: number

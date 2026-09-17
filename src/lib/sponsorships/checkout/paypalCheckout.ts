@@ -1,14 +1,9 @@
 import "server-only"
 
-import {
-  ensurePayPalBillingPlan,
-  type ExactPayPalBillingCatalogTerms,
-} from "@/lib/paypal/billingCatalogProvisioner"
-import {
-  capturePayPalSponsorshipOrder,
-  createPayPalSponsorshipProviderObject,
-  type CapturedPayPalOrder,
-  type CreatedPayPalProviderObject,
+import type { ExactPayPalBillingCatalogTerms } from "@/lib/paypal/billingCatalogProvisioner"
+import type {
+  CapturedPayPalOrder,
+  CreatedPayPalProviderObject,
 } from "@/lib/paypal/sponsorshipCheckout"
 import {
   buildPayPalProviderRequestTemplateClaims,
@@ -904,10 +899,4 @@ export async function capturePayPalSponsorshipCheckoutV2(
     statusUrl: "/payments/success?provider=paypal",
     replayed: false,
   }
-}
-
-export const defaultPayPalCheckoutProviderDependencies = {
-  createProviderObject: createPayPalSponsorshipProviderObject,
-  captureOrder: capturePayPalSponsorshipOrder,
-  ensureBillingPlan: ensurePayPalBillingPlan,
 }

@@ -164,48 +164,8 @@ export const getBrowserThumbnailSrc = (
 export const generatePublicUrl = (media: MediaRow): string =>
   getDirectMediaUrl(media)
 
-/**
- * Compatibility wrapper. Browser thumbnails are disabled so Supabase does not
- * transform images that Vercel will optimize in the browser.
- */
-export const generateThumbnailUrl = (_media?: MediaRow): string | undefined => {
-  void _media
-  return undefined
-}
-
 export const getImageSrc = (image: MediaImage): string =>
   getBrowserImageSrc(image)
-
-export const getThumbnailSrc = (image?: MediaImage): string | undefined =>
-  getBrowserThumbnailSrc(image)
-
-/**
- * Generate a public URL directly from a storage key (no bucket name).
- */
-export const getPublicUrlFromKey = (key: string): string => {
-  if (!key || key.trim() === "") {
-    throw new Error("Storage key is required")
-  }
-  const base = getSupabaseBaseUrl()
-  return `${base}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeStoragePath(key)}`
-}
-
-export async function mediaFileExists(
-  supabaseClient: StorageListClient,
-  media: MediaRow,
-): Promise<boolean> {
-  const key = getStorageKey(media)
-  const lastSlash = key.lastIndexOf("/")
-  const folder = lastSlash >= 0 ? key.slice(0, lastSlash) : ""
-  const fileName = lastSlash >= 0 ? key.slice(lastSlash + 1) : key
-
-  const { data, error } = await supabaseClient.storage
-    .from(STORAGE_BUCKET)
-    .list(folder, { limit: 1, search: fileName })
-
-  if (error) return false
-  return Boolean(data?.some((item) => item.name === fileName))
-}
 
 export async function filterExistingMediaRows<T extends MediaRow>(
   supabaseClient: StorageListClient,

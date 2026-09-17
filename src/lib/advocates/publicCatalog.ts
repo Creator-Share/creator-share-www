@@ -47,8 +47,6 @@ const PUBLIC_FILTER_STATUS_SET = new Set<string>([
 const ACTIVITY_TYPE_SET = new Set(["INFO", "UPDATE", "SUBSCRIPTION"])
 const MEDIA_TYPE_SET = new Set(["IMAGE", "VIDEO", "DOCUMENT"])
 
-export type PublicCatalogKind = "primary" | "advocate"
-
 export interface PublicCatalogFilters {
   beneficiaryTypes: readonly BeneficiaryType[]
   gender: Gender | null
