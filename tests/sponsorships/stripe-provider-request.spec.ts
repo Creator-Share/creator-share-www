@@ -103,6 +103,24 @@ function exactOpenInput(sealed: ReturnType<typeof sealStripeProviderRequest>) {
 }
 
 test.describe("sealed Stripe provider request", () => {
+  test("accepts PostgreSQL decimal midpoint terms and rejects the binary-rounded amount", () => {
+    const input = {
+      ...templateInput(),
+      baseAmountUsdCents: 2500,
+      chargedAmountMinor: 1534,
+      conversionRate: 0.6134,
+    }
+    expect(createStripeProviderRequestTemplate(input).chargedAmountMinor).toBe(
+      1534,
+    )
+    expect(() =>
+      createStripeProviderRequestTemplate({
+        ...input,
+        chargedAmountMinor: 1533,
+      }),
+    ).toThrow()
+  })
+
   test("seals the complete server request before materializing the database attempt ID", () => {
     const crypto = cryptoWithChangingNonces()
     const template = createStripeProviderRequestTemplate(templateInput())

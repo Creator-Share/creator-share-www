@@ -1,5 +1,7 @@
 import "server-only"
 
+import { roundMinorUnitsAtRate } from "@/utils/decimalMoney"
+
 import {
   constantTimeDigestEqual,
   fromSupabaseRpcBytea,
@@ -358,7 +360,7 @@ function validateTemplate(value: unknown): PayPalProviderRequestTemplate {
   const baseAmountUsdCents = requiredInteger(value.baseAmountUsdCents)
   const chargedAmountMinor = requiredInteger(value.chargedAmountMinor)
   const conversionRate = requiredConversionRate(value.conversionRate)
-  if (Math.round(baseAmountUsdCents * conversionRate) !== chargedAmountMinor) {
+  if (roundMinorUnitsAtRate(baseAmountUsdCents, conversionRate) !== chargedAmountMinor) {
     reject()
   }
 

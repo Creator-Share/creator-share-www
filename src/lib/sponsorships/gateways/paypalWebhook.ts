@@ -1,5 +1,7 @@
 import "server-only"
 
+import { roundMinorUnitsAtRate } from "@/utils/decimalMoney"
+
 import type {
   SponsorshipCrypto,
   SupabaseRpcBytea,
@@ -831,7 +833,7 @@ function validateBoundary(
     SUPPORTED_CURRENCIES.has(boundary.chargedCurrency) &&
     Number.isFinite(boundary.conversionRate) &&
     boundary.conversionRate > 0 &&
-    Math.round(boundary.baseAmountUsdCents * boundary.conversionRate) ===
+    roundMinorUnitsAtRate(boundary.baseAmountUsdCents, boundary.conversionRate) ===
       boundary.chargedAmountMinor
   if (!validCommon) reject("boundary-mismatch")
 
@@ -1522,7 +1524,7 @@ function deriveBaseAmount(
   ) {
     if (
       candidate <= movement.baseAmountUsdCents &&
-      Math.round(candidate * movement.conversionRate) === chargedAmountMinor
+      roundMinorUnitsAtRate(candidate, movement.conversionRate) === chargedAmountMinor
     ) {
       return candidate
     }

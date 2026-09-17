@@ -185,3 +185,9 @@ Two regression cases fail on the original worker and pass after the change. They
 ## Checkout retirement hosted fixture correction
 
 Publication run `35183402727` reached all 63 pgTAP files but failed when the sponsor recent-authentication fixture attempted a private core call as `service_role`. The new privilege boundary correctly rejected it. That fixture now seeds its pre-v2 payment state as the database owner, then switches back to `service_role` before public gateway ingestion, settlement, and sponsor-management assertions. No production grant was widened. The other pgTAP files passed; the complete suite and later harnesses still require a successful rerun. The corrected revision also includes the pending strict-retention candidate.
+
+## Exact decimal checkout arithmetic candidate
+
+The application used binary multiplication for rates that PostgreSQL validates as decimal numeric. Reproduced `2500 * 0.6134` rounding to 1,533 in JavaScript and 1,534 in PostgreSQL. A shared bounded minor-unit helper now rounds the exact serialized decimal rate with integer arithmetic. It handles scientific notation and returns an invalid numeric result for malformed inputs or unsafe output, preserving fail-closed callers without adding a dependency.
+
+Applied it to fresh conversion, both sealed provider request validators, shared Stripe/PayPal checkout recovery, and PayPal payment and adjustment boundary checks. This does not change the partial-refund allocation policy or fix FF-072. Both new provider regressions fail on the old code. The full selected server-free suite passes 1,580 tests; 20 focused currency/provider tests and 42 recovery/webhook tests pass. TypeScript and lint pass. A separate in-process PostgreSQL numeric comparison matches all 1,600 amount/rate cases. FF-073 remains open until hosted validation passes.

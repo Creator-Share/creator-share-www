@@ -1,5 +1,7 @@
 import "server-only"
 
+import { roundMinorUnitsAtRate } from "@/utils/decimalMoney"
+
 import type Stripe from "stripe"
 
 import { MINIMUM_OPEN_SPONSORSHIP_CENTS } from "@/config/beneficiaryTypes"
@@ -817,7 +819,10 @@ export function assertRecoveredSponsorshipCheckoutTerms(
     recovered.chargedCurrency !== expected.chargedCurrency ||
     !Number.isFinite(recovered.conversionRate) ||
     recovered.conversionRate <= 0 ||
-    Math.round(recovered.baseAmountUsdCents * recovered.conversionRate) !==
+    roundMinorUnitsAtRate(
+      recovered.baseAmountUsdCents,
+      recovered.conversionRate,
+    ) !==
       recovered.chargedAmountMinor
   ) {
     throw checkoutError("sponsorship-unavailable")

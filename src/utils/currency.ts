@@ -1,3 +1,5 @@
+import { roundMinorUnitsAtRate } from "@/utils/decimalMoney"
+
 export const dollarsToCents = (dollars: number): string => {
   return Math.round(Math.max(0, dollars) * 100).toString()
 }
@@ -73,7 +75,7 @@ export function convertUsdCentsToCurrency(
   // Rate is a pure ratio: foreign minor units per 1 USD cent.
   // Examples: 0.74 GBP pence per USD cent, 1.40 AUD cents per USD cent.
   // No major-unit conversion needed — all math is in cent-equivalents.
-  const chargedAmountMinor = Math.round(baseAmount * rate)
+  const chargedAmountMinor = roundMinorUnitsAtRate(baseAmount, rate)
   return {
     baseAmountUsdCents: Math.max(0, Math.round(baseAmountUsdCents)),
     chargedAmountMinor,

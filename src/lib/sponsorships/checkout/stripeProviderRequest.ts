@@ -1,5 +1,7 @@
 import "server-only"
 
+import { roundMinorUnitsAtRate } from "@/utils/decimalMoney"
+
 import type { StripeRegion } from "@/lib/stripe/config"
 import { stripeCheckoutReturnUrls } from "@/lib/sponsorships/checkout/providerReturnUrls"
 import {
@@ -386,7 +388,7 @@ function validateTemplate(value: unknown): StripeProviderRequestTemplate {
   const baseAmountUsdCents = requiredInteger(value.baseAmountUsdCents)
   const chargedAmountMinor = requiredInteger(value.chargedAmountMinor)
   const conversionRate = requiredConversionRate(value.conversionRate)
-  if (Math.round(baseAmountUsdCents * conversionRate) !== chargedAmountMinor) {
+  if (roundMinorUnitsAtRate(baseAmountUsdCents, conversionRate) !== chargedAmountMinor) {
     reject()
   }
 

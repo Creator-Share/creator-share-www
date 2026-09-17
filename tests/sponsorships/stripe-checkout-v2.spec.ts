@@ -45,6 +45,7 @@ const testRequire = createRequire(
   resolve(process.cwd(), "tests/sponsorships/stripe-checkout-v2.spec.ts"),
 )
 const {
+  assertRecoveredSponsorshipCheckoutTerms,
   buildHostedStripeSessionParams,
   createStripeSponsorshipCheckoutV2,
   SponsorshipCheckoutError,
@@ -369,6 +370,23 @@ function sealedReplayEvidence(
 }
 
 test.describe("v2 server owned Stripe checkout", () => {
+  test("accepts recovered decimal midpoint amounts and rejects binary rounding drift", () => {
+    const recovered = recoveredAttempt({
+      baseAmountUsdCents: 2500,
+      chargedAmountMinor: 1534,
+      conversionRate: 0.6134,
+    })
+    expect(() =>
+      assertRecoveredSponsorshipCheckoutTerms(recovered, recovered),
+    ).not.toThrow()
+    expect(() =>
+      assertRecoveredSponsorshipCheckoutTerms(
+        { ...recovered, chargedAmountMinor: 1533 },
+        recovered,
+      ),
+    ).toThrow(SponsorshipCheckoutError)
+  })
+
   test("rejects nonstandard ports in Stripe checkout redirects", async () => {
     const { dependencies, calls } = baseDependencies()
     dependencies.createHostedSession = async (input) => ({

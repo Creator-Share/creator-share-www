@@ -101,6 +101,24 @@ function exactOpenInput(sealed: ReturnType<typeof sealPayPalProviderRequest>) {
 }
 
 test.describe("sealed PayPal provider request", () => {
+  test("accepts PostgreSQL decimal midpoint terms and rejects the binary-rounded amount", () => {
+    const input = {
+      ...recurringTemplateInput(),
+      baseAmountUsdCents: 2500,
+      chargedAmountMinor: 1534,
+      conversionRate: 0.6134,
+    }
+    expect(createPayPalProviderRequestTemplate(input).chargedAmountMinor).toBe(
+      1534,
+    )
+    expect(() =>
+      createPayPalProviderRequestTemplate({
+        ...input,
+        chargedAmountMinor: 1533,
+      }),
+    ).toThrow()
+  })
+
   test("seals recurring terms and materializes only the database attempt ID", () => {
     const crypto = cryptoWithChangingNonces()
     const template = createPayPalProviderRequestTemplate(

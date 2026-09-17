@@ -516,6 +516,37 @@ test.describe("PayPal webhook trust boundary", () => {
     ).rejects.toMatchObject({ code: "payload-too-large", httpStatus: 413 })
   })
 
+  test("accepts the exact decimal conversion on a verified PayPal capture", async () => {
+    const raw = rawEvent(
+      "PAYMENT.CAPTURE.COMPLETED",
+      "capture",
+      captureResource({ amount: { value: "15.34", currency_code: "GBP" } }),
+    )
+    const { calls, value } = dependencies(
+      boundary({
+        baseAmountUsdCents: 2500,
+        chargedAmountMinor: 1534,
+        chargedCurrency: "GBP",
+        conversionRate: 0.6134,
+      }),
+    )
+    await expect(
+      ingestVerifiedPayPalEvent(
+        {
+          event: parsePayPalWebhookEvent(raw),
+          rawPayload: raw,
+          requestContext: requestContext(),
+        },
+        value,
+      ),
+    ).resolves.toMatchObject({ kind: "payment" })
+    expect(calls.ingested[0]).toMatchObject({
+      factBaseAmountUsdCents: 2500,
+      factChargedAmountMinor: 1534,
+      factConversionRate: 0.6134,
+    })
+  })
+
   test("ingests exact capture success facts without a provider lookup", async () => {
     const raw = rawEvent(
       "PAYMENT.CAPTURE.COMPLETED",
