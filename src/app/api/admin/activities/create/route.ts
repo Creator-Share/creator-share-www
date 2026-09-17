@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { findInvalidPublicActivityProjectionField } from "@/config/beneficiaryValidation"
 import { createClient } from "@/utils/supabase/server"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 
 // Configure route for JSON requests (no large file uploads)
 export const runtime = "nodejs"
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const supabase = await createClient()
-    const auth = await requireSuperAdmin(supabase)
+    const auth = await requireSuperAdminRequest(supabase, req)
     if (!auth.ok) return auth.response
 
     // Parse JSON body (lightweight - no files)

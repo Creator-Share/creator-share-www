@@ -5,7 +5,7 @@ import {
   prepareLegacyPreservingBeneficiaryUpdate,
 } from "@/config/beneficiaryValidation"
 import { createClient } from "@/utils/supabase/server"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 
 const EDITABLE_BENEFICIARY_FIELDS = new Set([
   "name",
@@ -34,7 +34,7 @@ export async function PUT(
 ) {
   const { id } = await params
   const supabase = await createClient()
-  const auth = await requireSuperAdmin(supabase)
+  const auth = await requireSuperAdminRequest(supabase, req)
   if (!auth.ok) return auth.response
   try {
     const body: unknown = await req.json()

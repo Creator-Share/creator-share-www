@@ -1,7 +1,7 @@
 import { readRequestForensics } from "@/lib/requestForensics"
 import { NextResponse } from "next/server"
 import { WAITING_STATUSES } from "@/config/beneficiaryStatuses"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 import { sendBlindSponsorshipMatchedEmail } from "@/utils/email"
 import { createClient } from "@/utils/supabase/server"
 
@@ -449,7 +449,7 @@ async function assignBlindSponsorship(
 
 export async function POST(request: Request) {
   const supabase = await createClient()
-  const auth = await requireSuperAdmin(supabase)
+  const auth = await requireSuperAdminRequest(supabase, request)
   if (!auth.ok) return auth.response
 
   const context = getRequestContext(request)

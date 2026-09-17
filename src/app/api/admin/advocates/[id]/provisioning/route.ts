@@ -10,7 +10,7 @@ import {
   parseAdvocateProvisioningStartResult,
   readBoundedProvisioningStartBody,
 } from "@/lib/advocates/provisioning/start"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 import { createClient } from "@/utils/supabase/server"
 
 export const runtime = "nodejs"
@@ -42,7 +42,7 @@ export async function POST(
 ): Promise<NextResponse> {
   let requestId: string = randomUUID()
   const supabase = await createClient()
-  const auth = await requireSuperAdmin(supabase)
+  const auth = await requireSuperAdminRequest(supabase, request)
   if (!auth.ok) return auth.response
 
   const { id: advocateId } = await params

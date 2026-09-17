@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 import {
   getCreatorShareRoleIds,
   replaceCreatorShareRoles,
@@ -12,7 +12,7 @@ import {
 export async function DELETE(request: Request) {
   try {
     const supabase = await createClient()
-    const auth = await requireSuperAdmin(supabase)
+    const auth = await requireSuperAdminRequest(supabase, request)
     if (!auth.ok) return auth.response
 
     const { userId, roleId, reason } = await request.json()

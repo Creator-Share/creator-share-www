@@ -337,3 +337,9 @@ Three denial regressions fail against the old routes. Five focused contracts pre
 ## Password login hosted validation
 
 Publication run 35191156280 and WebKit run 35191156285 passed on ce0ff91, including both independent jobs and the required aggregate. FF-078 is complete. The subsequent sponsor-assignment and diagnostic guards pass local checks but require a new hosted run. No merge into dev or live provider execution occurred.
+
+## Shared administrator mutation origin guard
+
+An AST inventory identified thirty role-only mutation calls without the explicit request guard used by newer routes. Migrated those calls to a shared request-aware administrator guard supporting JSON and multipart bodies. The diagnostic guard now delegates to that same origin implementation. Nine remaining role-only mutation call sites have their own explicit request guards; read handlers are unchanged.
+
+The three-handler regression fails when their former role-only calls are restored, observing three authentication lookups for untrusted origins instead of zero. The corrected handlers pass, and a same-origin multipart request reaches normal image validation. The upload route uses the ordinary static Supabase import, avoiding its unnecessary dynamic-import seam. All seven authorization tests and 1,602 selected server-free tests, TypeScript, lint, and manifest verification pass. The authorization spec was renamed to reflect its broader scope without changing lane counts. Hosted validation remains pending. This does not claim a live-browser CSRF demonstration or change global account-deletion behavior.

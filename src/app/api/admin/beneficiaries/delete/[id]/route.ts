@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 import { deleteFile, MediaRow } from "@/utils/supabase/media"
 
 export async function DELETE(
@@ -8,7 +8,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await createClient()
-  const auth = await requireSuperAdmin(supabase)
+  const auth = await requireSuperAdminRequest(supabase, _req)
   if (!auth.ok) return auth.response
   const { id } = await params
   try {

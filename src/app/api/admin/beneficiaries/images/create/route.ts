@@ -1,16 +1,16 @@
+import { createClient } from "@/utils/supabase/server"
 import { NextResponse } from "next/server"
 import { isValidPublicMediaExtension } from "@/config/beneficiaryValidation"
 import { MediaRow, getDirectMediaUrl, uploadFile } from "@/utils/supabase/media"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 
 // Route segment config for Vercel deployment
 export const runtime = "nodejs"
 export const maxDuration = 60
 
 export async function POST(req: Request) {
-  const { createClient } = await import("@/utils/supabase/server")
   const supabase = await createClient()
-  const auth = await requireSuperAdmin(supabase)
+  const auth = await requireSuperAdminRequest(supabase, req)
   if (!auth.ok) return auth.response
   try {
     const formData = await req.formData()

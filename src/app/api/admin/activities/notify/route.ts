@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 
 // New endpoint to send email notifications AFTER media is uploaded
 export const runtime = "nodejs"
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = await createClient()
-    const auth = await requireSuperAdmin(supabase)
+    const auth = await requireSuperAdminRequest(supabase, req)
     if (!auth.ok) return auth.response
 
     // Fetch the activity
