@@ -287,3 +287,7 @@ Publication run 35188193933 and WebKit run 35188193834 passed on `b812f8c`, incl
 ## Partial-adjustment amount-domain measurement
 
 Executed the active Stripe deriveProportionalBaseUsdCents helper over every positive partial amount below original charges normalized to 2,500 USD cents, using the current configured rates. USD accepted 2,499 of 2,499; GBP accepted 1,849 of 1,849; EUR accepted 2,149 of 2,149. AUD rejected 1,000 of 3,499, including whole-dollar refunds of 1, 6, 8, 13, 15, 20, 22, 27, 29, and 34 AUD. The scan resets to the untouched original payment for each amount and makes no provider call. It quantifies the single-adjustment representability defect, not real-world event frequency or cumulative settlement correctness. The accounting decision draft now includes these limits and results.
+
+## Hosted database expectation repair
+
+Publication run 35188935007 failed on the database job while its application job and WebKit run 35188935099 passed. The foundation suite ran all 80 assertions but still declared 78. The invitation suite retained an older assertion requiring the removed PostgREST network fallback. Corrected the count and changed that assertion to require absent forensics while preserving every signed-session, actor, request, tool, reason, and operation check. Synthetic hop headers and caller-supplied network values remain in the fixture so either unsafe source would fail the assertion. Hosted database validation must pass before FF-076 can close.

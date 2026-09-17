@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(78);
+SELECT extensions.plan(80);
 
 SELECT extensions.is(
   (

@@ -798,7 +798,7 @@ SELECT set_config(
   'request.headers',
   jsonb_build_object(
     'x-forwarded-for', '198.51.100.44',
-    'user-agent', 'trusted-invitation-gateway-test-agent'
+    'user-agent', 'postgrest-hop-test-agent'
   )::text,
   true
 );
@@ -971,7 +971,7 @@ SELECT extensions.ok(
   EXISTS (
     SELECT 1
     FROM audit.audit_events event
-    JOIN audit.audit_event_forensics forensic
+    LEFT JOIN audit.audit_event_forensics forensic
       ON forensic.audit_event_id = event.id
     WHERE event.advocate_id = (
         SELECT value FROM invitation_test_ids WHERE key = 'advocate'
@@ -979,8 +979,7 @@ SELECT extensions.ok(
       AND event.request_id = '95100000-0000-4000-8000-000000000801'
       AND event.trace_id = 'trace-invitation-redeem'
       AND event.session_id = '95000000-0000-4000-8000-000000000902'
-      AND forensic.client_ip = '198.51.100.44'
-      AND forensic.user_agent = 'trusted-invitation-gateway-test-agent'
+      AND forensic.audit_event_id IS NULL
       AND event.actor_type = 'user'
       AND event.actor_user_id =
         '95000000-0000-4000-8000-000000000102'::uuid
@@ -990,7 +989,7 @@ SELECT extensions.ok(
       AND event.reason = 'Accept the first delegate invitation'
       AND event.metadata ->> 'operation' = 'redeem_invitation'
   ),
-  'redemption ignores caller supplied forensics and records the signed session plus request gateway evidence'
+  'redemption preserves signed identity without trusting caller forensics or PostgREST hop headers'
 );
 
 SELECT set_config('request.jwt.claim.role', '', true);
