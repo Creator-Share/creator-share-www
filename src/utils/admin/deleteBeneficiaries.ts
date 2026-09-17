@@ -25,7 +25,7 @@ export async function deleteBeneficiaries(
   })
   if (error) {
     if (error.code === "23503" || error.code === "23001") {
-      return NextResponse.json({ error: "A selected child has sponsorship or payment records. Archive the child instead." }, { status: 409 })
+      return NextResponse.json({ error: "A selected child has sponsorship or payment records and cannot be deleted." }, { status: 409 })
     }
     const status = error.code === "42501" || error.code === "28000" ? 403 : 500
     return NextResponse.json({ error: "Unable to delete the selected children" }, { status })

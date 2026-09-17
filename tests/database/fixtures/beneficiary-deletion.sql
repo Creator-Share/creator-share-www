@@ -26,6 +26,9 @@ INSERT INTO public.media(id,parent_id,type,extension)
 SELECT ('bd300000-0000-4000-8000-'||lpad(i::text,12,'0'))::uuid,
        ('bd100000-0000-4000-8000-'||lpad(i::text,12,'0'))::uuid,'IMAGE','jpg'
 FROM generate_series(1,4) i;
+-- Disposable concurrency databases copy schema without migration seed rows.
+INSERT INTO public.payment_provider_accounts(provider,scope,environment)
+VALUES ('PAYPAL','paypal','sandbox') ON CONFLICT (provider,scope) DO NOTHING;
 INSERT INTO public.paypal_billing_catalog_entries(id,catalog_key,subject_kind,beneficiary_id,product_name,recurrence_interval,base_amount_usd_cents,charged_amount_minor,charged_currency,conversion_rate,currency_rate_source,product_request_id,plan_request_id,provisioning_lease_token,provisioning_lease_expires_at)
 VALUES ('bd400000-0000-4000-8000-000000000001',decode(repeat('bd',32),'hex'),'standard','bd100000-0000-4000-8000-000000000001','Deletion fixture','month',1000,1000,'USD',1,'fixture','bd400000-0000-4000-8000-000000000001','bd400000-0000-4000-8000-000000000002','bd400000-0000-4000-8000-000000000003',now()+interval '5 minutes');
 SET session_replication_role = origin;
