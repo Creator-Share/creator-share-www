@@ -57,3 +57,9 @@ Defer public metrics first if scope reduction is approved. Post-visit attributio
 ## Schema consolidation checkpoint
 
 The first schema cleanup consolidates 44 repeated function definitions. See [the consolidation record](./advocate-schema-consolidation.md) for the affected functions, structural comparison, legacy-data fixture comparison, and validation limits. This is a candidate awaiting real Supabase validation, not a completed release gate.
+
+## Required CI isolation
+
+Application build, offline contracts, and browser tests now run independently from the isolated Supabase database job. The existing required check name, `Publication authority database tests`, is retained as an aggregate requiring both jobs to succeed. A failed, skipped, or cancelled prerequisite cannot produce a successful aggregate. All 16 combinations of prerequisite outcomes are exercised against the actual gate shell. Provider isolation, loopback binding checks, mandatory database harnesses, and cleanup steps remain in place. Hosted execution remains to be verified.
+
+The production build and Advocate Edge middleware artifact gate passed after allowing the build's existing Google Fonts download. No website server was started.

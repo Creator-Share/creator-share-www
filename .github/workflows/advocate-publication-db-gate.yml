@@ -37,8 +37,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  publication-authority:
-    name: Publication authority database tests
+  application-contracts:
+    name: Advocate application contracts
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -112,6 +112,27 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  database-contracts:
+    name: Advocate database contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: yarn playwright install --with-deps chromium
 
       - name: Create loopback-only Docker network
         run: >-
@@ -312,3 +333,19 @@ jobs:
           if docker network inspect "$ADVOCATE_PUBLICATION_DOCKER_NETWORK" >/dev/null 2>&1; then
             docker network rm "$ADVOCATE_PUBLICATION_DOCKER_NETWORK"
           fi
+
+  publication-authority:
+    name: Publication authority database tests
+    needs: [application-contracts, database-contracts]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every release contract
+        shell: bash
+        env:
+          APPLICATION_RESULT: ${{ needs.application-contracts.result }}
+          DATABASE_RESULT: ${{ needs.database-contracts.result }}
+        run: |
+          test "$APPLICATION_RESULT" = success
+          test "$DATABASE_RESULT" = success
