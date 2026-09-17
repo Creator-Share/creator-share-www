@@ -131,16 +131,6 @@ export interface IssuedQuote {
   expiresAt: string
 }
 
-export interface BeginPaymentInput {
-  sponsorshipIntentId: string
-  paymentQuoteId: string
-  provider: SponsorshipPaymentProvider
-  providerAccountScope: string
-  providerIdempotencyKey: string
-  checkoutReceiptDigest: SupabaseRpcBytea
-  requestContext: SponsorshipCheckoutRequestContext
-}
-
 export interface BegunPayment {
   paymentAttemptId: string
   sponsorshipIntentId: string
@@ -151,13 +141,6 @@ export interface BegunPayment {
   chargedAmountMinor: number
   chargedCurrency: SupportedCurrency
   conversionRate: number
-}
-
-export interface AttachProviderObjectInput {
-  paymentAttemptId: string
-  providerObjectId: string
-  expiresAt: string
-  requestContext: SponsorshipCheckoutRequestContext
 }
 
 export interface HostedStripeSessionInput {
@@ -181,20 +164,6 @@ export interface CreatedHostedStripeSession {
   id: string
   url: string
   expiresAtUnixSeconds: number
-}
-
-export interface StripeSponsorshipCheckoutDependencies {
-  crypto: SponsorshipCrypto
-  loadBeneficiary(id: string): Promise<AuthoritativeBeneficiary | null>
-  prepareIntent(input: PrepareIntentInput): Promise<PreparedIntent>
-  issueQuote(input: IssueQuoteInput): Promise<IssuedQuote>
-  beginPayment(input: BeginPaymentInput): Promise<BegunPayment>
-  createHostedSession(
-    input: HostedStripeSessionInput,
-  ): Promise<CreatedHostedStripeSession>
-  attachProviderObject(input: AttachProviderObjectInput): Promise<void>
-  createOperationId(): string
-  now(): Date
 }
 
 export interface PrepareV2IntentInput extends Omit<
@@ -326,34 +295,6 @@ export interface StripeSponsorshipCheckoutV2Dependencies {
   ): Promise<CreatedHostedStripeSession>
   settleProviderObject(input: SettleV2ProviderObjectInput): Promise<void>
   now(): Date
-}
-
-export type ServerOwnedPaymentBoundaryDependencies = Pick<
-  StripeSponsorshipCheckoutDependencies,
-  | "crypto"
-  | "prepareIntent"
-  | "issueQuote"
-  | "beginPayment"
-  | "createOperationId"
->
-
-export interface ServerOwnedPaymentBoundaryInput extends Omit<
-  PrepareIntentInput,
-  "idempotencyKey"
-> {
-  operationId?: string
-  provider: SponsorshipPaymentProvider
-  providerAccountScope: string
-  providerIdempotencyPrefix: string
-  requestContext: SponsorshipCheckoutRequestContext
-}
-
-export interface ServerOwnedPaymentBoundaryResult {
-  preparedIntent: PreparedIntent
-  quote: IssuedQuote
-  paymentAttempt: BegunPayment
-  checkoutReceipt: OpaqueToken
-  providerIdempotencyKey: string
 }
 
 export interface CreateStripeSponsorshipCheckoutInput {
@@ -805,12 +746,6 @@ export function sponsorshipVisitorDigest(
 
 const visitorDigest = sponsorshipVisitorDigest
 
-function safeOperationId(createOperationId: () => string): string {
-  const operationId = createOperationId()
-  if (!UUID_PATTERN.test(operationId)) throw checkoutError("checkout-failed")
-  return operationId.toLowerCase()
-}
-
 export function validCheckoutDate(value: Date): Date {
   if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
     throw checkoutError("checkout-failed")
@@ -819,89 +754,6 @@ export function validCheckoutDate(value: Date): Date {
 }
 
 const validDate = validCheckoutDate
-
-/**
- * Shared transaction boundary for every sponsorship gateway. A provider may
- * create its external object only after this sequence returns the immutable
- * intent, server quote, payment attempt, and opaque browser receipt.
- */
-export async function prepareServerOwnedSponsorshipPayment(
-  input: ServerOwnedPaymentBoundaryInput,
-  dependencies: ServerOwnedPaymentBoundaryDependencies,
-): Promise<ServerOwnedPaymentBoundaryResult> {
-  const {
-    operationId: requestedOperationId,
-    provider,
-    providerAccountScope,
-    providerIdempotencyPrefix,
-    requestContext,
-    ...intentInput
-  } = input
-  if (
-    !/^[a-z0-9][a-z0-9_-]{2,63}$/.test(providerIdempotencyPrefix) ||
-    !/^[a-z0-9][a-z0-9_-]{0,119}$/.test(providerAccountScope)
-  ) {
-    throw checkoutError("checkout-failed")
-  }
-
-  const operationId = requestedOperationId
-    ? requiredUuid(requestedOperationId)
-    : safeOperationId(dependencies.createOperationId)
-  const receipt = dependencies.crypto.deriveCheckoutReceipt(operationId)
-  assertReceipt(receipt)
-
-  const preparedIntent = await dependencies.prepareIntent({
-    ...intentInput,
-    idempotencyKey: `checkout:${operationId}`,
-  })
-  assertUuid(preparedIntent.sponsorshipIntentId)
-  const acceptableStatus = preparedIntent.isReplay
-    ? ["created", "committed", "processing", "succeeded"].includes(
-        preparedIntent.intentStatus,
-      )
-    : preparedIntent.intentStatus === "created"
-  if (!acceptableStatus) {
-    throw checkoutError("sponsorship-unavailable")
-  }
-
-  const quote = await dependencies.issueQuote({
-    sponsorshipIntentId: preparedIntent.sponsorshipIntentId,
-    provider,
-    providerAccountScope,
-    idempotencyKey: `quote:${operationId}`,
-    requestId: intentInput.requestId,
-    traceId: intentInput.traceId,
-  })
-  const providerIdempotencyKey = `${providerIdempotencyPrefix}:${operationId}`
-  const paymentAttempt = await dependencies.beginPayment({
-    sponsorshipIntentId: preparedIntent.sponsorshipIntentId,
-    paymentQuoteId: quote.paymentQuoteId,
-    provider,
-    providerAccountScope,
-    providerIdempotencyKey,
-    checkoutReceiptDigest: receipt.digestRpcBytea,
-    requestContext,
-  })
-
-  assertProviderTerms(quote, paymentAttempt, {
-    sponsorshipIntentId: preparedIntent.sponsorshipIntentId,
-    provider,
-    providerAccountScope,
-    paymentMode: intentInput.paymentMode,
-    baseAmountUsdCents: intentInput.baseAmountUsdCents,
-    chargedAmountMinor: intentInput.chargedAmountMinor,
-    chargedCurrency: intentInput.chargedCurrency,
-    conversionRate: intentInput.conversionRate,
-  })
-
-  return {
-    preparedIntent,
-    quote,
-    paymentAttempt,
-    checkoutReceipt: receipt,
-    providerIdempotencyKey,
-  }
-}
 
 function isTrustedStripeCheckoutUrl(value: string): boolean {
   try {
@@ -924,145 +776,6 @@ function assertReceipt(receipt: OpaqueToken): void {
     !/^\\x[0-9a-f]{64}$/.test(receipt.digestRpcBytea)
   ) {
     throw checkoutError("checkout-failed")
-  }
-}
-
-export async function createStripeSponsorshipCheckout(
-  input: CreateStripeSponsorshipCheckoutInput,
-  dependencies: StripeSponsorshipCheckoutDependencies,
-): Promise<StripeSponsorshipCheckoutResult> {
-  if (!isRecord(input.body)) throw checkoutError("invalid-request")
-
-  const subjectKind = requestedSubject(input.body)
-  const partnershipProject = requestedPartnershipProject(
-    subjectKind,
-    input.body.project,
-  )
-  const requestedTerms = requestedPaymentTerms(input.body.paymentType)
-  if (
-    (subjectKind === "blind" || subjectKind === "partnership") &&
-    requestedTerms.paymentMode === "one_time"
-  ) {
-    throw checkoutError("invalid-request")
-  }
-
-  const beneficiaryId =
-    subjectKind === "standard" ? requiredUuid(input.body.beneficiaryId) : null
-  const beneficiary = beneficiaryId
-    ? await dependencies.loadBeneficiary(beneficiaryId)
-    : null
-  if (beneficiaryId && (!beneficiary || beneficiary.id !== beneficiaryId)) {
-    throw checkoutError("sponsorship-unavailable")
-  }
-
-  const baseAmountUsdCents = trustedBaseAmount(
-    subjectKind,
-    beneficiary,
-    input.body.amount,
-  )
-  const currency = selectedCurrency(input.body.currency)
-  const conversion = convertUsdCentsToCurrency(baseAmountUsdCents, currency)
-  const stripeRegion = getStripeRegionForPaymentCurrency(
-    conversion.chargedCurrency,
-  )
-  const providerAccountScope = `stripe_${stripeRegion}`
-
-  const sponsorEmail =
-    input.authenticatedUser?.email ??
-    (typeof input.body.email === "string" ? input.body.email : "")
-  let contactEmailDigest: VersionedEmailDigest
-  try {
-    contactEmailDigest = dependencies.crypto.digestEmail(sponsorEmail)
-  } catch {
-    throw checkoutError("invalid-email")
-  }
-
-  const currencyQuoteAt = validDate(dependencies.now())
-  const requestedOperationId =
-    input.body.checkoutRequestId === undefined
-      ? undefined
-      : requiredUuid(input.body.checkoutRequestId)
-  const boundary = await prepareServerOwnedSponsorshipPayment(
-    {
-      operationId: requestedOperationId,
-      source: input.host.source,
-      advocateHostname: input.host.advocateHostname,
-      visitorTokenDigest: visitorDigest(input.visitorToken),
-      authUserId: input.authenticatedUser?.id ?? null,
-      contactEmailDigest,
-      subjectKind,
-      beneficiaryId,
-      partnershipProject,
-      paymentMode: requestedTerms.paymentMode,
-      recurrenceInterval: requestedTerms.recurrenceInterval,
-      baseAmountUsdCents,
-      chargedAmountMinor: conversion.chargedAmountMinor,
-      chargedCurrency: conversion.chargedCurrency,
-      conversionRate: conversion.conversionRate,
-      currencyQuoteAt: currencyQuoteAt.toISOString(),
-      currencyRateSource: SPONSORSHIP_CURRENCY_RATE_SOURCE,
-      requestId: input.requestContext.requestId,
-      traceId: input.requestContext.traceId,
-      provider: "STRIPE",
-      providerAccountScope,
-      providerIdempotencyPrefix: "stripe-checkout",
-      requestContext: input.requestContext,
-    },
-    dependencies,
-  )
-  const attempt = boundary.paymentAttempt
-
-  const sessionCreationAt = validDate(dependencies.now())
-  if (sessionCreationAt.getTime() < currencyQuoteAt.getTime()) {
-    throw checkoutError("checkout-failed")
-  }
-  const expiresAtUnixSeconds =
-    Math.floor(sessionCreationAt.getTime() / 1000) +
-    CHECKOUT_SESSION_LIFETIME_SECONDS
-  const hostedSession = await dependencies.createHostedSession({
-    idempotencyKey: boundary.providerIdempotencyKey,
-    customerEmail: contactEmailDigest.normalizedEmail,
-    productName: productName(
-      subjectKind,
-      beneficiary,
-      attempt.paymentMode,
-      requestedTerms.recurrenceInterval,
-      partnershipProject,
-    ),
-    productImageUrl: beneficiary?.imageUrl ?? null,
-    sponsorshipIntentId: attempt.sponsorshipIntentId,
-    paymentAttemptId: attempt.paymentAttemptId,
-    providerAccountScope: attempt.providerAccountScope,
-    paymentMode: attempt.paymentMode,
-    recurrenceInterval: requestedTerms.recurrenceInterval,
-    chargedAmountMinor: attempt.chargedAmountMinor,
-    chargedCurrency: attempt.chargedCurrency,
-    checkoutBaseUrl: input.host.checkoutBaseUrl,
-    stripeRegion,
-    expiresAtUnixSeconds,
-  })
-
-  if (
-    !STRIPE_CHECKOUT_SESSION_ID_PATTERN.test(hostedSession.id) ||
-    !isTrustedStripeCheckoutUrl(hostedSession.url) ||
-    !Number.isSafeInteger(hostedSession.expiresAtUnixSeconds) ||
-    hostedSession.expiresAtUnixSeconds !== expiresAtUnixSeconds
-  ) {
-    throw checkoutError("checkout-failed")
-  }
-
-  await dependencies.attachProviderObject({
-    paymentAttemptId: attempt.paymentAttemptId,
-    providerObjectId: hostedSession.id,
-    expiresAt: new Date(
-      hostedSession.expiresAtUnixSeconds * 1000,
-    ).toISOString(),
-    requestContext: input.requestContext,
-  })
-
-  return {
-    url: hostedSession.url,
-    checkoutReceipt: boundary.checkoutReceipt.token,
   }
 }
 

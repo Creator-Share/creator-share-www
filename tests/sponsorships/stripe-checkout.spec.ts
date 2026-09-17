@@ -6,13 +6,13 @@ import { expect, test } from "@playwright/test"
 import type { VerifiedSponsorshipVisitorToken } from "../../src/lib/sponsorships/visitorCookie"
 
 import type {
-  AttachProviderObjectInput,
+  SettleV2ProviderObjectInput,
   AuthoritativeBeneficiary,
-  BeginPaymentInput,
+  BeginV2PaymentInput,
   HostedStripeSessionInput,
-  IssueQuoteInput,
-  PrepareIntentInput,
-  StripeSponsorshipCheckoutDependencies,
+  IssueV2QuoteInput,
+  PrepareV2IntentInput,
+  StripeSponsorshipCheckoutV2Dependencies,
 } from "../../src/lib/sponsorships/checkout/stripeCheckout"
 
 type CheckoutModule =
@@ -54,8 +54,7 @@ const {
   BLIND_SPONSORSHIP_AMOUNT_USD_CENTS,
   SponsorshipCheckoutError,
   buildHostedStripeSessionParams,
-  createStripeSponsorshipCheckout,
-  prepareServerOwnedSponsorshipPayment,
+  createStripeSponsorshipCheckoutV2,
   readSponsorshipVisitorCookie,
   resolveSponsorshipCheckoutHost,
 } = checkoutModule
@@ -77,15 +76,15 @@ const VISITOR_REQUEST_CONTEXT = Object.freeze({
 
 interface RecordedCalls {
   beneficiaryIds: string[]
-  prepare: PrepareIntentInput[]
-  quote: IssueQuoteInput[]
-  begin: BeginPaymentInput[]
+  prepare: PrepareV2IntentInput[]
+  quote: IssueV2QuoteInput[]
+  begin: BeginV2PaymentInput[]
   stripe: HostedStripeSessionInput[]
-  attach: AttachProviderObjectInput[]
+  attach: SettleV2ProviderObjectInput[]
 }
 
 function dependenciesFor(beneficiary: AuthoritativeBeneficiary | null): {
-  dependencies: StripeSponsorshipCheckoutDependencies
+  dependencies: StripeSponsorshipCheckoutV2Dependencies
   calls: RecordedCalls
 } {
   const calls: RecordedCalls = {
@@ -101,8 +100,15 @@ function dependenciesFor(beneficiary: AuthoritativeBeneficiary | null): {
     { randomBytes: (size) => Buffer.alloc(size, 5) },
   )
 
-  const dependencies: StripeSponsorshipCheckoutDependencies = {
+  const dependencies: StripeSponsorshipCheckoutV2Dependencies = {
     crypto: sponsorshipCrypto,
+    async authorizeHost() {},
+    async recoverCheckout() {
+      return null
+    },
+    async resumeCheckout() {
+      throw new Error("Unexpected recovery")
+    },
     async loadBeneficiary(id) {
       calls.beneficiaryIds.push(id)
       return beneficiary
@@ -134,6 +140,9 @@ function dependenciesFor(beneficiary: AuthoritativeBeneficiary | null): {
       calls.begin.push(input)
       const prepared = calls.prepare[0]
       return {
+        checkoutOperationId: OPERATION_ID,
+        replayed: false,
+        providerRequestExpiresAt: input.providerRequest.expiresAt,
         paymentAttemptId: ATTEMPT_ID,
         sponsorshipIntentId: input.sponsorshipIntentId,
         provider: input.provider,
@@ -153,10 +162,9 @@ function dependenciesFor(beneficiary: AuthoritativeBeneficiary | null): {
         expiresAtUnixSeconds: input.expiresAtUnixSeconds,
       }
     },
-    async attachProviderObject(input) {
+    async settleProviderObject(input) {
       calls.attach.push(input)
     },
-    createOperationId: () => OPERATION_ID,
     now: () => NOW,
   }
 
@@ -165,7 +173,7 @@ function dependenciesFor(beneficiary: AuthoritativeBeneficiary | null): {
 
 function baseInput(body: Record<string, unknown>) {
   return {
-    body,
+    body: { checkoutRequestId: OPERATION_ID, ...body },
     host: {
       source: "advocate_domain" as const,
       advocateHostname: "alice.creatorshare.com",
@@ -195,7 +203,7 @@ test.describe("server owned Stripe sponsorship checkout", () => {
     }
     const { dependencies, calls } = dependenciesFor(beneficiary)
 
-    const result = await createStripeSponsorshipCheckout(
+    const result = await createStripeSponsorshipCheckoutV2(
       baseInput({
         type: "sponsorship",
         beneficiaryId: beneficiary.id,
@@ -222,7 +230,7 @@ test.describe("server owned Stripe sponsorship checkout", () => {
       checkoutReceipt: expectedReceipt.token,
     })
     expect(calls.prepare).toHaveLength(1)
-    expect(calls.prepare[0].idempotencyKey).toBe(`checkout:${OPERATION_ID}`)
+    expect(calls.prepare[0].idempotencyKey).toBe(`checkout-v2:${OPERATION_ID}`)
     expect(calls.prepare[0]).toMatchObject({
       source: "advocate_domain",
       advocateHostname: "alice.creatorshare.com",
@@ -297,7 +305,7 @@ test.describe("server owned Stripe sponsorship checkout", () => {
     }
     const { dependencies, calls } = dependenciesFor(beneficiary)
 
-    await createStripeSponsorshipCheckout(
+    await createStripeSponsorshipCheckoutV2(
       baseInput({
         type: "sponsorship",
         beneficiaryId: beneficiary.id,
@@ -348,7 +356,7 @@ test.describe("server owned Stripe sponsorship checkout", () => {
       authenticatedUser: null,
     }
 
-    await createStripeSponsorshipCheckout(input, dependencies)
+    await createStripeSponsorshipCheckoutV2(input, dependencies)
 
     expect(calls.prepare[0].authUserId).toBeNull()
     expect(calls.prepare[0].contactEmailDigest.normalizedEmail).toBe(
@@ -362,7 +370,7 @@ test.describe("server owned Stripe sponsorship checkout", () => {
   test("forces blind sponsorship subject, amount, and recurrence on the server", async () => {
     const { dependencies, calls } = dependenciesFor(null)
 
-    await createStripeSponsorshipCheckout(
+    await createStripeSponsorshipCheckoutV2(
       baseInput({
         type: "blind_sponsorship",
         sponsorshipMode: "blind",
@@ -404,7 +412,7 @@ test.describe("server owned Stripe sponsorship checkout", () => {
     })
 
     await expect(
-      createStripeSponsorshipCheckout(
+      createStripeSponsorshipCheckoutV2(
         baseInput({
           type: "sponsorship",
           beneficiaryId: beneficiary.id,
@@ -422,7 +430,7 @@ test.describe("server owned Stripe sponsorship checkout", () => {
   test("rejects blind one-time checkout and malformed open amounts", async () => {
     const blind = dependenciesFor(null)
     await expect(
-      createStripeSponsorshipCheckout(
+      createStripeSponsorshipCheckoutV2(
         baseInput({
           type: "blind_sponsorship",
           paymentType: "one_time",
@@ -443,7 +451,7 @@ test.describe("server owned Stripe sponsorship checkout", () => {
     }
     const open = dependenciesFor(openBeneficiary)
     await expect(
-      createStripeSponsorshipCheckout(
+      createStripeSponsorshipCheckoutV2(
         baseInput({
           type: "sponsorship",
           beneficiaryId: openBeneficiary.id,
@@ -456,115 +464,6 @@ test.describe("server owned Stripe sponsorship checkout", () => {
       ),
     ).rejects.toMatchObject({ code: "invalid-request" })
     expect(open.calls.prepare).toEqual([])
-  })
-})
-
-test.describe("shared server owned gateway boundary", () => {
-  test("binds a non-Stripe provider before any external gateway object exists", async () => {
-    const { dependencies, calls } = dependenciesFor(null)
-    const contactEmailDigest = dependencies.crypto.digestEmail(
-      "gateway@example.com",
-    )
-    const result = await prepareServerOwnedSponsorshipPayment(
-      {
-        source: "primary_site",
-        advocateHostname: null,
-        visitorTokenDigest: null,
-        authUserId: null,
-        contactEmailDigest,
-        subjectKind: "blind",
-        beneficiaryId: null,
-        partnershipProject: null,
-        paymentMode: "recurring",
-        recurrenceInterval: "month",
-        baseAmountUsdCents: 3333,
-        chargedAmountMinor: 3333,
-        chargedCurrency: "USD",
-        conversionRate: 1,
-        currencyQuoteAt: NOW.toISOString(),
-        currencyRateSource: "test-rate-source",
-        requestId: "request-shared",
-        traceId: null,
-        provider: "PAYPAL",
-        providerAccountScope: "paypal",
-        providerIdempotencyPrefix: "paypal-order",
-        requestContext: {
-          requestId: "request-shared",
-          traceId: null,
-          clientIp: null,
-          userAgent: null,
-        },
-      },
-      dependencies,
-    )
-
-    expect(calls.quote[0]).toMatchObject({
-      provider: "PAYPAL",
-      providerAccountScope: "paypal",
-    })
-    expect(calls.begin[0]).toMatchObject({
-      provider: "PAYPAL",
-      providerAccountScope: "paypal",
-      providerIdempotencyKey: `paypal-order:${OPERATION_ID}`,
-    })
-    expect(result.paymentAttempt.provider).toBe("PAYPAL")
-    expect(calls.stripe).toEqual([])
-  })
-
-  test("recovers an exact in-flight checkout with the same stable receipt", async () => {
-    const { dependencies, calls } = dependenciesFor(null)
-    dependencies.prepareIntent = async (input) => {
-      calls.prepare.push(input)
-      return {
-        sponsorshipIntentId: INTENT_ID,
-        intentStatus: "processing",
-        isReplay: true,
-      }
-    }
-    const contactEmailDigest =
-      dependencies.crypto.digestEmail("replay@example.com")
-
-    const result = await prepareServerOwnedSponsorshipPayment(
-      {
-        operationId: OPERATION_ID,
-        source: "primary_site",
-        advocateHostname: null,
-        visitorTokenDigest: null,
-        authUserId: null,
-        contactEmailDigest,
-        subjectKind: "blind",
-        beneficiaryId: null,
-        partnershipProject: null,
-        paymentMode: "recurring",
-        recurrenceInterval: "month",
-        baseAmountUsdCents: 3333,
-        chargedAmountMinor: 3333,
-        chargedCurrency: "USD",
-        conversionRate: 1,
-        currencyQuoteAt: NOW.toISOString(),
-        currencyRateSource: "test-rate-source",
-        requestId: "request-replay",
-        traceId: null,
-        provider: "STRIPE",
-        providerAccountScope: "stripe_us",
-        providerIdempotencyPrefix: "stripe-checkout",
-        requestContext: {
-          requestId: "request-replay",
-          traceId: null,
-          clientIp: null,
-          userAgent: null,
-        },
-      },
-      dependencies,
-    )
-
-    expect(result.checkoutReceipt).toEqual(
-      dependencies.crypto.deriveCheckoutReceipt(OPERATION_ID),
-    )
-    expect(calls.prepare[0].idempotencyKey).toBe(`checkout:${OPERATION_ID}`)
-    expect(calls.begin[0].providerIdempotencyKey).toBe(
-      `stripe-checkout:${OPERATION_ID}`,
-    )
   })
 })
 
