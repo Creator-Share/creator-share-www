@@ -1348,18 +1348,7 @@ BEGIN
     JOIN public.advocate_invitations invitation
       ON invitation.id = outbox.invitation_id
      AND invitation.advocate_id = outbox.advocate_id
-    JOIN public.advocates advocate
-      ON advocate.id = outbox.advocate_id
-    WHERE invitation.accepted_at IS NULL
-      AND invitation.revoked_at IS NULL
-      AND invitation.expires_at > v_now
-      AND advocate.relationship_status = 'active'
-      AND advocate.publication_status IN (
-        'draft',
-        'provisioning',
-        'active',
-        'failed'
-      )
+    WHERE private.advocate_invitation_delivery_is_eligible(invitation.id)
       AND outbox.contact_redacted_at IS NULL
       AND outbox.attempt_count < outbox.max_attempts
       AND (
@@ -1593,13 +1582,6 @@ BEGIN
   PERFORM 1
   FROM public.advocates advocate
   WHERE advocate.id = v_advocate_id
-    AND advocate.relationship_status = 'active'
-    AND advocate.publication_status IN (
-      'draft',
-      'provisioning',
-      'active',
-      'failed'
-    )
   FOR UPDATE;
 
   IF NOT FOUND THEN
@@ -1632,7 +1614,8 @@ BEGIN
      OR v_invitation.target_auth_user_id IS NULL
      OR v_invitation.accepted_at IS NOT NULL
      OR v_invitation.revoked_at IS NOT NULL
-     OR v_invitation.expires_at <= v_now THEN
+     OR v_invitation.expires_at <= v_now
+     OR NOT private.advocate_invitation_delivery_is_eligible(v_invitation.id) THEN
     RAISE EXCEPTION 'Invitation delivery proof does not match the active lease'
       USING ERRCODE = '42501';
   END IF;
@@ -2615,121 +2598,6 @@ $$;
 
 COMMENT ON FUNCTION public.get_advocate_pending_invitations(uuid) IS
   'Permission-checked owner and administrator projection for pending or expired delegate invitations. It exposes normalized team contact email and predefined roles, but no auth identifier, capability, digest, encrypted delivery material, provider state, or outbox identifier.';
-
-CREATE OR REPLACE FUNCTION public.get_advocate_audit_events(
-  target_advocate_id uuid,
-  before_sequence bigint DEFAULT NULL,
-  page_size integer DEFAULT 50
-)
-RETURNS TABLE (
-  sequence_id bigint,
-  event_id uuid,
-  occurred_at timestamp with time zone,
-  table_name text,
-  operation audit.audit_operation,
-  actor_type audit.audit_actor_type,
-  actor_user_id uuid,
-  actor_display_name text,
-  effective_user_id uuid,
-  system_actor text,
-  tool text,
-  changed_columns text[],
-  reason text
-)
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-  IF auth.uid() IS NULL THEN
-    RAISE EXCEPTION 'Authentication is required'
-      USING ERRCODE = '28000';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM auth.users actor
-    WHERE actor.id = auth.uid()
-      AND actor.email IS NOT NULL
-      AND actor.email_confirmed_at IS NOT NULL
-      AND actor.deleted_at IS NULL
-      AND actor.is_anonymous IS NOT TRUE
-      AND (actor.banned_until IS NULL OR actor.banned_until <= clock_timestamp())
-  ) THEN
-    RAISE EXCEPTION 'An active authenticated account with a verified email is required'
-      USING ERRCODE = '42501';
-  END IF;
-
-  IF NOT private.has_advocate_permission(
-    target_advocate_id,
-    'portal.audit.view'
-  ) THEN
-    RAISE EXCEPTION 'Insufficient portal audit permission'
-      USING ERRCODE = '42501';
-  END IF;
-
-  IF page_size IS NULL OR page_size < 1 OR page_size > 200 THEN
-    RAISE EXCEPTION 'Audit page size must be between 1 and 200'
-      USING ERRCODE = '22023';
-  END IF;
-
-  RETURN QUERY
-  SELECT
-    event.sequence_id,
-    event.id,
-    event.occurred_at,
-    event.table_name,
-    event.operation,
-    event.actor_type,
-    event.actor_user_id,
-    CASE
-      WHEN event.actor_type = 'system' THEN event.system_actor
-      WHEN event.actor_user_id IS NOT NULL THEN nullif(
-        btrim(
-          concat_ws(
-            ' ',
-            nullif(profile.first_name, ''),
-            CASE
-              WHEN nullif(profile.last_name, '') IS NOT NULL
-                THEN left(profile.last_name, 1) || '.'
-              ELSE NULL
-            END
-          )
-        ),
-        ''
-      )
-      ELSE event.actor_type::text
-    END AS actor_display_name,
-    event.effective_user_id,
-    event.system_actor,
-    event.tool,
-    event.changed_columns,
-    event.reason
-  FROM audit.audit_events event
-  LEFT JOIN public.users profile ON profile.id = event.actor_user_id
-  WHERE event.advocate_id = target_advocate_id
-    AND event.table_name = ANY (ARRAY[
-      'advocates',
-      'advocate_domains',
-      'advocate_domain_integrations',
-      'domain_provisioning_jobs',
-      'advocate_branding',
-      'advocate_public_metric_selections',
-      'advocate_beneficiaries',
-      'advocate_memberships',
-      'advocate_membership_roles',
-      'advocate_invitations',
-      'advocate_invitation_roles',
-      'advocate_invitation_email_outbox',
-      'advocate_logo_upload_reservations',
-      'advocate_logo_reconciliation_jobs'
-    ]::text[])
-    AND (before_sequence IS NULL OR event.sequence_id < before_sequence)
-  ORDER BY event.sequence_id DESC
-  LIMIT page_size;
-END;
-$$;
 
 COMMENT ON FUNCTION public.get_advocate_audit_events(uuid, bigint, integer) IS
   'Returns only the sanitized, advocate-scoped audit ledger, including invitation delivery lifecycle events, to members with portal.audit.view. Raw forensic evidence and encrypted delivery material are never exposed.';

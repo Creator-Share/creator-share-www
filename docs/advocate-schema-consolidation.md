@@ -66,3 +66,21 @@ These are development checks, not the production release gate. The temporary har
 | `public.begin_email_proof_issuance` | 2 | 78 |
 | `public.abandon_email_proof_issuance` | 2 | 69 |
 | `public.purge_expired_email_proof_issuance_gates` | 3 | 127 |
+
+## Second consolidation pass
+
+The first pass conservatively excluded every function name involved in a rename or schema move. The second pass groups definitions only within the interval before or after that boundary. It preserves every rename, schema move, drop, and function alteration instead of combining distinct generations under the same name.
+
+Nine additional groups remove 1,212 superseded definition lines. The strict in-process replay again matches all 5,325 original catalog entries and the eight legacy fixture projections exactly. Final catalog equality includes the renamed private implementations that wrappers still call. Hosted Supabase and concurrency validation of this second pass remains required.
+
+| Function | Definitions in interval | Superseded definition lines |
+| --- | ---: | ---: |
+| `public.get_advocate_audit_events` | 4 | 276 |
+| `public.issue_sponsorship_payment_quote` | 2 | 142 |
+| `public.read_payment_gateway_event_success_material` | 2 | 135 |
+| `private.data_retention_counts_are_valid` | 2 | 86 |
+| `private.data_retention_backlog` | 2 | 96 |
+| `public.claim_advocate_invitation_email_jobs` | 2 | 209 |
+| `public.begin_advocate_invitation_email_delivery` | 2 | 124 |
+| `private.data_retention_counts_are_valid` | 2 | 43 |
+| `private.data_retention_backlog` | 3 | 101 |

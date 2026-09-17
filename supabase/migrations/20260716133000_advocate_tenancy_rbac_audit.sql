@@ -3131,7 +3131,29 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-  IF NOT private.has_advocate_permission(target_advocate_id, 'portal.audit.view') THEN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Authentication is required'
+      USING ERRCODE = '28000';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM auth.users actor
+    WHERE actor.id = auth.uid()
+      AND actor.email IS NOT NULL
+      AND actor.email_confirmed_at IS NOT NULL
+      AND actor.deleted_at IS NULL
+      AND actor.is_anonymous IS NOT TRUE
+      AND (actor.banned_until IS NULL OR actor.banned_until <= clock_timestamp())
+  ) THEN
+    RAISE EXCEPTION 'An active authenticated account with a verified email is required'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF NOT private.has_advocate_permission(
+    target_advocate_id,
+    'portal.audit.view'
+  ) THEN
     RAISE EXCEPTION 'Insufficient portal audit permission'
       USING ERRCODE = '42501';
   END IF;
@@ -3187,7 +3209,10 @@ BEGIN
       'advocate_memberships',
       'advocate_membership_roles',
       'advocate_invitations',
-      'advocate_invitation_roles'
+      'advocate_invitation_roles',
+      'advocate_invitation_email_outbox',
+      'advocate_logo_upload_reservations',
+      'advocate_logo_reconciliation_jobs'
     ]::text[])
     AND (before_sequence IS NULL OR event.sequence_id < before_sequence)
   ORDER BY event.sequence_id DESC

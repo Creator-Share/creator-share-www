@@ -878,33 +878,46 @@ BEGIN
       USING ERRCODE = '55P03';
   END IF;
 
-  IF v_event.provider <> 'STRIPE'
-     OR v_event.event_type NOT IN (
-       'checkout.session.completed',
-       'checkout.session.async_payment_succeeded',
-       'invoice.paid',
-       'invoice.payment_succeeded'
-     )
-     OR (
-       v_event.event_type IN (
-         'checkout.session.completed',
-         'checkout.session.async_payment_succeeded'
+  IF NOT (
+       (
+         v_event.provider = 'STRIPE'
+         AND (
+           (
+             v_event.event_type IN (
+               'checkout.session.completed',
+               'checkout.session.async_payment_succeeded'
+             )
+             AND v_event.provider_object_type = 'checkout_session'
+           )
+           OR (
+             v_event.event_type IN (
+               'invoice.paid',
+               'invoice.payment_succeeded'
+             )
+             AND v_event.provider_object_type = 'invoice'
+           )
+         )
        )
-       AND v_event.provider_object_type IS DISTINCT FROM 'checkout_session'
-     )
-     OR (
-       v_event.event_type IN (
-         'invoice.paid',
-         'invoice.payment_succeeded'
+       OR (
+         v_event.provider = 'PAYPAL'
+         AND (
+           (
+             v_event.event_type = 'PAYMENT.CAPTURE.COMPLETED'
+             AND v_event.provider_object_type = 'capture'
+           )
+           OR (
+             v_event.event_type = 'PAYMENT.SALE.COMPLETED'
+             AND v_event.provider_object_type = 'sale'
+           )
+         )
        )
-       AND v_event.provider_object_type IS DISTINCT FROM 'invoice'
      )
      OR v_event.fact_payment_status IS DISTINCT FROM 'paid'
      OR v_event.payment_attempt_id IS NULL
      OR v_event.sponsorship_intent_id IS NULL
      OR v_event.fact_server_payment_attempt_id IS DISTINCT FROM
        v_event.payment_attempt_id THEN
-    RAISE EXCEPTION 'Gateway event is not a typed Stripe payment success'
+    RAISE EXCEPTION 'Gateway event is not a typed sponsorship payment success'
       USING ERRCODE = '23514';
   END IF;
 

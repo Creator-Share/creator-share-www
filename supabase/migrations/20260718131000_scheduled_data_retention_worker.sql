@@ -144,6 +144,13 @@ BEGIN
     WHEN 'audit_forensics' THEN
       v_allowed_keys := ARRAY['deleted_count']::text[];
       v_maximum := 5000;
+    WHEN 'sponsor_authentication' THEN
+      v_allowed_keys := ARRAY[
+        'recent_auth_receipts_deleted',
+        'passwordless_reservations_deleted',
+        'passwordless_verification_attempts_deleted'
+      ]::text[];
+      v_maximum := 5000;
     WHEN 'advocate_tracking' THEN
       v_allowed_keys := ARRAY[
         'exposures_deleted',
@@ -441,23 +448,40 @@ BEGIN
       INTO v_oldest
       FROM public.payment_gateway_events event
       WHERE event.payload_ciphertext IS NOT NULL
-        AND event.payload_retention_expires_at <= clock_timestamp();
+        AND event.payload_retention_expires_at <= v_now;
     WHEN 'audit_forensics' THEN
       SELECT min(forensic.expires_at)
       INTO v_oldest
       FROM audit.audit_event_forensics forensic
-      WHERE forensic.expires_at <= clock_timestamp();
+      WHERE forensic.expires_at <= v_now;
+    WHEN 'sponsor_authentication' THEN
+      SELECT min(expired_at)
+      INTO v_oldest
+      FROM (
+        SELECT receipt.expires_at AS expired_at
+        FROM private.sponsor_email_authentication_receipts receipt
+        WHERE receipt.expires_at <= v_now
+        UNION ALL
+        SELECT reservation.requested_at + interval '24 hours'
+        FROM private.sponsor_passwordless_email_delivery_reservations
+          reservation
+        WHERE reservation.requested_at < v_now - interval '24 hours'
+        UNION ALL
+        SELECT attempt.attempted_at + interval '24 hours'
+        FROM private.sponsor_passwordless_email_verification_attempts attempt
+        WHERE attempt.attempted_at < v_now - interval '24 hours'
+      ) expired_authentication_evidence;
     WHEN 'advocate_tracking' THEN
       SELECT min(expired_at)
       INTO v_oldest
       FROM (
         SELECT exposure.retention_expires_at AS expired_at
         FROM public.advocate_exposures exposure
-        WHERE exposure.retention_expires_at <= clock_timestamp()
+        WHERE exposure.retention_expires_at <= v_now
         UNION ALL
         SELECT visitor.retention_expires_at
         FROM public.browser_visitors visitor
-        WHERE visitor.retention_expires_at <= clock_timestamp()
+        WHERE visitor.retention_expires_at <= v_now
           AND NOT EXISTS (
             SELECT 1
             FROM public.advocate_exposures exposure

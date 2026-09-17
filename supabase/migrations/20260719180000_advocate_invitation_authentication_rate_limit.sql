@@ -289,7 +289,7 @@ ALTER TABLE audit.data_retention_run_events
 ALTER FUNCTION private.data_retention_counts_are_valid(text, jsonb)
   RENAME TO data_retention_counts_are_valid_v1;
 
-CREATE FUNCTION private.data_retention_counts_are_valid(
+CREATE OR REPLACE FUNCTION private.data_retention_counts_are_valid(
   target_step_key text,
   target_counts jsonb
 )
@@ -300,33 +300,99 @@ PARALLEL SAFE
 SET search_path = ''
 AS $$
 DECLARE
-  v_advocate_count text;
+  v_value text;
+  v_key text;
+  v_allowed_keys text[];
+  v_maximum bigint;
+  v_total bigint := 0;
 BEGIN
-  IF target_step_key = 'sponsor_authentication'
-     AND target_counts ?
-       'advocate_invitation_authentication_attempts_deleted' THEN
-    v_advocate_count := target_counts ->>
-      'advocate_invitation_authentication_attempts_deleted';
-    IF jsonb_typeof(
-         target_counts ->
-           'advocate_invitation_authentication_attempts_deleted'
-       ) <> 'number'
-       OR v_advocate_count !~ '^(0|[1-9][0-9]*)$'
-       OR v_advocate_count::numeric > 5000 THEN
+  IF NOT private.data_retention_step_is_valid(target_step_key)
+     OR jsonb_typeof(target_counts) <> 'object'
+     OR pg_column_size(target_counts) > 1024 THEN
+    RETURN false;
+  END IF;
+
+  CASE target_step_key
+    WHEN 'checkout_contact_envelopes' THEN
+      v_allowed_keys := ARRAY[
+        'erased_count',
+        'succeeded_count',
+        'failed_count',
+        'cancelled_count',
+        'expired_count'
+      ]::text[];
+      v_maximum := 500;
+    WHEN 'email_outbox_contact' THEN
+      v_allowed_keys := ARRAY['redacted_count']::text[];
+      v_maximum := 5000;
+    WHEN 'gateway_event_payloads' THEN
+      v_allowed_keys := ARRAY['redacted_count']::text[];
+      v_maximum := 5000;
+    WHEN 'audit_forensics' THEN
+      v_allowed_keys := ARRAY['deleted_count']::text[];
+      v_maximum := 5000;
+    WHEN 'sponsor_authentication' THEN
+      v_allowed_keys := CASE
+        WHEN target_counts ? 'email_proof_issuance_gates_deleted' THEN ARRAY[
+          'recent_auth_receipts_deleted',
+          'passwordless_reservations_deleted',
+          'passwordless_verification_attempts_deleted',
+          'advocate_invitation_authentication_attempts_deleted',
+          'email_proof_issuance_gates_deleted'
+        ]::text[]
+        WHEN target_counts ?
+          'advocate_invitation_authentication_attempts_deleted' THEN ARRAY[
+          'recent_auth_receipts_deleted',
+          'passwordless_reservations_deleted',
+          'passwordless_verification_attempts_deleted',
+          'advocate_invitation_authentication_attempts_deleted'
+        ]::text[]
+        ELSE ARRAY[
+          'recent_auth_receipts_deleted',
+          'passwordless_reservations_deleted',
+          'passwordless_verification_attempts_deleted'
+        ]::text[]
+      END;
+      v_maximum := 5000;
+    WHEN 'advocate_tracking' THEN
+      v_allowed_keys := ARRAY[
+        'exposures_deleted',
+        'visitors_deleted'
+      ]::text[];
+      v_maximum := 5000;
+  END CASE;
+
+  IF (SELECT array_agg(entry.key ORDER BY entry.key)
+      FROM jsonb_each(target_counts) entry)
+     IS DISTINCT FROM
+     (SELECT array_agg(allowed_key ORDER BY allowed_key)
+      FROM unnest(v_allowed_keys) allowed_key) THEN
+    RETURN false;
+  END IF;
+
+  FOREACH v_key IN ARRAY v_allowed_keys LOOP
+    IF jsonb_typeof(target_counts -> v_key) <> 'number' THEN
       RETURN false;
     END IF;
 
-    RETURN private.data_retention_counts_are_valid_v1(
-      target_step_key,
-      target_counts -
-        'advocate_invitation_authentication_attempts_deleted'
-    );
+    v_value := target_counts ->> v_key;
+    IF v_value !~ '^(0|[1-9][0-9]*)$'
+       OR v_value::numeric > v_maximum THEN
+      RETURN false;
+    END IF;
+  END LOOP;
+
+  IF target_step_key = 'checkout_contact_envelopes' THEN
+    v_total := (target_counts ->> 'succeeded_count')::bigint
+      + (target_counts ->> 'failed_count')::bigint
+      + (target_counts ->> 'cancelled_count')::bigint
+      + (target_counts ->> 'expired_count')::bigint;
+    IF v_total <> (target_counts ->> 'erased_count')::bigint THEN
+      RETURN false;
+    END IF;
   END IF;
 
-  RETURN private.data_retention_counts_are_valid_v1(
-    target_step_key,
-    target_counts
-  );
+  RETURN true;
 EXCEPTION
   WHEN OTHERS THEN
     RETURN false;
@@ -394,7 +460,7 @@ ALTER TABLE audit.data_retention_run_events
 ALTER FUNCTION private.data_retention_backlog(text)
   RENAME TO data_retention_backlog_v1;
 
-CREATE FUNCTION private.data_retention_backlog(
+CREATE OR REPLACE FUNCTION private.data_retention_backlog(
   target_step_key text
 )
 RETURNS TABLE (
@@ -408,6 +474,7 @@ AS $$
 DECLARE
   v_existing record;
   v_advocate_oldest timestamp with time zone;
+  v_email_proof_oldest timestamp with time zone;
   v_oldest timestamp with time zone;
   v_now timestamp with time zone := clock_timestamp();
 BEGIN
@@ -422,13 +489,43 @@ BEGIN
     INTO v_advocate_oldest
     FROM private.advocate_invitation_authentication_attempts attempt
     WHERE attempt.attempted_at <= v_now - interval '24 hours';
+
+    SELECT min(
+      greatest(
+        gate.reservation_expires_at,
+        COALESCE(gate.next_issuance_at, gate.reservation_expires_at),
+        COALESCE(
+          gate.proof_exclusivity_expires_at,
+          gate.reservation_expires_at
+        ),
+        COALESCE(
+          gate.legacy_proof_quarantine_expires_at,
+          gate.reservation_expires_at
+        )
+      )
+    )
+    INTO v_email_proof_oldest
+    FROM private.email_proof_issuance_gates gate
+    WHERE gate.reservation_expires_at <= v_now
+      AND COALESCE(gate.next_issuance_at, '-infinity'::timestamptz) <= v_now
+      AND COALESCE(
+        gate.proof_exclusivity_expires_at,
+        '-infinity'::timestamptz
+      ) <= v_now
+      AND COALESCE(
+        gate.legacy_proof_quarantine_expires_at,
+        '-infinity'::timestamptz
+      ) <= v_now;
   END IF;
 
-  v_oldest := CASE
-    WHEN v_existing.oldest_expired_at IS NULL THEN v_advocate_oldest
-    WHEN v_advocate_oldest IS NULL THEN v_existing.oldest_expired_at
-    ELSE least(v_existing.oldest_expired_at, v_advocate_oldest)
-  END;
+  SELECT min(candidate.expired_at)
+  INTO v_oldest
+  FROM (
+    VALUES
+      (v_existing.oldest_expired_at),
+      (v_advocate_oldest),
+      (v_email_proof_oldest)
+  ) candidate(expired_at);
 
   RETURN QUERY SELECT v_oldest IS NOT NULL, v_oldest;
 END;
