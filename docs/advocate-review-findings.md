@@ -201,3 +201,9 @@ The payment runbook now supplies a protected aggregate query covering exhausted 
 **P2 authorization defect (FF-086):** recurring sponsorship, one-time history, and legacy PayPal presentation RPCs checked only authenticated role and user identity. A normal database role with unchanged claims could still read its recurring sponsorship after an Auth ban. Full-schema before/after execution now denies all three functions with SQLSTATE 42501 while preserving active access. The fix reuses the existing account-state predicate; only the three function definitions change and all eight legacy-data projections remain equal.
 
 Eight added database assertions cover active access, banned access, expiry restoration, and soft deletion. The real retained-JWT Auth/PostgREST test now exercises these sponsor endpoints as well. Hosted validation is pending. This does not alter historical ownership or erase sponsorship records.
+
+## Updated review footprint
+
+Against review baseline `0380658`, local revision `6b6b41f` changes 248 tracked text files, with 6,585 additions and 30,521 deletions: 23,936 net fewer lines. Lockfiles account for 10,602 of that reduction. Excluding lockfiles, the net reduction is 13,334 lines. Application and support paths (`src` and `scripts`) shrink by 1,491 lines, undeployed migrations by 11,477, database tests by 232, and application/harness tests by 299. Documentation/workflows add 135 net lines and other configuration adds 30. Binary files are excluded from these Git numstat measurements. These figures measure the review diff, not the entire PR or production-code deletion alone. No product capability has been removed.
+
+The last fully validated revision remains `231c0d7`. Later snapshot and sponsor-access changes need a complete successful hosted gate; passing individual files or an application-only job does not establish that result.
