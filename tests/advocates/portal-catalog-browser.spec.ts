@@ -189,7 +189,7 @@ async function fillChangeNote(
   note: string,
 ): Promise<void> {
   await expect(async () => {
-    await catalog.getByLabel("Change note").fill(note)
+    await catalog.getByRole("textbox", { name: "Change note", exact: true }).fill(note)
     expect(JSON.stringify(await readCatalogDrafts(page))).toContain(note)
   }).toPass({ timeout: 15_000 })
 }
@@ -283,7 +283,7 @@ test("operates every catalog mode and repairs, searches, reorders, and features 
   await expect(catalog.getByRole("alert")).toContainText(
     "Remove every unavailable child before saving",
   )
-  await catalog.getByLabel("Change note").fill("Repair the saved selection")
+  await catalog.getByRole("textbox", { name: "Change note", exact: true }).fill("Repair the saved selection")
   await expect(save).toBeDisabled()
 
   await removeBlockedSelections(page)
@@ -365,14 +365,14 @@ test("submits exact ordered state, accepts one-version success, and uses the new
   const catalog = page.getByRole("region", { name: "Child catalog" })
 
   await removeBlockedSelections(page)
-  await catalog.getByLabel("Change note").fill("Remove unavailable children")
+  await catalog.getByRole("textbox", { name: "Change note", exact: true }).fill("Remove unavailable children")
   await catalog.getByRole("button", { name: "Save child catalog" }).click()
 
   await expect(
     catalog.getByText("Child catalog saved.", { exact: true }),
   ).toBeVisible()
   await expect(catalog.getByText("You have unsaved changes.")).toHaveCount(0)
-  await expect(catalog.getByLabel("Change note")).toHaveValue("")
+  await expect(catalog.getByRole("textbox", { name: "Change note", exact: true })).toHaveValue("")
   expect(submissions).toHaveLength(1)
   expect(submissions[0].body).toEqual({
     expectedVersion: 7,
@@ -386,7 +386,7 @@ test("submits exact ordered state, accepts one-version success, and uses the new
   await search.fill("gamma")
   await catalog.getByRole("button", { name: "Add Gamma Child" }).click()
   await expect(search).toBeFocused()
-  await catalog.getByLabel("Change note").fill("Add Gamma to the catalog")
+  await catalog.getByRole("textbox", { name: "Change note", exact: true }).fill("Add Gamma to the catalog")
   await catalog.getByRole("button", { name: "Save child catalog" }).click()
   await expect.poll(() => submissions.length).toBe(2)
   expect(submissions[1].body).toMatchObject({
@@ -403,7 +403,7 @@ test("collapses same-tick duplicate submission attempts into one request", async
   await installSuccessfulCatalogEndpoint(page, submissions, 250)
   const catalog = page.getByRole("region", { name: "Child catalog" })
   await removeBlockedSelections(page)
-  await catalog.getByLabel("Change note").fill("Submit this update once")
+  await catalog.getByRole("textbox", { name: "Change note", exact: true }).fill("Submit this update once")
 
   const save = catalog.getByRole("button", { name: "Save child catalog" })
   await save.evaluate((button: HTMLButtonElement) => {
@@ -433,7 +433,7 @@ test("locks editing after an optimistic-concurrency conflict", async ({
   })
   const catalog = page.getByRole("region", { name: "Child catalog" })
   await removeBlockedSelections(page)
-  await catalog.getByLabel("Change note").fill("Attempt a stale update")
+  await catalog.getByRole("textbox", { name: "Change note", exact: true }).fill("Attempt a stale update")
   await catalog.getByRole("button", { name: "Save child catalog" }).click()
 
   await expect(catalog.getByText("Reload required")).toBeVisible()
@@ -442,7 +442,7 @@ test("locks editing after an optimistic-concurrency conflict", async ({
       "These catalog settings changed in another session. Reload the latest settings before making another change.",
     ),
   ).toBeVisible()
-  await expect(catalog.getByLabel("Change note")).toBeDisabled()
+  await expect(catalog.getByRole("textbox", { name: "Change note", exact: true })).toBeDisabled()
   await expect(
     catalog.getByRole("button", { name: "Reload latest settings" }),
   ).toBeVisible()
@@ -513,7 +513,7 @@ test("leaves a deliberately clean catalog when confirmed link navigation is canc
   await catalog
     .getByRole("button", { name: "Remove Unavailable selection 333333333333" })
     .click()
-  await catalog.getByLabel("Change note").fill("Discard this canceled link")
+  await catalog.getByRole("textbox", { name: "Change note", exact: true }).fill("Discard this canceled link")
   await expect.poll(() => readCatalogDrafts(page)).toHaveLength(1)
 
   await page.evaluate(() => {
@@ -701,7 +701,7 @@ test("leaves a deliberately clean catalog when another listener cancels a confir
   await catalog
     .getByRole("button", { name: "Remove Unavailable selection 333333333333" })
     .click()
-  await catalog.getByLabel("Change note").fill("Discard canceled traversal")
+  await catalog.getByRole("textbox", { name: "Change note", exact: true }).fill("Discard canceled traversal")
   await expect.poll(() => readCatalogDrafts(page)).toHaveLength(1)
 
   await page.evaluate(() => {
@@ -809,7 +809,7 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
   await expect(catalog.getByText(/^3 of 5 selected\./)).toBeVisible()
   const draftsBeforeFirstAssertion = await readCatalogDrafts(page)
   await expect(
-    catalog.getByLabel("Change note"),
+    catalog.getByRole("textbox", { name: "Change note", exact: true }),
     `persisted draft at assertion time: ${JSON.stringify(draftsBeforeFirstAssertion)}`,
   ).toHaveValue("Recover this mobile catalog draft")
   await catalog.getByRole("button", { name: "Reset to saved catalog" }).click()
@@ -843,7 +843,7 @@ test("recovers version-bound drafts after mobile WebKit back and forward travers
    */
   const draftsBeforeFinalAssertion = await readCatalogDrafts(page)
   await expect(
-    catalog.getByLabel("Change note"),
+    catalog.getByRole("textbox", { name: "Change note", exact: true }),
     `persisted draft at assertion time: ${JSON.stringify(draftsBeforeFinalAssertion)}`,
   ).toHaveValue("Recover this forward navigation draft")
   expect(unexpectedDialogs).toEqual([])
@@ -892,7 +892,7 @@ test("keeps a change note typed before the client bundle arrives", async ({
   await page.goto(harnessOrigin, { waitUntil: "domcontentloaded" })
 
   const catalog = page.getByRole("region", { name: "Child catalog" })
-  const note = catalog.getByLabel("Change note")
+  const note = catalog.getByRole("textbox", { name: "Change note", exact: true })
   await expect(note).toBeVisible()
   await assertNotYetHydrated(page)
 
@@ -917,7 +917,7 @@ test("a note typed before hydration outranks the note in a recovered draft", asy
       name: "Remove Unavailable selection 333333333333",
     })
     .click()
-  await catalog.getByLabel("Change note").fill("Note stored in the draft")
+  await catalog.getByRole("textbox", { name: "Change note", exact: true }).fill("Note stored in the draft")
   expect(JSON.stringify(await readCatalogDrafts(page))).toContain(
     "Note stored in the draft",
   )
@@ -925,7 +925,7 @@ test("a note typed before hydration outranks the note in a recovered draft", asy
   const releaseBundles = await gateClientBundles(page)
   await page.reload({ waitUntil: "domcontentloaded" })
 
-  const note = catalog.getByLabel("Change note")
+  const note = catalog.getByRole("textbox", { name: "Change note", exact: true })
   await expect(note).toBeVisible()
   await assertNotYetHydrated(page)
   // The server render carries no draft, so the field starts empty.

@@ -22,7 +22,7 @@ Creator Share is a modern sponsorship platform connecting compassionate individu
 ### Prerequisites
 
 - **Node.js**: v24.18.0 (specified in `.nvmrc`)
-- **Package Manager**: npm or yarn
+- **Package Manager**: Yarn 1.22.22 (declared in `package.json`)
 - **Database**: Supabase account
 - **Payment Processor**: Stripe account (PayPal optional)
 
@@ -45,10 +45,10 @@ Creator Share is a modern sponsorship platform connecting compassionate individu
 3. **Install dependencies**
 
    ```bash
-   npm install
-   # or
-   yarn install
+   yarn install --frozen-lockfile
    ```
+
+Use `yarn.lock` as the dependency authority, matching CI and deployment. Do not generate a second lockfile with npm.
 
 4. **Configure environment variables**
 

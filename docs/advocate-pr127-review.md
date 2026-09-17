@@ -63,3 +63,17 @@ The first schema cleanup consolidates 44 repeated function definitions. See [the
 Application build, offline contracts, and browser tests now run independently from the isolated Supabase database job. The existing required check name, `Publication authority database tests`, is retained as an aggregate requiring both jobs to succeed. A failed, skipped, or cancelled prerequisite cannot produce a successful aggregate. All 16 combinations of prerequisite outcomes are exercised against the actual gate shell. Provider isolation, loopback binding checks, mandatory database harnesses, and cleanup steps remain in place. Hosted execution remains to be verified.
 
 The production build and Advocate Edge middleware artifact gate passed after allowing the build's existing Google Fonts download. No website server was started.
+
+## Dependency security checkpoint
+
+The authoritative Yarn graph initially reported 138 advisory findings, including critical Next.js image processing and Sharp native decoder advisories. These are package audit findings, not 138 demonstrated application exploits. Updated Next.js and its ESLint configuration to 15.5.24, Sharp to 0.35.4, sanitize-html to 2.17.7, and Nodemailer to 9.1.1. The Sharp update requires its exported `Metadata` type instead of the former namespace type.
+
+Removed unused direct dependencies and their unused PayPal SDK declarations. The active Leaflet marker cluster plugin now declares its required `leaflet.markercluster` peer explicitly. Removed the stale npm lockfile; deployment and CI already use the declared Yarn 1.22.22 toolchain. The two lockfiles previously resolved different React versions.
+
+Refreshed vulnerable transitive packages within their declared ranges. Two explicit security resolutions remain: PostCSS 8.5.28 replaces Next.js's exact 8.4.31 dependency, and `supabase/tar` 7.5.22 replaces the CLI's exact 7.5.13 dependency. Yarn reports these intentional exact-pin overrides during installation. Mailparser and ImapFlow development dependencies were updated within their existing major versions.
+
+The refreshed Yarn audit reports zero known advisories across 723 dependencies. All 1,558 selected server-free tests and the production build, including TypeScript and the Edge middleware gate, passed. Browser and Supabase CLI compatibility still require hosted validation. A clean dependency audit does not establish application security.
+
+## Hosted review checkpoint
+
+Run 35176912563 independently executed both new jobs. Supabase startup, the complete pgTAP step, and the public catalog lane passed after migration consolidation. The HTTP browser test failed because a partial label locator also matched a tooltip. Later concurrency steps were skipped and remain unverified. The application browser fixture failed because its catalog tooltip requires a Chakra provider that the fixture did not supply. Both fixture defects have targeted repairs awaiting hosted validation. The aggregate required check correctly failed.

@@ -1044,7 +1044,7 @@ test.describe("local Supabase advocate catalog service boundary", () => {
     }
 
     await page.getByRole("radio", { name: /Show every eligible child/ }).check()
-    await page.getByLabel("Change note").fill("Return to the full catalog")
+    await page.getByRole("textbox", { name: "Change note", exact: true }).fill("Return to the full catalog")
     await page.getByRole("button", { name: "Save child catalog" }).click()
     await expect(
       page.getByText("Child catalog saved.", { exact: true }),

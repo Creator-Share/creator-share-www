@@ -1,6 +1,6 @@
 import "server-only"
 
-import sharp from "sharp"
+import sharp, { type Metadata } from "sharp"
 
 import {
   parseAdvocateBrandingUpdateInput,
@@ -236,7 +236,7 @@ function processor(bytes: Buffer) {
 }
 
 async function inspectSource(bytes: Buffer): Promise<void> {
-  let metadata: sharp.Metadata
+  let metadata: Metadata
   try {
     metadata = await processor(bytes).metadata()
   } catch {

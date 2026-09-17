@@ -22,7 +22,6 @@ on:
       - "vercel.json"
       - ".nvmrc"
       - "package.json"
-      - "package-lock.json"
       - "yarn.lock"
   workflow_dispatch:
 
