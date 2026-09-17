@@ -311,3 +311,9 @@ Both admin deletion route bodies are unchanged from the PR base. They delete pub
 ## Hosted database forensic correction validated
 
 Publication run 35189654393 and WebKit run 35189654400 passed on 4cc42a0. Both application and database jobs and the required aggregate concluded success. This closes FF-076 after the explicit count and invitation expectation repair. The subsequent visitor-index change must receive its own hosted validation. PR 127 remains open and draft, targeting dev; no merge was performed.
+
+## Password login boundary repair
+
+Two new route regressions failed on the current login implementation: an untrusted-origin request returned 200 and null JSON escaped as an uncaught TypeError. Added the same approved-primary-origin and JSON gate used by adjacent authentication routes, plus the shared strict body reader at 8,192 bytes and string credential checks. Authentication runs only after these checks. Removed the unused role query, whose result was ignored, and raw unexpected-error logging. Successful response and host-only identity behavior remain unchanged.
+
+All 12 focused tests and 1,590 selected server-free tests pass, as do TypeScript, lint with zero warnings, and Git whitespace validation. Hosted validation remains pending. The profile-deletion reproduction was also strengthened: the actual analytics snapshot RPC returns an object both before and after profile removal, with the Auth row and permission intact. The owner account-lifecycle question is pending; no global deletion semantics were changed.

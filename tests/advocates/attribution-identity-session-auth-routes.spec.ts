@@ -64,6 +64,7 @@ function recoveryAccessToken(): string {
 let passwordLoginData: { user: AuthUser | null } = {
   user: { id: AUTH_USER_ID },
 }
+let passwordLoginCalls = 0
 let passwordLoginError: { message: string } | null = null
 let verificationData: {
   user: AuthUser | null
@@ -172,6 +173,7 @@ nodeModule._load = function mockedModuleLoad(
         return {
           auth: {
             async signInWithPassword() {
+              passwordLoginCalls += 1
               return {
                 data: passwordLoginData,
                 error: passwordLoginError,
@@ -420,6 +422,7 @@ test.beforeEach(() => {
   process.env.NEXT_SERVICE_ROLE_KEY = "service-role-key"
   passwordLoginData = { user: { id: AUTH_USER_ID } }
   passwordLoginError = null
+  passwordLoginCalls = 0
   verificationData = {
     user: { id: AUTH_USER_ID },
     session: {
@@ -459,6 +462,44 @@ test("successful password login issues a verified host-only identity signal", as
 
   expect(response.status).toBe(200)
   expectVerifiedHostOnlyIdentity(response, AUTH_USER_ID)
+})
+
+test("password login rejects cross-origin and non-JSON requests before authentication", async () => {
+  for (const headers of [
+    { origin: "https://outside.example", "sec-fetch-site": "cross-site" },
+    { origin: "https://other.creatorshare.com", "sec-fetch-site": "same-site" },
+    { "content-type": "text/plain" },
+    {
+      host: "unprovisioned.creatorshare.com",
+      origin: "https://unprovisioned.creatorshare.com",
+    },
+    { origin: "null" },
+  ]) {
+    const request = loginRequest()
+    for (const [name, value] of Object.entries(headers)) {
+      request.headers.set(name, value)
+    }
+    const response = await login(request)
+    expect(response.status).toBe(400)
+    expect(setCookieHeaders(response)).toEqual([])
+  }
+  expect(passwordLoginCalls).toBe(0)
+})
+
+test("password login rejects malformed, oversized and non-string credentials before authentication", async () => {
+  for (const body of [
+    "null",
+    "{",
+    JSON.stringify({ email: ["sponsor@example.com"], password: "secret" }),
+    JSON.stringify({ email: "sponsor@example.com", password: { secret: true } }),
+    JSON.stringify({ email: "sponsor@example.com", password: "x".repeat(8192) }),
+  ]) {
+    const request = new Request(loginRequest(), { body })
+    const response = await login(request)
+    expect(response.status).toBe(400)
+    expect(setCookieHeaders(response)).toEqual([])
+  }
+  expect(passwordLoginCalls).toBe(0)
 })
 
 test("failed password login does not issue an identity signal", async () => {

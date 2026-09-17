@@ -92,13 +92,17 @@ Payment correctness, tenant isolation, private-data protection, and cancellation
 
 ## Legacy account deletion does not revoke Advocate access
 
-**P2 integration finding (FF-077):** both legacy administrator deletion routes remove `public.users`, not the Supabase Auth account. The bulk route separately removes legacy role assignments. Advocate membership references `auth.users`, and its permission function does not depend on the public profile. A synthetic delegate retained its Auth row and `portal.analytics.view` permission after executing the same public-profile deletion with normal database triggers enabled. Fixture setup used disabled triggers; the deletion and permission checks did not. This is database behavior evidence, not a live-session browser test.
+**P2 integration finding (FF-077):** both legacy administrator deletion routes remove `public.users`, not the Supabase Auth account. The bulk route separately removes legacy role assignments. Advocate membership references `auth.users`, and its permission function does not depend on the public profile. A synthetic delegate retained its Auth row and `portal.analytics.view` permission after executing the same public-profile deletion with normal database triggers enabled. The actual analytics snapshot RPC also returned an object both before and after deletion. Fixture setup used disabled triggers; the deletion and permission checks did not. This is database behavior evidence, not a live-session browser test.
 
 These route bodies predate this PR, but their successful “user deleted” response is misleading for the new Advocate authority model. Do not use profile deletion as offboarding. Tenant membership suspension and revocation remain the supported Advocate controls. A complete repair should distinguish profile removal from global account disablement, protect owner transfer and sponsor access, and apply revocation atomically before reporting success. Simply swapping in Auth hard deletion would collide with retained records and ownership constraints. No global deletion semantics were silently changed.
 
 ## Retention query maintenance
 
 The candidate broadens the existing exposure visitor index to include excluded exposures. Tracking cleanup must check all exposures, so the former qualified-only index could not support that visitor lookup. A 100,000-row planner probe changed the absent-visitor lookup from a sequential scan to an index-only scan. Full structural replay changes only the index and preserves representative legacy data. This does not measure production purge performance; the tradeoff is indexing excluded rows as well. Hosted validation is pending.
+
+## Password login request boundary
+
+**P2 candidate repair (FF-078):** password login accepted a cross-origin request and invoked authentication, while malformed JSON or a null body could throw outside the handler's error boundary. Unlike adjacent authentication routes, it had no streamed body limit or JSON-origin gate. New route regressions fail against the original implementation. The candidate reuses approved-primary-origin validation and the strict 8,192-byte body reader, rejects non-string credentials before authentication, and preserves the successful response and attribution identity cookie. It also removes an unused role query that never enforced authorization and avoids logging raw unexpected provider errors. Twelve focused tests, 1,590 selected server-free tests, TypeScript, and lint pass. Hosted validation is pending. This proves route behavior, not a live browser session-swapping demonstration.
 
 ## Key rotation and recovery limitation
 
