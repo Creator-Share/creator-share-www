@@ -47,7 +47,7 @@ Encrypted gateway payloads, including quarantined ones, expire after 90 days. Th
 
 ## Database forensic provenance
 
-**P2 correction pending hosted validation (FF-076).** The row-audit trigger replaced missing application IP and user agent with PostgREST request headers. An isolated execution reproduced that substitution after the application explicitly supplied neither field. Capture now preserves missing evidence instead of recording a different request hop. Strict replay changes only the capture function and preserves legacy data; two database assertions cover absent and explicit context, including retention. No actor-identity bypass was established. Direct database transport evidence remains in managed infrastructure logs.
+**Repaired P2 audit-evidence defect (FF-076).** The row-audit trigger replaced missing application IP and user agent with PostgREST request headers. An isolated execution reproduced that substitution after the application explicitly supplied neither field. Capture now preserves missing evidence instead of recording a different request hop. Strict replay changes only the capture function and preserves legacy data; two database assertions cover absent and explicit context, including retention. Publication 35189654393 and WebKit 35189654400 passed at `4cc42a0`. No actor-identity bypass was established. Direct database transport evidence remains in managed infrastructure logs.
 
 ## Remaining implementation review
 
@@ -71,11 +71,19 @@ A separate application cleanup removes 456 net lines of uncalled helpers, obsole
 
 The full release inventory remains in the completion audit and staging manual audit. The rows above identify major unresolved evidence, not an exhaustive replacement for those gates.
 
-## Decisions for the owner
+## Decisions and work still required
 
-App-wide host-prefixed Supabase session cookies, FF-046, require a migration strategy. A clean namespace cutover may require existing users to sign in again; session continuity adds migration behavior that needs adversarial testing. The review has not silently chosen that user-facing tradeoff. Less trusted sibling runtimes must not be introduced before that boundary is resolved.
+| Item | Decision or missing work | Recommendation and consequence |
+| --- | --- | --- |
+| Adjustment accounting, FF-072 and FF-084 | Approve normalization, reporting rounding, and loss allocation beyond principal | Derive exact values from immutable original amounts; preserve provider cash losses separately from principal attribution. Implement all affected boundaries and retained-event recovery. See [accounting decision](./advocate-adjustment-accounting-decision.md). |
+| Private analytics, FF-034 | Choose delayed coordinated disclosure or an explicitly narrower privacy contract | Preserve metrics behind a reviewed disclosure ledger if detailed analytics remains in MVP. Low-volume advocates receive less frequent updates. See [privacy decision](./advocate-analytics-disclosure-decision.md). |
+| Account offboarding, FF-077 | Define whether Delete user means global disablement or legacy profile removal | Global disablement needs owner-transfer safeguards and retained financial history. Renaming profile removal must clearly preserve Auth, Advocate, and sponsor access. Neither behavior has been selected. |
+| Session-cookie cutover, FF-046 | Choose forced reauthentication or tested session continuity | A clean host-prefixed namespace is simpler; existing users may need to sign in again. Do not introduce less trusted sibling runtimes before this boundary is resolved. |
+| Required checks | Authorize the prepared protection policy | The [payload](./dev-required-checks.json) requires both aggregate checks, an up-to-date base, and administrator enforcement, without an extra reviewer-count requirement. Coordinate other open PRs first. It remains unapplied and does not authorize merging this PR. |
+| Durable failure operations, FF-075 and FF-085 | Complete monitoring, audited acknowledgment, and reconciliation | A successful empty worker batch does not prove that no stranded or quarantined events remain. Complete the recovery contract and delivery canary; do not automatically retry financial work merely to clear an alert. |
+| Hosted and physical release evidence | Complete the existing canaries with authorized isolated configuration | Repository checks do not establish live provider, DNS, Auth, cookie, or physical-device behavior. The manual audit remains required. |
 
-The prepared [branch-protection payload](./dev-required-checks.json) is unapplied. It requires the two existing aggregate check names, an up-to-date base, and administrator enforcement, with no additional reviewer-count requirement. This affects other open PRs and remains an owner decision. It does not authorize merging PR 127.
+No accounting or privacy tradeoff, cookie migration, deletion semantics, or product scope reduction has been approved during this review. Some rows need a product decision; others remain engineering or operational delivery work. This table does not classify every remaining task as awaiting owner permission.
 
 ## Optional product reductions
 
@@ -83,7 +91,8 @@ All current capabilities remain required until explicitly changed. The [measured
 
 | Recommendation | Removed complexity | User-visible consequence |
 | --- | --- | --- |
-| Defer public impact counters first | Public release ledger, delayed disclosure calculations, recovery worker, metric-selection editor | Advocates launch without public fundraising counters. Private reporting and its FF-034 disclosure defect remain. |
+| Consider deferring detailed private analytics first | Removes the current private disclosure surface and its detailed reporting UI | Advocates retain existing delayed public impact metrics but lose the detailed private dashboard. Revoke the RPC as well as removing its UI; attribution and financial history remain. |
+| Defer public impact counters if private analytics is essential | Public release ledger, delayed disclosure calculations, recovery worker, metric-selection editor | Advocates launch without public fundraising counters. Private reporting and its FF-034 disclosure defect remain. |
 | Consider direct attribution only for the first release | Cross-host exposure coordination, long observation windows, related retention and reporting | Primary-site sponsorships after an advocate visit receive no post-visit credit. This materially changes the product proposition. |
 | Consider staff-managed delegate access only for operational reasons | Removes self-service administration but needs an audited staff replacement; initial-owner proof and delivery remain | Staff administer team access. Net engineering savings are uncertain, and the hosted proof canary remains. |
 | Consider plain-text introductory content | Rich-text editor behavior and formatting surface | Logos and colors remain, but introductory text loses rich formatting. Savings are smaller. |
@@ -200,7 +209,7 @@ The payment runbook now supplies a protected aggregate query covering exhausted 
 
 **P2 authorization defect (FF-086):** recurring sponsorship, one-time history, and legacy PayPal presentation RPCs checked only authenticated role and user identity. A normal database role with unchanged claims could still read its recurring sponsorship after an Auth ban. Full-schema before/after execution now denies all three functions with SQLSTATE 42501 while preserving active access. The fix reuses the existing account-state predicate; only the three function definitions change and all eight legacy-data projections remain equal.
 
-Eight added database assertions cover active access, banned access, expiry restoration, and soft deletion. The real retained-JWT Auth/PostgREST test now exercises these sponsor endpoints as well. Hosted validation is pending. This does not alter historical ownership or erase sponsorship records.
+The database assertions cover active access, banned access, expiry restoration, soft deletion, and public-profile visibility. The real retained-JWT Auth/PostgREST test exercises these sponsor endpoints as well. Publication 35202955091 and WebKit 35202955007 passed at `dbf6ded`. This does not alter historical ownership or erase sponsorship records.
 
 ## Updated review footprint
 
@@ -216,7 +225,7 @@ The same review also found a direct profile self-read policy that relied only on
 
 The candidate returns a fixed delivery-failure message, writes only that fixed error, and logs fixed operational messages. One shared outcome write replaces three repeated blocks, removing 30 net application lines. Three contracts cover transport disclosure, accepted delivery despite a logging exception, and missing credentials without a provider call. Existing recipient and subject fields in the email log remain unchanged, as does historical data; no broad claim about other legacy handlers or log erasure is made. Hosted validation remains pending.
 
-## Current complete hosted checkpoint
+## Hosted checkpoint at dbf6ded
 
 Publication run [35202955091](https://github.com/Creator-Share/creator-share-www/actions/runs/35202955091) and WebKit run [35202955007](https://github.com/Creator-Share/creator-share-www/actions/runs/35202955007) passed at `dbf6ded`. Evidence includes 1,707 offline tests, 66 dev-server tests, 99 provider contracts, 65 pgTAP files with 2,169 assertions, 15 catalog tests, three local Supabase HTTP tests, and every required concurrency and cleanup harness. This validates the snapshot simplification, corrected out-of-order dispute recovery scenario, and sponsor/profile account-state checks. FF-086 is complete. The later legacy email privacy repair remains pending its own hosted validation.
 
