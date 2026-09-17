@@ -47,7 +47,7 @@ export function supabaseAuthCookiesMustBeSecure(
   const trustedUrl = parsedTrustedUrl(
     options.trustedUrl ?? environment.NEXT_PUBLIC_BASE_URL,
   )
-  if (trustedUrl === null) return false
+  if (trustedUrl === null) return true
   if (trustedUrl.protocol === "https:") return true
   return !isLoopbackHostname(trustedUrl.hostname)
 }

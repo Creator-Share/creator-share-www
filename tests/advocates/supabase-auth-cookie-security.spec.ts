@@ -64,6 +64,22 @@ test.describe("Supabase authentication cookie transport security", () => {
     ).toEqual({ httpOnly: true })
   })
 
+  test("defaults to Secure when the development origin is absent or invalid", () => {
+    for (const trustedUrl of [
+      undefined,
+      "",
+      "not a URL",
+      "javascript:alert(1)",
+      "http://user:password@localhost:3000",
+      " http://localhost:3000",
+    ]) {
+      expect(supabaseAuthCookiesMustBeSecure({
+        environment: { NODE_ENV: "development" },
+        trustedUrl,
+      })).toBe(true)
+    }
+  })
+
   test("supports an already validated route transport decision", () => {
     expect(
       secureSupabaseAuthCookieOptions(
