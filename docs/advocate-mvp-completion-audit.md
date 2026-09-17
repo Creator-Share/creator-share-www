@@ -44,7 +44,7 @@ Four classes are used below, and they mean exactly this:
 
 No gate below is marked CI-enforced on the strength of a file name. Each names the file that carries the assertion.
 
-## Release gate traceability
+## Historical release gate traceability
 
 | #   | Release gate                                                                    | Status                                     | Asserting evidence                                                                                                                                                                                                                                                                                                                                            |
 | --- | ------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -123,7 +123,7 @@ All four files that the reachability probe found untested are now loaded by test
 
 The remaining gaps were recorded as 18 rows in `docs/advocate-coverage-gap-register.md` and are now closed. The row count is stated because the earlier figure of twenty could not be reconciled against the register by anyone counting it. The register retains the original findings, the tests that catch each mutation, and the controls that make the verdicts trustworthy.
 
-The release gates in the table above are enforced, and the mutation campaign has no known open gap. That does not prove the repository has been tested to exhaustion. It means every concrete regression found by this campaign is now caught or was shown to be behaviorally redundant.
+The historical mutation register records those specific regressions as caught or behaviorally redundant. It does not establish current release completeness: FF-072 demonstrates a tested but incorrect financial requirement, and FF-034 demonstrates a privacy requirement that individual snapshots cannot prove. Current review findings take precedence over the historical table.
 
 ## On the earlier traceability sweep
 
@@ -136,15 +136,10 @@ The aggregates tracked the instruction, not the code. The individual findings, w
 
 Two of the sweep's specific claims were wrong on inspection. The legacy invitation branch it flagged as an escalation risk is an intentional compatibility path documented by FF-042 that still requires a fresh `otp` session; its real defect was missing coverage, now closed. A claimed PayPal weakness turned out to be my test being wrong and the implementation being stricter than I had assumed.
 
-## The answer
+## Current release decision
 
-**Merging to `dev` is a decision about process, not about evidence.** Both required gates are green, every test file in the repository is assigned to a lane, and the manifest gate fails the build if that stops being true.
+The PR is not ready to merge or ship. No merge into `dev` is authorized. FF-072 requires correct accounting for legitimate partial foreign-currency adjustments, and FF-034 requires an explicit resolution of longitudinal analytics disclosure. Both are implementation issues; passing the historical suite does not settle them.
 
-Do not read this document as claiming exhaustive proof. `docs/advocate-coverage-gap-register.md` records the twenty-three deliberate regressions found by the mutation campaign. Twenty-two are now caught by tests, and one was shown to be behaviorally redundant. The register has no open row.
+The latest revision-bound results are in [current review findings](./advocate-review-findings.md). A workflow failure or pending run must not be replaced by an earlier green result. Branch protection remains unapplied, and physical iOS, hosted provider, infrastructure, and operational evidence remain outstanding in [the manual audit](./advocate-staging-manual-audit.md).
 
-Two things are worth settling first, and both are yours to decide:
-
-1. `dev` has **no branch protection and no required-check ruleset**. Every gate built for this pull request runs, but nothing prevents a merge that ignores them. Suggested required checks are `Publication authority database tests` and `Catalog recovery in WebKit`. I have deliberately not changed this.
-2. The **physical iOS smoke test** (manual item 4) is required for release and is the only evidence for the unsaved-change guard on Mobile Safari. It does not block a merge to `dev`, but it does block a release.
-
-The remaining hosted, provider, and operator decisions are enumerated in `docs/advocate-staging-manual-audit.md`.
+The closed historical mutation register establishes coverage for its enumerated edits only. It is not a release approval or a guarantee that the suite encodes every product requirement correctly.

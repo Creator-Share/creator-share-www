@@ -403,9 +403,10 @@ CREATE INDEX advocate_exposures_domain_time_idx
   ON public.advocate_exposures (advocate_domain_id, occurred_at DESC)
   WHERE is_qualified;
 
+-- Retention and visitor deletion must find excluded exposures too.
 CREATE INDEX advocate_exposures_visitor_time_idx
   ON public.advocate_exposures (browser_visitor_id, occurred_at DESC)
-  WHERE is_qualified AND browser_visitor_id IS NOT NULL;
+  WHERE browser_visitor_id IS NOT NULL;
 
 CREATE INDEX advocate_exposures_auth_user_time_idx
   ON public.advocate_exposures (auth_user_id, occurred_at DESC)

@@ -295,3 +295,11 @@ Publication run 35188935007 failed on the database job while its application job
 ## Key rotation implementation inventory
 
 Confirmed that numbered fields do not imply multi-key support: the application loads one sponsorship root key, envelope validation expects its fixed header, and email identity constraints plus claim functions reject later HMAC versions. The root also derives deterministic checkout receipts. The existing runbook already prohibits replacing its value. Recorded the coordinated rotation and recovery limitation in the findings without inventing a new cryptographic design or changing identity semantics.
+
+## Retention visitor lookup index
+
+The existing exposure index required `is_qualified`, while the tracking purge's visitor existence check and visitor foreign-key cleanup must consider every exposure. Broadened that index to every nonnull visitor ID instead of adding a second index. Qualified attribution lookups retain the same leading visitor and descending-time keys; excluded exposures now consume index space too.
+
+A 100,000-row in-process planner probe using the same visitor index and lookup predicate changed an absent visitor lookup from a sequential scan that filtered all 100,000 rows to an index-only lookup. This demonstrates index eligibility, not production workload latency or the full purge plan. Strict full migration replay changes exactly this one index among 5,280 catalog entries relative to the forensic correction and preserves all eight representative legacy data projections. Hosted database validation remains required.
+
+The completion audit's obsolete closing claim that merging was merely a process decision has also been removed. Its table is explicitly historical; current financial and privacy findings govern release readiness.
