@@ -101,3 +101,5 @@ Hosted run 35178462883 failed the recipient-correction browser test. Its screens
 ## Unreferenced helper cleanup
 
 Removed eight exported helpers whose names occurred only at their definitions across tracked source, scripts, tests, configuration, and documentation. This includes unused country-based Stripe routing and its private parsing helpers, a duplicate PayPal repository factory, unused canary dispatch and provider predicate wrappers, and unused invitation and cookie helpers. No test was removed. All 1,565 selected server-free tests, TypeScript, and lint passed.
+
+The Supabase bounded-fetch helper also replaced signals carried by Request inputs with its own timeout. A regression failed on caller cancellation before the repair and passed afterward. It now composes the Request signal with the timeout, matching its existing RequestInit behavior. All ten focused fetch and stateless-auth tests passed.

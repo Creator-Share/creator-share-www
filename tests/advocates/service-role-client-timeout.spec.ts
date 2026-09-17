@@ -111,6 +111,20 @@ test.describe("service role request timeout", () => {
     expect(options.global?.fetch).toEqual(expect.any(Function))
   })
 
+  test("preserves cancellation carried by Request inputs", async () => {
+    const caller = new AbortController()
+    let signal: AbortSignal | null | undefined
+    const fetcher = createAbortingServiceRoleFetch(1_000, async (_input, init) => {
+      signal = init?.signal
+      return new Response("{}")
+    })
+    await fetcher(new Request("https://example.invalid", { signal: caller.signal }))
+    const reason = new Error("caller cancelled")
+    caller.abort(reason)
+    expect(signal?.aborted).toBe(true)
+    expect(signal?.reason).toBe(reason)
+  })
+
   test("bounds authenticated server clients only when requested", async () => {
     await createClient()
     await createClient({ requestTimeoutMilliseconds: 8_000 })

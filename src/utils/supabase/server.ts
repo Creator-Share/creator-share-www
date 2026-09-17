@@ -85,8 +85,10 @@ export function createAbortingServiceRoleFetch(
 
   return (input, init) => {
     const timeoutSignal = AbortSignal.timeout(requestTimeoutMilliseconds)
-    const signal = init?.signal
-      ? AbortSignal.any([init.signal, timeoutSignal])
+    const upstreamSignal =
+      init?.signal ?? (input instanceof Request ? input.signal : undefined)
+    const signal = upstreamSignal
+      ? AbortSignal.any([upstreamSignal, timeoutSignal])
       : timeoutSignal
 
     return fetchImplementation(input, { ...init, signal })
