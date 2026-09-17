@@ -178,6 +178,32 @@ GROUP BY provider, provider_account_scope,
   redacted_payload ->> 'quarantine_error_code';
 ```
 
+Exhausted retries are a separate retained backlog. A final-attempt process crash can leave an event in `processing` after its ten-minute claim timeout; the claim function still excludes it because its attempt count reached the maximum. The batch route reports only events processed by that invocation, so an empty successful batch is not proof that this backlog is empty. Include the following protected aggregate inventory in operational monitoring:
+
+```sql
+SELECT
+  provider,
+  provider_account_scope,
+  processing_status,
+  count(*) AS exhausted_events,
+  min(received_at) AS oldest_received_at,
+  min(payload_retention_expires_at) FILTER (
+    WHERE payload_ciphertext IS NOT NULL
+  ) AS earliest_retained_payload_expiry
+FROM public.payment_gateway_events
+WHERE processing_attempt_count >= max_processing_attempts
+  AND (
+    processing_status = 'failed'
+    OR (
+      processing_status = 'processing'
+      AND processing_locked_at <= clock_timestamp() - interval '10 minutes'
+    )
+  )
+GROUP BY provider, provider_account_scope, processing_status;
+```
+
+FF-085 tracks the missing persistent health and audited resolution boundary. Do not reset attempt counters, delete an event, or directly edit its status to force replay. Alert acknowledgment must be distinguishable from financial reconciliation, preserve the original evidence, and never authorize replay by itself. A scheduled monitoring query and delivered alert must be proven in the authorized environment; this SQL snippet is not evidence that monitoring is configured. An always-failing worker flag without a resolution contract is not a complete repair.
+
 The encrypted payload is eligible for erasure 90 days after ingestion, including quarantined events. Investigate before that deadline; preserve the approved privacy retention boundary. Do not log decrypted payloads, change status directly, or promise that resending the provider webhook will repair a quarantined record. Reconciliation needs an explicitly reviewed, audited path that preserves provider identity, original immutable evidence, and settlement idempotency. FF-072 requires this recovery design together with the partial-adjustment accounting repair.
 
 

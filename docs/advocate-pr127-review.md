@@ -413,3 +413,5 @@ The release checklists now distinguish checks that can run through authorized pr
 ## Out-of-order dispute recovery regression
 
 The existing database test rejected a credit without its debit, then exercised a different dispute in debit-first order. It did not establish recovery of the rejected event. The revised scenario persists a retry through the production RPC, settles the matching debit, advances only the fixture retry schedule, reclaims the original credit, rejects its stale lease, and checks the restored net and two-movement bound. Production behavior is unchanged. Hosted validation is pending; this is a coverage gap, not a confirmed settlement defect.
+
+The first hosted recovery regression run (35200418623) correctly rejected the fixture debit because subtracting one second placed it before the original payment, all created within a short transaction. The fixture now puts debit occurrence halfway between the actual original payment and credit timestamps. No production check changed. Hosted validation must be rerun on the corrected fixture.

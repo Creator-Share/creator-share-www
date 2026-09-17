@@ -95,6 +95,8 @@ FF-029 now has one canonical 99-test offline provider contract covering the host
 
 | FF-084 | in_progress | P1 | Dispute accounting assumes losses cannot exceed one charge | Stripe documents larger disputes, combined recurring-charge disputes, and full-charge disputes after partial refunds. The adapter rejects a consistent 1,300-cent dispute against a 1,250-cent charge; settlement also forbids aggregate net below zero. Separate provider financial truth from principal attribution bounds and choose explicit excess-loss and cross-payment allocation semantics alongside FF-072. Acceptance requires larger disputes, partial-refund overlap, grouped recurring charges, matching reinstatement, replay, and reporting evidence. See docs/advocate-adjustment-accounting-decision.md. No production behavior has changed. |
 
+| FF-085 | in_progress | P2 | Durable payment failure health and audited resolution | Claims exclude events at their maximum attempt count, including a worker that crashed during its final processing lease. Batch alerts only describe the current invocation, so later empty runs can return success while retained work remains unresolved. Add persistent protected monitoring and an audited acknowledgment/reconciliation contract without permitting blind replay or permanent alerts for already-investigated evidence. The payment runbook includes the exact aggregate inventory. Acceptance must cover final-claim crashes, exhausted failures, quarantine acknowledgment distinct from financial recovery, and delivered alerts. |
+
 ## Entry requirements
 
 Every new entry must include:

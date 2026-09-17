@@ -853,9 +853,15 @@ SELECT extensions.ok(
 
 -- Provider occurrence order is debit then credit; delivery order is reversed.
 INSERT INTO adjustment_test_times
-SELECT 'dispute_debit', value - interval '1 second'
-FROM adjustment_test_times
-WHERE key = 'unmatched_dispute_credit';
+SELECT
+  'dispute_debit',
+  original.occurred_at + (credit.value - original.occurred_at) / 2
+FROM adjustment_test_times credit
+JOIN public.sponsorship_financial_movements original
+  ON original.id = (
+    SELECT value FROM adjustment_test_context WHERE key = 'stripe_gross_movement'
+  )
+WHERE credit.key = 'unmatched_dispute_credit';
 
 INSERT INTO adjustment_test_context
 SELECT 'dispute_debit_event', gateway_event_id
