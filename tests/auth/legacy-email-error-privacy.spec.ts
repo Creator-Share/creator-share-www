@@ -8,7 +8,7 @@ const marker = "PRIVATE_PROVIDER_RESPONSE"
 const testRequire = createRequire(resolve(process.cwd(), "tests/auth/legacy-email-error-privacy.spec.ts"))
 const loader = Module as unknown as { _load: (name: string, ...args: unknown[]) => unknown }
 
-async function exercise(deliveryFails: boolean, loggingFails = false, configured = true, renderTemplates = false) {
+async function exercise(deliveryFails: boolean, loggingFails: boolean | "returned" = false, configured = true, renderTemplates = false) {
   const originalLoad = loader._load
   const originalConsole = console.error
   const cachedBefore = new Set(Object.keys(testRequire.cache))
@@ -48,8 +48,8 @@ async function exercise(deliveryFails: boolean, loggingFails = false, configured
         createServiceRoleClient: () => ({ from: () => ({
           insert: async (record: Record<string, unknown>) => {
             records.push(record)
-            if (loggingFails) throw failure
-            return { error: null }
+            if (loggingFails === true) throw failure
+            return { error: loggingFails === "returned" ? failure : null }
           },
         }) }),
       }
@@ -97,9 +97,13 @@ test("email transport errors do not escape into logs, stored errors, or callers"
 })
 
 test("email-log failures preserve accepted delivery without exposing raw errors", async () => {
-  const { result, logs } = await exercise(false, true)
-  expect(result).toEqual({ success: true, messageId: "fixture-message" })
-  expect(logs).not.toContain(marker)
+  for (const loggingFailure of [true, "returned"] as const) {
+    const { result, logs, transportCalls } = await exercise(false, loggingFailure)
+    expect(result).toEqual({ success: true, messageId: "fixture-message" })
+    expect(transportCalls).toBe(1)
+    expect(logs).toContain("[Email] Failed to record delivery outcome")
+    expect(logs).not.toContain(marker)
+  }
 })
 
 test("missing credentials record a failure without attempting delivery", async () => {

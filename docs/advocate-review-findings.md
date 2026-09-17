@@ -272,3 +272,7 @@ The release audit cited invitation delivery for the legacy registration-role bou
 ## Email rendering hosted checkpoint
 
 Publication [35206039312](https://github.com/Creator-Share/creator-share-www/actions/runs/35206039312) and WebKit [35206039210](https://github.com/Creator-Share/creator-share-www/actions/runs/35206039210) passed at `c3f4b44`. This validates FF-089 and the shared email layout, including 1,716 offline tests and 2,169 database assertions. The subsequent retention consolidation and registration-metadata assertion require their own hosted run. Financial accounting and private-analytics policy blockers remain unresolved.
+
+## Returned delivery-log errors
+
+**P3 observability defect (FF-090):** the legacy email helper caught thrown logging failures but ignored a normal Supabase insert response containing `error`. The candidate checks that result and emits the existing sanitized diagnostic, preserving accepted delivery and making no second SMTP attempt. The regression covers both error forms, fails on the former helper, and passes after the correction. Hosted validation is pending. This does not provide durable recovery of a missing delivery-log row or prove operational alert delivery.

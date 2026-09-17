@@ -193,7 +193,7 @@ export const sendEmail = async ({
 
   try {
     const supabase = createServiceRoleClient()
-    await supabase.from("email_logs").insert({
+    const { error } = await supabase.from("email_logs").insert({
       email: to,
       subject,
       status: result.success ? "sent" : "failed",
@@ -202,6 +202,7 @@ export const sendEmail = async ({
       email_type: type,
       created_at: new Date().toISOString(),
     })
+    if (error) throw new Error("Email outcome log unavailable")
   } catch {
     console.error("[Email] Failed to record delivery outcome")
   }
