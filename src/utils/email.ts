@@ -284,6 +284,19 @@ function getLogoUrl(): string {
   return `${baseUrl.replace(/\/$/, "")}/logo_text.png`
 }
 
+// The caller supplies application-owned markup with dynamic values already encoded.
+function renderEmailLayout(content: string): string {
+  return `
+    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="${escapeHtml(getLogoUrl())}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+      </div>${content}      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
+        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
+      </div>
+    </div>
+  `
+}
+
 export const sendPartnershipConfirmationEmail = async (
   email: string,
   project: string,
@@ -302,13 +315,8 @@ export const sendPartnershipConfirmationEmail = async (
         ? "one-time"
         : "yearly"
   const greeting = partnerName ? `Dear ${partnerName},` : "Dear Partner,"
-  const logoUrl = getLogoUrl()
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Partnership!</h2>
@@ -327,11 +335,7 @@ export const sendPartnershipConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -360,7 +364,6 @@ export const sendSponsorshipConfirmationEmail = async (
         ? "one-time"
         : "yearly"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
-  const logoUrl = getLogoUrl()
   const managementSection = renderManagementSection(options)
 
   // Fetch beneficiary image if beneficiaryId is provided
@@ -386,11 +389,7 @@ export const sendSponsorshipConfirmationEmail = async (
     console.warn(`[Email] No beneficiaryId provided for child: ${childName}`)
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
@@ -413,11 +412,7 @@ export const sendSponsorshipConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
 
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -445,14 +440,9 @@ export const sendBlindSponsorshipConfirmationEmail = async (
         ? "one-time"
         : "yearly"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
-  const logoUrl = getLogoUrl()
   const managementSection = renderManagementSection(options)
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
@@ -473,11 +463,7 @@ export const sendBlindSponsorshipConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
 
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -511,7 +497,6 @@ export const sendBlindSponsorshipMatchedEmail = async (
     ? `${baseUrl}/sponsorships/${childUsername}`
     : `${baseUrl}/sponsorships`
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
-  const logoUrl = getLogoUrl()
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -538,11 +523,7 @@ export const sendBlindSponsorshipMatchedEmail = async (
     )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
@@ -572,11 +553,7 @@ export const sendBlindSponsorshipMatchedEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -602,7 +579,6 @@ export const sendPaymentFailedEmail = async (
     ? `We'll automatically try again on ${nextAttemptDate.toLocaleDateString()}.`
     : "We'll automatically try again soon."
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
-  const logoUrl = getLogoUrl()
   const managementSection = renderManagementSection(options)
 
   // Fetch beneficiary image if beneficiaryId is provided
@@ -630,11 +606,7 @@ export const sendPaymentFailedEmail = async (
     )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
@@ -661,11 +633,7 @@ export const sendPaymentFailedEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -685,7 +653,6 @@ export const sendSubscriptionConfirmationEmail = async (
   const greeting = subscriberName
     ? `Dear ${subscriberName},`
     : "Dear Subscriber,"
-  const logoUrl = getLogoUrl()
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -712,11 +679,7 @@ export const sendSubscriptionConfirmationEmail = async (
     )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       ${childImageHtml}
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Subscription Confirmed!</h2>
@@ -729,11 +692,7 @@ export const sendSubscriptionConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Thank you for staying connected,</p>
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
   return sendEmail({
     to: email,
     subject,
@@ -762,7 +721,6 @@ export const sendActivityNotificationEmail = async (
   const greeting = subscriberName
     ? `Dear ${subscriberName},`
     : "Dear Subscriber,"
-  const logoUrl = getLogoUrl()
 
   // Fetch beneficiary profile image if beneficiaryId is provided
   let childImageHtml = ""
@@ -893,11 +851,7 @@ export const sendActivityNotificationEmail = async (
     `
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       ${childImageHtml}
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">New Update for ${
@@ -922,11 +876,7 @@ export const sendActivityNotificationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Thank you for staying connected,</p>
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
   return sendEmail({
     to: email,
     subject,
@@ -949,7 +899,6 @@ export const sendBudgetFulfilledRejectionEmail = async (
   const subject = `Thank You - ${beneficiaryName} Has Been Fully Sponsored!`
   const formattedAmount = formatEmailAmount(amount, {})
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Friend,"
-  const logoUrl = getLogoUrl()
   const browseUrl = escapeHtml(getSponsorClaimCanonicalOrigin())
 
   // Fetch beneficiary image if beneficiaryId is provided
@@ -977,11 +926,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
     )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
@@ -1029,11 +974,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -1064,7 +1005,6 @@ export const sendManagerSponsorshipNotificationEmail = async (
       : interval === "one_time"
         ? "one-time"
         : "yearly"
-  const logoUrl = getLogoUrl()
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -1091,11 +1031,7 @@ export const sendManagerSponsorshipNotificationEmail = async (
     )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
@@ -1115,11 +1051,7 @@ export const sendManagerSponsorshipNotificationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: "johnstjulien@sharetanzania.com",
@@ -1140,7 +1072,6 @@ export const sendMonthlyPaymentConfirmationEmail = async (
   const subject = `Payment Confirmation: Your Sponsorship for ${childName}`
   const formattedAmount = formatEmailAmount(amount, options)
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
-  const logoUrl = getLogoUrl()
   const managementSection = renderManagementSection({
     ...options,
     variant: "prominent",
@@ -1171,11 +1102,7 @@ export const sendMonthlyPaymentConfirmationEmail = async (
     )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
@@ -1198,11 +1125,7 @@ export const sendMonthlyPaymentConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -1225,11 +1148,7 @@ export const sendSponsorshipCancellationNotificationEmail = async (
   const subject = `Sponsorship Cancelled: ${childName}`
   const formattedAmount = amount ? `$${(amount / 100).toFixed(2)}` : "N/A"
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${escapeHtml(getLogoUrl())}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">
         <h2 style="color: #dc2626; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Sponsorship Cancelled</h2>
@@ -1252,11 +1171,7 @@ export const sendSponsorshipCancellationNotificationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: "johnstjulien@sharetanzania.com",

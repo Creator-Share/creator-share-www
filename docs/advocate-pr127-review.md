@@ -439,3 +439,7 @@ Publication 35202955091 and WebKit 35202955007 passed at dbf6ded. The full gate 
 ## Activity notification result contract
 
 Reviewing callers of the email helper found discarded delivery results and an unchecked activity/child pairing. The route now returns accurate aggregate outcomes, stops on unavailable audience data, and requires the activity to belong to the requested child. The administration UI reads that outcome and warns before any operator resend. Removing impossible null-email fallback work and unused unselected-sponsor work deletes 80 net application lines. Four route tests pass, and controlled mutations of the count and child-binding logic fail the respective regressions. Hosted validation is pending under FF-088.
+
+## Shared email layout
+
+Eleven legacy templates now share their identical outer layout, deleting 85 net application lines. Mocked transport captured byte-identical rendered subjects and HTML before and after extraction for all eleven template fixtures. Existing content-escaping contracts remain in the required test lane. Publication 35205114027 and WebKit 35205114009 validate the preceding activity notification change at 18dbd9b; these later email changes still require their own hosted run.

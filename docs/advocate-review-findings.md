@@ -2,7 +2,7 @@
 
 Status: review in progress, September 17, 2026. The PR is not ready to ship: foreign-currency adjustment accounting, dispute loss bounds, and longitudinal private-analytics disclosure remain P1 blockers, and external release evidence is incomplete. No merge into `dev` is authorized.
 
-The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `d32f82e`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction, retention-index change, and password-login correction are hosted-validated. Sponsor assignment and diagnostic authorization are also hosted-validated. The shared administrator guard is also hosted-validated; atomic beneficiary deletion is now hosted-validated, while configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
+The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `18dbd9b`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction, retention-index change, and password-login correction are hosted-validated. Sponsor assignment and diagnostic authorization are also hosted-validated. The shared administrator guard is also hosted-validated; atomic beneficiary deletion is now hosted-validated, while configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
 
 ## Repaired defects and unnecessary complexity
 
@@ -239,3 +239,9 @@ The public child-update enrollment route also exposes existing enrollment throug
 The FF-089 candidate now also escapes child names, project and blind labels, plain activity titles and descriptions, decoded document filenames, and quoted image/profile/media URLs. The activity editor uses a plain textarea, so these fields have no supported raw-HTML contract. A second regression fails on the preceding sponsor-only repair and passes on the extended candidate. It checks retained template markup, unchanged plain subjects, escaped filename markup, and prevention of quote-based attribute injection. URL encoding here protects HTML syntax; it does not approve URL schemes or origins.
 
 Validation of the extended FF-089 candidate: all 1,616 selected server-free tests, TypeScript, and lint pass. Hosted validation remains pending.
+
+## Notification validation and email layout consolidation
+
+Publication [35205114027](https://github.com/Creator-Share/creator-share-www/actions/runs/35205114027) and WebKit [35205114009](https://github.com/Creator-Share/creator-share-www/actions/runs/35205114009) passed at `18dbd9b`, closing FF-088. The later email rendering fixes remain pending their own hosted run.
+
+The candidate consolidates the identical outer layout used by eleven legacy email templates, removing 85 net application lines. A temporary mocked-transport comparison rendered each template before and after extraction and found byte-for-byte identical subjects and HTML for those fixtures. It preserves the preceding content-escaping fixes and does not claim live email-client rendering evidence. All 1,616 selected server-free tests, TypeScript, and lint pass. The comparison fixture and outputs are retained outside the repository as review artifacts, rather than adding permanent duplicate template snapshots.
