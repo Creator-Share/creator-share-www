@@ -307,3 +307,7 @@ The completion audit's obsolete closing claim that merging was merely a process 
 ## Legacy profile deletion integration finding
 
 Both admin deletion route bodies are unchanged from the PR base. They delete public.users, while Advocate memberships reference auth.users. In a full migration replay, a synthetic analytics viewer had permission before profile deletion and retained both its Auth row and the same permission afterward. Normal triggers were enabled during deletion and both permission checks; only fixture construction bypassed triggers. FF-077 records the misleading offboarding boundary. Existing tenant suspension and revocation are the appropriate controls pending a coordinated global account lifecycle design. No live account or provider was changed.
+
+## Hosted database forensic correction validated
+
+Publication run 35189654393 and WebKit run 35189654400 passed on 4cc42a0. Both application and database jobs and the required aggregate concluded success. This closes FF-076 after the explicit count and invitation expectation repair. The subsequent visitor-index change must receive its own hosted validation. PR 127 remains open and draft, targeting dev; no merge was performed.
