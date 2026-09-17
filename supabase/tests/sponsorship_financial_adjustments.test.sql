@@ -934,14 +934,17 @@ SELECT extensions.ok(
   'Stripe dispute withdrawal appends a bounded negative dispute movement'
 );
 
--- Advance only the retry schedule in this superuser fixture. Settlement and
--- renewed lease acquisition still run through the production functions.
+-- Advance only the retry schedule in this superuser fixture. The lifecycle
+-- trigger correctly forbids application callers from editing it directly.
+-- Restore triggers before exercising claim, stale-lease rejection, and settlement.
+SET LOCAL session_replication_role = replica;
 UPDATE public.payment_gateway_events
 SET available_at = clock_timestamp() - interval '1 second'
 WHERE id = (
   SELECT value FROM adjustment_test_context
   WHERE key = 'unmatched_dispute_credit_event'
 );
+SET LOCAL session_replication_role = origin;
 
 INSERT INTO adjustment_test_leases
 SELECT

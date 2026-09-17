@@ -37,7 +37,8 @@ DECLARE
   v_auth_user_id uuid := auth.uid();
 BEGIN
   IF auth.role() IS DISTINCT FROM 'authenticated'
-     OR v_auth_user_id IS NULL THEN
+     OR v_auth_user_id IS NULL
+     OR NOT private.is_current_account_active() THEN
     RAISE EXCEPTION 'Sponsorship history requires an authenticated account'
       USING ERRCODE = '42501';
   END IF;

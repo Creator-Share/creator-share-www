@@ -1061,7 +1061,7 @@ test.describe("local Supabase advocate catalog service boundary", () => {
     expect(readback.beneficiary_mode).toBe("all")
     expect(readback.beneficiary_selections).toEqual([])
   })
-  test("a retained JWT loses global and delegate Data API access after an Auth ban", async () => {
+  test("a retained JWT loses administrator, delegate, and sponsor Data API access after an Auth ban", async () => {
     const current = fixture
     if (current === null) throw new Error("catalog_http_fixture_missing")
     const actor = current.users.ownerB
@@ -1090,6 +1090,12 @@ test.describe("local Supabase advocate catalog service boundary", () => {
       expect(await readRows(roleQuery)).toHaveLength(1)
       expect(await readRows("rpc/get_my_advocate_portal_access")).toHaveLength(1)
       expect(await readRows(`advocates?select=id&id=eq.${current.advocateBId}`)).toHaveLength(1)
+      const sponsorResources = [
+        "rpc/list_my_recurring_sponsorships",
+        "rpc/list_my_one_time_sponsorship_history",
+        "rpc/get_my_legacy_paypal_subscription_presentation?target_provider_subscription_id=I-1234567890",
+      ]
+      for (const resource of sponsorResources) await readRows(resource)
       const ban = await authAdminRequest(`/admin/users/${actor.id}`, {
         method: "PUT",
         body: JSON.stringify({ ban_duration: "24h" }),
@@ -1102,6 +1108,11 @@ test.describe("local Supabase advocate catalog service boundary", () => {
       expect(await readRows(roleQuery)).toEqual([])
       expect(await readRows("rpc/get_my_advocate_portal_access")).toEqual([])
       expect(await readRows(`advocates?select=id&id=eq.${current.advocateBId}`)).toEqual([])
+      for (const resource of sponsorResources) {
+        const denied = await fetch(`${stack.restUrl}/${resource}`, { headers })
+        expect(denied.status).toBe(403)
+        expect(await denied.json()).toMatchObject({ code: "42501" })
+      }
       const mutation = await fetch(`${stack.restUrl}/beneficiaries?id=eq.${current.childAlphaId}&select=id`, {
         method: "PATCH",
         headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },

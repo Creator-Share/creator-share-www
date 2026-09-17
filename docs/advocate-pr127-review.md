@@ -419,3 +419,9 @@ The first hosted recovery regression run (35200418623) correctly rejected the fi
 ## Administrator snapshot simplification
 
 Folded the intermediate owner-onboarding projection into its sole caller, the current publication-aware administrator snapshot. The same base function retains authorization. Owner labels, invitation recovery flags, ownerless suspension denial, and publication eligibility remain unchanged. This removes one function and 86 net SQL lines; strict catalog comparison shows only that deletion and the final function definition change, with eight equal legacy-data projections. Hosted contract validation is pending.
+
+## Sponsor presentation account-state repair
+
+The administrator/delegate ban review led to three separate sponsor presentation RPCs that trusted retained authentication claims without current account health. An isolated full-schema probe reads one owned recurring sponsorship both before and after a ban on the old definitions; the candidate denies all three RPCs after the ban while active calls still succeed. Reuse of the shared predicate changes only those definitions, with unchanged legacy data. Added eight pgTAP assertions and extended the retained-token HTTP test. Hosted validation remains pending under FF-086.
+
+Run 35201419838 passed the owner-onboarding, lifecycle, and publication snapshot pgTAP files, but the full database lane stopped in the new dispute-recovery fixture: a direct retry-timestamp edit correctly triggered SQLSTATE 42501. The fixture now advances only that timestamp under a narrowly scoped superuser trigger bypass and restores triggers before claim, stale-lease rejection, and settlement. Production lifecycle validation is unchanged. This partial result does not establish a green release gate. The preceding corrected-timestamp run 35201100745 was superseded before pgTAP and supplies no database validation evidence.

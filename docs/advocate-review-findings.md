@@ -195,3 +195,9 @@ These require explicit handling of provider losses beyond the attributed princip
 **P2 operational recovery gap (FF-085):** the database increments the attempt count when claiming, but future claims require that count to remain below the maximum even after the ten-minute processing lease expires. A worker crash on its final claim can therefore strand a `processing` event. `runPaymentGatewayEventBatch` and its route derive terminal failure health only from the current batch, so a later empty batch can return success without inspecting that retained event. This conclusion follows from the active claim predicate, transition trigger, and batch implementation; it is not a live crash canary.
 
 The payment runbook now supplies a protected aggregate query covering exhausted `failed` events and expired final `processing` leases. Persistent monitoring and an audited resolution boundary remain required. Quarantine acknowledgment must remain separate from replay or financial reconciliation. No automatic financial retry or service health behavior was changed by this documentation.
+
+## Sponsor read authority after an account ban
+
+**P2 authorization defect (FF-086):** recurring sponsorship, one-time history, and legacy PayPal presentation RPCs checked only authenticated role and user identity. A normal database role with unchanged claims could still read its recurring sponsorship after an Auth ban. Full-schema before/after execution now denies all three functions with SQLSTATE 42501 while preserving active access. The fix reuses the existing account-state predicate; only the three function definitions change and all eight legacy-data projections remain equal.
+
+Eight added database assertions cover active access, banned access, expiry restoration, and soft deletion. The real retained-JWT Auth/PostgREST test now exercises these sponsor endpoints as well. Hosted validation is pending. This does not alter historical ownership or erase sponsorship records.

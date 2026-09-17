@@ -97,6 +97,8 @@ FF-029 now has one canonical 99-test offline provider contract covering the host
 
 | FF-085 | in_progress | P2 | Durable payment failure health and audited resolution | Claims exclude events at their maximum attempt count, including a worker that crashed during its final processing lease. Batch alerts only describe the current invocation, so later empty runs can return success while retained work remains unresolved. Add persistent protected monitoring and an audited acknowledgment/reconciliation contract without permitting blind replay or permanent alerts for already-investigated evidence. The payment runbook includes the exact aggregate inventory. Acceptance must cover final-claim crashes, exhausted failures, quarantine acknowledgment distinct from financial recovery, and delivered alerts. |
 
+| FF-086 | in_progress | P2 | Sponsor presentation after an Auth ban | Retained authenticated claims could still invoke recurring, one-time-history, and legacy PayPal presentation RPCs after an Auth ban. Full-schema execution reproduces an owned recurring row remaining readable. All three functions now require the existing live account-state predicate, preserving active access and denying banned or soft-deleted accounts. Eight additional database assertions and the retained-JWT HTTP regression cover the change. In-process before/after evidence passes; hosted validation remains pending. |
+
 ## Entry requirements
 
 Every new entry must include:
