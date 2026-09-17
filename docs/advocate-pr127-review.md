@@ -303,3 +303,7 @@ The existing exposure index required `is_qualified`, while the tracking purge's 
 A 100,000-row in-process planner probe using the same visitor index and lookup predicate changed an absent visitor lookup from a sequential scan that filtered all 100,000 rows to an index-only lookup. This demonstrates index eligibility, not production workload latency or the full purge plan. Strict full migration replay changes exactly this one index among 5,280 catalog entries relative to the forensic correction and preserves all eight representative legacy data projections. Hosted database validation remains required.
 
 The completion audit's obsolete closing claim that merging was merely a process decision has also been removed. Its table is explicitly historical; current financial and privacy findings govern release readiness.
+
+## Legacy profile deletion integration finding
+
+Both admin deletion route bodies are unchanged from the PR base. They delete public.users, while Advocate memberships reference auth.users. In a full migration replay, a synthetic analytics viewer had permission before profile deletion and retained both its Auth row and the same permission afterward. Normal triggers were enabled during deletion and both permission checks; only fixture construction bypassed triggers. FF-077 records the misleading offboarding boundary. Existing tenant suspension and revocation are the appropriate controls pending a coordinated global account lifecycle design. No live account or provider was changed.

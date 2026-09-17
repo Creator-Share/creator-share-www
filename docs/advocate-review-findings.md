@@ -90,6 +90,12 @@ All current capabilities remain required until explicitly changed. The [measured
 
 Payment correctness, tenant isolation, private-data protection, and cancellation support are not proposed reductions.
 
+## Legacy account deletion does not revoke Advocate access
+
+**P2 integration finding (FF-077):** both legacy administrator deletion routes remove `public.users`, not the Supabase Auth account. The bulk route separately removes legacy role assignments. Advocate membership references `auth.users`, and its permission function does not depend on the public profile. A synthetic delegate retained its Auth row and `portal.analytics.view` permission after executing the same public-profile deletion with normal database triggers enabled. Fixture setup used disabled triggers; the deletion and permission checks did not. This is database behavior evidence, not a live-session browser test.
+
+These route bodies predate this PR, but their successful “user deleted” response is misleading for the new Advocate authority model. Do not use profile deletion as offboarding. Tenant membership suspension and revocation remain the supported Advocate controls. A complete repair should distinguish profile removal from global account disablement, protect owner transfer and sponsor access, and apply revocation atomically before reporting success. Simply swapping in Auth hard deletion would collide with retained records and ownership constraints. No global deletion semantics were silently changed.
+
 ## Retention query maintenance
 
 The candidate broadens the existing exposure visitor index to include excluded exposures. Tracking cleanup must check all exposures, so the former qualified-only index could not support that visitor lookup. A 100,000-row planner probe changed the absent-visitor lookup from a sequential scan to an index-only scan. Full structural replay changes only the index and preserves representative legacy data. This does not measure production purge performance; the tradeoff is indexing excluded rows as well. Hosted validation is pending.
