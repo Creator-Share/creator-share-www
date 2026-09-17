@@ -16,6 +16,7 @@
         "PW_NO_WEBSERVER": "1"
       },
       "files": [
+        "tests/admin/beneficiary-deletion-route.spec.ts",
         "tests/advocates/attribution-identity-auth-routes.spec.ts",
         "tests/advocates/attribution-identity-completion.spec.ts",
         "tests/advocates/attribution-identity-cookie.spec.ts",
@@ -107,11 +108,11 @@
         "tests/advocates/supabase-auth-cookie-security.spec.ts",
         "tests/advocates/tenant-middleware.spec.ts",
         "tests/advocates/tenant-route-policy.spec.ts",
+        "tests/auth/admin-request-authorization.spec.ts",
         "tests/auth/change-password.spec.ts",
         "tests/auth/creator-share-admin-invitation-route.spec.ts",
         "tests/auth/email-proof-issuance-gate.spec.ts",
         "tests/auth/email-proof-provider-inventory.spec.ts",
-        "tests/auth/admin-request-authorization.spec.ts",
         "tests/auth/local-phone-authentication-lock.spec.ts",
         "tests/auth/password-recovery-client.spec.ts",
         "tests/auth/password-reset-request-route.spec.ts",
@@ -223,7 +224,9 @@
       "env": {
         "RUN_LOCAL_SUPABASE_HTTP_INTEGRATION": "1"
       },
-      "files": ["tests/advocates/portal-catalog-supabase-http.spec.ts"]
+      "files": [
+        "tests/advocates/portal-catalog-supabase-http.spec.ts"
+      ]
     },
     "opt-in-integration": {
       "description": "Specs gated behind an explicit opt-in environment variable. They self-skip unless their provider is present, so they are not a required gate.",
@@ -263,6 +266,7 @@
         "supabase/tests/advocate_publication_sentinel_reservation.test.sql",
         "supabase/tests/advocate_sanitized_audit_history.test.sql",
         "supabase/tests/advocate_staging_subdomain_reservation.test.sql",
+        "supabase/tests/atomic_beneficiary_deletion.test.sql",
         "supabase/tests/blind_sponsorship_assignment.test.sql",
         "supabase/tests/checkout_contact_envelope_erasure.test.sql",
         "supabase/tests/creator_share_advocate_lifecycle_controls.test.sql",
@@ -312,6 +316,7 @@
         "tests/database/advocate-branding-authority-termination.mjs",
         "tests/database/advocate-initial-owner-concurrency.mjs",
         "tests/database/advocate-publication-concurrency.mjs",
+        "tests/database/beneficiary-deletion-concurrency.mjs",
         "tests/database/email-proof-issuance-concurrency.mjs",
         "tests/database/postgrest-role-claim-http-termination.mjs",
         "tests/database/postgrest-role-claim-http.mjs"

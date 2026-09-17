@@ -351,3 +351,13 @@ The authority review ruled out a suspected scoped SUPER_ADMIN bypass: the migrat
 In a full-schema in-process replay, a synthetic child with one activity, one media row, and a valid PayPal catalog reference remained after the beneficiary delete failed; its activity and media rows were gone. Triggers were disabled only for fixture setup, then enabled before all deletes. The failing final statement was isolated to model the separate route calls. No real storage objects were touched. FF-082 requires an atomic database deletion decision before storage cleanup, preserving the restrictive financial references and all-or-nothing bulk behavior.
 
 Publication run 35192016933 and WebKit run 35192016482 passed on 98928f2, including both independent jobs and the aggregate. FF-079 and FF-080 are complete. The subsequent shared administrator guard needs its own hosted validation.
+
+## Atomic beneficiary deletion candidate
+
+The single and bulk routes now share one authenticated database command. It rechecks healthy global administrator authority and the live signed session, locks selected children in UUID order, and deletes database content in one transaction. Restrictive financial references remain authoritative. Storage cleanup receives candidates only after the RPC commits. Invalid and oversized batches are rejected before the command.
+
+The original route regression fails by observing activity deletion, storage removal, media deletion, and then beneficiary deletion for both requests. The corrected routes pass all five contracts. Full-schema in-process execution preserves every child, activity, and media row after protected single and mixed bulk rejection, and returns cleanup candidates after successful deletion. All 1,607 selected server-free tests, TypeScript, lint, and manifest verification pass. The manifest classifies 258 files, 247 required. The hosted suite adds rollback and authority assertions plus four independently connected, server-observed financial-reference and account-ban interleavings. Those hosted checks are pending.
+
+Storage cleanup remains best effort. A process crash, lost successful RPC response, or storage failure can leave orphan objects requiring reconciliation. The change prevents premature destructive cleanup; it does not claim durable object cleanup or exercise a real payment provider. No local service or live provider was started.
+
+Publication run 35193169856 and WebKit run 35193169883 passed on ffe7337, validating the preceding shared administrator guard (FF-081). No merge into dev occurred.

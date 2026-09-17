@@ -219,6 +219,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      - name: Run beneficiary deletion concurrency harness
+        env:
+          BENEFICIARY_DELETION_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/beneficiary-deletion-concurrency-evidence.json
+        run: yarn test:beneficiaries:deletion-concurrency
+
+      - name: Upload sanitized beneficiary deletion evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: beneficiary-deletion-concurrency-evidence
+          path: ${{ runner.temp }}/beneficiary-deletion-concurrency-evidence.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Run branding authority concurrency harness
         env:
           ADVOCATE_BRANDING_AUTHORITY_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-branding-authority-concurrency-evidence.json
