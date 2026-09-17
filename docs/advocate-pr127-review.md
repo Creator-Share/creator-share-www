@@ -291,3 +291,7 @@ Executed the active Stripe deriveProportionalBaseUsdCents helper over every posi
 ## Hosted database expectation repair
 
 Publication run 35188935007 failed on the database job while its application job and WebKit run 35188935099 passed. The foundation suite ran all 80 assertions but still declared 78. The invitation suite retained an older assertion requiring the removed PostgREST network fallback. Corrected the count and changed that assertion to require absent forensics while preserving every signed-session, actor, request, tool, reason, and operation check. Synthetic hop headers and caller-supplied network values remain in the fixture so either unsafe source would fail the assertion. Hosted database validation must pass before FF-076 can close.
+
+## Key rotation implementation inventory
+
+Confirmed that numbered fields do not imply multi-key support: the application loads one sponsorship root key, envelope validation expects its fixed header, and email identity constraints plus claim functions reject later HMAC versions. The root also derives deterministic checkout receipts. The existing runbook already prohibits replacing its value. Recorded the coordinated rotation and recovery limitation in the findings without inventing a new cryptographic design or changing identity semantics.

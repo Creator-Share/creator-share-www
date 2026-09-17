@@ -90,6 +90,10 @@ All current capabilities remain required until explicitly changed. The [measured
 
 Payment correctness, tenant isolation, private-data protection, and cancellation support are not proposed reductions.
 
+## Key rotation and recovery limitation
+
+The version fields do not yet provide a working multi-key implementation. Sponsorship cryptography reads only `SPONSORSHIP_CRYPTO_SECRET_V1`, derives email lookup, envelope encryption, and checkout receipt keys from that root, and accepts only the current envelope header. Email identifier constraints and claim RPCs also require HMAC version one. Replacing the environment value would therefore break old envelope decryption and email lookup continuity; it can also change deterministic checkout receipts. The payment runbook correctly forbids replacement and requires a numbered migration plan. FF-022 and FF-032 cover parts of this work, but planned rotation needs one coordinated implementation and recovery exercise across these consumers. This is an acknowledged maintenance limitation, not a newly demonstrated cryptographic break. No key or identity semantics were changed during this review.
+
 ## Validation provenance
 
 [Publication workflow 35182345377](https://github.com/Creator-Share/creator-share-www/actions/runs/35182345377) and [WebKit workflow 35182345403](https://github.com/Creator-Share/creator-share-www/actions/runs/35182345403) both passed on `87399c7`. They cover the application and database lanes, including current concurrency and cleanup harnesses. The local in-process database replay supports structural comparison only; hosted Supabase provides the real database execution evidence. Neither substitutes for live provider or physical-device canaries.
