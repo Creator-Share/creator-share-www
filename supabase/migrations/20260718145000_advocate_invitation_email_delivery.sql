@@ -438,9 +438,7 @@ BEGIN
        OR NEW.status <> 'pending'
        OR NEW.attempt_count <> 0
        OR NEW.max_attempts <> 8
-       OR NEW.contact_redacted_at IS NOT NULL
-       OR NEW.legacy_email_proof_quarantined_at IS NOT NULL
-       OR NEW.legacy_email_proof_quarantine_reason IS NOT NULL THEN
+       OR NEW.contact_redacted_at IS NOT NULL THEN
       RAISE EXCEPTION 'Invitation email rows require atomic invitation issuance'
         USING ERRCODE = '42501';
     END IF;
@@ -486,41 +484,9 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
-  IF v_operation <> 'quarantine_legacy_email_proof'
-     AND (
-       NEW.legacy_email_proof_quarantined_at IS DISTINCT FROM
-         OLD.legacy_email_proof_quarantined_at
-       OR NEW.legacy_email_proof_quarantine_reason IS DISTINCT FROM
-         OLD.legacy_email_proof_quarantine_reason
-     ) THEN
-    RAISE EXCEPTION 'Invitation email legacy proof quarantine is immutable'
-      USING ERRCODE = '42501';
-  END IF;
-
-  IF v_operation = 'quarantine_legacy_email_proof' THEN
-    IF OLD.legacy_email_proof_quarantined_at IS NOT NULL
-       OR NEW.legacy_email_proof_quarantined_at IS NULL
-       OR NEW.legacy_email_proof_quarantine_reason <>
-         'shared_issuer_cutover_unresolved_legacy_proof'
-       OR NEW.status IS DISTINCT FROM OLD.status
-       OR NEW.available_at IS DISTINCT FROM OLD.available_at
-       OR NEW.attempt_count IS DISTINCT FROM OLD.attempt_count
-       OR NEW.locked_at IS DISTINCT FROM OLD.locked_at
-       OR NEW.locked_by IS DISTINCT FROM OLD.locked_by
-       OR NEW.locked_lease_token_digest IS DISTINCT FROM
-         OLD.locked_lease_token_digest
-       OR NEW.delivery_started_at IS DISTINCT FROM OLD.delivery_started_at
-       OR NEW.provider_message_id IS DISTINCT FROM OLD.provider_message_id
-       OR NEW.sent_at IS DISTINCT FROM OLD.sent_at
-       OR NEW.last_error_code IS DISTINCT FROM OLD.last_error_code
-       OR NEW.cancelled_at IS DISTINCT FROM OLD.cancelled_at THEN
-      RAISE EXCEPTION 'Invitation email legacy proof quarantine is invalid'
-        USING ERRCODE = '42501';
-    END IF;
-  ELSIF v_operation = 'claim' THEN
+  IF v_operation = 'claim' THEN
     IF OLD.attempt_count >= OLD.max_attempts
        OR OLD.contact_redacted_at IS NOT NULL
-       OR OLD.legacy_email_proof_quarantined_at IS NOT NULL
        OR NOT (
          (
            OLD.status IN ('pending', 'failed')
@@ -548,7 +514,6 @@ BEGIN
     END IF;
   ELSIF v_operation = 'begin_delivery' THEN
     IF OLD.status <> 'processing'
-       OR OLD.legacy_email_proof_quarantined_at IS NOT NULL
        OR OLD.delivery_started_at IS NOT NULL
        OR NEW.status <> 'processing'
        OR NEW.delivery_started_at IS NULL

@@ -205,20 +205,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Run invitation proof quarantine concurrency harness
-        env:
-          ADVOCATE_INVITATION_PROOF_QUARANTINE_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-invitation-proof-quarantine-concurrency-evidence.json
-        run: yarn test:advocate:invitation-proof-quarantine-concurrency
-
-      - name: Upload sanitized invitation proof quarantine concurrency evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: advocate-invitation-proof-quarantine-concurrency-evidence
-          path: ${{ runner.temp }}/advocate-invitation-proof-quarantine-concurrency-evidence.json
-          if-no-files-found: ignore
-          retention-days: 30
-
       - name: Run initial owner concurrency harness
         env:
           ADVOCATE_INITIAL_OWNER_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-initial-owner-concurrency-evidence.json

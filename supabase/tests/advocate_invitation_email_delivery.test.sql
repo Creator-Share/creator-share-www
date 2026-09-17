@@ -361,33 +361,7 @@ SELECT 'advocate', id FROM created;
 SELECT set_config('request.jwt.claim.sub', '', true);
 SELECT set_config('request.jwt.claim.role', 'service_role', true);
 
-DO $test_cutover$
-BEGIN
-  PERFORM public.arm_advocate_invitation_legacy_email_proof_quarantine(
-    '95000000-0000-4000-8000-000000000801'::uuid,
-    'invitation-delivery-test-arm'
-  );
-END;
-$test_cutover$;
 
-SET LOCAL session_replication_role = replica;
-UPDATE private.advocate_invitation_legacy_email_proof_quarantine
-SET
-  legacy_claim_fenced_at = clock_timestamp() - interval '71 seconds',
-  legacy_claim_fence_transaction_id = '1'::xid8
-WHERE quarantine_identity = 'advocate_invitation_legacy_email_proof_v1';
-SET LOCAL session_replication_role = origin;
-
-DO $test_cutover$
-BEGIN
-  PERFORM *
-  FROM public.quarantine_legacy_advocate_invitation_proofs(
-    3600::smallint,
-    '95000000-0000-4000-8000-000000000802'::uuid,
-    'invitation-delivery-test-quarantine'
-  );
-END;
-$test_cutover$;
 
 WITH issued AS (
   SELECT *

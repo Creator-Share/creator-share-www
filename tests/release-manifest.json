@@ -308,7 +308,6 @@
         "tests/database/advocate-branding-authority-concurrency.mjs",
         "tests/database/advocate-branding-authority-termination.mjs",
         "tests/database/advocate-initial-owner-concurrency.mjs",
-        "tests/database/advocate-invitation-proof-quarantine-concurrency.mjs",
         "tests/database/advocate-publication-concurrency.mjs",
         "tests/database/email-proof-issuance-concurrency.mjs",
         "tests/database/postgrest-role-claim-http-termination.mjs",

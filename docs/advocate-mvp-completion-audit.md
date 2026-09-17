@@ -2,7 +2,7 @@
 
 This answers one question: **is the Advocate Platform ready for final manual testing and a merge to `dev`?**
 
-The automated repository gates are green on the audited branch. The release is not complete. It still needs the isolated hosted deployment, live provider evidence, the historical caller decision, and a physical iOS pass. Those items are enumerated in `docs/advocate-staging-manual-audit.md`.
+This document records the earlier audit checkpoint, not the current PR head. See [the ongoing implementation review](./advocate-pr127-review.md) for revision-bound validation and the first-release migration changes. The release is not complete. It still needs the isolated hosted deployment, live provider evidence, the historical caller decision, and a physical iOS pass. Those items are enumerated in `docs/advocate-staging-manual-audit.md`.
 
 ## What is measured, not asserted
 

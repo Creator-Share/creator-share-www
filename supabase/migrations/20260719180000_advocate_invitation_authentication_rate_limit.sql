@@ -497,10 +497,6 @@ BEGIN
         COALESCE(
           gate.proof_exclusivity_expires_at,
           gate.reservation_expires_at
-        ),
-        COALESCE(
-          gate.legacy_proof_quarantine_expires_at,
-          gate.reservation_expires_at
         )
       )
     )
@@ -510,10 +506,6 @@ BEGIN
       AND COALESCE(gate.next_issuance_at, '-infinity'::timestamptz) <= v_now
       AND COALESCE(
         gate.proof_exclusivity_expires_at,
-        '-infinity'::timestamptz
-      ) <= v_now
-      AND COALESCE(
-        gate.legacy_proof_quarantine_expires_at,
         '-infinity'::timestamptz
       ) <= v_now;
   END IF;

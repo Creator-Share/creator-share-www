@@ -300,18 +300,10 @@ BEGIN
     v_all_fences_expired := CASE v_gate.phase
       WHEN 'reserved' THEN
         v_gate.reservation_expires_at <= v_now
-        AND COALESCE(
-          v_gate.legacy_proof_quarantine_expires_at,
-          '-infinity'::timestamptz
-        ) <= v_now
       ELSE
         v_gate.reservation_expires_at <= v_now
         AND v_gate.next_issuance_at <= v_now
         AND v_gate.proof_exclusivity_expires_at <= v_now
-        AND COALESCE(
-          v_gate.legacy_proof_quarantine_expires_at,
-          '-infinity'::timestamptz
-        ) <= v_now
     END;
 
     IF v_all_fences_expired THEN
@@ -335,8 +327,7 @@ BEGIN
         proof_exclusivity_expires_at = NULL,
         finish_disposition = NULL,
         finished_at = NULL,
-        updated_at = v_now,
-        legacy_proof_quarantine_expires_at = NULL
+        updated_at = v_now
       WHERE gate.id = v_gate.id;
 
       RETURN QUERY SELECT 'acquired'::text, 0;
@@ -346,31 +337,17 @@ BEGIN
     IF v_gate.operation_id = target_operation_id
        AND v_gate.issuance_flow = target_issuance_flow THEN
       IF v_gate.phase = 'reserved'
-         AND v_gate.lease_token_digest = v_lease_token_digest
-         AND COALESCE(
-           v_gate.legacy_proof_quarantine_expires_at,
-           '-infinity'::timestamptz
-         ) <= v_now THEN
+         AND v_gate.lease_token_digest = v_lease_token_digest THEN
         RETURN QUERY SELECT 'acquired'::text, 0;
         RETURN;
       END IF;
 
       v_retry_at := CASE v_gate.phase
-        WHEN 'reserved' THEN GREATEST(
-          v_gate.reservation_expires_at,
-          COALESCE(
-            v_gate.legacy_proof_quarantine_expires_at,
-            '-infinity'::timestamptz
-          )
-        )
+        WHEN 'reserved' THEN v_gate.reservation_expires_at
         ELSE GREATEST(
           v_gate.reservation_expires_at,
           v_gate.next_issuance_at,
-          v_gate.proof_exclusivity_expires_at,
-          COALESCE(
-            v_gate.legacy_proof_quarantine_expires_at,
-            '-infinity'::timestamptz
-          )
+          v_gate.proof_exclusivity_expires_at
         )
       END;
       v_retry_after_seconds := LEAST(
@@ -386,21 +363,11 @@ BEGIN
     END IF;
 
     v_retry_at := CASE v_gate.phase
-      WHEN 'reserved' THEN GREATEST(
-        v_gate.reservation_expires_at,
-        COALESCE(
-          v_gate.legacy_proof_quarantine_expires_at,
-          '-infinity'::timestamptz
-        )
-      )
+      WHEN 'reserved' THEN v_gate.reservation_expires_at
       ELSE GREATEST(
         v_gate.reservation_expires_at,
         v_gate.next_issuance_at,
-        v_gate.proof_exclusivity_expires_at,
-        COALESCE(
-          v_gate.legacy_proof_quarantine_expires_at,
-          '-infinity'::timestamptz
-        )
+        v_gate.proof_exclusivity_expires_at
       )
     END;
     v_retry_after_seconds := LEAST(
@@ -471,10 +438,6 @@ BEGIN
        v_gate.phase = 'reserved'
        AND v_gate.reservation_expires_at <= v_now
      )
-     OR COALESCE(
-       v_gate.legacy_proof_quarantine_expires_at,
-       '-infinity'::timestamptz
-     ) > v_now
      OR v_gate.phase IS DISTINCT FROM 'reserved' THEN
     RAISE EXCEPTION 'Email proof issuance fence is stale'
       USING ERRCODE = '55000';
@@ -646,11 +609,7 @@ BEGIN
      OR v_gate.operation_id IS DISTINCT FROM target_operation_id
      OR v_gate.lease_token_digest IS DISTINCT FROM v_lease_token_digest
      OR v_gate.phase IS DISTINCT FROM 'reserved'
-     OR v_gate.reservation_expires_at <= v_now
-     OR COALESCE(
-       v_gate.legacy_proof_quarantine_expires_at,
-       '-infinity'::timestamptz
-     ) > v_now THEN
+     OR v_gate.reservation_expires_at <= v_now THEN
     RAISE EXCEPTION 'Email proof issuance fence is stale'
       USING ERRCODE = '55000';
   END IF;
@@ -729,12 +688,7 @@ BEGIN
         gate.proof_exclusivity_expires_at,
         '-infinity'::timestamptz
       ) <= v_now
-      AND COALESCE(
-        gate.legacy_proof_quarantine_expires_at,
-        '-infinity'::timestamptz
-      ) <= v_now
     ORDER BY
-      gate.legacy_proof_quarantine_expires_at NULLS FIRST,
       gate.proof_exclusivity_expires_at NULLS FIRST,
       gate.next_issuance_at NULLS FIRST,
       gate.reservation_expires_at,
