@@ -76,3 +76,13 @@ Exercise retained-quarantine recovery separately. A repaired future webhook path
 ## Quarantine recovery boundary
 
 Current quarantines are terminal `ignored` records carrying `requires_operational_review`; ordinary worker claims exclude them. Their encrypted payloads remain subject to the 90-day retention deadline. Fixing conversion arithmetic does not itself reprocess those records, and a successful worker run is not a quarantine health check. The payment runbook now defines a sanitized ingress signal, protected aggregate inventory, and monitoring canary. The accounting repair still needs an explicit audited recovery path before it can be considered complete.
+
+## Disputes can exceed the original principal (FF-084)
+
+The accounting model has another independent constraint: it assumes every adjustment belongs wholly to one payment and that payment's aggregate net remains between zero and its original gross. Stripe documents larger disputes caused by currency changes, disputes that combine recurring charges, and full-charge disputes after partial refunds. These are supported provider outcomes, not necessarily forged amounts. [Stripe dispute lifecycle](https://support.stripe.com/embedded-connect/questions/how-disputes-work?locale=en-GB)
+
+A temporary server-free probe reused the current Stripe adapter fixtures with a 1,250-cent captured charge and a matching 1,300-cent dispute withdrawal. The active adapter rejected it with permanent `provider-fact-mismatch` before ingestion. The webhook handler sends permanent verified failures to quarantine. Independently, `apply_sponsorship_financial_adjustment` rejects any aggregate net below zero, so allowing the adapter input alone would not fix settlement. The probe is evidence of current rejection, not a desired rejection contract or a live provider incident.
+
+The repair must distinguish sponsor principal and attribution from actual provider cash movements. An authenticated loss must remain recorded even when principal attribution is exhausted. A dispute covering several recurring charges also needs explicit allocation or an unallocated reconciliation state; attributing the entire loss to one intent can misstate cohort reports. Preserve exact event identity, provider-account binding, original charge evidence, and bounded reinstatement authority. Do not merely remove amount checks or silently clamp the loss to zero.
+
+The existing owner accounting decision must cover these semantics before implementation. Add excess disputes, full-charge disputes after partial refunds, disputes spanning recurring charges, and their reinstatements to acceptance evidence. This finding is separate from the whole-cent representability defect in FF-072.
