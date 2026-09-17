@@ -352,12 +352,6 @@ EXECUTE FUNCTION private.bind_advocate_publication_approval_session();
  * Add one database-derived publication eligibility flag without weakening the
  * existing snapshot authorization or exposing provider identifiers.
  */
-ALTER FUNCTION public.get_creator_share_advocate_control_snapshot(uuid)
-  RENAME TO get_creator_share_advocate_control_snapshot_without_publication;
-
-REVOKE ALL ON FUNCTION public.get_creator_share_advocate_control_snapshot_without_publication(uuid)
-  FROM PUBLIC, anon, authenticated, service_role;
-
 CREATE OR REPLACE FUNCTION public.get_creator_share_advocate_control_snapshot(
   target_advocate_id uuid
 )
@@ -402,10 +396,11 @@ AS $$
     snapshot.relationship_status,
     snapshot.publication_status,
     snapshot.advocate_version,
-    snapshot.owner_display_name,
-    snapshot.ownership_status,
-    snapshot.can_reissue_initial_owner,
-    snapshot.can_revoke_initial_owner,
+    CASE WHEN owner_state.ownership_status = 'owner_active'
+      THEN snapshot.owner_display_name ELSE NULL END,
+    owner_state.ownership_status,
+    owner_state.can_reissue_initial_owner,
+    owner_state.can_revoke_initial_owner,
     snapshot.primary_domain_id,
     snapshot.primary_hostname,
     snapshot.primary_domain_status,
@@ -416,7 +411,9 @@ AS $$
     snapshot.pending_invitations,
     snapshot.cleanup_phase,
     snapshot.can_retry_cleanup,
-    snapshot.can_suspend,
+    snapshot.can_suspend
+      AND snapshot.relationship_status = 'active'
+      AND owner_state.ownership_status = 'owner_active',
     snapshot.can_resume,
     snapshot.can_archive,
     snapshot.can_repair,
@@ -452,9 +449,12 @@ AS $$
     snapshot.suspended_at,
     snapshot.archived_at,
     snapshot.updated_at
-  FROM public.get_creator_share_advocate_control_snapshot_without_publication(
+  FROM public.get_creator_share_advocate_control_snapshot_legacy(
     target_advocate_id
-  ) snapshot;
+  ) snapshot
+  CROSS JOIN LATERAL private.creator_share_advocate_owner_onboarding_state(
+    snapshot.advocate_id
+  ) owner_state;
 $$;
 
 REVOKE ALL ON FUNCTION public.get_creator_share_advocate_control_snapshot(uuid)

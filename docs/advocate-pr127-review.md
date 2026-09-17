@@ -415,3 +415,7 @@ The release checklists now distinguish checks that can run through authorized pr
 The existing database test rejected a credit without its debit, then exercised a different dispute in debit-first order. It did not establish recovery of the rejected event. The revised scenario persists a retry through the production RPC, settles the matching debit, advances only the fixture retry schedule, reclaims the original credit, rejects its stale lease, and checks the restored net and two-movement bound. Production behavior is unchanged. Hosted validation is pending; this is a coverage gap, not a confirmed settlement defect.
 
 The first hosted recovery regression run (35200418623) correctly rejected the fixture debit because subtracting one second placed it before the original payment, all created within a short transaction. The fixture now puts debit occurrence halfway between the actual original payment and credit timestamps. No production check changed. Hosted validation must be rerun on the corrected fixture.
+
+## Administrator snapshot simplification
+
+Folded the intermediate owner-onboarding projection into its sole caller, the current publication-aware administrator snapshot. The same base function retains authorization. Owner labels, invitation recovery flags, ownerless suspension denial, and publication eligibility remain unchanged. This removes one function and 86 net SQL lines; strict catalog comparison shows only that deletion and the final function definition change, with eight equal legacy-data projections. Hosted contract validation is pending.
