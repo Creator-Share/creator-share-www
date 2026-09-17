@@ -2,6 +2,8 @@
 // PayPal has no regional-account split today — the architectural decision is
 // single PayPal account, multi-region Stripe.
 
+import { readBoundedResponseText } from "@/lib/readBoundedResponseText"
+
 import {
   ADVOCATE_STAGING_PAYPAL_API_ORIGIN,
   assertStagingPayPalPaymentEnvironment,
@@ -56,7 +58,9 @@ export async function paypalFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  const accessToken = await getPayPalAccessToken(init.signal)
+  const deadline = AbortSignal.timeout(15_000)
+  const signal = init.signal ? AbortSignal.any([init.signal, deadline]) : deadline
+  const accessToken = await getPayPalAccessToken(signal)
   const headers = new Headers(init.headers)
   if (!headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${accessToken}`)
@@ -64,7 +68,13 @@ export async function paypalFetch(
   if (!headers.has("Content-Type") && init.method && init.method !== "GET") {
     headers.set("Content-Type", "application/json")
   }
-  return fetch(`${getPayPalApiUrl()}${path}`, { ...init, headers })
+  return fetch(`${getPayPalApiUrl()}${path}`, {
+    ...init,
+    headers,
+    signal,
+    redirect: "error",
+    cache: "no-store",
+  })
 }
 
 export async function getPayPalAccessToken(
@@ -83,19 +93,33 @@ export async function getPayPalAccessToken(
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: "grant_type=client_credentials",
-    signal,
+    signal: signal ?? AbortSignal.timeout(15_000),
+    redirect: "error",
+    cache: "no-store",
   })
 
   if (!response.ok) {
+    void response.body?.cancel().catch(() => undefined)
     console.error("PayPal token request failed", {
       httpStatus: response.status,
     })
     throw new Error("Failed to get PayPal access token")
   }
 
-  const data = (await response.json()) as { access_token?: string }
-  if (!data.access_token) {
+  const data: unknown = JSON.parse(
+    await readBoundedResponseText(response, 16 * 1024),
+  )
+  const token =
+    data && typeof data === "object" && "access_token" in data
+      ? data.access_token
+      : undefined
+  if (
+    typeof token !== "string" ||
+    token.length < 1 ||
+    token.length > 4_096 ||
+    /[\s\u0000-\u001f\u007f]/.test(token)
+  ) {
     throw new Error("Invalid PayPal token response")
   }
-  return data.access_token
+  return token
 }
