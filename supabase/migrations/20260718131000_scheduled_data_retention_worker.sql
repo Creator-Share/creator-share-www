@@ -94,6 +94,13 @@ AS $$
     WHEN 'email_outbox_contact' THEN jsonb_build_object('redacted_count', 0)
     WHEN 'gateway_event_payloads' THEN jsonb_build_object('redacted_count', 0)
     WHEN 'audit_forensics' THEN jsonb_build_object('deleted_count', 0)
+    WHEN 'sponsor_authentication' THEN jsonb_build_object(
+      'recent_auth_receipts_deleted', 0,
+      'passwordless_reservations_deleted', 0,
+      'passwordless_verification_attempts_deleted', 0,
+      'advocate_invitation_authentication_attempts_deleted', 0,
+      'email_proof_issuance_gates_deleted', 0
+    )
     WHEN 'advocate_tracking' THEN jsonb_build_object(
       'exposures_deleted', 0,
       'visitors_deleted', 0
@@ -148,7 +155,9 @@ BEGIN
       v_allowed_keys := ARRAY[
         'recent_auth_receipts_deleted',
         'passwordless_reservations_deleted',
-        'passwordless_verification_attempts_deleted'
+        'passwordless_verification_attempts_deleted',
+        'advocate_invitation_authentication_attempts_deleted',
+        'email_proof_issuance_gates_deleted'
       ]::text[];
       v_maximum := 5000;
     WHEN 'advocate_tracking' THEN

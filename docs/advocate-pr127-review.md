@@ -217,3 +217,9 @@ Publication run `35184592681` passed its database job but failed the application
 Portal mutation, invitation, Creator Share lifecycle, and sponsor cancellation contexts now reuse the same ingress reader. This removes four more parsers and closes the administrative readers' missing Vercel runtime check. Oversized user-agent values are unavailable rather than silently truncated. The lifecycle regression explicitly checks a valid-looking Vercel IP header outside Vercel. All 1,584 selected server-free tests pass; the new focused assertion, TypeScript, and lint are checked separately. Hosted validation remains part of FF-074.
 
 The [partial adjustment decision draft](./advocate-adjustment-accounting-decision.md) provides the pending owner's policy decision with an implementation map and executable arithmetic counterexample. It changes no financial behavior.
+
+## Hosted decimal and payment forensic validation
+
+[Publication run 35185296016](https://github.com/Creator-Share/creator-share-www/actions/runs/35185296016) completed successfully on `7cae034`, including both application and database jobs. The corresponding WebKit run `35185295959` also passed. This closes the decimal arithmetic candidate FF-073 and validates the six payment-route forensic changes. The administrative parser extension in `82c1b14` still requires hosted validation under FF-074. The partial adjustment accounting defect FF-072 remains open.
+
+A further retention migration consolidation removes 189 net lines with exact final catalog and legacy fixture equality. Hosted validation of this latest consolidation is pending.

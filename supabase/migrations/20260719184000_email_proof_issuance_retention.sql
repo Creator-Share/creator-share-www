@@ -126,41 +126,6 @@ COMMENT ON FUNCTION public.purge_expired_sponsor_authentication_evidence(
 ) IS
   'Deletes bounded batches of expired sponsor and advocate authentication evidence after complete authorization, quota, reservation, spacing, and proof exclusivity windows. Service role only and safe to retry.';
 
-CREATE OR REPLACE FUNCTION private.data_retention_zero_counts(
-  target_step_key text
-)
-RETURNS jsonb
-LANGUAGE sql
-IMMUTABLE
-PARALLEL SAFE
-SET search_path = ''
-AS $$
-  SELECT CASE target_step_key
-    WHEN 'checkout_contact_envelopes' THEN jsonb_build_object(
-      'erased_count', 0,
-      'succeeded_count', 0,
-      'failed_count', 0,
-      'cancelled_count', 0,
-      'expired_count', 0
-    )
-    WHEN 'email_outbox_contact' THEN jsonb_build_object('redacted_count', 0)
-    WHEN 'gateway_event_payloads' THEN jsonb_build_object('redacted_count', 0)
-    WHEN 'audit_forensics' THEN jsonb_build_object('deleted_count', 0)
-    WHEN 'sponsor_authentication' THEN jsonb_build_object(
-      'recent_auth_receipts_deleted', 0,
-      'passwordless_reservations_deleted', 0,
-      'passwordless_verification_attempts_deleted', 0,
-      'advocate_invitation_authentication_attempts_deleted', 0,
-      'email_proof_issuance_gates_deleted', 0
-    )
-    WHEN 'advocate_tracking' THEN jsonb_build_object(
-      'exposures_deleted', 0,
-      'visitors_deleted', 0
-    )
-    ELSE NULL
-  END;
-$$;
-
 REVOKE ALL ON FUNCTION private.data_retention_zero_counts(text)
   FROM PUBLIC, anon, authenticated, service_role;
 

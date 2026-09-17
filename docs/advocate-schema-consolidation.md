@@ -84,3 +84,7 @@ Nine additional groups remove 1,212 superseded definition lines. The strict in-p
 | `public.begin_advocate_invitation_email_delivery` | 2 | 124 |
 | `private.data_retention_counts_are_valid` | 2 | 43 |
 | `private.data_retention_backlog` | 3 | 101 |
+
+## Retention vocabulary consolidation
+
+The final zero-count constructor and count validator now appear once at their earliest definition sites. These functions depend on existing validation helpers and constant JSON keys, not on the later authentication tables. Four migration files lose a net 189 lines. Strict structural replay produces byte-identical catalogs with 5,280 entries and byte-identical legacy fixture projections compared with the preceding retention revision. This proof does not replace hosted PostgreSQL persona and concurrency validation, which remains pending for this consolidation.
