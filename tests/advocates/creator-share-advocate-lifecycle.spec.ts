@@ -127,10 +127,11 @@ test.describe("Creator Share advocate lifecycle contracts", () => {
           "user-agent": "a".repeat(2_000),
         },
       }),
+      { VERCEL: "1" },
     )
     expect(context).toEqual({
       clientIp: "203.0.113.42",
-      userAgent: "a".repeat(1_024),
+      userAgent: null,
     })
     expect(Object.isFrozen(context)).toBe(true)
 
@@ -143,8 +144,16 @@ test.describe("Creator Share advocate lifecycle contracts", () => {
           "x-vercel-forwarded-for": "not-an-ip",
         },
       }),
+      { VERCEL: "1" },
     )
     expect(spoofed.clientIp).toBeNull()
+    const outsideVercel = routeSecurity.creatorShareAdvocateControlForensicContext(
+      new Request("https://creatorshare.com/admin/advocates", {
+        headers: { "x-vercel-forwarded-for": "203.0.113.42" },
+      }),
+      {},
+    )
+    expect(outsideVercel.clientIp).toBeNull()
   })
 
   test("accepts only exact versioned lifecycle requests with archive confirmation", () => {

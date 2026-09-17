@@ -3,7 +3,7 @@ import "server-only"
 import { readBoundedResponseText } from "@/lib/readBoundedResponseText"
 
 import { createHash } from "node:crypto"
-import { isIP } from "node:net"
+import { readRequestForensics } from "@/lib/requestForensics"
 
 export const MAXIMUM_SUBSCRIPTION_CANCELLATION_BODY_BYTES = 1024
 export const MAXIMUM_SUBSCRIPTION_CANCELLATION_REASON_CHARACTERS = 500
@@ -35,19 +35,6 @@ export type SubscriptionCancellationRequestEnvironment = Readonly<
   Record<string, string | undefined>
 >
 
-function boundedRequestHeader(
-  headers: Pick<Headers, "get">,
-  name: string,
-  maximumLength: number,
-): string | null {
-  const value = headers.get(name)?.trim()
-  return value &&
-    value.length <= maximumLength &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-    ? value
-    : null
-}
-
 /**
  * Vercel overwrites these two infrastructure headers at final ingress. Other
  * proxy headers and every non-Vercel value are browser assertions, not
@@ -58,18 +45,9 @@ export function createSubscriptionCancellationRequestContext(options: {
   headers: Pick<Headers, "get">
   environment?: SubscriptionCancellationRequestEnvironment
 }): SubscriptionCancellationRequestContext {
-  const environment = options.environment ?? process.env
-  const onVercel = environment.VERCEL === "1"
-  const source = onVercel
-    ? boundedRequestHeader(options.headers, "x-vercel-forwarded-for", 64)
-    : null
   return Object.freeze({
     requestId: options.requestId,
-    traceId: onVercel
-      ? boundedRequestHeader(options.headers, "x-vercel-id", 255)
-      : null,
-    clientIp: source !== null && isIP(source) !== 0 ? source : null,
-    userAgent: boundedRequestHeader(options.headers, "user-agent", 1024),
+    ...readRequestForensics(options.headers, options.environment),
   })
 }
 

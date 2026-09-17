@@ -211,3 +211,9 @@ The settlement function already serializes adjustments by original movement usin
 ## Decimal arithmetic browser-fixture correction
 
 Publication run `35184592681` passed its database job but failed the application job because the checkout fixture targeted ES2017 and rejected BigInt literals during type checking. The production build passed, as did WebKit run `35184592734`. The fixture now uses the production TypeScript target, ESNext. Its production-mode build passed locally without starting a website server, and its tracked configuration was restored after the build. The full hosted application and checkout browser gates still require a rerun. This revision also carries the pending forensic-context fix.
+
+## Shared administrative forensic reader
+
+Portal mutation, invitation, Creator Share lifecycle, and sponsor cancellation contexts now reuse the same ingress reader. This removes four more parsers and closes the administrative readers' missing Vercel runtime check. Oversized user-agent values are unavailable rather than silently truncated. The lifecycle regression explicitly checks a valid-looking Vercel IP header outside Vercel. All 1,584 selected server-free tests pass; the new focused assertion, TypeScript, and lint are checked separately. Hosted validation remains part of FF-074.
+
+The [partial adjustment decision draft](./advocate-adjustment-accounting-decision.md) provides the pending owner's policy decision with an implementation map and executable arithmetic counterexample. It changes no financial behavior.
