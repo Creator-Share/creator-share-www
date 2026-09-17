@@ -765,8 +765,6 @@ CREATE TRIGGER advocate_delegate_events_no_truncate
 BEFORE TRUNCATE ON audit.advocate_delegate_events
 FOR EACH STATEMENT EXECUTE FUNCTION audit.prevent_advocate_delegate_event_mutation();
 
-DROP FUNCTION IF EXISTS public.get_advocate_audit_events(uuid, bigint, integer);
-
 CREATE OR REPLACE FUNCTION public.get_advocate_audit_history_page(
   target_advocate_id uuid,
   before_cursor uuid DEFAULT NULL,

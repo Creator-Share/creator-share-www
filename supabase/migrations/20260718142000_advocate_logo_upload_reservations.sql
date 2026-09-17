@@ -207,16 +207,6 @@ FOR EACH ROW EXECUTE FUNCTION audit.capture_row_change(
   '@columns_only'
 );
 
--- Reservations are user-initiated portal changes. Expose their columns-only
--- ledger entries through the same sanitized tenant audit surface.
-
-COMMENT ON FUNCTION public.get_advocate_audit_events(
-  uuid,
-  bigint,
-  integer
-) IS
-  'Returns only the sanitized, advocate-scoped audit ledger, including columns-only logo reservation lifecycle events, to members with portal.audit.view. Raw 90-day forensic evidence is never exposed.';
-
 CREATE OR REPLACE FUNCTION public.reserve_advocate_logo_upload(
   target_advocate_id uuid,
   target_actor_user_id uuid,
@@ -551,38 +541,8 @@ COMMENT ON FUNCTION public.get_advocate_logo_upload_reservation_result(
 ) IS
   'Service-only ambiguity recovery lookup bound to the reservation, actor, and request. It reveals only lifecycle status, immutable path, expected version, and committed resulting version.';
 
--- The browser-callable signature is removed. Only trusted application code can
--- present server-sanitized rich text and consume a provider upload reservation.
-REVOKE ALL ON FUNCTION public.update_advocate_branding(
-  uuid,
-  bigint,
-  text,
-  text,
-  text,
-  text,
-  text,
-  text,
-  text,
-  text,
-  text,
-  text
-) FROM PUBLIC, anon, authenticated, service_role;
-
-DROP FUNCTION public.update_advocate_branding(
-  uuid,
-  bigint,
-  text,
-  text,
-  text,
-  text,
-  text,
-  text,
-  text,
-  text,
-  text,
-  text
-);
-
+-- Only trusted application code may supply sanitized rich text and consume a
+-- provider upload reservation.
 CREATE FUNCTION public.update_advocate_branding(
   target_advocate_id uuid,
   target_actor_user_id uuid,

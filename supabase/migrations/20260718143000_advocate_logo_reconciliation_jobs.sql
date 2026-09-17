@@ -326,17 +326,6 @@ FOR EACH ROW EXECUTE FUNCTION audit.capture_row_change(
   '@columns_only'
 );
 
--- Reconciliation is operationally sensitive but contains no sponsor data.
--- Portal auditors receive the same columns-only view as other advocate
--- changes, while the raw audit ledger remains private.
-
-COMMENT ON FUNCTION public.get_advocate_audit_events(
-  uuid,
-  bigint,
-  integer
-) IS
-  'Returns only the sanitized advocate-scoped audit ledger, including columns-only logo reservation and reconciliation lifecycle events, to members with portal.audit.view. Raw 90-day forensic evidence is never exposed.';
-
 CREATE OR REPLACE FUNCTION public.claim_advocate_logo_reconciliation_jobs(
   worker_id text,
   batch_size integer,

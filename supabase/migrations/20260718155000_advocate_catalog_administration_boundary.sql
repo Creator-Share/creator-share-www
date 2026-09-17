@@ -33,30 +33,6 @@ COMMENT ON FUNCTION private.require_advocate_catalog_service_role() IS
 REVOKE ALL ON FUNCTION private.require_advocate_catalog_service_role()
   FROM PUBLIC, anon, authenticated, service_role;
 
-REVOKE ALL ON FUNCTION public.replace_advocate_beneficiary_configuration(
-  uuid,
-  bigint,
-  public.advocate_beneficiary_mode,
-  uuid[],
-  uuid[],
-  text,
-  text,
-  text,
-  text
-) FROM PUBLIC, anon, authenticated, service_role;
-
-DROP FUNCTION public.replace_advocate_beneficiary_configuration(
-  uuid,
-  bigint,
-  public.advocate_beneficiary_mode,
-  uuid[],
-  uuid[],
-  text,
-  text,
-  text,
-  text
-);
-
 CREATE OR REPLACE FUNCTION public.read_advocate_catalog_administration(
   target_advocate_id uuid,
   acting_user_id uuid

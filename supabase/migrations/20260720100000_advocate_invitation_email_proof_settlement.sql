@@ -136,12 +136,6 @@ EXECUTE FUNCTION audit.capture_row_change(
   'lease_token_digest'
 );
 
-DROP FUNCTION public.claim_advocate_invitation_email_jobs(
-  text,
-  integer,
-  text,
-  text
-);
 
 CREATE FUNCTION public.claim_advocate_invitation_email_jobs(
   worker_id text,

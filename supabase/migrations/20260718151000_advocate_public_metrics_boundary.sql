@@ -569,16 +569,6 @@ REVOKE ALL ON FUNCTION
  * The browser never calls this function. The application service supplies the
  * already authenticated actor and server generated audit correlation values.
  */
-DROP FUNCTION public.replace_advocate_public_metrics(
-  uuid,
-  bigint,
-  public.advocate_public_metric_key[],
-  text,
-  text,
-  text,
-  text
-);
-
 CREATE OR REPLACE FUNCTION public.replace_advocate_public_metrics(
   target_advocate_id uuid,
   acting_user_id uuid,

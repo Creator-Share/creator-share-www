@@ -259,7 +259,6 @@ BEGIN
 END;
 $$;
 
-DROP FUNCTION public.claim_payment_gateway_events(text, integer, text, text);
 
 CREATE FUNCTION public.claim_payment_gateway_events(
   target_worker_id text,

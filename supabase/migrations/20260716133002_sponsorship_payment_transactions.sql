@@ -3246,110 +3246,6 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.claim_payment_gateway_events(
-  target_worker_id text,
-  target_batch_size integer DEFAULT 20,
-  context_request_id text DEFAULT NULL,
-  context_trace_id text DEFAULT NULL
-)
-RETURNS TABLE (
-  gateway_event_id uuid,
-  processing_lease_token uuid,
-  provider public.sponsorship_method,
-  provider_account_scope text,
-  provider_event_id text,
-  event_type text,
-  provider_object_type text,
-  provider_object_id text,
-  sponsorship_intent_id uuid,
-  payment_attempt_id uuid,
-  redacted_payload jsonb,
-  payload_ciphertext bytea,
-  occurred_at timestamptz,
-  processing_attempt_count smallint
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-#variable_conflict use_column
-BEGIN
-  PERFORM private.require_payment_service_role();
-
-  IF nullif(btrim(target_worker_id), '') IS NULL
-     OR length(target_worker_id) > 140 THEN
-    RAISE EXCEPTION 'Gateway worker identifier must contain 1 to 140 characters'
-      USING ERRCODE = '22023';
-  END IF;
-
-  IF target_batch_size IS NULL
-     OR target_batch_size < 1
-     OR target_batch_size > 100 THEN
-    RAISE EXCEPTION 'Gateway claim batch size must be between 1 and 100'
-      USING ERRCODE = '22023';
-  END IF;
-
-  PERFORM private.set_payment_audit_context(
-    'claim_payment_gateway_events',
-    'STRIPE',
-    'worker_batch',
-    NULL,
-    NULL,
-    context_request_id,
-    context_trace_id,
-    NULL,
-    NULL
-  );
-
-  RETURN QUERY
-  WITH candidates AS (
-    SELECT
-      gateway_event.id,
-      gen_random_uuid() AS lease_token
-    FROM public.payment_gateway_events gateway_event
-    WHERE gateway_event.processing_attempt_count < gateway_event.max_processing_attempts
-      AND (
-        (
-          gateway_event.processing_status IN ('received', 'failed')
-          AND gateway_event.available_at <= clock_timestamp()
-        )
-        OR (
-          gateway_event.processing_status = 'processing'
-          AND gateway_event.processing_locked_at <= clock_timestamp() - interval '10 minutes'
-        )
-      )
-    ORDER BY gateway_event.available_at, gateway_event.received_at, gateway_event.id
-    LIMIT target_batch_size
-    FOR UPDATE SKIP LOCKED
-  ), claimed AS (
-    UPDATE public.payment_gateway_events gateway_event
-    SET
-      processing_status = 'processing',
-      processing_locked_by = left(target_worker_id, 140) || ':' || candidates.lease_token::text,
-      processing_lease_token = candidates.lease_token
-    FROM candidates
-    WHERE gateway_event.id = candidates.id
-    RETURNING gateway_event.*
-  )
-  SELECT
-    claimed.id,
-    claimed.processing_lease_token,
-    claimed.provider,
-    claimed.provider_account_scope,
-    claimed.provider_event_id,
-    claimed.event_type,
-    claimed.provider_object_type,
-    claimed.provider_object_id,
-    claimed.sponsorship_intent_id,
-    claimed.payment_attempt_id,
-    claimed.redacted_payload,
-    claimed.payload_ciphertext,
-    claimed.occurred_at,
-    claimed.processing_attempt_count
-  FROM claimed
-  ORDER BY claimed.available_at, claimed.received_at, claimed.id;
-END;
-$$;
 
 CREATE OR REPLACE FUNCTION public.apply_sponsorship_payment_success(
   target_gateway_event_id uuid,
@@ -5182,12 +5078,6 @@ REVOKE ALL ON FUNCTION public.ingest_verified_payment_gateway_event(
   text,
   text
 ) FROM PUBLIC, anon, authenticated, service_role;
-REVOKE ALL ON FUNCTION public.claim_payment_gateway_events(
-  text,
-  integer,
-  text,
-  text
-) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.apply_sponsorship_payment_success(
   uuid,
   uuid,
@@ -5327,12 +5217,6 @@ GRANT EXECUTE ON FUNCTION public.ingest_verified_payment_gateway_event(
   text,
   text,
   text,
-  text,
-  text
-) TO service_role;
-GRANT EXECUTE ON FUNCTION public.claim_payment_gateway_events(
-  text,
-  integer,
   text,
   text
 ) TO service_role;

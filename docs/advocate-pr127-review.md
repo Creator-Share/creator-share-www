@@ -383,3 +383,9 @@ All 1,607 selected server-free tests, TypeScript, lint, and manifest validation 
 ## Account-state hosted denial contracts
 
 The first FF-083 hosted run (35197024693) passed the new administrator account-state pgTAP file. Six older assertions failed only on their expected exception message: the shared predicate now rejects banned or anonymous administrators earlier, still with SQLSTATE 42501. Five now expect the existing generic administrator denial, and the cancellation case expects its existing generic authorization denial. The assertion that formerly named a post-lock health check now describes the earlier shared authority check. No deny assertion or production authorization check was removed. The hosted HTTP case was not reached and remains pending.
+
+## Remove functions created only to be dropped
+
+A further cleanup removes ten obsolete function versions and their grants, comments, and later drops, deleting 1,635 net migration lines across fourteen undeployed migrations. These include the old plaintext invitation issuer and one-argument redemption, the superseded audit endpoint, browser-callable branding/catalog/public-metric mutations, earlier payment and invitation worker claims, and two earlier authentication-retention result shapes. Current application contracts remain. The earlier payment functions that are renamed into active private cores are deliberately retained.
+
+Against the account-state candidate at c305049, strict in-process replay preserves all 5,282 final catalog entries exactly and leaves all eight legacy-data projections equal. All 1,607 selected server-free tests pass. Existing tests asserting the absence of retired RPC signatures remain. Hosted Supabase, HTTP, and concurrency validation is still required; no local service was started and no applied migration is being rewritten.

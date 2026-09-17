@@ -1,6 +1,5 @@
 BEGIN;
 
-DROP FUNCTION public.purge_expired_sponsor_authentication_evidence(integer);
 
 CREATE FUNCTION public.purge_expired_sponsor_authentication_evidence(
   batch_size integer DEFAULT 1000

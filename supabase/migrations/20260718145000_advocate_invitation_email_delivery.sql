@@ -7,14 +7,6 @@ BEGIN;
  * durable delivery enqueue occur in one transaction, and no RPC returns the
  * plaintext capability.
  */
-DROP FUNCTION IF EXISTS public.create_advocate_invitation(
-  uuid,
-  text,
-  text[],
-  interval
-);
-DROP FUNCTION IF EXISTS public.redeem_advocate_invitation(text);
-
 ALTER TABLE public.advocate_invitations
   ALTER COLUMN last_sent_at DROP NOT NULL,
   ADD COLUMN target_auth_user_id uuid
@@ -1183,204 +1175,6 @@ COMMENT ON FUNCTION public.issue_advocate_invitation_email(
 ) IS
   'Service-only atomic invitation and dedicated encrypted-email enqueue. The application service supplies a 256-bit capability digest plus its versioned ciphertext, and the database returns no secret material.';
 
-CREATE OR REPLACE FUNCTION public.claim_advocate_invitation_email_jobs(
-  worker_id text,
-  batch_size integer DEFAULT 10,
-  request_id text DEFAULT NULL,
-  trace_id text DEFAULT NULL
-)
-RETURNS TABLE (
-  outbox_id uuid,
-  invitation_id uuid,
-  advocate_id uuid,
-  lease_token text,
-  lease_expires_at timestamp with time zone,
-  target_auth_user_id uuid,
-  template_key text,
-  template_data jsonb,
-  recipient_email_ciphertext bytea,
-  recipient_email_hmac bytea,
-  secret_payload_ciphertext bytea,
-  capability_digest bytea,
-  email_normalization_version smallint,
-  email_hmac_key_version smallint,
-  email_encryption_key_version smallint,
-  provider_idempotency_key text,
-  attempt_count smallint
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-  v_now timestamp with time zone := clock_timestamp();
-BEGIN
-  PERFORM private.require_advocate_invitation_service_role();
-
-  IF worker_id IS NULL
-     OR worker_id <> btrim(worker_id)
-     OR char_length(worker_id) NOT BETWEEN 1 AND 120 THEN
-    RAISE EXCEPTION 'Worker identity must contain between 1 and 120 characters'
-      USING ERRCODE = '22023';
-  END IF;
-
-  IF batch_size IS NULL OR batch_size NOT BETWEEN 1 AND 50 THEN
-    RAISE EXCEPTION 'Invitation email claim batch size must be between 1 and 50'
-      USING ERRCODE = '22023';
-  END IF;
-
-  IF char_length(COALESCE(request_id, '')) > 255
-     OR char_length(COALESCE(trace_id, '')) > 255 THEN
-    RAISE EXCEPTION 'Invitation worker request identifiers exceed 255 characters'
-      USING ERRCODE = '22023';
-  END IF;
-
-  PERFORM audit.set_actor_context(
-    context_actor_type => 'system'::audit.audit_actor_type,
-    context_system_actor => worker_id,
-    context_tool => 'advocate-invitation-email-worker',
-    context_request_id => NULLIF(btrim(request_id), ''),
-    context_trace_id => NULLIF(btrim(trace_id), ''),
-    context_reason => 'Redact invitation delivery envelopes that are no longer usable',
-    context_metadata => jsonb_build_object(
-      'operation', 'redact',
-      'resource_kind', 'advocate_invitation_email_outbox'
-    )
-  );
-  PERFORM pg_catalog.set_config(
-    'app.advocate.invitation_email_operation',
-    'purge',
-    true
-  );
-
-  WITH candidates AS MATERIALIZED (
-    SELECT outbox.id
-    FROM public.advocate_invitation_email_outbox outbox
-    JOIN public.advocate_invitations invitation
-      ON invitation.id = outbox.invitation_id
-     AND invitation.advocate_id = outbox.advocate_id
-    WHERE outbox.contact_redacted_at IS NULL
-      AND (
-        invitation.accepted_at IS NOT NULL
-        OR invitation.revoked_at IS NOT NULL
-        OR invitation.expires_at <= v_now
-      )
-    ORDER BY invitation.expires_at, outbox.id
-    LIMIT 500
-    FOR UPDATE OF outbox SKIP LOCKED
-  )
-  UPDATE public.advocate_invitation_email_outbox outbox
-  SET
-    status = CASE
-      WHEN outbox.status = 'sent'
-        THEN 'sent'::public.email_outbox_status
-      ELSE 'cancelled'::public.email_outbox_status
-    END,
-    recipient_email_ciphertext = NULL,
-    recipient_email_hmac = NULL,
-    email_normalization_version = NULL,
-    email_hmac_key_version = NULL,
-    email_encryption_key_version = NULL,
-    secret_payload_ciphertext = NULL,
-    secret_payload_ciphertext_sha256 = NULL,
-    contact_redacted_at = v_now
-  FROM candidates candidate
-  WHERE outbox.id = candidate.id;
-
-  PERFORM audit.set_actor_context(
-    context_actor_type => 'system'::audit.audit_actor_type,
-    context_system_actor => worker_id,
-    context_tool => 'advocate-invitation-email-worker',
-    context_request_id => NULLIF(btrim(request_id), ''),
-    context_trace_id => NULLIF(btrim(trace_id), ''),
-    context_reason => 'Claim encrypted advocate invitation delivery envelopes',
-    context_metadata => jsonb_build_object(
-      'operation', 'claim',
-      'resource_kind', 'advocate_invitation_email_outbox',
-      'outcome', 'claimed'
-    )
-  );
-  PERFORM pg_catalog.set_config(
-    'app.advocate.invitation_email_operation',
-    'claim',
-    true
-  );
-
-  RETURN QUERY
-  WITH candidates AS MATERIALIZED (
-    SELECT outbox.id
-    FROM public.advocate_invitation_email_outbox outbox
-    JOIN public.advocate_invitations invitation
-      ON invitation.id = outbox.invitation_id
-     AND invitation.advocate_id = outbox.advocate_id
-    WHERE private.advocate_invitation_delivery_is_eligible(invitation.id)
-      AND outbox.contact_redacted_at IS NULL
-      AND outbox.attempt_count < outbox.max_attempts
-      AND (
-        (
-          outbox.status IN ('pending', 'failed')
-          AND outbox.available_at <= v_now
-        )
-        OR
-        (
-          outbox.status = 'processing'
-          AND outbox.delivery_started_at IS NULL
-          AND outbox.locked_at <= v_now - interval '5 minutes'
-        )
-      )
-    ORDER BY outbox.available_at, outbox.created_at, outbox.id
-    LIMIT batch_size
-    FOR UPDATE OF outbox SKIP LOCKED
-  ), leases AS MATERIALIZED (
-    SELECT
-      candidate.id,
-      encode(extensions.gen_random_bytes(32), 'hex') AS plaintext_token
-    FROM candidates candidate
-  ), claimed AS (
-    UPDATE public.advocate_invitation_email_outbox outbox
-    SET
-      status = 'processing',
-      attempt_count = outbox.attempt_count + 1,
-      locked_at = v_now,
-      locked_by = worker_id,
-      locked_lease_token_digest = extensions.digest(
-        lease.plaintext_token,
-        'sha256'
-      ),
-      delivery_started_at = NULL,
-      provider_message_id = NULL,
-      sent_at = NULL,
-      last_error_code = NULL,
-      cancelled_at = NULL
-    FROM leases lease
-    WHERE outbox.id = lease.id
-    RETURNING outbox.*
-  )
-  SELECT
-    claimed.id,
-    claimed.invitation_id,
-    claimed.advocate_id,
-    lease.plaintext_token,
-    claimed.locked_at + interval '5 minutes',
-    invitation.target_auth_user_id,
-    claimed.template_key,
-    claimed.template_data,
-    claimed.recipient_email_ciphertext,
-    claimed.recipient_email_hmac,
-    claimed.secret_payload_ciphertext,
-    invitation.token_digest,
-    claimed.email_normalization_version,
-    claimed.email_hmac_key_version,
-    claimed.email_encryption_key_version,
-    claimed.provider_idempotency_key,
-    claimed.attempt_count
-  FROM claimed
-  JOIN leases lease ON lease.id = claimed.id
-  JOIN public.advocate_invitations invitation
-    ON invitation.id = claimed.invitation_id
-   AND invitation.advocate_id = claimed.advocate_id;
-END;
-$$;
 
 CREATE OR REPLACE FUNCTION public.bind_advocate_invitation_email_target(
   target_outbox_id uuid,
@@ -2564,9 +2358,6 @@ $$;
 COMMENT ON FUNCTION public.get_advocate_pending_invitations(uuid) IS
   'Permission-checked owner and administrator projection for pending or expired delegate invitations. It exposes normalized team contact email and predefined roles, but no auth identifier, capability, digest, encrypted delivery material, provider state, or outbox identifier.';
 
-COMMENT ON FUNCTION public.get_advocate_audit_events(uuid, bigint, integer) IS
-  'Returns only the sanitized, advocate-scoped audit ledger, including invitation delivery lifecycle events, to members with portal.audit.view. Raw forensic evidence and encrypted delivery material are never exposed.';
-
 REVOKE ALL ON FUNCTION public.issue_advocate_invitation_email(
   uuid,
   uuid,
@@ -2608,18 +2399,6 @@ GRANT EXECUTE ON FUNCTION public.issue_advocate_invitation_email(
   text
 ) TO service_role;
 
-REVOKE ALL ON FUNCTION public.claim_advocate_invitation_email_jobs(
-  text,
-  integer,
-  text,
-  text
-) FROM PUBLIC, anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.claim_advocate_invitation_email_jobs(
-  text,
-  integer,
-  text,
-  text
-) TO service_role;
 
 REVOKE ALL ON FUNCTION public.bind_advocate_invitation_email_target(
   uuid,
@@ -2742,13 +2521,6 @@ REVOKE ALL ON FUNCTION public.get_advocate_pending_invitations(uuid)
 GRANT EXECUTE ON FUNCTION public.get_advocate_pending_invitations(uuid)
   TO authenticated;
 
-COMMENT ON FUNCTION public.claim_advocate_invitation_email_jobs(
-  text,
-  integer,
-  text,
-  text
-) IS
-  'Service-only bounded skip-locked claim. It returns encrypted material and a one-time 256-bit lease only while the invitation and tenant remain deliverable. Started provider handoffs are never automatically reclaimed.';
 COMMENT ON FUNCTION public.bind_advocate_invitation_email_target(
   uuid,
   text,
