@@ -2014,7 +2014,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = ''
 AS $$
-  SELECT EXISTS (
+  SELECT (SELECT private.is_current_account_active()) AND EXISTS (
     SELECT 1
     FROM public.advocate_memberships m
     JOIN public.advocates advocate ON advocate.id = m.advocate_id

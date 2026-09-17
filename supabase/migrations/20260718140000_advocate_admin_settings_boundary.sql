@@ -51,6 +51,7 @@ AS $$
     LIMIT 1
   ) canonical_domain ON true
   WHERE membership.user_id = (SELECT auth.uid())
+    AND (SELECT private.is_current_account_active())
     AND membership.status = 'active'
     AND advocate.relationship_status <> 'archived'
   GROUP BY

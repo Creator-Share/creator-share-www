@@ -1061,7 +1061,7 @@ test.describe("local Supabase advocate catalog service boundary", () => {
     expect(readback.beneficiary_mode).toBe("all")
     expect(readback.beneficiary_selections).toEqual([])
   })
-  test("a retained JWT loses administrator Data API access after an Auth ban", async () => {
+  test("a retained JWT loses global and delegate Data API access after an Auth ban", async () => {
     const current = fixture
     if (current === null) throw new Error("catalog_http_fixture_missing")
     const actor = current.users.ownerB
@@ -1088,6 +1088,8 @@ test.describe("local Supabase advocate catalog service boundary", () => {
       const roleQuery = `role_assignments?select=id&id=eq.${assignmentId}`
       expect(await readRows(childQuery)).toHaveLength(1)
       expect(await readRows(roleQuery)).toHaveLength(1)
+      expect(await readRows("rpc/get_my_advocate_portal_access")).toHaveLength(1)
+      expect(await readRows(`advocates?select=id&id=eq.${current.advocateBId}`)).toHaveLength(1)
       const ban = await authAdminRequest(`/admin/users/${actor.id}`, {
         method: "PUT",
         body: JSON.stringify({ ban_duration: "24h" }),
@@ -1098,6 +1100,8 @@ test.describe("local Supabase advocate catalog service boundary", () => {
       expect(await readRows(`public_beneficiaries?select=id&id=eq.${current.childAlphaId}`)).toHaveLength(1)
       expect(await readRows(childQuery)).toEqual([])
       expect(await readRows(roleQuery)).toEqual([])
+      expect(await readRows("rpc/get_my_advocate_portal_access")).toEqual([])
+      expect(await readRows(`advocates?select=id&id=eq.${current.advocateBId}`)).toEqual([])
       const mutation = await fetch(`${stack.restUrl}/beneficiaries?id=eq.${current.childAlphaId}&select=id`, {
         method: "PATCH",
         headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
