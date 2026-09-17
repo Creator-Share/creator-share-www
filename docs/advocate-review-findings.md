@@ -1,8 +1,8 @@
 # Advocate Platform review findings
 
-Status: review in progress, September 17, 2026. No merge into `dev` is authorized. This report does not approve production activation.
+Status: review in progress, September 17, 2026. The PR is not ready to ship: foreign-currency adjustment accounting and longitudinal private-analytics disclosure remain P1 blockers, and external release evidence is incomplete. No merge into `dev` is authorized.
 
-The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `f904b01`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction, retention-index change, and password-login correction are hosted-validated. Sponsor assignment and diagnostic authorization are also hosted-validated. The shared administrator guard is also hosted-validated; atomic beneficiary deletion is now hosted-validated, while configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
+The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `817e2de`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction, retention-index change, and password-login correction are hosted-validated. Sponsor assignment and diagnostic authorization are also hosted-validated. The shared administrator guard is also hosted-validated; atomic beneficiary deletion is now hosted-validated, while configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
 
 ## Repaired defects and unnecessary complexity
 
@@ -177,3 +177,9 @@ A further undeployed-history cleanup removes ten function versions that were cre
 An additional application cleanup removes an unread sponsorship-in-progress context and its global provider, eliminating 80 net application lines and unnecessary local-storage writes. Its only caller cleared state; no caller read it or set an in-progress flag. The obsolete 292-line reservation implementation report also described hooks and endpoints absent from the current branch and has been removed. Actual checkout intents, operation recovery, and existing database history remain. Local checks pass; hosted checkout/browser evidence is pending for this cleanup.
 
 The FF-083 review also reproduced retained delegate access after a ban: portal.view remained true, the tenant base row stayed readable, and get_my_advocate_portal_access returned the portal. The candidate now applies the same account-state helper to the delegate view predicate and portal-list RPC. Normal-role replay denies all three after the ban while preserving active access. Eight database assertions and the real-JWT HTTP case cover this extension; hosted validation remains pending. Transactional mutation authority checks remain intact.
+
+## Global account-state and schema cleanup hosted evidence
+
+Publication run [35197836385](https://github.com/Creator-Share/creator-share-www/actions/runs/35197836385) and WebKit run [35197836392](https://github.com/Creator-Share/creator-share-www/actions/runs/35197836392) passed on `817e2de`. This validates the global administrator account-state repair, including the real retained-JWT Auth-ban test through PostgREST, and the 1,635-line migration cleanup. The run records 1,707 offline tests, 66 dev-server tests, 99 provider contracts, 65 pgTAP files with 2,148 assertions, 15 catalog tests, and three local Supabase HTTP tests, plus all required concurrency and cleanup harnesses.
+
+The subsequent delegate-read extension and unused browser-state removal pass local checks but require their own hosted result. FF-083 remains open until that extension is validated.
