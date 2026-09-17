@@ -379,3 +379,7 @@ A complete-schema probe with actual authenticated-role RLS reads confirmed that 
 A hosted HTTP regression extends the existing local Supabase integration: obtain a real JWT, establish active administrator reads, ban the synthetic account through Auth, reuse that same JWT for a public-read positive control, then assert private data and role reads are empty and a child mutation affects no rows. The test removes its temporary grant and reverses the synthetic ban during cleanup. No local server was started.
 
 All 1,607 selected server-free tests, TypeScript, lint, and manifest validation pass. The manifest now classifies 259 files, 248 required. Structural replay changes only the intended function and policy, adds one helper, and retains equal legacy-data projections. Hosted database and HTTP evidence is pending. FF-083 remains open until those checks pass.
+
+## Account-state hosted denial contracts
+
+The first FF-083 hosted run (35197024693) passed the new administrator account-state pgTAP file. Six older assertions failed only on their expected exception message: the shared predicate now rejects banned or anonymous administrators earlier, still with SQLSTATE 42501. Five now expect the existing generic administrator denial, and the cancellation case expects its existing generic authorization denial. The assertion that formerly named a post-lock health check now describes the earlier shared authority check. No deny assertion or production authorization check was removed. The hosted HTTP case was not reached and remains pending.

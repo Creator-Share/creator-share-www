@@ -1283,8 +1283,8 @@ SELECT extensions.throws_ok(
     )
   $$,
   '42501',
-  'An active authenticated account with a verified email is required',
-  'a banned super administrator fails the post-lock account health check'
+  'Creator Share super administrator access is required',
+  'a banned super administrator fails the shared account-state authority check'
 );
 
 UPDATE auth.users

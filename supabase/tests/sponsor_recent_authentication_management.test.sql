@@ -1188,7 +1188,7 @@ SELECT extensions.throws_ok(
     )
   $$,
   '42501',
-  'An active authenticated account with a verified email is required',
+  'Subscription cancellation is not authorized',
   'the administrator path rejects a banned administrator account'
 );
 

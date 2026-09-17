@@ -563,7 +563,7 @@ SELECT extensions.throws_ok(
     )
   $$,
   '42501',
-  'An active authenticated account with a verified email is required',
+  'Creator Share super administrator access is required',
   'an anonymous super administrator identity cannot provision a portal'
 );
 RESET ROLE;
@@ -588,7 +588,7 @@ SELECT extensions.throws_ok(
     )
   $$,
   '42501',
-  'An active authenticated account with a verified email is required',
+  'Creator Share super administrator access is required',
   'a banned super administrator account cannot provision a portal'
 );
 RESET ROLE;
