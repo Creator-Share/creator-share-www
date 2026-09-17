@@ -210,6 +210,30 @@ async function openFormWithFailingServer(
   return issued
 }
 
+test("invitation inputs stay disabled until their handlers are ready", async ({ page }) => {
+  let releaseScripts!: () => void
+  const scriptsReleased = new Promise<void>((resolveScripts) => {
+    releaseScripts = resolveScripts
+  })
+  await page.route("**/_next/static/**/*.js", async (route) => {
+    await scriptsReleased
+    await route.continue()
+  })
+  try {
+    await page.goto(harnessOrigin, { waitUntil: "commit" })
+    await expect(page.getByLabel("Email address")).toBeDisabled()
+    await expect(page.getByLabel("Reason for access")).toBeDisabled()
+    await expect(page.getByRole("checkbox", { name: "Analytics viewer" })).toBeDisabled()
+  } finally {
+    releaseScripts()
+  }
+  await expect(page.getByLabel("Email address")).toBeEnabled()
+  await page.getByLabel("Reason for access").fill("Ready input survives hydration")
+  await page.getByLabel("Email address").fill("ready@example.test")
+  await expect(page.getByRole("button", { name: "Send invitation" })).toBeEnabled()
+  await expect(page.getByLabel("Reason for access")).toHaveValue("Ready input survives hydration")
+})
+
 test("mints a fresh idempotency key when the recipient is corrected", async ({
   page,
 }) => {

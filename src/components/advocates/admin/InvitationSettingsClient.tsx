@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, useState } from "react"
+import { FormEvent, useEffect, useState } from "react"
 
 import {
   ADVOCATE_DELEGATE_ROLE_KEYS,
@@ -19,6 +19,12 @@ const ROLE_LABELS: Readonly<Record<AdvocateDelegateRoleKey, string>> =
     brand_editor: "Brand editor",
     catalog_curator: "Catalog curator",
   })
+
+function useFormReady(): boolean {
+  const [ready, setReady] = useState(false)
+  useEffect(() => setReady(true), [])
+  return ready
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -64,6 +70,7 @@ function PendingInvitationCard({
   canInvite: boolean
   onRevoked(invitationId: string): void
 }) {
+  const ready = useFormReady()
   const [reason, setReason] = useState("")
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -146,6 +153,7 @@ function PendingInvitationCard({
           <label className="block text-sm font-medium text-gray-800">
             Reason for revoking this invitation
             <textarea
+              disabled={!ready}
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               maxLength={2_000}
@@ -156,7 +164,7 @@ function PendingInvitationCard({
           </label>
           <button
             type="submit"
-            disabled={busy || reason.trim().length < 1}
+            disabled={!ready || busy || reason.trim().length < 1}
             className="mt-3 min-h-11 rounded-md border border-red-700 px-4 py-2 text-sm font-semibold text-red-800 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
           >
             {busy ? "Revoking invitation" : "Revoke invitation"}
@@ -187,6 +195,7 @@ export function InvitationSettingsClient({
   const [selectedRoles, setSelectedRoles] = useState<
     readonly AdvocateDelegateRoleKey[]
   >(["analytics_viewer"])
+  const ready = useFormReady()
   const [reason, setReason] = useState("")
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -292,6 +301,7 @@ export function InvitationSettingsClient({
             <label className="block text-sm font-medium text-gray-800">
               Email address
               <input
+                disabled={!ready}
                 type="email"
                 value={email}
                 onChange={(event) => {
@@ -316,6 +326,7 @@ export function InvitationSettingsClient({
                     className="flex min-h-11 items-center gap-3 rounded-md border border-gray-200 px-3 py-2 text-sm"
                   >
                     <input
+                      disabled={!ready}
                       type="checkbox"
                       checked={selectedRoles.includes(role)}
                       onChange={() => toggleRole(role)}
@@ -330,6 +341,7 @@ export function InvitationSettingsClient({
             <label className="block text-sm font-medium text-gray-800 lg:col-span-2">
               Reason for access
               <textarea
+                disabled={!ready}
                 value={reason}
                 onChange={(event) => {
                   setReason(event.target.value)
@@ -346,6 +358,7 @@ export function InvitationSettingsClient({
               <button
                 type="submit"
                 disabled={
+                  !ready ||
                   busy ||
                   email.trim().length < 3 ||
                   selectedRoles.length < 1 ||
