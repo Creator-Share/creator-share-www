@@ -8,7 +8,7 @@ The gate-by-gate traceability behind that claim is in `docs/advocate-mvp-complet
 
 ## Current implementation blockers
 
-Before release, resolve the partial foreign-currency adjustment defect (FF-072) and private analytics disclosure across daily snapshots (FF-034). The [review findings](./advocate-review-findings.md) and linked decision drafts describe the reproduced failures and pending owner choices. Provider canaries and a physical-device pass do not repair these implementation defects. No merge into `dev` is authorized.
+Before release, resolve partial foreign-currency adjustment accounting (FF-072), dispute losses beyond the original principal (FF-084), private analytics disclosure across daily snapshots (FF-034), and durable payment failure monitoring and resolution (FF-085). The [review findings](./advocate-review-findings.md) and linked decision drafts describe the reproduced failures and pending owner choices. Provider canaries and a physical-device pass do not repair these implementation defects. No merge into `dev` is authorized.
 
 ***
 
@@ -74,8 +74,9 @@ Record what the physical device actually does, including whether a warning appea
 
 ## 5. Required for release: provider canaries
 
-These need live provider credentials and cannot run in CI:
+These need separately authorized provider access and protected evidence. The current required CI lanes do not supply that evidence:
 
+- Hosted Supabase phone authentication disabled, including phone MFA enrollment and verification, before invitation delivery. Record the exact target and observed configuration in protected release evidence. The local phone-configuration tests do not establish hosted state; follow the payment runbook’s invitation canary.
 - Stripe US and Stripe UK live-mode canaries, with one-time, monthly, and yearly terms where supported.
 - PayPal canaries for one-time, monthly, and yearly terms.
 - One payment-management canary each for Stripe US, Stripe UK, and PayPal.
@@ -91,7 +92,7 @@ Record Stripe object IDs in a protected operator record, never in the repository
 
 I have deliberately not changed this, because mutating branch protection needs your explicit authorization.
 
-**Suggested required checks**, matching what is now green:
+**Suggested required checks**, using the exact workflow job names:
 
 - `Publication authority database tests`
 - `Catalog recovery in WebKit`
@@ -102,7 +103,7 @@ I have deliberately not changed this, because mutating branch protection needs y
 
 ## Scope of automated evidence
 
-The earlier traceability sweep is historical. Its aggregate coverage verdicts do not establish current correctness. The current refund-accounting and analytics-disclosure findings remain implementation blockers even though earlier suites were green. Use the revision-bound [review findings](./advocate-review-findings.md), the release manifest, and the exact hosted workflow results.
+The earlier traceability sweep is historical. Its aggregate coverage verdicts do not establish current correctness. The current adjustment-accounting, dispute-loss, payment-recovery, and analytics-disclosure findings remain implementation blockers even though earlier suites were green. Use the revision-bound [review findings](./advocate-review-findings.md), the release manifest, and the exact hosted workflow results.
 
 ## Checks that belong in CI
 

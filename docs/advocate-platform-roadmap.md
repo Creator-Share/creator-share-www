@@ -292,7 +292,7 @@ Creator Share staff and members of the attributed advocate portal are excluded t
 
 The dashboard may report verified sponsor accounts and normalized sponsor contacts as different concepts. Neither is presented as an exact count of people. Contact count comparability across a future HMAC key rotation is deferred to FF-032. Pending provider adjustments are not inferred from gateway payloads and are deferred to FF-033 until a provider-neutral state exists.
 
-The MVP exposes no date filters, exports, recognition joins, or arbitrary cohorts. FF-034 tracks stronger protection against temporal differencing across repeated cumulative snapshots before any of those surfaces are added.
+The MVP exposes no date filters, exports, recognition joins, or arbitrary cohorts. Those restrictions do not prevent disclosure by comparing successive cumulative snapshots. The implementation review reproduced individual payment and adjustment differences across current daily snapshots. FF-034 is a release blocker for the existing private dashboard, pending an explicit privacy and freshness decision; it is not contingent on adding filters or exports. See [the analytics disclosure decision](./advocate-analytics-disclosure-decision.md).
 
 ### 5.2 MVP public metric release boundary
 
@@ -313,7 +313,7 @@ Releases are calculated for all four approved metrics regardless of current advo
 
 Children supported means distinct historical beneficiaries reached by an eligible official paid intent. A standard sponsorship uses its immutable intent beneficiary. A blind subscription uses its immutable assignment row only after that assignment predates the release cutoff. Unassigned blind sponsorships and partnership sponsorships do not count. One beneficiary counts once even when several sponsors provide support.
 
-The release table is system written, append only, and audited. Its worker uses one fixed database projection with a server-derived cutoff and an overlap-safe transaction lock. It accepts no caller-selected advocate, metric, cutoff, threshold, or bucket. FF-034 retains advanced privacy work before any finer cohorts, exports, public recognition, arbitrary queries, or exact values are introduced.
+The release table is system written, append only, and audited. Its worker uses one fixed database projection with a server-derived cutoff and an overlap-safe transaction lock. It accepts no caller-selected advocate, metric, cutoff, threshold, or bucket. The private-dashboard disclosure in FF-034 does not establish a defect in this separate delayed and rounded public release mechanism. Finer cohorts, exports, public recognition, arbitrary queries, or exact values still require an additional privacy review.
 
 ## 6. Financial reporting
 
