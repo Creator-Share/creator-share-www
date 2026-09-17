@@ -2,7 +2,7 @@
 
 Status: review in progress, September 17, 2026. No merge into `dev` is authorized. This report does not approve production activation.
 
-The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `14dcc77`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction and retention-index change are hosted-validated; the later password-login correction awaits its own gate, and configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
+The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `ce0ff91`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction, retention-index change, and password-login correction are hosted-validated. Sponsor assignment and diagnostic authorization await their own gate; configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
 
 ## Repaired defects and unnecessary complexity
 
@@ -102,7 +102,7 @@ The candidate broadens the existing exposure visitor index to include excluded e
 
 ## Password login request boundary
 
-**P2 candidate repair (FF-078):** password login accepted a cross-origin request and invoked authentication, while malformed JSON or a null body could throw outside the handler's error boundary. Unlike adjacent authentication routes, it had no streamed body limit or JSON-origin gate. New route regressions fail against the original implementation. The candidate reuses approved-primary-origin validation and the strict 8,192-byte body reader, rejects non-string credentials before authentication, and preserves the successful response and attribution identity cookie. It also removes an unused role query that never enforced authorization and avoids logging raw unexpected provider errors. Twelve focused tests, 1,590 selected server-free tests, TypeScript, and lint pass. Hosted validation is pending. This proves route behavior, not a live browser session-swapping demonstration.
+**Repaired P2 request boundary (FF-078):** password login accepted a cross-origin request and invoked authentication, while malformed JSON or a null body could throw outside the handler's error boundary. Unlike adjacent authentication routes, it had no streamed body limit or JSON-origin gate. New route regressions fail against the original implementation. The candidate reuses approved-primary-origin validation and the strict 8,192-byte body reader, rejects non-string credentials before authentication, and preserves the successful response and attribution identity cookie. It also removes an unused role query that never enforced authorization and avoids logging raw unexpected provider errors. Twelve focused tests, 1,590 selected server-free tests, TypeScript, and lint pass. Publication run 35191156280 and WebKit run 35191156285 passed on `ce0ff91`. This proves route behavior, not a live browser session-swapping demonstration.
 
 ## Sponsor assignment request boundary
 
@@ -139,3 +139,5 @@ The later [publication workflow 35183888657](https://github.com/Creator-Share/cr
 [Publication workflow 35189654393](https://github.com/Creator-Share/creator-share-www/actions/runs/35189654393) and [WebKit workflow 35189654400](https://github.com/Creator-Share/creator-share-www/actions/runs/35189654400) passed on `4cc42a0`, including both independent jobs and the required aggregate. FF-076 is complete. The later retention-index change remains pending; FF-072, FF-034, and FF-077 are unresolved.
 
 [Publication workflow 35190442288](https://github.com/Creator-Share/creator-share-www/actions/runs/35190442288) and [WebKit workflow 35190442308](https://github.com/Creator-Share/creator-share-www/actions/runs/35190442308) passed on `14dcc77`, validating the broader visitor index. The later password-login repair requires fresh hosted evidence.
+
+[Publication workflow 35191156280](https://github.com/Creator-Share/creator-share-www/actions/runs/35191156280) and [WebKit workflow 35191156285](https://github.com/Creator-Share/creator-share-www/actions/runs/35191156285) passed on `ce0ff91`, closing FF-078. The subsequent sponsor-assignment and diagnostic guards require their own hosted results.

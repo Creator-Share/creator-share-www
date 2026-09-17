@@ -333,3 +333,7 @@ Five route tests cover these regressions, authentication and identifier rejectio
 The primary-site diagnostic endpoints were outside authenticated middleware prefixes and lacked route authorization. Email accepted a supplied recipient, Telegram used configured credentials, and test-child creation attempted writes under existing RLS. A shared guard now requires an approved primary origin and Creator Share super-administrator authority before every GET and POST handler. Same-origin GET fetches may omit Origin only with same-origin Fetch Metadata; cross-site and direct navigations are rejected.
 
 Three denial regressions fail against the old routes. Five focused contracts preserve authorized email invocation and cover anonymous, ordinary-user, cross-origin, and navigation rejection without provider or database side effects. All 1,600 selected server-free tests, TypeScript, lint, and manifest validation pass. The manifest classifies 255 files, 244 required, with 161 offline entries. No real provider message or database write occurred. Hosted validation remains pending for this correction and the preceding assignment boundary.
+
+## Password login hosted validation
+
+Publication run 35191156280 and WebKit run 35191156285 passed on ce0ff91, including both independent jobs and the required aggregate. FF-078 is complete. The subsequent sponsor-assignment and diagnostic guards pass local checks but require a new hosted run. No merge into dev or live provider execution occurred.
