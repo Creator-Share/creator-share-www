@@ -493,6 +493,20 @@ BEGIN
         SELECT attempt.attempted_at + interval '24 hours'
         FROM private.sponsor_passwordless_email_verification_attempts attempt
         WHERE attempt.attempted_at < v_now - interval '24 hours'
+        UNION ALL
+        SELECT attempt.attempted_at + interval '24 hours'
+        FROM private.advocate_invitation_authentication_attempts attempt
+        WHERE attempt.attempted_at <= v_now - interval '24 hours'
+        UNION ALL
+        SELECT greatest(
+          gate.reservation_expires_at,
+          COALESCE(gate.next_issuance_at, gate.reservation_expires_at),
+          COALESCE(gate.proof_exclusivity_expires_at, gate.reservation_expires_at)
+        )
+        FROM private.email_proof_issuance_gates gate
+        WHERE gate.reservation_expires_at <= v_now
+          AND COALESCE(gate.next_issuance_at, '-infinity'::timestamptz) <= v_now
+          AND COALESCE(gate.proof_exclusivity_expires_at, '-infinity'::timestamptz) <= v_now
       ) expired_authentication_evidence;
     WHEN 'advocate_tracking' THEN
       SELECT min(expired_at)

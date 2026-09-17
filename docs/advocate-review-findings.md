@@ -245,3 +245,9 @@ Validation of the extended FF-089 candidate: all 1,616 selected server-free test
 Publication [35205114027](https://github.com/Creator-Share/creator-share-www/actions/runs/35205114027) and WebKit [35205114009](https://github.com/Creator-Share/creator-share-www/actions/runs/35205114009) passed at `18dbd9b`, closing FF-088. The later email rendering fixes remain pending their own hosted run.
 
 The candidate consolidates the identical outer layout used by eleven legacy email templates, removing 85 net application lines. A temporary mocked-transport comparison rendered each template before and after extraction and found byte-for-byte identical subjects and HTML for those fixtures. It preserves the preceding content-escaping fixes and does not claim live email-client rendering evidence. All 1,616 selected server-free tests, TypeScript, and lint pass. The comparison fixture and outputs are retained outside the repository as review artifacts, rather than adding permanent duplicate template snapshots.
+
+## Retention helper consolidation
+
+The candidate combines the private retention backlog wrapper and its sole-use `v1` helper into one function, removing 54 SQL lines and the obsolete private function. It retains the five authentication-expiry sources, service-role guard, invalid-step rejection, return shape, and grants. All sources now use one captured cutoff instead of two adjacent clock readings.
+
+Strict in-process migration replay with function-body validation passes. Catalog comparison changes only the current backlog function definition and removes the old helper; the remaining 5,279 entries and all eight legacy data projections are identical. Direct before-and-after probes confirm the expected oldest expiry for invitation attempts and email-proof reservations. The required database test now asserts absence of the obsolete helper. This local replay uses platform stubs and does not replace the pending hosted Supabase suite.

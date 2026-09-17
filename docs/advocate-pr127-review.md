@@ -443,3 +443,7 @@ Reviewing callers of the email helper found discarded delivery results and an un
 ## Shared email layout
 
 Eleven legacy templates now share their identical outer layout, deleting 85 net application lines. Mocked transport captured byte-identical rendered subjects and HTML before and after extraction for all eleven template fixtures. Existing content-escaping contracts remain in the required test lane. Publication 35205114027 and WebKit 35205114009 validate the preceding activity notification change at 18dbd9b; these later email changes still require their own hosted run.
+
+## Retention backlog composition
+
+Combined the private backlog wrapper with its only implementation helper, deleting 54 SQL lines. The strict catalog comparison permits one changed function definition and one removed helper, with all other entries and eight legacy data projections equal. Before-and-after isolated execution verifies both added expiry sources. The combined calculation captures one cutoff time for all sources; hosted retention validation is pending.

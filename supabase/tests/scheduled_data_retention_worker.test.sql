@@ -551,11 +551,7 @@ SELECT extensions.ok(
     'private.data_retention_backlog(text)',
     'EXECUTE'
   )
-  AND NOT has_function_privilege(
-    'service_role',
-    'private.data_retention_backlog_v1(text)',
-    'EXECUTE'
-  )
+  AND to_regprocedure('private.data_retention_backlog_v1(text)') IS NULL
   AND NOT has_function_privilege(
     'service_role',
     'private.data_retention_counts_are_valid(text,jsonb)',
