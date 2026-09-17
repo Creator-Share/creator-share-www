@@ -107,3 +107,7 @@ The Supabase bounded-fetch helper also replaced signals carried by Request input
 ## Secure cookie fallback
 
 The Supabase cookie helper documented an explicit loopback-only exception but also permitted nonsecure cookies when a nonproduction origin was absent or malformed. That fallback now requires Secure. The explicit HTTP loopback exception remains. Regression coverage rejects missing, malformed, credential-bearing, and whitespace-padded origins as reasons to weaken cookie transport security. The server-free suite passed 1,567 tests. This does not close the separate host-prefixed session migration tracked in FF-046.
+
+## Exact provider redirect origins
+
+Stripe Checkout and PayPal approval validators compared protocol and hostname but accepted nonstandard ports. They now compare the complete trusted origin, including the port. The PayPal publication canary uses the same exact-origin rule. Both checkout regressions failed on the original validation and passed after the repair; 36 focused checkout and canary tests, TypeScript, and lint passed. These are fail-closed provider-response checks, not evidence of a demonstrated external exploit.

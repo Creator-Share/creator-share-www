@@ -184,6 +184,19 @@ test.describe("PayPal server owned sponsorship requests", () => {
     ).rejects.toBeInstanceOf(PayPalSponsorshipCheckoutError)
   })
 
+  test("rejects nonstandard ports in PayPal approval redirects", async () => {
+    await expect(createPayPalSponsorshipProviderObject(materialized(), {
+      apiUrl: "https://api-m.paypal.com",
+      async fetch() {
+        return Response.json({
+          id: "I-BW452GLLEP1G",
+          status: "APPROVAL_PENDING",
+          links: [{ rel: "approve", href: "https://www.paypal.com:8443/approve" }],
+        })
+      },
+    })).rejects.toBeInstanceOf(PayPalSponsorshipCheckoutError)
+  })
+
   test("captures only the exact order, attempt, amount, and currency", async () => {
     const request = materialized({
       paymentMode: "one_time",

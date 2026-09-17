@@ -512,8 +512,7 @@ function assertPayPalApproveLink(
   }
   if (
     approveLinks[0].href.length > 4096 ||
-    approveUrl.protocol !== "https:" ||
-    approveUrl.hostname !== "www.paypal.com" ||
+    approveUrl.origin !== "https://www.paypal.com" ||
     approveUrl.username !== "" ||
     approveUrl.password !== "" ||
     approveUrl.pathname !== "/webapps/billing/subscriptions" ||

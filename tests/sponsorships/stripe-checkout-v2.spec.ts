@@ -369,6 +369,19 @@ function sealedReplayEvidence(
 }
 
 test.describe("v2 server owned Stripe checkout", () => {
+  test("rejects nonstandard ports in Stripe checkout redirects", async () => {
+    const { dependencies, calls } = baseDependencies()
+    dependencies.createHostedSession = async (input) => ({
+      id: SESSION_ID,
+      url: "https://checkout.stripe.com:8443/c/pay/session",
+      expiresAtUnixSeconds: input.expiresAtUnixSeconds,
+    })
+    await expect(createStripeSponsorshipCheckoutV2(
+      checkoutInput(), dependencies,
+    )).rejects.toMatchObject({ code: "checkout-failed" })
+    expect(calls.settle).toHaveLength(0)
+  })
+
   test("persists and reopens the exact provider request before calling Stripe", async () => {
     const { dependencies, calls } = baseDependencies()
     const result = await createStripeSponsorshipCheckoutV2(

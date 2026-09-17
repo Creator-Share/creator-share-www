@@ -592,6 +592,10 @@ test.describe("publication payment canaries", () => {
   test("rejects PayPal Subscriptions without a safe approval-pending state", async () => {
     for (const invalid of [
       paypalSubscription({ links: [] }),
+      paypalSubscription({ links: [{
+        rel: "approve",
+        href: "https://www.paypal.com:8443/webapps/billing/subscriptions?ba_token=BA-2M539689T3856352J",
+      }] }),
       paypalSubscription({ status: "ACTIVE" }),
       paypalSubscription({
         subscriber: { email_address: "somebody@example.com" },

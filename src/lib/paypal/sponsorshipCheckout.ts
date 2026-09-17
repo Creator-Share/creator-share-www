@@ -182,8 +182,7 @@ function trustedApprovalUrl(value: unknown, apiUrl: string): string {
     fail("invalid-provider-response")
   }
   if (
-    parsed.protocol !== "https:" ||
-    parsed.hostname !== expectedApprovalHostname(apiUrl) ||
+    parsed.origin !== `https://${expectedApprovalHostname(apiUrl)}` ||
     parsed.username !== "" ||
     parsed.password !== ""
   ) {
