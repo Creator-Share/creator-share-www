@@ -644,13 +644,3 @@ export async function runPayPalPublicationPaymentCanary(
       : {}),
   }
 }
-
-export async function runPublicationPaymentCanary(
-  config: PublicationPaymentCanaryConfig,
-  input: PublicationPaymentCanaryInput,
-  dependencies: PublicationPaymentCanaryDependencies = {},
-): Promise<PublicationPaymentCanaryEvidence> {
-  return config.provider === "paypal"
-    ? runPayPalPublicationPaymentCanary(config, input, dependencies)
-    : runStripePublicationPaymentCanary(config, input, dependencies)
-}

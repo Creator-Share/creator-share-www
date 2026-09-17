@@ -119,12 +119,6 @@ export function asDomainProvisioningError(
   })
 }
 
-export function isSupportedDomainProvider(
-  provider: DomainProvisioningProvider,
-): provider is SupportedDomainProvider {
-  return SUPPORTED_DOMAIN_PROVIDERS.some((candidate) => candidate === provider)
-}
-
 export function mergeProviderEvidence(
   ...evidence: SafeProviderEvidence[]
 ): SafeProviderEvidence {

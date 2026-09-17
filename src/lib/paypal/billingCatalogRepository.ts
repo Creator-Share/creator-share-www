@@ -343,7 +343,3 @@ export function createPayPalBillingCatalogRepository(
     },
   }
 }
-
-export function createDefaultPayPalBillingCatalogRepository(): PayPalBillingCatalogRepository {
-  return createPayPalBillingCatalogRepository()
-}

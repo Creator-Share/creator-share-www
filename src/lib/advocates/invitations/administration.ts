@@ -4,7 +4,6 @@ import { createHash, randomBytes } from "node:crypto"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { AdvocateDelegateRoleKey } from "@/lib/advocates/admin/teamContracts"
 import {
   type AdvocateInvitationIssueInput,
   parseAdvocatePendingInvitations,
@@ -262,10 +261,4 @@ export async function loadAdvocatePendingInvitations(
     throw new AdvocateInvitationRepositoryError("shape")
   }
   return invitations
-}
-
-export function invitationRoleLabels(
-  roles: readonly AdvocateDelegateRoleKey[],
-): string {
-  return roles.join(", ")
 }

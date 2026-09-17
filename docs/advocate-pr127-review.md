@@ -97,3 +97,7 @@ The shared PayPal client also lacked a default timeout for webhook verification 
 ## Invitation hydration repair
 
 Hosted run 35178462883 failed the recipient-correction browser test. Its screenshot shows the email populated but the previously entered access reason empty, leaving Send disabled. The initial server-rendered controlled inputs were editable before React attached handlers. Issue and revoke forms now disable their controls until hydration completes. A new browser test withholds JavaScript, asserts that inputs cannot be edited, releases scripts, and verifies successful entry and submission readiness. This repairs the production form rather than adding a timing delay to the test. Hosted execution of that regression remains required.
+
+## Unreferenced helper cleanup
+
+Removed eight exported helpers whose names occurred only at their definitions across tracked source, scripts, tests, configuration, and documentation. This includes unused country-based Stripe routing and its private parsing helpers, a duplicate PayPal repository factory, unused canary dispatch and provider predicate wrappers, and unused invitation and cookie helpers. No test was removed. All 1,565 selected server-free tests, TypeScript, and lint passed.

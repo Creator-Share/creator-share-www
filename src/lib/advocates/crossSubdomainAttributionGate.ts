@@ -220,9 +220,3 @@ export function resolveCrossSubdomainCookieScope(
     deleteParentDomainBeforeWrite: !parentDomainActive,
   })
 }
-
-export function crossSubdomainCookiesAreActive(
-  environment: CrossSubdomainCookieTrustEnvironment = process.env,
-): boolean {
-  return evaluateCrossSubdomainCookieTrustGate(environment).state === "active"
-}
