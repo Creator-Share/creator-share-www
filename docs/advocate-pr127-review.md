@@ -283,3 +283,7 @@ Strict replay changes only audit.capture_row_change among 5,280 catalog entries 
 ## Hosted operational evidence
 
 Publication run 35188193933 and WebKit run 35188193834 passed on `b812f8c`, including both independent jobs and the aggregate gate. The quarantine signal and shared worker trace parsing are hosted-validated. FF-075 remains open for actual configured alert-delivery evidence; the database forensic correction FF-076 needs the next hosted database gate.
+
+## Partial-adjustment amount-domain measurement
+
+Executed the active Stripe deriveProportionalBaseUsdCents helper over every positive partial amount below original charges normalized to 2,500 USD cents, using the current configured rates. USD accepted 2,499 of 2,499; GBP accepted 1,849 of 1,849; EUR accepted 2,149 of 2,149. AUD rejected 1,000 of 3,499, including whole-dollar refunds of 1, 6, 8, 13, 15, 20, 22, 27, 29, and 34 AUD. The scan resets to the untouched original payment for each amount and makes no provider call. It quantifies the single-adjustment representability defect, not real-world event frequency or cumulative settlement correctness. The accounting decision draft now includes these limits and results.

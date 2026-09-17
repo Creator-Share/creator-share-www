@@ -8,6 +8,19 @@ The active adjustment code rejects a two-cent AUD refund on a payment of 3,500 A
 
 The provider can already have completed the refund. The application classifies the failure as permanent, retains a quarantined event, and acknowledges delivery. The financial ledger then omits the adjustment. Repair must include recovery of those retained events and cannot rely on the provider retrying an acknowledged delivery.
 
+## Measured amount domain at current rates
+
+Executed the active Stripe adjustment helper for every positive partial-refund amount below a payment normalized to 2,500 USD cents, using the current configured rates and exact forward conversion. Each case starts from the same untouched original payment; this is a single-adjustment domain scan, not a cumulative-settlement or provider-network test.
+
+| Currency | Rate | Original charge in minor units | Partial amounts examined | Rejected by round-trip boundary |
+| --- | ---: | ---: | ---: | ---: |
+| USD | 1 | 2,500 | 2,499 | 0 |
+| AUD | 1.4 | 3,500 | 3,499 | 1,000 |
+| GBP | 0.74 | 1,850 | 1,849 | 0 |
+| EUR | 0.86 | 2,150 | 2,149 | 0 |
+
+The AUD failures include whole-dollar refunds of 1, 6, 8, 13, 15, 20, 22, 27, 29, and 34 AUD. For example, 71 USD cents converts to 99 AUD cents, while 72 converts to 101; a 100-cent AUD refund has no whole USD-cent preimage. This is not confined to unusually tiny adjustments. The counts describe representability at the tested rates and original amount, not observed refund frequency. Zero failures in the other single-adjustment scans do not establish correct cumulative allocation, dispute restoration, or behavior at different rates.
+
 ## Required invariants
 
 - Preserve the exact original-currency minor units received from the authenticated provider chain.
