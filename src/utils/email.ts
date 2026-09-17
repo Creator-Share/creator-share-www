@@ -307,13 +307,13 @@ export const sendPartnershipConfirmationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Partnership!</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to support our ${project} project.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to support our ${escapeHtml(project)} project.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your partnership makes a significant difference in helping us provide safety, healing, and a future full of promise for some of the most vulnerable children in the world.</p>
       </div>
       
@@ -371,8 +371,8 @@ export const sendSponsorshipConfirmationEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${childName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(childName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
@@ -389,7 +389,7 @@ export const sendSponsorshipConfirmationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       ${childImageHtml}
@@ -397,12 +397,12 @@ export const sendSponsorshipConfirmationEmail = async (
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to sponsor ${childName}.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to sponsor ${escapeHtml(childName)}.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your support makes a significant difference in providing education and opportunities for children in need.</p>
       </div>
       
       <div style="border-left: 4px solid #1C3C8C; padding-left: 1rem; margin-bottom: 1.5rem;">
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">We'll keep you updated on ${childName}'s progress and how your sponsorship is making an impact.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">We'll keep you updated on ${escapeHtml(childName)}'s progress and how your sponsorship is making an impact.</p>
         <p style="font-size: 1rem; line-height: 1.5;">If you have any questions about your sponsorship, please don't hesitate to contact us.</p>
       </div>
       
@@ -451,13 +451,13 @@ export const sendBlindSponsorshipConfirmationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to support ${blindLabel}.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to support ${escapeHtml(blindLabel)}.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">We'll match you with a child who needs support, and you'll receive updates as soon as your sponsorship is matched.</p>
       </div>
       
@@ -521,8 +521,8 @@ export const sendBlindSponsorshipMatchedEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${childName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(childName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
@@ -541,7 +541,7 @@ export const sendBlindSponsorshipMatchedEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       ${childImageHtml}
@@ -549,22 +549,22 @@ export const sendBlindSponsorshipMatchedEmail = async (
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #22c55e;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">You've Been Matched! 🎉</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Great news! We've matched your blind sponsorship with <strong style="color: #1C3C8C;">${childName}</strong>.</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your ${intervalText} contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> will now go directly to supporting ${childName}'s education and well-being.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Great news! We've matched your blind sponsorship with <strong style="color: #1C3C8C;">${escapeHtml(childName)}</strong>.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your ${intervalText} contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> will now go directly to supporting ${escapeHtml(childName)}'s education and well-being.</p>
       </div>
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h3 style="font-size: 1.25rem; font-weight: 600; margin-top: 0; color: #1C3C8C;">What's Next?</h3>
         <ul style="font-size: 1rem; line-height: 1.5;">
-          <li style="margin-bottom: 0.5rem;">You'll receive regular updates about ${childName}'s progress</li>
+          <li style="margin-bottom: 0.5rem;">You'll receive regular updates about ${escapeHtml(childName)}'s progress</li>
           <li style="margin-bottom: 0.5rem;">We'll share photos and stories of how your support is making a difference</li>
-          <li style="margin-bottom: 0.5rem;">You can view ${childName}'s profile and learn more about them</li>
+          <li style="margin-bottom: 0.5rem;">You can view ${escapeHtml(childName)}'s profile and learn more about them</li>
         </ul>
       </div>
       
       <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">View ${childName}'s profile and learn more about how your sponsorship is helping:</p>
-        <a href="${profileUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">View ${childName}'s Profile</a>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">View ${escapeHtml(childName)}'s profile and learn more about how your sponsorship is helping:</p>
+        <a href="${escapeHtml(profileUrl)}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">View ${escapeHtml(childName)}'s Profile</a>
       </div>
       
       <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
@@ -613,8 +613,8 @@ export const sendPaymentFailedEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${childName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(childName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
@@ -633,7 +633,7 @@ export const sendPaymentFailedEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       ${childImageHtml}
@@ -695,8 +695,8 @@ export const sendSubscriptionConfirmationEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${beneficiaryName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(beneficiaryName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
@@ -715,13 +715,13 @@ export const sendSubscriptionConfirmationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       ${childImageHtml}
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Subscription Confirmed!</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for subscribing to updates for <strong>${beneficiaryName}</strong>.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for subscribing to updates for <strong>${escapeHtml(beneficiaryName)}</strong>.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">You'll receive an email whenever there's a new activity or update for this beneficiary.</p>
         <p style="font-size: 1rem; line-height: 1.5;">You can unsubscribe at any time by contacting us.</p>
       </div>
@@ -772,8 +772,8 @@ export const sendActivityNotificationEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${beneficiary.name}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(beneficiary.name)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
@@ -813,7 +813,7 @@ export const sendActivityNotificationEmail = async (
                 <td style="padding: 0.5rem; width: 50%;">
                   <div style="border-radius: 0.5rem; overflow: hidden; border: 1px solid #e5e7eb; background-color: #f9fafb;">
                     <img 
-                      src="${imageUrl}" 
+                      src="${escapeHtml(imageUrl)}"
                       alt="Activity photo" 
                       style="width: 100%; max-width: 100%; height: auto; display: block; border: none;"
                     />
@@ -845,7 +845,7 @@ export const sendActivityNotificationEmail = async (
               (videoUrl, index) => `
                 <li style="margin-bottom: 0.75rem;">
                   <a 
-                    href="${videoUrl}" 
+                    href="${escapeHtml(videoUrl)}"
                     style="color: #1C3C8C; font-weight: 500; text-decoration: underline;"
                   >
                     Watch Video ${index + 1}
@@ -877,12 +877,12 @@ export const sendActivityNotificationEmail = async (
               return `
                   <li style="margin-bottom: 0.75rem;">
                     <a 
-                      href="${documentUrl}" 
+                      href="${escapeHtml(documentUrl)}"
                       style="display: inline-flex; align-items: center; gap: 0.5rem; color: #1C3C8C; font-weight: 500; text-decoration: none; padding: 0.5rem 1rem; background-color: #eff6ff; border-radius: 0.375rem; border: 1px solid #bfdbfe;"
                       download
                     >
                       <span style="font-size: 1.25rem;">📄</span>
-                      <span>${decodedFilename}</span>
+                      <span>${escapeHtml(decodedFilename)}</span>
                     </a>
                   </li>
                 `
@@ -896,22 +896,22 @@ export const sendActivityNotificationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       ${childImageHtml}
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">New Update for ${
-          beneficiary.name
+          escapeHtml(beneficiary.name)
         }</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">A new activity has been posted for <strong>${
-          beneficiary.name
+          escapeHtml(beneficiary.name)
         }</strong>:</p>
         <p style="font-size: 1.1rem; font-weight: 600; color: #1C3C8C; margin-bottom: 0.5rem;">${
-          activity.title
+          escapeHtml(activity.title)
         }</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${
-          activity.description
+          escapeHtml(activity.description)
         }</p>
         ${imagesHtml}
         ${videosHtml}
@@ -960,8 +960,8 @@ export const sendBudgetFulfilledRejectionEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${beneficiaryName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(beneficiaryName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
@@ -980,19 +980,19 @@ export const sendBudgetFulfilledRejectionEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       ${childImageHtml}
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #10b981;">
-        <h2 style="color: #10b981; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Good News - ${beneficiaryName} is Fully Sponsored!</h2>
+        <h2 style="color: #10b981; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Good News - ${escapeHtml(beneficiaryName)} is Fully Sponsored!</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
-          Thank you for your generous heart in wanting to sponsor <strong>${beneficiaryName}</strong>.
+          Thank you for your generous heart in wanting to sponsor <strong>${escapeHtml(beneficiaryName)}</strong>.
         </p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
-          We're delighted to share that <strong>${beneficiaryName} has already been fully sponsored</strong> by other generous supporters and has met their budget goal! This is wonderful news for ${beneficiaryName}.
+          We're delighted to share that <strong>${escapeHtml(beneficiaryName)} has already been fully sponsored</strong> by other generous supporters and has met their budget goal! This is wonderful news for ${escapeHtml(beneficiaryName)}.
         </p>
       </div>
       
@@ -1008,7 +1008,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
       <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h3 style="font-size: 1.25rem; font-weight: 600; margin-top: 0; color: #1C3C8C;">Sponsor Another Child in Need</h3>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
-          While ${beneficiaryName}'s sponsorship needs have been met, there are many other wonderful children still waiting for a sponsor like you. Each child has their own unique story and dreams for the future.
+          While ${escapeHtml(beneficiaryName)}'s sponsorship needs have been met, there are many other wonderful children still waiting for a sponsor like you. Each child has their own unique story and dreams for the future.
         </p>
         <div style="text-align: center; margin-top: 1.5rem;">
           <a href="${browseUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Explore Children Needing Support</a>
@@ -1074,8 +1074,8 @@ export const sendManagerSponsorshipNotificationEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${childName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(childName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
@@ -1094,7 +1094,7 @@ export const sendManagerSponsorshipNotificationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       ${childImageHtml}
@@ -1104,7 +1104,7 @@ export const sendManagerSponsorshipNotificationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">A new sponsorship has been received with the following details:</p>
         
         <div style="background-color: white; padding: 1rem; border-radius: 0.375rem; margin: 1rem 0;">
-          <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${childName}</p>
+          <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${escapeHtml(childName)}</p>
           <p style="margin: 0.5rem 0;"><strong>Amount:</strong> ${formattedAmount}/${intervalText}</p>
           <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${escapeHtml(customerName || "Not provided")}</p>
           <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${escapeHtml(customerEmail || "Not provided")}</p>
@@ -1154,8 +1154,8 @@ export const sendMonthlyPaymentConfirmationEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${childName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(childName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
@@ -1174,7 +1174,7 @@ export const sendMonthlyPaymentConfirmationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${escapeHtml(logoUrl)}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       ${childImageHtml}
@@ -1182,14 +1182,14 @@ export const sendMonthlyPaymentConfirmationEmail = async (
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Payment Confirmed</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your monthly sponsorship payment of <strong style="color: #1C3C8C;">${formattedAmount}</strong> for <strong>${childName}</strong> has been successfully processed.</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your continued support in making a difference in ${childName}'s life.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your monthly sponsorship payment of <strong style="color: #1C3C8C;">${formattedAmount}</strong> for <strong>${escapeHtml(childName)}</strong> has been successfully processed.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your continued support in making a difference in ${escapeHtml(childName)}'s life.</p>
       </div>
       
       ${managementSection}
 
       <div style="border-left: 4px solid #1C3C8C; padding-left: 1rem; margin-bottom: 1.5rem;">
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">We'll continue to keep you updated on ${childName}'s progress and how your sponsorship is making an impact.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">We'll continue to keep you updated on ${escapeHtml(childName)}'s progress and how your sponsorship is making an impact.</p>
         <p style="font-size: 1rem; line-height: 1.5;">If you have any questions about your sponsorship, please don't hesitate to contact us.</p>
       </div>
       
@@ -1228,7 +1228,7 @@ export const sendSponsorshipCancellationNotificationEmail = async (
   const html = `
     <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
       <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+        <img src="${escapeHtml(getLogoUrl())}" alt="Creator Share" style="max-width: 200px; height: auto;" />
       </div>
       
       <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">
@@ -1236,7 +1236,7 @@ export const sendSponsorshipCancellationNotificationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">A sponsorship has been cancelled and the child now has no active sponsorships.</p>
         
         <div style="background-color: white; padding: 1rem; border-radius: 0.375rem; margin: 1rem 0;">
-          <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${childName}</p>
+          <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${escapeHtml(childName)}</p>
           <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${escapeHtml(sponsorName || "Not provided")}</p>
           <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${escapeHtml(sponsorEmail || "Not provided")}</p>
           <p style="margin: 0.5rem 0;"><strong>Amount:</strong> ${formattedAmount}</p>

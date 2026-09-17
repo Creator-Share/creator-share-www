@@ -62,6 +62,13 @@ async function exercise(deliveryFails: boolean, loggingFails = false, configured
       await email.sendBlindSponsorshipConfirmationEmail("recipient@example.test", 2500, "month", "children", name, { provider: "PAYPAL" })
       await email.sendManagerSponsorshipNotificationEmail("Child", 2500, "month", "recipient@example.test", name)
       await email.sendSponsorshipCancellationNotificationEmail("Child", "recipient@example.test", name, 2500)
+      await email.sendActivityNotificationEmail("recipient@example.test", { name }, {
+        title: name, description: name,
+        documentUrls: [`https://media.example.test/${encodeURIComponent('<b>Document</b>')}`],
+        imageUrls: ['https://media.example.test/photo" data-forged="yes'],
+      })
+      await email.sendPartnershipConfirmationEmail("recipient@example.test", name, 2500, "month")
+      await email.sendBlindSponsorshipMatchedEmail("recipient@example.test", name, 2500, "month", null, 'child" data-forged="yes')
     }
     const result = await sendEmail({ to: "recipient@example.test", subject: "Fixture", text: "Fixture" })
     return { result, records, messages, transportCalls, logs: inspect(logs) }
@@ -110,5 +117,19 @@ test("sponsor names remain text in sponsor and administrator email templates", a
     expect(message.html).not.toContain('<a href="https://untrusted.example">')
     expect(message.html).toContain('&lt;a href=&quot;https://untrusted.example&quot;&gt;Pay here&lt;/a&gt; &amp; Friends')
   }
-  expect(messages).toHaveLength(4)
+  expect(messages).toHaveLength(7)
+})
+
+
+test("legacy content and media labels cannot alter email markup", async () => {
+  const { messages } = await exercise(false, false, true, true)
+  for (const message of messages.slice(3, 6)) {
+    expect(message.html).not.toContain('<a href="https://untrusted.example">')
+    expect(message.html).toContain('&lt;a href=&quot;https://untrusted.example&quot;&gt;Pay here&lt;/a&gt; &amp; Friends')
+    expect(message.html).not.toContain('" data-forged="yes')
+  }
+  expect(messages[3].html).toContain('&lt;b&gt;Document&lt;/b&gt;')
+  expect(messages[3].html).not.toContain('<b>Document</b>')
+  expect(messages[3].subject).toBe('New update on <a href="https://untrusted.example">Pay here</a> & Friends')
+  expect(messages[3].html).toContain('<h2 style=')
 })
