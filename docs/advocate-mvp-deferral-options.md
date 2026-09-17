@@ -1,17 +1,26 @@
 # MVP deferral options
 
-Status: recommendations only. No scope reduction is approved or implemented. Measurements use `b812f8c`; all current capabilities remain required.
+Status: recommendations only. No scope reduction is approved or implemented. Earlier measurements use `b812f8c`; the private-analytics measurement uses `dbf6ded`. All current capabilities remain required.
 
 ## Recommended order
 
 | Option | Recommendation | Dedicated application surface inspected | Main cost to the product |
 | --- | --- | --- | --- |
-| Public impact counters | Best first deferral | 12 files, 1,352 physical lines | No public fundraising or sponsorship counters at launch; private reporting remains |
+| Detailed private analytics | Highest direct reduction in current privacy-release risk, if reduced advocate reporting is acceptable | Three application files, 1,058 physical lines | No private detailed attribution, timing, currency, renewal, refund, or commitment dashboard at launch; retain existing delayed public impact metrics |
+| Public impact counters | Simpler deferral if private analytics remains essential | 12 files, 1,352 physical lines | No public fundraising or sponsorship counters at launch; private reporting remains |
 | Post-visit attribution and observation | Consider only if direct sponsorship credit is sufficient for launch | Nine exposure and visitor-token files, 1,481 physical lines | Primary-site sponsorships after an advocate visit receive no post-visit credit or year-long observation |
 | Staff-managed delegate invitations | Choose for operational reasons, not assumed engineering savings | Five delegate invitation administration files, 1,376 physical lines | Advocates ask staff to change team access; staff need a secure management path |
 | Plain-text introductions | Low priority | Editor and validator, 390 physical lines | Header and biography lose rich formatting; logos and colors remain |
 
 These are measured file footprints, not promised deletion totals or estimates of delivery time. They exclude shared wiring, most schema changes, and tests. Removing a capability may require replacement code. The counts include comments and blank lines.
+
+## Detailed private analytics
+
+The dedicated page, dashboard, and repository/validation module total 1,058 physical lines at `dbf6ded`. The `get_advocate_analytics_snapshot` function contains 789 lines. Its dedicated database and application tests total 2,784 lines, but those files and their shared fixture assertions are not automatically disposable. The surrounding migration also defines immutable analytics eligibility used by public metrics and attribution, so deleting that migration wholesale is unsafe.
+
+This option removes the current detailed private disclosure surface rather than claiming its privacy defect is repaired. If approved, remove or revoke the snapshot RPC as well as the page, adjust navigation and role capabilities, and test direct access denial. Merely hiding the menu leaves the database surface accessible. Keep attribution decisions and financial history intact so later reporting can use them. The existing delayed and rounded public metrics could remain as the initial reporting capability; no new manual-report service is assumed.
+
+The cost is substantive: advocates lose private conversion timing, currency detail, collected-fund adjustments, and recurring commitment reporting. This is an alternative to resolving the FF-034 privacy/freshness policy for launch, not approval to ship the current leaking snapshot. Payment accounting (FF-072 and FF-084), operational recovery, and external release gates remain necessary. This option and deferring public counters should be considered separately because choosing both removes the existing aggregate reporting experiences.
 
 ## Public impact counters
 
