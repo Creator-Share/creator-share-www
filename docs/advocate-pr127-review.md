@@ -321,3 +321,9 @@ All 12 focused tests and 1,590 selected server-free tests pass, as do TypeScript
 ## Retention visitor index hosted validation
 
 Publication run 35190442288 and WebKit run 35190442308 passed on 14dcc77. Both independent jobs and the aggregate concluded success. This validates the visitor-index change against the required hosted application, database, and browser lanes. The subsequent password-login correction passes local server-free checks and awaits its own hosted run.
+
+## Sponsor assignment boundary repair
+
+The self-assignment route used only a declared Content-Length bound and no origin gate. A route-level reproduction accepted both an untrusted origin and an oversized UTF-8 body without a truthful length header. Added the shared trusted-primary JSON boundary and bounded body reader. The existing caller already sends same-origin JSON. Database ownership checks and notification-on-first-assignment behavior remain unchanged.
+
+Five route tests cover these regressions, authentication and identifier rejection, database denial, the authoritative RPC, and replay notification behavior. All 1,595 selected server-free tests, TypeScript, lint, and the release manifest verifier pass. The manifest now classifies 254 files, 243 required, with 160 offline entries. Hosted validation remains pending.

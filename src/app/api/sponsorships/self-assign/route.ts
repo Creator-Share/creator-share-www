@@ -1,4 +1,9 @@
 import { readRequestForensics } from "@/lib/requestForensics"
+import {
+  isTrustedCheckoutJsonRequest,
+  resolveTrustedPrimaryRequestOrigin,
+} from "@/lib/sponsorships/checkout/requestSecurity"
+import { readBoundedSponsorManagementBody } from "@/lib/sponsorships/management/passwordlessAccess"
 import { NextResponse } from "next/server"
 import { sendBlindSponsorshipMatchedEmail } from "@/utils/email"
 import { createClient } from "@/utils/supabase/server"
@@ -59,6 +64,16 @@ function errorResponseForAssignment(code: string | undefined) {
 }
 
 export async function POST(request: Request) {
+  const expectedOrigin = resolveTrustedPrimaryRequestOrigin({
+    rawHost: request.headers.get("host"),
+  })
+  if (
+    expectedOrigin === null ||
+    !isTrustedCheckoutJsonRequest(request.headers, expectedOrigin)
+  ) {
+    return NextResponse.json({ error: "Invalid assignment request" }, { status: 400 })
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -76,7 +91,11 @@ export async function POST(request: Request) {
 
   let body: unknown
   try {
-    body = await request.json()
+    const serialized = await readBoundedSponsorManagementBody(request, 4096)
+    if (serialized === null) {
+      return NextResponse.json({ error: "Invalid JSON request" }, { status: 400 })
+    }
+    body = JSON.parse(serialized)
   } catch {
     return NextResponse.json({ error: "Invalid JSON request" }, { status: 400 })
   }
