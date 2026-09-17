@@ -2,7 +2,7 @@
 
 Status: review in progress, September 17, 2026. The PR is not ready to ship: foreign-currency adjustment accounting, dispute loss bounds, and longitudinal private-analytics disclosure remain P1 blockers, and external release evidence is incomplete. No merge into `dev` is authorized.
 
-The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `c3f4b44`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction, retention-index change, and password-login correction are hosted-validated. Sponsor assignment and diagnostic authorization are also hosted-validated. The shared administrator guard is also hosted-validated; atomic beneficiary deletion is now hosted-validated, while configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
+The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `5323d5c`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction, retention-index change, and password-login correction are hosted-validated. Sponsor assignment and diagnostic authorization are also hosted-validated. The shared administrator guard is also hosted-validated; atomic beneficiary deletion is now hosted-validated, while configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
 
 ## Repaired defects and unnecessary complexity
 
@@ -276,3 +276,9 @@ Publication [35206039312](https://github.com/Creator-Share/creator-share-www/act
 ## Returned delivery-log errors
 
 **P3 observability defect (FF-090):** the legacy email helper caught thrown logging failures but ignored a normal Supabase insert response containing `error`. The candidate checks that result and emits the existing sanitized diagnostic, preserving accepted delivery and making no second SMTP attempt. The regression covers both error forms, fails on the former helper, and passes after the correction. Hosted validation is pending. This does not provide durable recovery of a missing delivery-log row or prove operational alert delivery.
+
+## Retention and registration hosted checkpoint
+
+Publication [35207046696](https://github.com/Creator-Share/creator-share-www/actions/runs/35207046696) and WebKit [35207046638](https://github.com/Creator-Share/creator-share-www/actions/runs/35207046638) passed at `5323d5c`, validating retention backlog consolidation and the adversarial registration metadata assertion. The gate includes 1,716 offline tests, 66 dev-server tests, and 65 pgTAP files with 2,170 assertions, plus the required HTTP, concurrency, and cleanup harnesses. Vercel also passed at this revision. The later returned-email-log error correction, FF-090, still requires hosted validation.
+
+At local `2da94cf`, the release manifest verifies 261 classified test-shaped files with 250 required, the full review diff passes whitespace checks, and the pinned secret scan passes across 926 commits using its explicit exceptions and detection controls. These checks do not prove credential revocation, live provider readiness, or resolution of the open accounting and privacy findings.

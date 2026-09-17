@@ -447,3 +447,7 @@ Eleven legacy templates now share their identical outer layout, deleting 85 net 
 ## Retention backlog composition
 
 Combined the private backlog wrapper with its only implementation helper, deleting 54 SQL lines. The strict catalog comparison permits one changed function definition and one removed helper, with all other entries and eight legacy data projections equal. Before-and-after isolated execution verifies both added expiry sources. The combined calculation captures one cutoff time for all sources; hosted retention validation is pending.
+
+## Retention and registration validation
+
+Publication 35207046696 and WebKit 35207046638 passed at 5323d5c, including 2,170 pgTAP assertions, 1,716 offline tests, 66 dev-server tests, and all required HTTP and concurrency harnesses. This validates the combined backlog helper and the registration-metadata regression. Vercel also passed. The subsequent returned email-log error correction remains pending its own run.
