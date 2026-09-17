@@ -409,3 +409,7 @@ Publication run 35197836385 and WebKit run 35197836392 passed on 817e2de. The co
 Publication run 35199012868 and WebKit run 35199012853 passed at 231c0d7. This validates the delegate account-state extension, retained-JWT HTTP regression, and removal of unused browser reservation context. Hosted evidence includes 1,707 offline tests, 66 dev-server tests, 99 provider contracts, 65 pgTAP files with 2,156 assertions, 15 catalog tests, three Supabase HTTP tests, and all required concurrency and cleanup harnesses. FF-083 is complete. Local services remained stopped.
 
 The release checklists now distinguish checks that can run through authorized provider APIs from physical-device evidence and product decisions. Removed stale test counts, unsupported universal browser-behavior claims, and obsolete overnight-agent instructions. This documentation cleanup does not waive a release gate.
+
+## Out-of-order dispute recovery regression
+
+The existing database test rejected a credit without its debit, then exercised a different dispute in debit-first order. It did not establish recovery of the rejected event. The revised scenario persists a retry through the production RPC, settles the matching debit, advances only the fixture retry schedule, reclaims the original credit, rejects its stale lease, and checks the restored net and two-movement bound. Production behavior is unchanged. Hosted validation is pending; this is a coverage gap, not a confirmed settlement defect.

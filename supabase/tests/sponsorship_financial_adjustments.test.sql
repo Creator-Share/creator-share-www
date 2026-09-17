@@ -778,9 +778,9 @@ FROM public.ingest_verified_sponsorship_financial_adjustment(
   target_provider_event_id => 'evt_financial_adjustment_unmatched_credit_0001',
   target_event_type => 'charge.dispute.funds_reinstated',
   target_provider_object_type => 'dispute',
-  target_provider_object_id => 'dp_financial_adjustment_unmatched_0001',
+  target_provider_object_id => 'dp_financial_adjustment_0001',
   target_adjustment_provider_movement_type => 'dispute',
-  target_adjustment_provider_movement_id => 'dp_financial_adjustment_unmatched_0001',
+  target_adjustment_provider_movement_id => 'dp_financial_adjustment_0001',
   target_base_amount_usd_cents => 1000,
   target_charged_amount_minor => 1000,
   target_charged_currency => 'USD',
@@ -835,8 +835,27 @@ SELECT extensions.throws_ok(
   'dispute reinstatement cannot manufacture net value without its matching debit'
 );
 
+-- The worker persists a retry after an out-of-order credit fails settlement.
+SELECT extensions.ok(
+  (
+    SELECT processing_status = 'failed' AND processing_lease_token IS NULL
+    FROM public.retry_sponsorship_payment_gateway_event(
+      (SELECT gateway_event_id FROM adjustment_test_leases
+       WHERE key = 'unmatched_dispute_credit'),
+      (SELECT processing_lease_token FROM adjustment_test_leases
+       WHERE key = 'unmatched_dispute_credit'),
+      'adjustment_dependency_pending',
+      interval '1 hour'
+    )
+  ),
+  'an early dispute credit remains durably retryable and releases its lease'
+);
+
+-- Provider occurrence order is debit then credit; delivery order is reversed.
 INSERT INTO adjustment_test_times
-VALUES ('dispute_debit', clock_timestamp());
+SELECT 'dispute_debit', value - interval '1 second'
+FROM adjustment_test_times
+WHERE key = 'unmatched_dispute_credit';
 
 INSERT INTO adjustment_test_context
 SELECT 'dispute_debit_event', gateway_event_id
@@ -909,39 +928,13 @@ SELECT extensions.ok(
   'Stripe dispute withdrawal appends a bounded negative dispute movement'
 );
 
-INSERT INTO adjustment_test_times
-VALUES ('dispute_credit', clock_timestamp());
-
-INSERT INTO adjustment_test_context
-SELECT 'dispute_credit_event', gateway_event_id
-FROM public.ingest_verified_sponsorship_financial_adjustment(
-  target_original_financial_movement_id => (
-    SELECT value
-    FROM adjustment_test_context
-    WHERE key = 'stripe_gross_movement'
-  ),
-  target_provider => 'STRIPE',
-  target_provider_account_scope => 'stripe_us',
-  target_provider_event_id => 'evt_financial_adjustment_dispute_credit_0001',
-  target_event_type => 'charge.dispute.funds_reinstated',
-  target_provider_object_type => 'dispute',
-  target_provider_object_id => 'dp_financial_adjustment_0001',
-  target_adjustment_provider_movement_type => 'dispute',
-  target_adjustment_provider_movement_id => 'dp_financial_adjustment_0001',
-  target_base_amount_usd_cents => 1000,
-  target_charged_amount_minor => 1000,
-  target_charged_currency => 'USD',
-  target_conversion_rate => 1,
-  target_redacted_payload => '{"status":"won"}'::jsonb,
-  target_payload_ciphertext => decode('dc', 'hex'),
-  target_payload_sha256 => decode(repeat('dc', 32), 'hex'),
-  target_signature_verified_at => (
-    SELECT value FROM adjustment_test_times WHERE key = 'dispute_credit'
-  ),
-  target_occurred_at => (
-    SELECT value FROM adjustment_test_times WHERE key = 'dispute_credit'
-  ),
-  target_verification_method => 'stripe_webhook_signature'
+-- Advance only the retry schedule in this superuser fixture. Settlement and
+-- renewed lease acquisition still run through the production functions.
+UPDATE public.payment_gateway_events
+SET available_at = clock_timestamp() - interval '1 second'
+WHERE id = (
+  SELECT value FROM adjustment_test_context
+  WHERE key = 'unmatched_dispute_credit_event'
 );
 
 INSERT INTO adjustment_test_leases
@@ -954,7 +947,32 @@ FROM public.claim_payment_gateway_events(
   20
 )
 WHERE gateway_event_id = (
-  SELECT value FROM adjustment_test_context WHERE key = 'dispute_credit_event'
+  SELECT value FROM adjustment_test_context WHERE key = 'unmatched_dispute_credit_event'
+);
+
+SELECT extensions.ok(
+  (
+    SELECT recovered.processing_lease_token <> original.processing_lease_token
+    FROM adjustment_test_leases recovered
+    JOIN adjustment_test_leases original
+      ON original.gateway_event_id = recovered.gateway_event_id
+    WHERE recovered.key = 'dispute_credit'
+      AND original.key = 'unmatched_dispute_credit'
+  ),
+  'the same early credit is reclaimed with a fresh processing lease'
+);
+
+SELECT extensions.throws_ok(
+  format(
+    'SELECT * FROM public.apply_sponsorship_financial_adjustment(%L::uuid, %L::uuid)',
+    (SELECT gateway_event_id FROM adjustment_test_leases
+     WHERE key = 'unmatched_dispute_credit'),
+    (SELECT processing_lease_token FROM adjustment_test_leases
+     WHERE key = 'unmatched_dispute_credit')
+  ),
+  '55P03',
+  'Financial adjustment processing lease is missing or stale',
+  'the original worker cannot settle a reclaimed dispute credit'
 );
 
 CREATE TEMP TABLE adjustment_dispute_credit_result ON COMMIT DROP AS
@@ -980,7 +998,7 @@ SELECT extensions.ok(
       AND net_charged_amount_minor = 8000
     FROM adjustment_dispute_credit_result
   ),
-  'Stripe dispute reinstatement appends a bounded positive dispute movement'
+  'the retried early dispute credit restores the net after its matching debit arrives'
 );
 
 SELECT extensions.is(
