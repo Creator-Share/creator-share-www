@@ -153,7 +153,16 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
 
   // Generate a short URL-style string using cryptographically secure randomness
   const generateShortUrl = useCallback(() => {
-    return crypto.randomUUID().replace(/-/g, "").slice(0, 8)
+    const cryptoApi = globalThis.crypto
+    if (cryptoApi?.getRandomValues) {
+      const value = cryptoApi.getRandomValues(new Uint32Array(1))[0]
+      return value.toString(16).padStart(8, "0")
+    }
+
+    // Keeps modal creation available in older runtimes without Web Crypto.
+    return Math.floor(Math.random() * 0x1_0000_0000)
+      .toString(16)
+      .padStart(8, "0")
   }, [])
 
   // Prepopulate username in create mode when modal opens
@@ -1364,7 +1373,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
           {isEditMode && selectedChild?.id && (
             <div className="mt-8">
               <ActivitiesTable
-                beneficiaryType="CHILD"
+                beneficiaryType={selectedChild.beneficiary_type ?? "CHILD"}
                 beneficiaryId={selectedChild.id}
               />
             </div>

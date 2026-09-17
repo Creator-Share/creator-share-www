@@ -17,6 +17,7 @@ export const BENEFICIARY_TYPES = [
   "CHILD",
   "CHILD_LABORER",
   "SPECIAL_NEEDS",
+  "IMMEDIATE_NEED",
   "IN_OUR_CARE",
   "ANIMAL",
 ] as const
