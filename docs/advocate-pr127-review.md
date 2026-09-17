@@ -247,3 +247,7 @@ The same production analytics query also discloses isolated refunds and renewals
 A repository-wide identifier and import review found three unimported modules: the old PayPal financial metadata encoder/parser, image-transformation helpers, and unused icons. It also found an uncalled goal-fulfilled email template, unused media wrappers, two constants, two type aliases, and an unused default PayPal dependency object. Removing them and their unused imports reduces application code by 449 net lines. Generated database types remain intact, and active pre-PR payment-return handlers are unchanged.
 
 All 1,584 selected server-free tests, TypeScript, lint, and Git whitespace checks pass. No new service, browser server, provider, or email was started. Hosted validation remains pending for this application cleanup. The existing invitation and payment compatibility contracts remain required.
+
+## Release checklist reconciliation
+
+The completion audit and manual checklist now foreground the two confirmed financial and privacy implementation blockers. The historical caller audit is explicitly historical: its missing-project observation predates recorded project creation. Removed the obsolete complete-lifetime/virgin-exception prerequisite belonging to the deleted invitation cutover. Current target-ledger verification, unexpected-state reconciliation, capable-caller inventory, and migration-time caller isolation remain required. No deployment, provider configuration, or merge was performed.

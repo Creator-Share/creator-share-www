@@ -2,7 +2,7 @@
 
 This answers one question: **is the Advocate Platform ready for final manual testing and a merge to `dev`?**
 
-This document records the earlier audit checkpoint, not the current PR head. See [the ongoing implementation review](./advocate-pr127-review.md) for revision-bound validation and the first-release migration changes. The release is not complete. It still needs the isolated hosted deployment, live provider evidence, the historical caller decision, and a physical iOS pass. Those items are enumerated in `docs/advocate-staging-manual-audit.md`.
+This document records the earlier audit checkpoint, not the current PR head. See [the ongoing implementation review](./advocate-pr127-review.md) for revision-bound validation and the first-release migration changes. The release is not complete. Current implementation blockers include foreign-currency partial adjustment accounting (FF-072) and longitudinal private analytics disclosure (FF-034). Green historical checks do not resolve either defect. See [current review findings](./advocate-review-findings.md) and their pending owner decisions. External deployment, provider, current caller inventory, and physical iOS evidence also remain outstanding in `docs/advocate-staging-manual-audit.md`. No merge into `dev` is authorized.
 
 ## What is measured, not asserted
 

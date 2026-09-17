@@ -6,6 +6,10 @@ The repository classifies every test-shaped file. Required lanes run in CI. Opti
 
 The gate-by-gate traceability behind that claim is in `docs/advocate-mvp-completion-audit.md`, which names the asserting test file for every release gate and states plainly where the automated evidence stops.
 
+## Current implementation blockers
+
+Before release, resolve the partial foreign-currency adjustment defect (FF-072) and private analytics disclosure across daily snapshots (FF-034). The [review findings](./advocate-review-findings.md) and linked decision drafts describe the reproduced failures and pending owner choices. Provider canaries and a physical-device pass do not repair these implementation defects. No merge into `dev` is authorized.
+
 ***
 
 ## 1. Completed: Vercel project creation and activity evidence
@@ -25,20 +29,15 @@ Sources: [Vercel Activity Log](https://vercel.com/docs/activity-log) and [Vercel
 
 ---
 
-## 2. Blocking: historical caller capability for the staging Supabase project
+## 2. Blocking: current target state and capable callers
 
-**Why it is blocking.** The runbook requires proof of the complete lifetime of every deployment and scheduler capable of calling `destjwstohzmufshfnuy`. If provider retention does not cover a capable caller's complete lifetime, the runbook states the virgin exception is unavailable.
+The owner confirmed that no Advocate migrations have been applied to staging or production. The current first-release procedure therefore has no legacy invitation cutover or virgin-exception requirement. Do not require complete provider history merely to satisfy that removed procedure.
 
-**What was established automatically.** See `docs/advocate-staging-caller-audit.md`. No application source hard-codes the staging project, there are no Supabase Edge Functions, no database cron jobs, and no scheduled GitHub workflows. Capability therefore comes from configured environment only.
+Before any authorized database write, use the current staging runbook to verify the exact migration ledger, schema, and data baseline. If any Advocate migration or unexplained Advocate state already exists, stop and reconcile it instead of applying the revised first-release series.
 
-**What only you can check, in the Vercel dashboard:**
+Inventory callers that can still reach the target, including active deployments, callable older deployment URLs, current and recoverable environment bindings, workers, cron jobs, and external queues or hosts. Keep them paused or unable to authenticate during migration and controlled configuration. Repository absence of a hard-coded project ID does not prove absence of a configured caller. Record sanitized capability results and evidence references, never credential values.
 
-1. For `creator-share-www`, inspect **Production, Preview, and Development** environment variables and confirm whether any has ever pointed at `destjwstohzmufshfnuy`. Inspect values only inside the approved secret store; record a yes or no plus an evidence reference, never the value.
-2. Retrieve the historical cron invocation record for `creator-share-www` and confirm whether any invocation could have reached the staging project.
-3. Confirm whether Vercel's retention covers the complete lifetime of every capable deployment, including deleted ones and direct generated URLs.
-4. Confirm no externally operated scheduler, queue consumer, or persistent host outside this repository and this Vercel team holds staging credentials.
-
-**Answer needed:** a yes or no on capability for each, with an evidence reference.
+[The earlier caller audit](./advocate-staging-caller-audit.md) remains historical evidence. Its observation that the staging project did not exist predates the creation recorded in section 1; it is not a current instruction to create another project. Reconfirm current project configuration before its first deployment.
 
 ---
 
@@ -51,7 +50,7 @@ Two verified controls bound this, and both should be confirmed rather than assum
 - Vercel crons fire only against Production deployments, not Preview.
 - Every worker fails closed without a valid secret of at least 32 characters, compared with `timingSafeEqual`.
 
-**What to do when the project is created:** leave `CRON_SECRET` and the staging Supabase credentials unset until the caller audit is accepted, so the inherited crons are inert by construction rather than by intention.
+**Before the first deployment:** keep worker credentials absent or workers otherwise demonstrably paused until the current caller inventory and controlled configuration are accepted. Project creation alone does not execute the repository cron routes; deploying its Production configuration creates the operational risk.
 
 ---
 

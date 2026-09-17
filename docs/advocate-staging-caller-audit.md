@@ -1,5 +1,7 @@
 # Advocate Staging Caller Audit
 
+Historical pre-creation checkpoint. The project was subsequently created, as recorded in [the manual audit](./advocate-staging-manual-audit.md). Provider observations here have not been refreshed during the current review. Use the current staging release runbook and manual checklist for execution; do not treat this file as current provider inventory.
+
 Read-only inventory of everything with the capability to call the isolated staging Supabase project `destjwstohzmufshfnuy`, produced for the Pre-Step of `docs/advocate-staging-release-runbook.md`.
 
 This audit created no hosted resource. Every observation below is either repository evidence or a read-only provider query.
@@ -53,16 +55,10 @@ Both are provider-free. The hosted supersession suite is pinned so that it refus
 
 Capability therefore comes from configured environment, not from committed code. The remaining question for each caller is whether its environment ever contained credentials for `destjwstohzmufshfnuy`.
 
-## What this audit cannot establish
+## Current interpretation
 
-The runbook requires proving the _complete lifetime_ of every capable deployment and scheduler, including historical ones. The following cannot be answered from the repository or from read-only CLI access, and are carried into `docs/advocate-staging-manual-audit.md`:
+This historical inventory cannot establish current deployment credentials, remaining callable deployment URLs, external workers, or target schema state. Recheck those facts before the first authorized migration or deployment. Keep capable callers paused and provider automation disabled throughout the controlled release sequence.
 
-1. Whether any `creator-share-www` environment, in Production, Preview, or Development, has ever held credentials for `destjwstohzmufshfnuy`.
-2. The complete historical cron invocation record for `creator-share-www`, which determines whether an older deployment ever called the staging project.
-3. Whether provider retention covers the complete lifetime of each capable deployment. If it does not, the runbook states the virgin exception is unavailable.
-4. Any externally operated scheduler, queue consumer, or persistent host outside this repository and this Vercel team.
-5. The project-creation audit event required before the staging project may be created.
+The original audit required complete lifetime evidence to qualify for an undeployed invitation cutover exception. That procedure was removed after the owner confirmed no Advocate migrations had been applied. Its historical log-retention requirement is no longer a prerequisite for this first release. The current runbook instead requires exact target migration membership, schema and data postconditions, and a current capable-caller inventory. Unexpected preexisting Advocate state invalidates that release path and requires reconciliation.
 
-## Consequence for the Pre-Step
-
-The staging project must not be created until items 1 through 5 are settled. When it is created, it must have no `CRON_SECRET` and no staging Supabase credentials until the caller audit is accepted, so that the inherited cron fleet remains inert by construction rather than by intention.
+The staging project creation is already recorded in the manual checklist. Do not create a second project based on this earlier audit. No provider state was changed to update this interpretation.
