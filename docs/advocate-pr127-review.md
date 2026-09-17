@@ -115,3 +115,7 @@ Stripe Checkout and PayPal approval validators compared protocol and hostname bu
 ## Canonical currency guard
 
 `isSupportedCurrency` normalized case before returning a TypeScript type predicate, incorrectly narrowing lowercase strings to an uppercase-only union. The PayPal billing catalog used that predicate without normalizing the returned value. The guard now checks canonical values exactly; the existing user-input coercion still normalizes lowercase currencies. The new regression fails on the original guard. All 12 server-free currency and catalog tests, 1,569 selected server-free tests, TypeScript, and lint passed. The currency endpoint test requires the hosted dev-server lane; no local server was started.
+
+## Hosted validation of d42eb98
+
+[Publication workflow 35179157120](https://github.com/Creator-Share/creator-share-www/actions/runs/35179157120) and [WebKit workflow 35179159010](https://github.com/Creator-Share/creator-share-www/actions/runs/35179159010) passed. Both independent application and database jobs completed successfully, including the provider-free and dev-server lanes, second migration consolidation, complete pgTAP suite, HTTP integration, all required concurrency harnesses, and forced cleanup. This also verifies the invitation form's delayed-JavaScript regression. Later helper removal, cancellation, cookie fallback, exact-origin, and currency changes await their own hosted revision.

@@ -71,7 +71,7 @@ These are development checks, not the production release gate. The temporary har
 
 The first pass conservatively excluded every function name involved in a rename or schema move. The second pass groups definitions only within the interval before or after that boundary. It preserves every rename, schema move, drop, and function alteration instead of combining distinct generations under the same name.
 
-Nine additional groups remove 1,212 superseded definition lines. The strict in-process replay again matches all 5,325 original catalog entries and the eight legacy fixture projections exactly. Final catalog equality includes the renamed private implementations that wrappers still call. Hosted Supabase and concurrency validation of this second pass remains required.
+Nine additional groups remove 1,212 superseded definition lines. The strict in-process replay again matches all 5,325 original catalog entries and the eight legacy fixture projections exactly. Final catalog equality includes the renamed private implementations that wrappers still call. Hosted run [35179157120](https://github.com/Creator-Share/creator-share-www/actions/runs/35179157120) on `d42eb98` passed Supabase replay, the complete pgTAP suite, every required concurrency harness, PostgREST compatibility, and forced cleanup for this second pass.
 
 | Function | Definitions in interval | Superseded definition lines |
 | --- | ---: | ---: |
