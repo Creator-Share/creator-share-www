@@ -150,13 +150,6 @@ export const getBrowserImageSrc = (image: MediaImage): string => {
   return image.image_url || ""
 }
 
-export const getBrowserThumbnailSrc = (
-  _image?: MediaImage,
-): string | undefined => {
-  void _image
-  return undefined
-}
-
 /**
  * Compatibility wrapper. Browser paths should use direct storage URLs so
  * next/image and Vercel own browser optimization.

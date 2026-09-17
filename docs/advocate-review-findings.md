@@ -2,7 +2,7 @@
 
 Status: review in progress, September 17, 2026. No merge into `dev` is authorized. This report does not approve production activation.
 
-The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `e1f811e`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, and retention vocabulary consolidation. The final-definition migration cleanup in `67c18df` awaits hosted validation. Existing local checkouts were left intact; local services remain stopped.
+The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `ff01da5`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, and final-definition migration consolidation. The application dead-code cleanup awaits hosted validation. Existing local checkouts were left intact; local services remain stopped.
 
 ## Repaired defects and unnecessary complexity
 
@@ -21,7 +21,7 @@ The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b0
 | Secret scanning was described as evidence but absent from required CI. | Add checksum-pinned full-history Gitleaks with positive and negative controls and narrow reviewed exceptions. | Actual hosted scanner step and full workflow pass. Three historical Telegram occurrences have exact fingerprints; recorded rotation is not fresh provider-side revocation evidence. |
 | Required workflow path filters could leave checks permanently pending on unmatched PR changes. | Run both workflows for every PR targeting `dev`. | Four tooling regressions and 99 provider contracts pass locally. Hosted validation passed on `bb92a25`. |
 
-At `87399c7`, the review changes remove 25,835 lines and add 3,697, a net reduction of 22,138 across 126 files. This includes removal of the redundant 10,056-line npm lockfile. It is not a claim that 22,138 lines of application logic were eliminated. No product capability has been removed.
+At `b6f115d`, the review changes remove 27,919 lines and add 4,571, a net reduction of 23,348 across 179 files. This includes removal of the redundant 10,056-line npm lockfile. It is not a claim that 23,348 lines of application logic were eliminated. No product capability has been removed.
 
 ## Newly confirmed financial correctness findings
 
@@ -45,9 +45,9 @@ The application uses v2 checkout RPCs. A new candidate removes four public first
 
 A retention candidate also rejects obsolete cleanup responses that omit current categories instead of reporting missing counters as zero. The worker and database validator now require the complete five-count response; later cleanup still runs after rejection. Two regressions fail on the old worker, all 21 retention tests pass, and structural replay removes only the unused old validator while updating the current one. The full hosted database and application gates passed on `bb92a25`; FF-071 is complete.
 
-A refreshed inventory found seven repeated function groups. Two retention vocabulary groups now consolidate safely, removing 189 net lines with exact final catalog and legacy fixture equality. The remaining groups now have a further 413-line cleanup candidate: functions are defined once at valid dependency sites, with unchanged final bodies and privileges. Only the initial and final audit actor-context implementations remain, because migration-time callers precede the final implementation's transport table. Both consolidation candidates preserve the final catalog and legacy fixture bytes. Hosted validation passed for the 189-line pass on `e1f811e`; the 413-line pass remains pending.
+A refreshed inventory found seven repeated function groups. Two retention vocabulary groups now consolidate safely, removing 189 net lines with exact final catalog and legacy fixture equality. The remaining groups now have a further 413-line cleanup candidate: functions are defined once at valid dependency sites, with unchanged final bodies and privileges. Only the initial and final audit actor-context implementations remain, because migration-time callers precede the final implementation's transport table. Both consolidation candidates preserve the final catalog and legacy fixture bytes. Hosted validation passed for the 189-line pass on `e1f811e`; the 413-line pass passed on `ff01da5`.
 
-A separate application cleanup removes 449 net lines of uncalled helpers, obsolete PayPal metadata encoding, an unused email template, and unimported media/icon modules. Repository caller inspection, all 1,584 selected server-free tests, TypeScript, and lint pass. Hosted validation remains pending. Generated database types and active legacy payment-return handlers remain intact.
+A separate application cleanup removes 456 net lines of uncalled helpers, obsolete PayPal metadata encoding, an unused email template, and unimported media/icon modules. Repository caller inspection, all 1,584 selected server-free tests, TypeScript, and lint pass. Hosted validation remains pending. Generated database types and active legacy payment-return handlers remain intact.
 
 ## Release evidence still missing
 
@@ -91,3 +91,5 @@ The later [publication workflow 35183888657](https://github.com/Creator-Share/cr
 [Publication workflow 35185296016](https://github.com/Creator-Share/creator-share-www/actions/runs/35185296016) and [WebKit workflow 35185295959](https://github.com/Creator-Share/creator-share-www/actions/runs/35185295959) passed on `7cae034`: 1,684 offline tests, 66 dev-server tests, 99 provider contracts, and 63 pgTAP files with 2,110 assertions. The WebKit overlay passed 29 tests in each browser, plus the dedicated recovery check. Both complete logs contain zero PostCSS externalization warnings; both importer paths resolve the same PostCSS 8.5.28 installation. FF-061 is complete.
 
 [Publication workflow 35185951229](https://github.com/Creator-Share/creator-share-www/actions/runs/35185951229) and [WebKit workflow 35185951267](https://github.com/Creator-Share/creator-share-www/actions/runs/35185951267) passed on `e1f811e`, closing shared forensic parsing and the retention vocabulary consolidation. The application passed 1,684 offline tests, 66 dev-server tests, and 99 provider contracts; the database passed 63 pgTAP files with 2,110 assertions and the required integration and concurrency gates.
+
+[Publication workflow 35186695547](https://github.com/Creator-Share/creator-share-www/actions/runs/35186695547) and [WebKit workflow 35186695502](https://github.com/Creator-Share/creator-share-www/actions/runs/35186695502) passed on `ff01da5`, validating the final-definition migration cleanup. The subsequent application cleanup requires its own hosted run. Neither result resolves FF-072 or FF-034.

@@ -251,3 +251,7 @@ All 1,584 selected server-free tests, TypeScript, lint, and Git whitespace check
 ## Release checklist reconciliation
 
 The completion audit and manual checklist now foreground the two confirmed financial and privacy implementation blockers. The historical caller audit is explicitly historical: its missing-project observation predates recorded project creation. Removed the obsolete complete-lifetime/virgin-exception prerequisite belonging to the deleted invitation cutover. Current target-ledger verification, unexpected-state reconciliation, capable-caller inventory, and migration-time caller isolation remain required. No deployment, provider configuration, or merge was performed.
+
+## Final migration cleanup validated
+
+Publication run 35186695547 and WebKit run 35186695502 passed on `ff01da5`, including both independent application and database jobs and the aggregate gate. This validates the additional 413-line migration cleanup. A final application caller scan found one thumbnail stub whose only caller had just been removed; removing it brings the pending application cleanup to 456 net lines. Only generated database utility exports remain in the single-reference scan. That scan is a dead-code heuristic, not proof that every remaining export is necessary.
