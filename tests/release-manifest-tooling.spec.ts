@@ -151,3 +151,17 @@ test("the required publication gate rejects any incomplete application or databa
     }
   }
 })
+
+
+test("required workflows produce checks for every pull request to dev", async () => {
+  const testRequire = createRequire(resolve(workspace, "package.json"))
+  const { load } = testRequire("js-yaml") as { load(source: string): unknown }
+  for (const name of ["advocate-publication-db-gate.yml", "advocate-webkit-gate.yml"]) {
+    const workflow = load(await readFile(resolve(workspace, ".github/workflows", name), "utf8")) as {
+      on: { pull_request: { branches: string[]; paths?: string[]; "paths-ignore"?: string[] } }
+    }
+    expect(workflow.on.pull_request.branches).toContain("dev")
+    expect(workflow.on.pull_request.paths).toBeUndefined()
+    expect(workflow.on.pull_request["paths-ignore"]).toBeUndefined()
+  }
+})

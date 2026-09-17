@@ -4,25 +4,6 @@ on:
   pull_request:
     branches:
       - dev
-    paths:
-      - "src/components/advocates/admin/CatalogSettingsClient.tsx"
-      - "src/lib/advocates/admin/catalogForm.ts"
-      - "src/app/forgot-password/**"
-      - "src/lib/auth/passwordRecoveryClient.ts"
-      - "tests/auth/password-recovery-browser.spec.ts"
-      - "tests/advocates/portal-catalog-browser.spec.ts"
-      - "tests/advocates/invitation-interstitial.spec.ts"
-      - "tests/release-manifest.json"
-      - "tests/fixtures/**"
-      - "scripts/run-release-lane.mjs"
-      - "scripts/verify-release-manifest.mjs"
-      - "src/app/advocate-invitation/**"
-      - "src/lib/advocates/invitations/**"
-      - "playwright.config.ts"
-      - ".nvmrc"
-      - "package.json"
-      - "yarn.lock"
-      - ".github/workflows/advocate-webkit-gate.yml"
   workflow_dispatch:
 
 permissions:

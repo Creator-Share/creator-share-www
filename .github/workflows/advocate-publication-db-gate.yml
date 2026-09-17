@@ -4,26 +4,6 @@ on:
   pull_request:
     branches:
       - dev
-    paths:
-      # Broad by design. The previous enumeration is what allowed test files and
-      # implementation surfaces to drift out of required CI: a new file simply
-      # never matched a path, so the gate stayed green without running it.
-      # tests/release-manifest.json plus scripts/verify-release-manifest.mjs
-      # enforce lane assignment; these globs make sure the gate actually runs.
-      - "src/**"
-      - "tests/**"
-      - "supabase/**"
-      - "scripts/**"
-      - "docs/**"
-      - ".github/workflows/**"
-      - "middleware.ts"
-      - "next.config.*"
-      - "playwright.config.ts"
-      - "vercel.json"
-      - ".nvmrc"
-      - "package.json"
-      - "yarn.lock"
-      - ".gitleaks*"
   workflow_dispatch:
 
 permissions:
