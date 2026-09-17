@@ -6,6 +6,8 @@ Review baseline: GitHub PR 127, head `03806587621477ef8c86b946e59431b053f5a9d5`,
 
 The owner confirmed on September 17, 2026 that none of this PR's migrations have been applied to production or staging. The new migration series may be consolidated or redesigned. Existing base migrations and their data upgrade path must remain supported.
 
+The owner explicitly prohibited merging into `dev` on September 17, 2026. Review commits may update the PR branch; no merge or branch-protection mutation is authorized.
+
 Feature parity with the GitHub PR remains required. Product scope reductions require separate approval. Production provider operations and publication are outside this review's authority. Local services must remain stopped unless explicitly authorized under the workspace's September 14 directive.
 
 ## Review sequence
@@ -159,3 +161,9 @@ The configuration retains all default detection rules. Public-value exclusions m
 Both validation workflows now run for every pull request targeting `dev`. Path filters would otherwise leave an expected required check pending when a PR changes only unmatched files. Four release-tooling regressions, the 99 provider-harness contracts, TypeScript, and lint pass. The secret scanner step passed on GitHub in publication run `35182345377` at `87399c7`; the rest of that workflow is still running.
 
 [The proposed branch-protection payload](./dev-required-checks.json) requires `Publication authority database tests` and `Catalog recovery in WebKit` from the observed GitHub Actions app ID 15368, requires an up-to-date base, applies to administrators, and disables force pushes and branch deletion. It adds no review-count requirement or user/team push restriction. It has not been applied. The repository currently has seven other open PRs targeting `dev`, and these workflows are not yet in `dev`; applying the policy before PR 127 merges would prevent those other branches from merging until they produce the new checks. Repository-wide enforcement needs owner authorization and a coordinated activation point.
+
+## Hosted validation of the secret-detection gate
+
+[Publication workflow 35182345377](https://github.com/Creator-Share/creator-share-www/actions/runs/35182345377) and [WebKit workflow 35182345403](https://github.com/Creator-Share/creator-share-www/actions/runs/35182345403) completed successfully on `87399c7`. This supersedes the pending status above for that revision. Commit `18584a6` subsequently removes workflow path filters and awaits its own hosted results. No repository protection setting was changed.
+
+A consolidated [findings report](./advocate-review-findings.md) separates repaired defects, remaining release evidence, and product decisions from this chronological investigation record.
