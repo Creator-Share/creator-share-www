@@ -403,3 +403,9 @@ The adjacent direct-read boundary had the same defect: a normal authenticated de
 The account-state pgTAP file adds eight active, banned, expired-ban, and soft-deleted delegate assertions. The existing real-JWT HTTP test now checks both delegated tenant reads and the portal-list RPC around the Auth ban. Existing transaction-level mutation locks remain unchanged. Strict replay changes only those two function bodies and preserves all eight legacy-data projections. TypeScript, lint, and all 1,607 selected server-free tests pass. Hosted evidence for the delegate extension and the pending browser-state cleanup is still required.
 
 Publication run 35197836385 and WebKit run 35197836392 passed on 817e2de. The complete hosted suite validates the global account-state repair and the 1,635-line obsolete-function cleanup, including 65 pgTAP files with 2,148 assertions and all three Supabase HTTP tests. The retained real JWT loses private administrator reads and writes after an Auth ban while public reads still succeed. Subsequent delegate and browser-state changes remain a separate pending checkpoint.
+
+## Delegate account-state and browser cleanup validation
+
+Publication run 35199012868 and WebKit run 35199012853 passed at 231c0d7. This validates the delegate account-state extension, retained-JWT HTTP regression, and removal of unused browser reservation context. Hosted evidence includes 1,707 offline tests, 66 dev-server tests, 99 provider contracts, 65 pgTAP files with 2,156 assertions, 15 catalog tests, three Supabase HTTP tests, and all required concurrency and cleanup harnesses. FF-083 is complete. Local services remained stopped.
+
+The release checklists now distinguish checks that can run through authorized provider APIs from physical-device evidence and product decisions. Removed stale test counts, unsupported universal browser-behavior claims, and obsolete overnight-agent instructions. This documentation cleanup does not waive a release gate.

@@ -1,6 +1,6 @@
 # Manual Audit Checklist
 
-Everything on this list requires a human. Each item is here because it needs a credential, a console, a physical device, or a judgment call that cannot be automated or verified from the repository. Items are ordered so that the blocking ones come first.
+These release items require explicit authorization, protected external evidence, physical hardware, or product judgment. Repository CI alone cannot complete them. Authorized API-driven checks can automate external verification; physical-device behavior and product decisions still need the owner or operator.
 
 The repository classifies every test-shaped file. Required lanes run in CI. Optional provider canaries and imported harness support modules are inventoried separately and are not misrepresented as required tests.
 
@@ -66,11 +66,9 @@ Automated WebKit coverage is browser-engine emulation with an iPhone profile. It
 4. Return after process eviction.
 5. Confirm no sponsor, contact, or payment data appears in browser storage at any point.
 
-Note the exact shape of the automated coverage, because it is narrower than it first appears. `tests/advocates/portal-catalog-browser.spec.ts` holds 15 tests, and exactly one of them runs under WebKit: `recovers version-bound drafts after mobile WebKit back and forward traversal`. The other 14, including every `beforeunload` and history-confirm guard, run in Chromium only. Playwright's WebKit never emits native `beforeunload` or history `confirm` dialogs, and real Mobile Safari does present them.
+The WebKit workflow selects `recovers version-bound drafts after mobile WebKit back and forward traversal` from `tests/advocates/portal-catalog-browser.spec.ts`. Its other navigation and dialog cases run in the Chromium lane. The selected WebKit case does not establish physical iOS navigation, warning-dialog, email-client, or process-eviction behavior.
 
-**This manual pass is therefore the only evidence covering the unsaved-change guard on the target engine.** It is not optional.
-
-(This corrects an earlier note here that said four tests were skipped in WebKit. That described the lane before the FF-049 revert; one test runs in WebKit today.)
+Record what the physical device actually does, including whether a warning appears and whether draft recovery succeeds when it does not. Do not infer that behavior from Playwright's emulated device or from a generic browser-support claim.
 
 ---
 
@@ -102,39 +100,18 @@ I have deliberately not changed this, because mutating branch protection needs y
 
 ---
 
-## 7. Your decision: overnight autonomy
+## Scope of automated evidence
 
-If you want work to continue while you are away, two things need to be set up, because neither is automatic:
+The earlier traceability sweep is historical. Its aggregate coverage verdicts do not establish current correctness. The current refund-accounting and analytics-disclosure findings remain implementation blockers even though earlier suites were green. Use the revision-bound [review findings](./advocate-review-findings.md), the release manifest, and the exact hosted workflow results.
 
-- A **cloud schedule**, since a session loop stops when this session closes.
-- A **permission allowlist** for the commands the work actually needs. Two commands were denied by the permission classifier during this work, `git checkout --` and `git show`, each of which would stall an unattended run until you returned.
+## Checks that belong in CI
 
----
+These checks are automated. Their passing evidence must match the revision being released:
 
-## A note on the release-gate traceability sweep
+- Test-file classification, with required, optional, support, and overlay lanes represented explicitly.
+- The complete pgTAP suite from a clean migration replay, plus required authority and cleanup concurrency harnesses.
+- Browser checkout request and navigation parity across primary and advocate origins. The provider handoff is intercepted; this is not live provider execution.
+- The offline email-proof provider contract in a network namespace without outbound access.
+- Staging guards that reject production provider automation.
 
-A parallel sweep classified the roadmap release gates as 14 automated, 32 partial, 12 hosted-only, and 5 uncovered. Treat the partial count as conservative rather than as a work queue.
-
-Five of the five originally uncovered gates have now been addressed, and spot checks of the partial ones keep finding them substantially covered already:
-
-- Retention cleanup jobs: the hourly `17 * * * *` schedule is asserted against `vercel.json`, and `sponsor_authentication` is a first-class retention step with failure-path assertions.
-- Webhook idempotency: duplicate replay returning the exact durable result is asserted for both providers.
-- Visitor secret separation: the generic pairwise check was already asserted; only the payment-key instances were added.
-
-Two of the sweep's specific claims were wrong on inspection. The legacy invitation branch it flagged as an escalation risk is an intentional compatibility path documented by FF-042 that still requires a fresh `otp` session, and its real defect was missing coverage rather than missing enforcement. A claimed PayPal weakness turned out to be my test being wrong and the implementation being stricter than assumed.
-
-**A follow-up adjudication has now settled this.** The sixteen highest-value partial gates were each re-examined against source, with instructions to name the exact missing assertion if one existed. All sixteen came back covered, with specific files, line numbers, and quoted assertion text rather than inference from file names. The gates adjudicated were: two-response invitation redemption and its exact proof type, `verifyOtp` consuming that type, single-use under concurrency, explicit continuation before redemption, no session on page load or scanner fetch, magic links across cookie jars, no token leak into URLs or referrers or storage or analytics or history or logs, account creation limited to a validated claim or bounded registration, cancellation and payment-method management requiring an unexpired receipt bound to a live session, passwordless limiter partitioning with a separate verification limiter, webhook idempotency and authority, RLS and least-privilege grants on exposed tables, advocate roles being unable to read sponsor contact or raw tracking data, audit redaction and append-only protections, and browser lifecycle forensics privacy and 90 day removal.
-
-Because a clean sixteen out of sixteen invites suspicion, one verdict was independently re-checked by hand: the passwordless partitioning claim cites `supabase/tests/sponsor_passwordless_email_delivery_limits.test.sql` asserting that exhausting the public recipient pool still preserves capacity for a validated initial claim. Those assertions exist verbatim at the cited lines. The evidence is real.
-
-**Conclusion: the partial count was a classification artefact, not a backlog.** The residual work in these gates is hosted verification, which belongs on the manual list above rather than in CI.
-
-## Explicitly not on this list
-
-The following are automated and enforced, and need no manual verification:
-
-- Every test-shaped file is classified, with required, optional, support, and overlay lanes represented honestly.
-- The complete pgTAP suite, 63 files and 2,131 tests, from a clean reset.
-- Checkout parity across Stripe and PayPal on both a primary origin and an advocate subdomain, in a real browser.
-- The 99-test offline provider contract, executed inside a network namespace with no outbound interface.
-- Provider automation cannot be set to `active` in staging: it throws, and that is test-locked.
+CI results do not replace the target-state inventory, provider canaries, physical-device observations, or owner decisions above.

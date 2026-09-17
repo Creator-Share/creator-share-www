@@ -46,6 +46,14 @@ The provider dispute is fully restored, but its summed USD debit and credit stil
 
 Cumulative cent allocation remains the initial recommendation, subject to an explicit treatment of dispute restoration and rounding residuals. Sub-cent storage is an alternative, but still needs precision, residual, full-refund, and reporting rules. Neither option permits silently discarding adjustments.
 
+## Alternative using existing immutable payment facts
+
+A fractional representation need not add a separately rounded normalized amount to every adjustment. The original payment already records normalized USD cents `B` and charged minor units `A`; an adjustment of `x` original-currency minor units can derive the exact rational USD-cent value `B * x / A`. The original movement reference supplies the immutable denominator and conversion evidence. Integer numerator arithmetic preserves exact sums within that payment, a full refund reverses `B`, and an equal dispute debit and credit cancel even with an intervening refund.
+
+This uses the ratio of the actual original amounts, including original charge rounding. It is a proposed accounting convention, not a claim that dividing by the quoted conversion rate gives the same result. Cross-payment aggregation and whole-cent presentation still need explicit rounding rules. Independently rounded category displays can differ from a rounded net total; the reporting contract must explain or reconcile that residual. Existing positive whole-cent ledger constraints and consumers would still need coordinated changes.
+
+A standalone BigInt model examined 11,534 positive adjustment amounts, including full refunds, across five original-amount pairs, and 50,000 amount combinations for the ordering dispute debit, refund, then matching dispute credit. Exact numerator sums reconciled in every case. These are mathematical model checks, not production adapter, database, concurrency, event-order permutation, or provider evidence. No accounting behavior has changed. This alternative remains subject to the same owner decision as cumulative whole-cent allocation.
+
 ## Implementation boundaries to change together
 
 | Boundary | Current constraint or responsibility |
