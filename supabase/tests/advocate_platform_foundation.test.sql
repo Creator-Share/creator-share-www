@@ -1346,6 +1346,59 @@ SELECT extensions.ok(
   'raw audit forensics are isolated with an exact 90-day expiry'
 );
 
+SELECT set_config(
+  'request.headers',
+  '{"x-forwarded-for":"192.0.2.123","user-agent":"untrusted-postgrest-hop"}',
+  true
+);
+SELECT audit.set_actor_context(
+  context_actor_type => 'system',
+  context_system_actor => 'foundation-test',
+  context_tool => 'database-test',
+  context_request_id => 'request-foundation-missing-network'
+);
+UPDATE public.advocates
+SET display_name = 'Foundation Missing Network Evidence'
+WHERE id = (SELECT value FROM test_advocate_context WHERE key = 'advocate');
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1 FROM audit.audit_events event
+    WHERE event.request_id = 'request-foundation-missing-network'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM audit.audit_event_forensics forensic
+    JOIN audit.audit_events event ON event.id = forensic.audit_event_id
+    WHERE event.request_id = 'request-foundation-missing-network'
+  ),
+  'missing application forensics are not replaced by PostgREST hop headers'
+);
+
+SELECT audit.set_actor_context(
+  context_actor_type => 'system',
+  context_system_actor => 'foundation-test',
+  context_tool => 'database-test',
+  context_request_id => 'request-foundation-explicit-network',
+  context_client_ip => '203.0.113.9',
+  context_user_agent => 'application-validated-agent'
+);
+UPDATE public.advocates
+SET display_name = 'Foundation Explicit Network Evidence'
+WHERE id = (SELECT value FROM test_advocate_context WHERE key = 'advocate');
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1 FROM audit.audit_event_forensics forensic
+    JOIN audit.audit_events event ON event.id = forensic.audit_event_id
+    WHERE event.request_id = 'request-foundation-explicit-network'
+      AND forensic.client_ip = '203.0.113.9'
+      AND forensic.user_agent = 'application-validated-agent'
+      AND forensic.expires_at = forensic.captured_at + interval '90 days'
+  ),
+  'explicit application forensics retain their source and retention deadline'
+);
+SELECT set_config('request.headers', '{}', true);
+
+
 SELECT extensions.throws_ok(
   $$
     DO $body$

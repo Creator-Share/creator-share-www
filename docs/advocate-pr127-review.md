@@ -273,3 +273,9 @@ The preceding application cleanup passed publication run 35187383041 and WebKit 
 ## Measured product deferral recommendations
 
 Measured the dedicated application surfaces and checked shared dependencies before refining the requested deferral recommendations. Public impact counters remain the clearest first option. Staff-managed delegate invitations are less attractive as a code-reduction strategy: initial-owner onboarding still needs shared proof and delivery machinery, while staff administration needs its own audited authority boundary. Plain-text branding affects only 390 lines in its dedicated editor and validator. The new deferral analysis distinguishes file footprints from promised savings and explicitly states that public-counter deferral does not repair private analytics disclosure. No capability has been removed.
+
+## Database forensic hop correction
+
+The audit identity reader prioritizes auth.uid over context actor identity when present; this review did not establish an actor-identity bypass. A separate capture defect was reproduced: explicit empty application IP and user-agent context still produced a forensic row containing synthetic PostgREST hop headers. Removing those fallbacks makes the same trigger execution produce no forensic row while preserving the business audit event.
+
+Strict replay changes only audit.capture_row_change among 5,280 catalog entries and leaves representative legacy data identical. Added two pgTAP assertions for absent context and explicit application evidence with its exact 90-day expiry. This does not claim hosted authorization validation; the next database gate must run those assertions. FF-076 records the pending correction, and the roadmap now distinguishes row-audit context from infrastructure transport logs.

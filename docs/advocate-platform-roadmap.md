@@ -254,6 +254,8 @@ Each event can record:
 
 Raw row copying is forbidden because it would create a second sponsor PII database.
 
+Row-audit IP and user-agent fields come only from explicit audit context. Missing context stays unavailable; the trigger must not replace it with PostgREST request headers, which may describe the application-to-database hop instead of the original request. Direct database transport evidence remains in managed infrastructure logs.
+
 The forensic row audit is not an advocate delegate presentation model. Advocate users with `portal.audit.view` receive a separate append only, policy versioned disclosure ledger populated at business change write time. It has no historical backfill. Each disclosed entry contains only an opaque tenant cursor, a timestamp rounded to the second, one fixed event key, one fixed actor kind, one privacy limited actor label, and the exact fixed area keys for that event. Portal member labels may contain a validated first name and last initial. Creator Share staff and automation use fixed generic labels.
 
 The delegate ledger contains only disclosure fields plus private, ungranted transaction and source sequence links for deduplication and forensic correlation. Its reader never exposes sponsor facts, contact data, money, global sequences, source audit identifiers, account identifiers, row keys, changed column names, reasons, request metadata, network forensics, provider identifiers, or free form text. The reader is tenant scoped, permission checked, ordered by newest recorded ledger entry, and limited to fixed pages of 50 entries using opaque cursors. Unknown event shapes and near matches are omitted instead of being guessed into public history.

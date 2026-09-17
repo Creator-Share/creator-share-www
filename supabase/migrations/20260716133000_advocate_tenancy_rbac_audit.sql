@@ -2873,14 +2873,10 @@ BEGIN
     v_metadata := '{}'::jsonb;
   END;
 
-  v_client_ip := COALESCE(
-    NULLIF(current_setting('app.audit.client_ip', true), ''),
-    NULLIF(v_headers ->> 'x-forwarded-for', '')
-  );
-  v_user_agent := COALESCE(
-    NULLIF(current_setting('app.audit.user_agent', true), ''),
-    NULLIF(v_headers ->> 'user-agent', '')
-  );
+  -- PostgREST headers describe the database request hop, not necessarily the
+  -- original actor. Missing application evidence must remain unavailable.
+  v_client_ip := NULLIF(current_setting('app.audit.client_ip', true), '');
+  v_user_agent := NULLIF(current_setting('app.audit.user_agent', true), '');
   v_reason := NULLIF(btrim(current_setting('app.audit.reason', true)), '');
 
   IF v_client_ip IS NOT NULL OR v_user_agent IS NOT NULL THEN
