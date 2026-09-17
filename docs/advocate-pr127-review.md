@@ -227,3 +227,7 @@ A further retention migration consolidation removes 189 net lines with exact fin
 ## Final-definition migration cleanup candidate
 
 Removed 413 net SQL lines by retaining final definitions and their grants at valid dependency sites, moving the retention step vocabulary before its first use, and eliminating one intermediate audit actor-context version. Strict replay validates all function bodies and matches all 5,280 final catalog entries plus legacy fixture data byte for byte. The early audit actor-context implementation remains necessary for migration-time callers before the publication transport table exists. Hosted validation is pending; no product scope or final schema changed.
+
+## PostCSS issue closure
+
+The dependency refresh resolves the application and sanitize-html to the same installed PostCSS 8.5.28 package. Complete publication and WebKit logs for `7cae034` contain no `Package postcss can't be external` warning. The hosted production build, dev-server lane, and both browser overlays passed. FF-061 is complete; its earlier recommendation to retain the warning until a deliberate dependency refresh is superseded by this measured result.
