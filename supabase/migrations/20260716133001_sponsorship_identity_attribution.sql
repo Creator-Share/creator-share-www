@@ -2038,7 +2038,20 @@ SECURITY INVOKER
 SET search_path = ''
 AS $$
 BEGIN
-  RAISE EXCEPTION 'Sponsorship attribution decisions are immutable'
+  IF TG_OP = 'UPDATE'
+     AND OLD.finalized_at IS NULL
+     AND OLD.conversion_occurred_at IS NULL
+     AND NEW.finalized_at IS NOT NULL
+     AND NEW.conversion_occurred_at IS NOT NULL
+     AND NEW.sponsorship_intent_id IS NOT DISTINCT FROM OLD.sponsorship_intent_id
+     AND NEW.policy_version IS NOT DISTINCT FROM OLD.policy_version
+     AND NEW.analytics_eligible IS NOT DISTINCT FROM OLD.analytics_eligible
+     AND NEW.analytics_exclusion_reason IS NOT DISTINCT FROM
+       OLD.analytics_exclusion_reason THEN
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION 'Final sponsorship attribution decisions are immutable'
     USING ERRCODE = '42501';
 END;
 $$;
@@ -2806,7 +2819,11 @@ AS $$
 DECLARE
   v_claim public.sponsorship_account_claims%ROWTYPE;
   v_now timestamptz := clock_timestamp();
-  v_lease_timeout interval := interval '10 minutes';
+  v_operation text := nullif(
+    pg_catalog.current_setting('app.email_outbox.lifecycle_operation', true),
+    ''
+  );
+  v_claim_deliverable boolean;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     RAISE EXCEPTION 'Email outbox rows cannot be deleted'
@@ -2827,8 +2844,9 @@ BEGIN
 
     IF NOT FOUND
        OR v_claim.status <> 'pending'
+       OR v_claim.expires_at <= v_now
        OR NEW.sponsor_identity_id IS DISTINCT FROM v_claim.sponsor_identity_id THEN
-      RAISE EXCEPTION 'Sponsor welcome email must match a pending account claim'
+      RAISE EXCEPTION 'Sponsor welcome email must match a deliverable account claim'
         USING ERRCODE = '23514';
     END IF;
 
@@ -2839,58 +2857,21 @@ BEGIN
         USING ERRCODE = '23514';
     END IF;
 
-    NEW.max_attempts := 8;
+    NEW.max_attempts := 128;
     NEW.available_at := v_now;
     NEW.attempt_count := 0;
     NEW.locked_at := NULL;
     NEW.locked_by := NULL;
+    NEW.locked_lease_token_digest := NULL;
     NEW.sent_at := NULL;
     NEW.provider_message_id := NULL;
     NEW.email_log_id := NULL;
     NEW.last_error := NULL;
     NEW.cancelled_at := NULL;
-    NEW.contact_retention_expires_at := NULL;
     NEW.contact_redacted_at := NULL;
     NEW.created_at := v_now;
     NEW.updated_at := v_now;
-    RETURN NEW;
-  END IF;
-
-  IF OLD.contact_redacted_at IS NULL
-     AND OLD.contact_retention_expires_at IS NOT NULL
-     AND OLD.contact_retention_expires_at <= v_now
-     AND NEW.recipient_email_ciphertext IS NULL
-     AND NEW.recipient_email_hmac IS NULL
-     AND NEW.email_normalization_version IS NULL
-     AND NEW.email_hmac_key_version IS NULL
-     AND NEW.email_encryption_key_version IS NULL
-     AND NEW.secret_payload_ciphertext IS NULL
-     AND NEW.contact_redacted_at IS NOT NULL
-     AND (
-       to_jsonb(NEW) - ARRAY[
-         'recipient_email_ciphertext',
-         'recipient_email_hmac',
-         'email_normalization_version',
-         'email_hmac_key_version',
-         'email_encryption_key_version',
-         'secret_payload_ciphertext',
-         'contact_redacted_at',
-         'updated_at'
-       ]::text[]
-     ) = (
-       to_jsonb(OLD) - ARRAY[
-         'recipient_email_ciphertext',
-         'recipient_email_hmac',
-         'email_normalization_version',
-         'email_hmac_key_version',
-         'email_encryption_key_version',
-         'secret_payload_ciphertext',
-         'contact_redacted_at',
-         'updated_at'
-       ]::text[]
-     ) THEN
-    NEW.contact_redacted_at := v_now;
-    NEW.updated_at := v_now;
+    NEW.contact_retention_expires_at := NEW.created_at + interval '90 days';
     RETURN NEW;
   END IF;
 
@@ -2899,127 +2880,157 @@ BEGIN
      OR NEW.account_claim_id IS DISTINCT FROM OLD.account_claim_id
      OR NEW.sponsor_identity_id IS DISTINCT FROM OLD.sponsor_identity_id
      OR NEW.dedupe_key IS DISTINCT FROM OLD.dedupe_key
-     OR NEW.recipient_email_ciphertext IS DISTINCT FROM OLD.recipient_email_ciphertext
-     OR NEW.recipient_email_hmac IS DISTINCT FROM OLD.recipient_email_hmac
-     OR NEW.email_normalization_version IS DISTINCT FROM OLD.email_normalization_version
-     OR NEW.email_hmac_key_version IS DISTINCT FROM OLD.email_hmac_key_version
-     OR NEW.email_encryption_key_version IS DISTINCT FROM OLD.email_encryption_key_version
      OR NEW.template_key IS DISTINCT FROM OLD.template_key
      OR NEW.template_data IS DISTINCT FROM OLD.template_data
-     OR NEW.secret_payload_ciphertext IS DISTINCT FROM OLD.secret_payload_ciphertext
      OR NEW.max_attempts IS DISTINCT FROM OLD.max_attempts
-     OR NEW.contact_redacted_at IS DISTINCT FROM OLD.contact_redacted_at
-     OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
-    RAISE EXCEPTION 'Email outbox delivery payload is immutable'
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at
+     OR NEW.contact_retention_expires_at IS DISTINCT FROM OLD.contact_retention_expires_at THEN
+    RAISE EXCEPTION 'Email outbox delivery envelope is immutable'
       USING ERRCODE = '42501';
   END IF;
 
-  IF NEW.status IS DISTINCT FROM OLD.status AND NOT (
-    (OLD.status IN ('pending', 'failed') AND NEW.status IN ('processing', 'cancelled'))
-    OR (OLD.status = 'processing' AND NEW.status IN ('sent', 'failed', 'cancelled'))
-  ) THEN
-    RAISE EXCEPTION 'Illegal email outbox transition from % to %', OLD.status, NEW.status
-      USING ERRCODE = '23514';
+  IF v_operation <> 'purge'
+     AND (
+       NEW.recipient_email_ciphertext IS DISTINCT FROM OLD.recipient_email_ciphertext
+       OR NEW.recipient_email_hmac IS DISTINCT FROM OLD.recipient_email_hmac
+       OR NEW.email_normalization_version IS DISTINCT FROM OLD.email_normalization_version
+       OR NEW.email_hmac_key_version IS DISTINCT FROM OLD.email_hmac_key_version
+       OR NEW.email_encryption_key_version IS DISTINCT FROM OLD.email_encryption_key_version
+       OR NEW.secret_payload_ciphertext IS DISTINCT FROM OLD.secret_payload_ciphertext
+       OR NEW.contact_redacted_at IS DISTINCT FROM OLD.contact_redacted_at
+     ) THEN
+    RAISE EXCEPTION 'Email outbox contact envelope is immutable outside retention purge'
+      USING ERRCODE = '42501';
   END IF;
 
-  IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
-    IF OLD.status = 'processing'
-       AND NEW.locked_by IS DISTINCT FROM OLD.locked_by THEN
-      IF OLD.locked_at > v_now - v_lease_timeout THEN
-        RAISE EXCEPTION 'Email delivery lease is still active'
-          USING ERRCODE = '55P03';
-      END IF;
-      IF OLD.attempt_count >= OLD.max_attempts THEN
-        RAISE EXCEPTION 'Email delivery retry limit has been reached'
-          USING ERRCODE = '23514';
-      END IF;
-      IF nullif(btrim(NEW.locked_by), '') IS NULL THEN
-        RAISE EXCEPTION 'Email delivery lease reclaim requires a worker identity'
-          USING ERRCODE = '23514';
-      END IF;
-      IF NEW.available_at IS DISTINCT FROM OLD.available_at
-         OR NEW.attempt_count IS DISTINCT FROM OLD.attempt_count
-         OR NEW.locked_at IS DISTINCT FROM OLD.locked_at
-         OR NEW.sent_at IS DISTINCT FROM OLD.sent_at
-         OR NEW.provider_message_id IS DISTINCT FROM OLD.provider_message_id
-         OR NEW.email_log_id IS DISTINCT FROM OLD.email_log_id
-         OR NEW.last_error IS DISTINCT FROM OLD.last_error
-         OR NEW.cancelled_at IS DISTINCT FROM OLD.cancelled_at
-         OR NEW.contact_retention_expires_at IS DISTINCT FROM OLD.contact_retention_expires_at THEN
-        RAISE EXCEPTION 'Email delivery lease fields are server managed'
-          USING ERRCODE = '42501';
-      END IF;
-      NEW.attempt_count := OLD.attempt_count + 1;
-      NEW.locked_at := v_now;
-      NEW.sent_at := NULL;
-      NEW.cancelled_at := NULL;
-      NEW.last_error := NULL;
-    ELSIF NEW.available_at IS DISTINCT FROM OLD.available_at
-       OR NEW.attempt_count IS DISTINCT FROM OLD.attempt_count
-       OR NEW.locked_at IS DISTINCT FROM OLD.locked_at
-       OR NEW.locked_by IS DISTINCT FROM OLD.locked_by
-       OR NEW.sent_at IS DISTINCT FROM OLD.sent_at
-       OR NEW.provider_message_id IS DISTINCT FROM OLD.provider_message_id
-       OR NEW.email_log_id IS DISTINCT FROM OLD.email_log_id
-       OR NEW.last_error IS DISTINCT FROM OLD.last_error
-       OR NEW.cancelled_at IS DISTINCT FROM OLD.cancelled_at
-       OR NEW.contact_retention_expires_at IS DISTINCT FROM OLD.contact_retention_expires_at THEN
-      RAISE EXCEPTION 'Email delivery lifecycle fields require a legal status transition or stale lease reclaim'
-        USING ERRCODE = '42501';
+  IF v_operation = 'claim' THEN
+    SELECT
+      claim.status = 'pending'
+      AND claim.expires_at > v_now
+      AND claim.revoked_at IS NULL
+    INTO v_claim_deliverable
+    FROM public.sponsorship_account_claims claim
+    WHERE claim.id = OLD.account_claim_id;
+
+    IF NOT COALESCE(v_claim_deliverable, false)
+       OR OLD.contact_redacted_at IS NOT NULL
+       OR OLD.contact_retention_expires_at <= v_now
+       OR OLD.attempt_count >= OLD.max_attempts
+       OR NOT (
+         (
+           OLD.status IN ('pending', 'failed')
+           AND OLD.available_at <= v_now
+         )
+         OR
+         (
+           OLD.status = 'processing'
+           AND OLD.locked_at <= v_now - interval '10 minutes'
+         )
+       )
+       OR octet_length(NEW.locked_lease_token_digest) <> 32
+       OR nullif(btrim(NEW.locked_by), '') IS NULL THEN
+      RAISE EXCEPTION 'Email delivery claim is not eligible'
+        USING ERRCODE = '55P03';
     END IF;
 
-    NEW.updated_at := v_now;
-    RETURN NEW;
-  END IF;
-
-  IF NEW.status IS DISTINCT FROM OLD.status THEN
-    IF NEW.status = 'processing' THEN
-      IF OLD.available_at > v_now THEN
-        RAISE EXCEPTION 'Email delivery is not yet available for retry'
-          USING ERRCODE = '55P03';
-      END IF;
-      IF OLD.attempt_count >= OLD.max_attempts THEN
-        RAISE EXCEPTION 'Email delivery retry limit has been reached'
-          USING ERRCODE = '23514';
-      END IF;
-      IF nullif(btrim(NEW.locked_by), '') IS NULL THEN
-        RAISE EXCEPTION 'Processing email requires a worker identity'
-          USING ERRCODE = '23514';
-      END IF;
-      NEW.locked_at := v_now;
-      NEW.attempt_count := OLD.attempt_count + 1;
-      NEW.sent_at := NULL;
-      NEW.cancelled_at := NULL;
-      NEW.last_error := NULL;
-      NEW.contact_retention_expires_at := NULL;
-    ELSIF NEW.status = 'sent' THEN
-      NEW.sent_at := v_now;
-      NEW.cancelled_at := NULL;
-      NEW.last_error := NULL;
-      NEW.locked_at := NULL;
-      NEW.locked_by := NULL;
-      NEW.contact_retention_expires_at := v_now + interval '90 days';
-    ELSIF NEW.status = 'failed' THEN
-      IF nullif(btrim(NEW.last_error), '') IS NULL THEN
-        RAISE EXCEPTION 'Failed email delivery requires an error summary'
-          USING ERRCODE = '23514';
-      END IF;
-      NEW.sent_at := NULL;
-      NEW.cancelled_at := NULL;
-      NEW.locked_at := NULL;
-      NEW.locked_by := NULL;
-      IF OLD.attempt_count >= OLD.max_attempts THEN
-        NEW.contact_retention_expires_at := v_now + interval '90 days';
-      ELSE
-        NEW.contact_retention_expires_at := NULL;
-      END IF;
-    ELSIF NEW.status = 'cancelled' THEN
-      NEW.cancelled_at := v_now;
-      NEW.sent_at := NULL;
-      NEW.locked_at := NULL;
-      NEW.locked_by := NULL;
-      NEW.contact_retention_expires_at := v_now + interval '90 days';
+    NEW.status := 'processing';
+    NEW.available_at := OLD.available_at;
+    NEW.attempt_count := OLD.attempt_count + 1;
+    NEW.locked_at := v_now;
+    NEW.sent_at := NULL;
+    NEW.provider_message_id := NULL;
+    NEW.email_log_id := NULL;
+    NEW.last_error := NULL;
+    NEW.cancelled_at := NULL;
+  ELSIF v_operation = 'complete' THEN
+    IF OLD.status <> 'processing' THEN
+      RAISE EXCEPTION 'Only a processing email can be completed'
+        USING ERRCODE = '23514';
     END IF;
+
+    NEW.status := 'sent';
+    NEW.available_at := OLD.available_at;
+    NEW.attempt_count := OLD.attempt_count;
+    NEW.locked_at := NULL;
+    NEW.locked_by := NULL;
+    NEW.locked_lease_token_digest := NULL;
+    NEW.sent_at := v_now;
+    NEW.last_error := NULL;
+    NEW.cancelled_at := NULL;
+  ELSIF v_operation = 'fail' THEN
+    IF OLD.status <> 'processing'
+       OR nullif(btrim(NEW.last_error), '') IS NULL THEN
+      RAISE EXCEPTION 'Only a processing email can record a delivery failure'
+        USING ERRCODE = '23514';
+    END IF;
+
+    NEW.status := 'failed';
+    NEW.attempt_count := OLD.attempt_count;
+    NEW.locked_at := NULL;
+    NEW.locked_by := NULL;
+    NEW.locked_lease_token_digest := NULL;
+    NEW.sent_at := NULL;
+    NEW.provider_message_id := NULL;
+    NEW.email_log_id := NULL;
+    NEW.cancelled_at := NULL;
+  ELSIF v_operation = 'purge' THEN
+    SELECT
+      claim.status = 'pending'
+      AND claim.expires_at > v_now
+      AND claim.revoked_at IS NULL
+    INTO v_claim_deliverable
+    FROM public.sponsorship_account_claims claim
+    WHERE claim.id = OLD.account_claim_id;
+
+    IF OLD.contact_redacted_at IS NOT NULL
+       OR NOT (
+         OLD.contact_retention_expires_at <= v_now
+         OR NOT COALESCE(v_claim_deliverable, false)
+       )
+       OR NEW.recipient_email_ciphertext IS NOT NULL
+       OR NEW.recipient_email_hmac IS NOT NULL
+       OR NEW.email_normalization_version IS NOT NULL
+       OR NEW.email_hmac_key_version IS NOT NULL
+       OR NEW.email_encryption_key_version IS NOT NULL
+       OR NEW.secret_payload_ciphertext IS NOT NULL
+       OR NEW.contact_redacted_at IS NULL THEN
+      RAISE EXCEPTION 'Email contact envelope is not eligible for retention purge'
+        USING ERRCODE = '23514';
+    END IF;
+
+    NEW.status := CASE
+      WHEN OLD.status = 'sent' THEN 'sent'::public.email_outbox_status
+      WHEN OLD.status = 'cancelled' THEN 'cancelled'::public.email_outbox_status
+      ELSE 'cancelled'::public.email_outbox_status
+    END;
+    NEW.available_at := OLD.available_at;
+    NEW.attempt_count := OLD.attempt_count;
+    NEW.locked_at := NULL;
+    NEW.locked_by := NULL;
+    NEW.locked_lease_token_digest := NULL;
+    NEW.sent_at := CASE WHEN OLD.status = 'sent' THEN OLD.sent_at ELSE NULL END;
+    NEW.provider_message_id := CASE
+      WHEN OLD.status = 'sent' THEN OLD.provider_message_id
+      ELSE NULL
+    END;
+    NEW.email_log_id := CASE
+      WHEN OLD.status = 'sent' THEN OLD.email_log_id
+      ELSE NULL
+    END;
+    NEW.last_error := CASE
+      WHEN OLD.status = 'sent' THEN OLD.last_error
+      WHEN OLD.contact_retention_expires_at <= v_now
+        THEN 'Contact retention expired before delivery'
+      ELSE 'Account claim is no longer deliverable'
+    END;
+    NEW.cancelled_at := CASE
+      WHEN OLD.status = 'sent' THEN NULL
+      ELSE COALESCE(OLD.cancelled_at, v_now)
+    END;
+    NEW.contact_redacted_at := v_now;
+  ELSE
+    RAISE EXCEPTION 'Email outbox lifecycle changes require a narrow worker operation'
+      USING ERRCODE = '42501';
   END IF;
 
   NEW.updated_at := v_now;
@@ -3054,7 +3065,21 @@ DECLARE
   v_now timestamptz := clock_timestamp();
   v_exposures_deleted bigint;
   v_visitors_deleted bigint;
+  v_request_id text := nullif(
+    current_setting('app.data_retention.request_id', true),
+    ''
+  );
+  v_trace_id text := nullif(
+    current_setting('app.data_retention.trace_id', true),
+    ''
+  );
+  v_run_id text := nullif(
+    current_setting('app.data_retention.run_id', true),
+    ''
+  );
 BEGIN
+  PERFORM private.require_data_retention_service_role();
+
   IF batch_size IS NULL OR batch_size < 1 OR batch_size > 5000 THEN
     RAISE EXCEPTION 'Retention batch size must be between 1 and 5000'
       USING ERRCODE = '22023';
@@ -3064,10 +3089,13 @@ BEGIN
     context_actor_type => 'system'::audit.audit_actor_type,
     context_system_actor => 'retention-worker',
     context_tool => 'database-retention',
+    context_request_id => v_request_id,
+    context_trace_id => v_trace_id,
     context_reason => 'Expired advocate tracking retention',
     context_metadata => jsonb_build_object(
       'operation', 'delete',
-      'resource_kind', 'advocate_tracking'
+      'resource_kind', 'advocate_tracking',
+      'batch_id', v_run_id
     )
   );
 
@@ -3084,9 +3112,7 @@ BEGIN
     WHERE exposure.id = candidate.id
     RETURNING exposure.id
   )
-  SELECT count(*)
-  INTO v_exposures_deleted
-  FROM deleted;
+  SELECT count(*) INTO v_exposures_deleted FROM deleted;
 
   WITH candidates AS MATERIALIZED (
     SELECT visitor.id
@@ -3106,12 +3132,9 @@ BEGIN
     WHERE visitor.id = candidate.id
     RETURNING visitor.id
   )
-  SELECT count(*)
-  INTO v_visitors_deleted
-  FROM deleted;
+  SELECT count(*) INTO v_visitors_deleted FROM deleted;
 
-  RETURN QUERY
-  SELECT v_exposures_deleted, v_visitors_deleted;
+  RETURN QUERY SELECT v_exposures_deleted, v_visitors_deleted;
 END;
 $$;
 
@@ -3131,7 +3154,21 @@ AS $$
 DECLARE
   v_now timestamptz := clock_timestamp();
   v_redacted_count bigint;
+  v_request_id text := nullif(
+    current_setting('app.data_retention.request_id', true),
+    ''
+  );
+  v_trace_id text := nullif(
+    current_setting('app.data_retention.trace_id', true),
+    ''
+  );
+  v_run_id text := nullif(
+    current_setting('app.data_retention.run_id', true),
+    ''
+  );
 BEGIN
+  PERFORM private.require_data_retention_service_role();
+
   IF batch_size IS NULL OR batch_size < 1 OR batch_size > 5000 THEN
     RAISE EXCEPTION 'Retention batch size must be between 1 and 5000'
       USING ERRCODE = '22023';
@@ -3141,10 +3178,13 @@ BEGIN
     context_actor_type => 'system'::audit.audit_actor_type,
     context_system_actor => 'retention-worker',
     context_tool => 'database-retention',
+    context_request_id => v_request_id,
+    context_trace_id => v_trace_id,
     context_reason => 'Expired encrypted gateway payload retention',
     context_metadata => jsonb_build_object(
       'operation', 'redact',
-      'resource_kind', 'payment_gateway_event_payload'
+      'resource_kind', 'payment_gateway_event_payload',
+      'batch_id', v_run_id
     )
   );
 
@@ -3158,16 +3198,12 @@ BEGIN
     FOR UPDATE SKIP LOCKED
   ), redacted AS (
     UPDATE public.payment_gateway_events event
-    SET
-      payload_ciphertext = NULL,
-      payload_redacted_at = v_now
+    SET payload_ciphertext = NULL, payload_redacted_at = v_now
     FROM candidates candidate
     WHERE event.id = candidate.id
     RETURNING event.id
   )
-  SELECT count(*)
-  INTO v_redacted_count
-  FROM redacted;
+  SELECT count(*) INTO v_redacted_count FROM redacted;
 
   RETURN v_redacted_count;
 END;
@@ -3189,7 +3225,21 @@ AS $$
 DECLARE
   v_now timestamptz := clock_timestamp();
   v_redacted_count bigint;
+  v_request_id text := nullif(
+    current_setting('app.data_retention.request_id', true),
+    ''
+  );
+  v_trace_id text := nullif(
+    current_setting('app.data_retention.trace_id', true),
+    ''
+  );
+  v_run_id text := nullif(
+    current_setting('app.data_retention.run_id', true),
+    ''
+  );
 BEGIN
+  PERFORM private.require_data_retention_service_role();
+
   IF batch_size IS NULL OR batch_size < 1 OR batch_size > 5000 THEN
     RAISE EXCEPTION 'Retention batch size must be between 1 and 5000'
       USING ERRCODE = '22023';
@@ -3198,25 +3248,46 @@ BEGIN
   PERFORM audit.set_actor_context(
     context_actor_type => 'system'::audit.audit_actor_type,
     context_system_actor => 'retention-worker',
-    context_tool => 'database-retention',
-    context_reason => 'Expired welcome email contact retention',
+    context_tool => 'email-outbox-retention',
+    context_request_id => v_request_id,
+    context_trace_id => v_trace_id,
+    context_reason => 'Redact expired or undeliverable welcome email contact data',
     context_metadata => jsonb_build_object(
       'operation', 'redact',
-      'resource_kind', 'email_outbox_contact'
+      'resource_kind', 'email_outbox_contact',
+      'batch_id', v_run_id
     )
+  );
+  PERFORM pg_catalog.set_config(
+    'app.email_outbox.lifecycle_operation',
+    'purge',
+    true
   );
 
   WITH candidates AS MATERIALIZED (
     SELECT outbox.id
     FROM public.email_outbox outbox
+    LEFT JOIN public.sponsorship_account_claims claim
+      ON claim.id = outbox.account_claim_id
     WHERE outbox.contact_redacted_at IS NULL
-      AND outbox.contact_retention_expires_at <= v_now
+      AND (
+        outbox.contact_retention_expires_at <= v_now
+        OR claim.id IS NULL
+        OR claim.status <> 'pending'
+        OR claim.expires_at <= v_now
+        OR claim.revoked_at IS NOT NULL
+      )
     ORDER BY outbox.contact_retention_expires_at, outbox.id
     LIMIT batch_size
-    FOR UPDATE SKIP LOCKED
+    FOR UPDATE OF outbox SKIP LOCKED
   ), redacted AS (
     UPDATE public.email_outbox outbox
     SET
+      status = CASE
+        WHEN outbox.status = 'sent' THEN 'sent'::public.email_outbox_status
+        WHEN outbox.status = 'cancelled' THEN 'cancelled'::public.email_outbox_status
+        ELSE 'cancelled'::public.email_outbox_status
+      END,
       recipient_email_ciphertext = NULL,
       recipient_email_hmac = NULL,
       email_normalization_version = NULL,
@@ -3228,9 +3299,7 @@ BEGIN
     WHERE outbox.id = candidate.id
     RETURNING outbox.id
   )
-  SELECT count(*)
-  INTO v_redacted_count
-  FROM redacted;
+  SELECT count(*) INTO v_redacted_count FROM redacted;
 
   RETURN v_redacted_count;
 END;

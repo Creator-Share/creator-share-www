@@ -53,3 +53,7 @@ All capabilities remain in scope unless the owner approves a change.
 | Rich text editing | Editor state and formatting behavior; plain text must still be escaped | Branding supports plain text, logo, and colors |
 
 Defer public metrics first if scope reduction is approved. Post-visit attribution offers a broader simplification but changes the advocate proposition substantially. Preserve payment correctness, tenant isolation, private-data protection, and cancellation support.
+
+## Schema consolidation checkpoint
+
+The first schema cleanup consolidates 44 repeated function definitions. See [the consolidation record](./advocate-schema-consolidation.md) for the affected functions, structural comparison, legacy-data fixture comparison, and validation limits. This is a candidate awaiting real Supabase validation, not a completed release gate.

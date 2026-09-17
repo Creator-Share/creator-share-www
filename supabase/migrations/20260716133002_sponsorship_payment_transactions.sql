@@ -1040,7 +1040,8 @@ BEGIN
     (target_event_type IN (
       'checkout.session.completed',
       'checkout.session.async_payment_succeeded',
-      'checkout.session.async_payment_failed'
+      'checkout.session.async_payment_failed',
+      'checkout.session.expired'
     ) AND target_provider_object_type = 'checkout_session')
     OR
     (target_event_type IN (
@@ -1061,15 +1062,12 @@ BEGIN
     (target_event_type IN (
       'PAYMENT.CAPTURE.COMPLETED',
       'PAYMENT.CAPTURE.DENIED',
-      'PAYMENT.CAPTURE.REFUNDED',
-      'PAYMENT.CAPTURE.REVERSED'
+      'PAYMENT.CAPTURE.DECLINED'
     ) AND target_provider_object_type = 'capture')
     OR
     (target_event_type IN (
       'PAYMENT.SALE.COMPLETED',
-      'PAYMENT.SALE.DENIED',
-      'PAYMENT.SALE.REFUNDED',
-      'PAYMENT.SALE.REVERSED'
+      'PAYMENT.SALE.DENIED'
     ) AND target_provider_object_type = 'sale')
     OR
     (target_event_type IN (
@@ -1077,7 +1075,8 @@ BEGIN
       'BILLING.SUBSCRIPTION.CANCELLED',
       'BILLING.SUBSCRIPTION.SUSPENDED',
       'BILLING.SUBSCRIPTION.EXPIRED',
-      'BILLING.SUBSCRIPTION.UPDATED'
+      'BILLING.SUBSCRIPTION.UPDATED',
+      'BILLING.SUBSCRIPTION.PAYMENT.FAILED'
     ) AND target_provider_object_type = 'billing_subscription')
   ) THEN
     RAISE EXCEPTION 'Unsupported PayPal event and object type combination'
@@ -1136,10 +1135,10 @@ BEGIN
     FOR SHARE;
 
     IF NOT FOUND
-       OR v_beneficiary.status IN ('Draft', 'Archived')
-       OR (
-         v_beneficiary.budget_goal <> -1
-         AND v_beneficiary.status NOT IN ('New', 'Partially Funded')
+       OR NOT private.is_beneficiary_canonically_sponsorable(
+         v_beneficiary.status,
+         v_beneficiary.budget_goal,
+         v_beneficiary.goal_fulfilled_at
        ) THEN
       RAISE EXCEPTION 'Beneficiary is not canonically eligible for sponsorship'
         USING ERRCODE = '23514';
@@ -1173,6 +1172,24 @@ BEGIN
        OR v_domain.status <> 'active'
        OR v_domain.hostname <> v_intent.source_host THEN
       RAISE EXCEPTION 'Advocate portal is not eligible to begin checkout'
+        USING ERRCODE = '23514';
+    END IF;
+
+    IF v_intent.subject_kind = 'standard'
+       AND NOT private.is_advocate_child_eligible(
+         v_beneficiary.status,
+         v_beneficiary.budget_goal,
+         v_beneficiary.goal_fulfilled_at,
+         v_beneficiary.name,
+         v_beneficiary.username,
+         v_beneficiary.biography,
+         v_beneficiary.country,
+         v_beneficiary.location_str,
+         v_beneficiary.video_url,
+         v_beneficiary.introduction,
+         v_beneficiary.beneficiary_type
+       ) THEN
+      RAISE EXCEPTION 'Beneficiary is not eligible for an advocate child catalog'
         USING ERRCODE = '23514';
     END IF;
 
@@ -1262,9 +1279,6 @@ DECLARE
   v_intent public.sponsorship_intents%ROWTYPE;
   v_attribution public.sponsorship_attributions%ROWTYPE;
   v_policy public.sponsorship_attribution_policies%ROWTYPE;
-  v_exposure public.advocate_exposures%ROWTYPE;
-  v_kind public.sponsorship_attribution_kind;
-  v_lag interval;
 BEGIN
   SELECT intent.*
   INTO v_intent
@@ -1287,7 +1301,8 @@ BEGIN
     RETURN v_attribution;
   END IF;
 
-  IF target_conversion_occurred_at < v_intent.created_at THEN
+  IF target_conversion_occurred_at IS NULL
+     OR target_conversion_occurred_at < v_intent.created_at THEN
     RAISE EXCEPTION 'Verified conversion cannot precede its server owned intent'
       USING ERRCODE = '23514';
   END IF;
@@ -1302,104 +1317,26 @@ BEGIN
       USING ERRCODE = '23503';
   END IF;
 
-  IF v_intent.source = 'advocate_domain' THEN
-    v_kind := 'direct';
-    v_attribution.advocate_id := v_intent.source_advocate_id;
-    v_attribution.exposure_id := NULL;
-    v_lag := NULL;
-  ELSE
-    SELECT exposure.*
-    INTO v_exposure
-    FROM public.advocate_exposures exposure
-    WHERE exposure.is_qualified
-      AND exposure.occurred_at <= target_conversion_occurred_at
-      AND exposure.recorded_at <= target_conversion_occurred_at
-      AND exposure.occurred_at >= target_conversion_occurred_at
-        - make_interval(days => v_policy.observed_window_days)
-      AND NOT (
-        v_intent.auth_user_id IS NOT NULL
-        AND exposure.auth_user_id IS NOT NULL
-        AND exposure.auth_user_id <> v_intent.auth_user_id
-      )
-      AND (
-        (
-          v_intent.browser_visitor_id IS NOT NULL
-          AND exposure.browser_visitor_id = v_intent.browser_visitor_id
-          AND EXISTS (
-            SELECT 1
-            FROM public.browser_visitors visitor
-            WHERE visitor.id = v_intent.browser_visitor_id
-              AND visitor.consent_state IN ('granted', 'not_required')
-              AND visitor.revoked_at IS NULL
-              AND visitor.retention_expires_at > target_conversion_occurred_at
-          )
-        )
-        OR (
-          v_intent.auth_user_id IS NOT NULL
-          AND exposure.auth_user_id = v_intent.auth_user_id
-        )
-      )
-    ORDER BY exposure.occurred_at DESC, exposure.recorded_at DESC, exposure.id DESC
-    LIMIT 1;
-
-    IF v_exposure.id IS NULL THEN
-      v_kind := 'unattributed';
-      v_attribution.advocate_id := NULL;
-      v_attribution.exposure_id := NULL;
-      v_lag := NULL;
-    ELSE
-      v_lag := target_conversion_occurred_at - v_exposure.occurred_at;
-      v_kind := CASE
-        WHEN v_lag <= make_interval(days => v_policy.official_window_days)
-          THEN 'post_visit_attributed'::public.sponsorship_attribution_kind
-        ELSE 'post_visit_observed'::public.sponsorship_attribution_kind
-      END;
-      v_attribution.advocate_id := v_exposure.advocate_id;
-      v_attribution.exposure_id := v_exposure.id;
-    END IF;
+  IF v_attribution.policy_version IS DISTINCT FROM v_intent.attribution_policy_version THEN
+    RAISE EXCEPTION 'Provisional attribution policy does not match its intent'
+      USING ERRCODE = '23514';
   END IF;
 
   UPDATE public.sponsorship_attributions
   SET
-    kind = v_kind,
-    advocate_id = v_attribution.advocate_id,
-    exposure_id = v_attribution.exposure_id,
-    exposure_lag = v_lag,
-    decision_context = jsonb_build_object(
+    decision_context = v_attribution.decision_context || jsonb_build_object(
       'decision_stage', 'first_verified_success',
+      'attribution_locked_at', v_intent.created_at,
       'conversion_occurred_at', target_conversion_occurred_at,
       'provisional_kind', v_attribution.kind::text,
       'provisional_decided_at', v_attribution.decided_at
     ),
-    decided_at = clock_timestamp(),
     finalized_at = clock_timestamp(),
     conversion_occurred_at = target_conversion_occurred_at
   WHERE sponsorship_intent_id = target_sponsorship_intent_id
   RETURNING * INTO v_attribution;
 
   RETURN v_attribution;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION private.prevent_sponsorship_attribution_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY INVOKER
-SET search_path = ''
-AS $$
-BEGIN
-  IF TG_OP = 'UPDATE'
-     AND OLD.finalized_at IS NULL
-     AND OLD.conversion_occurred_at IS NULL
-     AND NEW.finalized_at IS NOT NULL
-     AND NEW.conversion_occurred_at IS NOT NULL
-     AND NEW.sponsorship_intent_id IS NOT DISTINCT FROM OLD.sponsorship_intent_id
-     AND NEW.policy_version IS NOT DISTINCT FROM OLD.policy_version THEN
-    RETURN NEW;
-  END IF;
-
-  RAISE EXCEPTION 'Final sponsorship attribution decisions are immutable'
-    USING ERRCODE = '42501';
 END;
 $$;
 
@@ -1785,8 +1722,8 @@ AS $$
 DECLARE
   v_intent public.sponsorship_intents%ROWTYPE;
   v_attempt public.sponsorship_payment_attempts%ROWTYPE;
-  v_quote public.sponsorship_payment_quotes%ROWTYPE;
   v_movement public.sponsorship_financial_movements%ROWTYPE;
+  v_beneficiary_matches boolean;
 BEGIN
   IF NEW.sponsorship_intent_id IS NULL THEN
     RETURN NEW;
@@ -1816,6 +1753,22 @@ BEGIN
   END IF;
 
   IF TG_TABLE_NAME = 'subscriptions' THEN
+    v_beneficiary_matches :=
+      NEW.beneficiary_id IS NOT DISTINCT FROM v_intent.beneficiary_id
+      OR (
+        v_intent.subject_kind = 'blind'
+        AND v_intent.beneficiary_id IS NULL
+        AND NEW.beneficiary_id IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM public.subscription_beneficiary_assignments assignment
+          WHERE assignment.subscription_id = NEW.id
+            AND assignment.beneficiary_id = NEW.beneficiary_id
+            AND assignment.sponsorship_intent_id = NEW.sponsorship_intent_id
+            AND assignment.sponsor_identity_id = NEW.sponsor_identity_id
+        )
+      );
+
     IF v_intent.payment_mode <> 'recurring'
        OR NEW.sponsorship_method IS DISTINCT FROM v_attempt.provider
        OR NEW.provider_account_scope IS DISTINCT FROM v_attempt.provider_account_scope
@@ -1823,7 +1776,7 @@ BEGIN
        OR NEW.provider_subscription_object_type IS DISTINCT FROM v_attempt.provider_subscription_object_type
        OR NEW.provider_subscription_object_id IS DISTINCT FROM v_attempt.provider_subscription_object_id
        OR NEW.subject_kind IS DISTINCT FROM v_intent.subject_kind
-       OR NEW.beneficiary_id IS DISTINCT FROM v_intent.beneficiary_id
+       OR NOT v_beneficiary_matches
        OR NEW.partnership_project IS DISTINCT FROM v_intent.partnership_project
        OR NEW.amount::bigint IS DISTINCT FROM v_intent.base_amount_usd_cents
        OR NEW.charged_amount::bigint IS DISTINCT FROM v_intent.charged_amount_minor

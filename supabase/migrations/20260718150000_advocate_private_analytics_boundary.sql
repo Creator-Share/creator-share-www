@@ -208,31 +208,6 @@ ALTER TABLE public.sponsorship_attributions
 ALTER TABLE public.sponsorship_attributions
   VALIDATE CONSTRAINT sponsorship_attributions_analytics_eligibility_check;
 
-CREATE OR REPLACE FUNCTION private.prevent_sponsorship_attribution_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY INVOKER
-SET search_path = ''
-AS $$
-BEGIN
-  IF TG_OP = 'UPDATE'
-     AND OLD.finalized_at IS NULL
-     AND OLD.conversion_occurred_at IS NULL
-     AND NEW.finalized_at IS NOT NULL
-     AND NEW.conversion_occurred_at IS NOT NULL
-     AND NEW.sponsorship_intent_id IS NOT DISTINCT FROM OLD.sponsorship_intent_id
-     AND NEW.policy_version IS NOT DISTINCT FROM OLD.policy_version
-     AND NEW.analytics_eligible IS NOT DISTINCT FROM OLD.analytics_eligible
-     AND NEW.analytics_exclusion_reason IS NOT DISTINCT FROM
-       OLD.analytics_exclusion_reason THEN
-    RETURN NEW;
-  END IF;
-
-  RAISE EXCEPTION 'Final sponsorship attribution decisions are immutable'
-    USING ERRCODE = '42501';
-END;
-$$;
-
 REVOKE ALL ON FUNCTION private.prevent_sponsorship_attribution_mutation()
   FROM PUBLIC, anon, authenticated, service_role;
 

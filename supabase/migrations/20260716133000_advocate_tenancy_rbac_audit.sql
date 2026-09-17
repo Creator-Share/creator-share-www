@@ -1063,6 +1063,17 @@ BEGIN
            AND NEW.publication_status IN ('draft', 'active', 'failed', 'suspended'))
          OR (OLD.publication_status = 'active'
            AND NEW.publication_status IN ('failed', 'suspended'))
+         OR (
+           OLD.publication_status = 'active'
+           AND NEW.publication_status = 'provisioning'
+           AND EXISTS (
+             SELECT 1
+             FROM private.advocate_lifecycle_mutation_guards mutation_guard
+             WHERE mutation_guard.transaction_id = txid_current()
+               AND mutation_guard.advocate_id = OLD.id
+               AND mutation_guard.operation = 'repair'
+           )
+         )
          OR (OLD.publication_status = 'failed'
            AND NEW.publication_status IN ('draft', 'provisioning', 'suspended'))
          OR (OLD.publication_status = 'suspended'
@@ -1130,6 +1141,10 @@ DECLARE
   v_dns_ready_at timestamp with time zone;
   v_tls_ready_at timestamp with time zone;
   v_payments_ready_at timestamp with time zone;
+  v_quiescing_domain_id text := nullif(
+    pg_catalog.current_setting('app.advocate_domain.quiescing_domain_id', true),
+    ''
+  );
 BEGIN
   SELECT advocate.slug
   INTO v_slug
@@ -1200,10 +1215,10 @@ BEGIN
 
   IF NOT (
     (OLD.status = 'pending' AND NEW.status IN ('provisioning', 'disabled'))
-    OR (OLD.status = 'provisioning' AND NEW.status IN ('verifying', 'failed', 'disabled'))
-    OR (OLD.status = 'verifying' AND NEW.status IN ('active', 'failed', 'disabled'))
-    OR (OLD.status = 'failed' AND NEW.status IN ('provisioning', 'disabled'))
-    OR (OLD.status = 'active' AND NEW.status IN ('redirecting', 'disabled'))
+    OR (OLD.status = 'provisioning' AND NEW.status IN ('verifying', 'failed', 'redirecting', 'disabled'))
+    OR (OLD.status = 'verifying' AND NEW.status IN ('active', 'failed', 'redirecting', 'disabled'))
+    OR (OLD.status = 'failed' AND NEW.status IN ('provisioning', 'redirecting', 'disabled'))
+    OR (OLD.status = 'active' AND NEW.status IN ('failed', 'redirecting'))
     OR (OLD.status = 'redirecting' AND NEW.status IN ('active', 'disabled'))
     OR (OLD.status = 'disabled' AND NEW.status = 'provisioning')
   ) THEN
@@ -1230,7 +1245,16 @@ BEGIN
      AND integration.environment = expected.environment
      AND integration.is_required
      AND integration.status = 'ready'
-     AND integration.ready_at IS NOT NULL;
+     AND integration.ready_at IS NOT NULL
+    JOIN public.domain_provisioning_jobs job
+      ON job.id = integration.last_verified_job_id
+     AND job.advocate_id = integration.advocate_id
+     AND job.domain_id = integration.domain_id
+     AND job.integration_id = integration.id
+     AND job.provider = integration.provider
+     AND job.status = 'succeeded'
+     AND job.kind IN ('provision', 'reconcile')
+     AND job.result_payload @> '{"verified":true}'::jsonb;
 
     SELECT count(*)::integer
     INTO v_required_not_ready
@@ -1240,6 +1264,7 @@ BEGIN
       AND (
         integration.status <> 'ready'
         OR integration.ready_at IS NULL
+        OR integration.last_verified_job_id IS NULL
       );
 
     IF v_ready_count <> 5 OR v_required_not_ready <> 0 THEN
@@ -1262,7 +1287,7 @@ BEGIN
     NEW.dns_verified_at := v_dns_ready_at;
     NEW.tls_ready_at := v_tls_ready_at;
     NEW.payments_ready_at := v_payments_ready_at;
-    NEW.activated_at := v_now;
+    NEW.activated_at := COALESCE(OLD.activated_at, v_now);
     NEW.deactivated_at := NULL;
     NEW.redirect_to_domain_id := NULL;
     NEW.failure_code := NULL;
@@ -1274,13 +1299,19 @@ BEGIN
     END IF;
     NEW.redirect_to_domain_id := NULL;
   ELSIF NEW.status = 'redirecting' THEN
-    IF NEW.redirect_to_domain_id IS NULL THEN
-      RAISE EXCEPTION 'Redirecting advocate domains require a target domain'
-        USING ERRCODE = '23514';
+    IF NEW.redirect_to_domain_id IS NULL
+       AND v_quiescing_domain_id IS DISTINCT FROM NEW.id::text THEN
+      RAISE EXCEPTION 'A targetless redirecting domain requires the audited quiescing boundary'
+        USING ERRCODE = '42501';
     END IF;
     NEW.deactivated_at := v_now;
   ELSIF NEW.status = 'disabled' THEN
-    NEW.deactivated_at := v_now;
+    IF OLD.status = 'redirecting'
+       AND NOT private.domain_deprovisioning_is_complete(NEW.id) THEN
+      RAISE EXCEPTION 'Advocate domain cannot disable before verified provider deprovisioning completes'
+        USING ERRCODE = '55000';
+    END IF;
+    NEW.deactivated_at := COALESCE(OLD.deactivated_at, v_now);
     NEW.redirect_to_domain_id := NULL;
   ELSE
     NEW.redirect_to_domain_id := NULL;
@@ -2986,12 +3017,14 @@ AS $$
 DECLARE
   v_deleted integer;
 BEGIN
-  IF batch_size IS NULL OR batch_size < 1 OR batch_size > 10000 THEN
-    RAISE EXCEPTION 'Forensics purge batch size must be between 1 and 10000'
+  PERFORM private.require_data_retention_service_role();
+
+  IF batch_size IS NULL OR batch_size < 1 OR batch_size > 5000 THEN
+    RAISE EXCEPTION 'Retention batch size must be between 1 and 5000'
       USING ERRCODE = '22023';
   END IF;
 
-  WITH expired AS (
+  WITH expired AS MATERIALIZED (
     SELECT forensic.audit_event_id
     FROM audit.audit_event_forensics forensic
     WHERE forensic.expires_at <= clock_timestamp()
@@ -3598,65 +3631,55 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_actor_user_id uuid := auth.uid();
-  v_is_creator_share_admin boolean;
+  v_actor_user_id uuid;
   v_advocate public.advocates%ROWTYPE;
   v_current_owner public.advocate_memberships%ROWTYPE;
   v_target_owner public.advocate_memberships%ROWTYPE;
-  v_reason text := btrim(change_reason);
+  v_reason text := btrim($4);
   v_deleted_owner_roles integer;
+  v_client_ip text;
+  v_user_agent text;
 BEGIN
-  IF v_actor_user_id IS NULL THEN
-    RAISE EXCEPTION 'Authentication is required'
-      USING ERRCODE = '28000';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM auth.users actor
-    WHERE actor.id = v_actor_user_id
-      AND actor.email IS NOT NULL
-      AND actor.email_confirmed_at IS NOT NULL
-      AND actor.deleted_at IS NULL
-      AND actor.is_anonymous IS NOT TRUE
-      AND (
-        actor.banned_until IS NULL
-        OR actor.banned_until <= now()
-      )
-  ) THEN
-    RAISE EXCEPTION 'An active authenticated account with a verified email is required'
-      USING ERRCODE = '42501';
-  END IF;
-
-  IF v_reason IS NULL
-     OR char_length(v_reason) NOT BETWEEN 1 AND 2000 THEN
-    RAISE EXCEPTION 'An ownership transfer reason between 1 and 2000 characters is required'
+  IF $1 IS NULL
+     OR $2 IS NULL
+     OR $3 IS NULL
+     OR $4 IS NULL
+     OR $4 IS DISTINCT FROM v_reason
+     OR char_length(v_reason) NOT BETWEEN 1 AND 2000
+     OR replace(v_reason, E'\n', '') ~ '[[:cntrl:]]'
+     OR v_reason ~ '^[[:space:]]'
+     OR v_reason ~ '[[:space:]]$'
+     OR char_length(COALESCE($5, '')) > 255
+     OR char_length(COALESCE($6, '')) > 255
+     OR char_length(COALESCE($7, '')) > 255 THEN
+    RAISE EXCEPTION 'Advocate ownership transfer input is invalid'
       USING ERRCODE = '22023';
   END IF;
 
-  IF char_length(COALESCE(request_id, '')) > 255
-     OR char_length(COALESCE(trace_id, '')) > 255
-     OR char_length(COALESCE(session_id, '')) > 255 THEN
-    RAISE EXCEPTION 'Ownership transfer request identifiers exceed 255 characters'
-      USING ERRCODE = '22023';
-  END IF;
+  v_actor_user_id := private.require_healthy_creator_share_super_admin(
+    'transfer_advocate_ownership'
+  );
 
-  v_is_creator_share_admin := private.is_creator_share_super_admin();
-
-  IF v_is_creator_share_admin THEN
-    PERFORM pg_catalog.pg_advisory_xact_lock(112927, 1);
-    v_is_creator_share_admin := private.is_creator_share_super_admin();
-  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended($1::text, 184219)
+  );
 
   SELECT advocate.*
   INTO v_advocate
   FROM public.advocates advocate
-  WHERE advocate.id = target_advocate_id
+  WHERE advocate.id = $1
   FOR UPDATE;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Advocate portal does not exist'
       USING ERRCODE = '23503';
+  END IF;
+
+  IF private.require_healthy_creator_share_super_admin(
+       'transfer_advocate_ownership'
+     ) IS DISTINCT FROM v_actor_user_id THEN
+    RAISE EXCEPTION 'Creator Share administrator identity changed during ownership transfer'
+      USING ERRCODE = '40001';
   END IF;
 
   IF v_advocate.relationship_status = 'archived' THEN
@@ -3685,38 +3708,24 @@ BEGIN
       USING ERRCODE = '23514';
   END IF;
 
-  IF NOT v_is_creator_share_admin
-     AND (
-       v_current_owner.user_id <> v_actor_user_id
-       OR v_advocate.relationship_status <> 'active'
-       OR v_advocate.publication_status = 'suspended'
-     ) THEN
-    RAISE EXCEPTION 'Only the current active owner or a Creator Share super administrator can transfer ownership'
-      USING ERRCODE = '42501';
-  END IF;
-
-  IF expected_owner_user_id IS NULL
-     OR v_current_owner.user_id IS DISTINCT FROM expected_owner_user_id THEN
+  IF v_current_owner.user_id IS DISTINCT FROM $2 THEN
     RAISE EXCEPTION 'Advocate ownership changed; refresh and retry'
       USING ERRCODE = '40001';
   END IF;
 
-  IF target_owner_user_id = v_current_owner.user_id THEN
+  IF $3 = v_current_owner.user_id THEN
     RAISE EXCEPTION 'The target account already owns this advocate portal'
       USING ERRCODE = '23505';
   END IF;
 
   PERFORM 1
   FROM auth.users account
-  WHERE account.id = target_owner_user_id
+  WHERE account.id = $3
     AND account.email IS NOT NULL
     AND account.email_confirmed_at IS NOT NULL
     AND account.deleted_at IS NULL
     AND account.is_anonymous IS NOT TRUE
-    AND (
-      account.banned_until IS NULL
-      OR account.banned_until <= now()
-    )
+    AND (account.banned_until IS NULL OR account.banned_until <= now())
   FOR KEY SHARE;
 
   IF NOT FOUND THEN
@@ -3728,7 +3737,7 @@ BEGIN
   INTO v_target_owner
   FROM public.advocate_memberships membership
   WHERE membership.advocate_id = v_advocate.id
-    AND membership.user_id = target_owner_user_id
+    AND membership.user_id = $3
   FOR UPDATE;
 
   IF NOT FOUND OR v_target_owner.status <> 'active' THEN
@@ -3736,22 +3745,23 @@ BEGIN
       USING ERRCODE = '23503';
   END IF;
 
+  SELECT transport.client_ip, transport.user_agent
+  INTO v_client_ip, v_user_agent
+  FROM private.advocate_ownership_transport_contexts transport
+  WHERE transport.transaction_id = txid_current()
+    AND transport.advocate_id = v_advocate.id;
+
   PERFORM audit.set_actor_context(
-    context_actor_type => CASE
-      WHEN v_is_creator_share_admin
-        THEN 'creator_share_admin'::audit.audit_actor_type
-      ELSE 'user'::audit.audit_actor_type
-    END,
+    context_actor_type => 'creator_share_admin'::audit.audit_actor_type,
     context_actor_user_id => v_actor_user_id,
-    context_effective_user_id => target_owner_user_id,
-    context_tool => CASE
-      WHEN v_is_creator_share_admin THEN 'creator-share-admin-advocates'
-      ELSE 'advocate-portal-ownership'
-    END,
-    context_request_id => NULLIF(btrim(request_id), ''),
-    context_trace_id => NULLIF(btrim(trace_id), ''),
-    context_session_id => NULLIF(btrim(session_id), ''),
-    context_reason => v_reason,
+    context_effective_user_id => $3,
+    context_tool => 'creator-share-admin-advocates',
+    context_request_id => NULLIF(btrim($5), ''),
+    context_trace_id => NULLIF(btrim($6), ''),
+    context_session_id => NULLIF(btrim($7), ''),
+    context_client_ip => v_client_ip,
+    context_user_agent => v_user_agent,
+    context_reason => $4,
     context_metadata => jsonb_build_object(
       'operation', 'transfer_ownership',
       'resource_kind', 'advocate',
@@ -3786,10 +3796,10 @@ BEGIN
     v_actor_user_id
   );
 
-  UPDATE public.advocates
+  UPDATE public.advocates advocate
   SET owner_membership_id = v_target_owner.id
-  WHERE id = v_advocate.id
-    AND owner_membership_id = v_current_owner.id;
+  WHERE advocate.id = v_advocate.id
+    AND advocate.owner_membership_id = v_current_owner.id;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Advocate ownership changed during transfer'
@@ -4375,6 +4385,7 @@ DECLARE
   v_integration_status public.advocate_domain_integration_status;
   v_relationship_status public.advocate_relationship_status;
   v_publication_status public.advocate_publication_status;
+  v_reconciliation_suppressed_at timestamp with time zone;
   v_existing_job_id uuid;
   v_existing_kind public.domain_provisioning_job_kind;
   v_job_id uuid;
@@ -4393,56 +4404,81 @@ BEGIN
   SELECT
     integration.advocate_id,
     integration.provider,
-    domain.status,
     integration.status,
-    advocate.relationship_status,
-    advocate.publication_status
+    integration.reconciliation_suppressed_at
   INTO
     v_advocate_id,
     v_provider,
-    v_domain_status,
     v_integration_status,
-    v_relationship_status,
-    v_publication_status
+    v_reconciliation_suppressed_at
   FROM public.advocate_domain_integrations integration
-  JOIN public.advocate_domains domain
-    ON domain.id = integration.domain_id
-   AND domain.advocate_id = integration.advocate_id
-  JOIN public.advocates advocate
-    ON advocate.id = integration.advocate_id
   WHERE integration.id = target_integration_id
     AND integration.domain_id = target_domain_id
-  FOR UPDATE OF integration;
+  FOR UPDATE;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Domain integration does not exist'
       USING ERRCODE = '23503';
   END IF;
 
-  IF job_kind = 'provision' THEN
-    IF v_relationship_status <> 'active'
-       OR v_publication_status = 'suspended'
-       OR v_domain_status NOT IN ('pending', 'provisioning', 'failed', 'disabled')
-       OR v_integration_status NOT IN ('pending', 'provisioning', 'failed', 'disabled') THEN
-      RAISE EXCEPTION 'Domain integration is not eligible for provisioning'
-        USING ERRCODE = '55000';
-    END IF;
-  ELSIF job_kind = 'reconcile' THEN
-    IF v_relationship_status <> 'active'
-       OR v_publication_status = 'suspended'
-       OR v_domain_status NOT IN ('provisioning', 'verifying', 'active', 'failed')
-       OR v_integration_status = 'disabled' THEN
-      RAISE EXCEPTION 'Domain integration is not eligible for reconciliation'
-        USING ERRCODE = '55000';
-    END IF;
-  ELSIF job_kind = 'deprovision' THEN
-    IF v_domain_status NOT IN ('redirecting', 'disabled') THEN
-      RAISE EXCEPTION 'Domain must be redirecting or disabled before deprovisioning'
-        USING ERRCODE = '55000';
-    END IF;
-  ELSE
-    RAISE EXCEPTION 'Unsupported domain provisioning job kind'
-      USING ERRCODE = '22023';
+  SELECT
+    domain.status,
+    advocate.relationship_status,
+    advocate.publication_status
+  INTO
+    v_domain_status,
+    v_relationship_status,
+    v_publication_status
+  FROM public.advocate_domains domain
+  JOIN public.advocates advocate
+    ON advocate.id = domain.advocate_id
+  WHERE domain.id = target_domain_id
+    AND domain.advocate_id = v_advocate_id
+  FOR UPDATE OF domain;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Domain integration does not exist'
+      USING ERRCODE = '23503';
+  END IF;
+
+  IF v_relationship_status = 'archived' THEN
+    RAISE EXCEPTION 'Archived advocate cleanup must use the lifecycle coordinator'
+      USING ERRCODE = '55000';
+  END IF;
+
+  IF v_reconciliation_suppressed_at IS NOT NULL THEN
+    RAISE EXCEPTION 'Domain integration work is administratively suppressed'
+      USING ERRCODE = '55000';
+  END IF;
+
+  IF NOT private.domain_job_lifecycle_is_eligible(
+    job_kind,
+    v_domain_status,
+    v_integration_status,
+    v_relationship_status,
+    v_publication_status
+  ) THEN
+    CASE job_kind
+      WHEN 'provision' THEN
+        RAISE EXCEPTION 'Domain integration is not eligible for provisioning'
+          USING ERRCODE = '55000';
+      WHEN 'reconcile' THEN
+        RAISE EXCEPTION 'Domain integration is not eligible for reconciliation'
+          USING ERRCODE = '55000';
+      WHEN 'deprovision' THEN
+        RAISE EXCEPTION 'Domain must be quiescing or disabled before deprovisioning'
+          USING ERRCODE = '55000';
+      ELSE
+        RAISE EXCEPTION 'Unsupported domain provisioning job kind'
+          USING ERRCODE = '22023';
+    END CASE;
+  END IF;
+
+  IF job_kind = 'deprovision'
+     AND v_provider = 'vercel'
+     AND NOT private.cloudflare_dns_removal_is_verified(target_domain_id) THEN
+    RAISE EXCEPTION 'Cloudflare DNS removal must be verified before Vercel release'
+      USING ERRCODE = '55000';
   END IF;
 
   SELECT job.id, job.kind
@@ -4512,6 +4548,7 @@ DECLARE
   v_actor_user_id uuid := auth.uid();
   v_hostname text;
   v_provider public.advocate_domain_integration_provider;
+  v_was_suppressed boolean;
 BEGIN
   IF v_actor_user_id IS NULL THEN
     RAISE EXCEPTION 'Authentication is required'
@@ -4520,6 +4557,23 @@ BEGIN
 
   IF NOT private.is_creator_share_super_admin() THEN
     RAISE EXCEPTION 'Creator Share super administrator access is required'
+      USING ERRCODE = '42501';
+  END IF;
+
+  PERFORM 1
+  FROM auth.users actor
+  WHERE actor.id = v_actor_user_id
+    AND actor.email IS NOT NULL
+    AND actor.email_confirmed_at IS NOT NULL
+    AND actor.deleted_at IS NULL
+    AND actor.is_anonymous IS NOT TRUE
+    AND (
+      actor.banned_until IS NULL
+      OR actor.banned_until <= now()
+    );
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'An active authenticated account with a verified email is required'
       USING ERRCODE = '42501';
   END IF;
 
@@ -4534,14 +4588,18 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  SELECT domain.hostname, integration.provider
-  INTO v_hostname, v_provider
+  SELECT
+    domain.hostname,
+    integration.provider,
+    integration.reconciliation_suppressed_at IS NOT NULL
+  INTO v_hostname, v_provider, v_was_suppressed
   FROM public.advocate_domain_integrations integration
   JOIN public.advocate_domains domain
     ON domain.id = integration.domain_id
    AND domain.advocate_id = integration.advocate_id
   WHERE integration.id = target_integration_id
-    AND integration.domain_id = target_domain_id;
+    AND integration.domain_id = target_domain_id
+  FOR UPDATE OF integration;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Domain integration does not exist'
@@ -4555,13 +4613,30 @@ BEGIN
     context_request_id => request_id,
     context_reason => btrim(change_reason),
     context_metadata => jsonb_build_object(
-      'operation', 'enqueue',
+      'operation', CASE
+        WHEN v_was_suppressed THEN 'resume_and_enqueue'
+        ELSE 'enqueue'
+      END,
       'resource_kind', 'domain_integration',
       'resource_id', target_integration_id::text,
       'provider', v_provider::text,
-      'domain_hostname', v_hostname
+      'domain_hostname', v_hostname,
+      'prior_status', CASE
+        WHEN v_was_suppressed THEN 'reconciliation_suppressed'
+        ELSE 'reconciliation_enabled'
+      END
     )
   );
+
+  IF v_was_suppressed THEN
+    UPDATE public.advocate_domain_integrations integration
+    SET
+      reconciliation_suppressed_at = NULL,
+      reconciliation_suppressed_by_user_id = NULL,
+      reconciliation_suppression_reason = NULL
+    WHERE integration.id = target_integration_id
+      AND integration.domain_id = target_domain_id;
+  END IF;
 
   RETURN private.enqueue_domain_provisioning_job_internal(
     target_domain_id,
@@ -4707,6 +4782,12 @@ AS $$
 DECLARE
   v_now timestamp with time zone := clock_timestamp();
   v_batch_id uuid := gen_random_uuid();
+  v_exhausted_identity record;
+  v_exhausted_job public.domain_provisioning_jobs%ROWTYPE;
+  v_exhausted_integration public.advocate_domain_integrations%ROWTYPE;
+  v_exhausted_domain public.advocate_domains%ROWTYPE;
+  v_exhausted_token_digest bytea;
+  v_exhausted_fingerprint bytea;
 BEGIN
   IF worker_id IS NULL
      OR char_length(worker_id) NOT BETWEEN 1 AND 128
@@ -4727,6 +4808,126 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
+  FOR v_exhausted_identity IN
+    SELECT
+      job.id,
+      job.integration_id,
+      job.domain_id,
+      job.advocate_id
+    FROM public.domain_provisioning_jobs job
+    WHERE job.status = 'running'
+      AND job.lease_expires_at <= v_now
+      AND job.attempt_count >= job.max_attempts
+    ORDER BY job.lease_expires_at, job.created_at, job.id
+    LIMIT batch_size
+  LOOP
+    SELECT integration.*
+    INTO v_exhausted_integration
+    FROM public.advocate_domain_integrations integration
+    WHERE integration.id = v_exhausted_identity.integration_id
+      AND integration.domain_id = v_exhausted_identity.domain_id
+      AND integration.advocate_id = v_exhausted_identity.advocate_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Domain provisioning integration chain is unavailable'
+        USING ERRCODE = '42501';
+    END IF;
+
+    SELECT domain.*
+    INTO v_exhausted_domain
+    FROM public.advocate_domains domain
+    WHERE domain.id = v_exhausted_identity.domain_id
+      AND domain.advocate_id = v_exhausted_identity.advocate_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Domain provisioning domain chain is unavailable'
+        USING ERRCODE = '42501';
+    END IF;
+
+    SELECT job.*
+    INTO v_exhausted_job
+    FROM public.domain_provisioning_jobs job
+    WHERE job.id = v_exhausted_identity.id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      CONTINUE;
+    END IF;
+
+    IF v_exhausted_job.status <> 'running'
+       OR v_exhausted_job.lease_expires_at > v_now
+       OR v_exhausted_job.attempt_count < v_exhausted_job.max_attempts THEN
+      CONTINUE;
+    END IF;
+
+    IF v_exhausted_job.integration_id IS DISTINCT FROM v_exhausted_integration.id
+       OR v_exhausted_job.domain_id IS DISTINCT FROM v_exhausted_domain.id
+       OR v_exhausted_job.advocate_id IS DISTINCT FROM v_exhausted_domain.advocate_id
+       OR v_exhausted_job.advocate_id IS DISTINCT FROM v_exhausted_integration.advocate_id
+       OR v_exhausted_job.provider IS DISTINCT FROM v_exhausted_integration.provider THEN
+      RAISE EXCEPTION 'Domain provisioning settlement chain does not match'
+        USING ERRCODE = '42501';
+    END IF;
+
+    v_exhausted_token_digest := extensions.digest(
+      pg_catalog.convert_to(v_exhausted_job.lease_token::text, 'UTF8'),
+      'sha256'
+    );
+    v_exhausted_fingerprint := private.domain_settlement_fingerprint(
+      v_exhausted_job.id,
+      v_exhausted_domain.id,
+      v_exhausted_integration.id,
+      v_exhausted_job.kind,
+      v_exhausted_job.provider,
+      v_exhausted_integration.environment,
+      v_exhausted_domain.hostname,
+      'lease_expired',
+      'failed',
+      'lease_expired_max_attempts',
+      v_exhausted_job.result_payload
+    );
+
+    PERFORM audit.set_actor_context(
+      context_actor_type => 'system'::audit.audit_actor_type,
+      context_system_actor => v_exhausted_job.lease_owner,
+      context_tool => 'domain-provisioning-settlement',
+      context_reason => 'Atomically settle an exhausted provider lease and domain lifecycle',
+      context_metadata => jsonb_build_object(
+        'operation', 'lease_expired',
+        'resource_kind', 'domain_provisioning_job',
+        'resource_id', v_exhausted_job.id::text,
+        'job_id', v_exhausted_job.id::text,
+        'provider', v_exhausted_job.provider::text,
+        'provider_account_scope', v_exhausted_integration.environment,
+        'domain_hostname', v_exhausted_domain.hostname,
+        'outcome', 'failed',
+        'retry_count', GREATEST(v_exhausted_job.attempt_count - 1, 0)
+      )
+    );
+
+    UPDATE public.domain_provisioning_jobs job
+    SET
+      status = 'failed',
+      lease_owner = NULL,
+      lease_token = NULL,
+      leased_at = NULL,
+      lease_expires_at = NULL,
+      finished_at = v_now,
+      last_error = 'lease_expired_max_attempts',
+      settlement_lease_token_digest = v_exhausted_token_digest,
+      settlement_fingerprint = v_exhausted_fingerprint,
+      settlement_schema_version = 1
+    WHERE job.id = v_exhausted_job.id;
+
+    PERFORM private.apply_domain_job_failure(
+      v_exhausted_job.id,
+      'lease_expired_max_attempts',
+      v_now
+    );
+  END LOOP;
+
   PERFORM audit.set_actor_context(
     context_actor_type => 'system'::audit.audit_actor_type,
     context_system_actor => 'advocate-domain-worker',
@@ -4740,23 +4941,19 @@ BEGIN
   );
 
   RETURN QUERY
-  WITH exhausted AS (
-    UPDATE public.domain_provisioning_jobs job
-    SET
-      status = 'failed',
-      lease_owner = NULL,
-      lease_token = NULL,
-      leased_at = NULL,
-      lease_expires_at = NULL,
-      finished_at = v_now,
-      last_error = 'lease_expired_max_attempts'
-    WHERE job.status = 'running'
-      AND job.lease_expires_at <= v_now
-      AND job.attempt_count >= job.max_attempts
-    RETURNING job.id
-  ), candidates AS (
+  WITH candidates AS (
     SELECT job.id
     FROM public.domain_provisioning_jobs job
+    JOIN public.advocate_domain_integrations integration
+      ON integration.id = job.integration_id
+     AND integration.domain_id = job.domain_id
+     AND integration.advocate_id = job.advocate_id
+     AND integration.provider = job.provider
+    JOIN public.advocate_domains domain
+      ON domain.id = job.domain_id
+     AND domain.advocate_id = job.advocate_id
+    JOIN public.advocates advocate
+      ON advocate.id = job.advocate_id
     WHERE (
         (
           job.status = 'queued'
@@ -4769,15 +4966,24 @@ BEGIN
           AND job.attempt_count < job.max_attempts
         )
       )
-      AND NOT EXISTS (
-        SELECT 1 FROM exhausted WHERE exhausted.id = job.id
+      AND private.domain_job_lifecycle_is_eligible(
+        job.kind,
+        domain.status,
+        integration.status,
+        advocate.relationship_status,
+        advocate.publication_status
+      )
+      AND (
+        job.kind <> 'deprovision'
+        OR job.provider <> 'vercel'
+        OR private.cloudflare_dns_removal_is_verified(job.domain_id)
       )
     ORDER BY
       CASE WHEN job.status = 'running' THEN 0 ELSE 1 END,
       job.run_after,
       job.created_at,
       job.id
-    FOR UPDATE SKIP LOCKED
+    FOR UPDATE OF job SKIP LOCKED
     LIMIT batch_size
   ), claimed AS (
     UPDATE public.domain_provisioning_jobs job
@@ -4794,7 +5000,10 @@ BEGIN
       reconciliation_outcome = NULL,
       reconciled_at = NULL,
       result_payload = '{}'::jsonb,
-      last_error = NULL
+      last_error = NULL,
+      settlement_lease_token_digest = NULL,
+      settlement_fingerprint = NULL,
+      settlement_schema_version = NULL
     FROM candidates
     WHERE job.id = candidates.id
     RETURNING job.*
@@ -4898,6 +5107,14 @@ SET search_path = ''
 AS $$
 DECLARE
   v_job public.domain_provisioning_jobs%ROWTYPE;
+  v_integration public.advocate_domain_integrations%ROWTYPE;
+  v_domain public.advocate_domains%ROWTYPE;
+  v_job_integration_id uuid;
+  v_job_domain_id uuid;
+  v_job_advocate_id uuid;
+  v_publication_status public.advocate_publication_status;
+  v_withdraw_public_eligibility boolean := false;
+  v_evidence jsonb := COALESCE(evidence_payload, '{}'::jsonb);
   v_now timestamp with time zone := clock_timestamp();
 BEGIN
   IF reconciliation_result IS NULL
@@ -4913,9 +5130,44 @@ BEGIN
   END IF;
 
   PERFORM private.assert_safe_domain_provisioning_payload(
-    COALESCE(evidence_payload, '{}'::jsonb),
+    v_evidence,
     'result'
   );
+
+  SELECT job.integration_id, job.domain_id, job.advocate_id
+  INTO v_job_integration_id, v_job_domain_id, v_job_advocate_id
+  FROM public.domain_provisioning_jobs job
+  WHERE job.id = target_job_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Domain provisioning lease is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  SELECT integration.*
+  INTO v_integration
+  FROM public.advocate_domain_integrations integration
+  WHERE integration.id = v_job_integration_id
+    AND integration.domain_id = v_job_domain_id
+    AND integration.advocate_id = v_job_advocate_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Domain provisioning integration chain is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  SELECT domain.*
+  INTO v_domain
+  FROM public.advocate_domains domain
+  WHERE domain.id = v_job_domain_id
+    AND domain.advocate_id = v_job_advocate_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Domain provisioning domain chain is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
 
   SELECT job.*
   INTO v_job
@@ -4923,8 +5175,16 @@ BEGIN
   WHERE job.id = target_job_id
   FOR UPDATE;
 
-  IF NOT FOUND
-     OR v_job.status <> 'running'
+  IF v_job.integration_id IS DISTINCT FROM v_integration.id
+     OR v_job.domain_id IS DISTINCT FROM v_domain.id
+     OR v_job.advocate_id IS DISTINCT FROM v_domain.advocate_id
+     OR v_job.advocate_id IS DISTINCT FROM v_integration.advocate_id
+     OR v_job.provider IS DISTINCT FROM v_integration.provider THEN
+    RAISE EXCEPTION 'Domain provisioning settlement chain does not match'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_job.status <> 'running'
      OR v_job.lease_token IS DISTINCT FROM target_lease_token
      OR v_job.lease_expires_at <= v_now
      OR NOT v_job.reconciliation_required
@@ -4933,30 +5193,73 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
+  SELECT advocate.publication_status
+  INTO v_publication_status
+  FROM public.advocates advocate
+  WHERE advocate.id = v_job.advocate_id
+  FOR SHARE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Domain provisioning advocate chain is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  v_withdraw_public_eligibility :=
+    v_job.kind = 'reconcile'
+    AND v_integration.is_required
+    AND (
+      v_domain.status = 'active'
+      OR v_publication_status = 'active'
+    )
+    AND NOT (
+      reconciliation_result = 'matches_intent'
+      AND v_evidence @> '{"verified":true}'::jsonb
+    );
+
   PERFORM audit.set_actor_context(
     context_actor_type => 'system'::audit.audit_actor_type,
-    context_system_actor => 'advocate-domain-worker',
+    context_system_actor => v_job.lease_owner,
     context_tool => 'domain-provisioning-reconcile',
-    context_reason => 'Provider state reconciled before external mutation or completion',
+    context_reason => CASE
+      WHEN v_withdraw_public_eligibility
+        THEN 'Withdraw public eligibility after required provider state was not verified'
+      ELSE 'Provider state reconciled before external mutation or completion'
+    END,
     context_metadata => jsonb_build_object(
       'operation', 'reconcile',
       'resource_kind', 'domain_provisioning_job',
       'resource_id', v_job.id::text,
       'job_id', v_job.id::text,
       'provider', v_job.provider::text,
-      'outcome', reconciliation_result
+      'provider_account_scope', v_integration.environment,
+      'domain_hostname', v_domain.hostname,
+      'outcome', CASE
+        WHEN v_withdraw_public_eligibility THEN 'public_eligibility_withdrawn'
+        ELSE reconciliation_result
+      END
     )
   );
 
   UPDATE public.domain_provisioning_jobs job
   SET
-    reconciliation_required = reconciliation_result IN ('conflict', 'inconclusive'),
+    reconciliation_required = reconciliation_result IN (
+      'conflict',
+      'inconclusive'
+    ),
     reconciliation_outcome = reconciliation_result,
     reconciled_at = v_now,
-    result_payload = job.result_payload || COALESCE(evidence_payload, '{}'::jsonb)
+    result_payload = job.result_payload || v_evidence
   WHERE job.id = v_job.id;
 
-  RETURN true;
+  IF v_withdraw_public_eligibility THEN
+    PERFORM private.apply_domain_job_failure(
+      v_job.id,
+      'active_provider_reconciliation_unverified',
+      v_now
+    );
+  END IF;
+
+  RETURN NOT v_withdraw_public_eligibility;
 END;
 $$;
 
@@ -5002,9 +5305,23 @@ SET search_path = ''
 AS $$
 DECLARE
   v_job public.domain_provisioning_jobs%ROWTYPE;
+  v_integration public.advocate_domain_integrations%ROWTYPE;
+  v_domain public.advocate_domains%ROWTYPE;
+  v_job_integration_id uuid;
+  v_job_domain_id uuid;
+  v_job_advocate_id uuid;
+  v_relationship_status public.advocate_relationship_status;
+  v_publication_status public.advocate_publication_status;
   v_final_result jsonb;
+  v_token_digest bytea;
+  v_fingerprint bytea;
   v_now timestamp with time zone := clock_timestamp();
 BEGIN
+  IF target_job_id IS NULL OR target_lease_token IS NULL THEN
+    RAISE EXCEPTION 'Domain provisioning completion proof is invalid'
+      USING ERRCODE = '22023';
+  END IF;
+
   IF completion_status IS NULL
      OR completion_status NOT IN ('succeeded', 'failed') THEN
     RAISE EXCEPTION 'Completion status must be succeeded or failed'
@@ -5028,14 +5345,88 @@ BEGIN
     'result'
   );
 
+  SELECT job.integration_id, job.domain_id, job.advocate_id
+  INTO v_job_integration_id, v_job_domain_id, v_job_advocate_id
+  FROM public.domain_provisioning_jobs job
+  WHERE job.id = target_job_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Domain provisioning lease is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  SELECT integration.*
+  INTO v_integration
+  FROM public.advocate_domain_integrations integration
+  WHERE integration.id = v_job_integration_id
+    AND integration.domain_id = v_job_domain_id
+    AND integration.advocate_id = v_job_advocate_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Domain provisioning integration chain is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  SELECT domain.*
+  INTO v_domain
+  FROM public.advocate_domains domain
+  WHERE domain.id = v_job_domain_id
+    AND domain.advocate_id = v_job_advocate_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Domain provisioning domain chain is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
   SELECT job.*
   INTO v_job
   FROM public.domain_provisioning_jobs job
   WHERE job.id = target_job_id
   FOR UPDATE;
 
-  IF NOT FOUND
-     OR v_job.status <> 'running'
+  IF v_job.integration_id IS DISTINCT FROM v_integration.id
+     OR v_job.domain_id IS DISTINCT FROM v_domain.id
+     OR v_job.advocate_id IS DISTINCT FROM v_domain.advocate_id
+     OR v_job.advocate_id IS DISTINCT FROM v_integration.advocate_id
+     OR v_job.provider IS DISTINCT FROM v_integration.provider THEN
+    RAISE EXCEPTION 'Domain provisioning settlement chain does not match'
+      USING ERRCODE = '42501';
+  END IF;
+
+  v_final_result := v_job.result_payload || COALESCE(provider_result, '{}'::jsonb);
+  v_token_digest := extensions.digest(
+    pg_catalog.convert_to(target_lease_token::text, 'UTF8'),
+    'sha256'
+  );
+  v_fingerprint := private.domain_settlement_fingerprint(
+    v_job.id,
+    v_domain.id,
+    v_integration.id,
+    v_job.kind,
+    v_job.provider,
+    v_integration.environment,
+    v_domain.hostname,
+    'complete',
+    completion_status,
+    completion_code,
+    v_final_result
+  );
+
+  IF v_job.status IN ('succeeded', 'failed') THEN
+    IF v_job.status = completion_status
+       AND v_job.settlement_lease_token_digest = v_token_digest
+       AND v_job.settlement_fingerprint = v_fingerprint
+       AND v_job.settlement_schema_version = 1 THEN
+      RETURN v_job.status;
+    END IF;
+
+    RAISE EXCEPTION 'Domain provisioning lease is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_job.status <> 'running'
      OR v_job.lease_token IS DISTINCT FROM target_lease_token
      OR v_job.lease_expires_at <= v_now THEN
     RAISE EXCEPTION 'Domain provisioning lease is unavailable'
@@ -5047,25 +5438,58 @@ BEGIN
       USING ERRCODE = '55000';
   END IF;
 
-  v_final_result := v_job.result_payload || COALESCE(provider_result, '{}'::jsonb);
+  IF completion_status = 'succeeded' THEN
+    SELECT advocate.relationship_status, advocate.publication_status
+    INTO v_relationship_status, v_publication_status
+    FROM public.advocates advocate
+    WHERE advocate.id = v_job.advocate_id
+    FOR SHARE;
 
-  IF completion_status = 'succeeded'
-     AND NOT v_final_result @> '{"verified":true}'::jsonb THEN
-    RAISE EXCEPTION 'Verified provider state is required before successful completion'
-      USING ERRCODE = '55000';
+    IF NOT FOUND
+       OR NOT private.domain_job_lifecycle_is_eligible(
+         v_job.kind,
+         v_domain.status,
+         v_integration.status,
+         v_relationship_status,
+         v_publication_status
+       ) THEN
+      RAISE EXCEPTION 'Domain provider success is no longer lifecycle eligible'
+        USING ERRCODE = '55000';
+    END IF;
+
+    PERFORM private.assert_verified_domain_provider_result(
+      v_job.kind,
+      v_job.provider,
+      v_integration.environment,
+      v_domain.hostname,
+      v_final_result
+    );
+
+    IF v_job.kind = 'deprovision'
+       AND v_job.provider = 'vercel'
+       AND NOT private.cloudflare_dns_removal_is_verified(v_domain.id) THEN
+      RAISE EXCEPTION 'Cloudflare DNS removal must be verified before Vercel release'
+        USING ERRCODE = '55000';
+    END IF;
   END IF;
 
   PERFORM audit.set_actor_context(
     context_actor_type => 'system'::audit.audit_actor_type,
-    context_system_actor => 'advocate-domain-worker',
-    context_tool => 'domain-provisioning-complete',
-    context_reason => 'Domain provisioning worker recorded a terminal provider outcome',
+    context_system_actor => v_job.lease_owner,
+    context_tool => 'domain-provisioning-settlement',
+    context_reason => CASE
+      WHEN completion_status = 'succeeded'
+        THEN 'Atomically settle verified provider success and domain lifecycle'
+      ELSE 'Atomically settle terminal provider failure and domain lifecycle'
+    END,
     context_metadata => jsonb_build_object(
       'operation', 'complete',
       'resource_kind', 'domain_provisioning_job',
       'resource_id', v_job.id::text,
       'job_id', v_job.id::text,
       'provider', v_job.provider::text,
+      'provider_account_scope', v_integration.environment,
+      'domain_hostname', v_domain.hostname,
       'outcome', completion_status::text,
       'retry_count', GREATEST(v_job.attempt_count - 1, 0)
     )
@@ -5080,8 +5504,17 @@ BEGIN
     lease_expires_at = NULL,
     finished_at = v_now,
     result_payload = v_final_result,
-    last_error = completion_code
+    last_error = completion_code,
+    settlement_lease_token_digest = v_token_digest,
+    settlement_fingerprint = v_fingerprint,
+    settlement_schema_version = 1
   WHERE job.id = v_job.id;
+
+  IF completion_status = 'succeeded' THEN
+    PERFORM private.apply_domain_job_success(v_job.id, v_final_result, v_now);
+  ELSE
+    PERFORM private.apply_domain_job_failure(v_job.id, completion_code, v_now);
+  END IF;
 
   RETURN completion_status;
 END;
@@ -5101,9 +5534,22 @@ SET search_path = ''
 AS $$
 DECLARE
   v_job public.domain_provisioning_jobs%ROWTYPE;
+  v_integration public.advocate_domain_integrations%ROWTYPE;
+  v_domain public.advocate_domains%ROWTYPE;
+  v_job_integration_id uuid;
+  v_job_domain_id uuid;
+  v_job_advocate_id uuid;
   v_next_status public.domain_provisioning_job_status;
+  v_final_result jsonb;
+  v_token_digest bytea;
+  v_fingerprint bytea;
   v_now timestamp with time zone := clock_timestamp();
 BEGIN
+  IF target_job_id IS NULL OR target_lease_token IS NULL THEN
+    RAISE EXCEPTION 'Domain provisioning retry proof is invalid'
+      USING ERRCODE = '22023';
+  END IF;
+
   IF retry_delay IS NULL
      OR retry_delay < interval '1 second'
      OR retry_delay > interval '24 hours' THEN
@@ -5122,17 +5568,43 @@ BEGIN
     'result'
   );
 
+  SELECT job.integration_id, job.domain_id, job.advocate_id
+  INTO v_job_integration_id, v_job_domain_id, v_job_advocate_id
+  FROM public.domain_provisioning_jobs job
+  WHERE job.id = target_job_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Domain provisioning lease is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  SELECT integration.*
+  INTO v_integration
+  FROM public.advocate_domain_integrations integration
+  WHERE integration.id = v_job_integration_id
+    AND integration.domain_id = v_job_domain_id
+    AND integration.advocate_id = v_job_advocate_id
+  FOR UPDATE;
+
+  SELECT domain.*
+  INTO v_domain
+  FROM public.advocate_domains domain
+  WHERE domain.id = v_job_domain_id
+    AND domain.advocate_id = v_job_advocate_id
+  FOR UPDATE;
+
   SELECT job.*
   INTO v_job
   FROM public.domain_provisioning_jobs job
   WHERE job.id = target_job_id
   FOR UPDATE;
 
-  IF NOT FOUND
-     OR v_job.status <> 'running'
-     OR v_job.lease_token IS DISTINCT FROM target_lease_token
-     OR v_job.lease_expires_at <= v_now THEN
-    RAISE EXCEPTION 'Domain provisioning lease is unavailable'
+  IF v_job.integration_id IS DISTINCT FROM v_integration.id
+     OR v_job.domain_id IS DISTINCT FROM v_domain.id
+     OR v_job.advocate_id IS DISTINCT FROM v_domain.advocate_id
+     OR v_job.advocate_id IS DISTINCT FROM v_integration.advocate_id
+     OR v_job.provider IS DISTINCT FROM v_integration.provider THEN
+    RAISE EXCEPTION 'Domain provisioning settlement chain does not match'
       USING ERRCODE = '42501';
   END IF;
 
@@ -5141,18 +5613,60 @@ BEGIN
       THEN 'failed'::public.domain_provisioning_job_status
     ELSE 'queued'::public.domain_provisioning_job_status
   END;
+  v_final_result := v_job.result_payload || COALESCE(provider_result, '{}'::jsonb);
+  v_token_digest := extensions.digest(
+    pg_catalog.convert_to(target_lease_token::text, 'UTF8'),
+    'sha256'
+  );
+  v_fingerprint := private.domain_settlement_fingerprint(
+    v_job.id,
+    v_domain.id,
+    v_integration.id,
+    v_job.kind,
+    v_job.provider,
+    v_integration.environment,
+    v_domain.hostname,
+    'retry',
+    v_next_status,
+    retry_code,
+    v_final_result
+  );
+
+  IF v_job.status = 'failed' THEN
+    IF v_job.settlement_lease_token_digest = v_token_digest
+       AND v_job.settlement_fingerprint = v_fingerprint
+       AND v_job.settlement_schema_version = 1 THEN
+      RETURN 'failed'::public.domain_provisioning_job_status;
+    END IF;
+
+    RAISE EXCEPTION 'Domain provisioning lease is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_job.status <> 'running'
+     OR v_job.lease_token IS DISTINCT FROM target_lease_token
+     OR v_job.lease_expires_at <= v_now THEN
+    RAISE EXCEPTION 'Domain provisioning lease is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
 
   PERFORM audit.set_actor_context(
     context_actor_type => 'system'::audit.audit_actor_type,
-    context_system_actor => 'advocate-domain-worker',
-    context_tool => 'domain-provisioning-retry',
-    context_reason => 'Domain provisioning worker scheduled a bounded retry',
+    context_system_actor => v_job.lease_owner,
+    context_tool => 'domain-provisioning-settlement',
+    context_reason => CASE
+      WHEN v_next_status = 'queued'
+        THEN 'Atomically schedule bounded provider retry without asserting readiness'
+      ELSE 'Atomically settle exhausted provider retry and domain lifecycle'
+    END,
     context_metadata => jsonb_build_object(
       'operation', 'retry',
       'resource_kind', 'domain_provisioning_job',
       'resource_id', v_job.id::text,
       'job_id', v_job.id::text,
       'provider', v_job.provider::text,
+      'provider_account_scope', v_integration.environment,
+      'domain_hostname', v_domain.hostname,
       'outcome', v_next_status::text,
       'retry_count', v_job.attempt_count
     )
@@ -5173,9 +5687,27 @@ BEGIN
     reconciliation_required = true,
     reconciliation_outcome = NULL,
     reconciled_at = NULL,
-    result_payload = job.result_payload || COALESCE(provider_result, '{}'::jsonb),
-    last_error = retry_code
+    result_payload = v_final_result,
+    last_error = retry_code,
+    settlement_lease_token_digest = CASE
+      WHEN v_next_status = 'failed' THEN v_token_digest
+      ELSE NULL
+    END,
+    settlement_fingerprint = CASE
+      WHEN v_next_status = 'failed' THEN v_fingerprint
+      ELSE NULL
+    END,
+    settlement_schema_version = CASE
+      WHEN v_next_status = 'failed' THEN 1
+      ELSE NULL
+    END
   WHERE job.id = v_job.id;
+
+  IF v_next_status = 'failed' THEN
+    PERFORM private.apply_domain_job_failure(v_job.id, retry_code, v_now);
+  ELSE
+    PERFORM private.apply_domain_job_retry(v_job.id);
+  END IF;
 
   RETURN v_next_status;
 END;
@@ -5265,6 +5797,12 @@ AS $$
 DECLARE
   v_actor_user_id uuid := auth.uid();
   v_job public.domain_provisioning_jobs%ROWTYPE;
+  v_integration public.advocate_domain_integrations%ROWTYPE;
+  v_domain public.advocate_domains%ROWTYPE;
+  v_job_integration_id uuid;
+  v_job_domain_id uuid;
+  v_job_advocate_id uuid;
+  v_reason text := btrim(change_reason);
   v_now timestamp with time zone := clock_timestamp();
 BEGIN
   IF v_actor_user_id IS NULL THEN
@@ -5277,8 +5815,24 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
-  IF nullif(btrim(change_reason), '') IS NULL
-     OR char_length(change_reason) > 2000 THEN
+  PERFORM 1
+  FROM auth.users actor
+  WHERE actor.id = v_actor_user_id
+    AND actor.email IS NOT NULL
+    AND actor.email_confirmed_at IS NOT NULL
+    AND actor.deleted_at IS NULL
+    AND actor.is_anonymous IS NOT TRUE
+    AND (
+      actor.banned_until IS NULL
+      OR actor.banned_until <= now()
+    );
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'An active authenticated account with a verified email is required'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_reason IS NULL OR char_length(v_reason) NOT BETWEEN 1 AND 2000 THEN
     RAISE EXCEPTION 'A cancellation reason between 1 and 2000 characters is required'
       USING ERRCODE = '22023';
   END IF;
@@ -5288,13 +5842,57 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
+  SELECT job.integration_id, job.domain_id, job.advocate_id
+  INTO v_job_integration_id, v_job_domain_id, v_job_advocate_id
+  FROM public.domain_provisioning_jobs job
+  WHERE job.id = target_job_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Only queued domain provisioning work can be administratively cancelled'
+      USING ERRCODE = '55000';
+  END IF;
+
+  SELECT integration.*
+  INTO v_integration
+  FROM public.advocate_domain_integrations integration
+  WHERE integration.id = v_job_integration_id
+    AND integration.domain_id = v_job_domain_id
+    AND integration.advocate_id = v_job_advocate_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Domain provisioning integration chain is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  SELECT domain.*
+  INTO v_domain
+  FROM public.advocate_domains domain
+  WHERE domain.id = v_job_domain_id
+    AND domain.advocate_id = v_job_advocate_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Domain provisioning domain chain is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
   SELECT job.*
   INTO v_job
   FROM public.domain_provisioning_jobs job
   WHERE job.id = target_job_id
   FOR UPDATE;
 
-  IF NOT FOUND OR v_job.status <> 'queued' THEN
+  IF v_job.integration_id IS DISTINCT FROM v_integration.id
+     OR v_job.domain_id IS DISTINCT FROM v_domain.id
+     OR v_job.advocate_id IS DISTINCT FROM v_domain.advocate_id
+     OR v_job.advocate_id IS DISTINCT FROM v_integration.advocate_id
+     OR v_job.provider IS DISTINCT FROM v_integration.provider THEN
+    RAISE EXCEPTION 'Domain provisioning settlement chain does not match'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_job.status <> 'queued' THEN
     RAISE EXCEPTION 'Only queued domain provisioning work can be administratively cancelled'
       USING ERRCODE = '55000';
   END IF;
@@ -5304,14 +5902,16 @@ BEGIN
     context_actor_user_id => v_actor_user_id,
     context_tool => 'creator-share-admin-domains',
     context_request_id => request_id,
-    context_reason => btrim(change_reason),
+    context_reason => v_reason,
     context_metadata => jsonb_build_object(
-      'operation', 'cancel',
+      'operation', 'cancel_and_suppress',
       'resource_kind', 'domain_provisioning_job',
       'resource_id', v_job.id::text,
       'job_id', v_job.id::text,
       'provider', v_job.provider::text,
-      'outcome', 'cancelled'
+      'provider_account_scope', v_integration.environment,
+      'domain_hostname', v_domain.hostname,
+      'outcome', 'cancelled_and_suppressed'
     )
   );
 
@@ -5321,6 +5921,19 @@ BEGIN
     finished_at = v_now,
     last_error = 'administrator_cancelled'
   WHERE job.id = v_job.id;
+
+  UPDATE public.advocate_domain_integrations integration
+  SET
+    reconciliation_suppressed_at = v_now,
+    reconciliation_suppressed_by_user_id = v_actor_user_id,
+    reconciliation_suppression_reason = v_reason
+  WHERE integration.id = v_integration.id;
+
+  PERFORM private.apply_domain_job_failure(
+    v_job.id,
+    'administrator_cancelled',
+    v_now
+  );
 
   RETURN true;
 END;

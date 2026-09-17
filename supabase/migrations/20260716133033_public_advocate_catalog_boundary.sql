@@ -523,111 +523,6 @@ GRANT EXECUTE ON FUNCTION private.validate_public_beneficiary_catalog_request(
   uuid
 ) TO service_role;
 
-CREATE OR REPLACE FUNCTION private.validate_sponsorship_checkout_eligibility(
-  target_sponsorship_intent_id uuid
-)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-  v_intent public.sponsorship_intents%ROWTYPE;
-  v_beneficiary public.beneficiaries%ROWTYPE;
-  v_advocate public.advocates%ROWTYPE;
-  v_domain public.advocate_domains%ROWTYPE;
-BEGIN
-  SELECT intent.*
-  INTO v_intent
-  FROM public.sponsorship_intents intent
-  WHERE intent.id = target_sponsorship_intent_id
-  FOR SHARE;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Sponsorship intent does not exist'
-      USING ERRCODE = '23503';
-  END IF;
-
-  IF v_intent.base_amount_usd_cents < 500
-     OR v_intent.base_amount_usd_cents > 2147483647
-     OR v_intent.charged_amount_minor < 1
-     OR v_intent.charged_amount_minor > 2147483647
-     OR v_intent.charged_amount_minor IS DISTINCT FROM
-       round(v_intent.base_amount_usd_cents * v_intent.conversion_rate) THEN
-    RAISE EXCEPTION 'Sponsorship amount is outside product bounds or fails currency conversion'
-      USING ERRCODE = '23514';
-  END IF;
-
-  IF (v_intent.payment_mode = 'one_time' AND v_intent.recurrence_interval IS NOT NULL)
-     OR (v_intent.payment_mode = 'recurring'
-       AND v_intent.recurrence_interval NOT IN ('month', 'year')) THEN
-    RAISE EXCEPTION 'Sponsorship recurrence does not match the product rules'
-      USING ERRCODE = '23514';
-  END IF;
-
-  IF v_intent.subject_kind = 'standard' THEN
-    SELECT beneficiary.*
-    INTO v_beneficiary
-    FROM public.beneficiaries beneficiary
-    WHERE beneficiary.id = v_intent.beneficiary_id
-    FOR SHARE;
-
-    IF NOT FOUND
-       OR NOT private.is_beneficiary_canonically_sponsorable(
-         v_beneficiary.status,
-         v_beneficiary.budget_goal,
-         v_beneficiary.goal_fulfilled_at
-       ) THEN
-      RAISE EXCEPTION 'Beneficiary is not canonically eligible for sponsorship'
-        USING ERRCODE = '23514';
-    END IF;
-
-    IF v_beneficiary.budget_goal <> -1
-       AND v_intent.base_amount_usd_cents IS DISTINCT FROM v_beneficiary.budget_goal::bigint THEN
-      RAISE EXCEPTION 'Fixed sponsorship amount must equal the beneficiary budget goal'
-        USING ERRCODE = '23514';
-    END IF;
-  END IF;
-
-  IF v_intent.source = 'advocate_domain' THEN
-    SELECT advocate.*
-    INTO v_advocate
-    FROM public.advocates advocate
-    WHERE advocate.id = v_intent.source_advocate_id
-    FOR SHARE;
-
-    SELECT domain.*
-    INTO v_domain
-    FROM public.advocate_domains domain
-    WHERE domain.id = v_intent.source_advocate_domain_id
-      AND domain.advocate_id = v_intent.source_advocate_id
-    FOR SHARE;
-
-    IF v_advocate.id IS NULL
-       OR v_domain.id IS NULL
-       OR v_advocate.relationship_status <> 'active'
-       OR v_advocate.publication_status <> 'active'
-       OR v_domain.status <> 'active'
-       OR v_domain.hostname <> v_intent.source_host THEN
-      RAISE EXCEPTION 'Advocate portal is not eligible to begin checkout'
-        USING ERRCODE = '23514';
-    END IF;
-
-    IF v_intent.subject_kind = 'standard'
-       AND v_advocate.beneficiary_mode = 'selected'
-       AND NOT EXISTS (
-         SELECT 1
-         FROM public.advocate_beneficiaries selection
-         WHERE selection.advocate_id = v_advocate.id
-           AND selection.beneficiary_id = v_intent.beneficiary_id
-       ) THEN
-      RAISE EXCEPTION 'Beneficiary is not selected for this advocate portal'
-        USING ERRCODE = '23514';
-    END IF;
-  END IF;
-END;
-$$;
-
 COMMENT ON FUNCTION private.validate_sponsorship_checkout_eligibility(uuid) IS
   'Validates amount, recurrence, canonical beneficiary eligibility including fulfillment evidence, and exact advocate catalog eligibility before a payment quote is issued.';
 
@@ -931,7 +826,7 @@ BEGIN
       public_beneficiary.id,
       public_beneficiary.created_at,
       CASE
-        WHEN v_beneficiary_mode IN ('all_featured', 'selected')
+        WHEN v_beneficiary_mode = 'all_featured'
           AND selection.is_featured IS TRUE
           THEN 0
         ELSE 1
@@ -967,7 +862,10 @@ BEGIN
     LEFT JOIN public.advocate_beneficiaries selection
       ON selection.advocate_id = v_advocate_id
       AND selection.beneficiary_id = beneficiary.id
-    WHERE private.is_public_beneficiary_projection_safe(
+    WHERE private.is_advocate_child_eligible(
+        beneficiary.status,
+        beneficiary.budget_goal,
+        beneficiary.goal_fulfilled_at,
         public_beneficiary.name,
         public_beneficiary.username,
         public_beneficiary.biography,
@@ -976,11 +874,6 @@ BEGIN
         public_beneficiary.video_url,
         public_beneficiary.introduction,
         public_beneficiary.beneficiary_type
-      )
-      AND private.is_beneficiary_canonically_sponsorable(
-        beneficiary.status,
-        beneficiary.budget_goal,
-        beneficiary.goal_fulfilled_at
       )
       AND (
         v_beneficiary_mode <> 'selected'
@@ -1304,7 +1197,10 @@ BEGIN
   LEFT JOIN public.advocate_beneficiaries selection
     ON selection.advocate_id = v_advocate_id
     AND selection.beneficiary_id = beneficiary.id
-  WHERE private.is_public_beneficiary_projection_safe(
+  WHERE private.is_advocate_child_eligible(
+      beneficiary.status,
+      beneficiary.budget_goal,
+      beneficiary.goal_fulfilled_at,
       public_beneficiary.name,
       public_beneficiary.username,
       public_beneficiary.biography,
@@ -1322,11 +1218,6 @@ BEGIN
         AND public_beneficiary.username = target_username
       )
       OR beneficiary.id = target_beneficiary_id
-    )
-    AND private.is_beneficiary_canonically_sponsorable(
-      beneficiary.status,
-      beneficiary.budget_goal,
-      beneficiary.goal_fulfilled_at
     )
     AND (
       v_beneficiary_mode <> 'selected'

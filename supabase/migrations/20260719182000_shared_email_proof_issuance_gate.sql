@@ -298,11 +298,20 @@ BEGIN
     v_now := clock_timestamp();
 
     v_all_fences_expired := CASE v_gate.phase
-      WHEN 'reserved' THEN v_gate.reservation_expires_at <= v_now
+      WHEN 'reserved' THEN
+        v_gate.reservation_expires_at <= v_now
+        AND COALESCE(
+          v_gate.legacy_proof_quarantine_expires_at,
+          '-infinity'::timestamptz
+        ) <= v_now
       ELSE
         v_gate.reservation_expires_at <= v_now
         AND v_gate.next_issuance_at <= v_now
         AND v_gate.proof_exclusivity_expires_at <= v_now
+        AND COALESCE(
+          v_gate.legacy_proof_quarantine_expires_at,
+          '-infinity'::timestamptz
+        ) <= v_now
     END;
 
     IF v_all_fences_expired THEN
@@ -326,7 +335,8 @@ BEGIN
         proof_exclusivity_expires_at = NULL,
         finish_disposition = NULL,
         finished_at = NULL,
-        updated_at = v_now
+        updated_at = v_now,
+        legacy_proof_quarantine_expires_at = NULL
       WHERE gate.id = v_gate.id;
 
       RETURN QUERY SELECT 'acquired'::text, 0;
@@ -336,17 +346,31 @@ BEGIN
     IF v_gate.operation_id = target_operation_id
        AND v_gate.issuance_flow = target_issuance_flow THEN
       IF v_gate.phase = 'reserved'
-         AND v_gate.lease_token_digest = v_lease_token_digest THEN
+         AND v_gate.lease_token_digest = v_lease_token_digest
+         AND COALESCE(
+           v_gate.legacy_proof_quarantine_expires_at,
+           '-infinity'::timestamptz
+         ) <= v_now THEN
         RETURN QUERY SELECT 'acquired'::text, 0;
         RETURN;
       END IF;
 
       v_retry_at := CASE v_gate.phase
-        WHEN 'reserved' THEN v_gate.reservation_expires_at
+        WHEN 'reserved' THEN GREATEST(
+          v_gate.reservation_expires_at,
+          COALESCE(
+            v_gate.legacy_proof_quarantine_expires_at,
+            '-infinity'::timestamptz
+          )
+        )
         ELSE GREATEST(
           v_gate.reservation_expires_at,
           v_gate.next_issuance_at,
-          v_gate.proof_exclusivity_expires_at
+          v_gate.proof_exclusivity_expires_at,
+          COALESCE(
+            v_gate.legacy_proof_quarantine_expires_at,
+            '-infinity'::timestamptz
+          )
         )
       END;
       v_retry_after_seconds := LEAST(
@@ -362,11 +386,21 @@ BEGIN
     END IF;
 
     v_retry_at := CASE v_gate.phase
-      WHEN 'reserved' THEN v_gate.reservation_expires_at
+      WHEN 'reserved' THEN GREATEST(
+        v_gate.reservation_expires_at,
+        COALESCE(
+          v_gate.legacy_proof_quarantine_expires_at,
+          '-infinity'::timestamptz
+        )
+      )
       ELSE GREATEST(
         v_gate.reservation_expires_at,
         v_gate.next_issuance_at,
-        v_gate.proof_exclusivity_expires_at
+        v_gate.proof_exclusivity_expires_at,
+        COALESCE(
+          v_gate.legacy_proof_quarantine_expires_at,
+          '-infinity'::timestamptz
+        )
       )
     END;
     v_retry_after_seconds := LEAST(
@@ -437,6 +471,10 @@ BEGIN
        v_gate.phase = 'reserved'
        AND v_gate.reservation_expires_at <= v_now
      )
+     OR COALESCE(
+       v_gate.legacy_proof_quarantine_expires_at,
+       '-infinity'::timestamptz
+     ) > v_now
      OR v_gate.phase IS DISTINCT FROM 'reserved' THEN
     RAISE EXCEPTION 'Email proof issuance fence is stale'
       USING ERRCODE = '55000';
@@ -608,7 +646,11 @@ BEGIN
      OR v_gate.operation_id IS DISTINCT FROM target_operation_id
      OR v_gate.lease_token_digest IS DISTINCT FROM v_lease_token_digest
      OR v_gate.phase IS DISTINCT FROM 'reserved'
-     OR v_gate.reservation_expires_at <= v_now THEN
+     OR v_gate.reservation_expires_at <= v_now
+     OR COALESCE(
+       v_gate.legacy_proof_quarantine_expires_at,
+       '-infinity'::timestamptz
+     ) > v_now THEN
     RAISE EXCEPTION 'Email proof issuance fence is stale'
       USING ERRCODE = '55000';
   END IF;
@@ -638,6 +680,18 @@ AS $$
 DECLARE
   v_now timestamptz := clock_timestamp();
   v_deleted integer;
+  v_request_id text := nullif(
+    current_setting('app.data_retention.request_id', true),
+    ''
+  );
+  v_trace_id text := nullif(
+    current_setting('app.data_retention.trace_id', true),
+    ''
+  );
+  v_run_id text := nullif(
+    current_setting('app.data_retention.run_id', true),
+    ''
+  );
 BEGIN
   PERFORM private.require_email_proof_issuance_service_role();
 
@@ -648,9 +702,22 @@ BEGIN
 
   PERFORM audit.set_actor_context(
     context_actor_type => 'system'::audit.audit_actor_type,
-    context_system_actor => 'email-proof-issuance-retention',
-    context_tool => 'purge_expired_email_proof_issuance_gates',
-    context_metadata => jsonb_build_object('operation', 'retention')
+    context_system_actor => CASE
+      WHEN v_run_id IS NULL THEN 'email-proof-issuance-retention'
+      ELSE 'retention-worker'
+    END,
+    context_tool => CASE
+      WHEN v_run_id IS NULL THEN 'purge_expired_email_proof_issuance_gates'
+      ELSE 'database-retention'
+    END,
+    context_request_id => v_request_id,
+    context_trace_id => v_trace_id,
+    context_reason => 'Expired email proof issuance gate retention',
+    context_metadata => jsonb_build_object(
+      'operation', 'delete',
+      'resource_kind', 'email_proof_issuance_gate',
+      'batch_id', v_run_id
+    )
   );
 
   WITH expired AS MATERIALIZED (
@@ -662,7 +729,12 @@ BEGIN
         gate.proof_exclusivity_expires_at,
         '-infinity'::timestamptz
       ) <= v_now
+      AND COALESCE(
+        gate.legacy_proof_quarantine_expires_at,
+        '-infinity'::timestamptz
+      ) <= v_now
     ORDER BY
+      gate.legacy_proof_quarantine_expires_at NULLS FIRST,
       gate.proof_exclusivity_expires_at NULLS FIRST,
       gate.next_issuance_at NULLS FIRST,
       gate.reservation_expires_at,

@@ -212,7 +212,7 @@ SET search_path = ''
 AS $$
 BEGIN
   IF target_provider = 'STRIPE'
-     AND target_event_type = 'refund.created'
+     AND target_event_type IN ('refund.created', 'refund.updated')
      AND target_provider_object_type = 'refund'
      AND target_adjustment_provider_movement_type = 'refund' THEN
     RETURN 'sponsorship_refund';
@@ -227,93 +227,47 @@ BEGIN
      AND target_adjustment_provider_movement_type = 'dispute' THEN
     RETURN 'sponsorship_dispute_credit';
   ELSIF target_provider = 'PAYPAL'
+     AND target_event_type IN (
+       'PAYMENT.CAPTURE.REFUNDED',
+       'PAYMENT.SALE.REFUNDED'
+     )
      AND (
-       (
-         target_event_type = 'PAYMENT.CAPTURE.REFUNDED'
-         AND target_provider_object_type = 'capture'
-       )
-       OR (
-         target_event_type = 'PAYMENT.SALE.REFUNDED'
-         AND target_provider_object_type = 'sale'
-       )
+       (target_event_type = 'PAYMENT.CAPTURE.REFUNDED'
+        AND target_provider_object_type = 'capture')
+       OR
+       (target_event_type = 'PAYMENT.SALE.REFUNDED'
+        AND target_provider_object_type = 'sale')
      )
      AND target_adjustment_provider_movement_type = 'refund' THEN
     RETURN 'sponsorship_refund';
   ELSIF target_provider = 'PAYPAL'
+     AND target_event_type IN (
+       'PAYMENT.CAPTURE.REVERSED',
+       'PAYMENT.SALE.REVERSED'
+     )
      AND (
-       (
-         target_event_type = 'PAYMENT.CAPTURE.REVERSED'
-         AND target_provider_object_type = 'capture'
-       )
-       OR (
-         target_event_type = 'PAYMENT.SALE.REVERSED'
-         AND target_provider_object_type = 'sale'
-       )
+       (target_event_type = 'PAYMENT.CAPTURE.REVERSED'
+        AND target_provider_object_type = 'capture')
+       OR
+       (target_event_type = 'PAYMENT.SALE.REVERSED'
+        AND target_provider_object_type = 'sale')
      )
      AND target_adjustment_provider_movement_type = 'reversal' THEN
     RETURN 'sponsorship_reversal';
+  ELSIF target_provider = 'PAYPAL'
+     AND target_event_type = 'CUSTOMER.DISPUTE.CREATED'
+     AND target_provider_object_type IN ('capture', 'sale')
+     AND target_adjustment_provider_movement_type = 'dispute' THEN
+    RETURN 'sponsorship_dispute_debit';
+  ELSIF target_provider = 'PAYPAL'
+     AND target_event_type = 'CUSTOMER.DISPUTE.RESOLVED'
+     AND target_provider_object_type IN ('capture', 'sale')
+     AND target_adjustment_provider_movement_type = 'dispute' THEN
+    RETURN 'sponsorship_dispute_credit';
   END IF;
 
   RAISE EXCEPTION 'Unsupported financial adjustment event and object mapping'
     USING ERRCODE = '22023';
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION private.validate_provider_event_type(
-  target_provider public.sponsorship_method,
-  target_event_type text,
-  target_provider_object_type text
-)
-RETURNS void
-LANGUAGE plpgsql
-IMMUTABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-  IF target_provider = 'STRIPE' AND NOT (
-    (target_event_type IN (
-      'checkout.session.completed',
-      'checkout.session.async_payment_succeeded',
-      'checkout.session.async_payment_failed'
-    ) AND target_provider_object_type = 'checkout_session')
-    OR
-    (target_event_type IN (
-      'invoice.paid',
-      'invoice.payment_succeeded',
-      'invoice.payment_failed'
-    ) AND target_provider_object_type = 'invoice')
-    OR
-    (target_event_type IN (
-      'customer.subscription.created',
-      'customer.subscription.updated',
-      'customer.subscription.deleted'
-    ) AND target_provider_object_type = 'subscription')
-  ) THEN
-    RAISE EXCEPTION 'Unsupported Stripe event and object type combination'
-      USING ERRCODE = '22023';
-  ELSIF target_provider = 'PAYPAL' AND NOT (
-    (target_event_type IN (
-      'PAYMENT.CAPTURE.COMPLETED',
-      'PAYMENT.CAPTURE.DENIED'
-    ) AND target_provider_object_type = 'capture')
-    OR
-    (target_event_type IN (
-      'PAYMENT.SALE.COMPLETED',
-      'PAYMENT.SALE.DENIED'
-    ) AND target_provider_object_type = 'sale')
-    OR
-    (target_event_type IN (
-      'BILLING.SUBSCRIPTION.ACTIVATED',
-      'BILLING.SUBSCRIPTION.CANCELLED',
-      'BILLING.SUBSCRIPTION.SUSPENDED',
-      'BILLING.SUBSCRIPTION.EXPIRED',
-      'BILLING.SUBSCRIPTION.UPDATED'
-    ) AND target_provider_object_type = 'billing_subscription')
-  ) THEN
-    RAISE EXCEPTION 'Unsupported PayPal event and object type combination'
-      USING ERRCODE = '22023';
-  END IF;
 END;
 $$;
 

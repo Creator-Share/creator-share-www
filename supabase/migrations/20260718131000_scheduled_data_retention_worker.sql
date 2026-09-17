@@ -30,47 +30,8 @@ $$;
 REVOKE ALL ON FUNCTION private.require_data_retention_service_role()
   FROM PUBLIC, anon, authenticated, service_role;
 
-
-
-CREATE OR REPLACE FUNCTION audit.purge_expired_forensics(
-  batch_size integer DEFAULT 1000
-)
-RETURNS integer
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-  v_deleted integer;
-BEGIN
-  PERFORM private.require_data_retention_service_role();
-
-  IF batch_size IS NULL OR batch_size < 1 OR batch_size > 5000 THEN
-    RAISE EXCEPTION 'Retention batch size must be between 1 and 5000'
-      USING ERRCODE = '22023';
-  END IF;
-
-  WITH expired AS MATERIALIZED (
-    SELECT forensic.audit_event_id
-    FROM audit.audit_event_forensics forensic
-    WHERE forensic.expires_at <= clock_timestamp()
-    ORDER BY forensic.expires_at, forensic.audit_event_id
-    LIMIT batch_size
-    FOR UPDATE SKIP LOCKED
-  )
-  DELETE FROM audit.audit_event_forensics forensic
-  USING expired
-  WHERE forensic.audit_event_id = expired.audit_event_id;
-
-  GET DIAGNOSTICS v_deleted = ROW_COUNT;
-  RETURN v_deleted;
-END;
-$$;
-
 REVOKE ALL ON FUNCTION audit.purge_expired_forensics(integer)
   FROM PUBLIC, anon, authenticated, service_role;
-
-
 
 REVOKE ALL ON FUNCTION public.purge_sponsorship_checkout_contact_envelopes(
   integer,
@@ -565,250 +526,6 @@ REVOKE ALL ON FUNCTION private.validate_data_retention_run_context(
  * These legacy one argument functions remain callable by existing workers.
  * During a scheduled run they consume transaction local correlation context.
  */
-CREATE OR REPLACE FUNCTION public.purge_expired_advocate_tracking(
-  batch_size integer DEFAULT 500
-)
-RETURNS TABLE (
-  exposures_deleted bigint,
-  visitors_deleted bigint
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-  v_now timestamptz := clock_timestamp();
-  v_exposures_deleted bigint;
-  v_visitors_deleted bigint;
-  v_request_id text := nullif(
-    current_setting('app.data_retention.request_id', true),
-    ''
-  );
-  v_trace_id text := nullif(
-    current_setting('app.data_retention.trace_id', true),
-    ''
-  );
-  v_run_id text := nullif(
-    current_setting('app.data_retention.run_id', true),
-    ''
-  );
-BEGIN
-  PERFORM private.require_data_retention_service_role();
-
-  IF batch_size IS NULL OR batch_size < 1 OR batch_size > 5000 THEN
-    RAISE EXCEPTION 'Retention batch size must be between 1 and 5000'
-      USING ERRCODE = '22023';
-  END IF;
-
-  PERFORM audit.set_actor_context(
-    context_actor_type => 'system'::audit.audit_actor_type,
-    context_system_actor => 'retention-worker',
-    context_tool => 'database-retention',
-    context_request_id => v_request_id,
-    context_trace_id => v_trace_id,
-    context_reason => 'Expired advocate tracking retention',
-    context_metadata => jsonb_build_object(
-      'operation', 'delete',
-      'resource_kind', 'advocate_tracking',
-      'batch_id', v_run_id
-    )
-  );
-
-  WITH candidates AS MATERIALIZED (
-    SELECT exposure.id
-    FROM public.advocate_exposures exposure
-    WHERE exposure.retention_expires_at <= v_now
-    ORDER BY exposure.retention_expires_at, exposure.id
-    LIMIT batch_size
-    FOR UPDATE SKIP LOCKED
-  ), deleted AS (
-    DELETE FROM public.advocate_exposures exposure
-    USING candidates candidate
-    WHERE exposure.id = candidate.id
-    RETURNING exposure.id
-  )
-  SELECT count(*) INTO v_exposures_deleted FROM deleted;
-
-  WITH candidates AS MATERIALIZED (
-    SELECT visitor.id
-    FROM public.browser_visitors visitor
-    WHERE visitor.retention_expires_at <= v_now
-      AND NOT EXISTS (
-        SELECT 1
-        FROM public.advocate_exposures exposure
-        WHERE exposure.browser_visitor_id = visitor.id
-      )
-    ORDER BY visitor.retention_expires_at, visitor.id
-    LIMIT batch_size
-    FOR UPDATE SKIP LOCKED
-  ), deleted AS (
-    DELETE FROM public.browser_visitors visitor
-    USING candidates candidate
-    WHERE visitor.id = candidate.id
-    RETURNING visitor.id
-  )
-  SELECT count(*) INTO v_visitors_deleted FROM deleted;
-
-  RETURN QUERY SELECT v_exposures_deleted, v_visitors_deleted;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.purge_expired_gateway_event_payloads(
-  batch_size integer DEFAULT 500
-)
-RETURNS bigint
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-  v_now timestamptz := clock_timestamp();
-  v_redacted_count bigint;
-  v_request_id text := nullif(
-    current_setting('app.data_retention.request_id', true),
-    ''
-  );
-  v_trace_id text := nullif(
-    current_setting('app.data_retention.trace_id', true),
-    ''
-  );
-  v_run_id text := nullif(
-    current_setting('app.data_retention.run_id', true),
-    ''
-  );
-BEGIN
-  PERFORM private.require_data_retention_service_role();
-
-  IF batch_size IS NULL OR batch_size < 1 OR batch_size > 5000 THEN
-    RAISE EXCEPTION 'Retention batch size must be between 1 and 5000'
-      USING ERRCODE = '22023';
-  END IF;
-
-  PERFORM audit.set_actor_context(
-    context_actor_type => 'system'::audit.audit_actor_type,
-    context_system_actor => 'retention-worker',
-    context_tool => 'database-retention',
-    context_request_id => v_request_id,
-    context_trace_id => v_trace_id,
-    context_reason => 'Expired encrypted gateway payload retention',
-    context_metadata => jsonb_build_object(
-      'operation', 'redact',
-      'resource_kind', 'payment_gateway_event_payload',
-      'batch_id', v_run_id
-    )
-  );
-
-  WITH candidates AS MATERIALIZED (
-    SELECT event.id
-    FROM public.payment_gateway_events event
-    WHERE event.payload_ciphertext IS NOT NULL
-      AND event.payload_retention_expires_at <= v_now
-    ORDER BY event.payload_retention_expires_at, event.id
-    LIMIT batch_size
-    FOR UPDATE SKIP LOCKED
-  ), redacted AS (
-    UPDATE public.payment_gateway_events event
-    SET payload_ciphertext = NULL, payload_redacted_at = v_now
-    FROM candidates candidate
-    WHERE event.id = candidate.id
-    RETURNING event.id
-  )
-  SELECT count(*) INTO v_redacted_count FROM redacted;
-
-  RETURN v_redacted_count;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.purge_expired_email_outbox_contact(
-  batch_size integer DEFAULT 500
-)
-RETURNS bigint
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-  v_now timestamptz := clock_timestamp();
-  v_redacted_count bigint;
-  v_request_id text := nullif(
-    current_setting('app.data_retention.request_id', true),
-    ''
-  );
-  v_trace_id text := nullif(
-    current_setting('app.data_retention.trace_id', true),
-    ''
-  );
-  v_run_id text := nullif(
-    current_setting('app.data_retention.run_id', true),
-    ''
-  );
-BEGIN
-  PERFORM private.require_data_retention_service_role();
-
-  IF batch_size IS NULL OR batch_size < 1 OR batch_size > 5000 THEN
-    RAISE EXCEPTION 'Retention batch size must be between 1 and 5000'
-      USING ERRCODE = '22023';
-  END IF;
-
-  PERFORM audit.set_actor_context(
-    context_actor_type => 'system'::audit.audit_actor_type,
-    context_system_actor => 'retention-worker',
-    context_tool => 'email-outbox-retention',
-    context_request_id => v_request_id,
-    context_trace_id => v_trace_id,
-    context_reason => 'Redact expired or undeliverable welcome email contact data',
-    context_metadata => jsonb_build_object(
-      'operation', 'redact',
-      'resource_kind', 'email_outbox_contact',
-      'batch_id', v_run_id
-    )
-  );
-  PERFORM pg_catalog.set_config(
-    'app.email_outbox.lifecycle_operation',
-    'purge',
-    true
-  );
-
-  WITH candidates AS MATERIALIZED (
-    SELECT outbox.id
-    FROM public.email_outbox outbox
-    LEFT JOIN public.sponsorship_account_claims claim
-      ON claim.id = outbox.account_claim_id
-    WHERE outbox.contact_redacted_at IS NULL
-      AND (
-        outbox.contact_retention_expires_at <= v_now
-        OR claim.id IS NULL
-        OR claim.status <> 'pending'
-        OR claim.expires_at <= v_now
-        OR claim.revoked_at IS NOT NULL
-      )
-    ORDER BY outbox.contact_retention_expires_at, outbox.id
-    LIMIT batch_size
-    FOR UPDATE OF outbox SKIP LOCKED
-  ), redacted AS (
-    UPDATE public.email_outbox outbox
-    SET
-      status = CASE
-        WHEN outbox.status = 'sent' THEN 'sent'::public.email_outbox_status
-        WHEN outbox.status = 'cancelled' THEN 'cancelled'::public.email_outbox_status
-        ELSE 'cancelled'::public.email_outbox_status
-      END,
-      recipient_email_ciphertext = NULL,
-      recipient_email_hmac = NULL,
-      email_normalization_version = NULL,
-      email_hmac_key_version = NULL,
-      email_encryption_key_version = NULL,
-      secret_payload_ciphertext = NULL,
-      contact_redacted_at = v_now
-    FROM candidates candidate
-    WHERE outbox.id = candidate.id
-    RETURNING outbox.id
-  )
-  SELECT count(*) INTO v_redacted_count FROM redacted;
-
-  RETURN v_redacted_count;
-END;
-$$;
 
 CREATE OR REPLACE FUNCTION public.purge_expired_audit_forensics(
   batch_size integer DEFAULT 1000
@@ -963,13 +680,8 @@ BEGIN
             FILTER (WHERE event.status = 'completed') AS completed_steps,
           array_agg(event.step_key ORDER BY steps.ordinality)
             FILTER (WHERE event.has_more) AS backlog_steps
-        FROM unnest(ARRAY[
-          'checkout_contact_envelopes',
-          'email_outbox_contact',
-          'gateway_event_payloads',
-          'audit_forensics',
-          'advocate_tracking'
-        ]::text[]) WITH ORDINALITY steps(step_key, ordinality)
+        FROM unnest(private.data_retention_step_keys())
+          WITH ORDINALITY steps(step_key, ordinality)
         LEFT JOIN audit.data_retention_run_events event
           ON event.run_id = start_data_retention_run.run_id
          AND event.event_kind = 'step_outcome'
@@ -1041,13 +753,8 @@ BEGIN
         FILTER (WHERE event.status = 'completed') AS completed_steps,
       array_agg(event.step_key ORDER BY steps.ordinality)
         FILTER (WHERE event.has_more) AS backlog_steps
-    FROM unnest(ARRAY[
-      'checkout_contact_envelopes',
-      'email_outbox_contact',
-      'gateway_event_payloads',
-      'audit_forensics',
-      'advocate_tracking'
-    ]::text[]) WITH ORDINALITY steps(step_key, ordinality)
+    FROM unnest(private.data_retention_step_keys())
+      WITH ORDINALITY steps(step_key, ordinality)
     LEFT JOIN audit.data_retention_run_events event
       ON event.run_id = stale.run_id
      AND event.event_kind = 'step_outcome'
@@ -1102,6 +809,7 @@ DECLARE
   v_has_more boolean;
   v_oldest_expired_at timestamp with time zone;
   v_checkout record;
+  v_sponsor_authentication record;
   v_tracking record;
   v_scalar bigint;
   v_expected_batch_size integer;
@@ -1212,6 +920,23 @@ BEGIN
       WHEN 'audit_forensics' THEN
         v_scalar := public.purge_expired_audit_forensics(batch_size);
         v_counts := jsonb_build_object('deleted_count', v_scalar);
+      WHEN 'sponsor_authentication' THEN
+        SELECT cleanup.*
+        INTO STRICT v_sponsor_authentication
+        FROM public.purge_expired_sponsor_authentication_evidence(batch_size)
+          cleanup;
+        v_counts := jsonb_build_object(
+          'recent_auth_receipts_deleted',
+          v_sponsor_authentication.recent_auth_receipts_deleted,
+          'passwordless_reservations_deleted',
+          v_sponsor_authentication.passwordless_reservations_deleted,
+          'passwordless_verification_attempts_deleted',
+          v_sponsor_authentication.passwordless_verification_attempts_deleted,
+          'advocate_invitation_authentication_attempts_deleted',
+          v_sponsor_authentication.advocate_invitation_authentication_attempts_deleted,
+          'email_proof_issuance_gates_deleted',
+          v_sponsor_authentication.email_proof_issuance_gates_deleted
+        );
       WHEN 'advocate_tracking' THEN
         SELECT cleanup.*
         INTO STRICT v_tracking
@@ -1278,19 +1003,11 @@ AS $$
 DECLARE
   v_header record;
   v_terminal record;
-  v_all_steps constant text[] := ARRAY[
-    'checkout_contact_envelopes',
-    'email_outbox_contact',
-    'gateway_event_payloads',
-    'audit_forensics',
-    'advocate_tracking'
-  ]::text[];
+  v_all_steps text[] := private.data_retention_step_keys();
   v_failed_steps text[];
   v_completed_steps text[];
   v_backlog_steps text[];
   v_step_key text;
-  v_has_more boolean;
-  v_oldest_expired_at timestamp with time zone;
   v_status text;
   v_health_status text;
 BEGIN
@@ -1320,7 +1037,10 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  SELECT COALESCE(array_agg(steps.step_key ORDER BY steps.ordinality), ARRAY[]::text[])
+  SELECT COALESCE(
+    array_agg(steps.step_key ORDER BY steps.ordinality),
+    ARRAY[]::text[]
+  )
   INTO v_failed_steps
   FROM unnest(v_all_steps) WITH ORDINALITY steps(step_key, ordinality)
   WHERE steps.step_key = ANY (reported_failed_steps);
@@ -1342,10 +1062,6 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  /*
-   * A committed completed outcome wins over a caller reported timeout. This
-   * makes finish safe after the cleanup committed but its response was lost.
-   */
   SELECT COALESCE(
     array_agg(steps.step_key ORDER BY steps.ordinality),
     ARRAY[]::text[]

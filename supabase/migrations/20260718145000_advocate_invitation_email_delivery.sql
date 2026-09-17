@@ -312,6 +312,7 @@ BEGIN
 
   IF NEW.id IS DISTINCT FROM OLD.id
      OR NEW.advocate_id IS DISTINCT FROM OLD.advocate_id
+     OR NEW.invitation_kind IS DISTINCT FROM OLD.invitation_kind
      OR NEW.email IS DISTINCT FROM OLD.email
      OR NEW.token_digest IS DISTINCT FROM OLD.token_digest
      OR NEW.expires_at IS DISTINCT FROM OLD.expires_at
@@ -419,6 +420,13 @@ DECLARE
     ''
   );
   v_now timestamp with time zone := clock_timestamp();
+  v_proof_disposition text := nullif(
+    pg_catalog.current_setting(
+      'app.advocate.invitation_email_proof_disposition',
+      true
+    ),
+    ''
+  );
 BEGIN
   IF TG_OP = 'DELETE' THEN
     RAISE EXCEPTION 'Advocate invitation email rows cannot be deleted'
@@ -430,7 +438,9 @@ BEGIN
        OR NEW.status <> 'pending'
        OR NEW.attempt_count <> 0
        OR NEW.max_attempts <> 8
-       OR NEW.contact_redacted_at IS NOT NULL THEN
+       OR NEW.contact_redacted_at IS NOT NULL
+       OR NEW.legacy_email_proof_quarantined_at IS NOT NULL
+       OR NEW.legacy_email_proof_quarantine_reason IS NOT NULL THEN
       RAISE EXCEPTION 'Invitation email rows require atomic invitation issuance'
         USING ERRCODE = '42501';
     END IF;
@@ -476,9 +486,41 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
-  IF v_operation = 'claim' THEN
+  IF v_operation <> 'quarantine_legacy_email_proof'
+     AND (
+       NEW.legacy_email_proof_quarantined_at IS DISTINCT FROM
+         OLD.legacy_email_proof_quarantined_at
+       OR NEW.legacy_email_proof_quarantine_reason IS DISTINCT FROM
+         OLD.legacy_email_proof_quarantine_reason
+     ) THEN
+    RAISE EXCEPTION 'Invitation email legacy proof quarantine is immutable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_operation = 'quarantine_legacy_email_proof' THEN
+    IF OLD.legacy_email_proof_quarantined_at IS NOT NULL
+       OR NEW.legacy_email_proof_quarantined_at IS NULL
+       OR NEW.legacy_email_proof_quarantine_reason <>
+         'shared_issuer_cutover_unresolved_legacy_proof'
+       OR NEW.status IS DISTINCT FROM OLD.status
+       OR NEW.available_at IS DISTINCT FROM OLD.available_at
+       OR NEW.attempt_count IS DISTINCT FROM OLD.attempt_count
+       OR NEW.locked_at IS DISTINCT FROM OLD.locked_at
+       OR NEW.locked_by IS DISTINCT FROM OLD.locked_by
+       OR NEW.locked_lease_token_digest IS DISTINCT FROM
+         OLD.locked_lease_token_digest
+       OR NEW.delivery_started_at IS DISTINCT FROM OLD.delivery_started_at
+       OR NEW.provider_message_id IS DISTINCT FROM OLD.provider_message_id
+       OR NEW.sent_at IS DISTINCT FROM OLD.sent_at
+       OR NEW.last_error_code IS DISTINCT FROM OLD.last_error_code
+       OR NEW.cancelled_at IS DISTINCT FROM OLD.cancelled_at THEN
+      RAISE EXCEPTION 'Invitation email legacy proof quarantine is invalid'
+        USING ERRCODE = '42501';
+    END IF;
+  ELSIF v_operation = 'claim' THEN
     IF OLD.attempt_count >= OLD.max_attempts
        OR OLD.contact_redacted_at IS NOT NULL
+       OR OLD.legacy_email_proof_quarantined_at IS NOT NULL
        OR NOT (
          (
            OLD.status IN ('pending', 'failed')
@@ -506,6 +548,7 @@ BEGIN
     END IF;
   ELSIF v_operation = 'begin_delivery' THEN
     IF OLD.status <> 'processing'
+       OR OLD.legacy_email_proof_quarantined_at IS NOT NULL
        OR OLD.delivery_started_at IS NOT NULL
        OR NEW.status <> 'processing'
        OR NEW.delivery_started_at IS NULL
@@ -557,6 +600,53 @@ BEGIN
        OR NEW.sent_at IS NOT NULL
        OR NEW.cancelled_at IS NOT NULL THEN
       RAISE EXCEPTION 'Invitation email failure settlement is invalid'
+        USING ERRCODE = '42501';
+    END IF;
+  ELSIF v_operation = 'settle_email_proof' THEN
+    IF OLD.status <> 'processing'
+       OR OLD.delivery_started_at IS NOT NULL
+       OR NEW.status <> 'failed'
+       OR v_proof_disposition NOT IN (
+         'coalesced',
+         'deferred',
+         'ambiguous',
+         'unavailable',
+         'begin_ambiguous',
+         'issued_not_handed_off',
+         'issued_target_mismatch'
+       )
+       OR NEW.last_error_code IS DISTINCT FROM (CASE
+         WHEN v_proof_disposition IN ('coalesced', 'deferred')
+           THEN 'email_proof_deferred'
+         WHEN v_proof_disposition IN ('ambiguous', 'begin_ambiguous')
+           THEN 'email_proof_issuance_ambiguous'
+         WHEN v_proof_disposition = 'issued_not_handed_off'
+           THEN 'email_proof_issued_not_handed_off'
+         WHEN v_proof_disposition = 'issued_target_mismatch'
+           THEN 'invitation_target_unavailable'
+         WHEN v_proof_disposition = 'unavailable'
+           THEN 'email_proof_unavailable'
+         ELSE NULL
+       END)
+       OR NEW.attempt_count IS DISTINCT FROM
+         OLD.attempt_count - (CASE
+           WHEN v_proof_disposition IN (
+             'coalesced',
+             'deferred',
+             'unavailable',
+             'begin_ambiguous'
+           ) THEN 1
+           ELSE 0
+         END)
+       OR NEW.attempt_count < 0
+       OR NEW.locked_at IS NOT NULL
+       OR NEW.locked_by IS NOT NULL
+       OR NEW.locked_lease_token_digest IS NOT NULL
+       OR NEW.delivery_started_at IS NOT NULL
+       OR NEW.provider_message_id IS NOT NULL
+       OR NEW.sent_at IS NOT NULL
+       OR NEW.cancelled_at IS NOT NULL THEN
+      RAISE EXCEPTION 'Invitation email proof settlement is invalid'
         USING ERRCODE = '42501';
     END IF;
   ELSIF v_operation IN ('cancel', 'purge') THEN
@@ -1678,7 +1768,10 @@ BEGIN
         )
   )::integer;
   v_retryable :=
-    error_code <> 'invitation_email_material_invalid'
+    error_code NOT IN (
+      'invitation_email_material_invalid',
+      'invitation_target_unavailable'
+    )
     AND v_outbox.attempt_count < v_outbox.max_attempts
     AND v_now + make_interval(secs => v_retry_delay) < v_invitation.expires_at
     AND v_invitation.accepted_at IS NULL

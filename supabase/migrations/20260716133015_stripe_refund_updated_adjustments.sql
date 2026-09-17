@@ -75,67 +75,6 @@ ALTER TABLE public.payment_gateway_events
     )
   );
 
-CREATE OR REPLACE FUNCTION private.resolve_sponsorship_financial_adjustment_kind(
-  target_provider public.sponsorship_method,
-  target_event_type text,
-  target_provider_object_type text,
-  target_adjustment_provider_movement_type text
-)
-RETURNS public.sponsorship_financial_entry_kind
-LANGUAGE plpgsql
-IMMUTABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-  IF target_provider = 'STRIPE'
-     AND target_event_type IN ('refund.created', 'refund.updated')
-     AND target_provider_object_type = 'refund'
-     AND target_adjustment_provider_movement_type = 'refund' THEN
-    RETURN 'sponsorship_refund';
-  ELSIF target_provider = 'STRIPE'
-     AND target_event_type = 'charge.dispute.funds_withdrawn'
-     AND target_provider_object_type = 'dispute'
-     AND target_adjustment_provider_movement_type = 'dispute' THEN
-    RETURN 'sponsorship_dispute_debit';
-  ELSIF target_provider = 'STRIPE'
-     AND target_event_type = 'charge.dispute.funds_reinstated'
-     AND target_provider_object_type = 'dispute'
-     AND target_adjustment_provider_movement_type = 'dispute' THEN
-    RETURN 'sponsorship_dispute_credit';
-  ELSIF target_provider = 'PAYPAL'
-     AND (
-       (
-         target_event_type = 'PAYMENT.CAPTURE.REFUNDED'
-         AND target_provider_object_type = 'capture'
-       )
-       OR (
-         target_event_type = 'PAYMENT.SALE.REFUNDED'
-         AND target_provider_object_type = 'sale'
-       )
-     )
-     AND target_adjustment_provider_movement_type = 'refund' THEN
-    RETURN 'sponsorship_refund';
-  ELSIF target_provider = 'PAYPAL'
-     AND (
-       (
-         target_event_type = 'PAYMENT.CAPTURE.REVERSED'
-         AND target_provider_object_type = 'capture'
-       )
-       OR (
-         target_event_type = 'PAYMENT.SALE.REVERSED'
-         AND target_provider_object_type = 'sale'
-       )
-     )
-     AND target_adjustment_provider_movement_type = 'reversal' THEN
-    RETURN 'sponsorship_reversal';
-  END IF;
-
-  RAISE EXCEPTION 'Unsupported financial adjustment event and object mapping'
-    USING ERRCODE = '22023';
-END;
-$$;
-
 REVOKE ALL ON FUNCTION private.resolve_sponsorship_financial_adjustment_kind(
   public.sponsorship_method,
   text,

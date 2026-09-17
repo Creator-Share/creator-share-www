@@ -115,6 +115,7 @@ BEGIN
      OR delivery_flow NOT IN (
        'generic-sign-in',
        'registration',
+       'password-reset',
        'reauthentication',
        'initial-claim',
        'account-claim'
@@ -134,7 +135,8 @@ BEGIN
 
   v_is_public_flow := delivery_flow IN (
     'generic-sign-in',
-    'registration'
+    'registration',
+    'password-reset'
   );
 
   /*
@@ -160,7 +162,8 @@ BEGIN
            v_is_public_flow
            OR reservation.delivery_flow NOT IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
          )
      )
@@ -197,7 +200,8 @@ BEGIN
              target_recipient_hmac_key_version
            AND reservation.delivery_flow IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '10 minutes'
        ) >= 2
@@ -215,7 +219,8 @@ BEGIN
              target_recipient_hmac_key_version
            AND reservation.delivery_flow IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '24 hours'
        ) >= 6
@@ -233,7 +238,8 @@ BEGIN
              target_recipient_hmac_key_version
            AND reservation.delivery_flow NOT IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '10 minutes'
        ) >= 3
@@ -251,7 +257,8 @@ BEGIN
              target_recipient_hmac_key_version
            AND reservation.delivery_flow NOT IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '24 hours'
        ) >= 10
@@ -281,7 +288,8 @@ BEGIN
              target_source_hmac_key_version
            AND reservation.delivery_flow IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '10 minutes'
        ) >= 20
@@ -297,7 +305,8 @@ BEGIN
              target_source_hmac_key_version
            AND reservation.delivery_flow IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '24 hours'
        ) >= 120
@@ -313,7 +322,8 @@ BEGIN
              target_source_hmac_key_version
            AND reservation.delivery_flow NOT IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '10 minutes'
        ) >= 30
@@ -329,7 +339,8 @@ BEGIN
              target_source_hmac_key_version
            AND reservation.delivery_flow NOT IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '24 hours'
        ) >= 180
@@ -342,7 +353,8 @@ BEGIN
            reservation
          WHERE reservation.delivery_flow IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '1 hour'
        ) >= 700
@@ -355,7 +367,8 @@ BEGIN
            reservation
          WHERE reservation.delivery_flow IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '24 hours'
        ) >= 3500
@@ -368,7 +381,8 @@ BEGIN
            reservation
          WHERE reservation.delivery_flow NOT IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '1 hour'
        ) >= 800
@@ -381,7 +395,8 @@ BEGIN
            reservation
          WHERE reservation.delivery_flow NOT IN (
              'generic-sign-in',
-             'registration'
+             'registration',
+             'password-reset'
            )
            AND reservation.requested_at > v_now - interval '24 hours'
        ) >= 4000

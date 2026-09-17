@@ -107,6 +107,24 @@ BEGIN
       USING ERRCODE = '23514';
   END IF;
 
+  IF target_auth_user_id IS NOT NULL AND (
+    EXISTS (
+      SELECT 1
+      FROM public.role_assignments assignment
+      WHERE assignment.user_id = target_auth_user_id
+        AND assignment.organization_id IS NULL
+        AND assignment.advocate_id IS NULL
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM public.advocate_memberships membership
+      WHERE membership.user_id = target_auth_user_id
+        AND membership.advocate_id = v_advocate_id
+    )
+  ) THEN
+    RETURN;
+  END IF;
+
   PERFORM audit.set_actor_context(
     context_actor_type => 'system',
     context_effective_user_id => target_auth_user_id,
