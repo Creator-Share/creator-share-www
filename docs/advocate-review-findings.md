@@ -75,13 +75,13 @@ The prepared [branch-protection payload](./dev-required-checks.json) is unapplie
 
 ## Optional product reductions
 
-All current capabilities remain required until explicitly changed.
+All current capabilities remain required until explicitly changed. The [measured deferral analysis](./advocate-mvp-deferral-options.md) identifies dedicated code surfaces, shared dependencies, and blockers each option leaves intact.
 
 | Recommendation | Removed complexity | User-visible consequence |
 | --- | --- | --- |
-| Defer public impact counters first | Public release ledger, delayed disclosure calculations, recovery worker, metric-selection editor | Advocates launch without public fundraising counters. Private reporting remains. |
+| Defer public impact counters first | Public release ledger, delayed disclosure calculations, recovery worker, metric-selection editor | Advocates launch without public fundraising counters. Private reporting and its FF-034 disclosure defect remain. |
 | Consider direct attribution only for the first release | Cross-host exposure coordination, long observation windows, related retention and reporting | Primary-site sponsorships after an advocate visit receive no post-visit credit. This materially changes the product proposition. |
-| Consider staff-managed delegate access | Self-service invitation UI and some advocate delivery/recovery operations | Creator Share staff administer team access. Sponsor authentication and secure authorization still remain necessary. |
+| Consider staff-managed delegate access only for operational reasons | Removes self-service administration but needs an audited staff replacement; initial-owner proof and delivery remain | Staff administer team access. Net engineering savings are uncertain, and the hosted proof canary remains. |
 | Consider plain-text introductory content | Rich-text editor behavior and formatting surface | Logos and colors remain, but introductory text loses rich formatting. Savings are smaller. |
 
 Payment correctness, tenant isolation, private-data protection, and cancellation support are not proposed reductions.

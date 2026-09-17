@@ -269,3 +269,7 @@ Seven worker routes now reuse the shared forensic reader instead of separate tra
 Retention and public-metric route tests now exercise both configured Vercel and non-Vercel callers. Retention fixtures use the production-valid cron credential when VERCEL is enabled; dedicated retention credentials are correctly rejected in that runtime. All 39 focused tests, 1,588 selected server-free tests, TypeScript, lint, and Git whitespace checks pass. Hosted validation remains pending for this follow-up and the quarantine signal.
 
 The preceding application cleanup passed publication run 35187383041 and WebKit run 35187383042 on `8fecade`. The 456-line application deletion is now hosted-validated.
+
+## Measured product deferral recommendations
+
+Measured the dedicated application surfaces and checked shared dependencies before refining the requested deferral recommendations. Public impact counters remain the clearest first option. Staff-managed delegate invitations are less attractive as a code-reduction strategy: initial-owner onboarding still needs shared proof and delivery machinery, while staff administration needs its own audited authority boundary. Plain-text branding affects only 390 lines in its dedicated editor and validator. The new deferral analysis distinguishes file footprints from promised savings and explicitly states that public-counter deferral does not repair private analytics disclosure. No capability has been removed.
