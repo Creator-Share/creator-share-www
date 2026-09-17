@@ -1,4 +1,10 @@
+import "server-only"
+
 import nodemailer from "nodemailer"
+import {
+  ADVOCATE_STAGING_CANONICAL_ORIGIN,
+  isAdvocateStagingEnvironmentEnabled,
+} from "@/lib/advocates/host"
 import {
   coerceRegion,
   getPortalUrl,
@@ -6,7 +12,7 @@ import {
 } from "@/lib/stripe/config"
 import {
   DEFAULT_STRIPE_PORTAL_URL,
-  PAYPAL_MANAGE_URL,
+  resolvePayPalManageUrl,
 } from "@/lib/payments/portals"
 import {
   filterExistingMediaRows,
@@ -15,6 +21,11 @@ import {
 } from "@/utils/supabase/media"
 import { createServiceRoleClient } from "@/utils/supabase/server"
 import { formatMoney } from "@/utils/currency"
+import {
+  advocateStagingLegacyEmailTransportSecurityOptions,
+  assertAdvocateStagingLegacyEmailAllowed,
+} from "@/lib/stagingOutboundEmail"
+import { getSponsorClaimCanonicalOrigin } from "@/lib/sponsorships/accountClaim"
 
 export type SponsorshipProvider = "STRIPE" | "PAYPAL"
 
@@ -33,16 +44,26 @@ function formatEmailAmount(
     options.chargedCurrency &&
     typeof options.chargedAmountMinor === "number"
   ) {
-    return formatMoney(
-      options.chargedAmountMinor,
-      options.chargedCurrency,
-    )
+    return formatMoney(options.chargedAmountMinor, options.chargedCurrency)
   }
   return formatMoney(canonicalUsdCents, "USD")
 }
 
 function resolveStripePortalUrl(region: StripeRegion): string {
+  if (isAdvocateStagingEnvironmentEnabled(process.env)) {
+    return `${ADVOCATE_STAGING_CANONICAL_ORIGIN}/app`
+  }
   return getPortalUrl(region) || DEFAULT_STRIPE_PORTAL_URL
+}
+
+// Use at HTML text and quoted attribute boundaries, never on plain email subjects.
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
 }
 
 /**
@@ -57,12 +78,13 @@ export function renderManagementSection({
   variant = "compact",
 }: ManagementLinkOptions & { variant?: "compact" | "prominent" }): string {
   if (provider === "PAYPAL") {
+    const paypalManageUrl = resolvePayPalManageUrl()
     return `
       <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
           <b>To update or cancel your recurring PayPal sponsorship,</b> sign in to your PayPal account and open <i>Payments → Automatic Payments</i>.
         </p>
-        <a href="${PAYPAL_MANAGE_URL}" style="display: inline-block; background-color: #0070BA; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Manage in PayPal</a>
+        <a href="${paypalManageUrl}" style="display: inline-block; background-color: #0070BA; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Manage in PayPal</a>
         <p style="font-size: 0.95rem; color: #475569; margin: 1.25rem 0 0 0;">
           If you need help, reply to this email and we'll take care of it.
         </p>
@@ -70,7 +92,9 @@ export function renderManagementSection({
     `
   }
 
-  const portalUrl = resolveStripePortalUrl(coerceRegion(region))
+  const portalUrl = escapeHtml(
+    resolveStripePortalUrl(coerceRegion(region)),
+  )
   if (variant === "prominent") {
     return `
       <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
@@ -100,11 +124,12 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
+  ...advocateStagingLegacyEmailTransportSecurityOptions(),
 })
 
 /**
  * Email Deliverability Best Practices:
- * 
+ *
  * For optimal email deliverability, ensure your SMTP server is properly configured:
  * 1. SPF (Sender Policy Framework) records in DNS
  * 2. DKIM (DomainKeys Identified Mail) signatures
@@ -112,7 +137,7 @@ const transporter = nodemailer.createTransport({
  * 4. Reverse DNS (PTR) records pointing back to your domain
  * 5. Proper FROM address matching your domain
  * 6. Consistent sender reputation (avoid spam triggers)
- * 
+ *
  * The current configuration uses:
  * - Secure connections (TLS/SSL) via EMAIL_SECURE
  * - Proper FROM address from EMAIL_FROM env var
@@ -137,82 +162,64 @@ export const sendEmail = async ({
 }: SendEmailParams) => {
   const type = emailType || "generic"
 
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-    console.error("Email configuration is missing")
-    try {
-      const supabase = createServiceRoleClient()
-      await supabase.from("email_logs").insert({
-        email: to,
-        subject,
-        status: "failed",
-        error: "Email service not configured",
-        email_type: type,
-        created_at: new Date().toISOString(),
-      })
-    } catch (logError) {
-      console.error("[Email] Failed to log missing email configuration:", logError)
-    }
+  try {
+    assertAdvocateStagingLegacyEmailAllowed(to)
+  } catch {
+    console.error("Email configuration is unavailable")
     return { success: false, error: "Email service not configured" }
   }
 
-  try {
-    const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM || '"Creator Share" <noreply@yourapp.com>',
-      to,
-      subject,
-      text,
-      html,
-    })
-
+  let result: { success: true; messageId: string } | { success: false; error: string }
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    console.error("Email configuration is missing")
+    result = { success: false, error: "Email service not configured" }
+  } else {
     try {
-      const supabase = createServiceRoleClient()
-      await supabase.from("email_logs").insert({
-        email: to,
+      const info = await transporter.sendMail({
+        from: process.env.EMAIL_FROM || '"Creator Share" <noreply@yourapp.com>',
+        to,
         subject,
-        status: "sent",
-        error: null,
-        message_id: info.messageId,
-        email_type: type,
-        created_at: new Date().toISOString(),
+        text,
+        html,
       })
-    } catch (logError) {
-      console.error("[Email] Failed to log successful email send:", logError)
+      result = { success: true, messageId: info.messageId }
+    } catch {
+      // SMTP failures can contain recipient addresses and provider response text.
+      // Keep transport material out of callers, application logs, and error fields.
+      console.error("[Email] Delivery failed")
+      result = { success: false, error: "Email delivery failed" }
     }
-
-    return { success: true, messageId: info.messageId }
-  } catch (error) {
-    console.error("Error sending email - full details:", error)
-    try {
-      const supabase = createServiceRoleClient()
-      await supabase.from("email_logs").insert({
-        email: to,
-        subject,
-        status: "failed",
-        error:
-          error instanceof Error
-            ? error.message
-            : typeof error === "string"
-              ? error
-              : JSON.stringify(error),
-        email_type: type,
-        created_at: new Date().toISOString(),
-      })
-    } catch (logError) {
-      console.error("[Email] Failed to log failed email send:", logError)
-    }
-    return { success: false, error }
   }
+
+  try {
+    const supabase = createServiceRoleClient()
+    const { error } = await supabase.from("email_logs").insert({
+      email: to,
+      subject,
+      status: result.success ? "sent" : "failed",
+      error: result.success ? null : result.error,
+      ...(result.success ? { message_id: result.messageId } : {}),
+      email_type: type,
+      created_at: new Date().toISOString(),
+    })
+    if (error) throw new Error("Email outcome log unavailable")
+  } catch {
+    console.error("[Email] Failed to record delivery outcome")
+  }
+  return result
 }
 
 /**
  * Get the first image URL for a beneficiary
  * Uses service role client for database access in webhook context
  */
-async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | null> {
+async function getBeneficiaryImageUrl(
+  beneficiaryId: string,
+): Promise<string | null> {
   try {
     // Use service role client for email operations (no user session in webhook context)
     const supabase = createServiceRoleClient()
-    
+
     // Query media table directly for images
     const { data: mediaData, error } = await supabase
       .from("media")
@@ -223,7 +230,10 @@ async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | n
       .limit(10)
 
     if (error) {
-      console.error(`[Email] Failed to fetch images for beneficiary ${beneficiaryId}:`, error)
+      console.error(
+        `[Email] Failed to fetch images for beneficiary ${beneficiaryId}:`,
+        error,
+      )
       return null
     }
 
@@ -237,17 +247,23 @@ async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | n
     )
     const firstImage = existingMedia[0]
     if (!firstImage) return null
-    
+
     // Try to generate public URL using the media utility
     try {
       const publicUrl = getExternalProfileImageUrl(firstImage)
       return publicUrl
     } catch (urlError) {
-      console.error(`[Email] Failed to generate public URL for beneficiary ${beneficiaryId}:`, urlError)
+      console.error(
+        `[Email] Failed to generate public URL for beneficiary ${beneficiaryId}:`,
+        urlError,
+      )
       return null
     }
   } catch (error) {
-    console.error(`[Email] Error fetching image for beneficiary ${beneficiaryId}:`, error)
+    console.error(
+      `[Email] Error fetching image for beneficiary ${beneficiaryId}:`,
+      error,
+    )
     return null
   }
 }
@@ -257,15 +273,29 @@ async function getBeneficiaryImageUrl(beneficiaryId: string): Promise<string | n
  * Falls back to production URL if localhost is detected to ensure emails work
  */
 function getLogoUrl(): string {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://creator-share-www.vercel.app'
-  
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
+
   // If localhost is detected, use production URL instead
   // Email clients cannot access localhost URLs
-  if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
-    return 'https://creator-share-www.vercel.app/logo_text.png'
+  if (baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1")) {
+    return "https://creator-share-www.vercel.app/logo_text.png"
   }
-  
-  return `${baseUrl.replace(/\/$/, '')}/logo_text.png`
+
+  return `${baseUrl.replace(/\/$/, "")}/logo_text.png`
+}
+
+// The caller supplies application-owned markup with dynamic values already encoded.
+function renderEmailLayout(content: string): string {
+  return `
+    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="${escapeHtml(getLogoUrl())}" alt="Creator Share" style="max-width: 200px; height: auto;" />
+      </div>${content}      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
+        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
+      </div>
+    </div>
+  `
 }
 
 export const sendPartnershipConfirmationEmail = async (
@@ -279,20 +309,20 @@ export const sendPartnershipConfirmationEmail = async (
   const subject = `Thank you for partnering with Creator Share Foundation!`
 
   const formattedAmount = formatEmailAmount(amount, options)
-  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
+  const intervalText =
+    interval === "month"
+      ? "monthly"
+      : interval === "one_time"
+        ? "one-time"
+        : "yearly"
   const greeting = partnerName ? `Dear ${partnerName},` : "Dear Partner,"
-  const logoUrl = getLogoUrl()
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Partnership!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to support our ${project} project.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to support our ${escapeHtml(project)} project.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your partnership makes a significant difference in helping us provide safety, healing, and a future full of promise for some of the most vulnerable children in the world.</p>
       </div>
       
@@ -306,11 +336,7 @@ export const sendPartnershipConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -332,9 +358,13 @@ export const sendSponsorshipConfirmationEmail = async (
   const subject = `Thank you for sponsoring ${childName}!`
 
   const formattedAmount = formatEmailAmount(amount, options)
-  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
+  const intervalText =
+    interval === "month"
+      ? "monthly"
+      : interval === "one_time"
+        ? "one-time"
+        : "yearly"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
-  const logoUrl = getLogoUrl()
   const managementSection = renderManagementSection(options)
 
   // Fetch beneficiary image if beneficiaryId is provided
@@ -345,36 +375,34 @@ export const sendSponsorshipConfirmationEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${childName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(childName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
       `
     } else {
-      console.warn(`[Email] No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+      console.warn(
+        `[Email] No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`,
+      )
     }
   } else {
     console.warn(`[Email] No beneficiaryId provided for child: ${childName}`)
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to sponsor ${childName}.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to sponsor ${escapeHtml(childName)}.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your support makes a significant difference in providing education and opportunities for children in need.</p>
       </div>
       
       <div style="border-left: 4px solid #1C3C8C; padding-left: 1rem; margin-bottom: 1.5rem;">
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">We'll keep you updated on ${childName}'s progress and how your sponsorship is making an impact.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">We'll keep you updated on ${escapeHtml(childName)}'s progress and how your sponsorship is making an impact.</p>
         <p style="font-size: 1rem; line-height: 1.5;">If you have any questions about your sponsorship, please don't hesitate to contact us.</p>
       </div>
       
@@ -385,11 +413,7 @@ export const sendSponsorshipConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
 
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -410,21 +434,21 @@ export const sendBlindSponsorshipConfirmationEmail = async (
   const subject = `Thank you for your blind sponsorship!`
 
   const formattedAmount = formatEmailAmount(amount, options)
-  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
+  const intervalText =
+    interval === "month"
+      ? "monthly"
+      : interval === "one_time"
+        ? "one-time"
+        : "yearly"
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
-  const logoUrl = getLogoUrl()
   const managementSection = renderManagementSection(options)
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Thank You for Your Sponsorship!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to support ${blindLabel}.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your generous contribution of <strong style="color: #1C3C8C;">${formattedAmount}</strong> ${intervalText} to support ${escapeHtml(blindLabel)}.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">We'll match you with a child who needs support, and you'll receive updates as soon as your sponsorship is matched.</p>
       </div>
       
@@ -440,11 +464,7 @@ export const sendBlindSponsorshipConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
 
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -466,13 +486,18 @@ export const sendBlindSponsorshipMatchedEmail = async (
   const subject = `Great news! You've been matched with ${childName}!`
 
   const formattedAmount = (amount / 100).toFixed(2)
-  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
-  const profileUrl = childUsername 
+  const intervalText =
+    interval === "month"
+      ? "monthly"
+      : interval === "one_time"
+        ? "one-time"
+        : "yearly"
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL || "https://creator-share-www.vercel.app"
+  const profileUrl = childUsername
     ? `${baseUrl}/sponsorships/${childUsername}`
     : `${baseUrl}/sponsorships`
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
-  const logoUrl = getLogoUrl()
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -482,46 +507,46 @@ export const sendBlindSponsorshipMatchedEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${childName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(childName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
       `
     } else {
-      console.warn(`[Email] Blind sponsorship matched - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+      console.warn(
+        `[Email] Blind sponsorship matched - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Blind sponsorship matched - No beneficiaryId provided for child: ${childName}`)
+    console.warn(
+      `[Email] Blind sponsorship matched - No beneficiaryId provided for child: ${childName}`,
+    )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #22c55e;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">You've Been Matched! 🎉</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Great news! We've matched your blind sponsorship with <strong style="color: #1C3C8C;">${childName}</strong>.</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your ${intervalText} contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> will now go directly to supporting ${childName}'s education and well-being.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Great news! We've matched your blind sponsorship with <strong style="color: #1C3C8C;">${escapeHtml(childName)}</strong>.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your ${intervalText} contribution of <strong style="color: #1C3C8C;">$${formattedAmount}</strong> will now go directly to supporting ${escapeHtml(childName)}'s education and well-being.</p>
       </div>
       
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h3 style="font-size: 1.25rem; font-weight: 600; margin-top: 0; color: #1C3C8C;">What's Next?</h3>
         <ul style="font-size: 1rem; line-height: 1.5;">
-          <li style="margin-bottom: 0.5rem;">You'll receive regular updates about ${childName}'s progress</li>
+          <li style="margin-bottom: 0.5rem;">You'll receive regular updates about ${escapeHtml(childName)}'s progress</li>
           <li style="margin-bottom: 0.5rem;">We'll share photos and stories of how your support is making a difference</li>
-          <li style="margin-bottom: 0.5rem;">You can view ${childName}'s profile and learn more about them</li>
+          <li style="margin-bottom: 0.5rem;">You can view ${escapeHtml(childName)}'s profile and learn more about them</li>
         </ul>
       </div>
       
       <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">View ${childName}'s profile and learn more about how your sponsorship is helping:</p>
-        <a href="${profileUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">View ${childName}'s Profile</a>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">View ${escapeHtml(childName)}'s profile and learn more about how your sponsorship is helping:</p>
+        <a href="${escapeHtml(profileUrl)}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">View ${escapeHtml(childName)}'s Profile</a>
       </div>
       
       <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
@@ -529,11 +554,7 @@ export const sendBlindSponsorshipMatchedEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -559,7 +580,6 @@ export const sendPaymentFailedEmail = async (
     ? `We'll automatically try again on ${nextAttemptDate.toLocaleDateString()}.`
     : "We'll automatically try again soon."
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
-  const logoUrl = getLogoUrl()
   const managementSection = renderManagementSection(options)
 
   // Fetch beneficiary image if beneficiaryId is provided
@@ -570,30 +590,30 @@ export const sendPaymentFailedEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${childName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(childName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
       `
     } else {
-      console.warn(`[Email] Payment failed - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+      console.warn(
+        `[Email] Payment failed - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Payment failed - No beneficiaryId provided for child: ${childName}`)
+    console.warn(
+      `[Email] Payment failed - No beneficiaryId provided for child: ${childName}`,
+    )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
       <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">
         <h2 style="color: #dc2626; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Payment Failed</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">We were unable to process your sponsorship payment of <strong>${formattedAmount}</strong>.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${nextAttemptText}</p>
       </div>
@@ -614,11 +634,7 @@ export const sendPaymentFailedEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -635,8 +651,9 @@ export const sendSubscriptionConfirmationEmail = async (
   beneficiaryId?: string | null,
 ) => {
   const subject = `You're subscribed to updates for ${beneficiaryName}!`
-  const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
-  const logoUrl = getLogoUrl()
+  const greeting = subscriberName
+    ? `Dear ${subscriberName},`
+    : "Dear Subscriber,"
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -646,29 +663,29 @@ export const sendSubscriptionConfirmationEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${beneficiaryName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(beneficiaryName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
       `
     } else {
-      console.warn(`[Email] Subscription confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`)
+      console.warn(
+        `[Email] Subscription confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Subscription confirmation - No beneficiaryId provided for beneficiary: ${beneficiaryName}`)
+    console.warn(
+      `[Email] Subscription confirmation - No beneficiaryId provided for beneficiary: ${beneficiaryName}`,
+    )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       ${childImageHtml}
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Subscription Confirmed!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for subscribing to updates for <strong>${beneficiaryName}</strong>.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for subscribing to updates for <strong>${escapeHtml(beneficiaryName)}</strong>.</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">You'll receive an email whenever there's a new activity or update for this beneficiary.</p>
         <p style="font-size: 1rem; line-height: 1.5;">You can unsubscribe at any time by contacting us.</p>
       </div>
@@ -676,11 +693,7 @@ export const sendSubscriptionConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Thank you for staying connected,</p>
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
   return sendEmail({
     to: email,
     subject,
@@ -706,8 +719,9 @@ export const sendActivityNotificationEmail = async (
   beneficiaryId?: string | null,
 ) => {
   const subject = `New update on ${beneficiary.name}`
-  const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
-  const logoUrl = getLogoUrl()
+  const greeting = subscriberName
+    ? `Dear ${subscriberName},`
+    : "Dear Subscriber,"
 
   // Fetch beneficiary profile image if beneficiaryId is provided
   let childImageHtml = ""
@@ -717,19 +731,23 @@ export const sendActivityNotificationEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${beneficiary.name}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(beneficiary.name)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
       `
     } else {
-      console.warn(`[Email] Activity notification - No profile image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiary.name}`)
+      console.warn(
+        `[Email] Activity notification - No profile image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiary.name}`,
+      )
     }
   } else {
-    console.warn(`[Email] Activity notification - No beneficiaryId provided for beneficiary: ${beneficiary.name}`)
+    console.warn(
+      `[Email] Activity notification - No beneficiaryId provided for beneficiary: ${beneficiary.name}`,
+    )
   }
-  
+
   // Generate image HTML if images are provided
   let imagesHtml = ""
   if (activity.imageUrls && activity.imageUrls.length > 0) {
@@ -739,27 +757,35 @@ export const sendActivityNotificationEmail = async (
     for (let i = 0; i < activity.imageUrls.length; i += imagesPerRow) {
       imageRows.push(activity.imageUrls.slice(i, i + imagesPerRow))
     }
-    
+
     imagesHtml = `
       <div style="margin: 1.5rem 0;">
         <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1C3C8C;">Photos:</h3>
         <table style="width: 100%; border-collapse: collapse;">
-          ${imageRows.map((row) => `
+          ${imageRows
+            .map(
+              (row) => `
             <tr>
-              ${row.map((imageUrl) => `
+              ${row
+                .map(
+                  (imageUrl) => `
                 <td style="padding: 0.5rem; width: 50%;">
                   <div style="border-radius: 0.5rem; overflow: hidden; border: 1px solid #e5e7eb; background-color: #f9fafb;">
                     <img 
-                      src="${imageUrl}" 
+                      src="${escapeHtml(imageUrl)}"
                       alt="Activity photo" 
                       style="width: 100%; max-width: 100%; height: auto; display: block; border: none;"
                     />
                   </div>
                 </td>
-              `).join("")}
+              `,
+                )
+                .join("")}
               ${row.length < imagesPerRow ? `<td style="width: 50%;"></td>` : ""}
             </tr>
-          `).join("")}
+          `,
+            )
+            .join("")}
         </table>
       </div>
     `
@@ -778,7 +804,7 @@ export const sendActivityNotificationEmail = async (
               (videoUrl, index) => `
                 <li style="margin-bottom: 0.75rem;">
                   <a 
-                    href="${videoUrl}" 
+                    href="${escapeHtml(videoUrl)}"
                     style="color: #1C3C8C; font-weight: 500; text-decoration: underline;"
                   >
                     Watch Video ${index + 1}
@@ -800,51 +826,47 @@ export const sendActivityNotificationEmail = async (
         <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1C3C8C;">Documents:</h3>
         <ul style="list-style: none; padding: 0; margin: 0;">
           ${activity.documentUrls
-            .map(
-              (documentUrl, index) => {
-                // Extract filename from URL
-                const filename = documentUrl.split('/').pop()?.split('?')[0] || `Document ${index + 1}`
-                const decodedFilename = decodeURIComponent(filename)
-                
-                return `
+            .map((documentUrl, index) => {
+              // Extract filename from URL
+              const filename =
+                documentUrl.split("/").pop()?.split("?")[0] ||
+                `Document ${index + 1}`
+              const decodedFilename = decodeURIComponent(filename)
+
+              return `
                   <li style="margin-bottom: 0.75rem;">
                     <a 
-                      href="${documentUrl}" 
+                      href="${escapeHtml(documentUrl)}"
                       style="display: inline-flex; align-items: center; gap: 0.5rem; color: #1C3C8C; font-weight: 500; text-decoration: none; padding: 0.5rem 1rem; background-color: #eff6ff; border-radius: 0.375rem; border: 1px solid #bfdbfe;"
                       download
                     >
                       <span style="font-size: 1.25rem;">📄</span>
-                      <span>${decodedFilename}</span>
+                      <span>${escapeHtml(decodedFilename)}</span>
                     </a>
                   </li>
                 `
-              },
-            )
+            })
             .join("")}
         </ul>
       </div>
     `
   }
-  
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+
+  const html = renderEmailLayout(`
       ${childImageHtml}
       <div style="background-color: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #1C3C8C; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">New Update for ${
-          beneficiary.name
+          escapeHtml(beneficiary.name)
         }</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">A new activity has been posted for <strong>${
-          beneficiary.name
+          escapeHtml(beneficiary.name)
         }</strong>:</p>
         <p style="font-size: 1.1rem; font-weight: 600; color: #1C3C8C; margin-bottom: 0.5rem;">${
-          activity.title
+          escapeHtml(activity.title)
         }</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${
-          activity.description
+          escapeHtml(activity.description)
         }</p>
         ${imagesHtml}
         ${videosHtml}
@@ -855,93 +877,12 @@ export const sendActivityNotificationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">Thank you for staying connected,</p>
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
   return sendEmail({
     to: email,
     subject,
     html,
     emailType: "activity_notification",
-  })
-}
-
-/**
- * Send "budget goal fulfilled" email to a subscriber
- */
-export const sendGoalFulfilledEmail = async (
-  email: string,
-  beneficiary: { name: string; budget_goal: number },
-  subscriberName?: string | null,
-  beneficiaryId?: string | null,
-) => {
-  const subject = `Goal Fulfilled for ${beneficiary.name}!`
-  const formattedGoal = beneficiary.budget_goal
-    ? `$${(beneficiary.budget_goal / 100).toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-      })}`
-    : "the goal amount"
-  const greeting = subscriberName ? `Dear ${subscriberName},` : "Dear Subscriber,"
-  const logoUrl = getLogoUrl()
-
-  // Fetch beneficiary image if beneficiaryId is provided
-  let childImageHtml = ""
-  if (beneficiaryId) {
-    const childImageUrl = await getBeneficiaryImageUrl(beneficiaryId)
-    if (childImageUrl) {
-      childImageHtml = `
-        <div style="text-align: center; margin-bottom: 2rem;">
-          <img 
-            src="${childImageUrl}" 
-            alt="${beneficiary.name}" 
-            style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
-          />
-        </div>
-      `
-    } else {
-      console.warn(`[Email] Goal fulfilled - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiary.name}`)
-    }
-  } else {
-    console.warn(`[Email] Goal fulfilled - No beneficiaryId provided for beneficiary: ${beneficiary.name}`)
-  }
-
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
-      ${childImageHtml}
-      <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
-        <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Goal Fulfilled!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
-          We are excited to let you know that <strong>${
-            beneficiary.name
-          }</strong> has reached their budget goal of <strong>${formattedGoal}</strong>!
-        </p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
-          Thank you for your support and for being part of this journey.
-        </p>
-        <p style="font-size: 1rem; line-height: 1.5;">
-          Stay tuned for more updates and stories of impact.
-        </p>
-      </div>
-      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.25rem;">With gratitude,</p>
-        <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
-      </div>
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
-  return sendEmail({
-    to: email,
-    subject,
-    html,
-    emailType: "goal_fulfilled",
   })
 }
 
@@ -959,7 +900,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
   const subject = `Thank You - ${beneficiaryName} Has Been Fully Sponsored!`
   const formattedAmount = formatEmailAmount(amount, {})
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Friend,"
-  const logoUrl = getLogoUrl()
+  const browseUrl = escapeHtml(getSponsorClaimCanonicalOrigin())
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -969,35 +910,35 @@ export const sendBudgetFulfilledRejectionEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${beneficiaryName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(beneficiaryName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
       `
     } else {
-      console.warn(`[Email] Budget fulfilled rejection - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`)
+      console.warn(
+        `[Email] Budget fulfilled rejection - No image URL returned for beneficiaryId: ${beneficiaryId}, beneficiaryName: ${beneficiaryName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Budget fulfilled rejection - No beneficiaryId provided for beneficiary: ${beneficiaryName}`)
+    console.warn(
+      `[Email] Budget fulfilled rejection - No beneficiaryId provided for beneficiary: ${beneficiaryName}`,
+    )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #10b981;">
-        <h2 style="color: #10b981; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Good News - ${beneficiaryName} is Fully Sponsored!</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
+        <h2 style="color: #10b981; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Good News - ${escapeHtml(beneficiaryName)} is Fully Sponsored!</h2>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
-          Thank you for your generous heart in wanting to sponsor <strong>${beneficiaryName}</strong>.
+          Thank you for your generous heart in wanting to sponsor <strong>${escapeHtml(beneficiaryName)}</strong>.
         </p>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
-          We're delighted to share that <strong>${beneficiaryName} has already been fully sponsored</strong> by other generous supporters and has met their budget goal! This is wonderful news for ${beneficiaryName}.
+          We're delighted to share that <strong>${escapeHtml(beneficiaryName)} has already been fully sponsored</strong> by other generous supporters and has met their budget goal! This is wonderful news for ${escapeHtml(beneficiaryName)}.
         </p>
       </div>
       
@@ -1013,10 +954,10 @@ export const sendBudgetFulfilledRejectionEmail = async (
       <div style="background-color: #eff6ff; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h3 style="font-size: 1.25rem; font-weight: 600; margin-top: 0; color: #1C3C8C;">Sponsor Another Child in Need</h3>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">
-          While ${beneficiaryName}'s sponsorship needs have been met, there are many other wonderful children still waiting for a sponsor like you. Each child has their own unique story and dreams for the future.
+          While ${escapeHtml(beneficiaryName)}'s sponsorship needs have been met, there are many other wonderful children still waiting for a sponsor like you. Each child has their own unique story and dreams for the future.
         </p>
         <div style="text-align: center; margin-top: 1.5rem;">
-          <a href="https://creatorshare.com" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Explore Children Needing Support</a>
+          <a href="${browseUrl}" style="display: inline-block; background-color: #1C3C8C; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.375rem; font-weight: 500;">Explore Children Needing Support</a>
         </div>
       </div>
       
@@ -1034,11 +975,7 @@ export const sendBudgetFulfilledRejectionEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -1063,8 +1000,12 @@ export const sendManagerSponsorshipNotificationEmail = async (
 ) => {
   const subject = `New Sponsorship Received for ${childName}`
   const formattedAmount = formatEmailAmount(amount, options)
-  const intervalText = interval === "month" ? "monthly" : interval === "one_time" ? "one-time" : "yearly"
-  const logoUrl = getLogoUrl()
+  const intervalText =
+    interval === "month"
+      ? "monthly"
+      : interval === "one_time"
+        ? "one-time"
+        : "yearly"
 
   // Fetch beneficiary image if beneficiaryId is provided
   let childImageHtml = ""
@@ -1074,24 +1015,24 @@ export const sendManagerSponsorshipNotificationEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${childName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(childName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
       `
     } else {
-      console.warn(`[Email] Manager notification - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+      console.warn(
+        `[Email] Manager notification - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Manager notification - No beneficiaryId provided for child: ${childName}`)
+    console.warn(
+      `[Email] Manager notification - No beneficiaryId provided for child: ${childName}`,
+    )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
@@ -1100,10 +1041,10 @@ export const sendManagerSponsorshipNotificationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">A new sponsorship has been received with the following details:</p>
         
         <div style="background-color: white; padding: 1rem; border-radius: 0.375rem; margin: 1rem 0;">
-          <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${childName}</p>
+          <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${escapeHtml(childName)}</p>
           <p style="margin: 0.5rem 0;"><strong>Amount:</strong> ${formattedAmount}/${intervalText}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${customerName || 'Not provided'}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${customerEmail || 'Not provided'}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${escapeHtml(customerName || "Not provided")}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${escapeHtml(customerEmail || "Not provided")}</p>
         </div>
       </div>
       
@@ -1111,11 +1052,7 @@ export const sendManagerSponsorshipNotificationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: "johnstjulien@sharetanzania.com",
@@ -1136,7 +1073,6 @@ export const sendMonthlyPaymentConfirmationEmail = async (
   const subject = `Payment Confirmation: Your Sponsorship for ${childName}`
   const formattedAmount = formatEmailAmount(amount, options)
   const greeting = sponsorName ? `Dear ${sponsorName},` : "Dear Sponsor,"
-  const logoUrl = getLogoUrl()
   const managementSection = renderManagementSection({
     ...options,
     variant: "prominent",
@@ -1150,38 +1086,38 @@ export const sendMonthlyPaymentConfirmationEmail = async (
       childImageHtml = `
         <div style="text-align: center; margin-bottom: 2rem;">
           <img 
-            src="${childImageUrl}" 
-            alt="${childName}" 
+            src="${escapeHtml(childImageUrl)}"
+            alt="${escapeHtml(childName)}"
             style="max-width: 300px; width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" 
           />
         </div>
       `
     } else {
-      console.warn(`[Email] Monthly payment confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`)
+      console.warn(
+        `[Email] Monthly payment confirmation - No image URL returned for beneficiaryId: ${beneficiaryId}, childName: ${childName}`,
+      )
     }
   } else {
-    console.warn(`[Email] Monthly payment confirmation - No beneficiaryId provided for child: ${childName}`)
+    console.warn(
+      `[Email] Monthly payment confirmation - No beneficiaryId provided for child: ${childName}`,
+    )
   }
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${logoUrl}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       ${childImageHtml}
       
       <div style="background-color: #f0fdf4; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h2 style="color: #16a34a; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Payment Confirmed</h2>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${greeting}</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your monthly sponsorship payment of <strong style="color: #1C3C8C;">${formattedAmount}</strong> for <strong>${childName}</strong> has been successfully processed.</p>
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your continued support in making a difference in ${childName}'s life.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${escapeHtml(greeting)}</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Your monthly sponsorship payment of <strong style="color: #1C3C8C;">${formattedAmount}</strong> for <strong>${escapeHtml(childName)}</strong> has been successfully processed.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">Thank you for your continued support in making a difference in ${escapeHtml(childName)}'s life.</p>
       </div>
       
       ${managementSection}
 
       <div style="border-left: 4px solid #1C3C8C; padding-left: 1rem; margin-bottom: 1.5rem;">
-        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">We'll continue to keep you updated on ${childName}'s progress and how your sponsorship is making an impact.</p>
+        <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 0.75rem;">We'll continue to keep you updated on ${escapeHtml(childName)}'s progress and how your sponsorship is making an impact.</p>
         <p style="font-size: 1rem; line-height: 1.5;">If you have any questions about your sponsorship, please don't hesitate to contact us.</p>
       </div>
       
@@ -1190,11 +1126,7 @@ export const sendMonthlyPaymentConfirmationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: email,
@@ -1217,20 +1149,16 @@ export const sendSponsorshipCancellationNotificationEmail = async (
   const subject = `Sponsorship Cancelled: ${childName}`
   const formattedAmount = amount ? `$${(amount / 100).toFixed(2)}` : "N/A"
 
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; color: #1f2937;">
-      <div style="text-align: center; margin-bottom: 2rem;">
-        <img src="${getLogoUrl()}" alt="Creator Share" style="max-width: 200px; height: auto;" />
-      </div>
+  const html = renderEmailLayout(`
       
       <div style="background-color: #fef2f2; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #dc2626;">
         <h2 style="color: #dc2626; font-size: 1.5rem; font-weight: 600; margin-top: 0; text-align: center;">Sponsorship Cancelled</h2>
         <p style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">A sponsorship has been cancelled and the child now has no active sponsorships.</p>
         
         <div style="background-color: white; padding: 1rem; border-radius: 0.375rem; margin: 1rem 0;">
-          <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${childName}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${sponsorName || 'Not provided'}</p>
-          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${sponsorEmail || 'Not provided'}</p>
+          <p style="margin: 0.5rem 0;"><strong>Child:</strong> ${escapeHtml(childName)}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Name:</strong> ${escapeHtml(sponsorName || "Not provided")}</p>
+          <p style="margin: 0.5rem 0;"><strong>Sponsor Email:</strong> ${escapeHtml(sponsorEmail || "Not provided")}</p>
           <p style="margin: 0.5rem 0;"><strong>Amount:</strong> ${formattedAmount}</p>
           <p style="margin: 0.5rem 0; color: #dc2626; font-weight: 600;"><strong>Status:</strong> Child moved to "Sponsorship Cancelled" status</p>
         </div>
@@ -1244,11 +1172,7 @@ export const sendSponsorshipCancellationNotificationEmail = async (
         <p style="font-size: 1rem; line-height: 1.5; font-weight: 600; color: #1C3C8C;">The Creator Share Team</p>
       </div>
       
-      <div style="text-align: center; margin-top: 2rem; font-size: 0.875rem; color: #6b7280;">
-        <p>© ${new Date().getFullYear()} Creator Share. All rights reserved.</p>
-      </div>
-    </div>
-  `
+`)
 
   return sendEmail({
     to: "johnstjulien@sharetanzania.com",

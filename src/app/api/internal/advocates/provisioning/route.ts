@@ -1,0 +1,127 @@
+import { randomUUID } from "node:crypto"
+
+import { NextRequest, NextResponse } from "next/server"
+
+import {
+  createDomainProviderAdapterFactory,
+  createSupabaseDomainProvisioningRepository,
+  DOMAIN_WORKER_INVOCATION_BUDGET_MS,
+  isAuthorizedDomainWorkerRequest,
+  loadDomainWorkerConfig,
+  loadWorkerRouteSecret,
+  runScheduledDomainProvisioningBatch,
+} from "@/lib/advocates/provisioning"
+import {
+  PROVIDER_AUTOMATION_DISABLED_RESULT,
+  runWhenProviderAutomationActive,
+} from "@/lib/advocates/providerAutomation"
+import { createServiceRoleClient } from "@/utils/supabase/server"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const maxDuration = 60
+
+function response(body: Record<string, unknown>, status: number) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  })
+}
+
+async function handle(request: NextRequest) {
+  const deadlineAtMilliseconds =
+    performance.now() + DOMAIN_WORKER_INVOCATION_BUDGET_MS
+  const requestId = randomUUID()
+  let expectedSecret: string
+  try {
+    expectedSecret = loadWorkerRouteSecret()
+  } catch {
+    return response({ ok: false, code: "worker_unavailable", requestId }, 503)
+  }
+
+  if (
+    !isAuthorizedDomainWorkerRequest(
+      request.headers.get("authorization"),
+      expectedSecret,
+    )
+  ) {
+    return response({ ok: false, code: "unauthorized", requestId }, 401)
+  }
+
+  try {
+    const execution = await runWhenProviderAutomationActive(async () => {
+      const config = loadDomainWorkerConfig()
+      const repository = createSupabaseDomainProvisioningRepository(
+        createServiceRoleClient({
+          requestTimeoutMilliseconds:
+            DOMAIN_WORKER_INVOCATION_BUDGET_MS - 5_000,
+        }),
+      )
+      return runScheduledDomainProvisioningBatch({
+        repository,
+        adapterFactory: createDomainProviderAdapterFactory(),
+        config,
+        workerId: `advocate-domain-worker:${requestId}`,
+        correlationId: `advocate-domain-reconciliation:${requestId}`,
+        deadlineAtMilliseconds,
+      })
+    })
+    if (!execution.active) {
+      return response(PROVIDER_AUTOMATION_DISABLED_RESULT, 200)
+    }
+    const batch = execution.value
+
+    const requiresAttention =
+      batch.schedulingFailed ||
+      batch.quarantinedDomains > 0 ||
+      batch.failed > 0 ||
+      batch.settlementUnknown > 0 ||
+      batch.withdrawnPublications > 0
+    if (requiresAttention) {
+      console.error("ADVOCATE_DOMAIN_PROVISIONING_REQUIRES_ATTENTION", {
+        requestId,
+        code: "worker_partial_failure",
+        schedulingFailed: batch.schedulingFailed,
+        quarantinedDomains: batch.quarantinedDomains,
+        failed: batch.failed,
+        settlementUnknown: batch.settlementUnknown,
+        withdrawnPublications: batch.withdrawnPublications,
+      })
+    }
+
+    return response(
+      {
+        ok: !requiresAttention,
+        ...(requiresAttention ? { code: "worker_partial_failure" } : {}),
+        requestId,
+        scheduledDomains: batch.scheduledDomains,
+        enqueuedReconciliations: batch.enqueuedReconciliations,
+        quarantinedDomains: batch.quarantinedDomains,
+        schedulingFailed: batch.schedulingFailed,
+        ...(batch.schedulingFailureCode
+          ? { schedulingFailureCode: batch.schedulingFailureCode }
+          : {}),
+        claimed: batch.claimed,
+        succeeded: batch.succeeded,
+        retried: batch.retried,
+        failed: batch.failed,
+        leaseLost: batch.leaseLost,
+        settlementUnknown: batch.settlementUnknown,
+        withdrawnPublications: batch.withdrawnPublications,
+      },
+      requiresAttention ? 503 : 200,
+    )
+  } catch {
+    console.error("ADVOCATE_DOMAIN_PROVISIONING_REQUIRES_ATTENTION", {
+      requestId,
+      code: "worker_execution_failed",
+    })
+    return response(
+      { ok: false, code: "worker_execution_failed", requestId },
+      503,
+    )
+  }
+}
+
+export const GET = handle
+export const POST = handle

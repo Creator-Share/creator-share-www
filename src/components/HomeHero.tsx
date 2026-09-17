@@ -3,6 +3,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react"
 import { Box, Heading, Text } from "@chakra-ui/react"
 import { ALL_BENEFICIARY_TABS } from "@/config/beneficiaryTypes"
 import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
+import { usePublicSite } from "@/components/advocates/PublicSiteProvider"
 import { HeartHandMark } from "@/components/common/HeartHandMark"
 
 // ---------------------------------------------------------------------------
@@ -31,7 +32,7 @@ function toDisplayKey(type: BeneficiaryTabType | null): DisplayKey {
 // Brushstroke SVG
 // ---------------------------------------------------------------------------
 
-const BrushstrokeUnderline = () => (
+const BrushstrokeUnderline = ({ color = "#FFB700" }: { color?: string }) => (
   <svg
     viewBox="0 0 368 28"
     fill="none"
@@ -49,11 +50,11 @@ const BrushstrokeUnderline = () => (
     <g clipPath="url(#brushClip)">
       <path
         d="M295.775 11.1961C287.817 10.4394 106.655 7.35562 48.2304 8.32877C23.2951 8.74803 31.4173 14.1242 46.1741 15.6624C65.065 17.6478 79.2217 15.0664 226.172 18.2296C285.063 19.4673 302.447 19.0882 306.125 16.4046C308.358 14.7753 302.407 11.8264 295.775 11.1961Z"
-        fill="#FFB700"
+        fill={color}
       />
       <path
         d="M311.572 18.3493C282.722 21.0648 281.826 21.2457 290.269 24.0841C306.742 29.5815 380.96 27.8798 372.741 22.133C364.895 16.6294 343.522 15.2678 311.572 18.3493Z"
-        fill="#FFB700"
+        fill={color}
       />
     </g>
     <defs>
@@ -64,85 +65,64 @@ const BrushstrokeUnderline = () => (
   </svg>
 )
 
+const AllOpportunitiesHeading = ({
+  underlineColor,
+}: {
+  underlineColor?: string
+}) => (
+  <>
+    One child at a time,{" "}
+    <Box as="br" display={{ base: "none", md: "initial" }} />
+    love is{" "}
+    <Box as="span" display="inline-block" position="relative">
+      <Box as="span" style={{ position: "relative", zIndex: 1 }}>
+        changing
+      </Box>
+      <BrushstrokeUnderline color={underlineColor} />
+    </Box>{" "}
+    thousands of lives
+  </>
+)
+
+const AllOpportunitiesDescription = ({
+  linkColor = "#2b7ff9",
+}: {
+  linkColor?: string
+}) => (
+  <>
+    For over a decade, the{" "}
+    <a
+      href="https://tanzania.creatorshare.com"
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        color: linkColor,
+        textDecoration: "underline",
+        textUnderlineOffset: "2px",
+      }}
+    >
+      Creator Share Foundation
+    </a>{" "}
+    has stewarded children&apos;s centers across Tanzania, creating home and
+    family for hundreds of the most vulnerable children on earth. Here you can
+    walk with a specific child, providing education, medical care, and the
+    belief in their potential that changes everything.
+  </>
+)
+
 // ---------------------------------------------------------------------------
 // Hero content per display key
 // ---------------------------------------------------------------------------
 
 const HERO_CONTENT: Record<DisplayKey, HeroContent> = {
   ALL: {
-    heading: (
-      <>
-        One child at a time,{" "}
-        <Box as="br" display={{ base: "none", md: "initial" }} />
-        love is{" "}
-        <Box as="span" display="inline-block" position="relative">
-          <Box as="span" style={{ position: "relative", zIndex: 1 }}>
-            changing
-          </Box>
-          <BrushstrokeUnderline />
-        </Box>{" "}
-        thousands of lives
-      </>
-    ),
-    description: (
-      <>
-        For over a decade, the{" "}
-        <a
-          href="https://tanzania.creatorshare.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            color: "#2b7ff9",
-            textDecoration: "underline",
-            textUnderlineOffset: "2px",
-          }}
-        >
-          Creator Share Foundation
-        </a>{" "}
-        has stewarded children&apos;s centers across Tanzania, creating home and
-        family for hundreds of the most vulnerable children on earth. Here you
-        can walk with a specific child, providing education, medical care, and
-        the belief in their potential that changes everything.
-      </>
-    ),
+    heading: <AllOpportunitiesHeading />,
+    description: <AllOpportunitiesDescription />,
   },
 
   CHILD: {
-    heading: (
-      <>
-        One child at a time,{" "}
-        <Box as="br" display={{ base: "none", md: "initial" }} />
-        love is{" "}
-        <Box as="span" display="inline-block" position="relative">
-          <Box as="span" style={{ position: "relative", zIndex: 1 }}>
-            changing
-          </Box>
-          <BrushstrokeUnderline />
-        </Box>{" "}
-        thousands of lives
-      </>
-    ),
-    description: (
-      <>
-        For over a decade, the{" "}
-        <a
-          href="https://tanzania.creatorshare.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            color: "#2b7ff9",
-            textDecoration: "underline",
-            textUnderlineOffset: "2px",
-          }}
-        >
-          Creator Share Foundation
-        </a>{" "}
-        has stewarded children&apos;s centers across Tanzania, creating home and
-        family for hundreds of the most vulnerable children on earth. Here you
-        can walk with a specific child, providing education, medical care, and
-        the belief in their potential that changes everything.
-      </>
-    ),
+    heading: <AllOpportunitiesHeading />,
+    description: <AllOpportunitiesDescription />,
   },
 
   CHILD_LABORER: {
@@ -193,9 +173,8 @@ const HERO_CONTENT: Record<DisplayKey, HeroContent> = {
     ),
     description: (
       <>
-        Every child in our care was once alone. Now they have a home, a
-        school, and adults who show up with loving care. Your sponsorship
-        changes lives.
+        Every child in our care was once alone. Now they have a home, a school,
+        and adults who show up with loving care. Your sponsorship changes lives.
       </>
     ),
   },
@@ -261,6 +240,13 @@ const BTN_RESET: React.CSSProperties = {
 // ---------------------------------------------------------------------------
 
 export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
+  const publicSite = usePublicSite()
+  const isAdvocateSite = publicSite.kind === "advocate"
+  const primaryColor = isAdvocateSite ? "var(--public-site-primary)" : "#2b7ff9"
+  const primaryInkColor = isAdvocateSite
+    ? "var(--public-site-primary-ink)"
+    : "#2b7ff9"
+  const accentColor = isAdvocateSite ? "var(--public-site-accent)" : "#FFB700"
   const displayKey = toDisplayKey(activeType)
 
   const [displayedKey, setDisplayedKey] = useState<DisplayKey>(displayKey)
@@ -373,6 +359,22 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
   )
 
   const content = HERO_CONTENT[displayedKey]
+  const advocateOpeningHeaderHtml =
+    isAdvocateSite && displayedKey === "ALL"
+      ? publicSite.openingHeaderHtml.trim()
+      : ""
+  const defaultHeading =
+    isAdvocateSite && displayedKey === "ALL" ? (
+      <AllOpportunitiesHeading underlineColor={accentColor} />
+    ) : (
+      content.heading
+    )
+  const description =
+    isAdvocateSite && displayedKey === "ALL" ? (
+      <AllOpportunitiesDescription linkColor={primaryInkColor} />
+    ) : (
+      content.description
+    )
 
   return (
     <Box
@@ -435,7 +437,7 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                   paddingRight: "0.875rem",
                   fontSize: "0.875rem",
                   fontWeight: isActive ? 800 : 700,
-                  color: isActive ? "#2b7ff9" : "#6b7280",
+                  color: isActive ? primaryInkColor : "#6b7280",
                   whiteSpace: "nowrap",
                   marginBottom: "-1px",
                   transition: "color 0.18s ease",
@@ -450,7 +452,7 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                     right: "0.5rem",
                     height: "3px",
                     borderRadius: "99px",
-                    background: isActive ? "#2b7ff9" : "transparent",
+                    background: isActive ? primaryColor : "transparent",
                     transition: "background 0.18s ease",
                   }}
                 />
@@ -546,7 +548,11 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                           transition: `opacity ${EXIT_DURATION_MS}ms ease, transform ${EXIT_DURATION_MS}ms ease`,
                         }}
                       >
-                        <HeartHandMark width={22} height={20} />
+                        <HeartHandMark
+                          width={22}
+                          height={20}
+                          color={primaryColor}
+                        />
                       </Box>
 
                       <span
@@ -554,9 +560,11 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                           fontSize: "1.2rem",
                           fontWeight: 800,
                           color: isActive
-                            ? "#2b7ff9"
+                            ? primaryInkColor
                             : isHovered
-                              ? "#5a84c1"
+                              ? isAdvocateSite
+                                ? primaryInkColor
+                                : "#5a84c1"
                               : "#888",
                           transition: `color ${EXIT_DURATION_MS}ms ease`,
                           display: "block",
@@ -600,23 +608,65 @@ export const HomeHero = ({ activeType, onTypeChange }: HomeHeroProps) => {
                     : "none",
               }}
             >
-              <Heading
-                as="h1"
-                fontSize={{ base: "2xl", md: "3xl", lg: "4xl" }}
-                fontWeight="800"
-                color="#2b7ff9"
-                lineHeight="1.15"
-                mb={5}
-                style={{ fontFamily: "var(--font-reddit-sans), sans-serif" }}
-              >
-                {content.heading}
-              </Heading>
+              {advocateOpeningHeaderHtml ? (
+                <>
+                  <Heading as="h1" className="sr-only">
+                    {publicSite.displayName} sponsorship opportunities
+                  </Heading>
+                  <Box
+                    data-advocate-opening-header="true"
+                    color="#666666"
+                    fontSize={{ base: "sm", md: "md" }}
+                    lineHeight="1.7"
+                    mb={5}
+                    style={{
+                      fontFamily: "var(--font-reddit-sans), sans-serif",
+                    }}
+                    css={{
+                      "& h2": {
+                        color: primaryInkColor,
+                        fontFamily: "inherit",
+                        fontSize: "clamp(1.5rem, 4vw, 2.25rem)",
+                        fontWeight: 800,
+                        lineHeight: "1.15",
+                        margin: 0,
+                      },
+                      "& p, & ul, & ol, & blockquote": { margin: 0 },
+                      "& > * + *": { marginTop: "0.65rem" },
+                      "& ul, & ol": { paddingInlineStart: "1.4em" },
+                      "& blockquote": {
+                        borderInlineStart: `4px solid ${accentColor}`,
+                        paddingInlineStart: "0.75rem",
+                      },
+                    }}
+                    // The public site DTO contains field-normalized canonical
+                    // HTML sanitized by the server-only presentation boundary.
+                    dangerouslySetInnerHTML={{
+                      __html: advocateOpeningHeaderHtml,
+                    }}
+                  />
+                </>
+              ) : (
+                <Heading
+                  as="h1"
+                  fontSize={{ base: "2xl", md: "3xl", lg: "4xl" }}
+                  fontWeight="800"
+                  color={primaryInkColor}
+                  lineHeight="1.15"
+                  mb={5}
+                  style={{
+                    fontFamily: "var(--font-reddit-sans), sans-serif",
+                  }}
+                >
+                  {defaultHeading}
+                </Heading>
+              )}
               <Text
                 fontSize={{ base: "sm", md: "md" }}
                 color="#666666"
                 lineHeight="1.7"
               >
-                {content.description}
+                {description}
               </Text>
             </Box>
           </Box>

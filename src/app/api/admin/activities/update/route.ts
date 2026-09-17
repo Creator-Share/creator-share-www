@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
+import { findInvalidPublicActivityProjectionField } from "@/config/beneficiaryValidation"
 import { createClient } from "@/utils/supabase/server"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -32,14 +33,30 @@ export async function PUT(req: NextRequest) {
     beneficiary_id?: string
   }
 
-  const { id, title, description, activity_type, is_public, beneficiary_id } = body
+  const { id, title, description, activity_type, is_public, beneficiary_id } =
+    body
 
   if (!id || !description || !beneficiary_id) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    return NextResponse.json(
+      { error: "Missing required fields" },
+      { status: 400 },
+    )
+  }
+
+  const invalidProjectionField = findInvalidPublicActivityProjectionField({
+    title: title ?? null,
+    description,
+    activity_type: activity_type ?? null,
+  })
+  if (invalidProjectionField !== null) {
+    return NextResponse.json(
+      { error: `Invalid activity ${invalidProjectionField}` },
+      { status: 400 },
+    )
   }
 
   const supabase = await createClient()
-  const auth = await requireSuperAdmin(supabase)
+  const auth = await requireSuperAdminRequest(supabase, req)
   if (!auth.ok) return auth.response
 
   const updateData: {

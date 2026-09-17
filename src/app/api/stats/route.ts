@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     const openCondition = "and(budget_goal.eq.-1,status.not.in.(Draft,Archived))"
 
     let waitingQuery = supabase
-      .from("beneficiaries")
+      .from("public_beneficiaries")
       .select("*", { count: "exact", head: true })
       .or(`status.in.(${statusList}),${openCondition}`)
 
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
     // Sponsored count: Budget Fulfilled beneficiaries (same set as the sponsored row).
     // Filtered by type when requested so the stats card reflects the active tab.
     let sponsoredQuery = supabase
-      .from("beneficiaries")
+      .from("public_beneficiaries")
       .select("*", { count: "exact", head: true })
       .eq("status", "Budget Fulfilled")
 

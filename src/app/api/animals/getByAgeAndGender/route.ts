@@ -13,7 +13,7 @@ export async function GET(req: Request) {
 
   try {
     let query = supabase
-      .from("beneficiaries")
+      .from("public_beneficiaries")
       .select("*")
       .eq("beneficiary_type", "ANIMAL")
 

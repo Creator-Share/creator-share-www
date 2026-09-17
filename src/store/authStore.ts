@@ -11,7 +11,6 @@ export const useAuthStore = create<AuthState>((set) => {
 
   return {
     user: null,
-    registrationEmail: null,
 
     logout: async () => {
       try {
@@ -40,8 +39,5 @@ export const useAuthStore = create<AuthState>((set) => {
         set({ user: data.user || null })
       }
     },
-
-    setRegistrationEmail: (email: string) => set({ registrationEmail: email }),
-    clearRegistrationEmail: () => set({ registrationEmail: null }),
   }
 })

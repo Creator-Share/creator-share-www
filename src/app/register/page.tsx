@@ -47,10 +47,6 @@ const Register = () => {
 
   const setIsDisabled = useFormStore((state) => state.setIsDisabled)
   const isDisabled = useFormStore((state) => state.isDisabled)
-  const setRegistrationEmail = useAuthStore(
-    (state) => state.setRegistrationEmail
-  )
-
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
@@ -69,7 +65,7 @@ const Register = () => {
     validate: (value: string) => {
       const validation = validatePassword(value)
       return validation.isValid ? true : validation.error
-    }
+    },
   }
 
   const onSubmit = async (data: FormValues) => {
@@ -79,40 +75,40 @@ const Register = () => {
     try {
       const response = await fetch("/api/auth/registration", {
         method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        redirect: "error",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, first_name, last_name }),
       })
 
-      const result = await response.json()
+      const result: unknown = await response.json().catch(() => null)
+      const exactAcceptedResponse =
+        response.status === 202 &&
+        result !== null &&
+        typeof result === "object" &&
+        !Array.isArray(result) &&
+        Object.keys(result).length === 1 &&
+        (result as { status?: unknown }).status === "check-email"
 
-      if (!response.ok) {
-        if (result.error.includes("already exists")) {
-          toaster.create({
-            title: "Email Already Exists",
-            description:
-              "This email address is already registered. Please try logging in instead.",
-            duration: 5000,
-          })
-        } else {
-          toaster.create({
-            title: "Signup Failed",
-            description: result.error || "An unexpected error occurred",
-            duration: 5000,
-          })
-        }
+      if (!exactAcceptedResponse) {
+        toaster.create({
+          title: "Signup unavailable",
+          description: "Please review the form and try again shortly.",
+          duration: 5000,
+        })
         return
       }
 
       toaster.create({
-        title: "Signup Successful",
-        description: "Please check your email to verify your account.",
+        title: "Check your email",
+        description:
+          "If the account can be created, a secure confirmation link is on its way.",
         duration: 5000,
       })
 
-      setRegistrationEmail(email)
-      router.push(`/verifyAccount/${encodeURIComponent(email)}`)
-    } catch (err) {
-      console.error(err)
+      router.push("/verifyAccount")
+    } catch {
       toaster.create({
         title: "Unexpected Error",
         description: "Something went wrong. Please try again later.",
@@ -185,6 +181,8 @@ const Register = () => {
             errorText={errors.email?.message}
           >
             <Input
+              type="email"
+              autoComplete="email"
               {...register("email", { required: "Email Address is required" })}
               className="border border-[#8D9692] p-2"
             />
@@ -198,6 +196,7 @@ const Register = () => {
               <Box className="relative">
                 <Input
                   type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   {...register("password", passwordValidation)}
                   className="border border-[#8D9692] p-2 w-full"
                 />
@@ -210,8 +209,9 @@ const Register = () => {
               </Box>
               <PasswordStrengthIndicator password={watch("password")} />
               <Text fontSize="xs" color="gray.600" mt={1}>
-                Password must contain at least 8 characters, including uppercase, lowercase, 
-                number, and special character (!@#$%^&*(),.?":{}|&lt;&gt;).
+                Password must contain at least 8 characters, including
+                uppercase, lowercase, number, and special character
+                (!@#$%^&*(),.?":{}|&lt;&gt;).
               </Text>
             </Box>
           </Field>
@@ -231,6 +231,7 @@ const Register = () => {
               <Box className="relative">
                 <Input
                   type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   {...register("confirmPassword", {
                     required: "Confirm Password is required",
                   })}
@@ -269,7 +270,7 @@ const Register = () => {
             <Text fontSize="sm" color="gray.600">
               Already have an account?{" "}
               <Link href="/login" className="text-[#2b7ff9] hover:underline">
-                Sign in here →
+                Sign in here
               </Link>
             </Text>
           </Box>

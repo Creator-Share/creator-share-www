@@ -21,8 +21,8 @@ Creator Share is a modern sponsorship platform connecting compassionate individu
 
 ### Prerequisites
 
-- **Node.js**: v20.17.0 (specified in `.nvmrc`)
-- **Package Manager**: npm or yarn
+- **Node.js**: v24.18.0 (specified in `.nvmrc`)
+- **Package Manager**: Yarn 1.22.22 (declared in `package.json`)
 - **Database**: Supabase account
 - **Payment Processor**: Stripe account (PayPal optional)
 
@@ -38,17 +38,17 @@ Creator Share is a modern sponsorship platform connecting compassionate individu
 2. **Install Node.js version**
 
    ```bash
-   nvm install 20
-   nvm use 20
+   nvm install
+   nvm use
    ```
 
 3. **Install dependencies**
 
    ```bash
-   npm install
-   # or
-   yarn install
+   yarn install --frozen-lockfile
    ```
+
+Use `yarn.lock` as the dependency authority, matching CI and deployment. Do not generate a second lockfile with npm.
 
 4. **Configure environment variables**
 
@@ -142,6 +142,8 @@ See [telegram-bot-setup.md](./docs/telegram-bot-setup.md) for detailed setup ins
 
 ## 📚 Documentation
 
+- **[Advocate Platform Architecture](./docs/advocate-platform-roadmap.md)** - Approved architecture, security boundaries, delivery roadmap, and release gates
+- **[Repo-Wide Fast Follows](./FAST_FOLLOWS.md)** - Canonical register for intentionally deferred work
 - **[Setup Guide](./docs/setup.md)** - Database configuration and extension setup
 - **[Branching & Deployment](./docs/branches.md)** - Git workflow and CI/CD process
 - **[Stripe Webhooks](./docs/stripe-webhook.md)** - Payment webhook configuration
@@ -210,6 +212,7 @@ We use custom scripts to manage database schema synchronization between local mi
 For detailed instructions, see [scripts/db/README.md](./scripts/db/README.md).
 
 **Quick start:**
+
 ```bash
 # Set environment variables
 export SUPABASE_DB_PASSWORD='your-password'
@@ -319,4 +322,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Made with ❤️ by the Creator Share team**
-

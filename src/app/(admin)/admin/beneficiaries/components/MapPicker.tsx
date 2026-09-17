@@ -11,6 +11,12 @@ import {
 import { Box, Text, Input, Flex } from "@chakra-ui/react"
 import { Button } from "@/components/ui/button"
 import { toaster } from "@/components/ui/toaster"
+import { resolveMapTileProvider } from "@/lib/maps/tileProvider"
+
+const MAP_TILE_PROVIDER = resolveMapTileProvider("bright-v2", {
+  NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
+  NEXT_PUBLIC_MAPTILER_KEY: process.env.NEXT_PUBLIC_MAPTILER_KEY,
+})
 
 const customIcon = L.icon({
   iconUrl: "/CreatorSharePin.svg",
@@ -229,8 +235,8 @@ const MapPicker: React.FC<MapPickerProps> = ({
             maxBoundsViscosity={1.0}
           >
             <TileLayer
-              attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
-              url={`https://api.maptiler.com/maps/bright-v2/{z}/{x}/{y}.png?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY}&lang=en`}
+              attribution={MAP_TILE_PROVIDER.attribution}
+              url={MAP_TILE_PROVIDER.url}
             />
             {selectedLocation && (
               <Marker position={selectedLocation} icon={customIcon} />

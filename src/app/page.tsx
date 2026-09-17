@@ -6,6 +6,8 @@ import SponsorshipsContainer from "./sponsorships/components/SponsorshipsContain
 import type { BeneficiaryTabType } from "@/config/beneficiaryTypes"
 import { TYPE_TO_ROUTE } from "@/config/beneficiaryTypes"
 import { HomeBgPicker } from "@/components/HomeBg"
+import { notifyPublicPathChange } from "@/lib/advocates/publicPathChanges"
+import { AdvocateImpactMetrics } from "@/components/advocates/AdvocateImpactMetrics"
 
 export default function Home() {
   const [activeType, setActiveType] = useState<BeneficiaryTabType | null>(null)
@@ -16,16 +18,25 @@ export default function Home() {
       const route = type === null ? "/" : (TYPE_TO_ROUTE[type] ?? "/")
       if (window.location.pathname !== route) {
         window.history.pushState({ beneficiaryType: type }, "", route)
+        notifyPublicPathChange()
       }
     }
   }, [])
 
   return (
-    <Box position="relative" minH={{ base: "auto", lg: "130vh" }} pb={{ base: 0, lg: 40 }}>
+    <Box
+      position="relative"
+      minH={{ base: "auto", lg: "130vh" }}
+      pb={{ base: 0, lg: 40 }}
+    >
       <HomeBgPicker />
       <div style={{ position: "relative", zIndex: 1 }}>
         <HomeHero activeType={activeType} onTypeChange={handleTypeChange} />
-        <SponsorshipsContainer activeType={activeType} onTypeChange={handleTypeChange} />
+        <AdvocateImpactMetrics />
+        <SponsorshipsContainer
+          activeType={activeType}
+          onTypeChange={handleTypeChange}
+        />
       </div>
     </Box>
   )

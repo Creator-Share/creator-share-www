@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "reviewState": "pending",
+  "tenantRoot": "creatorshare.com",
+  "policyRevision": "initial-policy-pending",
+  "advocateCnameTarget": null,
+  "vercelProjectId": null,
+  "staticHosts": []
+}

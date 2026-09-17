@@ -421,7 +421,7 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
       // ── Step 4: Send email notifications (only reached if all uploads succeeded) ─
       if (sendToSponsors && selectedSponsorIds.size > 0) {
         try {
-          await fetch("/api/admin/activities/notify", {
+          const notificationResponse = await fetch("/api/admin/activities/notify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -430,11 +430,15 @@ export const CreateActivityModal: React.FC<CreateModalProps> = ({
               selectedSponsorshipIds: Array.from(selectedSponsorIds),
             }),
           })
+          const notificationResult = await notificationResponse.json()
+          if (!notificationResponse.ok || notificationResult?.success !== true) {
+            throw new Error("Activity notifications were not fully confirmed")
+          }
         } catch (err) {
           console.error("Failed to send email notifications:", err)
           toaster.create({
             title: "Warning",
-            description: "Activity created but email notifications failed to send.",
+            description: "Activity created. Some email notifications could not be confirmed. Check delivery logs before resending.",
             type: "warning",
             duration: 5000,
           })

@@ -79,8 +79,8 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
       }
 
       toaster.create({
-        title: "Success",
-        description: `User invited successfully with ${selectedRoleIds.size} role(s).`,
+        title: "Request accepted",
+        description: "We received the invitation request.",
         duration: 5000,
       })
 

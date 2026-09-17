@@ -1,5 +1,9 @@
+import { roundMinorUnitsAtRate } from "../src/utils/decimalMoney"
 import { expect, test } from "@playwright/test"
 import {
+  coerceSupportedCurrency,
+  isSupportedCurrency,
+  SUPPORTED_CURRENCIES,
   convertCurrencyMinorToUsdCents,
   convertUsdCentsToCurrency,
   formatMoney,
@@ -8,6 +12,42 @@ import {
 import { getStripeRegionForPaymentCurrency } from "../src/lib/stripe/currencyRouting"
 
 test.describe("payment currency support", () => {
+  test("distinguishes canonical currency values from normalized user input", () => {
+    for (const currency of SUPPORTED_CURRENCIES) {
+      expect(isSupportedCurrency(currency)).toBe(true)
+      expect(isSupportedCurrency(currency.toLowerCase())).toBe(false)
+      expect(coerceSupportedCurrency(currency.toLowerCase())).toBe(currency)
+    }
+    for (const currency of [undefined, null, "", "JPY"]) {
+      expect(isSupportedCurrency(currency)).toBe(false)
+    }
+  })
+
+  test("rounds decimal conversion midpoints exactly as PostgreSQL numeric", () => {
+    for (const [amount, rate, expected] of [
+      [2500, 0.6134, 1534],
+      [3000, 0.6255, 1877],
+      [500, 0.001, 1],
+      [499, 0.001, 0],
+      [100000000, 1e-8, 1],
+      [1, 1e8, 100000000],
+      [0, 0.74, 0],
+    ]) {
+      expect(roundMinorUnitsAtRate(amount, rate)).toBe(expected)
+    }
+    for (const [amount, rate] of [
+      [-1, 1],
+      [1.5, 1],
+      [1, 0],
+      [1, -1],
+      [1, Number.NaN],
+      [1, Number.POSITIVE_INFINITY],
+      [Number.MAX_SAFE_INTEGER, 2],
+    ]) {
+      expect(roundMinorUnitsAtRate(amount, rate)).toBeNaN()
+    }
+  })
+
   test("maps supported countries to the expected default currencies", () => {
     expect(getDefaultCurrencyForCountry("US")).toBe("USD")
     expect(getDefaultCurrencyForCountry("AU")).toBe("AUD")

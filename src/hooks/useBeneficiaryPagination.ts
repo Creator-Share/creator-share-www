@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react"
 import { Beneficiaries } from "@/types"
 import { subscribeToSubscriptions } from "@/lib/subscriptionsRealtime"
 import { INACTIVE_STATUSES } from "@/config/beneficiaryStatuses"
+import { usePublicSite } from "@/components/advocates/PublicSiteProvider"
 
 type FiltersState = {
   gender: string
@@ -33,7 +34,7 @@ interface UseBeneficiaryPaginationReturn {
   fetchError: string | null
   filters: FiltersState
   setFilters: (
-    filters: FiltersState | ((prev: FiltersState) => FiltersState)
+    filters: FiltersState | ((prev: FiltersState) => FiltersState),
   ) => void
   handleFilterChange: (newFilters: Partial<FiltersState>) => void
   fetchPage: (nextCursor: string | null) => Promise<void>
@@ -42,11 +43,14 @@ interface UseBeneficiaryPaginationReturn {
   retryCount: number
 }
 
-/** In-place Fisher-Yates shuffle — O(n), unbiased. */
-function shuffle<T>(arr: T[]): void {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+/** In-place Fisher-Yates shuffle used by the existing primary experience. */
+function shuffle<T>(items: T[]): void {
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const replacementIndex = Math.floor(Math.random() * (index + 1))
+    ;[items[index], items[replacementIndex]] = [
+      items[replacementIndex],
+      items[index],
+    ]
   }
 }
 
@@ -55,8 +59,9 @@ function shuffle<T>(arr: T[]): void {
  * Includes Fibonacci-based auto-retry logic for failed requests
  */
 export function useBeneficiaryPagination(
-  options: UseBeneficiaryPaginationOptions = {}
+  options: UseBeneficiaryPaginationOptions = {},
 ): UseBeneficiaryPaginationReturn {
+  const publicSite = usePublicSite()
   const {
     recordsPerPage = 3,
     beneficiaryType,
@@ -102,23 +107,27 @@ export function useBeneficiaryPagination(
   const buildQuery = useCallback(
     (nextCursor: string | null) => {
       const params = new URLSearchParams()
-      const type = (filters.beneficiary_type || beneficiaryType) as string | undefined;
+      const type = (filters.beneficiary_type || beneficiaryType) as
+        | string
+        | undefined
       if (type && type !== "null" && type !== "undefined") {
-        params.set("beneficiary_type", type);
+        params.set("beneficiary_type", type)
       }
       if (filters.gender) params.set("gender", filters.gender)
       if (filters.status?.length) params.set("status", filters.status.join(","))
-      
-      // Skip age range filtering when:
-      //  • the type is ANIMAL (dogs don't have human-comparable ages), or
-      //  • status includes an inactive value that may cover beneficiaries of any age
+
+      // Skip age range filtering for animal records and for inactive statuses
+      // that may cover beneficiaries of any age.
       const isAnimalType = (type ?? "").split(",").includes("ANIMAL")
       const shouldSkipAgeRange =
         isAnimalType ||
-        (filters.status || []).some((status) => (INACTIVE_STATUSES as string[]).includes(status))
+        (filters.status || []).some((status) =>
+          (INACTIVE_STATUSES as string[]).includes(status),
+        )
 
       // Only apply the age range when the user has moved the slider away from its
-      // default position (0 → type max). At the default, treat as "no upper bound"
+      // default position from zero to the type maximum. At the default, treat
+      // the range as unbounded above
       // so beneficiaries older than the slider maximum still appear in the listing.
       // This prevents the stats card and the filter strip from diverging on a fresh page load.
       const defaultMaxAge = isAnimalType ? 20 : 14
@@ -131,11 +140,10 @@ export function useBeneficiaryPagination(
       params.set("limit", String(recordsPerPage))
       if (nextCursor) params.set("cursor", nextCursor)
       if (isAdminMode) params.set("admin_mode", "true")
-      
-      
+
       return params.toString()
     },
-    [filters, beneficiaryType, recordsPerPage, isAdminMode]
+    [filters, beneficiaryType, recordsPerPage, isAdminMode],
   )
 
   const fetchPage = useCallback(
@@ -157,15 +165,14 @@ export function useBeneficiaryPagination(
       abortControllerRef.current = controller
       setIsLoading(true)
       try {
-        const res = await fetch(
-          `/api/beneficiaries/get?${queryString}`,
-          { signal: controller.signal }
-        )
+        const res = await fetch(`/api/beneficiaries/get?${queryString}`, {
+          signal: controller.signal,
+        })
         if (!res.ok) throw new Error("Failed to load beneficiaries")
         const data = await res.json()
         if (data?.totalCount != null) setTotalCount(data.totalCount)
         const people = (data?.people || []) as Beneficiaries[]
-        shuffle(people)
+        if (publicSite.kind === "primary") shuffle(people)
 
         setBeneficiaries((prev) => {
           if (!nextCursor) {
@@ -173,17 +180,16 @@ export function useBeneficiaryPagination(
           }
 
           // Deduplicate: filter out any items that already exist in prev
-          const existingIds = new Set(prev.map(b => b.id))
-          const newItems = people.filter(b => !existingIds.has(b.id))
+          const existingIds = new Set(prev.map((b) => b.id))
+          const newItems = people.filter((b) => !existingIds.has(b.id))
           const duplicatesFiltered = people.length - newItems.length
-          
-          
+
           if (duplicatesFiltered > 0) {
             console.warn(
-              `[useBeneficiaryPagination] ⚠️  ${duplicatesFiltered} duplicate(s) detected! Total unique items: ${prev.length + newItems.length}`
+              `[useBeneficiaryPagination] ${duplicatesFiltered} duplicate(s) detected. Total unique items: ${prev.length + newItems.length}`,
             )
           }
-          
+
           return [...prev, ...newItems]
         })
         setCursor(data?.pageInfo?.nextCursor || null)
@@ -191,7 +197,6 @@ export function useBeneficiaryPagination(
         retryCountRef.current = 0
         setRetryCount(0)
         setFetchError(null)
-
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
           return
@@ -229,7 +234,7 @@ export function useBeneficiaryPagination(
         }
       }
     },
-    [buildQuery, autoRetry, getFibonacciDelay]
+    [buildQuery, autoRetry, getFibonacciDelay, publicSite.kind],
   )
 
   const memoizedRetryFetch = useCallback(() => {
@@ -251,7 +256,7 @@ export function useBeneficiaryPagination(
     (newFilters: Partial<FiltersState>) => {
       setFilters((prev) => ({ ...prev, ...newFilters }))
     },
-    []
+    [],
   )
 
   useEffect(() => {
@@ -261,17 +266,22 @@ export function useBeneficiaryPagination(
   }, [filters])
 
   useEffect(() => {
-    const unsubscribe = subscribeToSubscriptions("beneficiary-pagination", () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current)
-        retryTimeoutRef.current = null
-      }
-      retryCountRef.current = 0
-      setRetryCount(0)
-      fetchPage(null)
-    })
+    if (publicSite.kind === "advocate" && !isAdminMode) return
+
+    const unsubscribe = subscribeToSubscriptions(
+      "beneficiary-pagination",
+      () => {
+        if (retryTimeoutRef.current) {
+          clearTimeout(retryTimeoutRef.current)
+          retryTimeoutRef.current = null
+        }
+        retryCountRef.current = 0
+        setRetryCount(0)
+        fetchPage(null)
+      },
+    )
     return unsubscribe
-  }, [fetchPage])
+  }, [fetchPage, isAdminMode, publicSite.kind])
 
   // Cleanup retry timeout on unmount
   useEffect(() => {

@@ -20,7 +20,7 @@ type StorageListClient = {
     from: (bucket: string) => {
       list: (
         path: string,
-        options?: { limit?: number; search?: string },
+        options?: { limit?: number; offset?: number; search?: string },
       ) => Promise<{
         data: Array<{ name: string }> | null
         error: { message?: string } | null
@@ -150,13 +150,6 @@ export const getBrowserImageSrc = (image: MediaImage): string => {
   return image.image_url || ""
 }
 
-export const getBrowserThumbnailSrc = (
-  _image?: MediaImage,
-): string | undefined => {
-  void _image
-  return undefined
-}
-
 /**
  * Compatibility wrapper. Browser paths should use direct storage URLs so
  * next/image and Vercel own browser optimization.
@@ -164,60 +157,78 @@ export const getBrowserThumbnailSrc = (
 export const generatePublicUrl = (media: MediaRow): string =>
   getDirectMediaUrl(media)
 
-/**
- * Compatibility wrapper. Browser thumbnails are disabled so Supabase does not
- * transform images that Vercel will optimize in the browser.
- */
-export const generateThumbnailUrl = (_media?: MediaRow): string | undefined => {
-  void _media
-  return undefined
-}
-
 export const getImageSrc = (image: MediaImage): string =>
   getBrowserImageSrc(image)
-
-export const getThumbnailSrc = (image?: MediaImage): string | undefined =>
-  getBrowserThumbnailSrc(image)
-
-/**
- * Generate a public URL directly from a storage key (no bucket name).
- */
-export const getPublicUrlFromKey = (key: string): string => {
-  if (!key || key.trim() === "") {
-    throw new Error("Storage key is required")
-  }
-  const base = getSupabaseBaseUrl()
-  return `${base}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeStoragePath(key)}`
-}
-
-export async function mediaFileExists(
-  supabaseClient: StorageListClient,
-  media: MediaRow,
-): Promise<boolean> {
-  const key = getStorageKey(media)
-  const lastSlash = key.lastIndexOf("/")
-  const folder = lastSlash >= 0 ? key.slice(0, lastSlash) : ""
-  const fileName = lastSlash >= 0 ? key.slice(lastSlash + 1) : key
-
-  const { data, error } = await supabaseClient.storage
-    .from(STORAGE_BUCKET)
-    .list(folder, { limit: 1, search: fileName })
-
-  if (error) return false
-  return Boolean(data?.some((item) => item.name === fileName))
-}
 
 export async function filterExistingMediaRows<T extends MediaRow>(
   supabaseClient: StorageListClient,
   mediaRows: T[],
 ): Promise<T[]> {
-  const checks = await Promise.all(
-    mediaRows.map(async (media) => ({
-      media,
-      exists: await mediaFileExists(supabaseClient, media),
-    })),
+  if (mediaRows.length === 0) return []
+
+  const groups = new Map<
+    string,
+    { rowsByFileName: Map<string, T[]>; expectedFileNames: Set<string> }
+  >()
+  for (const media of mediaRows) {
+    const key = getStorageKey(media)
+    const lastSlash = key.lastIndexOf("/")
+    const folder = lastSlash >= 0 ? key.slice(0, lastSlash) : ""
+    const fileName = lastSlash >= 0 ? key.slice(lastSlash + 1) : key
+    const group = groups.get(folder) ?? {
+      rowsByFileName: new Map<string, T[]>(),
+      expectedFileNames: new Set<string>(),
+    }
+    const matchingRows = group.rowsByFileName.get(fileName) ?? []
+    matchingRows.push(media)
+    group.rowsByFileName.set(fileName, matchingRows)
+    group.expectedFileNames.add(fileName)
+    groups.set(folder, group)
+  }
+
+  const entries = [...groups.entries()]
+  const existingRows = new Set<T>()
+  const pageSize = 1_000
+  const maximumPagesPerFolder = 100
+  const maximumConcurrentFolders = 8
+  let nextEntry = 0
+
+  async function inspectNextFolder(): Promise<void> {
+    while (nextEntry < entries.length) {
+      const entryIndex = nextEntry
+      nextEntry += 1
+      const [folder, group] = entries[entryIndex]
+      const remaining = new Set(group.expectedFileNames)
+
+      for (
+        let page = 0;
+        page < maximumPagesPerFolder && remaining.size > 0;
+        page += 1
+      ) {
+        const { data, error } = await supabaseClient.storage
+          .from(STORAGE_BUCKET)
+          .list(folder, { limit: pageSize, offset: page * pageSize })
+        if (error || data === null) break
+
+        for (const item of data) {
+          if (!remaining.delete(item.name)) continue
+          for (const row of group.rowsByFileName.get(item.name) ?? []) {
+            existingRows.add(row)
+          }
+        }
+        if (data.length < pageSize) break
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(maximumConcurrentFolders, entries.length) },
+      () => inspectNextFolder(),
+    ),
   )
-  return checks.filter((check) => check.exists).map((check) => check.media)
+
+  return mediaRows.filter((media) => existingRows.has(media))
 }
 
 /**

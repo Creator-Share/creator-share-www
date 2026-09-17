@@ -1,14 +1,21 @@
+import { randomUUID } from "node:crypto"
+
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
+import {
+  getCreatorShareRoleIds,
+  replaceCreatorShareRoles,
+  roleChangeReason,
+} from "@/utils/admin/creatorShareRoles"
 
 export async function DELETE(request: Request) {
   try {
     const supabase = await createClient()
-    const auth = await requireSuperAdmin(supabase)
+    const auth = await requireSuperAdminRequest(supabase, request)
     if (!auth.ok) return auth.response
 
-    const { userId, roleId } = await request.json()
+    const { userId, roleId, reason } = await request.json()
 
     if (!userId || !roleId) {
       return NextResponse.json(
@@ -17,22 +24,18 @@ export async function DELETE(request: Request) {
       )
     }
 
-    // Remove role assignment
-    const { error } = await supabase
-      .from("role_assignments")
-      .delete()
-      .eq("user_id", userId)
-      .eq("role_id", roleId)
+    const currentRoleIds = await getCreatorShareRoleIds(supabase, userId)
+    const roles = await replaceCreatorShareRoles(
+      supabase,
+      randomUUID(),
+      userId,
+      currentRoleIds.filter((currentRoleId) => currentRoleId !== roleId),
+      roleChangeReason(reason, "Administrator removed a Creator Share role"),
+    )
 
-    if (error) {
-      console.error("Error removing role:", error)
-      return NextResponse.json({ error: "Failed to remove role" }, { status: 500 })
-    }
-
-    return NextResponse.json({ message: "Role removed successfully" })
+    return NextResponse.json({ message: "Role removed successfully", roles })
   } catch (error) {
     console.error("Unexpected error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
-

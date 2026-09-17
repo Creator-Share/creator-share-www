@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 import {
   ALL_BENEFICIARY_TABS,
   getDefaultBudgetGoal,
@@ -11,7 +11,7 @@ const VALID_TYPES = ALL_BENEFICIARY_TABS.filter(t => t.type != null && !t.isLega
 
 export async function POST(req: Request) {
   const supabase = await createClient()
-  const auth = await requireSuperAdmin(supabase)
+  const auth = await requireSuperAdminRequest(supabase, req)
   if (!auth.ok) return auth.response
 
   try {

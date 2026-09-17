@@ -1,7 +1,11 @@
+import { requireDiagnosticAdmin } from "@/utils/auth/requireDiagnosticAdmin"
 import { NextResponse } from "next/server"
 import { createTelegramService } from "@/services/telegram"
 
-export async function POST() {
+export async function POST(req: Request) {
+  const denied = await requireDiagnosticAdmin(req)
+  if (denied) return denied
+
   try {
     // Check if Telegram is configured
     if (!process.env.TELEGRAM_BOT_TOKEN) {
@@ -49,7 +53,10 @@ export async function POST() {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = await requireDiagnosticAdmin(req)
+  if (denied) return denied
+
   return NextResponse.json({ 
     message: "Use POST method to test Telegram bot",
     requiredEnvVars: [

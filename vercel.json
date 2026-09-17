@@ -1,9 +1,94 @@
 {
   "functions": {
+    "src/app/api/admin/users/invite/route.ts": {
+      "maxDuration": 120
+    },
     "src/app/api/admin/beneficiaries/images/create/route.ts": {
       "maxDuration": 60,
       "memory": 3008
+    },
+    "src/app/api/internal/payments/gateway-events/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/advocates/provisioning/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/advocates/publication-canaries/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/internal/advocates/publication-sentinel/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/advocates/logo-reconciliation/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/advocates/invitations/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/internal/advocates/public-metrics/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/advocates/lifecycle-cleanup/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/portal/[slug]/logo/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/sponsorships/welcome-emails/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/sponsorships/subscription-cancellations/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/retention/route.ts": {
+      "maxDuration": 60
     }
   },
+  "crons": [
+    {
+      "path": "/api/internal/advocates/provisioning",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/advocates/publication-canaries",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/advocates/publication-sentinel",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/advocates/logo-reconciliation",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/advocates/invitations",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/advocates/public-metrics",
+      "schedule": "13 1 * * *"
+    },
+    {
+      "path": "/api/internal/advocates/lifecycle-cleanup",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/payments/gateway-events",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/sponsorships/welcome-emails",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/sponsorships/subscription-cancellations",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/retention",
+      "schedule": "17 * * * *"
+    }
+  ],
   "regions": ["sfo1"]
 }

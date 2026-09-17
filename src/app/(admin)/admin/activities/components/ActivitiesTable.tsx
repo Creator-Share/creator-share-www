@@ -13,7 +13,7 @@ import { DataTable } from "@/components/admin-ui/Tables/data-table"
 import { LogoLoader } from "@/components/common/LogoLoader"
 
 interface ActivitiesTableProps {
-  beneficiaryType: string
+  beneficiaryType: string | null
   beneficiaryId: string
   searchQuery?: string
   userRole?: string | null
@@ -47,10 +47,10 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
   const fetchActivities = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({
-        beneficiary_type: beneficiaryType,
-        beneficiary_id: beneficiaryId,
-      })
+      const params = new URLSearchParams({ beneficiary_id: beneficiaryId })
+      if (beneficiaryType) {
+        params.set("beneficiary_type", beneficiaryType)
+      }
       if (searchQuery && searchQuery.trim()) {
         params.set("q", searchQuery.trim())
       }
@@ -85,7 +85,9 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
     const newIsPublic = !(activity.is_public ?? false)
     // Optimistic update
     setActivities((prev) =>
-      prev.map((a) => (a.id === activity.id ? { ...a, is_public: newIsPublic } : a)),
+      prev.map((a) =>
+        a.id === activity.id ? { ...a, is_public: newIsPublic } : a,
+      ),
     )
     try {
       const res = await fetch("/api/admin/activities/update", {
@@ -104,7 +106,9 @@ const ActivitiesTable: React.FC<ActivitiesTableProps> = ({
     } catch {
       // Revert optimistic update on failure
       setActivities((prev) =>
-        prev.map((a) => (a.id === activity.id ? { ...a, is_public: activity.is_public } : a)),
+        prev.map((a) =>
+          a.id === activity.id ? { ...a, is_public: activity.is_public } : a,
+        ),
       )
     }
   }

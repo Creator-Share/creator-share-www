@@ -61,9 +61,16 @@ const BeneficiaryCard: React.FC<BeneficiaryCardProps> = ({
   const age = beneficiary.birth_date
     ? calculateAge(new Date(beneficiary.birth_date).toISOString())
     : null
+  const birthDateMetadata = beneficiary.metadata as
+    | {
+        birth_date_is_estimate?: boolean
+        birth_date_precision?: "day" | "month" | "year"
+      }
+    | undefined
   const birthDateIsEstimate = Boolean(
-    (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
-      ?.birth_date_is_estimate,
+    birthDateMetadata?.birth_date_is_estimate ||
+      (birthDateMetadata?.birth_date_precision &&
+        birthDateMetadata.birth_date_precision !== "day"),
   )
 
   return (
