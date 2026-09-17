@@ -1099,3 +1099,20 @@ test.describe("PayPal webhook trust boundary", () => {
     })
   })
 })
+
+
+test("oversized paypal payload rejects even when stream cancellation stalls", async () => {
+  let cancelled = false
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) { controller.enqueue(new Uint8Array(MAXIMUM_PAYPAL_WEBHOOK_BYTES + 1)) },
+    cancel() {
+      cancelled = true
+      return new Promise<void>(() => {})
+    },
+  })
+  await expect(readBoundedPayPalWebhookPayload({
+    headers: new Headers(), body,
+  } as Request)).rejects.toMatchObject({ code: "payload-too-large" })
+  expect(cancelled).toBe(true)
+  expect(body.locked).toBe(false)
+})

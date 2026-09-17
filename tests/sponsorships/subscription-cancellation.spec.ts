@@ -685,7 +685,7 @@ test("the route has no direct subscription write, bespoke beneficiary mutation, 
   expect(source).not.toContain("providerObjectId")
   expect(source).toContain("parseSubscriptionCancellationBody")
   expect(source).toContain("cancelSponsorSubscription")
-  expect(source).toContain("request.body.getReader()")
+  expect(source).toMatch(/readBoundedUtf8Stream\(\s*request\.body,\s*MAXIMUM_SUBSCRIPTION_CANCELLATION_BODY_BYTES/)
   expect(source).toContain("resolveTrustedPrimaryRequestOrigin")
   expect(source).not.toContain("resolveTrustedCheckoutRequestOrigin")
 })

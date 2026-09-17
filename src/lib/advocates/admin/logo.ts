@@ -90,7 +90,7 @@ export async function readBoundedAdvocateLogoMultipartBody(
       if (done) break
       totalBytes += value.byteLength
       if (totalBytes > MAX_ADVOCATE_LOGO_MULTIPART_BYTES) {
-        await reader.cancel()
+        void reader.cancel().catch(() => undefined)
         return null
       }
       chunks.push(value)

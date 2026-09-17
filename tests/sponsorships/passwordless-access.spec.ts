@@ -680,3 +680,12 @@ test("reauthentication stops on private context and signal failures", async () =
   expect(reservationCalls).toHaveLength(0)
   expect(reauthenticationIssuerCalls).toHaveLength(0)
 })
+
+
+test("passwordless request decoding rejects malformed UTF-8 instead of replacing bytes", async () => {
+  const request = new Request("https://creatorshare.com/api/auth/passwordless", {
+    method: "POST",
+    body: new Uint8Array([0xff]),
+  })
+  expect(await passwordlessAccess.readBoundedSponsorManagementBody(request, 1024)).toBeNull()
+})

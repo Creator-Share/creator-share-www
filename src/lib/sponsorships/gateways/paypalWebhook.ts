@@ -588,11 +588,7 @@ export async function readBoundedPayPalWebhookPayload(
       if (!(value instanceof Uint8Array)) throw infrastructure()
       total += value.byteLength
       if (total > MAXIMUM_PAYPAL_WEBHOOK_BYTES) {
-        try {
-          await reader.cancel()
-        } catch {
-          // The bounded rejection remains authoritative.
-        }
+        void reader.cancel().catch(() => undefined)
         reject("payload-too-large", 413)
       }
       chunks.push(Buffer.from(value))

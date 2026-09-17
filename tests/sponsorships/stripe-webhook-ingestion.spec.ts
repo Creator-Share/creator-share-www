@@ -1463,3 +1463,20 @@ test.describe("durable retained Stripe webhook capture", () => {
     expect(captured).toEqual([])
   })
 })
+
+
+test("oversized stripe payload rejects even when stream cancellation stalls", async () => {
+  let cancelled = false
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) { controller.enqueue(new Uint8Array(MAXIMUM_SIGNED_PAYLOAD_BYTES + 1)) },
+    cancel() {
+      cancelled = true
+      return new Promise<void>(() => {})
+    },
+  })
+  await expect(readBoundedStripeWebhookPayload({
+    headers: new Headers(), body,
+  } as Request)).rejects.toMatchObject({ code: "payload-too-large" })
+  expect(cancelled).toBe(true)
+  expect(body.locked).toBe(false)
+})

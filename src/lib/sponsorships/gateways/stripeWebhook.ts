@@ -287,11 +287,7 @@ export async function readBoundedStripeWebhookPayload(
 
       totalBytes += value.byteLength
       if (totalBytes > MAXIMUM_SIGNED_PAYLOAD_BYTES) {
-        try {
-          await reader.cancel()
-        } catch {
-          // The size rejection remains authoritative if cancellation fails.
-        }
+        void reader.cancel().catch(() => undefined)
         reject("payload-too-large")
       }
       chunks.push(Buffer.from(value))

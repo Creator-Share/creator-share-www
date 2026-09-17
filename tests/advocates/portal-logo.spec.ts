@@ -238,3 +238,15 @@ test.describe("advocate portal logo processing", () => {
     ).resolves.toBeNull()
   })
 })
+
+
+test("oversized logo upload rejects without waiting for producer cancellation", async () => {
+  const body = new ReadableStream<Uint8Array<ArrayBuffer>>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(MAX_ADVOCATE_LOGO_MULTIPART_BYTES + 1))
+    },
+    cancel() { return new Promise<void>(() => {}) },
+  })
+  expect(await readBoundedAdvocateLogoMultipartBody({ headers: new Headers(), body })).toBeNull()
+  expect(body.locked).toBe(false)
+})
