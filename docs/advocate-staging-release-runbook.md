@@ -435,7 +435,7 @@ The exact overall `configurationState` is `invalid` in all three phases. Only `p
 
 Removing only the invitation override in Phase C does not make `worker_configuration` configured because eight deliberate overrides remain. Prove invitation authorization directly from its route and database evidence. Do not misreport the preflight.
 
-## Step 8: attach only the two exact staging hostnames
+## Step 3: attach only the two exact staging hostnames
 
 Begin this step only after the final schema checkpoint, Phase A preflight, schedule fail-closed evidence, and aggregate zero-state query all pass. Provider automation remains disabled, and the application deployment retains no Cloudflare or Vercel provider credentials.
 
@@ -454,7 +454,7 @@ Perform and record the exact sequence:
 
 If any step after DNS creation fails, remove both Cloudflare CNAMEs first. Verify authoritative DNS absence, then detach both exact Vercel domain objects. This order stops public routing before releasing platform ownership. If failure occurs before DNS creation, detach any newly added Vercel domain object and verify the project domain inventory returns to its pre-step state. Never point either hostname at the existing production project as a diagnostic shortcut.
 
-## Step 9: exact-host Auth, email, routing, privacy, and cleanup canaries
+## Step 4: exact-host Auth, email, routing, privacy, and cleanup canaries
 
 Only the exact hostnames can validate these surfaces. Configure hosted Supabase Auth for project `destjwstohzmufshfnuy` with the reviewed templates, exact email confirmation setting, exact 3,600-second OTP expiry, and only the four exact staging redirect paths defined in the payment runbook. Do not add a wildcard URL, Vercel generated URL, preview URL, sibling tenant, or production fallback.
 
@@ -482,6 +482,8 @@ Follow the payment and domain publication runbooks for every later provider or w
 | Boundary                                                    | Permitted response                                                                                                                                                                                              | Forbidden action                                                                                                                                               |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Before database application | Stop and preserve the source and target evidence. | Do not repair or rewrite migration history. |
+| After partial database application | Keep callers paused, preserve the exact ledger and failure evidence, and review forward recovery. | Do not deploy against a partial schema or replay an applied migration. |
+| After complete database application | Use only an application proven compatible with the installed schema; keep workers disabled until their release gates pass. | Do not restore an older database across external authentication or payment activity. |
 | After first Production deployment, before domain attachment | Keep the nine overrides and disabled provider mode. Replace the deployment only with another reviewed fail-closed build. Preserve all deployment, invocation, and schedule evidence.                            | Do not assume deployment rollback removes the 11 installed schedules, delete the project to hide evidence, or point the production Creator Share project here. |
 | After Vercel domain objects, before Cloudflare DNS          | Detach only the two new exact domain objects and verify their absence.                                                                                                                                          | Do not add a wildcard, transfer a production hostname, or create DNS to diagnose a platform ownership conflict.                                                |
 | After Cloudflare DNS creation                               | Remove both exact DNS records first and verify authoritative absence. Then detach the two Vercel domain objects and preserve the failed certificate and routing evidence.                                       | Do not detach Vercel first while DNS can still route, proxy the records, or retarget them to another project.                                                  |
