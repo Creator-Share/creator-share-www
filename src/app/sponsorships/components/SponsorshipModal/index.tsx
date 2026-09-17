@@ -42,7 +42,6 @@ import { ImageCarousel } from "@/components/common/ImageCarousel"
 import SupportedRibbon from "@/components/common/SupportedRibbon"
 import SupportedCheckBadge from "@/components/common/SupportedCheckBadge"
 import { PERSON_PLACEHOLDER_PATH } from "@/utils/placeholders"
-import { useSponsorship } from "../../hooks/useSponsorship"
 import BeneficiaryActivity, { SHOW_MORE_CLASS } from "../SponsorshipActivity"
 import { FAQModal } from "@/components/FAQModal"
 import { NativeSelectField, NativeSelectRoot } from "@/components/ui/native-select"
@@ -127,7 +126,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
   const [toastCount, setToastCount] = useState(0)
   const [lastToastTime, setLastToastTime] = useState(0)
   const user = useAuthStore((state) => state.user)
-  const { setSponsorshipInProgress } = useSponsorship()
   const isOpen = isOpenSponsorshipType(beneficiary.beneficiary_type)
   const hasOpenSupport = isOpen && hasOpenSponsorshipSupport(beneficiary)
 
@@ -218,12 +216,6 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
     (beneficiary.status === "Budget Fulfilled" ||
       (beneficiary.budget_goal > 0 &&
         beneficiary.budget_goal <= (beneficiary.budget_raised || 0)))
-
-  useEffect(() => {
-    if (!open) {
-      setSponsorshipInProgress(beneficiary.id, false)
-    }
-  }, [open, beneficiary.id, setSponsorshipInProgress])
 
   const loadImages = useCallback(
     async (beneficiaryId: string, signal?: AbortSignal) => {
