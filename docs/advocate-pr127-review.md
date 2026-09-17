@@ -77,3 +77,9 @@ The refreshed Yarn audit reports zero known advisories across 723 dependencies. 
 ## Hosted review checkpoint
 
 Run 35176912563 independently executed both new jobs. Supabase startup, the complete pgTAP step, and the public catalog lane passed after migration consolidation. The HTTP browser test failed because a partial label locator also matched a tooltip. Later concurrency steps were skipped and remain unverified. The application browser fixture failed because its catalog tooltip requires a Chakra provider that the fixture did not supply. Both fixture defects have targeted repairs awaiting hosted validation. The aggregate required check correctly failed.
+
+## Worker transport bounds
+
+The logo cleanup fetch wrapper cleared its deadline when fetch returned response headers. A regression test proved that a stalled response body then had no deadline. Replaced manual timers and listeners with native abort signal composition, preserving both the invocation bound and cancellation supplied through Request or RequestInit. Storage error classification recognizes the native timeout outcome.
+
+Provisioning's nominal response size limit previously buffered the entire response before checking JavaScript character count. The reader now enforces a byte limit during streaming and cancels rejected responses. A nonterminating multibyte response regression proves early rejection without relying on Content-Length. All 114 focused logo and provisioning tests passed without servers or provider calls.

@@ -46,29 +46,16 @@ export function createBoundedAdvocateLogoReconciliationFetch(
     )
     if (timeoutMilliseconds < 1) throw abortError()
 
-    const controller = new AbortController()
-    const upstreamSignal = init?.signal
-    const abortFromUpstream = () => controller.abort(upstreamSignal?.reason)
-    if (upstreamSignal?.aborted) {
-      abortFromUpstream()
-    } else {
-      upstreamSignal?.addEventListener("abort", abortFromUpstream, {
-        once: true,
-      })
-    }
-    const timeout = setTimeout(
-      () => controller.abort(abortError()),
-      timeoutMilliseconds,
-    )
-
-    try {
-      return await fetchImplementation(input, {
-        ...init,
-        signal: controller.signal,
-      })
-    } finally {
-      clearTimeout(timeout)
-      upstreamSignal?.removeEventListener("abort", abortFromUpstream)
-    }
+    // Fetch resolves at headers. Keep cancellation active while the SDK reads
+    // the body, including cancellation inherited from a Request input.
+    const upstreamSignal =
+      init?.signal ?? (input instanceof Request ? input.signal : undefined)
+    const deadlineSignal = AbortSignal.timeout(timeoutMilliseconds)
+    return fetchImplementation(input, {
+      ...init,
+      signal: upstreamSignal
+        ? AbortSignal.any([upstreamSignal, deadlineSignal])
+        : deadlineSignal,
+    })
   }
 }

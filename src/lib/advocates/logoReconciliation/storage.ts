@@ -78,17 +78,18 @@ function numericStatus(value: unknown): number | null {
   return null
 }
 
+function isAbortOrTimeoutError(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    (value.name === "AbortError" || value.name === "TimeoutError")
+  )
+}
+
 function classifiedStorageError(
   value: unknown,
 ): AdvocateLogoReconciliationStorageError {
   const originalError = isRecord(value) ? value.originalError : undefined
-  if (
-    (value instanceof DOMException && value.name === "AbortError") ||
-    (isRecord(value) && value.name === "AbortError") ||
-    (originalError instanceof DOMException &&
-      originalError.name === "AbortError") ||
-    (isRecord(originalError) && originalError.name === "AbortError")
-  ) {
+  if (isAbortOrTimeoutError(value) || isAbortOrTimeoutError(originalError)) {
     return new AdvocateLogoReconciliationStorageError("storage_timeout")
   }
   const status = numericStatus(value)

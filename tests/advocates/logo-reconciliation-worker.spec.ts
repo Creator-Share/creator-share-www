@@ -534,6 +534,8 @@ test.describe("advocate logo reconciliation provider boundary", () => {
   test("maps provider failures to the fixed database allowlist", async () => {
     for (const [providerError, expectedCode] of [
       [new DOMException("timeout body", "AbortError"), "storage_timeout"],
+      [new DOMException("timeout body", "TimeoutError"), "storage_timeout"],
+      [{ originalError: new DOMException("timeout", "TimeoutError") }, "storage_timeout"],
       [{ status: 408, message: "timeout body" }, "storage_timeout"],
       [
         { originalError: new DOMException("nested timeout", "AbortError") },
@@ -598,6 +600,66 @@ test.describe("advocate logo reconciliation provider boundary", () => {
     })
   })
 
+  test("preserves caller cancellation through Request and init signals", async () => {
+    for (const useRequest of [false, true]) {
+      const controller = new AbortController()
+      const reason = new Error("caller_cancelled")
+      let observedSignal: AbortSignal | undefined
+      const fetcher = boundedFetch.createBoundedAdvocateLogoReconciliationFetch({
+        requestTimeoutMilliseconds: 1_000,
+        invocationDeadlineAt: NOW + 1_000,
+        now: () => NOW,
+        fetchImplementation: async (_input, init) => {
+          observedSignal = init?.signal ?? undefined
+          return new Response("[]")
+        },
+      })
+      const url = "https://storage.example.test/delete"
+      if (useRequest) {
+        await fetcher(new Request(url, { signal: controller.signal }))
+      } else {
+        await fetcher(url, { signal: controller.signal })
+      }
+      controller.abort(reason)
+      expect(observedSignal?.aborted).toBe(true)
+      expect(observedSignal?.reason).toBe(reason)
+    }
+  })
+
+  test("keeps the deadline active after headers while the response body stalls", async () => {
+    let observedSignal: AbortSignal | undefined
+    const fetcher = boundedFetch.createBoundedAdvocateLogoReconciliationFetch({
+      requestTimeoutMilliseconds: 1_000,
+      invocationDeadlineAt: NOW + 10,
+      now: () => NOW,
+      fetchImplementation: async (_input, init) => {
+        observedSignal = init?.signal ?? undefined
+        return new Response(new ReadableStream({
+          start(controller) {
+            observedSignal?.addEventListener("abort", () => {
+              controller.error(observedSignal?.reason)
+            }, { once: true })
+          },
+        }))
+      },
+    })
+    const response = await fetcher("https://storage.example.test/delete")
+    const reader = response.body!.getReader()
+    let guard: ReturnType<typeof setTimeout> | undefined
+    try {
+      await expect(Promise.race([
+        reader.read(),
+        new Promise((_, reject) => {
+          guard = setTimeout(() => reject(new Error("body_deadline_missing")), 100)
+        }),
+      ])).rejects.toMatchObject({ name: "TimeoutError" })
+      expect(observedSignal?.aborted).toBe(true)
+    } finally {
+      clearTimeout(guard)
+      await reader.cancel().catch(() => undefined)
+    }
+  })
+
   test("aborts the real provider fetch at the lesser remaining deadline", async () => {
     let observedSignal: AbortSignal | undefined
     const fetcher = boundedFetch.createBoundedAdvocateLogoReconciliationFetch({
@@ -618,7 +680,7 @@ test.describe("advocate logo reconciliation provider boundary", () => {
 
     await expect(
       fetcher("https://storage.example.test/delete"),
-    ).rejects.toMatchObject({ name: "AbortError" })
+    ).rejects.toMatchObject({ name: "TimeoutError" })
     expect(observedSignal?.aborted).toBe(true)
   })
 })

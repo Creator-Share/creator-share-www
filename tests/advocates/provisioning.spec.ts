@@ -22,6 +22,7 @@ import {
   DomainProvisioningRepositoryError,
   type DomainProvisioningRepository,
 } from "../../src/lib/advocates/provisioning/repository"
+import { fetchProviderJson } from "../../src/lib/advocates/provisioning/providerHttp"
 import { DomainProvisioningError } from "../../src/lib/advocates/provisioning/types"
 import type {
   ClaimedDomainProvisioningJob,
@@ -2744,4 +2745,29 @@ test.describe("domain provisioning configuration", () => {
       }),
     ).toThrow("worker_configuration_invalid")
   })
+})
+
+
+test("provider response bounds count streamed bytes and cancel before buffering the body", async () => {
+  let cancelled = false
+  let chunks = 0
+  const chunk = new TextEncoder().encode("é".repeat(300_000))
+  const response = new Response(new ReadableStream({
+    pull(controller) {
+      chunks += 1
+      controller.enqueue(chunk)
+    },
+    cancel() {
+      cancelled = true
+    },
+  }))
+  await expect(fetchProviderJson({
+    provider: "cloudflare",
+    fetchImplementation: async () => response,
+    url: "https://provider.example.test/records",
+    init: {},
+    timeoutMs: 1_000,
+  })).rejects.toMatchObject({ code: "provider_response_too_large" })
+  expect(cancelled).toBe(true)
+  expect(chunks).toBeLessThanOrEqual(3)
 })
