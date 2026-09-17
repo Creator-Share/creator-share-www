@@ -17,6 +17,17 @@ Subtracting responses reveals the new contact's exact 733-cent contribution. The
 
 The reproduction used the actual migration function in in-process PostgreSQL with minimal Auth and Storage stubs. Fixture seeding followed the existing pgTAP test's trigger-disabled preparation. For the second query only, the function's local `v_as_of` expression advanced by one day; every aggregation, eligibility, and suppression expression stayed unchanged. This is concrete query evidence, not a hosted authorization, payment-ingestion, or concurrency test. No provider or hosted database was contacted.
 
+## Existing-contact changes
+
+Two additional executions kept the contact count fixed at five and introduced no new sponsorship. Each contact already contributed to the relevant historical measure, so per-measure contact suppression also passed.
+
+| Change | First snapshot | Following snapshot | Revealed difference |
+| --- | --- | --- | --- |
+| One further refund | Refunds 50 cents; net 450 cents | Refunds 57 cents; net 443 cents | Seven-cent refund |
+| One further renewal | Renewals 50 cents; gross and net 550 cents | Renewals 57 cents; gross and net 557 cents | Seven-cent renewal |
+
+Both official cells remained unsuppressed, with five contacts and five sponsorships. These reproductions use the same isolated fixture and clock method described above. They establish that a new-contact release threshold alone is insufficient, and that suppressing only the adjustment field can still leave its difference visible through net or gross totals.
+
 ## Why the current mitigation is insufficient
 
 A one-day delay shifts when disclosure occurs. A five-contact cumulative cohort does not imply five contributors to its change. Removing filters and exports does not prevent an authorized viewer from retaining yesterday's result. Rounding alone can still reveal isolated changes at bucket boundaries. The existing FF-034 therefore applies to the current MVP, not only to future filters or exports.

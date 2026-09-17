@@ -237,3 +237,7 @@ The dependency refresh resolves the application and sanitize-html to the same in
 Executed the actual private analytics function against the existing fixture structure with five unique historical contacts contributing 100 USD cents each and a sixth contributing 733 cents in the next reporting day. The initial official snapshot returned five contacts and 500 cents, unsuppressed; advancing only the function's reporting cutoff by one day returned six contacts and 1,233 cents, also unsuppressed. The difference discloses the sixth contribution exactly. This is an in-process SQL reproduction, not hosted authorization evidence. No identity is directly returned. FF-034 now tracks this as a current MVP P1; a reporting freshness/privacy decision is pending.
 
 The preceding `e1f811e` checkpoint passed publication run 35185951229 and WebKit run 35185951267. FF-074 is complete. The 413-line final-definition cleanup still requires its own hosted run.
+
+## Existing-contact privacy counterexamples
+
+The same production analytics query also discloses isolated refunds and renewals after five contacts already support the measure. With no new sponsorship or contact, the refund execution changed disclosed refunds from 50 to 57 cents and net from 450 to 443. The renewal execution changed renewals from 50 to 57 and gross/net from 550 to 557. Both snapshots remained unsuppressed. This rules out a repair that gates only new contacts or hides only a single financial field while leaving its complement visible. Reporting behavior remains unchanged pending the owner decision.
