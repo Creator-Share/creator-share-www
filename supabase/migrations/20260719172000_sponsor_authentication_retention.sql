@@ -103,35 +103,6 @@ COMMENT ON FUNCTION public.purge_expired_sponsor_authentication_evidence(
 ) IS
   'Deletes bounded batches of expired recent-email-auth receipts, passwordless delivery reservations, and passwordless verification attempts outside their complete quota windows. Service role only and safe to retry.';
 
-CREATE OR REPLACE FUNCTION private.data_retention_step_keys()
-RETURNS text[]
-LANGUAGE sql
-IMMUTABLE
-PARALLEL SAFE
-SET search_path = ''
-AS $$
-  SELECT ARRAY[
-    'checkout_contact_envelopes',
-    'email_outbox_contact',
-    'gateway_event_payloads',
-    'audit_forensics',
-    'sponsor_authentication',
-    'advocate_tracking'
-  ]::text[];
-$$;
-
-CREATE OR REPLACE FUNCTION private.data_retention_step_is_valid(
-  target_step_key text
-)
-RETURNS boolean
-LANGUAGE sql
-IMMUTABLE
-PARALLEL SAFE
-SET search_path = ''
-AS $$
-  SELECT target_step_key = ANY (private.data_retention_step_keys());
-$$;
-
 ALTER TABLE audit.data_retention_run_events
   DROP CONSTRAINT data_retention_run_events_shape_check;
 ALTER TABLE audit.data_retention_run_events
@@ -187,8 +158,6 @@ ALTER TABLE audit.data_retention_run_events
     )
   );
 
-REVOKE ALL ON FUNCTION private.data_retention_step_keys()
-  FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION private.data_retention_step_is_valid(text)
   FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION private.data_retention_zero_counts(text)

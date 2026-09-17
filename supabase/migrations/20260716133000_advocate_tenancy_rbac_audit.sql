@@ -2677,7 +2677,9 @@ BEGIN
       'ownership_conflict',
       'observed_provider_product_id',
       'observed_provider_plan_id',
-      'evidence_sha256'
+      'evidence_sha256',
+      'canary_completed_at',
+      'publication_binding_sha256'
     ]::text[])
       OR jsonb_typeof(entry.value) NOT IN ('string', 'number', 'boolean', 'null')
   ) THEN
@@ -3086,24 +3088,7 @@ GRANT EXECUTE ON FUNCTION audit.set_actor_context(
   jsonb
 ) TO service_role;
 
-CREATE OR REPLACE FUNCTION public.purge_expired_audit_forensics(
-  batch_size integer DEFAULT 1000
-)
-RETURNS integer
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-  SELECT audit.purge_expired_forensics(batch_size);
-$$;
 
-REVOKE ALL ON FUNCTION public.purge_expired_audit_forensics(integer)
-  FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.purge_expired_audit_forensics(integer)
-  TO service_role;
-
-COMMENT ON FUNCTION public.purge_expired_audit_forensics(integer) IS
-  'Service-only retention hook for scheduled deletion of raw audit IP and user-agent evidence after 90 days.';
 
 CREATE OR REPLACE FUNCTION public.get_advocate_audit_events(
   target_advocate_id uuid,

@@ -88,3 +88,9 @@ Nine additional groups remove 1,212 superseded definition lines. The strict in-p
 ## Retention vocabulary consolidation
 
 The final zero-count constructor and count validator now appear once at their earliest definition sites. These functions depend on existing validation helpers and constant JSON keys, not on the later authentication tables. Four migration files lose a net 189 lines. Strict structural replay produces byte-identical catalogs with 5,280 entries and byte-identical legacy fixture projections compared with the preceding retention revision. This proof does not replace hosted PostgreSQL persona and concurrency validation, which remains pending for this consolidation.
+
+## Final-definition placement
+
+Five further groups remove a net 413 SQL lines across seven migrations. Welcome-email completion, public presentation, and the audit-retention wrapper are now introduced only at their final definition sites, where their dependencies exist. Superseded grants and comments are removed with the obsolete definitions; final privileges and comments remain. The retention step list moves before its first validator, eliminating a second vocabulary definition. The intermediate audit actor-context definition is folded into its initial version.
+
+Strict replay with function-body validation produces the same 5,280 catalog entries and byte-identical legacy fixture projections as the preceding revision. Hosted PostgreSQL validation remains pending for this candidate. One repeated actor-context group remains intentionally: migration-time callers need the earlier implementation before the final implementation's publication transport table exists. This pass does not disable function validation or introduce runtime dependency checks to hide ordering errors.

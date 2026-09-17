@@ -56,6 +56,26 @@ COMMENT ON FUNCTION public.purge_sponsorship_checkout_contact_envelopes(
  * The header owns correlation data. Step and terminal events contain only
  * bounded counts, backlog timestamps, and fixed vocabulary status values.
  */
+CREATE OR REPLACE FUNCTION private.data_retention_step_keys()
+RETURNS text[]
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = ''
+AS $$
+  SELECT ARRAY[
+    'checkout_contact_envelopes',
+    'email_outbox_contact',
+    'gateway_event_payloads',
+    'audit_forensics',
+    'sponsor_authentication',
+    'advocate_tracking'
+  ]::text[];
+$$;
+
+REVOKE ALL ON FUNCTION private.data_retention_step_keys()
+  FROM PUBLIC, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION private.data_retention_step_is_valid(
   target_step_key text
 )
@@ -65,13 +85,7 @@ IMMUTABLE
 PARALLEL SAFE
 SET search_path = ''
 AS $$
-  SELECT target_step_key = ANY (ARRAY[
-    'checkout_contact_envelopes',
-    'email_outbox_contact',
-    'gateway_event_payloads',
-    'audit_forensics',
-    'advocate_tracking'
-  ]::text[]);
+  SELECT target_step_key = ANY (private.data_retention_step_keys());
 $$;
 
 CREATE OR REPLACE FUNCTION private.data_retention_zero_counts(

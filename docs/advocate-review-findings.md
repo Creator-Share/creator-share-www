@@ -39,7 +39,7 @@ The application uses v2 checkout RPCs. A new candidate removes four public first
 
 A retention candidate also rejects obsolete cleanup responses that omit current categories instead of reporting missing counters as zero. The worker and database validator now require the complete five-count response; later cleanup still runs after rejection. Two regressions fail on the old worker, all 21 retention tests pass, and structural replay removes only the unused old validator while updating the current one. The full hosted database and application gates passed on `bb92a25`; FF-071 is complete.
 
-A refreshed inventory found seven repeated function groups. Two retention vocabulary groups now consolidate safely, removing 189 net lines with exact final catalog and legacy fixture equality. Five groups still require dependency or migration-time execution analysis. Hosted validation of the new consolidation is pending.
+A refreshed inventory found seven repeated function groups. Two retention vocabulary groups now consolidate safely, removing 189 net lines with exact final catalog and legacy fixture equality. The remaining groups now have a further 413-line cleanup candidate: functions are defined once at valid dependency sites, with unchanged final bodies and privileges. Only the initial and final audit actor-context implementations remain, because migration-time callers precede the final implementation's transport table. Both consolidation candidates preserve the final catalog and legacy fixture bytes; hosted validation remains pending.
 
 ## Release evidence still missing
 

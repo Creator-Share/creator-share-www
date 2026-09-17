@@ -229,82 +229,6 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.complete_email_outbox_delivery(
-  outbox_id uuid,
-  lease_token text,
-  verified_recipient_email_hmac bytea,
-  provider_message_id text,
-  email_log_id uuid DEFAULT NULL
-)
-RETURNS timestamptz
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-  v_now timestamptz := clock_timestamp();
-  v_outbox public.email_outbox%ROWTYPE;
-  v_sent_at timestamptz;
-BEGIN
-  IF outbox_id IS NULL
-     OR lease_token IS NULL
-     OR lease_token !~ '^[0-9a-f]{64}$'
-     OR octet_length(verified_recipient_email_hmac) <> 32
-     OR provider_message_id IS NULL
-     OR provider_message_id <> btrim(provider_message_id)
-     OR length(provider_message_id) < 1
-     OR length(provider_message_id) > 255 THEN
-    RAISE EXCEPTION 'Email completion proof is malformed'
-      USING ERRCODE = '22023';
-  END IF;
-
-  SELECT outbox.*
-  INTO v_outbox
-  FROM public.email_outbox outbox
-  WHERE outbox.id = outbox_id
-  FOR UPDATE;
-
-  IF NOT FOUND
-     OR v_outbox.status <> 'processing'
-     OR v_outbox.locked_at <= v_now - interval '10 minutes'
-     OR v_outbox.locked_lease_token_digest IS DISTINCT FROM
-       extensions.digest(lease_token, 'sha256')
-     OR v_outbox.recipient_email_hmac IS DISTINCT FROM
-       verified_recipient_email_hmac THEN
-    RAISE EXCEPTION 'Email completion proof does not match the active delivery lease'
-      USING ERRCODE = '42501';
-  END IF;
-
-  PERFORM audit.set_actor_context(
-    context_actor_type => 'system'::audit.audit_actor_type,
-    context_system_actor => v_outbox.locked_by,
-    context_tool => 'email-delivery-worker',
-    context_reason => 'Record verified welcome email delivery',
-    context_metadata => jsonb_build_object(
-      'operation', 'complete',
-      'resource_kind', 'email_outbox',
-      'resource_id', outbox_id::text,
-      'outcome', 'sent'
-    )
-  );
-  PERFORM pg_catalog.set_config(
-    'app.email_outbox.lifecycle_operation',
-    'complete',
-    true
-  );
-
-  UPDATE public.email_outbox outbox
-  SET
-    status = 'sent',
-    provider_message_id = complete_email_outbox_delivery.provider_message_id,
-    email_log_id = complete_email_outbox_delivery.email_log_id
-  WHERE outbox.id = outbox_id
-  RETURNING outbox.sent_at INTO v_sent_at;
-
-  RETURN v_sent_at;
-END;
-$$;
-
 CREATE OR REPLACE FUNCTION public.fail_email_outbox_delivery(
   outbox_id uuid,
   lease_token text,
@@ -426,20 +350,6 @@ REVOKE ALL ON FUNCTION public.claim_email_outbox_jobs(text, integer)
 GRANT EXECUTE ON FUNCTION public.claim_email_outbox_jobs(text, integer)
   TO service_role;
 
-REVOKE ALL ON FUNCTION public.complete_email_outbox_delivery(
-  uuid,
-  text,
-  bytea,
-  text,
-  uuid
-) FROM PUBLIC, anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.complete_email_outbox_delivery(
-  uuid,
-  text,
-  bytea,
-  text,
-  uuid
-) TO service_role;
 
 REVOKE ALL ON FUNCTION public.fail_email_outbox_delivery(
   uuid,

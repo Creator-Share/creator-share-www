@@ -223,3 +223,7 @@ The [partial adjustment decision draft](./advocate-adjustment-accounting-decisio
 [Publication run 35185296016](https://github.com/Creator-Share/creator-share-www/actions/runs/35185296016) completed successfully on `7cae034`, including both application and database jobs. The corresponding WebKit run `35185295959` also passed. This closes the decimal arithmetic candidate FF-073 and validates the six payment-route forensic changes. The administrative parser extension in `82c1b14` still requires hosted validation under FF-074. The partial adjustment accounting defect FF-072 remains open.
 
 A further retention migration consolidation removes 189 net lines with exact final catalog and legacy fixture equality. Hosted validation of this latest consolidation is pending.
+
+## Final-definition migration cleanup candidate
+
+Removed 413 net SQL lines by retaining final definitions and their grants at valid dependency sites, moving the retention step vocabulary before its first use, and eliminating one intermediate audit actor-context version. Strict replay validates all function bodies and matches all 5,280 final catalog entries plus legacy fixture data byte for byte. The early audit actor-context implementation remains necessary for migration-time callers before the publication transport table exists. Hosted validation is pending; no product scope or final schema changed.
