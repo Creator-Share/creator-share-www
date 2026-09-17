@@ -65,6 +65,7 @@ SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"bc000000-
 SELECT set_config('request.jwt.claim.sub','bc000000-0000-4000-8000-000000000002',true);
 SET LOCAL ROLE authenticated;
 SELECT extensions.is((SELECT count(*) FROM public.list_my_recurring_sponsorships()),1::bigint,'active sponsor can read its recurring sponsorship');
+SELECT extensions.is((SELECT count(*) FROM public.users WHERE id='bc000000-0000-4000-8000-000000000002'),1::bigint,'active sponsor can read its own profile');
 SELECT extensions.lives_ok('SELECT * FROM public.list_my_one_time_sponsorship_history()','active sponsor can read one-time history');
 SELECT extensions.lives_ok($$SELECT * FROM public.get_my_legacy_paypal_subscription_presentation('I-1234567890')$$,'active sponsor can request its legacy PayPal presentation');
 SELECT extensions.ok(private.has_advocate_permission('bc100000-0000-4000-8000-000000000001','portal.view'),'active delegate retains portal view permission');
@@ -76,6 +77,7 @@ SET LOCAL ROLE authenticated;
 SELECT extensions.throws_ok('SELECT * FROM public.list_my_recurring_sponsorships()','42501','Recurring sponsorships require an authenticated account','retained claims cannot read recurring sponsorships after a ban');
 SELECT extensions.throws_ok('SELECT * FROM public.list_my_one_time_sponsorship_history()','42501','Sponsorship history requires an authenticated account','retained claims cannot read one-time history after a ban');
 SELECT extensions.throws_ok($$SELECT * FROM public.get_my_legacy_paypal_subscription_presentation('I-1234567890')$$,'42501','PayPal subscription presentation requires an authenticated account','retained claims cannot read legacy PayPal presentation after a ban');
+SELECT extensions.is((SELECT count(*) FROM public.users WHERE id='bc000000-0000-4000-8000-000000000002'),0::bigint,'banned sponsor cannot read its own profile with retained claims');
 SELECT extensions.ok(NOT private.has_advocate_permission('bc100000-0000-4000-8000-000000000001','portal.view'),'banned delegate loses portal view permission');
 SELECT extensions.is((SELECT count(*) FROM public.advocates WHERE id='bc100000-0000-4000-8000-000000000001'),0::bigint,'banned delegate cannot read its tenant through the Data API');
 SELECT extensions.is((SELECT count(*) FROM public.get_my_advocate_portal_access()),0::bigint,'banned delegate cannot list portals through the definer RPC');

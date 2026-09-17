@@ -1088,6 +1088,7 @@ test.describe("local Supabase advocate catalog service boundary", () => {
       const roleQuery = `role_assignments?select=id&id=eq.${assignmentId}`
       expect(await readRows(childQuery)).toHaveLength(1)
       expect(await readRows(roleQuery)).toHaveLength(1)
+      expect(await readRows(`users?select=id&id=eq.${actor.id}`)).toHaveLength(1)
       expect(await readRows("rpc/get_my_advocate_portal_access")).toHaveLength(1)
       expect(await readRows(`advocates?select=id&id=eq.${current.advocateBId}`)).toHaveLength(1)
       const sponsorResources = [
@@ -1106,6 +1107,7 @@ test.describe("local Supabase advocate catalog service boundary", () => {
       expect(await readRows(`public_beneficiaries?select=id&id=eq.${current.childAlphaId}`)).toHaveLength(1)
       expect(await readRows(childQuery)).toEqual([])
       expect(await readRows(roleQuery)).toEqual([])
+      expect(await readRows(`users?select=id&id=eq.${actor.id}`)).toEqual([])
       expect(await readRows("rpc/get_my_advocate_portal_access")).toEqual([])
       expect(await readRows(`advocates?select=id&id=eq.${current.advocateBId}`)).toEqual([])
       for (const resource of sponsorResources) {

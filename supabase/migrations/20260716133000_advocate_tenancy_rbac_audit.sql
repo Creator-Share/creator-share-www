@@ -3730,8 +3730,11 @@ ON public.users
 FOR SELECT
 TO authenticated
 USING (
-  id = (SELECT auth.uid())
-  OR (SELECT private.is_creator_share_super_admin())
+  (SELECT private.is_current_account_active())
+  AND (
+    id = (SELECT auth.uid())
+    OR (SELECT private.is_creator_share_super_admin())
+  )
 );
 
 ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;

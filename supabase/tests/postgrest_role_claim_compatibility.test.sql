@@ -237,18 +237,6 @@ SELECT extensions.is(
   'auth.role resolves the current consolidated authenticated claim'
 );
 
-SELECT extensions.lives_ok(
-  $$SELECT * FROM public.list_my_recurring_sponsorships()$$,
-  'a consolidated authenticated claim crosses the recurring sponsorship role gate'
-);
-
-SELECT extensions.throws_ok(
-  $$SELECT * FROM public.list_my_one_time_sponsorship_history(0)$$,
-  '22023',
-  'Sponsorship history limit must be between 1 and 100',
-  'a consolidated authenticated claim crosses the one time history role gate'
-);
-
 SELECT extensions.throws_ok(
   $$SELECT * FROM public.consume_sponsorship_account_claim(NULL)$$,
   '22023',
@@ -300,6 +288,19 @@ VALUES (
   clock_timestamp(),
   clock_timestamp(),
   false
+);
+
+-- Sponsor reads require a real active account as well as valid role claims.
+SELECT extensions.lives_ok(
+  $$SELECT * FROM public.list_my_recurring_sponsorships()$$,
+  'a consolidated authenticated claim crosses the recurring sponsorship role gate'
+);
+
+SELECT extensions.throws_ok(
+  $$SELECT * FROM public.list_my_one_time_sponsorship_history(0)$$,
+  '22023',
+  'Sponsorship history limit must be between 1 and 100',
+  'a consolidated authenticated claim crosses the one time history role gate'
 );
 
 INSERT INTO auth.sessions (
