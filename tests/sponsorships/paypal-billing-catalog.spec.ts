@@ -163,12 +163,12 @@ test.describe("PayPal billing catalog provider boundary", () => {
   })
 
   test("fails closed on invalid input, plan drift, and provider rejection", async () => {
-    expect(() =>
-      buildPayPalBillingPlanRequest(
+    for (const chargedCurrency of ["CAD", "gbp", " USD "]) {
+      expect(() => buildPayPalBillingPlanRequest(
         PRODUCT_ID,
-        terms({ chargedCurrency: "CAD" }),
-      ),
-    ).toThrow(PayPalBillingCatalogError)
+        terms({ chargedCurrency }),
+      )).toThrow(PayPalBillingCatalogError)
+    }
     expect(() =>
       buildPayPalBillingPlanRequest(
         PRODUCT_ID,

@@ -49,9 +49,7 @@ export interface PaymentCurrencyMetadata {
 export function isSupportedCurrency(
   value: string | null | undefined,
 ): value is SupportedCurrency {
-  return SUPPORTED_CURRENCIES.includes(
-    (value || "").toUpperCase() as SupportedCurrency,
-  )
+  return (SUPPORTED_CURRENCIES as readonly string[]).includes(value ?? "")
 }
 
 export function coerceSupportedCurrency(

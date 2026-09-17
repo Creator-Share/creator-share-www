@@ -111,3 +111,7 @@ The Supabase cookie helper documented an explicit loopback-only exception but al
 ## Exact provider redirect origins
 
 Stripe Checkout and PayPal approval validators compared protocol and hostname but accepted nonstandard ports. They now compare the complete trusted origin, including the port. The PayPal publication canary uses the same exact-origin rule. Both checkout regressions failed on the original validation and passed after the repair; 36 focused checkout and canary tests, TypeScript, and lint passed. These are fail-closed provider-response checks, not evidence of a demonstrated external exploit.
+
+## Canonical currency guard
+
+`isSupportedCurrency` normalized case before returning a TypeScript type predicate, incorrectly narrowing lowercase strings to an uppercase-only union. The PayPal billing catalog used that predicate without normalizing the returned value. The guard now checks canonical values exactly; the existing user-input coercion still normalizes lowercase currencies. The new regression fails on the original guard. All 12 server-free currency and catalog tests, 1,569 selected server-free tests, TypeScript, and lint passed. The currency endpoint test requires the hosted dev-server lane; no local server was started.

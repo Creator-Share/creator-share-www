@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test"
 import {
+  coerceSupportedCurrency,
+  isSupportedCurrency,
+  SUPPORTED_CURRENCIES,
   convertCurrencyMinorToUsdCents,
   convertUsdCentsToCurrency,
   formatMoney,
@@ -8,6 +11,17 @@ import {
 import { getStripeRegionForPaymentCurrency } from "../src/lib/stripe/currencyRouting"
 
 test.describe("payment currency support", () => {
+  test("distinguishes canonical currency values from normalized user input", () => {
+    for (const currency of SUPPORTED_CURRENCIES) {
+      expect(isSupportedCurrency(currency)).toBe(true)
+      expect(isSupportedCurrency(currency.toLowerCase())).toBe(false)
+      expect(coerceSupportedCurrency(currency.toLowerCase())).toBe(currency)
+    }
+    for (const currency of [undefined, null, "", "JPY"]) {
+      expect(isSupportedCurrency(currency)).toBe(false)
+    }
+  })
+
   test("maps supported countries to the expected default currencies", () => {
     expect(getDefaultCurrencyForCountry("US")).toBe("USD")
     expect(getDefaultCurrencyForCountry("AU")).toBe("AUD")
