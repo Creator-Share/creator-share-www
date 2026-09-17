@@ -1,8 +1,8 @@
 # Advocate Payment Boundary Release Runbook
 
-This runbook controls the additive deployment of the v2 sponsorship checkout boundary. It exists because database functions and warm application instances cannot be replaced atomically across Supabase and Vercel.
+This runbook controls the first deployment of the v2 sponsorship checkout boundary. No Advocate migration has been deployed. Its earlier public prepare, quote, begin, and attach RPCs are therefore omitted from the first release. Shared private payment implementations remain because v2 uses them.
 
-The release must preserve the current sponsorship checkout until every new application instance uses the v2 functions. Legacy functions remain service scoped during that overlap and contain explicit guards that prevent them from mutating v2 checkout operations.
+The primary site's pre-PR application and payment return endpoints have a different history. Preserve existing customer returns and financial records while deploying the new database and application. Inspect the target first; stop if its migration or caller inventory contradicts the declared undeployed Advocate state.
 
 ## Required configuration
 
@@ -201,17 +201,17 @@ PostgREST role claim compatibility is a release boundary, not an implementation 
 
 That loopback artifact is `local_mechanics_only`, retains `hostedEvidenceRequired: true`, and is not phase 1 release evidence. Its missing-credential status and SQLSTATE are version-bound local Kong behavior. Before promotion, repeat the matrix through the exact deployed project and deployed PostgREST version. Run every service-only case with both the legacy service role JWT and the current secret API key. Run sponsor cases with a real hosted authenticated user token. Repeat service cases as an ordinary user and anonymous caller, and repeat sponsor cases anonymously. Every authorized hosted canary must reach its exact downstream validation error. Every unauthorized hosted canary must stop before protected function behavior, whether the deployed gateway rejects the request or PostgREST enforces the execute grant. A unit test that manually injects a database claim and a loopback HTTP pass are supporting mechanics evidence, never substitutes for the deployed exact-project matrix.
 
-## Phase 1: additive database deployment
+## Phase 1: first-release database deployment
 
 1. Back up the target database and record the restore point.
-2. Apply migrations through the additive v2 checkout and gateway worker boundaries.
+2. Apply the complete reviewed migration series after the target inventory passes.
 3. Run the complete pgTAP suite against the target schema.
 4. Read `read_sponsorship_checkout_rpc_release_gate_v2()` and record its result in the release evidence.
-5. Confirm both legacy and v2 functions are service role only.
-6. Confirm every legacy checkout mutator rejects an intent that owns a v2 operation.
+5. Confirm the four retired public compatibility RPCs are absent and v2 mutators are service role only.
+6. Confirm shared private payment core functions are not executable by anonymous, authenticated, or service API roles.
 7. Confirm direct table access to checkout operations, recovery state, gateway events, claims, outbox, and secret material access evidence is unavailable to browser roles.
 
-The release gate function is deployment evidence. It is not a per request feature flag. During the additive phase it intentionally reports that caller cutover and a later legacy drain migration are still required.
+The release gate function is deployment evidence. It is not a per request feature flag. It reports v2 enabled, legacy RPCs disabled, application caller deployment required, and no later v1 RPC drain migration required. It does not claim the application deployment has happened.
 
 ## Phase 2: application caller cutover
 
@@ -331,26 +331,15 @@ The checkout contact erasure boundary removes the server-owned provider request 
 
 This boundary does not erase encrypted gateway event payloads or encrypted provider reconciliation evidence. Those retained provider records may contain provider-supplied contact fields unless their producers strip the fields before sealing. Database backups can also retain older row versions while the shared encryption key remains active. Release communications must describe this as checkout request contact erasure, not global sponsor contact cryptographic erasure. A broader provider evidence minimization and key destruction policy requires separate approval, migration, and restore testing.
 
-## Phase 3: warm instance drain
+## Phase 3: old application and customer-return compatibility
 
-1. Stop promotion while old application instances can still receive traffic.
-2. Wait through the platform's maximum warm instance lifetime, plus an operational safety margin.
-3. Verify logs show no legacy prepare, quote, begin, or attach calls during the full drain window.
-4. Verify all newly created checkout operations have boundary version 2 and a matching durable recovery row after payment begin.
-5. Verify the manual review queue is empty or explicitly owned.
+1. Confirm old application instances no longer create checkouts before declaring the v2 caller rollout complete. Use platform deployment and traffic evidence, not deployment success alone.
+2. Verify all newly created checkout operations have boundary version 2 and a matching durable recovery row after payment begin.
+3. Verify the manual review queue is empty or explicitly owned.
+4. Preserve `/api/stripe/success`, `/api/paypal/verify`, and their legacy return branches for pre-PR customer checkouts. A warm instance drain does not prove that no customer will later return from an older provider session.
+5. Keep marked v2 PayPal returns without their tab receipt fail closed; they must never fall back to the legacy verifier.
 
-Do not infer a completed drain from a successful deployment alone. Serverless platforms are quite capable of preserving yesterday inside a warm process.
-
-## Phase 4: legacy revocation
-
-Create and apply a separate migration only after Phase 3 evidence is approved. That migration must:
-
-1. Revoke service role execution from the compatibility generation of prepare, quote, begin, and attach.
-2. Preserve private historical primitives only where rollback evidence requires them.
-3. Update the release gate result to show caller cutover complete and no later drain migration required.
-4. Add pgTAP assertions for the final privileges and function inventory.
-5. Retain all historical intents, attempts, operations, events, movements, claims, and audit evidence.
-6. Retire the legacy return compatibility endpoints and client branches, including `/api/stripe/success` and `/api/paypal/verify`, after the warm drain proves no unmarked legacy return remains. Marked v2 PayPal returns without their tab receipt must continue to fail closed and must never fall back to the legacy verifier.
+There is no second migration to revoke the undeployed v1 RPC generation. Future removal of pre-PR return compatibility needs its own provider-session inventory and approved recovery policy. Retain historical intents, attempts, operations, events, movements, claims, and audit evidence.
 
 ## Rollback boundaries
 

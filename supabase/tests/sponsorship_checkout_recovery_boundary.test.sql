@@ -4,6 +4,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT extensions.no_plan();
 
+-- Superuser fixture and unit calls use the shared private payment core.
+-- Public caller authority and recovery contracts are exercised through v2.
+
 CREATE TEMP TABLE checkout_recovery_test_ids (
   key text PRIMARY KEY,
   value uuid NOT NULL
@@ -239,14 +242,14 @@ WHERE username IN (
 SELECT extensions.ok(
   to_regprocedure(
     'public.prepare_sponsorship_checkout_intent(text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)'
-  ) IS NOT NULL
+  ) IS NULL
   AND to_regprocedure(
     'public.prepare_sponsorship_checkout_intent_v2(uuid,bytea,public.sponsorship_method,text,text,text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)'
   ) IS NOT NULL
   AND to_regprocedure(
     'public.begin_sponsorship_payment_v2(uuid,uuid,uuid,public.sponsorship_method,text,text,bytea,smallint,jsonb,bytea,timestamptz,bytea,smallint,bytea,interval,jsonb,text,text,text,text)'
   ) IS NOT NULL,
-  'v1 compatibility and additive v2 checkout RPCs coexist during caller cutover'
+  'only v2 checkout RPCs are installed for the first release'
 );
 
 SELECT extensions.ok(
@@ -317,27 +320,27 @@ SELECT extensions.ok(
   )
   AND has_function_privilege(
     'service_role',
-    'public.prepare_sponsorship_checkout_intent(text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)',
+    'public.prepare_sponsorship_checkout_intent_v2(uuid,bytea,public.sponsorship_method,text,text,text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
     'anon',
-    'public.prepare_sponsorship_checkout_intent(text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)',
+    'public.prepare_sponsorship_checkout_intent_v2(uuid,bytea,public.sponsorship_method,text,text,text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)',
     'EXECUTE'
   ),
-  'checkout state is RPC only and both compatibility generations remain service scoped'
+  'checkout state is RPC only and v2 remains service scoped'
 );
 
 SELECT extensions.ok(
   (
     SELECT gate.checkout_schema_version = 2
-      AND gate.legacy_rpc_enabled
+      AND NOT gate.legacy_rpc_enabled
       AND gate.v2_rpc_enabled
       AND gate.caller_cutover_required
-      AND gate.later_legacy_drain_migration_required
+      AND NOT gate.later_legacy_drain_migration_required
     FROM public.read_sponsorship_checkout_rpc_release_gate_v2() gate
   ),
-  'the release gate advertises the explicit two phase v1 and v2 cutover'
+  'the release gate requires v2 callers without an undeployed v1 drain'
 );
 
 SELECT extensions.ok(
@@ -414,37 +417,20 @@ SELECT extensions.ok(
   'first attachment and foreground leases cannot outlive sealed request validity'
 );
 
-SELECT extensions.throws_ok(
-  $$
-    SELECT *
-    FROM public.prepare_sponsorship_checkout_intent(
-      target_idempotency_key =>
-        'checkout-v2:97000000-0000-4000-8000-000000000099',
-      target_source => 'primary_site',
-      target_advocate_hostname => NULL,
-      target_visitor_token_digest => NULL,
-      target_auth_user_id => NULL,
-      target_contact_email_hmac => decode(repeat('b9', 32), 'hex'),
-      target_contact_email_normalization_version => 1::smallint,
-      target_contact_email_hmac_key_version => 1::smallint,
-      target_subject_kind => 'standard',
-      target_beneficiary_id => (
-        SELECT value FROM checkout_recovery_test_ids WHERE key = 'legacy_beneficiary'
-      ),
-      target_partnership_project => NULL,
-      target_payment_mode => 'one_time',
-      target_recurrence_interval => NULL,
-      target_base_amount_usd_cents => 1600,
-      target_charged_amount_minor => 1600,
-      target_charged_currency => 'USD',
-      target_conversion_rate => 1,
-      target_currency_quote_at => clock_timestamp(),
-      target_currency_rate_source => 'checkout-recovery-test'
-    )
-  $$,
-  '23514',
-  'Legacy checkout preparation cannot enter a v2 operation scope',
-  'the v1 prepare wrapper cannot mint a v2 intent'
+SELECT extensions.ok(
+  NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'prepare_sponsorship_checkout_intent'
+  ) AND EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'private' AND p.proname = 'prepare_sponsorship_checkout_intent_core_v1'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    CROSS JOIN (VALUES ('anon'), ('authenticated'), ('service_role')) AS caller(role_name)
+    WHERE n.nspname = 'private' AND p.proname = 'prepare_sponsorship_checkout_intent_core_v1'
+      AND has_function_privilege(caller.role_name, p.oid, 'EXECUTE')
+  ),
+  'retired prepare_sponsorship_checkout_intent is absent and its shared core is not executable by API roles'
 );
 
 INSERT INTO checkout_recovery_test_times
@@ -476,41 +462,36 @@ SELECT extensions.is(
   'an exact v2 receipt recovers before quote creation'
 );
 
-SELECT extensions.throws_ok(
-  $$
-    SELECT *
-    FROM public.issue_sponsorship_payment_quote(
-      target_sponsorship_intent_id => (
-        SELECT value FROM checkout_recovery_test_ids WHERE key = 'main_intent'
-      ),
-      target_provider => 'STRIPE',
-      target_provider_account_scope => 'stripe_us',
-      target_quote_idempotency_key => 'legacy-blocked-quote-v2-main'
-    )
-  $$,
-  '23514',
-  'Legacy payment quote cannot mutate a v2 checkout operation',
-  'the v1 quote wrapper cannot mutate a v2 intent'
+SELECT extensions.ok(
+  NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'issue_sponsorship_payment_quote'
+  ) AND EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'private' AND p.proname = 'issue_sponsorship_payment_quote_core_v1'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    CROSS JOIN (VALUES ('anon'), ('authenticated'), ('service_role')) AS caller(role_name)
+    WHERE n.nspname = 'private' AND p.proname = 'issue_sponsorship_payment_quote_core_v1'
+      AND has_function_privilege(caller.role_name, p.oid, 'EXECUTE')
+  ),
+  'retired issue_sponsorship_payment_quote is absent and its shared core is not executable by API roles'
 );
 
-SELECT extensions.throws_ok(
-  $$
-    SELECT *
-    FROM public.begin_sponsorship_payment(
-      target_sponsorship_intent_id => (
-        SELECT value FROM checkout_recovery_test_ids WHERE key = 'main_intent'
-      ),
-      target_payment_quote_id => gen_random_uuid(),
-      target_provider => 'STRIPE',
-      target_provider_account_scope => 'stripe_us',
-      target_provider_idempotency_key =>
-        'legacy-blocked:97000000-0000-4000-8000-000000000001',
-      target_checkout_receipt_digest => decode(repeat('a1', 32), 'hex')
-    )
-  $$,
-  '23514',
-  'Legacy payment begin cannot mutate a v2 checkout operation',
-  'the v1 begin wrapper cannot mutate a v2 intent'
+SELECT extensions.ok(
+  NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'begin_sponsorship_payment'
+  ) AND EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'private' AND p.proname = 'begin_sponsorship_payment_core_v1'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    CROSS JOIN (VALUES ('anon'), ('authenticated'), ('service_role')) AS caller(role_name)
+    WHERE n.nspname = 'private' AND p.proname = 'begin_sponsorship_payment_core_v1'
+      AND has_function_privilege(caller.role_name, p.oid, 'EXECUTE')
+  ),
+  'retired begin_sponsorship_payment is absent and its shared core is not executable by API roles'
 );
 
 INSERT INTO checkout_recovery_test_ids (key, value)
@@ -916,23 +897,20 @@ SELECT extensions.ok(
   'a failed intent can cross gateways only through its exact terminal successor operation'
 );
 
-SELECT extensions.throws_ok(
-  $$
-    SELECT *
-    FROM public.attach_sponsorship_payment_provider_object(
-      (SELECT value FROM checkout_recovery_test_ids WHERE key = 'paypal_attempt'),
-      'order',
-      'paypal_order_v2_002',
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL
-    )
-  $$,
-  '23514',
-  'Legacy provider attachment cannot mutate a v2 checkout operation',
-  'the v1 attachment wrapper cannot mutate a v2 attempt'
+SELECT extensions.ok(
+  NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'attach_sponsorship_payment_provider_object'
+  ) AND EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'private' AND p.proname = 'attach_sponsorship_payment_provider_object_core_v1'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    CROSS JOIN (VALUES ('anon'), ('authenticated'), ('service_role')) AS caller(role_name)
+    WHERE n.nspname = 'private' AND p.proname = 'attach_sponsorship_payment_provider_object_core_v1'
+      AND has_function_privilege(caller.role_name, p.oid, 'EXECUTE')
+  ),
+  'retired attach_sponsorship_payment_provider_object is absent and its shared core is not executable by API roles'
 );
 
 INSERT INTO checkout_recovery_test_times
@@ -1156,7 +1134,7 @@ INSERT INTO checkout_recovery_test_ids (key, value)
 SELECT
   'legacy_intent',
   prepared.resolved_sponsorship_intent_id
-FROM public.prepare_sponsorship_checkout_intent(
+FROM private.prepare_sponsorship_checkout_intent_core_v1(
   target_idempotency_key => 'legacy-checkout-recovery-v1-001',
   target_source => 'primary_site',
   target_advocate_hostname => NULL,
@@ -1184,7 +1162,7 @@ INSERT INTO checkout_recovery_test_ids (key, value)
 SELECT
   'legacy_quote',
   quote.payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM checkout_recovery_test_ids WHERE key = 'legacy_intent'
   ),
@@ -1197,7 +1175,7 @@ INSERT INTO checkout_recovery_test_ids (key, value)
 SELECT
   'legacy_attempt',
   payment.payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM checkout_recovery_test_ids WHERE key = 'legacy_intent'
   ),

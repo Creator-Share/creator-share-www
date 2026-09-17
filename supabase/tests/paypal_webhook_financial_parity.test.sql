@@ -4,6 +4,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT extensions.no_plan();
 
+-- Superuser fixture and unit calls use the shared private payment core.
+-- Public caller authority and recovery contracts are exercised through v2.
+
 UPDATE public.payment_provider_accounts
 SET
   status = 'active',
@@ -125,7 +128,7 @@ SELECT 'one_time_intent', id FROM inserted;
 
 INSERT INTO paypal_webhook_parity_context (key, uuid_value)
 SELECT 'one_time_quote', payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   target_sponsorship_intent_id => (
     SELECT uuid_value
     FROM paypal_webhook_parity_context
@@ -138,7 +141,7 @@ FROM public.issue_sponsorship_payment_quote(
 
 INSERT INTO paypal_webhook_parity_context (key, uuid_value)
 SELECT 'one_time_attempt', payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   target_sponsorship_intent_id => (
     SELECT uuid_value
     FROM paypal_webhook_parity_context
@@ -157,7 +160,7 @@ FROM public.begin_sponsorship_payment(
 );
 
 SELECT count(*)
-FROM public.attach_sponsorship_payment_provider_object(
+FROM private.attach_sponsorship_payment_provider_object_core_v1(
   target_payment_attempt_id => (
     SELECT uuid_value
     FROM paypal_webhook_parity_context
@@ -419,7 +422,7 @@ SELECT 'recurring_intent', id FROM inserted;
 
 INSERT INTO paypal_webhook_parity_context (key, uuid_value)
 SELECT 'recurring_quote', payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   target_sponsorship_intent_id => (
     SELECT uuid_value
     FROM paypal_webhook_parity_context
@@ -432,7 +435,7 @@ FROM public.issue_sponsorship_payment_quote(
 
 INSERT INTO paypal_webhook_parity_context (key, uuid_value)
 SELECT 'recurring_attempt', payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   target_sponsorship_intent_id => (
     SELECT uuid_value
     FROM paypal_webhook_parity_context
@@ -451,7 +454,7 @@ FROM public.begin_sponsorship_payment(
 );
 
 SELECT count(*)
-FROM public.attach_sponsorship_payment_provider_object(
+FROM private.attach_sponsorship_payment_provider_object_core_v1(
   target_payment_attempt_id => (
     SELECT uuid_value
     FROM paypal_webhook_parity_context

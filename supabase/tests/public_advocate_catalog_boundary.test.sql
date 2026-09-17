@@ -4,6 +4,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT extensions.no_plan();
 
+-- Superuser fixture and unit calls use the shared private payment core.
+-- Public caller authority and recovery contracts are exercised through v2.
+
 SELECT extensions.ok(
   NOT EXISTS (
     SELECT 1
@@ -1069,7 +1072,7 @@ SELECT set_config('request.jwt.claim.role', 'service_role', true);
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.prepare_sponsorship_checkout_intent(
+    FROM private.prepare_sponsorship_checkout_intent_core_v1(
       target_idempotency_key => 'advocate-animal-reject-0001',
       target_source => 'advocate_domain',
       target_advocate_hostname => 'catalogselected.creatorshare.com',

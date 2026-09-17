@@ -4,6 +4,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT extensions.no_plan();
 
+-- Superuser fixture and unit calls use the shared private payment core.
+-- Public caller authority and recovery contracts are exercised through v2.
+
 CREATE TEMP TABLE attribution_freeze_test_context (
   key text PRIMARY KEY,
   uuid_value uuid NOT NULL
@@ -601,7 +604,7 @@ WITH prepared AS MATERIALIZED (
         'd3'
       )
   ) AS fixture(label, auth_user_id, visitor_digest_pair, contact_digest_pair)
-  CROSS JOIN LATERAL public.prepare_sponsorship_checkout_intent(
+  CROSS JOIN LATERAL private.prepare_sponsorship_checkout_intent_core_v1(
     target_idempotency_key =>
       'attribution-analytics-eligibility-' || fixture.label,
     target_source => 'advocate_domain',
@@ -717,7 +720,7 @@ FROM latest_touch;
 
 WITH prepared AS MATERIALIZED (
   SELECT *
-  FROM public.prepare_sponsorship_checkout_intent(
+  FROM private.prepare_sponsorship_checkout_intent_core_v1(
     target_idempotency_key => 'attribution-freeze-primary-intent-0001',
     target_source => 'primary_site',
     target_advocate_hostname => NULL,
@@ -869,7 +872,7 @@ WITH visitor AS (
   WHERE token_digest = decode(repeat('a2', 32), 'hex')
 ), prepared AS MATERIALIZED (
   SELECT *
-  FROM public.prepare_sponsorship_checkout_intent(
+  FROM private.prepare_sponsorship_checkout_intent_core_v1(
     target_idempotency_key => 'attribution-freeze-unattributed-0001',
     target_source => 'primary_site',
     target_advocate_hostname => NULL,
@@ -982,7 +985,7 @@ WITH visitor AS (
   WHERE token_digest = decode(repeat('a3', 32), 'hex')
 ), prepared AS MATERIALIZED (
   SELECT *
-  FROM public.prepare_sponsorship_checkout_intent(
+  FROM private.prepare_sponsorship_checkout_intent_core_v1(
     target_idempotency_key => 'attribution-freeze-direct-intent-0001',
     target_source => 'advocate_domain',
     target_advocate_hostname => 'attributionfreeze.creatorshare.com',

@@ -1105,7 +1105,7 @@ WHERE provider = 'STRIPE'
 
 INSERT INTO test_advocate_context (key, value)
 SELECT 'payment_quote', payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   (SELECT value FROM test_advocate_context WHERE key = 'primary_intent'),
   'STRIPE',
   'stripe_us',
@@ -1158,7 +1158,7 @@ SELECT extensions.throws_ok(
 
 INSERT INTO test_advocate_context (key, value)
 SELECT 'payment_attempt', payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   (SELECT value FROM test_advocate_context WHERE key = 'primary_intent'),
   (SELECT value FROM test_advocate_context WHERE key = 'payment_quote'),
   'STRIPE',
@@ -1228,7 +1228,7 @@ SELECT extensions.throws_ok(
 );
 
 SELECT count(*)
-FROM public.attach_sponsorship_payment_provider_object(
+FROM private.attach_sponsorship_payment_provider_object_core_v1(
   (SELECT value FROM test_advocate_context WHERE key = 'payment_attempt'),
   'checkout_session',
   'cs_foundation_gateway_0001'

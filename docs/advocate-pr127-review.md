@@ -167,3 +167,11 @@ Both validation workflows now run for every pull request targeting `dev`. Path f
 [Publication workflow 35182345377](https://github.com/Creator-Share/creator-share-www/actions/runs/35182345377) and [WebKit workflow 35182345403](https://github.com/Creator-Share/creator-share-www/actions/runs/35182345403) completed successfully on `87399c7`. This supersedes the pending status above for that revision. Commit `18584a6` subsequently removes workflow path filters and awaits its own hosted results. No repository protection setting was changed.
 
 A consolidated [findings report](./advocate-review-findings.md) separates repaired defects, remaining release evidence, and product decisions from this chronological investigation record.
+
+## First-release checkout RPC retirement candidate
+
+Removed the four unused public first-generation prepare, quote, begin, and attach wrappers. Current v2 interfaces and their private shared payment cores remain unchanged. Existing low-level business tests now call those cores as database-owner fixtures; public permission assertions target v2. Four obsolete wrapper rejection assertions now prove that the old public function is absent, the retained core exists, and no anonymous, authenticated, or service API role can execute it. The authenticated quote denial still invokes the current public v2 function.
+
+Strict structural replay removes exactly four function entries and changes only the release-gate result. Every other catalog entry and all eight legacy data projections match. All 13 changed SQL files parse, and 1,576 selected server-free tests pass. Hosted database and concurrency validation remains mandatory under FF-070.
+
+The release runbook no longer demands a drain migration for RPCs that were never deployed. It also corrects a separate unsafe retirement criterion: draining old application instances does not prove that customers cannot return from older provider sessions. Pre-PR Stripe and PayPal return endpoints remain until a separate provider-session inventory and recovery policy justify removal.

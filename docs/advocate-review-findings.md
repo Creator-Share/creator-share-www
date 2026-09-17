@@ -25,7 +25,7 @@ At `87399c7`, the review changes remove 25,835 lines and add 3,697, a net reduct
 
 ## Remaining implementation review
 
-The application uses v2 checkout RPCs. Four public first-generation prepare, quote, begin, and attach wrappers remain service-role callable; their underlying private core functions are also used by v2. Those wrappers originate inside the undeployed PR, whereas the older primary-site Stripe and PayPal return endpoints predate it. The wrappers are candidates for retirement; existing customer return handling and current shared payment logic must remain. Their database tests need a deliberate migration to current public contracts or explicitly private unit fixtures before removal.
+The application uses v2 checkout RPCs. A new candidate removes four public first-generation prepare, quote, begin, and attach wrappers that originated inside the undeployed PR. Shared private implementations remain unchanged. Existing unit fixtures call those cores; public privilege assertions target v2, and dedicated assertions require the retired wrappers to be absent and their cores inaccessible to API roles. Structural replay and 1,576 server-free tests pass; hosted validation is pending under FF-070. Pre-PR customer return endpoints remain. Their old removal criterion was also corrected: a server-instance drain does not establish that no customer will return from an older provider session.
 
 Six other repeated function-definition groups remain. Migration-time execution and later schema dependencies prevent treating them as simple duplicate text. No safe deletion has yet been established.
 

@@ -4,6 +4,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT extensions.no_plan();
 
+-- Superuser fixture and unit calls use the shared private payment core.
+-- Public caller authority and recovery contracts are exercised through v2.
+
 CREATE TEMP TABLE sponsor_history_context (
   key text PRIMARY KEY,
   value uuid NOT NULL
@@ -162,7 +165,7 @@ SELECT 'intent', id FROM inserted;
 
 INSERT INTO sponsor_history_context
 SELECT 'quote', payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM sponsor_history_context WHERE key = 'intent'
   ),
@@ -173,7 +176,7 @@ FROM public.issue_sponsorship_payment_quote(
 
 INSERT INTO sponsor_history_context
 SELECT 'attempt', payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM sponsor_history_context WHERE key = 'intent'
   ),
@@ -188,7 +191,7 @@ FROM public.begin_sponsorship_payment(
 );
 
 SELECT count(*)
-FROM public.attach_sponsorship_payment_provider_object(
+FROM private.attach_sponsorship_payment_provider_object_core_v1(
   target_payment_attempt_id => (
     SELECT value FROM sponsor_history_context WHERE key = 'attempt'
   ),
@@ -307,7 +310,7 @@ SELECT 'paypal_intent', id FROM inserted;
 
 INSERT INTO sponsor_history_context
 SELECT 'paypal_quote', payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM sponsor_history_context WHERE key = 'paypal_intent'
   ),
@@ -318,7 +321,7 @@ FROM public.issue_sponsorship_payment_quote(
 
 INSERT INTO sponsor_history_context
 SELECT 'paypal_attempt', payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM sponsor_history_context WHERE key = 'paypal_intent'
   ),
@@ -332,7 +335,7 @@ FROM public.begin_sponsorship_payment(
 );
 
 SELECT count(*)
-FROM public.attach_sponsorship_payment_provider_object(
+FROM private.attach_sponsorship_payment_provider_object_core_v1(
   target_payment_attempt_id => (
     SELECT value FROM sponsor_history_context WHERE key = 'paypal_attempt'
   ),

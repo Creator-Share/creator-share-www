@@ -4,6 +4,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT extensions.no_plan();
 
+-- Superuser fixture and unit calls use the shared private payment core.
+-- Public caller authority and recovery contracts are exercised through v2.
+
 CREATE TEMP TABLE payment_test_context (
   key text PRIMARY KEY,
   value uuid NOT NULL
@@ -105,7 +108,7 @@ SELECT 'intent', id FROM inserted;
 
 INSERT INTO payment_test_context
 SELECT 'quote', payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM payment_test_context WHERE key = 'intent'
   ),
@@ -117,7 +120,7 @@ FROM public.issue_sponsorship_payment_quote(
 SELECT extensions.is(
   (
     SELECT payment_quote_id
-    FROM public.issue_sponsorship_payment_quote(
+    FROM private.issue_sponsorship_payment_quote_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM payment_test_context WHERE key = 'intent'
       ),
@@ -143,7 +146,7 @@ SELECT extensions.throws_ok(
 
 INSERT INTO payment_test_context
 SELECT 'attempt', payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM payment_test_context WHERE key = 'intent'
   ),
@@ -160,7 +163,7 @@ FROM public.begin_sponsorship_payment(
 SELECT extensions.is(
   (
     SELECT payment_attempt_id
-    FROM public.begin_sponsorship_payment(
+    FROM private.begin_sponsorship_payment_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM payment_test_context WHERE key = 'intent'
       ),
@@ -238,7 +241,7 @@ SELECT extensions.throws_ok(
 );
 
 SELECT count(*)
-FROM public.attach_sponsorship_payment_provider_object(
+FROM private.attach_sponsorship_payment_provider_object_core_v1(
   target_payment_attempt_id => (
     SELECT value FROM payment_test_context WHERE key = 'attempt'
   ),
@@ -1154,12 +1157,12 @@ SELECT set_config('request.jwt.claim.sub', '', true);
 SELECT extensions.ok(
   NOT has_function_privilege(
     'anon',
-    'public.begin_sponsorship_payment(uuid,uuid,public.sponsorship_method,text,text,bytea,interval,jsonb,text,text,text,text)',
+    'public.begin_sponsorship_payment_v2(uuid,uuid,uuid,public.sponsorship_method,text,text,bytea,smallint,jsonb,bytea,timestamptz,bytea,smallint,bytea,interval,jsonb,text,text,text,text)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
     'authenticated',
-    'public.begin_sponsorship_payment(uuid,uuid,public.sponsorship_method,text,text,bytea,interval,jsonb,text,text,text,text)',
+    'public.begin_sponsorship_payment_v2(uuid,uuid,uuid,public.sponsorship_method,text,text,bytea,smallint,jsonb,bytea,timestamptz,bytea,smallint,bytea,interval,jsonb,text,text,text,text)',
     'EXECUTE'
   ),
   'browser roles cannot create server payment attempts'
@@ -1356,7 +1359,7 @@ SELECT 'fixed_intent_2', id FROM inserted;
 
 INSERT INTO payment_test_context
 SELECT 'fixed_quote_1', payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM payment_test_context WHERE key = 'fixed_intent_1'
   ),
@@ -1367,7 +1370,7 @@ FROM public.issue_sponsorship_payment_quote(
 
 INSERT INTO payment_test_context
 SELECT 'fixed_quote_2', payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM payment_test_context WHERE key = 'fixed_intent_2'
   ),
@@ -1378,7 +1381,7 @@ FROM public.issue_sponsorship_payment_quote(
 
 INSERT INTO payment_test_context
 SELECT 'fixed_attempt_1', payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM payment_test_context WHERE key = 'fixed_intent_1'
   ),
@@ -1394,7 +1397,7 @@ FROM public.begin_sponsorship_payment(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.begin_sponsorship_payment(
+    FROM private.begin_sponsorship_payment_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM payment_test_context WHERE key = 'fixed_intent_2'
       ),
@@ -1413,7 +1416,7 @@ SELECT extensions.throws_ok(
 );
 
 SELECT count(*)
-FROM public.attach_sponsorship_payment_provider_object(
+FROM private.attach_sponsorship_payment_provider_object_core_v1(
   target_payment_attempt_id => (
     SELECT value FROM payment_test_context WHERE key = 'fixed_attempt_1'
   ),
@@ -1435,7 +1438,7 @@ FROM public.release_sponsorship_checkout_reservation(
 
 INSERT INTO payment_test_context
 SELECT 'fixed_attempt_2', payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM payment_test_context WHERE key = 'fixed_intent_2'
   ),

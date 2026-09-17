@@ -1261,82 +1261,6 @@ REVOKE ALL ON FUNCTION private.prepare_sponsorship_checkout_intent_core_v1(
   text
 ) FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE OR REPLACE FUNCTION public.prepare_sponsorship_checkout_intent(
-  target_idempotency_key text,
-  target_source public.sponsorship_intent_source,
-  target_advocate_hostname text,
-  target_visitor_token_digest bytea,
-  target_auth_user_id uuid,
-  target_contact_email_hmac bytea,
-  target_contact_email_normalization_version smallint,
-  target_contact_email_hmac_key_version smallint,
-  target_subject_kind public.sponsorship_subject_kind,
-  target_beneficiary_id uuid,
-  target_partnership_project public.project_type,
-  target_payment_mode public.sponsorship_payment_mode,
-  target_recurrence_interval text,
-  target_base_amount_usd_cents bigint,
-  target_charged_amount_minor bigint,
-  target_charged_currency public.payment_currency,
-  target_conversion_rate numeric,
-  target_currency_quote_at timestamptz,
-  target_currency_rate_source text,
-  context_request_id text DEFAULT NULL,
-  context_trace_id text DEFAULT NULL
-)
-RETURNS TABLE (
-  resolved_sponsorship_intent_id uuid,
-  resolved_sponsor_identity_id uuid,
-  resolved_browser_visitor_id uuid,
-  resolved_source public.sponsorship_intent_source,
-  resolved_source_host text,
-  resolved_attribution_kind public.sponsorship_attribution_kind,
-  resolved_attribution_advocate_id uuid,
-  resolved_attribution_exposure_id uuid,
-  resolved_intent_status public.sponsorship_intent_status,
-  replayed boolean
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-#variable_conflict use_column
-BEGIN
-  PERFORM private.require_payment_service_role();
-
-  IF target_idempotency_key LIKE 'checkout-v2:%' THEN
-    RAISE EXCEPTION 'Legacy checkout preparation cannot enter a v2 operation scope'
-      USING ERRCODE = '23514';
-  END IF;
-
-  RETURN QUERY
-  SELECT core.*
-  FROM private.prepare_sponsorship_checkout_intent_core_v1(
-    target_idempotency_key,
-    target_source,
-    target_advocate_hostname,
-    target_visitor_token_digest,
-    target_auth_user_id,
-    target_contact_email_hmac,
-    target_contact_email_normalization_version,
-    target_contact_email_hmac_key_version,
-    target_subject_kind,
-    target_beneficiary_id,
-    target_partnership_project,
-    target_payment_mode,
-    target_recurrence_interval,
-    target_base_amount_usd_cents,
-    target_charged_amount_minor,
-    target_charged_currency,
-    target_conversion_rate,
-    target_currency_quote_at,
-    target_currency_rate_source,
-    context_request_id,
-    context_trace_id
-  ) core;
-END;
-$$;
-
 CREATE OR REPLACE FUNCTION public.prepare_sponsorship_checkout_intent_v2(
   target_checkout_operation_id uuid,
   target_checkout_receipt_digest bytea,
@@ -1974,59 +1898,6 @@ REVOKE ALL ON FUNCTION private.issue_sponsorship_payment_quote_core_v1(
   text
 ) FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE OR REPLACE FUNCTION public.issue_sponsorship_payment_quote(
-  target_sponsorship_intent_id uuid,
-  target_provider public.sponsorship_method,
-  target_provider_account_scope text,
-  target_quote_idempotency_key text,
-  target_valid_for interval DEFAULT interval '15 minutes',
-  context_request_id text DEFAULT NULL,
-  context_trace_id text DEFAULT NULL
-)
-RETURNS TABLE (
-  payment_quote_id uuid,
-  sponsorship_intent_id uuid,
-  provider public.sponsorship_method,
-  provider_account_scope text,
-  base_amount_usd_cents bigint,
-  charged_amount_minor bigint,
-  charged_currency public.payment_currency,
-  conversion_rate numeric,
-  issued_at timestamptz,
-  expires_at timestamptz
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-#variable_conflict use_column
-BEGIN
-  PERFORM private.require_payment_service_role();
-
-  IF EXISTS (
-    SELECT 1
-    FROM public.sponsorship_checkout_operations operation
-    WHERE operation.sponsorship_intent_id = target_sponsorship_intent_id
-      AND operation.checkout_boundary_version = 2
-  ) THEN
-    RAISE EXCEPTION 'Legacy payment quote cannot mutate a v2 checkout operation'
-      USING ERRCODE = '23514';
-  END IF;
-
-  RETURN QUERY
-  SELECT core.*
-  FROM private.issue_sponsorship_payment_quote_core_v1(
-    target_sponsorship_intent_id,
-    target_provider,
-    target_provider_account_scope,
-    target_quote_idempotency_key,
-    target_valid_for,
-    context_request_id,
-    context_trace_id
-  ) core;
-END;
-$$;
-
 CREATE OR REPLACE FUNCTION public.issue_sponsorship_payment_quote_v2(
   target_checkout_operation_id uuid,
   target_sponsorship_intent_id uuid,
@@ -2285,71 +2156,6 @@ REVOKE ALL ON FUNCTION private.begin_sponsorship_payment_core_v1(
   text,
   text
 ) FROM PUBLIC, anon, authenticated, service_role;
-
-CREATE OR REPLACE FUNCTION public.begin_sponsorship_payment(
-  target_sponsorship_intent_id uuid,
-  target_payment_quote_id uuid,
-  target_provider public.sponsorship_method,
-  target_provider_account_scope text,
-  target_provider_idempotency_key text,
-  target_checkout_receipt_digest bytea,
-  target_checkout_receipt_valid_for interval DEFAULT interval '24 hours',
-  target_metadata jsonb DEFAULT '{}'::jsonb,
-  context_request_id text DEFAULT NULL,
-  context_trace_id text DEFAULT NULL,
-  context_client_ip text DEFAULT NULL,
-  context_user_agent text DEFAULT NULL
-)
-RETURNS TABLE (
-  payment_attempt_id uuid,
-  sponsorship_intent_id uuid,
-  attempt_number smallint,
-  provider public.sponsorship_method,
-  provider_account_scope text,
-  status public.sponsorship_payment_attempt_status,
-  payment_mode public.sponsorship_payment_mode,
-  base_amount_usd_cents bigint,
-  charged_amount_minor bigint,
-  charged_currency public.payment_currency,
-  conversion_rate numeric,
-  currency_quote_at timestamptz
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-#variable_conflict use_column
-BEGIN
-  PERFORM private.require_payment_service_role();
-
-  IF EXISTS (
-    SELECT 1
-    FROM public.sponsorship_checkout_operations operation
-    WHERE operation.sponsorship_intent_id = target_sponsorship_intent_id
-      AND operation.checkout_boundary_version = 2
-  ) THEN
-    RAISE EXCEPTION 'Legacy payment begin cannot mutate a v2 checkout operation'
-      USING ERRCODE = '23514';
-  END IF;
-
-  RETURN QUERY
-  SELECT core.*
-  FROM private.begin_sponsorship_payment_core_v1(
-    target_sponsorship_intent_id,
-    target_payment_quote_id,
-    target_provider,
-    target_provider_account_scope,
-    target_provider_idempotency_key,
-    target_checkout_receipt_digest,
-    target_checkout_receipt_valid_for,
-    target_metadata,
-    context_request_id,
-    context_trace_id,
-    context_client_ip,
-    context_user_agent
-  ) core;
-END;
-$$;
 
 CREATE OR REPLACE FUNCTION public.begin_sponsorship_payment_v2(
   target_checkout_operation_id uuid,
@@ -2864,57 +2670,6 @@ REVOKE ALL ON FUNCTION private.attach_sponsorship_payment_provider_object_core_v
   text,
   text
 ) FROM PUBLIC, anon, authenticated, service_role;
-
-CREATE OR REPLACE FUNCTION public.attach_sponsorship_payment_provider_object(
-  target_payment_attempt_id uuid,
-  target_provider_object_type text,
-  target_provider_object_id text,
-  target_expires_at timestamptz DEFAULT NULL,
-  context_request_id text DEFAULT NULL,
-  context_trace_id text DEFAULT NULL,
-  context_client_ip text DEFAULT NULL,
-  context_user_agent text DEFAULT NULL
-)
-RETURNS TABLE (
-  payment_attempt_id uuid,
-  sponsorship_intent_id uuid,
-  provider public.sponsorship_method,
-  provider_account_scope text,
-  provider_object_type text,
-  provider_object_id text,
-  status public.sponsorship_payment_attempt_status
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-#variable_conflict use_column
-BEGIN
-  PERFORM private.require_payment_service_role();
-
-  IF EXISTS (
-    SELECT 1
-    FROM public.sponsorship_checkout_recovery_states recovery
-    WHERE recovery.payment_attempt_id = target_payment_attempt_id
-  ) THEN
-    RAISE EXCEPTION 'Legacy provider attachment cannot mutate a v2 checkout operation'
-      USING ERRCODE = '23514';
-  END IF;
-
-  RETURN QUERY
-  SELECT core.*
-  FROM private.attach_sponsorship_payment_provider_object_core_v1(
-    target_payment_attempt_id,
-    target_provider_object_type,
-    target_provider_object_id,
-    target_expires_at,
-    context_request_id,
-    context_trace_id,
-    context_client_ip,
-    context_user_agent
-  ) core;
-END;
-$$;
 
 CREATE OR REPLACE FUNCTION public.attach_sponsorship_payment_provider_object_v2(
   target_payment_attempt_id uuid,
@@ -4591,68 +4346,8 @@ STABLE
 SECURITY DEFINER
 SET search_path = ''
 AS $$
-  SELECT 2::smallint, true, true, true, true;
+  SELECT 2::smallint, false, true, true, false;
 $$;
-
-REVOKE ALL ON FUNCTION public.prepare_sponsorship_checkout_intent(
-  text,
-  public.sponsorship_intent_source,
-  text,
-  bytea,
-  uuid,
-  bytea,
-  smallint,
-  smallint,
-  public.sponsorship_subject_kind,
-  uuid,
-  public.project_type,
-  public.sponsorship_payment_mode,
-  text,
-  bigint,
-  bigint,
-  public.payment_currency,
-  numeric,
-  timestamptz,
-  text,
-  text,
-  text
-) FROM PUBLIC, anon, authenticated, service_role;
-
-REVOKE ALL ON FUNCTION public.issue_sponsorship_payment_quote(
-  uuid,
-  public.sponsorship_method,
-  text,
-  text,
-  interval,
-  text,
-  text
-) FROM PUBLIC, anon, authenticated, service_role;
-
-REVOKE ALL ON FUNCTION public.begin_sponsorship_payment(
-  uuid,
-  uuid,
-  public.sponsorship_method,
-  text,
-  text,
-  bytea,
-  interval,
-  jsonb,
-  text,
-  text,
-  text,
-  text
-) FROM PUBLIC, anon, authenticated, service_role;
-
-REVOKE ALL ON FUNCTION public.attach_sponsorship_payment_provider_object(
-  uuid,
-  text,
-  text,
-  timestamptz,
-  text,
-  text,
-  text,
-  text
-) FROM PUBLIC, anon, authenticated, service_role;
 
 REVOKE ALL ON FUNCTION public.prepare_sponsorship_checkout_intent_v2(
   uuid,
@@ -4810,66 +4505,6 @@ REVOKE ALL ON FUNCTION public.read_sponsorship_checkout_status_v2(bytea)
 REVOKE ALL ON FUNCTION public.read_sponsorship_checkout_rpc_release_gate_v2()
   FROM PUBLIC, anon, authenticated, service_role;
 
-GRANT EXECUTE ON FUNCTION public.prepare_sponsorship_checkout_intent(
-  text,
-  public.sponsorship_intent_source,
-  text,
-  bytea,
-  uuid,
-  bytea,
-  smallint,
-  smallint,
-  public.sponsorship_subject_kind,
-  uuid,
-  public.project_type,
-  public.sponsorship_payment_mode,
-  text,
-  bigint,
-  bigint,
-  public.payment_currency,
-  numeric,
-  timestamptz,
-  text,
-  text,
-  text
-) TO service_role;
-
-GRANT EXECUTE ON FUNCTION public.issue_sponsorship_payment_quote(
-  uuid,
-  public.sponsorship_method,
-  text,
-  text,
-  interval,
-  text,
-  text
-) TO service_role;
-
-GRANT EXECUTE ON FUNCTION public.begin_sponsorship_payment(
-  uuid,
-  uuid,
-  public.sponsorship_method,
-  text,
-  text,
-  bytea,
-  interval,
-  jsonb,
-  text,
-  text,
-  text,
-  text
-) TO service_role;
-
-GRANT EXECUTE ON FUNCTION public.attach_sponsorship_payment_provider_object(
-  uuid,
-  text,
-  text,
-  timestamptz,
-  text,
-  text,
-  text,
-  text
-) TO service_role;
-
 GRANT EXECUTE ON FUNCTION public.prepare_sponsorship_checkout_intent_v2(
   uuid,
   bytea,
@@ -5025,70 +4660,6 @@ GRANT EXECUTE ON FUNCTION public.read_sponsorship_checkout_status_v2(bytea)
 
 GRANT EXECUTE ON FUNCTION public.read_sponsorship_checkout_rpc_release_gate_v2()
   TO service_role;
-
-COMMENT ON FUNCTION public.prepare_sponsorship_checkout_intent(
-  text,
-  public.sponsorship_intent_source,
-  text,
-  bytea,
-  uuid,
-  bytea,
-  smallint,
-  smallint,
-  public.sponsorship_subject_kind,
-  uuid,
-  public.project_type,
-  public.sponsorship_payment_mode,
-  text,
-  bigint,
-  bigint,
-  public.payment_currency,
-  numeric,
-  timestamptz,
-  text,
-  text,
-  text
-) IS
-  'Temporary guarded v1 compatibility RPC. It cannot create a v2 checkout intent and remains available only for the two phase caller cutover.';
-
-COMMENT ON FUNCTION public.issue_sponsorship_payment_quote(
-  uuid,
-  public.sponsorship_method,
-  text,
-  text,
-  interval,
-  text,
-  text
-) IS
-  'Temporary guarded v1 compatibility RPC. It rejects every intent registered to a v2 checkout operation.';
-
-COMMENT ON FUNCTION public.begin_sponsorship_payment(
-  uuid,
-  uuid,
-  public.sponsorship_method,
-  text,
-  text,
-  bytea,
-  interval,
-  jsonb,
-  text,
-  text,
-  text,
-  text
-) IS
-  'Temporary guarded v1 compatibility RPC. It rejects every intent registered to a v2 checkout operation.';
-
-COMMENT ON FUNCTION public.attach_sponsorship_payment_provider_object(
-  uuid,
-  text,
-  text,
-  timestamptz,
-  text,
-  text,
-  text,
-  text
-) IS
-  'Temporary guarded v1 compatibility RPC. It rejects every payment attempt with v2 recovery state.';
 
 COMMENT ON TABLE public.sponsorship_checkout_operations IS
   'Append only v2 preprovider checkout operation lineage keyed by one opaque receipt digest and one exact provider idempotency scope. Failed intents may continue through one serial successor operation while successful or unsettled chains are closed.';
@@ -5270,6 +4841,6 @@ COMMENT ON FUNCTION public.read_sponsorship_checkout_status_v2(bytea) IS
   'Reads a live opaque checkout receipt without treating receipt expiry as payment terminal evidence.';
 
 COMMENT ON FUNCTION public.read_sponsorship_checkout_rpc_release_gate_v2() IS
-  'Deployment capability gate. V1 and v2 remain concurrently enabled until a later caller drain migration explicitly revokes v1.';
+  'Deployment capability gate. The first release exposes v2 only; deploy v2 application callers without an undeployed v1 RPC drain.';
 
 COMMIT;

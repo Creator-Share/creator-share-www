@@ -4,6 +4,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT extensions.no_plan();
 
+-- Superuser fixture and unit calls use the shared private payment core.
+-- Public caller authority and recovery contracts are exercised through v2.
+
 CREATE TEMP TABLE checkout_boundary_test_context (
   key text PRIMARY KEY,
   uuid_value uuid
@@ -442,7 +445,7 @@ SELECT extensions.is(
 
 WITH prepared AS MATERIALIZED (
   SELECT *
-  FROM public.prepare_sponsorship_checkout_intent(
+  FROM private.prepare_sponsorship_checkout_intent_core_v1(
     target_idempotency_key => 'checkout-boundary-direct-0001',
     target_source => 'advocate_domain',
     target_advocate_hostname => 'checkoutboundary.creatorshare.com',
@@ -513,7 +516,7 @@ SELECT extensions.ok(
   (
     SELECT result.replayed
       AND result.resolved_sponsorship_intent_id = context.uuid_value
-    FROM public.prepare_sponsorship_checkout_intent(
+    FROM private.prepare_sponsorship_checkout_intent_core_v1(
       target_idempotency_key => 'checkout-boundary-direct-0001',
       target_source => 'advocate_domain',
       target_advocate_hostname => 'checkoutboundary.creatorshare.com',
@@ -557,7 +560,7 @@ SELECT extensions.is(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.prepare_sponsorship_checkout_intent(
+    FROM private.prepare_sponsorship_checkout_intent_core_v1(
       target_idempotency_key => 'checkout-boundary-direct-0001',
       target_source => 'advocate_domain',
       target_advocate_hostname => 'checkoutboundary.creatorshare.com',
@@ -586,7 +589,7 @@ SELECT extensions.throws_ok(
 
 WITH prepared AS (
   SELECT *
-  FROM public.prepare_sponsorship_checkout_intent(
+  FROM private.prepare_sponsorship_checkout_intent_core_v1(
     target_idempotency_key => 'checkout-boundary-primary-0001',
     target_source => 'primary_site',
     target_advocate_hostname => NULL,
@@ -660,7 +663,7 @@ SELECT extensions.is(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.prepare_sponsorship_checkout_intent(
+    FROM private.prepare_sponsorship_checkout_intent_core_v1(
       target_idempotency_key => 'checkout-boundary-local-host',
       target_source => 'primary_site',
       target_advocate_hostname => 'localhost',
@@ -690,7 +693,7 @@ SELECT extensions.throws_ok(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.prepare_sponsorship_checkout_intent(
+    FROM private.prepare_sponsorship_checkout_intent_core_v1(
       target_idempotency_key => 'checkout-boundary-small-amount',
       target_source => 'primary_site',
       target_advocate_hostname => NULL,
@@ -719,7 +722,7 @@ SELECT extensions.throws_ok(
 
 WITH prepared AS (
   SELECT *
-  FROM public.prepare_sponsorship_checkout_intent(
+  FROM private.prepare_sponsorship_checkout_intent_core_v1(
     target_idempotency_key => 'checkout-boundary-guest-conflict',
     target_source => 'primary_site',
     target_advocate_hostname => NULL,
@@ -747,7 +750,7 @@ FROM prepared;
 
 WITH prepared AS (
   SELECT *
-  FROM public.prepare_sponsorship_checkout_intent(
+  FROM private.prepare_sponsorship_checkout_intent_core_v1(
     target_idempotency_key => 'checkout-boundary-account-a',
     target_source => 'primary_site',
     target_advocate_hostname => NULL,
@@ -794,7 +797,7 @@ SELECT extensions.ok(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.prepare_sponsorship_checkout_intent(
+    FROM private.prepare_sponsorship_checkout_intent_core_v1(
       target_idempotency_key => 'checkout-boundary-account-a-conflict',
       target_source => 'primary_site',
       target_advocate_hostname => NULL,
@@ -824,7 +827,7 @@ SELECT extensions.throws_ok(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.prepare_sponsorship_checkout_intent(
+    FROM private.prepare_sponsorship_checkout_intent_core_v1(
       target_idempotency_key => 'checkout-boundary-account-a-changed',
       target_source => 'primary_site',
       target_advocate_hostname => NULL,
@@ -854,7 +857,7 @@ SELECT extensions.throws_ok(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.prepare_sponsorship_checkout_intent(
+    FROM private.prepare_sponsorship_checkout_intent_core_v1(
       target_idempotency_key => 'checkout-boundary-account-b-takeover',
       target_source => 'primary_site',
       target_advocate_hostname => NULL,
@@ -924,7 +927,7 @@ SELECT extensions.ok(
   )
   AND has_function_privilege(
     'service_role',
-    'public.prepare_sponsorship_checkout_intent(text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)',
+    'public.prepare_sponsorship_checkout_intent_v2(uuid,bytea,public.sponsorship_method,text,text,text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)',
     'EXECUTE'
   ),
   'service role can invoke both narrow checkout boundary RPCs'
@@ -943,12 +946,12 @@ SELECT extensions.ok(
   )
   AND NOT has_function_privilege(
     'anon',
-    'public.prepare_sponsorship_checkout_intent(text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)',
+    'public.prepare_sponsorship_checkout_intent_v2(uuid,bytea,public.sponsorship_method,text,text,text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
     'authenticated',
-    'public.prepare_sponsorship_checkout_intent(text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)',
+    'public.prepare_sponsorship_checkout_intent_v2(uuid,bytea,public.sponsorship_method,text,text,text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)',
     'EXECUTE'
   ),
   'browser roles cannot invoke checkout mutation boundaries directly'
@@ -967,7 +970,7 @@ SELECT extensions.ok(
       AND coalesce(array_to_string(procedure.proconfig, ','), '') = 'search_path=""'
     FROM pg_proc procedure
     WHERE procedure.oid =
-      'public.prepare_sponsorship_checkout_intent(text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)'::regprocedure
+      'public.prepare_sponsorship_checkout_intent_v2(uuid,bytea,public.sponsorship_method,text,text,text,public.sponsorship_intent_source,text,bytea,uuid,bytea,smallint,smallint,public.sponsorship_subject_kind,uuid,public.project_type,public.sponsorship_payment_mode,text,bigint,bigint,public.payment_currency,numeric,timestamptz,text,text,text)'::regprocedure
   ),
   'both checkout boundary RPCs are security definers with an empty search path'
 );

@@ -4,6 +4,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT extensions.no_plan();
 
+-- Superuser fixture and unit calls use the shared private payment core.
+-- Public caller authority and recovery contracts are exercised through v2.
+
 CREATE TEMP TABLE checkout_replay_test_ids (
   key text PRIMARY KEY,
   value uuid NOT NULL
@@ -197,7 +200,7 @@ SELECT 'failed_intent', id FROM inserted;
 
 INSERT INTO checkout_replay_test_ids
 SELECT 'main_quote', payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
   ),
@@ -223,7 +226,7 @@ WHERE id = (
 SELECT extensions.is(
   (
     SELECT payment_quote_id
-    FROM public.issue_sponsorship_payment_quote(
+    FROM private.issue_sponsorship_payment_quote_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
       ),
@@ -238,7 +241,7 @@ SELECT extensions.is(
 
 INSERT INTO checkout_replay_test_ids
 SELECT 'main_attempt', payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
   ),
@@ -274,7 +277,7 @@ SELECT extensions.is(
 SELECT extensions.is(
   (
     SELECT payment_quote_id
-    FROM public.issue_sponsorship_payment_quote(
+    FROM private.issue_sponsorship_payment_quote_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
       ),
@@ -291,7 +294,7 @@ SELECT extensions.is(
 SELECT extensions.is(
   (
     SELECT expires_at
-    FROM public.issue_sponsorship_payment_quote(
+    FROM private.issue_sponsorship_payment_quote_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
       ),
@@ -318,7 +321,7 @@ WHERE id = (
 SELECT extensions.is(
   (
     SELECT payment_quote_id
-    FROM public.issue_sponsorship_payment_quote(
+    FROM private.issue_sponsorship_payment_quote_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
       ),
@@ -340,7 +343,7 @@ WHERE id = (
 SELECT extensions.is(
   (
     SELECT payment_quote_id
-    FROM public.issue_sponsorship_payment_quote(
+    FROM private.issue_sponsorship_payment_quote_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
       ),
@@ -356,7 +359,7 @@ SELECT extensions.is(
 SELECT extensions.is(
   (
     SELECT payment_attempt_id
-    FROM public.begin_sponsorship_payment(
+    FROM private.begin_sponsorship_payment_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
       ),
@@ -377,7 +380,7 @@ SELECT extensions.is(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.begin_sponsorship_payment(
+    FROM private.begin_sponsorship_payment_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
       ),
@@ -398,7 +401,7 @@ SELECT extensions.throws_ok(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.issue_sponsorship_payment_quote(
+    FROM private.issue_sponsorship_payment_quote_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
       ),
@@ -415,7 +418,7 @@ SELECT extensions.throws_ok(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.issue_sponsorship_payment_quote(
+    FROM private.issue_sponsorship_payment_quote_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids
         WHERE key = 'changed_terms_intent'
@@ -433,7 +436,7 @@ SELECT extensions.throws_ok(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.issue_sponsorship_payment_quote(
+    FROM private.issue_sponsorship_payment_quote_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
       ),
@@ -450,7 +453,7 @@ SELECT extensions.throws_ok(
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.begin_sponsorship_payment(
+    FROM private.begin_sponsorship_payment_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'main_intent'
       ),
@@ -470,7 +473,7 @@ SELECT extensions.throws_ok(
 
 INSERT INTO checkout_replay_test_ids
 SELECT 'failed_quote', payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM checkout_replay_test_ids WHERE key = 'failed_intent'
   ),
@@ -481,7 +484,7 @@ FROM public.issue_sponsorship_payment_quote(
 
 INSERT INTO checkout_replay_test_ids
 SELECT 'failed_attempt', payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   target_sponsorship_intent_id => (
     SELECT value FROM checkout_replay_test_ids WHERE key = 'failed_intent'
   ),
@@ -503,7 +506,7 @@ WHERE id = (
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.issue_sponsorship_payment_quote(
+    FROM private.issue_sponsorship_payment_quote_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'failed_intent'
       ),
@@ -520,7 +523,7 @@ SELECT extensions.throws_ok(
 SELECT extensions.is(
   (
     SELECT payment_attempt_id
-    FROM public.begin_sponsorship_payment(
+    FROM private.begin_sponsorship_payment_core_v1(
       target_sponsorship_intent_id => (
         SELECT value FROM checkout_replay_test_ids WHERE key = 'failed_intent'
       ),
@@ -629,17 +632,17 @@ SELECT extensions.is(
 SELECT extensions.ok(
   NOT has_function_privilege(
     'anon',
-    'public.issue_sponsorship_payment_quote(uuid,public.sponsorship_method,text,text,interval,text,text)',
+    'public.issue_sponsorship_payment_quote_v2(uuid,uuid,text,interval,text,text)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
     'authenticated',
-    'public.issue_sponsorship_payment_quote(uuid,public.sponsorship_method,text,text,interval,text,text)',
+    'public.issue_sponsorship_payment_quote_v2(uuid,uuid,text,interval,text,text)',
     'EXECUTE'
   )
   AND has_function_privilege(
     'service_role',
-    'public.issue_sponsorship_payment_quote(uuid,public.sponsorship_method,text,text,interval,text,text)',
+    'public.issue_sponsorship_payment_quote_v2(uuid,uuid,text,interval,text,text)',
     'EXECUTE'
   ),
   'only the payment service role may issue or replay sponsorship quotes'
@@ -650,10 +653,9 @@ SET LOCAL ROLE authenticated;
 SELECT extensions.throws_ok(
   $$
     SELECT *
-    FROM public.issue_sponsorship_payment_quote(
+    FROM public.issue_sponsorship_payment_quote_v2(
       '97100000-0000-4000-8000-000000000001'::uuid,
-      'STRIPE',
-      'stripe_us',
+      '97100000-0000-4000-8000-000000000002'::uuid,
       'checkout-replay-unauthorized-key-0001'
     )
   $$,

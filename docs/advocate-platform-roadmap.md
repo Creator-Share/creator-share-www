@@ -440,7 +440,7 @@ This phase is a release gate. The current invitation flow cannot be extended bec
 - Add the durable welcome email sequence.
 - Cryptographically erase sealed checkout contact material after terminal settlement and welcome materialization while retaining noncontact fingerprints and audit evidence.
 
-The v2 checkout database functions and application callers use an additive two phase release. Follow [the payment boundary release runbook](./advocate-payment-release-runbook.md). The database release gate is deployment evidence, not a runtime request flag. Legacy service scoped functions are revoked only in a later migration after the v2 caller deployment and warm instance drain are proven.
+The first release installs only the public v2 checkout RPCs; the earlier generation existed solely within this undeployed PR. Shared private payment implementations and pre-PR customer return compatibility remain. Follow [the payment boundary release runbook](./advocate-payment-release-runbook.md). The database release gate is deployment evidence, not a runtime request flag. Application deployment and existing provider-session recovery still require independent evidence.
 
 ### Phase 2: Tenant routing and provisioning
 

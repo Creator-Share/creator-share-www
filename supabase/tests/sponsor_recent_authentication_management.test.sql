@@ -4,6 +4,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT extensions.no_plan();
 
+-- Superuser fixture and unit calls use the shared private payment core.
+-- Public caller authority and recovery contracts are exercised through v2.
+
 SELECT extensions.ok(
   (
     SELECT routine.prosecdef
@@ -603,7 +606,7 @@ SET LOCAL ROLE service_role;
 
 INSERT INTO recent_management_context
 SELECT 'quote', payment_quote_id
-FROM public.issue_sponsorship_payment_quote(
+FROM private.issue_sponsorship_payment_quote_core_v1(
   target_sponsorship_intent_id =>
     '7e000000-0000-4000-8000-000000000001'::uuid,
   target_provider => 'STRIPE',
@@ -613,7 +616,7 @@ FROM public.issue_sponsorship_payment_quote(
 
 INSERT INTO recent_management_context
 SELECT 'attempt', payment_attempt_id
-FROM public.begin_sponsorship_payment(
+FROM private.begin_sponsorship_payment_core_v1(
   target_sponsorship_intent_id =>
     '7e000000-0000-4000-8000-000000000001'::uuid,
   target_payment_quote_id => (
@@ -626,7 +629,7 @@ FROM public.begin_sponsorship_payment(
 );
 
 SELECT count(*)
-FROM public.attach_sponsorship_payment_provider_object(
+FROM private.attach_sponsorship_payment_provider_object_core_v1(
   target_payment_attempt_id => (
     SELECT value FROM recent_management_context WHERE key = 'attempt'
   ),
