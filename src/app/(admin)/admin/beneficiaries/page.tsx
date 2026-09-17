@@ -549,7 +549,7 @@ const ChildrenTable = () => {
       <Box mb={6}>
         <SponsorshipFilters
           onFilterChange={handleFilterChange}
-          beneficiaryType={activeType === "ANIMAL" ? "ANIMAL" : "CHILD"}
+          beneficiaryType={activeType ?? "CHILD"}
           isAdminMode={true}
           activeType={activeType}
           onTypeChange={handleTypeChange}

@@ -183,6 +183,23 @@ const HERO_CONTENT: Record<DisplayKey, HeroContent> = {
     ),
   },
 
+  IMMEDIATE_NEED: {
+    heading: (
+      <>
+        Urgent needs deserve{" "}
+        <Box as="br" display={{ base: "none", md: "initial" }} />
+        an immediate response
+      </>
+    ),
+    description: (
+      <>
+        When a child faces an urgent need, timely support can provide safety,
+        care, and essential stability. Your sponsorship helps meet those needs
+        with dignity when they matter most.
+      </>
+    ),
+  },
+
   IN_OUR_CARE: {
     heading: (
       <>
