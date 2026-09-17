@@ -255,3 +255,7 @@ Strict in-process migration replay with function-body validation passes. Catalog
 ## Accounting recommendation refinement
 
 The expanded model covers 300,000 amount/arrival-order scenarios across five original-payment pairs, including credits deferred until their debit exists. Exact rational values reconcile throughout; naive cumulative whole-cent deltas leave a nonzero balance on a fully restored dispute in 19,960 scenarios. The accounting decision draft now favors exact derived values with explicit reporting rounding. These model counts are not production incident rates or completed payment tests. FF-072 and FF-084 remain open pending policy approval, implementation, and recovery evidence.
+
+## Registration metadata evidence
+
+The release audit cited invitation delivery for the legacy registration-role boundary. The current registration trigger ignores role metadata, but the foundation suite lacked a direct adversarial registration fixture. Its owner fixture now supplies forged global role IDs and an advocate owner label, then asserts that normal profile fields are copied while no global role assignment or advocate membership is created. The isolated trigger probe passes; the added pgTAP assertion still requires hosted validation. This closes an evidence gap, not a newly demonstrated production escalation. The audit now cites the relevant foundation suite and describes invitation secrets precisely as absent from persistent storage and request targets, while deliberate fragment transport remains supported.

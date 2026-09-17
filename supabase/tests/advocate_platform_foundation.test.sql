@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT extensions.plan(80);
+SELECT extensions.plan(81);
 
 SELECT extensions.is(
   (
@@ -518,7 +518,7 @@ WITH inserted AS (
     'foundation-owner@example.test',
     now(),
     '{}'::jsonb,
-    '{"first_name":"Foundation","last_name":"Owner"}'::jsonb,
+    '{"first_name":"Foundation","last_name":"Owner","role":"super_admin","roles":["7363a1c9-5336-4a6d-a1df-16136313d385"],"role_ids":["7363a1c9-5336-4a6d-a1df-16136313d385"],"advocate_role":"owner"}'::jsonb,
     now(),
     now()
   )
@@ -526,6 +526,24 @@ WITH inserted AS (
 )
 INSERT INTO test_advocate_context (key, value)
 SELECT 'owner_user', id FROM inserted;
+
+SELECT extensions.ok(
+  EXISTS (
+    SELECT 1 FROM public.users
+    WHERE id = '90000000-0000-4000-8000-000000000001'
+      AND first_name = 'Foundation'
+      AND email = 'foundation-owner@example.test'
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM public.role_assignments
+    WHERE user_id = '90000000-0000-4000-8000-000000000001'
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM public.advocate_memberships
+    WHERE user_id = '90000000-0000-4000-8000-000000000001'
+  ),
+  'registration copies profile fields but user-controlled role metadata grants no global or advocate authority'
+);
 
 WITH inserted AS (
   INSERT INTO public.sponsor_identities (auth_user_id)
