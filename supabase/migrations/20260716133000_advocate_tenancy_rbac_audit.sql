@@ -1816,7 +1816,9 @@ CREATE TRIGGER advocate_roles_touch_updated_at
 BEFORE UPDATE ON public.advocate_roles
 FOR EACH ROW EXECUTE FUNCTION private.touch_updated_at();
 
-CREATE OR REPLACE FUNCTION private.is_creator_share_super_admin()
+-- Data API policies must recheck account state even while an issued JWT is valid.
+-- Role possession alone is not authority for a banned or deleted account.
+CREATE FUNCTION private.is_current_account_active()
 RETURNS boolean
 LANGUAGE sql
 STABLE
@@ -1824,6 +1826,26 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
   SELECT EXISTS (
+    SELECT 1 FROM auth.users account
+    WHERE account.id = (SELECT auth.uid())
+      AND account.deleted_at IS NULL
+      AND account.is_anonymous IS NOT TRUE
+      AND (account.banned_until IS NULL OR account.banned_until <= now())
+  );
+$$;
+
+REVOKE ALL ON FUNCTION private.is_current_account_active() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.is_current_account_active()
+  TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION private.is_creator_share_super_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT (SELECT private.is_current_account_active()) AND EXISTS (
     SELECT 1
     FROM public.role_assignments ra
     JOIN public.roles r ON r.id = ra.role_id
@@ -2067,8 +2089,11 @@ ON public.role_assignments
 FOR SELECT
 TO authenticated
 USING (
-  user_id = (SELECT auth.uid())
-  OR (SELECT private.is_creator_share_super_admin())
+  (SELECT private.is_current_account_active())
+  AND (
+    user_id = (SELECT auth.uid())
+    OR (SELECT private.is_creator_share_super_admin())
+  )
 );
 
 -- All advocate tables are deny-by-default at the Data API. Public portal reads

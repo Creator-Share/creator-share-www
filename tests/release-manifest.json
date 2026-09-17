@@ -241,6 +241,7 @@
       "required": true,
       "runner": "supabase-test-db",
       "files": [
+        "supabase/tests/administrator_account_state.test.sql",
         "supabase/tests/advocate_admin_settings_boundary.test.sql",
         "supabase/tests/advocate_attribution_freeze_and_self_exclusion.test.sql",
         "supabase/tests/advocate_attribution_settlement_integration.test.sql",

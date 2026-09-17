@@ -371,3 +371,11 @@ The first hosted atomic-deletion run (35194644035) passed pgTAP, then failed bef
 Publication run 35195399935 and WebKit run 35195399933 passed on f904b01. Both independent jobs and the required aggregate passed. Evidence includes 1,707 offline tests, 66 dev-server tests, 99 provider contracts, 64 pgTAP files with 2,134 assertions, 15 catalog tests, and two local Supabase HTTP tests. The new harness passed financial-reference-first, deletion-first, ban-first, and deletion-before-ban cases with server-observed blocking, then disposed its database before publishing sanitized evidence. FF-082 is complete within its stated boundary; post-commit storage cleanup remains best effort.
 
 The corrected reference insert also passed an in-process full-schema replay after deliberately removing the migration-seeded PayPal account and allowing the fixture to restore it. This supports fixture correctness without claiming in-process concurrency evidence. No local service, live provider, production database, or dev branch was changed.
+
+## Administrator account-state policy candidate
+
+A complete-schema probe with actual authenticated-role RLS reads confirmed that an administrator banned in auth.users still passed the shared role predicate and read another sponsor subscription. The candidate adds a private account-state helper to both administrator authority and the role lookup used by existing route guards. The same probe now preserves active access and denies banned access. Soft-deletion and anonymous-account assertions are included in the new pgTAP file.
+
+A hosted HTTP regression extends the existing local Supabase integration: obtain a real JWT, establish active administrator reads, ban the synthetic account through Auth, reuse that same JWT for a public-read positive control, then assert private data and role reads are empty and a child mutation affects no rows. The test removes its temporary grant and reverses the synthetic ban during cleanup. No local server was started.
+
+All 1,607 selected server-free tests, TypeScript, lint, and manifest validation pass. The manifest now classifies 259 files, 248 required. Structural replay changes only the intended function and policy, adds one helper, and retains equal legacy-data projections. Hosted database and HTTP evidence is pending. FF-083 remains open until those checks pass.

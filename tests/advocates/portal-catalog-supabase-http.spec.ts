@@ -1061,4 +1061,64 @@ test.describe("local Supabase advocate catalog service boundary", () => {
     expect(readback.beneficiary_mode).toBe("all")
     expect(readback.beneficiary_selections).toEqual([])
   })
+  test("a retained JWT loses administrator Data API access after an Auth ban", async () => {
+    const current = fixture
+    if (current === null) throw new Error("catalog_http_fixture_missing")
+    const actor = current.users.ownerB
+    const assignmentId = randomUUID()
+    const token = await signIn(actor)
+    const headers = { apikey: stack.anonKey, Authorization: `Bearer ${token}` }
+    const readRows = async (resource: string): Promise<unknown[]> => {
+      const response = await fetch(`${stack.restUrl}/${resource}`, { headers })
+      expect(response.status).toBe(200)
+      const rows: unknown = await response.json()
+      expect(Array.isArray(rows)).toBe(true)
+      return rows as unknown[]
+    }
+    executeSql(`
+      BEGIN;
+      SET LOCAL session_replication_role = replica;
+      INSERT INTO public.role_assignments(id,user_id,role_id)
+      SELECT ${uuidLiteral(assignmentId)},${uuidLiteral(actor.id)},id
+      FROM public.roles WHERE name='SUPER_ADMIN';
+      COMMIT;
+    `)
+    try {
+      const childQuery = `beneficiaries?select=id&id=eq.${current.childAlphaId}`
+      const roleQuery = `role_assignments?select=id&id=eq.${assignmentId}`
+      expect(await readRows(childQuery)).toHaveLength(1)
+      expect(await readRows(roleQuery)).toHaveLength(1)
+      const ban = await authAdminRequest(`/admin/users/${actor.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ ban_duration: "24h" }),
+      })
+      expect(ban.status).toBe(200)
+      // The unchanged, still-valid JWT reaches PostgREST; public reads remain
+      // available, while policies independently reject private administrator access.
+      expect(await readRows(`public_beneficiaries?select=id&id=eq.${current.childAlphaId}`)).toHaveLength(1)
+      expect(await readRows(childQuery)).toEqual([])
+      expect(await readRows(roleQuery)).toEqual([])
+      const mutation = await fetch(`${stack.restUrl}/beneficiaries?id=eq.${current.childAlphaId}&select=id`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
+        body: JSON.stringify({ biography: "Unauthorized banned-account edit" }),
+      })
+      expect(mutation.status).toBe(200)
+      expect(await mutation.json()).toEqual([])
+      expect(executeSql(`SELECT biography FROM public.beneficiaries WHERE id=${uuidLiteral(current.childAlphaId)}`)).toBe(current.privateContactMarker)
+    } finally {
+      executeSql(`
+        BEGIN;
+        SET LOCAL session_replication_role = replica;
+        DELETE FROM public.role_assignments WHERE id=${uuidLiteral(assignmentId)};
+        COMMIT;
+      `)
+      const unban = await authAdminRequest(`/admin/users/${actor.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ ban_duration: "none" }),
+      })
+      expect(unban.status).toBe(200)
+    }
+  })
+
 })
