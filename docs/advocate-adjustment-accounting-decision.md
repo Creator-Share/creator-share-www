@@ -51,3 +51,7 @@ The settlement function already holds an original-payment advisory transaction l
 Run both providers and every supported currency through single partial refunds, repeated one-minor-unit refunds, final full refunds, partial reversals, dispute debits and credits, refund/dispute interleavings, duplicate events, duplicate movement identities, conflicting evidence, and concurrent settlement. Assert original-currency totals, normalized totals, per-dispute restoration, reporting projections, and append-only audit evidence. Include the two-cent AUD example and the interleaving above. Existing tests that expect rejection of unrepresentable slices must change to the approved behavior.
 
 Exercise retained-quarantine recovery separately. A repaired future webhook path does not establish reconciliation of previously acknowledged events. No live provider operation is authorized by this review document.
+
+## Quarantine recovery boundary
+
+Current quarantines are terminal `ignored` records carrying `requires_operational_review`; ordinary worker claims exclude them. Their encrypted payloads remain subject to the 90-day retention deadline. Fixing conversion arithmetic does not itself reprocess those records, and a successful worker run is not a quarantine health check. The payment runbook now defines a sanitized ingress signal, protected aggregate inventory, and monitoring canary. The accounting repair still needs an explicit audited recovery path before it can be considered complete.

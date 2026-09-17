@@ -39,6 +39,12 @@ The recommended repair preserves provider minor units exactly and allocates norm
 
 The prior fast-follow treated this as future hardening before adding filters or exports. It affects the existing MVP. A [decision draft](./advocate-analytics-disclosure-decision.md) proposes preserving metrics while batching updates behind coordinated disclosure rules. That changes freshness for low-volume advocates, so the owner decision remains pending. No private reporting behavior has changed.
 
+## Gateway quarantine operations
+
+**P2 observability repair pending validation (FF-075).** Verified gateway quarantines are acknowledged with HTTP 200 and stored as terminal `ignored` events. The ordinary worker excludes them, so its success does not establish an empty quarantine. The new candidate emits a sanitized signal only after a newly committed quarantine; it exposes no financial or provider-object details. Two regressions fail on the old implementation, and all 1,586 selected server-free tests, TypeScript, and lint pass. Hosted validation and configured alert-delivery evidence remain pending.
+
+Encrypted gateway payloads, including quarantined ones, expire after 90 days. The payment runbook now provides a protected aggregate inventory and requires operator investigation before expiry. The accounting repair still needs an audited reconciliation path; neither log monitoring nor provider redelivery alone is a demonstrated recovery mechanism.
+
 ## Remaining implementation review
 
 The application uses v2 checkout RPCs. A new candidate removes four public first-generation prepare, quote, begin, and attach wrappers that originated inside the undeployed PR. Shared private implementations remain unchanged. Existing unit fixtures call those cores; public privilege assertions target v2, and dedicated assertions require the retired wrappers to be absent and their cores inaccessible to API roles. Structural replay and the full hosted database and application gates pass; FF-070 is complete. Pre-PR customer return endpoints remain. Their old removal criterion was also corrected: a server-instance drain does not establish that no customer will return from an older provider session.

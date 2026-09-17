@@ -1480,3 +1480,37 @@ test("oversized stripe payload rejects even when stream cancellation stalls", as
   expect(cancelled).toBe(true)
   expect(body.locked).toBe(false)
 })
+
+test("signals only newly committed Stripe quarantines without provider material", async () => {
+  const originalError = console.error
+  const signals: unknown[][] = []
+  console.error = (...args: unknown[]) => { signals.push(args) }
+  try {
+    for (const disposition of ["new", "duplicate", "failed"] as const) {
+      signals.length = 0
+      const { dependencies } = dependenciesFor(boundary(), {
+        duplicate: disposition === "duplicate",
+      })
+      if (disposition === "failed") {
+        dependencies.quarantineVerifiedEvent = async () => {
+          throw new Error("private provider failure")
+        }
+      }
+      const operation = quarantineVerifiedStripeEvent({
+        event: event("checkout.session.completed", checkoutSession(stripeMetadata("one_time", 1200))),
+        region: "us",
+        rawPayload: '{"private_email":"private@example.test"}',
+        requestContext,
+        error: new ServerIntentStripeWebhookError("provider-fact-mismatch"),
+      }, dependencies)
+      if (disposition === "failed") await expect(operation).rejects.toThrow()
+      else await operation
+      expect(signals).toEqual(disposition === "new" ? [[
+        "PAYMENT_GATEWAY_EVENT_QUARANTINED",
+        { provider: "STRIPE", requestId: requestContext.requestId, code: "provider-fact-mismatch" },
+      ]] : [])
+    }
+  } finally {
+    console.error = originalError
+  }
+})

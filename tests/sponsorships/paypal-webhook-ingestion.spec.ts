@@ -1147,3 +1147,36 @@ test("oversized paypal payload rejects even when stream cancellation stalls", as
   expect(cancelled).toBe(true)
   expect(body.locked).toBe(false)
 })
+
+test("signals only newly committed PayPal quarantines without provider material", async () => {
+  const originalError = console.error
+  const signals: unknown[][] = []
+  console.error = (...args: unknown[]) => { signals.push(args) }
+  try {
+    for (const disposition of ["new", "duplicate", "failed"] as const) {
+      signals.length = 0
+      const { value } = dependencies()
+      const quarantine = value.quarantineVerifiedEvent
+      value.quarantineVerifiedEvent = async (input) => {
+        if (disposition === "failed") throw new Error("private provider failure")
+        return { ...await quarantine(input), isDuplicate: disposition === "duplicate" }
+      }
+      const context = requestContext()
+      const raw = rawEvent("CATALOG.PRODUCT.UPDATED", "product", {
+        id: "PROD-5RN21878H3527870P", name: "Private provider content",
+      })
+      const operation = quarantineVerifiedPayPalEvent({
+        event: parsePayPalWebhookEvent(raw), rawPayload: raw, requestContext: context,
+        error: new PayPalWebhookError("unsupported-event"),
+      }, value)
+      if (disposition === "failed") await expect(operation).rejects.toThrow()
+      else await operation
+      expect(signals).toEqual(disposition === "new" ? [[
+        "PAYMENT_GATEWAY_EVENT_QUARANTINED",
+        { provider: "PAYPAL", requestId: context.requestId, code: "unsupported-event" },
+      ]] : [])
+    }
+  } finally {
+    console.error = originalError
+  }
+})

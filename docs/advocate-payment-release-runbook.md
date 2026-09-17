@@ -153,6 +153,34 @@ Both regional Stripe webhook endpoints must deliver events using API version `20
 
 The PayPal webhook endpoint accepts at most 64 KiB and verifies the exact raw event representation through PayPal's signature verification API. Do not place a body parser, JSON normalizer, or proxy transformation in front of it. Unsupported signed events are acknowledged after durable contact-free quarantine evidence is written. Permanent chain mismatches are also quarantined. Provider lookup outages remain retryable and return a static unavailable response.
 
+### Verified gateway quarantine monitoring
+
+Configure an operational alert for `PAYMENT_GATEWAY_EVENT_QUARANTINED` before accepting live payments. Stripe and PayPal emit this signal after a newly committed quarantine, with only provider, request correlation, and a fixed error code. Duplicate deliveries do not repeat it. A log signal is not evidence that an alert reached an operator; retain a staging delivery and acknowledgment canary for the configured monitoring destination.
+
+Quarantined events use processing status `ignored` with `requires_operational_review=true`. The ordinary payment worker does not claim them, so a clean worker batch does not establish that quarantine is empty. Through protected database operational access, review the aggregate backlog and payload deadlines:
+
+```sql
+SELECT
+  provider,
+  provider_account_scope,
+  redacted_payload ->> 'quarantine_error_code' AS error_code,
+  count(*) AS events_requiring_review,
+  min(received_at) AS oldest_received_at,
+  min(payload_retention_expires_at) FILTER (
+    WHERE payload_ciphertext IS NOT NULL
+  ) AS earliest_retained_payload_expiry,
+  count(*) FILTER (WHERE payload_ciphertext IS NULL) AS erased_payloads
+FROM public.payment_gateway_events
+WHERE processing_status = 'ignored'
+  AND redacted_payload @>
+    '{"quarantine":true,"requires_operational_review":true}'::jsonb
+GROUP BY provider, provider_account_scope,
+  redacted_payload ->> 'quarantine_error_code';
+```
+
+The encrypted payload is eligible for erasure 90 days after ingestion, including quarantined events. Investigate before that deadline; preserve the approved privacy retention boundary. Do not log decrypted payloads, change status directly, or promise that resending the provider webhook will repair a quarantined record. Reconciliation needs an explicitly reviewed, audited path that preserves provider identity, original immutable evidence, and settlement idempotency. FF-072 requires this recovery design together with the partial-adjustment accounting repair.
+
+
 The production Vercel project must support one-minute Cron schedules. The repository declares eleven schedules: advocate provisioning, publication canaries, the publication sentinel, logo reconciliation, invitation delivery, lifecycle cleanup, payment event processing, sponsor welcome delivery, and subscription cancellation every minute; bounded retention hourly at minute 17; and public metric release daily at 01:13 UTC. The database permits only one fixed weekly public-metric source cutoff, so daily invocations provide idempotent recovery without increasing the public release cadence. Vercel does not retry one failed Cron invocation, so durable database state and the next scheduled invocation provide recovery. Confirm the project plan accepts all eleven schedules and the 300 second publication-canary function before promotion.
 
 ### Advocate invitation worker operations

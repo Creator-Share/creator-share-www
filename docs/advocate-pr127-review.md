@@ -255,3 +255,9 @@ The completion audit and manual checklist now foreground the two confirmed finan
 ## Final migration cleanup validated
 
 Publication run 35186695547 and WebKit run 35186695502 passed on `ff01da5`, including both independent application and database jobs and the aggregate gate. This validates the additional 413-line migration cleanup. A final application caller scan found one thumbnail stub whose only caller had just been removed; removing it brings the pending application cleanup to 456 net lines. Only generated database utility exports remain in the single-reference scan. That scan is a dead-code heuristic, not proof that every remaining export is necessary.
+
+## Gateway quarantine observability candidate
+
+Quarantine produces terminal ignored events outside ordinary worker claims, so current worker health can remain green while review-required payment evidence accumulates. Both provider ingestion boundaries now emit a sanitized error signal after a newly committed quarantine. Duplicate delivery and persistence failure emit no success signal. Two new regressions fail on the original implementation; all 55 focused ingestion tests, TypeScript, and lint pass. The signal includes no provider event/object identifier, contact, amount, signature, ciphertext, or raw error.
+
+The payment runbook adds a protected aggregate inventory and monitoring-delivery canary. Payload retention remains 90 days; neither logging nor fixing future arithmetic repairs already quarantined events. FF-075 remains pending hosted and alert-delivery evidence, and FF-072 still requires an audited recovery path.

@@ -2019,6 +2019,13 @@ export async function quarantineVerifiedPayPalEvent(
   ) {
     throw infrastructure()
   }
+  if (!result.isDuplicate) {
+    console.error("PAYMENT_GATEWAY_EVENT_QUARANTINED", {
+      provider: "PAYPAL",
+      requestId: input.requestContext.requestId,
+      code: input.error.code,
+    })
+  }
   return { quarantined: true, ...result }
 }
 
