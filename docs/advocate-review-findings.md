@@ -2,7 +2,7 @@
 
 Status: review in progress, September 17, 2026. No merge into `dev` is authorized. This report does not approve production activation.
 
-The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `4cc42a0`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction is hosted-validated; the later retention-index change awaits its own gate, and configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
+The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `14dcc77`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, application dead-code removal, and the quarantine signal. The database forensic correction and retention-index change are hosted-validated; the later password-login correction awaits its own gate, and configured alert-delivery evidence remains external release work. Existing local checkouts were left intact; local services remain stopped.
 
 ## Repaired defects and unnecessary complexity
 
@@ -98,7 +98,7 @@ These route bodies predate this PR, but their successful “user deleted” resp
 
 ## Retention query maintenance
 
-The candidate broadens the existing exposure visitor index to include excluded exposures. Tracking cleanup must check all exposures, so the former qualified-only index could not support that visitor lookup. A 100,000-row planner probe changed the absent-visitor lookup from a sequential scan to an index-only scan. Full structural replay changes only the index and preserves representative legacy data. This does not measure production purge performance; the tradeoff is indexing excluded rows as well. Hosted validation is pending.
+The candidate broadens the existing exposure visitor index to include excluded exposures. Tracking cleanup must check all exposures, so the former qualified-only index could not support that visitor lookup. A 100,000-row planner probe changed the absent-visitor lookup from a sequential scan to an index-only scan. Full structural replay changes only the index and preserves representative legacy data. This does not measure production purge performance; the tradeoff is indexing excluded rows as well. Publication run 35190442288 and WebKit run 35190442308 passed on `14dcc77`.
 
 ## Password login request boundary
 
@@ -127,3 +127,5 @@ The later [publication workflow 35183888657](https://github.com/Creator-Share/cr
 [Publication workflow 35188193933](https://github.com/Creator-Share/creator-share-www/actions/runs/35188193933) and [WebKit workflow 35188193834](https://github.com/Creator-Share/creator-share-www/actions/runs/35188193834) passed on `b812f8c`, validating the quarantine signal and worker trace consolidation. The later database forensic correction still needs its own hosted gate.
 
 [Publication workflow 35189654393](https://github.com/Creator-Share/creator-share-www/actions/runs/35189654393) and [WebKit workflow 35189654400](https://github.com/Creator-Share/creator-share-www/actions/runs/35189654400) passed on `4cc42a0`, including both independent jobs and the required aggregate. FF-076 is complete. The later retention-index change remains pending; FF-072, FF-034, and FF-077 are unresolved.
+
+[Publication workflow 35190442288](https://github.com/Creator-Share/creator-share-www/actions/runs/35190442288) and [WebKit workflow 35190442308](https://github.com/Creator-Share/creator-share-www/actions/runs/35190442308) passed on `14dcc77`, validating the broader visitor index. The later password-login repair requires fresh hosted evidence.

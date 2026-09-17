@@ -317,3 +317,7 @@ Publication run 35189654393 and WebKit run 35189654400 passed on 4cc42a0. Both a
 Two new route regressions failed on the current login implementation: an untrusted-origin request returned 200 and null JSON escaped as an uncaught TypeError. Added the same approved-primary-origin and JSON gate used by adjacent authentication routes, plus the shared strict body reader at 8,192 bytes and string credential checks. Authentication runs only after these checks. Removed the unused role query, whose result was ignored, and raw unexpected-error logging. Successful response and host-only identity behavior remain unchanged.
 
 All 12 focused tests and 1,590 selected server-free tests pass, as do TypeScript, lint with zero warnings, and Git whitespace validation. Hosted validation remains pending. The profile-deletion reproduction was also strengthened: the actual analytics snapshot RPC returns an object both before and after profile removal, with the Auth row and permission intact. The owner account-lifecycle question is pending; no global deletion semantics were changed.
+
+## Retention visitor index hosted validation
+
+Publication run 35190442288 and WebKit run 35190442308 passed on 14dcc77. Both independent jobs and the aggregate concluded success. This validates the visitor-index change against the required hosted application, database, and browser lanes. The subsequent password-login correction passes local server-free checks and awaits its own hosted run.
