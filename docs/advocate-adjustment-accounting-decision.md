@@ -44,7 +44,7 @@ A cumulative calculation can reconcile the overall USD net while misallocating c
 
 The provider dispute is fully restored, but its summed USD debit and credit still show a one-cent loss. Conversely, forcing the credit to restore the earlier USD cent changes the cumulative normalized total unless the rounding residual is recorded elsewhere. Replacing the existing helper with a simple inverse rate therefore does not complete this repair.
 
-Cumulative cent allocation remains the initial recommendation, subject to an explicit treatment of dispute restoration and rounding residuals. Sub-cent storage is an alternative, but still needs precision, residual, full-refund, and reporting rules. Neither option permits silently discarding adjustments.
+The earlier cumulative-cent recommendation is insufficient without a separate residual allocation contract. The preferred proposal is now to derive exact rational normalized values from the immutable original payment and round at an explicitly defined reporting boundary. This avoids assigning an arrival-order-dependent rounding residual to an otherwise fully restored dispute. It still needs an approved cross-payment aggregation and display policy; neither option permits silently discarding adjustments.
 
 ## Alternative using existing immutable payment facts
 
@@ -52,7 +52,15 @@ A fractional representation need not add a separately rounded normalized amount 
 
 This uses the ratio of the actual original amounts, including original charge rounding. It is a proposed accounting convention, not a claim that dividing by the quoted conversion rate gives the same result. Cross-payment aggregation and whole-cent presentation still need explicit rounding rules. Independently rounded category displays can differ from a rounded net total; the reporting contract must explain or reconcile that residual. Existing positive whole-cent ledger constraints and consumers would still need coordinated changes.
 
-A standalone BigInt model examined 11,534 positive adjustment amounts, including full refunds, across five original-amount pairs, and 50,000 amount combinations for the ordering dispute debit, refund, then matching dispute credit. Exact numerator sums reconciled in every case. These are mathematical model checks, not production adapter, database, concurrency, event-order permutation, or provider evidence. No accounting behavior has changed. This alternative remains subject to the same owner decision as cumulative whole-cent allocation.
+A standalone BigInt model examined 11,534 positive adjustment amounts, including full refunds, across five original-amount pairs, and 50,000 amount combinations for the ordering dispute debit, refund, then matching dispute credit. Exact numerator sums reconciled in every case. These are mathematical model checks, not production adapter, database, concurrency, event-order permutation, or provider evidence. No accounting behavior has changed. This proposal remains subject to the owner accounting decision.
+
+## Arrival-order model extension
+
+A second standalone BigInt model examined all six arrival permutations of one dispute debit, one refund, and the matching full dispute credit. It used the same five original-amount pairs, with dispute and refund amounts independently ranging from 1 through 100 provider minor units: 300,000 scenarios. Credits arriving before the debit were deferred until the end of the sequence, then applied; replay of committed event identities added no movement in the model.
+
+Exact rational sums preserved the final provider net and restored the dispute numerator to zero in every scenario. The simple cumulative whole-cent model left a nonzero dispute category balance in 19,960 scenarios: 9,980 with debit/refund/credit arrival and 9,980 with credit/debit/refund arrival followed by deferred credit settlement. This demonstrates dependence on settlement ordering, not an estimated frequency of production failures. The model assumes sufficient bounded principal and one original payment. It does not resolve excess or grouped disputes in FF-084.
+
+These are model properties, not assertions about current database retry scheduling, idempotency, concurrent settlement, or provider delivery. The existing hosted recovery regression remains separate evidence for the implemented out-of-order event boundary. The accounting recommendation must still be implemented and tested across adapters, ingestion, settlement, reporting, and retained-quarantine recovery after approval.
 
 ## Implementation boundaries to change together
 
