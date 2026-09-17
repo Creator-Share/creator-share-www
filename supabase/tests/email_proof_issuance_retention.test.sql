@@ -57,7 +57,7 @@ SELECT extensions.is(
 );
 
 SELECT extensions.ok(
-  private.data_retention_counts_are_valid(
+  NOT private.data_retention_counts_are_valid(
     'sponsor_authentication',
     '{
       "recent_auth_receipts_deleted": 1,
@@ -65,7 +65,7 @@ SELECT extensions.ok(
       "passwordless_verification_attempts_deleted": 3
     }'::jsonb
   )
-  AND private.data_retention_counts_are_valid(
+  AND NOT private.data_retention_counts_are_valid(
     'sponsor_authentication',
     '{
       "recent_auth_receipts_deleted": 1,
@@ -84,7 +84,7 @@ SELECT extensions.ok(
       "email_proof_issuance_gates_deleted": 5
     }'::jsonb
   ),
-  'rolling deployments accept only the historical three, four, and current five count families'
+  'the first release rejects incomplete count families and accepts the current five counts'
 );
 
 SELECT extensions.ok(

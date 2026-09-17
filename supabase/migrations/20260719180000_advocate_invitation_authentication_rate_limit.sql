@@ -286,9 +286,6 @@ REVOKE ALL ON FUNCTION private.data_retention_zero_counts(text)
 ALTER TABLE audit.data_retention_run_events
   DROP CONSTRAINT data_retention_run_events_shape_check;
 
-ALTER FUNCTION private.data_retention_counts_are_valid(text, jsonb)
-  RENAME TO data_retention_counts_are_valid_v1;
-
 CREATE OR REPLACE FUNCTION private.data_retention_counts_are_valid(
   target_step_key text,
   target_counts jsonb
@@ -332,27 +329,13 @@ BEGIN
       v_allowed_keys := ARRAY['deleted_count']::text[];
       v_maximum := 5000;
     WHEN 'sponsor_authentication' THEN
-      v_allowed_keys := CASE
-        WHEN target_counts ? 'email_proof_issuance_gates_deleted' THEN ARRAY[
-          'recent_auth_receipts_deleted',
-          'passwordless_reservations_deleted',
-          'passwordless_verification_attempts_deleted',
-          'advocate_invitation_authentication_attempts_deleted',
-          'email_proof_issuance_gates_deleted'
-        ]::text[]
-        WHEN target_counts ?
-          'advocate_invitation_authentication_attempts_deleted' THEN ARRAY[
-          'recent_auth_receipts_deleted',
-          'passwordless_reservations_deleted',
-          'passwordless_verification_attempts_deleted',
-          'advocate_invitation_authentication_attempts_deleted'
-        ]::text[]
-        ELSE ARRAY[
-          'recent_auth_receipts_deleted',
-          'passwordless_reservations_deleted',
-          'passwordless_verification_attempts_deleted'
-        ]::text[]
-      END;
+      v_allowed_keys := ARRAY[
+        'recent_auth_receipts_deleted',
+        'passwordless_reservations_deleted',
+        'passwordless_verification_attempts_deleted',
+        'advocate_invitation_authentication_attempts_deleted',
+        'email_proof_issuance_gates_deleted'
+      ]::text[];
       v_maximum := 5000;
     WHEN 'advocate_tracking' THEN
       v_allowed_keys := ARRAY[
@@ -399,8 +382,6 @@ EXCEPTION
 END;
 $$;
 
-REVOKE ALL ON FUNCTION private.data_retention_counts_are_valid_v1(text, jsonb)
-  FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION private.data_retention_counts_are_valid(text, jsonb)
   FROM PUBLIC, anon, authenticated, service_role;
 

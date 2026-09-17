@@ -420,88 +420,57 @@ test.describe("data retention worker execution", () => {
     }
   })
 
-  test("replays historical sponsor authentication counts with a zero advocate count", async () => {
-    const result = await worker.runDataRetentionWorker({
-      config: workerConfig,
-      context: retentionContext,
-      invocationDeadlineAt: NOW + 60_000,
-      now: () => NOW,
-      timeoutSignal,
-      executor: {
-        async startRun() {
-          return RUN_ID
-        },
-        async executeStep(stepKey) {
-          if (stepKey !== "sponsor_authentication") return stepResult(stepKey)
-          return {
-            ...stepResult(stepKey),
-            counts: {
-              recent_auth_receipts_deleted: 3,
-              passwordless_reservations_deleted: 6,
-              passwordless_verification_attempts_deleted: 8,
+  for (const fields of [3, 4]) {
+    test(`rejects an obsolete ${fields}-count authentication response instead of inventing zeroes`, async () => {
+      const originalError = console.error
+      console.error = () => undefined
+      try {
+        const executed: DataRetentionStepKey[] = []
+        const result = await worker.runDataRetentionWorker({
+          config: workerConfig,
+          context: retentionContext,
+          invocationDeadlineAt: NOW + 60_000,
+          now: () => NOW,
+          timeoutSignal,
+          executor: {
+            async startRun() {
+              return RUN_ID
             },
-          }
-        },
-        async finishRun() {
-          return finishResult()
-        },
-      },
-    })
-
-    expect(result).toMatchObject({
-      ok: true,
-      failedSteps: [],
-      counts: {
-        sponsorRecentAuthenticationReceiptsDeleted: 3,
-        sponsorPasswordlessReservationsDeleted: 6,
-        sponsorPasswordlessVerificationAttemptsDeleted: 8,
-        advocateInvitationAuthenticationAttemptsDeleted: 0,
-        emailProofIssuanceGatesDeleted: 0,
-      },
-    })
-  })
-
-  test("replays the four-count sponsor authentication shape with a zero email proof count", async () => {
-    const result = await worker.runDataRetentionWorker({
-      config: workerConfig,
-      context: retentionContext,
-      invocationDeadlineAt: NOW + 60_000,
-      now: () => NOW,
-      timeoutSignal,
-      executor: {
-        async startRun() {
-          return RUN_ID
-        },
-        async executeStep(stepKey) {
-          if (stepKey !== "sponsor_authentication") return stepResult(stepKey)
-          return {
-            ...stepResult(stepKey),
-            counts: {
-              recent_auth_receipts_deleted: 3,
-              passwordless_reservations_deleted: 6,
-              passwordless_verification_attempts_deleted: 8,
-              advocate_invitation_authentication_attempts_deleted: 9,
+            async executeStep(stepKey) {
+              executed.push(stepKey)
+              if (stepKey !== "sponsor_authentication") return stepResult(stepKey)
+              return {
+                ...stepResult(stepKey),
+                counts: Object.fromEntries(
+                  Object.entries(stepCounts(stepKey)).slice(0, fields),
+                ),
+              }
             },
-          }
-        },
-        async finishRun() {
-          return finishResult()
-        },
-      },
-    })
+            async finishRun(reportedFailedSteps) {
+              expect(reportedFailedSteps).toEqual(["sponsor_authentication"])
+              return finishResult(reportedFailedSteps)
+            },
+          },
+        })
 
-    expect(result).toMatchObject({
-      ok: true,
-      failedSteps: [],
-      counts: {
-        sponsorRecentAuthenticationReceiptsDeleted: 3,
-        sponsorPasswordlessReservationsDeleted: 6,
-        sponsorPasswordlessVerificationAttemptsDeleted: 8,
-        advocateInvitationAuthenticationAttemptsDeleted: 9,
-        emailProofIssuanceGatesDeleted: 0,
-      },
+        expect(executed).toContain("advocate_tracking")
+        expect(result).toMatchObject({
+          ok: false,
+          status: "completed_with_failures",
+          failedSteps: ["sponsor_authentication"],
+          counts: {
+            sponsorRecentAuthenticationReceiptsDeleted: 0,
+            sponsorPasswordlessReservationsDeleted: 0,
+            sponsorPasswordlessVerificationAttemptsDeleted: 0,
+            advocateInvitationAuthenticationAttemptsDeleted: 0,
+            emailProofIssuanceGatesDeleted: 0,
+          },
+        })
+      } finally {
+        console.error = originalError
+      }
     })
-  })
+  }
 
   test("rejects a noncanonical sponsor authentication count envelope", async () => {
     const originalError = console.error

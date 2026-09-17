@@ -75,7 +75,7 @@ SELECT extensions.ok(
 );
 
 SELECT extensions.ok(
-  private.data_retention_counts_are_valid(
+  NOT private.data_retention_counts_are_valid(
     'sponsor_authentication',
     '{
       "recent_auth_receipts_deleted": 1,
@@ -83,7 +83,7 @@ SELECT extensions.ok(
       "passwordless_verification_attempts_deleted": 3
     }'::jsonb
   ),
-  'historical three-count retention outcomes remain replay compatible'
+  'incomplete three-count retention outcomes are rejected'
 );
 
 SET LOCAL ROLE anon;

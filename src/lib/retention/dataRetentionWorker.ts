@@ -197,30 +197,18 @@ function applyStepCounts(
     return
   }
   if (stepKey === "sponsor_authentication") {
-    const legacyKeys = [
+    const expectedKeys = [
+      "advocate_invitation_authentication_attempts_deleted",
+      "email_proof_issuance_gates_deleted",
       "passwordless_reservations_deleted",
       "passwordless_verification_attempts_deleted",
       "recent_auth_receipts_deleted",
     ]
-    const advocateKeys = [
-      "advocate_invitation_authentication_attempts_deleted",
-      ...legacyKeys,
-    ].sort()
-    const currentKeys = [
-      "email_proof_issuance_gates_deleted",
-      ...advocateKeys,
-    ].sort()
     const suppliedKeys = Object.keys(row).sort()
-    const isLegacyShape =
-      suppliedKeys.length === legacyKeys.length &&
-      suppliedKeys.every((key, index) => key === legacyKeys[index])
-    const isAdvocateShape =
-      suppliedKeys.length === advocateKeys.length &&
-      suppliedKeys.every((key, index) => key === advocateKeys[index])
-    const isCurrentShape =
-      suppliedKeys.length === currentKeys.length &&
-      suppliedKeys.every((key, index) => key === currentKeys[index])
-    if (!isLegacyShape && !isAdvocateShape && !isCurrentShape) {
+    if (
+      suppliedKeys.length !== expectedKeys.length ||
+      suppliedKeys.some((key, index) => key !== expectedKeys[index])
+    ) {
       resultShapeError()
     }
 
@@ -236,16 +224,14 @@ function applyStepCounts(
       row.passwordless_verification_attempts_deleted,
       batchSize,
     )
-    const advocateInvitationAuthenticationAttemptsDeleted =
-      isAdvocateShape || isCurrentShape
-        ? boundedCount(
-            row.advocate_invitation_authentication_attempts_deleted,
-            batchSize,
-          )
-        : 0
-    const emailProofIssuanceGatesDeleted = isCurrentShape
-      ? boundedCount(row.email_proof_issuance_gates_deleted, batchSize)
-      : 0
+    const advocateInvitationAuthenticationAttemptsDeleted = boundedCount(
+      row.advocate_invitation_authentication_attempts_deleted,
+      batchSize,
+    )
+    const emailProofIssuanceGatesDeleted = boundedCount(
+      row.email_proof_issuance_gates_deleted,
+      batchSize,
+    )
 
     counts.sponsorRecentAuthenticationReceiptsDeleted =
       recentAuthenticationReceiptsDeleted

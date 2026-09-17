@@ -558,9 +558,10 @@ SELECT extensions.ok(
   )
   AND NOT has_function_privilege(
     'service_role',
-    'private.data_retention_counts_are_valid_v1(text,jsonb)',
+    'private.data_retention_counts_are_valid(text,jsonb)',
     'EXECUTE'
   )
+  AND to_regprocedure('private.data_retention_counts_are_valid_v1(text,jsonb)') IS NULL
   AND NOT has_function_privilege(
     'service_role',
     'private.validate_data_retention_run_context(uuid,integer,text,text)',

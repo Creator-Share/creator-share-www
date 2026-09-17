@@ -175,3 +175,9 @@ Removed the four unused public first-generation prepare, quote, begin, and attac
 Strict structural replay removes exactly four function entries and changes only the release-gate result. Every other catalog entry and all eight legacy data projections match. All 13 changed SQL files parse, and 1,576 selected server-free tests pass. Hosted database and concurrency validation remains mandatory under FF-070.
 
 The release runbook no longer demands a drain migration for RPCs that were never deployed. It also corrects a separate unsafe retirement criterion: draining old application instances does not prove that customers cannot return from older provider sessions. Pre-PR Stripe and PayPal return endpoints remain until a separate provider-session inventory and recovery policy justify removal.
+
+## Complete retention evidence candidate
+
+The retention worker accepted obsolete three- and four-field sponsor-authentication results, reporting missing invitation-attempt and shared-proof cleanup counts as zero. Those intermediate versions exist only in this undeployed PR. The worker and database ledger validator now require all five current counters. The obsolete private count validator is also removed; its current replacement remains inaccessible to API roles.
+
+Two regression cases fail on the original worker and pass after the change. They verify that the incomplete step is reported as failed, no partial counts become evidence, and advocate tracking cleanup still runs. All 21 retention tests, TypeScript, and lint pass. Structural replay removes exactly one unused function, changes only the current count-validator body, and preserves all other catalog entries and eight legacy data projections. FF-071 tracks the remaining hosted database validation.
