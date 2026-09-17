@@ -2,6 +2,8 @@ import "server-only"
 
 import { randomUUID } from "node:crypto"
 
+import { readRequestForensics } from "@/lib/requestForensics"
+
 import { isAuthorizedDataRetentionWorkerRequest } from "@/lib/retention/dataRetentionAuth"
 import {
   loadDataRetentionWorkerConfig,
@@ -32,16 +34,6 @@ function response(body: Record<string, unknown>, status: number): Response {
       "X-Content-Type-Options": "nosniff",
     },
   })
-}
-
-function traceId(request: Request): string | null {
-  for (const header of ["x-vercel-id", "cf-ray", "traceparent", "x-trace-id"]) {
-    const value = request.headers.get(header)?.trim()
-    if (value && value.length <= 255 && /^[\x21-\x7e]+$/.test(value)) {
-      return value
-    }
-  }
-  return null
 }
 
 function isUuid(value: string): boolean {
@@ -92,7 +84,7 @@ export async function handleDataRetentionRequest(
     const result = await runDataRetentionWorker({
       config: loadDataRetentionWorkerConfig(environment),
       executor: dependencies.createExecutor(),
-      context: { runId, requestId, traceId: traceId(request) },
+      context: { runId, requestId, traceId: readRequestForensics(request.headers, environment).traceId },
       invocationDeadlineAt: now() + 60_000,
       now,
       timeoutSignal: dependencies.timeoutSignal,

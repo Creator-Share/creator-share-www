@@ -2,7 +2,7 @@
 
 Status: review in progress, September 17, 2026. No merge into `dev` is authorized. This report does not approve production activation.
 
-The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `ff01da5`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, and final-definition migration consolidation. The application dead-code cleanup awaits hosted validation. Existing local checkouts were left intact; local services remain stopped.
+The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. The latest fully validated review revision is `8fecade`, including checkout RPC retirement, strict retention evidence, exact decimal arithmetic, shared forensic parsing, migration consolidation, and application dead-code removal. The quarantine signal and worker trace consolidation await hosted validation. Existing local checkouts were left intact; local services remain stopped.
 
 ## Repaired defects and unnecessary complexity
 
@@ -53,7 +53,7 @@ A retention candidate also rejects obsolete cleanup responses that omit current 
 
 A refreshed inventory found seven repeated function groups. Two retention vocabulary groups now consolidate safely, removing 189 net lines with exact final catalog and legacy fixture equality. The remaining groups now have a further 413-line cleanup candidate: functions are defined once at valid dependency sites, with unchanged final bodies and privileges. Only the initial and final audit actor-context implementations remain, because migration-time callers precede the final implementation's transport table. Both consolidation candidates preserve the final catalog and legacy fixture bytes. Hosted validation passed for the 189-line pass on `e1f811e`; the 413-line pass passed on `ff01da5`.
 
-A separate application cleanup removes 456 net lines of uncalled helpers, obsolete PayPal metadata encoding, an unused email template, and unimported media/icon modules. Repository caller inspection, all 1,584 selected server-free tests, TypeScript, and lint pass. Hosted validation remains pending. Generated database types and active legacy payment-return handlers remain intact.
+A separate application cleanup removes 456 net lines of uncalled helpers, obsolete PayPal metadata encoding, an unused email template, and unimported media/icon modules. Repository caller inspection, all 1,584 selected server-free tests, TypeScript, lint, and hosted application/database/WebKit validation pass. Generated database types and active legacy payment-return handlers remain intact.
 
 ## Release evidence still missing
 
@@ -99,3 +99,5 @@ The later [publication workflow 35183888657](https://github.com/Creator-Share/cr
 [Publication workflow 35185951229](https://github.com/Creator-Share/creator-share-www/actions/runs/35185951229) and [WebKit workflow 35185951267](https://github.com/Creator-Share/creator-share-www/actions/runs/35185951267) passed on `e1f811e`, closing shared forensic parsing and the retention vocabulary consolidation. The application passed 1,684 offline tests, 66 dev-server tests, and 99 provider contracts; the database passed 63 pgTAP files with 2,110 assertions and the required integration and concurrency gates.
 
 [Publication workflow 35186695547](https://github.com/Creator-Share/creator-share-www/actions/runs/35186695547) and [WebKit workflow 35186695502](https://github.com/Creator-Share/creator-share-www/actions/runs/35186695502) passed on `ff01da5`, validating the final-definition migration cleanup. The subsequent application cleanup requires its own hosted run. Neither result resolves FF-072 or FF-034.
+
+[Publication workflow 35187383041](https://github.com/Creator-Share/creator-share-www/actions/runs/35187383041) and [WebKit workflow 35187383042](https://github.com/Creator-Share/creator-share-www/actions/runs/35187383042) passed on `8fecade`, validating the application dead-code removal. The pending worker follow-up removes seven duplicate trace readers and passes 1,588 selected server-free tests, including the quarantine signal regressions. Hosted validation of that follow-up remains outstanding.

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto"
 
+import { readRequestForensics } from "@/lib/requestForensics"
+
 import { NextRequest, NextResponse } from "next/server"
 
 import { isAuthorizedSubscriptionCancellationWorkerRequest } from "@/lib/sponsorships/cancellation/subscriptionCancellationWorkerAuth"
@@ -20,16 +22,6 @@ function response(body: Record<string, unknown>, status: number) {
       "X-Content-Type-Options": "nosniff",
     },
   })
-}
-
-function traceId(request: NextRequest): string | null {
-  for (const header of ["x-vercel-id", "cf-ray", "traceparent", "x-trace-id"]) {
-    const value = request.headers.get(header)?.trim()
-    if (value && value.length <= 255 && /^[\x21-\x7e]+$/.test(value)) {
-      return value
-    }
-  }
-  return null
 }
 
 async function runWorker(request: NextRequest) {
@@ -57,7 +49,7 @@ async function runWorker(request: NextRequest) {
       workerId: `subscription-cancellation-worker:${randomUUID()}`,
       context: {
         requestId,
-        traceId: traceId(request),
+        traceId: readRequestForensics(request.headers, process.env).traceId,
         clientIp: null,
         userAgent: null,
       },

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto"
 
+import { readRequestForensics } from "@/lib/requestForensics"
+
 import { NextRequest, NextResponse } from "next/server"
 
 import { isAuthorizedPaymentGatewayEventWorkerRequest } from "@/lib/sponsorships/gateways/paymentGatewayEventAuth"
@@ -17,16 +19,6 @@ function response(body: Record<string, unknown>, status: number) {
     status,
     headers: { "Cache-Control": "no-store" },
   })
-}
-
-function traceId(request: NextRequest): string | null {
-  for (const header of ["x-vercel-id", "cf-ray", "traceparent", "x-trace-id"]) {
-    const value = request.headers.get(header)?.trim()
-    if (value && value.length <= 255 && /^[\x21-\x7e]+$/.test(value)) {
-      return value
-    }
-  }
-  return null
 }
 
 async function runWorker(request: NextRequest) {
@@ -51,7 +43,7 @@ async function runWorker(request: NextRequest) {
     const batch = await runPaymentGatewayEventBatchFromEnvironment({
       config: loadPaymentGatewayEventWorkerConfig(),
       workerId: `payment-gateway-event-worker:${randomUUID()}`,
-      context: { requestId, traceId: traceId(request) },
+      context: { requestId, traceId: readRequestForensics(request.headers, process.env).traceId },
     })
     const requiresAttention =
       batch.terminalFailed > 0 || batch.settlementUnknown > 0

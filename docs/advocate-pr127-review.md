@@ -261,3 +261,11 @@ Publication run 35186695547 and WebKit run 35186695502 passed on `ff01da5`, incl
 Quarantine produces terminal ignored events outside ordinary worker claims, so current worker health can remain green while review-required payment evidence accumulates. Both provider ingestion boundaries now emit a sanitized error signal after a newly committed quarantine. Duplicate delivery and persistence failure emit no success signal. Two new regressions fail on the original implementation; all 55 focused ingestion tests, TypeScript, and lint pass. The signal includes no provider event/object identifier, contact, amount, signature, ciphertext, or raw error.
 
 The payment runbook adds a protected aggregate inventory and monitoring-delivery canary. Payload retention remains 90 days; neither logging nor fixing future arithmetic repairs already quarantined events. FF-075 remains pending hosted and alert-delivery evidence, and FF-072 still requires an audited recovery path.
+
+## Shared worker trace parsing
+
+Seven worker routes now reuse the shared forensic reader instead of separate trace parsers. Six previously accepted alternate proxy assertions without the configured Vercel runtime; the invitation worker already applied that runtime boundary. The shared reader retains the worker paths' visible-ASCII trace restriction while leaving user-agent handling separate. Worker-generated request IDs remain available outside Vercel. Production code loses 58 net lines.
+
+Retention and public-metric route tests now exercise both configured Vercel and non-Vercel callers. Retention fixtures use the production-valid cron credential when VERCEL is enabled; dedicated retention credentials are correctly rejected in that runtime. All 39 focused tests, 1,588 selected server-free tests, TypeScript, lint, and Git whitespace checks pass. Hosted validation remains pending for this follow-up and the quarantine signal.
+
+The preceding application cleanup passed publication run 35187383041 and WebKit run 35187383042 on `8fecade`. The 456-line application deletion is now hosted-validated.

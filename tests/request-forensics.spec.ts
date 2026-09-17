@@ -65,6 +65,9 @@ test("rejects malformed and multiple source IPs rather than choosing one", () =>
 })
 
 test("bounds forensic metadata by bytes and rejects control characters", () => {
+  for (const trace of ["trace with spaces", "é-non-ascii", "x".repeat(256)]) {
+    expect(readRequestForensics(new Headers({ "x-vercel-id": trace }), { VERCEL: "1" }).traceId).toBeNull()
+  }
   for (const value of ["x".repeat(1025), "é".repeat(513), "bad\u0000value"]) {
     expect(readRequestForensics({ get: () => value }, { VERCEL: "1" })).toEqual({
       clientIp: null, traceId: null, userAgent: null,

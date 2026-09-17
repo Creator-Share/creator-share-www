@@ -2,6 +2,8 @@ import "server-only"
 
 import { randomUUID } from "node:crypto"
 
+import { readRequestForensics } from "@/lib/requestForensics"
+
 import {
   isAuthorizedAdvocatePublicMetricReleaseWorkerRequest,
   loadAdvocatePublicMetricReleaseWorkerSecret,
@@ -32,16 +34,6 @@ function response(body: Record<string, unknown>, status: number): Response {
       "X-Content-Type-Options": "nosniff",
     },
   })
-}
-
-function safeTraceId(request: Request): string | null {
-  for (const header of ["x-vercel-id", "cf-ray", "traceparent"]) {
-    const value = request.headers.get(header)?.trim()
-    if (value && value.length <= 255 && /^[\x21-\x7e]+$/.test(value)) {
-      return value
-    }
-  }
-  return null
 }
 
 export async function handleAdvocatePublicMetricReleaseRequest(
@@ -75,7 +67,7 @@ export async function handleAdvocatePublicMetricReleaseRequest(
     const summary = await runAdvocatePublicMetricReleaseWorker({
       ...config,
       executor: dependencies.createExecutor(),
-      context: { requestId, traceId: safeTraceId(request) },
+      context: { requestId, traceId: readRequestForensics(request.headers, environment).traceId },
       timeoutSignal: dependencies.timeoutSignal,
     })
     return response(

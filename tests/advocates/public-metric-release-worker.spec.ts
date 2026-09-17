@@ -308,42 +308,45 @@ test.describe("advocate public metric release route and schedule", () => {
     expect(response.headers.get("cache-control")).toBe("no-store")
   })
 
-  test("returns one sanitized aggregate and accepts only trusted trace headers", async () => {
-    const contexts: unknown[] = []
-    const response = await route.handleAdvocatePublicMetricReleaseRequest(
-      authorizedRequest({
-        "x-vercel-id": "sfo1::trace-safe",
-        "x-trace-id": "browser-fiction",
-      }),
-      {
-        environment: {
-          CRON_SECRET: SECRET,
-          ADVOCATE_PUBLIC_METRIC_RELEASE_BATCH_SIZE: "2",
+  for (const vercel of ["1", undefined]) {
+    test(`returns safe aggregates with VERCEL=${vercel ?? "unset"}`, async () => {
+      const contexts: unknown[] = []
+      const response = await route.handleAdvocatePublicMetricReleaseRequest(
+        authorizedRequest({
+          "x-vercel-id": "sfo1::trace-safe",
+          "x-trace-id": "browser-fiction",
+        }),
+        {
+          environment: {
+            CRON_SECRET: SECRET,
+            VERCEL: vercel,
+            ADVOCATE_PUBLIC_METRIC_RELEASE_BATCH_SIZE: "2",
+          },
+          requestId: () => REQUEST_ID,
+          timeoutSignal: () => new AbortController().signal,
+          createExecutor: () =>
+            executorDouble(async (_batchSize, context) => {
+              contexts.push(context)
+              return validResult
+            }),
         },
-        requestId: () => REQUEST_ID,
-        timeoutSignal: () => new AbortController().signal,
-        createExecutor: () =>
-          executorDouble(async (_batchSize, context) => {
-            contexts.push(context)
-            return validResult
-          }),
-      },
-    )
-    expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({
-      ok: true,
-      requestId: REQUEST_ID,
-      processedAdvocates: 2,
-      insertedReleases: 3,
-      pendingMetrics: 5,
-      sourceCutoff: SOURCE_CUTOFF,
-      policyVersion: "public-v1",
+      )
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({
+        ok: true,
+        requestId: REQUEST_ID,
+        processedAdvocates: 2,
+        insertedReleases: 3,
+        pendingMetrics: 5,
+        sourceCutoff: SOURCE_CUTOFF,
+        policyVersion: "public-v1",
+      })
+      expect(contexts).toEqual([
+        { requestId: REQUEST_ID, traceId: vercel === "1" ? "sfo1::trace-safe" : null },
+      ])
+      expect(response.headers.get("referrer-policy")).toBe("no-referrer")
     })
-    expect(contexts).toEqual([
-      { requestId: REQUEST_ID, traceId: "sfo1::trace-safe" },
-    ])
-    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
-  })
+  }
 
   test("redacts failures from both responses and logs", async () => {
     const sensitive = "sponsor@example.com"

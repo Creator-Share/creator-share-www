@@ -2,6 +2,8 @@ import "server-only"
 
 import { randomUUID } from "node:crypto"
 
+import { readRequestForensics } from "@/lib/requestForensics"
+
 import {
   loadAdvocateInvitationEmailWorkerConfig,
   loadAdvocateInvitationEmailWorkerSecret,
@@ -38,19 +40,6 @@ function response(body: Record<string, unknown>, status: number): Response {
       "X-Content-Type-Options": "nosniff",
     },
   })
-}
-
-function traceId(
-  request: Request,
-  environment: AdvocateInvitationEmailEnvironment,
-): string | null {
-  if (environment.VERCEL !== "1") return null
-  const value = request.headers.get("x-vercel-id")?.trim()
-  return value &&
-    Buffer.byteLength(value, "utf8") <= 255 &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-    ? value
-    : null
 }
 
 function safeResponse(options: {
@@ -143,7 +132,7 @@ export async function handleAdvocateInvitationEmailRequest(
     const batch = await runAdvocateInvitationEmailBatch({
       config,
       workerId: `advocate-invitation-email:${workerToken}`,
-      context: { requestId, traceId: traceId(request, environment) },
+      context: { requestId, traceId: readRequestForensics(request.headers, environment).traceId },
       invocationDeadlineAt:
         startedAt + ADVOCATE_INVITATION_EMAIL_INVOCATION_BUDGET_MILLISECONDS,
       dependencies: dependencies.createWorkerDependencies({ config }),

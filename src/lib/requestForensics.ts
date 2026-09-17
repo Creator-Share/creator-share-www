@@ -20,8 +20,9 @@ export function readRequestForensics(
   }
   const onVercel = environment.VERCEL === "1"
   const source = onVercel ? bounded("x-vercel-forwarded-for", 64) : null
+  const trace = onVercel ? bounded("x-vercel-id", 255) : null
   return {
-    traceId: onVercel ? bounded("x-vercel-id", 255) : null,
+    traceId: trace !== null && /^[\x21-\x7e]+$/.test(trace) ? trace : null,
     clientIp: source !== null && isIP(source) !== 0 ? source.toLowerCase() : null,
     userAgent: bounded("user-agent", 1024),
   }

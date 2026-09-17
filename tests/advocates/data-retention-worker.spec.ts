@@ -70,7 +70,7 @@ function authorizedRequest() {
   return new Request("https://creatorshare.com/api/internal/retention", {
     headers: {
       authorization: `Bearer ${SECRET}`,
-      "x-trace-id": "trace-safe",
+      "x-vercel-id": "trace-safe",
     },
   })
 }
@@ -1040,11 +1040,11 @@ test.describe("data retention route and scheduler", () => {
           new Request("https://creatorshare.com/api/internal/retention", {
             headers: {
               authorization: `Bearer ${SECRET}`,
-              "x-trace-id": value,
+              "x-vercel-id": value,
             },
           }),
           {
-            environment: { DATA_RETENTION_WORKER_SECRET: SECRET },
+            environment: { CRON_SECRET: SECRET, VERCEL: "1" },
             requestId: () => REQUEST_ID,
             runId: () => RUN_ID,
             now: () => NOW,
@@ -1073,45 +1073,48 @@ test.describe("data retention route and scheduler", () => {
     }
   })
 
-  test("carries a well formed trace header through to the run", async () => {
-    // The other side of the boundary, so the refusals above cannot be
-    // satisfied by discarding every trace id.
-    let observedTraceId: string | null | undefined
-    const originalError = console.error
-    console.error = () => undefined
-    try {
-      await route.handleDataRetentionRequest(
-        new Request("https://creatorshare.com/api/internal/retention", {
-          headers: {
-            authorization: `Bearer ${SECRET}`,
-            "x-trace-id": "1a2b3c4d-vercel-iad1",
-          },
-        }),
-        {
-          environment: { DATA_RETENTION_WORKER_SECRET: SECRET },
-          requestId: () => REQUEST_ID,
-          runId: () => RUN_ID,
-          now: () => NOW,
-          createExecutor: () => ({
-            async startRun(_batchSize, _signal, context) {
-              observedTraceId = context.traceId
-              throw new Error("stop_after_context_capture")
-            },
-            async executeStep() {
-              throw new Error("must not run")
-            },
-            async finishRun() {
-              throw new Error("must not run")
+  for (const vercel of ["1", undefined]) {
+    test(`accepts worker trace evidence only with VERCEL=${vercel ?? "unset"}`, async () => {
+      // The other side of the boundary, so the refusals above cannot be
+      // satisfied by discarding every trace id.
+      let observedTraceId: string | null | undefined
+      const originalError = console.error
+      console.error = () => undefined
+      try {
+        await route.handleDataRetentionRequest(
+          new Request("https://creatorshare.com/api/internal/retention", {
+            headers: {
+              authorization: `Bearer ${SECRET}`,
+              "x-vercel-id": "1a2b3c4d-vercel-iad1",
+              "x-trace-id": "caller-fiction",
             },
           }),
-        },
-      )
-    } finally {
-      console.error = originalError
-    }
+          {
+            environment: { CRON_SECRET: SECRET, VERCEL: vercel },
+            requestId: () => REQUEST_ID,
+            runId: () => RUN_ID,
+            now: () => NOW,
+            createExecutor: () => ({
+              async startRun(_batchSize, _signal, context) {
+                observedTraceId = context.traceId
+                throw new Error("stop_after_context_capture")
+              },
+              async executeStep() {
+                throw new Error("must not run")
+              },
+              async finishRun() {
+                throw new Error("must not run")
+              },
+            }),
+          },
+        )
+      } finally {
+        console.error = originalError
+      }
 
-    expect(observedTraceId).toBe("1a2b3c4d-vercel-iad1")
-  })
+      expect(observedTraceId).toBe(vercel === "1" ? "1a2b3c4d-vercel-iad1" : null)
+    })
+  }
 
   test("returns safe identifiers, aggregates, failures, and backlog", async () => {
     const originalError = console.error
@@ -1120,7 +1123,7 @@ test.describe("data retention route and scheduler", () => {
       const response = await route.handleDataRetentionRequest(
         authorizedRequest(),
         {
-          environment: { DATA_RETENTION_WORKER_SECRET: SECRET },
+          environment: { CRON_SECRET: SECRET, VERCEL: "1" },
           requestId: () => REQUEST_ID,
           runId: () => RUN_ID,
           now: () => NOW,
