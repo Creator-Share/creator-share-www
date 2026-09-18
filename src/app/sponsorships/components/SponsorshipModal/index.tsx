@@ -428,6 +428,7 @@ const BeneficiaryModal: React.FC<BeneficiaryModalProps> = ({
       const payload = {
         beneficiaryId: beneficiary.id,
         beneficiaryName: beneficiary.name,
+        beneficiaryType: beneficiary.beneficiary_type,
         amount: isOpen ? amountCents : beneficiary.budget_goal,
         paymentType,
         location: beneficiary.country,

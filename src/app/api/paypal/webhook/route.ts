@@ -180,7 +180,7 @@ export async function POST(req: Request) {
           const { data: beneficiary, error: beneficiaryError } = beneficiaryId
             ? await supabase
                 .from("beneficiaries")
-                .select("name")
+                .select("name, beneficiary_type")
                 .eq("id", beneficiaryId)
                 .single()
             : { data: null, error: null }
@@ -229,6 +229,7 @@ export async function POST(req: Request) {
               chargedCurrency: conversion.chargedCurrency,
               beneficiaryId,
               beneficiaryName,
+              beneficiaryType: beneficiary?.beneficiary_type || null,
               paymentMethod: "PayPal",
               paymentReference: orderId,
               interval: "one_time",
@@ -295,7 +296,7 @@ export async function POST(req: Request) {
         const { data: beneficiary, error: beneficiaryError } = beneficiaryId
           ? await supabase
               .from("beneficiaries")
-              .select("name")
+              .select("name, beneficiary_type")
               .eq("id", beneficiaryId)
               .single()
           : { data: null, error: null }
@@ -378,6 +379,7 @@ export async function POST(req: Request) {
               chargedCurrency: conversion.chargedCurrency,
               beneficiaryId: beneficiaryId,
               beneficiaryName: beneficiaryName,
+              beneficiaryType: beneficiary?.beneficiary_type || null,
               paymentMethod: "PayPal",
               paymentReference: recurringReference,
             })
@@ -419,7 +421,7 @@ export async function POST(req: Request) {
         const { data: beneficiary, error: beneficiaryError } = beneficiaryId
           ? await supabase
               .from("beneficiaries")
-              .select("name")
+              .select("name, beneficiary_type")
               .eq("id", beneficiaryId)
               .single()
           : { data: null, error: null }
@@ -549,6 +551,7 @@ export async function POST(req: Request) {
               chargedCurrency: conversion?.chargedCurrency,
               beneficiaryId: beneficiaryId,
               beneficiaryName: beneficiaryName,
+              beneficiaryType: beneficiary?.beneficiary_type || null,
               paymentMethod: "PayPal",
               paymentReference: paypalSubscriptionId,
             })

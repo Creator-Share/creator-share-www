@@ -25,6 +25,7 @@ export interface SponsorshipNotificationData {
   chargedCurrency?: string;
   beneficiaryId?: string | null;
   beneficiaryName: string;
+  beneficiaryType?: string | null;
   paymentMethod: string;
   paymentReference: string;
   interval?: string;

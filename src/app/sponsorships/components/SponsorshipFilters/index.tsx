@@ -180,8 +180,8 @@ const SponsorshipFilters: React.FC<
     e.preventDefault()
 
     const defaultStatus = isAdminMode
-      ? ["New", "Partially Funded", "Budget Fulfilled", "Draft", "Archived", "Sponsorship Cancelled"]
-      : ["New", "Partially Funded", "Sponsorship Cancelled"]
+      ? [...ALL_STATUSES]
+      : [...PUBLIC_STATUSES]
 
     isInternalUpdateRef.current = true
 

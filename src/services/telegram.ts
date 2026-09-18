@@ -16,6 +16,7 @@ import {
   MediaRow,
 } from "@/utils/supabase/media"
 import { createServiceRoleClient } from "@/utils/supabase/server"
+import { getBeneficiaryTypeLabel } from "@/config/beneficiaryTypes"
 
 // Single Responsibility Principle (SRP) - Telegram service only handles Telegram operations
 export class TelegramBotService implements TelegramNotificationService {
@@ -275,7 +276,8 @@ export class TelegramBotService implements TelegramNotificationService {
       interval,
       sponsorName,
       sponsorEmail,
-      paymentMethod
+      paymentMethod,
+      beneficiaryType,
     } = sponsorshipData;
 
     const amountFormatted = chargedCurrency
@@ -283,11 +285,13 @@ export class TelegramBotService implements TelegramNotificationService {
       : `$${(amount / 100).toFixed(2)}`;
     const intervalText = interval === 'month' ? 'Monthly' : interval === 'one_time' ? 'One-time' : 'Yearly';
     const sponsorDisplayName = sponsorName || sponsorEmail?.split('@')[0] || 'Anonymous';
+    const beneficiaryTypeLabel = getBeneficiaryTypeLabel(beneficiaryType) || 'Not specified';
 
     return `
 🎉 <b>New Sponsorship Received!</b>
 
 👤 <b>Beneficiary:</b> ${beneficiaryName}
+🏷️ <b>Beneficiary Type:</b> ${beneficiaryTypeLabel}
 💰 <b>Amount:</b> ${amountFormatted}
 🔄 <b>Type:</b> ${intervalText}${interval === 'month' || interval === 'year' ? ' Recurring' : ''}
 💳 <b>Payment Method:</b> ${paymentMethod}

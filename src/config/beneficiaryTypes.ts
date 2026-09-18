@@ -20,6 +20,7 @@ export type BeneficiaryTabType =
   | "CHILD"
   | "CHILD_LABORER"
   | "SPECIAL_NEEDS"
+  | "IMMEDIATE_NEED"
   | "IN_OUR_CARE"
   | "ANIMAL"
 
@@ -113,6 +114,17 @@ export const ALL_BENEFICIARY_TABS: BeneficiaryTypeConfig[] = [
     route: "/special_needs",
   },
   {
+    label: "Immediate Need",
+    type: "IMMEDIATE_NEED",
+    isOpenSponsorship: true,
+    defaultBudgetGoalCents: -1,
+    isPubliclyVisible: true,
+    singularName: "child",
+    pluralName: "children",
+    maxAgeYears: 14,
+    route: "/immediate_need",
+  },
+  {
     label: "In Our Care",
     type: "IN_OUR_CARE",
     isOpenSponsorship: true,
@@ -145,6 +157,7 @@ export const TYPE_TO_ROUTE: Record<BeneficiaryTabType, string> = {
   CHILD: "/child_laborers", // legacy alias — same route as CHILD_LABORER
   CHILD_LABORER: "/child_laborers",
   SPECIAL_NEEDS: "/special_needs",
+  IMMEDIATE_NEED: "/immediate_need",
   IN_OUR_CARE: "/in_our_care",
   ANIMAL: "/dogs",
 }
@@ -157,6 +170,7 @@ export const ROUTE_TO_TYPE: Record<string, BeneficiaryTabType | null> = {
   "/": null,
   "/child_laborers": "CHILD_LABORER",
   "/special_needs": "SPECIAL_NEEDS",
+  "/immediate_need": "IMMEDIATE_NEED",
   "/in_our_care": "IN_OUR_CARE",
   "/dogs": "ANIMAL",
 }
@@ -198,6 +212,20 @@ export function isFixedSponsorshipType(
 ): boolean {
   const config = findConfig(type)
   return Boolean(config?.type && !config.isOpenSponsorship)
+}
+
+export function getBeneficiaryTypeLabel(
+  type: BeneficiaryTabType | string | null | undefined,
+): string | null {
+  if (!type) return null
+  const config = findConfig(type)
+  if (config?.label) return config.label
+
+  return type
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ")
 }
 
 export function hasOpenSponsorshipSupport(beneficiary: {
