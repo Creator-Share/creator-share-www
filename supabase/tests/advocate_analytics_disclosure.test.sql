@@ -281,6 +281,15 @@ SELECT extensions.ok(private.coordinate_analytics_disclosure(
   'a later private report cannot reconstruct an individual residual against public history');
 SELECT extensions.throws_ok($$SELECT private.append_analytics_basis('97000000-0000-4000-8000-000000000001','{"contact":[],"account":[]}')$$,
   '23514','Analytics history cannot discard prior columns','history cannot reset its disclosure budget');
+SELECT extensions.throws_ok($$SELECT private.append_analytics_basis('97000000-0000-4000-8000-000000000001',
+  jsonb_set(private.analytics_disclosure_basis('97000000-0000-4000-8000-000000000001'),
+    '{contact,0,contact-1}','[101,1]'::jsonb))$$,
+  '23514','Analytics history cannot discard prior columns','same-width history cannot replace an existing contribution');
+SELECT extensions.throws_ok($$SELECT private.append_analytics_basis('97000000-0000-4000-8000-000000000001',
+  jsonb_set(private.analytics_disclosure_basis('97000000-0000-4000-8000-000000000001'),'{contact}',
+    (private.analytics_disclosure_basis('97000000-0000-4000-8000-000000000001')->'contact')
+      || '[{"contact-1":[1,1]}]'::jsonb))$$,
+  '23514','Analytics history requires an independent certified basis','a history extension still requires full certification');
 SELECT extensions.throws_ok($$UPDATE private.advocate_analytics_basis_columns SET contributions='{}'$$,
   '42501','Analytics contributions are append only','historical contributions cannot be overwritten');
 SELECT extensions.throws_ok($$DELETE FROM private.advocate_analytics_basis_columns$$,

@@ -134,6 +134,44 @@ async function releaseInterruption(database) {
     })
 }
 
+// Synthetic capacity evidence, separate from the transactional race assertions.
+// A timeout is recorded as a capacity limit, never described as certification.
+async function observeDenseHistory(database) {
+  return withPgClients(database, ["capacity"], async client => {
+    await client.query("SET statement_timeout='15s'")
+    const observations = []
+    for (const width of [64, 128, 256]) {
+      let seed = 907
+      const next = () => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+        return seed % 1000 + 1
+      }
+      const rows = Array.from({ length: width }, () => Array.from({ length: width }, next))
+      const columns = Array.from({ length: width }, (_, column) => Object.fromEntries(
+        Array.from({ length: 5 * width }, (_, subject) => [
+          String(subject).padStart(5, "0"), [rows[subject % width][column], 1],
+        ]),
+      ))
+      const started = performance.now()
+      let outcome
+      try {
+        const { rows: [result] } = await client.query(
+          "SELECT jsonb_array_length(private.certify_analytics_columns($1::jsonb)) AS width",
+          [JSON.stringify(columns)],
+        )
+        assert.equal(result.width, width)
+        outcome = "certified"
+      } catch (error) {
+        if (error.code !== "57014") throw error
+        outcome = "query_canceled"
+      }
+      observations.push({ columns: width, subjects: 5 * width, outcome,
+        milliseconds: Math.round(performance.now() - started), statementTimeoutMilliseconds: 15_000 })
+    }
+    return { scenario: "synthetic_dense_history_capacity", observations }
+  })
+}
+
 let database
 const evidencePath = process.env.ADVOCATE_ANALYTICS_CONCURRENCY_EVIDENCE_PATH ?? null
 const removeTerminationCleanup = installConcurrencyGateTerminationCleanup({
@@ -164,13 +202,14 @@ try {
     SET LOCAL session_replication_role = origin;
     COMMIT;`)
   const scenarios = await releaseInterruption(database)
+  scenarios.push(await observeDenseHistory(database))
   await database.dispose()
   database = undefined
   await writeConcurrencyGateEvidence({
     gate: "FF-034", outputPath: evidencePath, provenance, scenarios,
     synchronization: "server_observed_blocking_pids_and_transaction_visibility",
   })
-  process.stdout.write("Analytics release concurrency passed: 4 scenarios\n")
+  process.stdout.write("Analytics release concurrency passed: 4 scenarios; bounded capacity observation recorded\n")
 } finally {
   try { if (database) await database.dispose() } finally { removeTerminationCleanup() }
 }

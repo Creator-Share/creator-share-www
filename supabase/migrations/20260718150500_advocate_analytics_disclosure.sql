@@ -262,6 +262,9 @@ BEGIN
         WHERE value IS DISTINCT FROM basis->kind->(ordinal::integer-1)) THEN
       RAISE EXCEPTION 'Analytics history cannot discard prior columns' USING ERRCODE='23514';
     END IF;
+    -- Immutable prior columns were certified when appended. An exact replay
+    -- adds no disclosure direction and needs no new elimination pass.
+    IF basis->kind=prior->kind THEN CONTINUE; END IF;
     IF private.certify_analytics_columns(basis->kind) IS DISTINCT FROM basis->kind THEN
       RAISE EXCEPTION 'Analytics history requires an independent certified basis' USING ERRCODE='23514';
     END IF;

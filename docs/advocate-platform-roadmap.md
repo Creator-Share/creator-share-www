@@ -669,3 +669,8 @@ The provider digest serializer is shared and uses deterministic UTF-16 key order
 Financial-adjustment recovery admission now uses the existing financial validation function with an explicit operation identity. The admission receipt and complete interpretation commit together; original authenticated evidence and retention remain unchanged. Normal worker settlement stays authoritative. Durable recovery orchestration and the new native race evidence remain required.
 
 Retained financial-adjustment recovery uses an explicit internal operator POST and a persistent operation identity. Committed receipt replay precedes payload access; provider preparation uses existing adapters, and the existing gateway worker settles admitted events. The endpoint adds no cron job or recovery queue. Other event families and live provider recovery evidence remain outside this checkpoint.
+
+
+## Review checkpoint: analytics history capacity
+
+Unchanged immutable disclosure history no longer repeats numerical certification during append. Extensions still require full certification and cannot replace or remove prior columns. Policy, actual-query, and public-metric regressions pass 160 in-process SQL assertions. A synthetic dense-history certificate takes 11.9 seconds for 128 columns and 640 subjects, demonstrating why the earlier 5,000-contact, two-column probe cannot establish a capacity bound. Native capacity and cross-portal composition remain open under FF-034; this optimization changes neither disclosure scope nor retention.
