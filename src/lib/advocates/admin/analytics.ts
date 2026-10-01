@@ -230,6 +230,8 @@ function parseCell(value: unknown): AdvocateAnalyticsCell | null {
   if (!hasExactKeys(value, VISIBLE_CELL_KEYS)) return null
 
   const sponsorships = value.sponsorships
+  // Historical contact keys can be shared by different verified accounts.
+  // Each counted account still requires at least one sponsorship in this cell.
   const uniqueSponsorContacts = value.unique_sponsor_contacts
   const verifiedSponsorAccounts = value.verified_sponsor_accounts
   const initialCollectedUsdCents = value.initial_collected_usd_cents
@@ -271,7 +273,7 @@ function parseCell(value: unknown): AdvocateAnalyticsCell | null {
       sponsorships !== null && uniqueSponsorContacts > sponsorships) ||
     (verifiedSponsorAccounts !== null &&
       (uniqueSponsorContacts === null || sponsorships === null ||
-        verifiedSponsorAccounts > uniqueSponsorContacts)) ||
+        verifiedSponsorAccounts > sponsorships)) ||
     (verifiedSponsorAccounts !== null &&
       verifiedSponsorAccounts > 0 &&
       verifiedSponsorAccounts < 5) ||

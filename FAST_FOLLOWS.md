@@ -111,6 +111,8 @@ FF-029 now has one canonical 99-test offline provider contract covering the host
 
 | FF-092 | completed | P3 | Invitation test crosses its future-skew boundary | Hosted job 110233824252 rejected the test expectation, not the authentication contract: a fixture created at now +61 seconds becomes valid under the existing +60-second allowance when its loop crosses a second boundary. A controlled one-second advance reproduces the failure at that exact case. Freeze Date.now only during this test and restore it in finally; keep production limits unchanged. All 13 focused contracts pass. Publication application job 110237771800 passed at baa2af2, including the complete offline lane. |
 
+| FF-093 | in_progress | P2 | Verified accounts incorrectly bounded by contact count | The production SQL release can contain ten distinct verified accounts sharing five historical email contact keys. The application parser rejected that valid report because it bounded accounts by contacts. Bound accounts by sponsorships instead, retain existing suppression checks, and exercise the actual release writer plus valid and impossible parser cases. In-process SQL evidence passes; hosted validation remains pending. |
+
 ## Entry requirements
 
 Every new entry must include:

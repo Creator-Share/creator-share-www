@@ -493,3 +493,8 @@ WebKit started successfully under Webpack and passed 27 checks. Two password-rec
 Replacing nested JSONB aggregation with intermediate JSON and one final JSONB conversion reduces the analyzed 5,000-contact candidate calculation from 17.56 to 20.493 seconds to 1.905 to 1.972 seconds in the same PGlite fixture. The entire candidate compares equal. Four in-process policy, reader, public metric, and settlement probes pass. These measurements do not establish native PostgreSQL latency or full worker capacity; contribution history and release insertion still require measurement.
 
 WebKit workflow 36821474619 passed at `baa2af2`, validating recovery route preparation. Its publication application job also passed, including the repaired invitation clock test; the aggregate publication workflow was still finishing when this checkpoint was prepared. No local services were started.
+
+
+## Verified accounts and historical contacts
+
+The release writer can report ten verified accounts across five historical contact keys, but the application parser rejected that valid snapshot. Historical email keys do not have a one-to-one relationship with stable account identities. The parser now bounds account count by sponsorship count, retaining the existing suppression checks. A real SQL release reproduces the valid combination; parser contracts accept it and reject eleven accounts for ten sponsorships. Hosted validation remains pending.

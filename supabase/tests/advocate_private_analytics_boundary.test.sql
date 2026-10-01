@@ -2299,6 +2299,34 @@ SELECT extensions.throws_ok($$SELECT public.get_advocate_analytics_snapshot(
   (SELECT value FROM analytics_test_ids WHERE key='main_advocate'))$$,
   '42501','Analytics access is unavailable','a persisted report does not bypass current account revocation');
 
+-- Separate stable account identities can share an older normalized contact key.
+-- Reuse ten paid identities after the preceding fixture assertions, retaining
+-- five contacts and two distinct accounts per contact in one reporting cell.
+SET LOCAL session_replication_role = replica;
+UPDATE public.sponsorship_attributions
+SET analytics_eligible=false, analytics_exclusion_reason='creator_share_staff'
+WHERE advocate_id=(SELECT value FROM analytics_test_ids WHERE key='contact_advocate');
+UPDATE public.sponsorship_intents intent
+SET contact_email_hmac=extensions.digest(
+  'shared-historical-contact-' || ((split_part(fixture.label,'_',3)::integer-1)%5)::text,'sha256')
+FROM analytics_fixture_intents fixture
+WHERE intent.id=fixture.intent_id AND fixture.label ~ '^main_direct_([1-9]|10)$';
+UPDATE public.sponsorship_attributions attribution
+SET advocate_id=(SELECT value FROM analytics_test_ids WHERE key='contact_advocate')
+FROM analytics_fixture_intents fixture
+WHERE attribution.sponsorship_intent_id=fixture.intent_id
+  AND fixture.label ~ '^main_direct_([1-9]|10)$';
+SET LOCAL session_replication_role = origin;
+SELECT set_config('request.jwt.claim.role','service_role',true);
+CREATE TEMP TABLE shared_contact_release AS SELECT private.release_advocate_analytics(
+  (SELECT value FROM analytics_test_ids WHERE key='contact_advocate'),
+  (date_trunc('week',now() AT TIME ZONE 'UTC')-interval '7 days') AT TIME ZONE 'UTC') AS value;
+SELECT extensions.ok((SELECT value#>>'{official,sponsorships}'='10'
+  AND value#>>'{official,unique_sponsor_contacts}'='5'
+  AND value#>>'{official,verified_sponsor_accounts}'='10'
+  FROM shared_contact_release),
+  'a real disclosure can contain more verified accounts than historical contacts');
+
 SELECT * FROM extensions.finish();
 
 ROLLBACK;

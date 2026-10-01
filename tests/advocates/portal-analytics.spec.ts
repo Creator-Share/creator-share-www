@@ -469,7 +469,7 @@ test.describe("advocate private analytics projection", () => {
       snapshot({ sponsor_email: "must-not-cross@example.com" }),
       snapshot({ official: { suppressed: true, sponsorships: 4 } }),
       snapshot({ official: visibleCell({ unique_sponsor_contacts: 4 }) }),
-      snapshot({ official: visibleCell({ verified_sponsor_accounts: 7 }) }),
+      snapshot({ official: visibleCell({ verified_sponsor_accounts: 9 }) }),
       snapshot({ official: visibleCell({ verified_sponsor_accounts: -1 }) }),
       ...[1, 2, 3, 4].map((verifiedSponsorAccounts) =>
         snapshot({
@@ -662,4 +662,24 @@ test.describe("advocate analytics administrative UI contract", () => {
     expect(dashboardSource).not.toMatch(/\bcompleted\b/i)
     expect(dashboardSource).not.toMatch(/<input|<select|<textarea|download=/i)
   })
+})
+
+
+test("accepts distinct verified accounts sharing historical contact keys", () => {
+  const sharedContactCell = visibleCell({
+    sponsorships: 10,
+    unique_sponsor_contacts: 5,
+    verified_sponsor_accounts: 10,
+  })
+  const result = analytics.parseAdvocateAnalyticsSnapshot(snapshot({
+    official: sharedContactCell,
+  }))
+  expect(result?.official).toMatchObject({
+    sponsorships: 10,
+    uniqueSponsorContacts: 5,
+    verifiedSponsorAccounts: 10,
+  })
+  expect(analytics.parseAdvocateAnalyticsSnapshot(snapshot({
+    official: { ...sharedContactCell, verified_sponsor_accounts: 11 },
+  }))).toBeNull()
 })
