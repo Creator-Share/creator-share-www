@@ -2,32 +2,36 @@ BEGIN;
 
 -- Preserve integer fractions during accumulation, including across payments.
 -- Division appears only as exact integer div(); presentation rounds once.
+CREATE FUNCTION private.add_usd_fraction(state numeric[], fraction numeric[])
+RETURNS numeric[] LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SET search_path = '' AS $$
+DECLARE v_numerator numeric; v_denominator numeric; v_common numeric;
+BEGIN
+  IF fraction IS NULL OR array_length(fraction,1) IS DISTINCT FROM 2
+    OR fraction[1] IS NULL OR fraction[2] IS NULL OR fraction[2] <= 0 THEN
+    RAISE EXCEPTION 'Normalized amount requires an integer fraction' USING ERRCODE = '22023';
+  END IF;
+  v_common := gcd(state[2], fraction[2]);
+  v_numerator := state[1] * div(fraction[2], v_common)
+    + fraction[1] * div(state[2], v_common);
+  v_denominator := state[2] * div(fraction[2], v_common);
+  v_common := gcd(abs(v_numerator), v_denominator);
+  RETURN ARRAY[div(v_numerator, v_common), div(v_denominator, v_common)];
+END;
+$$;
 CREATE FUNCTION private.accumulate_normalized_usd(
   state numeric[], original_base_usd_cents bigint,
   original_charged_minor bigint, signed_charged_minor bigint
 )
 RETURNS numeric[] LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SET search_path = '' AS $$
-DECLARE
-  v_numerator numeric;
-  v_denominator numeric;
-  v_common numeric;
 BEGIN
   IF original_base_usd_cents IS NULL OR original_charged_minor IS NULL OR signed_charged_minor IS NULL
     OR original_base_usd_cents <= 0 OR original_charged_minor <= 0 THEN
     RAISE EXCEPTION 'Original payment amounts must be positive' USING ERRCODE = '22023';
   END IF;
-  IF signed_charged_minor = 0 THEN RETURN state; END IF;
-  v_numerator := original_base_usd_cents::numeric * signed_charged_minor;
-  v_denominator := original_charged_minor;
-  v_common := gcd(abs(v_numerator), v_denominator);
-  v_numerator := div(v_numerator, v_common);
-  v_denominator := div(v_denominator, v_common);
-  v_common := gcd(state[2], v_denominator);
-  v_numerator := state[1] * div(v_denominator, v_common)
-    + v_numerator * div(state[2], v_common);
-  v_denominator := state[2] * div(v_denominator, v_common);
-  v_common := gcd(abs(v_numerator), v_denominator);
-  RETURN ARRAY[div(v_numerator, v_common), div(v_denominator, v_common)];
+  RETURN private.add_usd_fraction(state, ARRAY[
+    original_base_usd_cents::numeric * signed_charged_minor,
+    original_charged_minor::numeric
+  ]);
 END;
 $$;
 CREATE FUNCTION private.round_normalized_usd(state numeric[])
@@ -41,6 +45,16 @@ CREATE AGGREGATE private.sum_normalized_usd_cents(bigint,bigint,bigint) (
   INITCOND = '{0,1}',
   PARALLEL = SAFE
 );
+CREATE AGGREGATE private.normalized_usd_fraction(bigint,bigint,bigint) (
+  SFUNC = private.accumulate_normalized_usd, STYPE = numeric[], INITCOND = '{0,1}', PARALLEL = SAFE
+);
+CREATE AGGREGATE private.sum_usd_fractions(numeric[]) (
+  SFUNC = private.add_usd_fraction, STYPE = numeric[], INITCOND = '{0,1}',
+  FINALFUNC = private.round_normalized_usd, PARALLEL = SAFE
+);
+REVOKE ALL ON FUNCTION private.add_usd_fraction(numeric[],numeric[]) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.normalized_usd_fraction(bigint,bigint,bigint) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.sum_usd_fractions(numeric[]) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION private.accumulate_normalized_usd(numeric[],bigint,bigint,bigint) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION private.round_normalized_usd(numeric[]) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION private.sum_normalized_usd_cents(bigint,bigint,bigint) FROM PUBLIC, anon, authenticated, service_role;
@@ -78,16 +92,6 @@ ALTER TABLE public.payment_gateway_events
 
 ALTER TABLE public.sponsorship_financial_movements
   ADD COLUMN original_financial_movement_id uuid,
-  ADD COLUMN net_base_amount_usd_cents bigint GENERATED ALWAYS AS (
-    CASE
-      WHEN entry_kind IN (
-        'sponsorship_refund',
-        'sponsorship_reversal',
-        'sponsorship_dispute_debit'
-      ) THEN -base_amount_usd_cents
-      ELSE base_amount_usd_cents
-    END
-  ) STORED,
   ADD COLUMN net_charged_amount_minor bigint GENERATED ALWAYS AS (
     CASE
       WHEN entry_kind IN (
@@ -124,6 +128,35 @@ ALTER TABLE public.sponsorship_financial_movements
     provider_account_scope,
     payment_mode,
     charged_currency
+  );
+
+ALTER TABLE public.sponsorship_financial_movements
+  ALTER COLUMN base_amount_usd_cents DROP NOT NULL,
+  DROP CONSTRAINT sponsorship_financial_movements_amount_check,
+  ADD CONSTRAINT sponsorship_financial_movements_amount_check CHECK (
+    charged_amount_minor > 0 AND conversion_rate > 0 AND (
+      (entry_kind = 'sponsorship_payment' AND base_amount_usd_cents IS NOT NULL AND base_amount_usd_cents > 0)
+      OR (entry_kind <> 'sponsorship_payment' AND base_amount_usd_cents IS NULL)
+    )
+  );
+COMMENT ON COLUMN public.sponsorship_financial_movements.base_amount_usd_cents IS
+  'Whole USD cents for original payments only. Adjustment normalization is the exact original USD/provider ratio times its provider minor units.';
+
+ALTER TABLE public.payment_gateway_events
+  DROP CONSTRAINT payment_gateway_events_fact_movement_shape_check,
+  ADD CONSTRAINT payment_gateway_events_fact_movement_shape_check CHECK (
+    (fact_provider_movement_type IS NULL AND fact_provider_movement_id IS NULL
+      AND fact_base_amount_usd_cents IS NULL AND fact_charged_amount_minor IS NULL
+      AND fact_charged_currency IS NULL AND fact_conversion_rate IS NULL)
+    OR (fact_provider_movement_type IS NOT NULL AND fact_provider_movement_id IS NOT NULL
+      AND fact_provider_movement_type = lower(btrim(fact_provider_movement_type))
+      AND length(fact_provider_movement_type) BETWEEN 1 AND 80
+      AND fact_provider_movement_id = btrim(fact_provider_movement_id)
+      AND length(fact_provider_movement_id) BETWEEN 1 AND 255
+      AND fact_charged_amount_minor IS NOT NULL AND fact_charged_amount_minor > 0
+      AND fact_charged_currency IS NOT NULL AND fact_conversion_rate IS NOT NULL AND fact_conversion_rate > 0
+      AND ((original_financial_movement_id IS NULL AND fact_base_amount_usd_cents IS NOT NULL AND fact_base_amount_usd_cents > 0)
+        OR (original_financial_movement_id IS NOT NULL AND fact_base_amount_usd_cents IS NULL)))
   );
 
 ALTER TABLE public.sponsorship_financial_movements
@@ -375,7 +408,6 @@ CREATE OR REPLACE FUNCTION public.ingest_verified_sponsorship_financial_adjustme
   target_provider_object_id text,
   target_adjustment_provider_movement_type text,
   target_adjustment_provider_movement_id text,
-  target_base_amount_usd_cents bigint,
   target_charged_amount_minor bigint,
   target_charged_currency public.payment_currency,
   target_conversion_rate numeric,
@@ -500,16 +532,11 @@ BEGIN
       USING ERRCODE = '23514';
   END IF;
 
-  IF target_base_amount_usd_cents IS NULL
-     OR target_base_amount_usd_cents <= 0
-     OR target_base_amount_usd_cents > v_original.base_amount_usd_cents
-     OR target_charged_amount_minor IS NULL
+  IF target_charged_amount_minor IS NULL
      OR target_charged_amount_minor <= 0
      OR target_charged_amount_minor > v_original.charged_amount_minor
      OR target_charged_currency IS DISTINCT FROM v_original.charged_currency
-     OR target_conversion_rate IS DISTINCT FROM v_original.conversion_rate
-     OR target_charged_amount_minor IS DISTINCT FROM
-       round(target_base_amount_usd_cents * target_conversion_rate) THEN
+     OR target_conversion_rate IS DISTINCT FROM v_original.conversion_rate THEN
     RAISE EXCEPTION 'Financial adjustment amounts do not match the original charged currency terms'
       USING ERRCODE = '23514';
   END IF;
@@ -569,8 +596,7 @@ BEGIN
          target_adjustment_provider_movement_type
        OR v_event.fact_provider_movement_id IS DISTINCT FROM
          target_adjustment_provider_movement_id
-       OR v_event.fact_base_amount_usd_cents IS DISTINCT FROM
-         target_base_amount_usd_cents
+       OR v_event.fact_base_amount_usd_cents IS NOT NULL
        OR v_event.fact_charged_amount_minor IS DISTINCT FROM
          target_charged_amount_minor
        OR v_event.fact_charged_currency IS DISTINCT FROM target_charged_currency
@@ -659,7 +685,7 @@ BEGIN
     v_original.provider_movement_id,
     target_adjustment_provider_movement_type,
     target_adjustment_provider_movement_id,
-    target_base_amount_usd_cents,
+    NULL,
     target_charged_amount_minor,
     target_charged_currency,
     target_conversion_rate,
@@ -712,13 +738,11 @@ DECLARE
   v_resolution public.sponsorship_refund_requirement_resolutions%ROWTYPE;
   v_kind public.sponsorship_financial_entry_kind;
   v_effect public.gateway_event_application_effect;
-  v_signed_base bigint;
   v_signed_charged bigint;
   v_current_net_base bigint;
   v_current_net_charged bigint;
   v_new_net_base bigint;
   v_new_net_charged bigint;
-  v_dispute_outstanding_base bigint;
   v_dispute_outstanding_charged bigint;
 BEGIN
   PERFORM private.require_payment_service_role();
@@ -740,6 +764,8 @@ BEGIN
   WHERE application.gateway_event_id = v_event.id;
 
   IF FOUND THEN
+    SELECT * INTO v_original FROM public.sponsorship_financial_movements
+      WHERE id = v_event.original_financial_movement_id;
     SELECT movement.*
     INTO v_movement
     FROM public.sponsorship_financial_movements movement
@@ -756,7 +782,10 @@ BEGIN
     WHERE resolution.resolving_gateway_event_id = v_event.id;
 
     SELECT
-      sum(movement.net_base_amount_usd_cents),
+      private.sum_normalized_usd_cents(
+        v_original.base_amount_usd_cents, v_original.charged_amount_minor,
+        movement.net_charged_amount_minor
+      ),
       sum(movement.net_charged_amount_minor)
     INTO v_new_net_base, v_new_net_charged
     FROM public.sponsorship_financial_movements movement
@@ -844,19 +873,13 @@ BEGIN
       USING ERRCODE = '23514';
   END IF;
 
-  IF v_event.fact_base_amount_usd_cents IS NULL
-     OR v_event.fact_base_amount_usd_cents <= 0
+  IF v_event.fact_base_amount_usd_cents IS NOT NULL
      OR v_event.fact_charged_amount_minor IS NULL
      OR v_event.fact_charged_amount_minor <= 0
      OR v_event.fact_charged_currency IS DISTINCT FROM
        v_original.charged_currency
      OR v_event.fact_conversion_rate IS DISTINCT FROM
-       v_original.conversion_rate
-     OR v_event.fact_charged_amount_minor IS DISTINCT FROM
-       round(
-         v_event.fact_base_amount_usd_cents *
-           v_event.fact_conversion_rate
-       ) THEN
+       v_original.conversion_rate THEN
     RAISE EXCEPTION 'Financial adjustment typed amounts are invalid'
       USING ERRCODE = '23514';
   END IF;
@@ -920,7 +943,10 @@ BEGIN
     WHERE id = v_event.id;
 
     SELECT
-      sum(movement.net_base_amount_usd_cents),
+      private.sum_normalized_usd_cents(
+        v_original.base_amount_usd_cents, v_original.charged_amount_minor,
+        movement.net_charged_amount_minor
+      ),
       sum(movement.net_charged_amount_minor)
     INTO v_new_net_base, v_new_net_charged
     FROM public.sponsorship_financial_movements movement
@@ -943,21 +969,12 @@ BEGIN
     SELECT
       COALESCE(sum(
         CASE movement.entry_kind
-          WHEN 'sponsorship_dispute_debit' THEN movement.base_amount_usd_cents
-          WHEN 'sponsorship_dispute_credit' THEN -movement.base_amount_usd_cents
-          ELSE 0
-        END
-      ), 0),
-      COALESCE(sum(
-        CASE movement.entry_kind
           WHEN 'sponsorship_dispute_debit' THEN movement.charged_amount_minor
           WHEN 'sponsorship_dispute_credit' THEN -movement.charged_amount_minor
           ELSE 0
         END
       ), 0)
-    INTO
-      v_dispute_outstanding_base,
-      v_dispute_outstanding_charged
+    INTO v_dispute_outstanding_charged
     FROM public.sponsorship_financial_movements movement
     WHERE movement.original_financial_movement_id = v_original.id
       AND movement.provider = v_event.provider
@@ -969,8 +986,7 @@ BEGIN
         'sponsorship_dispute_credit'
       );
 
-    IF v_event.fact_base_amount_usd_cents > v_dispute_outstanding_base
-       OR v_event.fact_charged_amount_minor >
+    IF v_event.fact_charged_amount_minor >
          v_dispute_outstanding_charged THEN
       RAISE EXCEPTION 'Dispute reinstatement exceeds the verified outstanding dispute debit'
         USING ERRCODE = '23514';
@@ -978,21 +994,16 @@ BEGIN
   END IF;
 
   SELECT
-    sum(movement.net_base_amount_usd_cents),
+    private.sum_normalized_usd_cents(
+        v_original.base_amount_usd_cents, v_original.charged_amount_minor,
+        movement.net_charged_amount_minor
+      ),
     sum(movement.net_charged_amount_minor)
   INTO v_current_net_base, v_current_net_charged
   FROM public.sponsorship_financial_movements movement
   WHERE movement.id = v_original.id
      OR movement.original_financial_movement_id = v_original.id;
 
-  v_signed_base := CASE
-    WHEN v_kind IN (
-      'sponsorship_refund',
-      'sponsorship_reversal',
-      'sponsorship_dispute_debit'
-    ) THEN -v_event.fact_base_amount_usd_cents
-    ELSE v_event.fact_base_amount_usd_cents
-  END;
   v_signed_charged := CASE
     WHEN v_kind IN (
       'sponsorship_refund',
@@ -1001,12 +1012,13 @@ BEGIN
     ) THEN -v_event.fact_charged_amount_minor
     ELSE v_event.fact_charged_amount_minor
   END;
-  v_new_net_base := v_current_net_base + v_signed_base;
   v_new_net_charged := v_current_net_charged + v_signed_charged;
+  v_new_net_base := private.round_normalized_usd(ARRAY[
+    v_original.base_amount_usd_cents::numeric * v_new_net_charged,
+    v_original.charged_amount_minor::numeric
+  ]);
 
-  IF v_new_net_base < 0
-     OR v_new_net_base > v_original.base_amount_usd_cents
-     OR v_new_net_charged < 0
+  IF v_new_net_charged < 0
      OR v_new_net_charged > v_original.charged_amount_minor THEN
     RAISE EXCEPTION 'Financial adjustment would move aggregate net outside the original gross payment'
       USING ERRCODE = '23514';
@@ -1169,7 +1181,7 @@ BEGIN
   VALUES (
     v_intent.auth_user_id,
     v_intent.beneficiary_id,
-    v_movement.net_base_amount_usd_cents::integer,
+    NULL,
     NULL,
     NULL,
     v_event.fact_provider_movement_id,
@@ -1227,7 +1239,8 @@ BEGIN
       'event_type', v_event.event_type,
       'operation', v_effect::text,
       'original_financial_movement_id', v_original.id,
-      'signed_base_amount_usd_cents', v_signed_base,
+      'normalized_usd_numerator', v_original.base_amount_usd_cents::numeric * v_signed_charged,
+      'normalized_usd_denominator', v_original.charged_amount_minor,
       'signed_charged_amount_minor', v_signed_charged,
       'net_base_amount_usd_cents', v_new_net_base,
       'net_charged_amount_minor', v_new_net_charged
@@ -1308,7 +1321,6 @@ REVOKE ALL ON FUNCTION public.ingest_verified_sponsorship_financial_adjustment(
   text,
   text,
   bigint,
-  bigint,
   public.payment_currency,
   numeric,
   jsonb,
@@ -1343,7 +1355,6 @@ GRANT EXECUTE ON FUNCTION public.ingest_verified_sponsorship_financial_adjustmen
   text,
   text,
   bigint,
-  bigint,
   public.payment_currency,
   numeric,
   jsonb,
@@ -1370,9 +1381,6 @@ GRANT EXECUTE ON FUNCTION public.apply_sponsorship_financial_adjustment(
 COMMENT ON COLUMN public.payment_gateway_events.original_financial_movement_id IS
   'Immutable gross sponsorship payment linked to a verified refund, reversal, or dispute event.';
 
-COMMENT ON COLUMN public.sponsorship_financial_movements.net_base_amount_usd_cents IS
-  'Canonical signed USD contribution of this immutable movement. Gross and dispute credits are positive. Refunds, reversals, and dispute debits are negative.';
-
 COMMENT ON COLUMN public.sponsorship_financial_movements.net_charged_amount_minor IS
   'Canonical signed contribution in the original charged currency minor units.';
 
@@ -1389,7 +1397,6 @@ COMMENT ON FUNCTION public.ingest_verified_sponsorship_financial_adjustment(
   text,
   text,
   text,
-  bigint,
   bigint,
   public.payment_currency,
   numeric,

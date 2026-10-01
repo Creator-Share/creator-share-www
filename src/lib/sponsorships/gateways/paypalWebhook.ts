@@ -240,7 +240,6 @@ export interface VerifiedPayPalFinancialAdjustmentInput {
   providerObjectId: string
   adjustmentProviderMovementType: "refund" | "reversal" | "dispute"
   adjustmentProviderMovementId: string
-  baseAmountUsdCents: number
   chargedAmountMinor: number
   chargedCurrency: SupportedCurrency
   conversionRate: number
@@ -1506,32 +1505,6 @@ function adjustmentOriginalIdentity(event: PayPalWebhookEvent): {
   }
 }
 
-function deriveBaseAmount(
-  chargedAmountMinor: number,
-  movement: AuthoritativePayPalFinancialMovement,
-): number {
-  if (chargedAmountMinor === movement.chargedAmountMinor) {
-    return movement.baseAmountUsdCents
-  }
-  const approximate = Math.round(
-    (chargedAmountMinor * movement.baseAmountUsdCents) /
-      movement.chargedAmountMinor,
-  )
-  for (
-    let candidate = Math.max(1, approximate - 2);
-    candidate <= approximate + 2;
-    candidate += 1
-  ) {
-    if (
-      candidate <= movement.baseAmountUsdCents &&
-      roundMinorUnitsAtRate(candidate, movement.conversionRate) === chargedAmountMinor
-    ) {
-      return candidate
-    }
-  }
-  reject("provider-fact-mismatch")
-}
-
 async function adjustmentFacts(
   event: PayPalWebhookEvent,
   dependencies: PayPalWebhookDependencies,
@@ -1579,7 +1552,6 @@ async function adjustmentFacts(
   ) {
     reject("provider-fact-mismatch")
   }
-  const baseAmountUsdCents = deriveBaseAmount(adjusted.amountMinor, movement)
   return {
     movement,
     input: {
@@ -1591,7 +1563,6 @@ async function adjustmentFacts(
       providerObjectId: identity.id,
       adjustmentProviderMovementType: identity.adjustmentType,
       adjustmentProviderMovementId: identity.adjustmentId,
-      baseAmountUsdCents,
       chargedAmountMinor: adjusted.amountMinor,
       chargedCurrency: adjusted.currency,
       conversionRate: movement.conversionRate,
@@ -1716,7 +1687,6 @@ async function disputeFacts(
   ) {
     reject("provider-fact-mismatch")
   }
-  const baseAmountUsdCents = deriveBaseAmount(disputed.amountMinor, movement)
   const status = requiredString(event.resource.status, 72).toUpperCase()
   if (!/^[A-Z][A-Z0-9_]{1,71}$/.test(status)) {
     reject("provider-fact-mismatch")
@@ -1766,7 +1736,6 @@ async function disputeFacts(
       providerObjectId: movement.providerMovementId,
       adjustmentProviderMovementType: "dispute",
       adjustmentProviderMovementId: disputeId,
-      baseAmountUsdCents,
       chargedAmountMinor: disputed.amountMinor,
       chargedCurrency: disputed.currency,
       conversionRate: movement.conversionRate,

@@ -1139,7 +1139,7 @@ SELECT
   'analytics-adjustment-' || adjustment.suffix || '-' || fixture.label,
   adjustment.entry_kind,
   'recurring'::public.sponsorship_payment_mode,
-  adjustment.amount,
+  NULL,
   adjustment.amount,
   'USD'::public.payment_currency,
   1,
@@ -2191,6 +2191,40 @@ SELECT extensions.is(
 
 ALTER TABLE public.sponsorship_attributions
   ALTER COLUMN analytics_eligible SET NOT NULL;
+
+-- Return a real report over a temporary fractional fixture, then roll the
+-- fixture changes back before emitting assertions.
+CREATE FUNCTION pg_temp.fractional_analytics_report() RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE result jsonb;
+BEGIN
+  BEGIN
+    PERFORM set_config('session_replication_role','replica',true);
+    UPDATE public.sponsorship_intents intent SET charged_currency='AUD',charged_amount_minor=140,conversion_rate=1.4,
+      contact_email_hmac=extensions.digest(fixture.label,'sha256')
+    FROM analytics_fixture_intents fixture WHERE fixture.label LIKE 'contact_repeat_%' AND intent.id=fixture.intent_id;
+    UPDATE public.sponsorship_payment_attempts attempt SET charged_currency='AUD',charged_amount_minor=140,conversion_rate=1.4
+    FROM analytics_fixture_intents fixture WHERE fixture.label LIKE 'contact_repeat_%' AND attempt.id=fixture.payment_attempt_id;
+    UPDATE public.sponsorship_financial_movements movement SET charged_currency='AUD',charged_amount_minor=140,conversion_rate=1.4
+    FROM analytics_fixture_intents fixture WHERE fixture.label LIKE 'contact_repeat_%' AND movement.id=fixture.initial_movement_id;
+    INSERT INTO public.sponsorship_financial_movements(source_gateway_event_id,payment_attempt_id,sponsorship_intent_id,
+      sponsor_identity_id,provider,provider_account_scope,provider_movement_type,provider_movement_id,entry_kind,payment_mode,
+      base_amount_usd_cents,charged_amount_minor,charged_currency,conversion_rate,occurred_at,recorded_at,original_financial_movement_id)
+    SELECT gen_random_uuid(),fixture.payment_attempt_id,fixture.intent_id,fixture.identity_id,'STRIPE','stripe_us',
+      'refund','fractional-analytics-'||fixture.label,'sponsorship_refund',fixture.payment_mode,NULL,1,'AUD',1.4,
+      fixture.payment_occurred_at+interval '1 day',fixture.payment_occurred_at+interval '1 day',fixture.initial_movement_id
+    FROM analytics_fixture_intents fixture WHERE fixture.label LIKE 'contact_repeat_%';
+    PERFORM set_config('session_replication_role','origin',true);
+    PERFORM set_config('request.jwt.claim.role','authenticated',true);
+    PERFORM set_config('request.jwt.claim.sub','96000000-0000-4000-8000-000000000105',true);
+    result:=public.get_advocate_analytics_snapshot((SELECT value FROM analytics_test_ids WHERE key='contact_advocate'));
+    RAISE EXCEPTION 'Restore fractional fixture' USING ERRCODE='P9001';
+  EXCEPTION WHEN SQLSTATE 'P9001' THEN RETURN result;
+  END;
+END;
+$$;
+CREATE TEMP TABLE fractional_analytics_report AS SELECT pg_temp.fractional_analytics_report() AS value;
+SELECT extensions.ok((SELECT value->'official' @> '{"refunds_and_reversals_usd_cents":4,"net_collected_usd_cents":496}'::jsonb
+  FROM fractional_analytics_report), 'private totals combine five fractional refunds before rounding instead of rounding each sponsorship');
 
 SELECT * FROM extensions.finish();
 

@@ -1042,7 +1042,7 @@ SELECT
   'public-metric-refund-' || fact.label,
   'sponsorship_refund',
   fact.payment_mode,
-  999999,
+  NULL,
   999999,
   'USD',
   1,

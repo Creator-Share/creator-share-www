@@ -899,7 +899,8 @@ ALTER TABLE public.transaction_ledger
       AND length(provider_movement_id) BETWEEN 1 AND 255
       AND financial_entry_kind IS NOT NULL
       AND financial_movement_id IS NOT NULL
-      AND base_amount_usd_cents > 0
+      AND ((financial_entry_kind = 'sponsorship_payment' AND base_amount_usd_cents IS NOT NULL AND base_amount_usd_cents > 0 AND credit IS NOT NULL AND credit = base_amount_usd_cents)
+        OR (financial_entry_kind <> 'sponsorship_payment' AND base_amount_usd_cents IS NULL AND credit IS NULL))
       AND provider_occurred_at IS NOT NULL
     )
   ),
@@ -912,7 +913,7 @@ ALTER TABLE public.transaction_ledger
       AND payment_provider IS NOT NULL
       AND provider_account_scope IS NOT NULL
       AND financial_movement_id IS NOT NULL
-      AND base_amount_usd_cents IS NOT NULL
+      AND (financial_entry_kind <> 'sponsorship_payment' OR base_amount_usd_cents IS NOT NULL)
     )
   ),
   ADD CONSTRAINT transaction_ledger_attempt_chain_fkey

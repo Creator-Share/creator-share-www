@@ -451,3 +451,12 @@ Combined the private backlog wrapper with its only implementation helper, deleti
 ## Retention and registration validation
 
 Publication 35207046696 and WebKit 35207046638 passed at 5323d5c, including 2,170 pgTAP assertions, 1,716 offline tests, 66 dev-server tests, and all required HTTP and concurrency harnesses. This validates the combined backlog helper and the registration-metadata regression. Vercel also passed. The subsequent returned email-log error correction remains pending its own run.
+
+
+## Exact adjustment normalization
+
+The whole-cent preimage requirement is removed from Stripe, PayPal, SQL ingestion, and settlement. Adjustment amounts remain exact provider minor units; USD reporting derives the immutable original payment ratio and rounds the final total. This removes the redundant normalized adjustment field from the RPC and canonical adjustment rows. Private analytics now carries exact fractions across sponsorships, including the five tiny refunds regression described in the accounting decision.
+
+Forty-four mock adapter tests, TypeScript, and lint pass. In-process PostgreSQL checks pass the financial-adjustment suite with forty additional provider/currency assertions, existing one-time history, refund-update and public-metric assertions, sixteen exact aggregate assertions, and the private analytics suite with its new cross-sponsorship rounding case. These checks use managed-schema stubs, not a running Supabase service. Hosted validation is pending for this candidate.
+
+The preceding `fa6f522` head passed publication workflow 36809158006 and WebKit workflow 36809157943. Those results establish only the preceding exact aggregate foundation. Excess provider losses, multiple dispute cash movements, retained-event reconciliation, and coordinated longitudinal analytics disclosure remain open. No merge or local service start is authorized.

@@ -605,7 +605,6 @@ BEGIN
     target_provider_object_id => test_provider_object_id,
     target_adjustment_provider_movement_type => test_movement_type,
     target_adjustment_provider_movement_id => test_movement_id,
-    target_base_amount_usd_cents => test_amount,
     target_charged_amount_minor => test_amount,
     target_charged_currency => 'USD',
     target_conversion_rate => 1,

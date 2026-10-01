@@ -473,7 +473,6 @@ async function ingestVerifiedAdjustment(
         input.adjustmentProviderMovementType,
       target_adjustment_provider_movement_id:
         input.adjustmentProviderMovementId,
-      target_base_amount_usd_cents: input.baseAmountUsdCents,
       target_charged_amount_minor: input.chargedAmountMinor,
       target_charged_currency: input.chargedCurrency,
       target_conversion_rate: input.conversionRate,

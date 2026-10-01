@@ -46,5 +46,12 @@ SELECT extensions.ok(NOT EXISTS (
   ) actual
   WHERE actual.result <> -div(2*refund::numeric*2500+3500,2*3500)
 ), '60000 amount and arrival-order combinations match exact final rounding');
+SELECT extensions.ok((SELECT private.sum_usd_fractions(fraction)=4 FROM (
+  SELECT private.normalized_usd_fraction(100,140,1) AS fraction FROM generate_series(1,5) payment(id) GROUP BY payment.id
+) movement), 'cross-sponsorship fractions are combined before final rounding');
+SELECT extensions.ok((SELECT private.sum_usd_fractions(fraction)=0 FROM (
+  SELECT private.normalized_usd_fraction(2500,3500,delta) AS fraction
+  FROM (VALUES (-1::bigint),(1)) movement(delta) GROUP BY delta
+) fractions), 'two-stage aggregation preserves exact dispute restoration');
 SELECT * FROM extensions.finish();
 ROLLBACK;

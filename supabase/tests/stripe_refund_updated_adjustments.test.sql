@@ -247,7 +247,6 @@ AS $$
     target_provider_object_id => test_refund_id,
     target_adjustment_provider_movement_type => 'refund',
     target_adjustment_provider_movement_id => test_refund_id,
-    target_base_amount_usd_cents => test_amount,
     target_charged_amount_minor => test_amount,
     target_charged_currency => 'USD',
     target_conversion_rate => 1,
@@ -459,7 +458,7 @@ SELECT extensions.ok(
       )
       AND event.fact_provider_movement_type = 'refund'
       AND event.fact_provider_movement_id = 're_refund_updated_shared_0001'
-      AND event.fact_base_amount_usd_cents = 2000
+      AND event.fact_base_amount_usd_cents IS NULL
     FROM public.payment_gateway_events event
     WHERE event.id = (
       SELECT gateway_event_id FROM refund_updated_ingest

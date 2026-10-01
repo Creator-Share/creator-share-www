@@ -321,8 +321,9 @@ function OriginalCurrencyTable({
       </h3>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
         These values preserve the currency charged by the payment provider.
-        Normalized USD summaries above use the conversion evidence recorded at
-        transaction time.
+        USD adjustments use the original payment’s recorded USD and charged
+        amounts. Each displayed total is rounded once, so rounded components may
+        differ slightly from the displayed net total.
       </p>
 
       {currencies === null ? (

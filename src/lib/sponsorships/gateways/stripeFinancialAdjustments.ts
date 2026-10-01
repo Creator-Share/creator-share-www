@@ -109,7 +109,6 @@ export interface VerifiedStripeFinancialAdjustmentInput {
   providerObjectId: string
   adjustmentProviderMovementType: "refund" | "dispute"
   adjustmentProviderMovementId: string
-  baseAmountUsdCents: number
   chargedAmountMinor: number
   chargedCurrency: SupportedCurrency
   conversionRate: number
@@ -511,21 +510,6 @@ async function disputeChain(
   return chain
 }
 
-function rateFraction(rate: number): {
-  numerator: bigint
-  denominator: bigint
-} {
-  if (!Number.isFinite(rate) || rate <= 0 || rate >= 10_000_000_000) {
-    reject("boundary-mismatch")
-  }
-  const fixed = rate.toFixed(8)
-  const [whole, fraction = ""] = fixed.split(".")
-  const numerator = BigInt(`${whole}${fraction}`)
-  const denominator = 100_000_000n
-  if (numerator <= 0n) reject("boundary-mismatch")
-  return { numerator, denominator }
-}
-
 function roundPositiveRational(numerator: bigint, denominator: bigint): bigint {
   return (2n * numerator + denominator) / (2n * denominator)
 }
@@ -534,71 +518,7 @@ function ceilPositiveRational(numerator: bigint, denominator: bigint): bigint {
   return (numerator + denominator - 1n) / denominator
 }
 
-/**
- * Converts a partial charged-currency adjustment back to normalized USD cents.
- * The selected value is the nearest proportional value that still reproduces
- * the exact charged amount under the original immutable conversion rate.
- */
-export function deriveProportionalBaseUsdCents(
-  chargedAmountMinor: number,
-  original: Pick<
-    AuthoritativeStripeFinancialMovement,
-    "baseAmountUsdCents" | "chargedAmountMinor" | "conversionRate"
-  >,
-): number {
-  if (
-    !Number.isSafeInteger(chargedAmountMinor) ||
-    chargedAmountMinor < 1 ||
-    !Number.isSafeInteger(original.baseAmountUsdCents) ||
-    original.baseAmountUsdCents < 1 ||
-    !Number.isSafeInteger(original.chargedAmountMinor) ||
-    original.chargedAmountMinor < chargedAmountMinor
-  ) {
-    reject("boundary-mismatch")
-  }
-
-  const { numerator: rateNumerator, denominator: rateDenominator } =
-    rateFraction(original.conversionRate)
-  const originalBase = BigInt(original.baseAmountUsdCents)
-  const originalCharged = BigInt(original.chargedAmountMinor)
-  if (
-    roundPositiveRational(originalBase * rateNumerator, rateDenominator) !==
-    originalCharged
-  ) {
-    reject("boundary-mismatch")
-  }
-
-  if (chargedAmountMinor === original.chargedAmountMinor) {
-    return original.baseAmountUsdCents
-  }
-
-  const adjustedCharged = BigInt(chargedAmountMinor)
-  const proportional = roundPositiveRational(
-    adjustedCharged * originalBase,
-    originalCharged,
-  )
-  const lowerNumerator = (2n * adjustedCharged - 1n) * rateDenominator
-  const upperNumerator = (2n * adjustedCharged + 1n) * rateDenominator - 1n
-  let lower = ceilPositiveRational(lowerNumerator, 2n * rateNumerator)
-  let upper = upperNumerator / (2n * rateNumerator)
-  if (lower < 1n) lower = 1n
-  if (upper > originalBase) upper = originalBase
-  if (lower > upper) reject("boundary-mismatch")
-
-  const selected =
-    proportional < lower ? lower : proportional > upper ? upper : proportional
-  if (
-    selected < 1n ||
-    selected > originalBase ||
-    roundPositiveRational(selected * rateNumerator, rateDenominator) !==
-      adjustedCharged ||
-    selected > BigInt(Number.MAX_SAFE_INTEGER)
-  ) {
-    reject("boundary-mismatch")
-  }
-  return Number(selected)
-}
-
+/** Validate the immutable original payment before accepting provider adjustments. */
 function validateOriginalMovement(
   movement: AuthoritativeStripeFinancialMovement,
   lookup: StripeFinancialMovementLookup,
@@ -628,6 +548,8 @@ function validateOriginalMovement(
     movement.baseAmountUsdCents < 1 ||
     !Number.isSafeInteger(movement.chargedAmountMinor) ||
     movement.chargedAmountMinor < 1 ||
+    !Number.isFinite(movement.conversionRate) ||
+    movement.conversionRate <= 0 ||
     !Number.isFinite(originalOccurredAt.getTime()) ||
     originalOccurredAt.getTime() > new Date(occurredAt).getTime()
   ) {
@@ -958,10 +880,6 @@ export async function ingestStripeFinancialAdjustment(
     reject("boundary-mismatch")
   }
 
-  const baseAmountUsdCents = deriveProportionalBaseUsdCents(
-    facts.chargedAmountMinor,
-    original,
-  )
   const payload = encryptedPayload(
     input.rawPayload,
     input.event,
@@ -976,7 +894,6 @@ export async function ingestStripeFinancialAdjustment(
     providerEventId,
     eventType,
     ...databaseFacts,
-    baseAmountUsdCents,
     conversionRate: original.conversionRate,
     redactedPayload: {
       redaction_version: "stripe_financial_adjustment_v1",

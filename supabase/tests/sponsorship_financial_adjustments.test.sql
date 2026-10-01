@@ -444,7 +444,6 @@ FROM public.ingest_verified_sponsorship_financial_adjustment(
   target_provider_object_id => 're_financial_adjustment_partial_0001',
   target_adjustment_provider_movement_type => 'refund',
   target_adjustment_provider_movement_id => 're_financial_adjustment_partial_0001',
-  target_base_amount_usd_cents => 2000,
   target_charged_amount_minor => 2000,
   target_charged_currency => 'USD',
   target_conversion_rate => 1,
@@ -507,9 +506,8 @@ SELECT extensions.is(
 SELECT extensions.ok(
   (
     SELECT
-      movement.base_amount_usd_cents = 2000
+      movement.base_amount_usd_cents IS NULL
       AND movement.charged_amount_minor = 2000
-      AND movement.net_base_amount_usd_cents = -2000
       AND movement.net_charged_amount_minor = -2000
       AND movement.original_financial_movement_id = (
         SELECT value
@@ -528,16 +526,16 @@ SELECT extensions.ok(
 SELECT extensions.ok(
   (
     SELECT
-      ledger.credit = -2000
+      ledger.credit IS NULL
       AND ledger.charged_amount = 2000
-      AND ledger.base_amount_usd_cents = 2000
+      AND ledger.base_amount_usd_cents IS NULL
     FROM public.transaction_ledger ledger
     WHERE ledger.id = (
       SELECT transaction_ledger_id
       FROM adjustment_partial_refund_result
     )
   ),
-  'adjustment ledger uses signed credit while charged evidence remains positive'
+  'adjustment ledger retains exact provider evidence without a rounded USD posting'
 );
 
 CREATE TEMP TABLE adjustment_partial_refund_replay ON COMMIT DROP AS
@@ -556,7 +554,6 @@ FROM public.ingest_verified_sponsorship_financial_adjustment(
   target_provider_object_id => 're_financial_adjustment_partial_0001',
   target_adjustment_provider_movement_type => 'refund',
   target_adjustment_provider_movement_id => 're_financial_adjustment_partial_0001',
-  target_base_amount_usd_cents => 2000,
   target_charged_amount_minor => 2000,
   target_charged_currency => 'USD',
   target_conversion_rate => 1,
@@ -616,7 +613,6 @@ FROM public.ingest_verified_sponsorship_financial_adjustment(
   target_provider_object_id => 're_financial_adjustment_partial_0001',
   target_adjustment_provider_movement_type => 'refund',
   target_adjustment_provider_movement_id => 're_financial_adjustment_partial_0001',
-  target_base_amount_usd_cents => 2000,
   target_charged_amount_minor => 2000,
   target_charged_currency => 'USD',
   target_conversion_rate => 1,
@@ -699,7 +695,6 @@ FROM public.ingest_verified_sponsorship_financial_adjustment(
   target_provider_object_id => 're_financial_adjustment_over_0001',
   target_adjustment_provider_movement_type => 'refund',
   target_adjustment_provider_movement_id => 're_financial_adjustment_over_0001',
-  target_base_amount_usd_cents => 9000,
   target_charged_amount_minor => 9000,
   target_charged_currency => 'USD',
   target_conversion_rate => 1,
@@ -781,7 +776,6 @@ FROM public.ingest_verified_sponsorship_financial_adjustment(
   target_provider_object_id => 'dp_financial_adjustment_0001',
   target_adjustment_provider_movement_type => 'dispute',
   target_adjustment_provider_movement_id => 'dp_financial_adjustment_0001',
-  target_base_amount_usd_cents => 1000,
   target_charged_amount_minor => 1000,
   target_charged_currency => 'USD',
   target_conversion_rate => 1,
@@ -879,7 +873,6 @@ FROM public.ingest_verified_sponsorship_financial_adjustment(
   target_provider_object_id => 'dp_financial_adjustment_0001',
   target_adjustment_provider_movement_type => 'dispute',
   target_adjustment_provider_movement_id => 'dp_financial_adjustment_0001',
-  target_base_amount_usd_cents => 1000,
   target_charged_amount_minor => 1000,
   target_charged_currency => 'USD',
   target_conversion_rate => 1,
@@ -1042,7 +1035,6 @@ FROM public.ingest_verified_sponsorship_financial_adjustment(
   target_provider_object_id => 're_financial_adjustment_full_0001',
   target_adjustment_provider_movement_type => 'refund',
   target_adjustment_provider_movement_id => 're_financial_adjustment_full_0001',
-  target_base_amount_usd_cents => 8000,
   target_charged_amount_minor => 8000,
   target_charged_currency => 'USD',
   target_conversion_rate => 1,
@@ -1133,7 +1125,6 @@ SELECT extensions.throws_ok(
       target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
       target_adjustment_provider_movement_type => 'refund',
       target_adjustment_provider_movement_id => 'REFUND-BAD-MAPPING-0001',
-      target_base_amount_usd_cents => 5000,
       target_charged_amount_minor => 5000,
       target_charged_currency => 'USD',
       target_conversion_rate => 1,
@@ -1169,7 +1160,6 @@ FROM public.ingest_verified_sponsorship_financial_adjustment(
   target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
   target_adjustment_provider_movement_type => 'dispute',
   target_adjustment_provider_movement_id => 'PP-D-123456789',
-  target_base_amount_usd_cents => 1200,
   target_charged_amount_minor => 1200,
   target_charged_currency => 'USD',
   target_conversion_rate => 1,
@@ -1211,7 +1201,6 @@ SELECT extensions.ok(
       target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
       target_adjustment_provider_movement_type => 'dispute',
       target_adjustment_provider_movement_id => 'PP-D-123456789',
-      target_base_amount_usd_cents => 1200,
       target_charged_amount_minor => 1200,
       target_charged_currency => 'USD',
       target_conversion_rate => 1,
@@ -1288,7 +1277,6 @@ FROM public.ingest_verified_sponsorship_financial_adjustment(
   target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
   target_adjustment_provider_movement_type => 'dispute',
   target_adjustment_provider_movement_id => 'PP-D-123456789',
-  target_base_amount_usd_cents => 1200,
   target_charged_amount_minor => 1200,
   target_charged_currency => 'USD',
   target_conversion_rate => 1,
@@ -1382,7 +1370,6 @@ FROM public.ingest_verified_sponsorship_financial_adjustment(
   target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
   target_adjustment_provider_movement_type => 'reversal',
   target_adjustment_provider_movement_id => 'REVERSAL-FINANCIAL-ADJUSTMENT-0001',
-  target_base_amount_usd_cents => 5000,
   target_charged_amount_minor => 5000,
   target_charged_currency => 'USD',
   target_conversion_rate => 1,
@@ -1441,8 +1428,13 @@ SELECT extensions.ok(
 
 SELECT extensions.is(
   (
-    SELECT movement.net_base_amount_usd_cents
+    SELECT private.sum_normalized_usd_cents(
+      original.base_amount_usd_cents, original.charged_amount_minor,
+      movement.net_charged_amount_minor
+    )::bigint
     FROM public.sponsorship_financial_movements movement
+    JOIN public.sponsorship_financial_movements original
+      ON original.id = movement.original_financial_movement_id
     WHERE movement.id = (
       SELECT financial_movement_id
       FROM adjustment_paypal_reversal_result
@@ -1466,7 +1458,7 @@ SELECT extensions.ok(
 SELECT extensions.ok(
   NOT has_function_privilege(
     'anon',
-    'public.ingest_verified_sponsorship_financial_adjustment(uuid,public.sponsorship_method,text,text,text,text,text,text,text,bigint,bigint,public.payment_currency,numeric,jsonb,bytea,bytea,timestamp with time zone,timestamp with time zone,text,text,text,text,text)',
+    'public.ingest_verified_sponsorship_financial_adjustment(uuid,public.sponsorship_method,text,text,text,text,text,text,text,bigint,public.payment_currency,numeric,jsonb,bytea,bytea,timestamp with time zone,timestamp with time zone,text,text,text,text,text)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
@@ -1518,6 +1510,116 @@ SELECT extensions.throws_ok(
   'Payment transaction evidence is append only',
   'refund requirement resolution evidence is append only'
 );
+
+-- Synthetic original-payment fixtures reuse the existing provider chains. Only
+-- fixture creation bypasses triggers; ingestion, claim, and settlement do not.
+CREATE FUNCTION pg_temp.clone_normalization_row(target_table regclass, source_value jsonb, changes jsonb)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE columns text;
+BEGIN
+  SELECT string_agg(quote_ident(attname),',' ORDER BY attnum) INTO columns
+  FROM pg_attribute WHERE attrelid=target_table AND attnum>0 AND NOT attisdropped AND attgenerated='';
+  EXECUTE format('INSERT INTO %s (%s) SELECT %s FROM jsonb_populate_record(NULL::%s,$1)',target_table,columns,columns,target_table)
+    USING source_value || changes;
+END;
+$$;
+CREATE FUNCTION pg_temp.normalization_payment(provider_name text, currency public.payment_currency, charged bigint, rate numeric)
+RETURNS uuid LANGUAGE plpgsql AS $$
+DECLARE
+  original public.sponsorship_financial_movements;
+  intent_id uuid := gen_random_uuid(); attempt_id uuid := gen_random_uuid();
+  event_id uuid := gen_random_uuid(); movement_id uuid := gen_random_uuid();
+  patch jsonb;
+BEGIN
+  SELECT * INTO original FROM public.sponsorship_financial_movements WHERE id=(
+    SELECT value FROM adjustment_test_context WHERE key=lower(provider_name)||'_gross_movement');
+  patch := jsonb_build_object('sponsorship_intent_id',intent_id,'payment_attempt_id',attempt_id,
+    'base_amount_usd_cents',2500,'charged_amount_minor',charged,'charged_currency',currency,'conversion_rate',rate);
+  PERFORM set_config('session_replication_role','replica',true);
+  PERFORM pg_temp.clone_normalization_row('public.sponsorship_intents',
+    (SELECT to_jsonb(t) FROM public.sponsorship_intents t WHERE id=original.sponsorship_intent_id),
+    patch || jsonb_build_object('id',intent_id,'idempotency_key','normalization-'||intent_id));
+  PERFORM pg_temp.clone_normalization_row('public.sponsorship_payment_attempts',
+    (SELECT to_jsonb(t) FROM public.sponsorship_payment_attempts t WHERE id=original.payment_attempt_id),
+    patch || jsonb_build_object('id',attempt_id,'provider_idempotency_key','normalization-'||attempt_id,
+      'provider_object_id','normalization-'||attempt_id,
+      'checkout_receipt_digest',extensions.digest(attempt_id::text,'sha256')));
+  PERFORM pg_temp.clone_normalization_row('public.sponsorship_attributions',
+    (SELECT to_jsonb(t) FROM public.sponsorship_attributions t WHERE sponsorship_intent_id=original.sponsorship_intent_id),
+    jsonb_build_object('sponsorship_intent_id',intent_id));
+  PERFORM pg_temp.clone_normalization_row('public.payment_gateway_events',
+    (SELECT to_jsonb(t) FROM public.payment_gateway_events t WHERE id=original.source_gateway_event_id),
+    patch || jsonb_build_object('id',event_id,'provider_event_id','normalization-'||event_id,
+      'provider_object_id','normalization-'||attempt_id,
+      'fact_provider_movement_id','normalization-'||movement_id,
+      'fact_server_payment_attempt_id',attempt_id,'fact_base_amount_usd_cents',2500,
+      'fact_charged_amount_minor',charged,'fact_charged_currency',currency,'fact_conversion_rate',rate));
+  PERFORM pg_temp.clone_normalization_row('public.sponsorship_financial_movements',to_jsonb(original),
+    patch || jsonb_build_object('id',movement_id,'source_gateway_event_id',event_id,'provider_movement_id','normalization-'||movement_id));
+  PERFORM pg_temp.clone_normalization_row('public.payment_gateway_event_applications',
+    (SELECT to_jsonb(t) FROM public.payment_gateway_event_applications t WHERE gateway_event_id=original.source_gateway_event_id),
+    jsonb_build_object('id',gen_random_uuid(),'gateway_event_id',event_id,'financial_movement_id',movement_id));
+  PERFORM set_config('session_replication_role','origin',true);
+  RETURN movement_id;
+END;
+$$;
+CREATE FUNCTION pg_temp.normalization_adjustment(root_id uuid, adjustment_kind text, amount bigint, movement_key text DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE root public.sponsorship_financial_movements; operation_id uuid:=gen_random_uuid();
+  event_id uuid; lease uuid; result jsonb; event_kind text; movement_type text;
+BEGIN
+  SELECT * INTO root FROM public.sponsorship_financial_movements WHERE id=root_id;
+  movement_type := CASE WHEN adjustment_kind='refund' THEN 'refund' ELSE 'dispute' END;
+  movement_key := coalesce(movement_key,'re_normalization_'||replace(operation_id::text,'-',''));
+  event_kind := CASE WHEN root.provider='STRIPE' THEN CASE adjustment_kind
+    WHEN 'refund' THEN 'refund.created' WHEN 'debit' THEN 'charge.dispute.funds_withdrawn' ELSE 'charge.dispute.funds_reinstated' END
+    ELSE CASE adjustment_kind WHEN 'refund' THEN 'PAYMENT.CAPTURE.REFUNDED' WHEN 'debit' THEN 'CUSTOMER.DISPUTE.CREATED' ELSE 'CUSTOMER.DISPUTE.RESOLVED' END END;
+  SELECT gateway_event_id INTO event_id FROM public.ingest_verified_sponsorship_financial_adjustment(
+    target_original_financial_movement_id=>root.id,target_provider=>root.provider,
+    target_provider_account_scope=>root.provider_account_scope,target_provider_event_id=>'normalization-'||operation_id,
+    target_event_type=>event_kind,target_provider_object_type=>CASE WHEN root.provider='STRIPE' THEN movement_type ELSE root.provider_movement_type END,
+    target_provider_object_id=>CASE WHEN root.provider='STRIPE' THEN movement_key ELSE root.provider_movement_id END,
+    target_adjustment_provider_movement_type=>movement_type,target_adjustment_provider_movement_id=>movement_key,
+    target_charged_amount_minor=>amount,target_charged_currency=>root.charged_currency,target_conversion_rate=>root.conversion_rate,
+    target_redacted_payload=>'{}',target_payload_ciphertext=>decode('ab','hex'),target_payload_sha256=>extensions.digest(operation_id::text,'sha256'),
+    target_signature_verified_at=>clock_timestamp(),target_occurred_at=>clock_timestamp(),
+    target_verification_method=>CASE WHEN root.provider='STRIPE' THEN 'stripe_webhook_signature' ELSE 'paypal_webhook_signature_api' END);
+  SELECT processing_lease_token INTO lease FROM public.claim_payment_gateway_events('normalization-test',100)
+    WHERE gateway_event_id=event_id;
+  SELECT to_jsonb(applied) INTO result FROM public.apply_sponsorship_financial_adjustment(event_id,lease) applied;
+  RETURN result;
+END;
+$$;
+CREATE FUNCTION pg_temp.verify_fractional_adjustments(provider_name text,currency public.payment_currency,charged bigint,rate numeric)
+RETURNS SETOF text LANGUAGE plpgsql AS $$
+DECLARE root_id uuid; result jsonb; dispute_key text; label text:=provider_name||' '||currency;
+BEGIN
+  root_id:=pg_temp.normalization_payment(provider_name,currency,charged,rate);
+  result:=pg_temp.normalization_adjustment(root_id,'refund',2);
+  RETURN NEXT extensions.ok((result->>'net_charged_amount_minor')::bigint=charged-2,
+    label||' accepts a two-unit provider refund without a rounded USD preimage');
+  RETURN NEXT extensions.ok((result->>'net_base_amount_usd_cents')::bigint=private.round_normalized_usd(ARRAY[2500::numeric*(charged-2),charged::numeric]),
+    label||' reports the exact-ratio remaining value');
+  result:=pg_temp.normalization_adjustment(root_id,'refund',charged-2);
+  RETURN NEXT extensions.ok(result @> '{"net_base_amount_usd_cents":0,"net_charged_amount_minor":0}'::jsonb,
+    label||' split refunds completely reverse both original amounts');
+  root_id:=pg_temp.normalization_payment(provider_name,currency,charged,rate);
+  dispute_key:='dp_normalization_'||replace(root_id::text,'-','');
+  PERFORM pg_temp.normalization_adjustment(root_id,'debit',1,dispute_key);
+  PERFORM pg_temp.normalization_adjustment(root_id,'refund',1);
+  result:=pg_temp.normalization_adjustment(root_id,'credit',1,dispute_key);
+  RETURN NEXT extensions.ok((SELECT private.sum_normalized_usd_cents(2500,charged,net_charged_amount_minor)=0
+    FROM public.sponsorship_financial_movements WHERE original_financial_movement_id=root_id
+      AND entry_kind IN ('sponsorship_dispute_debit','sponsorship_dispute_credit')),
+    label||' interleaved refund leaves no restored-dispute residual');
+  RETURN NEXT extensions.ok((result->>'net_base_amount_usd_cents')::bigint=private.round_normalized_usd(ARRAY[2500::numeric*(charged-1),charged::numeric]),
+    label||' restored dispute preserves the exact refund net');
+END;
+$$;
+SELECT set_config('request.jwt.claim.role','service_role',true);
+SELECT checked.assertion FROM (VALUES ('STRIPE'),('PAYPAL')) provider(name)
+CROSS JOIN (VALUES ('USD'::public.payment_currency,2500::bigint,1::numeric),('AUD',3500,1.4),('GBP',1850,0.74),('EUR',2150,0.86)) quote(currency,charged,rate)
+CROSS JOIN LATERAL pg_temp.verify_fractional_adjustments(provider.name,quote.currency,quote.charged,quote.rate) checked(assertion);
 
 SELECT * FROM extensions.finish();
 

@@ -820,6 +820,24 @@ test.describe("PayPal webhook trust boundary", () => {
     expect(calls.adjustments).toHaveLength(0)
   })
 
+  test("preserves AUD refund units without inventing rounded USD input", async () => {
+    for (const amount of [1, 2, 100, 600, 3499, 3500]) {
+      const raw = rawEvent("PAYMENT.CAPTURE.REFUNDED", "refund", {
+        id: REFUND_ID, status: "COMPLETED",
+        amount: { value: (amount / 100).toFixed(2), currency_code: "AUD" },
+        supplementary_data: { related_ids: { capture_id: CAPTURE_ID } },
+      })
+      const { calls, value } = dependencies()
+      value.loadOriginalMovement = async () => originalMovement({
+        baseAmountUsdCents: 2500, chargedAmountMinor: 3500, chargedCurrency: "AUD", conversionRate: 1.4,
+      })
+      await expect(ingestVerifiedPayPalEvent({ event: parsePayPalWebhookEvent(raw), rawPayload: raw,
+        requestContext: requestContext() }, value)).resolves.toMatchObject({ kind: "adjustment" })
+      expect(calls.adjustments[0].chargedAmountMinor).toBe(amount)
+      expect(calls.adjustments[0]).not.toHaveProperty("baseAmountUsdCents")
+    }
+  })
+
   test("refuses a refund larger than the original capture", async () => {
     // The other half of the same guard, which the amount comparison enforces.
     const raw = rawEvent("PAYMENT.CAPTURE.REFUNDED", "refund", {
@@ -880,7 +898,6 @@ test.describe("PayPal webhook trust boundary", () => {
       providerObjectId: CAPTURE_ID,
       adjustmentProviderMovementType: "dispute",
       adjustmentProviderMovementId: DISPUTE_ID,
-      baseAmountUsdCents: 500,
       chargedAmountMinor: 500,
     })
   })

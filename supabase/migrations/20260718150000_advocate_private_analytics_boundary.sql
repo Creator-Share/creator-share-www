@@ -440,28 +440,36 @@ BEGIN
     SELECT
       movement.sponsorship_intent_id,
       coalesce(
-        sum(movement.base_amount_usd_cents) FILTER (
+        private.normalized_usd_fraction(
+          original.base_amount_usd_cents, original.charged_amount_minor, movement.charged_amount_minor
+        ) FILTER (
           WHERE movement.entry_kind IN (
             'sponsorship_refund',
             'sponsorship_reversal'
           )
         ),
-        0
-      )::bigint AS refunds_and_reversals_usd_cents,
+        ARRAY[0,1]::numeric[]
+      ) AS refunds_and_reversals_usd_fraction,
       coalesce(
-        sum(movement.base_amount_usd_cents) FILTER (
+        private.normalized_usd_fraction(
+          original.base_amount_usd_cents, original.charged_amount_minor, movement.charged_amount_minor
+        ) FILTER (
           WHERE movement.entry_kind = 'sponsorship_dispute_debit'
         ),
-        0
-      )::bigint AS dispute_debits_usd_cents,
+        ARRAY[0,1]::numeric[]
+      ) AS dispute_debits_usd_fraction,
       coalesce(
-        sum(movement.base_amount_usd_cents) FILTER (
+        private.normalized_usd_fraction(
+          original.base_amount_usd_cents, original.charged_amount_minor, movement.charged_amount_minor
+        ) FILTER (
           WHERE movement.entry_kind = 'sponsorship_dispute_credit'
         ),
-        0
-      )::bigint AS dispute_credits_usd_cents,
-      sum(movement.net_base_amount_usd_cents)::bigint
-        AS net_collected_usd_cents,
+        ARRAY[0,1]::numeric[]
+      ) AS dispute_credits_usd_fraction,
+      private.normalized_usd_fraction(
+        original.base_amount_usd_cents, original.charged_amount_minor, movement.net_charged_amount_minor
+      )
+        AS net_collected_usd_fraction,
       coalesce(
         sum(movement.charged_amount_minor) FILTER (
           WHERE movement.entry_kind IN (
@@ -486,6 +494,8 @@ BEGIN
       sum(movement.net_charged_amount_minor)::bigint
         AS net_collected_minor
     FROM public.sponsorship_financial_movements movement
+    JOIN public.sponsorship_financial_movements original
+      ON original.id = coalesce(movement.original_financial_movement_id, movement.id)
     JOIN bounded_intent_facts fact
       ON fact.sponsorship_intent_id = movement.sponsorship_intent_id
     WHERE movement.occurred_at < v_as_of
@@ -556,10 +566,10 @@ BEGIN
       payment.initial_collected_usd_cents,
       payment.renewal_collected_usd_cents,
       payment.gross_collected_usd_cents,
-      movement.refunds_and_reversals_usd_cents,
-      movement.dispute_debits_usd_cents,
-      movement.dispute_credits_usd_cents,
-      movement.net_collected_usd_cents,
+      movement.refunds_and_reversals_usd_fraction,
+      movement.dispute_debits_usd_fraction,
+      movement.dispute_credits_usd_fraction,
+      movement.net_collected_usd_fraction,
       CASE
         WHEN fact.payment_mode = 'recurring'
              AND subscription_state.is_active_at_cutoff
@@ -649,22 +659,22 @@ BEGIN
       )::bigint AS renewal_contacts,
       sum(expanded.gross_collected_usd_cents)::bigint
         AS gross_collected_usd_cents,
-      sum(expanded.refunds_and_reversals_usd_cents)::bigint
+      private.sum_usd_fractions(expanded.refunds_and_reversals_usd_fraction)::bigint
         AS refunds_and_reversals_usd_cents,
       count(DISTINCT expanded.sponsor_contact_key) FILTER (
-        WHERE expanded.refunds_and_reversals_usd_cents > 0
+        WHERE expanded.refunds_and_reversals_usd_fraction[1] > 0
       )::bigint AS refund_and_reversal_contacts,
-      sum(expanded.dispute_debits_usd_cents)::bigint
+      private.sum_usd_fractions(expanded.dispute_debits_usd_fraction)::bigint
         AS dispute_debits_usd_cents,
       count(DISTINCT expanded.sponsor_contact_key) FILTER (
-        WHERE expanded.dispute_debits_usd_cents > 0
+        WHERE expanded.dispute_debits_usd_fraction[1] > 0
       )::bigint AS dispute_debit_contacts,
-      sum(expanded.dispute_credits_usd_cents)::bigint
+      private.sum_usd_fractions(expanded.dispute_credits_usd_fraction)::bigint
         AS dispute_credits_usd_cents,
       count(DISTINCT expanded.sponsor_contact_key) FILTER (
-        WHERE expanded.dispute_credits_usd_cents > 0
+        WHERE expanded.dispute_credits_usd_fraction[1] > 0
       )::bigint AS dispute_credit_contacts,
-      sum(expanded.net_collected_usd_cents)::bigint
+      private.sum_usd_fractions(expanded.net_collected_usd_fraction)::bigint
         AS net_collected_usd_cents,
       sum(expanded.active_monthly_commitment_usd_cents)::bigint
         AS active_monthly_commitment_usd_cents,

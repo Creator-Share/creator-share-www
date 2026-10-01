@@ -35,7 +35,7 @@ ALTER TABLE public.payment_gateway_events
           AND fact_parent_provider_object_id IS NOT NULL
           AND fact_provider_movement_type IS NOT NULL
           AND fact_provider_movement_id IS NOT NULL
-          AND fact_base_amount_usd_cents IS NOT NULL
+          AND fact_base_amount_usd_cents IS NULL
           AND fact_charged_amount_minor IS NOT NULL
           AND fact_charged_currency IS NOT NULL
           AND fact_conversion_rate IS NOT NULL

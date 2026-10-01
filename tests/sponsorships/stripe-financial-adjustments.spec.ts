@@ -43,7 +43,6 @@ const { createSponsorshipCrypto, fromSupabaseRpcBytea } = testRequire(
   "../../src/lib/sponsorships/crypto",
 ) as typeof import("../../src/lib/sponsorships/crypto")
 const {
-  deriveProportionalBaseUsdCents,
   ingestStripeFinancialAdjustment,
   StripeFinancialAdjustmentError,
 } = testRequire(
@@ -546,7 +545,6 @@ test.describe("verified Stripe sponsorship financial adjustments", () => {
       providerObjectId: REFUND_ID,
       adjustmentProviderMovementType: "refund",
       adjustmentProviderMovementId: REFUND_ID,
-      baseAmountUsdCents: 500,
       chargedAmountMinor: 625,
       chargedCurrency: "USD",
       conversionRate: 1.25,
@@ -663,7 +661,6 @@ test.describe("verified Stripe sponsorship financial adjustments", () => {
       providerObjectId: DISPUTE_ID,
       adjustmentProviderMovementType: "dispute",
       adjustmentProviderMovementId: DISPUTE_ID,
-      baseAmountUsdCents: 400,
       chargedAmountMinor: 500,
       redactedPayload: {
         balance_transaction_id: DISPUTE_DEBIT_TRANSACTION_ID,
@@ -695,7 +692,6 @@ test.describe("verified Stripe sponsorship financial adjustments", () => {
       adjustmentKind: "sponsorship_dispute_credit",
     })
     expect(reinstated.calls.ingested[0]).toMatchObject({
-      baseAmountUsdCents: 300,
       chargedAmountMinor: 375,
       redactedPayload: {
         balance_transaction_id: DISPUTE_CREDIT_TRANSACTION_ID,
@@ -741,7 +737,6 @@ test.describe("verified Stripe sponsorship financial adjustments", () => {
     ).resolves.toMatchObject({ handled: true, ingested: true })
     expect(exact.calls.ingested[0]).toMatchObject({
       chargedAmountMinor: 500,
-      baseAmountUsdCents: 400,
     })
 
     await expect(
@@ -812,28 +807,17 @@ test.describe("verified Stripe sponsorship financial adjustments", () => {
     )
   })
 
-  test("derives only exact proportional base values and rejects unrepresentable currency slices", () => {
-    expect(
-      deriveProportionalBaseUsdCents(625, {
-        baseAmountUsdCents: 1000,
-        chargedAmountMinor: 1250,
-        conversionRate: 1.25,
-      }),
-    ).toBe(500)
-    expect(
-      deriveProportionalBaseUsdCents(1250, {
-        baseAmountUsdCents: 1000,
-        chargedAmountMinor: 1250,
-        conversionRate: 1.25,
-      }),
-    ).toBe(1000)
-    expect(() =>
-      deriveProportionalBaseUsdCents(1, {
-        baseAmountUsdCents: 5,
-        chargedAmountMinor: 10,
-        conversionRate: 2,
-      }),
-    ).toThrow(StripeFinancialAdjustmentError)
+  test("preserves every AUD refund unit without requiring a whole USD-cent preimage", async () => {
+    for (const amount of [1, 2, 100, 600, 3499, 3500]) {
+      const fixture = dependenciesFor(movement({ baseAmountUsdCents: 2500,
+        chargedAmountMinor: 3500, chargedCurrency: "AUD", conversionRate: 1.4 }), {
+        charge: charge({ amount_captured: 3500, currency: "aud" }),
+      })
+      await expect(ingestFixture(event("refund.created", refund({ amount, currency: "aud" })),
+        "{}", fixture.dependencies)).resolves.toMatchObject({ handled: true, ingested: true })
+      expect(fixture.calls.ingested[0].chargedAmountMinor).toBe(amount)
+      expect(fixture.calls.ingested[0]).not.toHaveProperty("baseAmountUsdCents")
+    }
   })
 
   test("fails closed on oversized evidence and distinguishes permanent and transient provider lookup failures", async () => {
