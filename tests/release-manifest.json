@@ -323,6 +323,7 @@
       "files": [
         "tests/database/account-offboarding-concurrency.mjs",
         "tests/database/advocate-analytics-release-concurrency.mjs",
+        "tests/database/advocate-release-deadline-http.mjs",
         "tests/database/advocate-branding-authority-concurrency.mjs",
         "tests/database/advocate-branding-authority-termination.mjs",
         "tests/database/advocate-initial-owner-concurrency.mjs",

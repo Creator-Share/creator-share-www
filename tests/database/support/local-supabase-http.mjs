@@ -928,7 +928,7 @@ export function createBoundedLocalSupabaseFetch(options = {}) {
     options.requestTimeoutMilliseconds,
     5_000,
     250,
-    30_000,
+    60_000,
     "local_supabase_http_fetch_timeout_invalid",
   )
   const maximumResponseBytes = requirePositiveInteger(

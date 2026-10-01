@@ -490,3 +490,12 @@ A `422` leaves the event unadmitted when retained material is unavailable, expir
 The endpoint limits request bodies to 1,024 bytes and five seconds. Preparation has a 90-second budget checked before writes. Database requests have eight-second transport limits; Stripe recovery reads have ten-second limits with SDK retries disabled; PayPal retains its existing bounded transport. The function requires the documented 120-second hosting allowance. Responses contain only categorical outcome, processing state, replay status and a server-issued request correlation ID.
 
 The request uses original signature-verification evidence rather than claiming a fresh provider signature. It preserves original ciphertext, hashes, timestamps and retention. The database records the operation, interpretation version and derived-fact digest atomically with queue admission. No second recovery queue is required because provider preparation reads and admission retries reuse the existing financial boundaries. Live recovery has not been exercised by this review.
+
+
+## Analytics release execution deadline
+
+The private/public analytics release RPC declares `statement_timeout = '40s'`. PostgREST must hoist that setting before executing the RPC; reload its schema cache after applying the migration. The application defaults to a 45-second HTTP budget. Shorter configured client budgets can still end before the server operation, so a client abort alone is not rollback evidence. Direct SQL operators must establish a session statement timeout before calling the function.
+
+The publication workflow runs `tests/database/advocate-release-deadline-http.mjs` against its existing isolated loopback stack and retains sanitized deadline evidence. It starts no services itself and must not be run locally unless the user has explicitly authorized the required local services. The gate waits on a deliberate database lock, observes the blocked RPC, requires SQLSTATE `57014` before the HTTP deadline, and verifies unchanged release and audit counts after cancellation. This gate has not yet passed on hosted infrastructure.
+
+A database-canceled invocation publishes no new transaction and retains earlier releases. Treat the worker failure as an operational failure requiring investigation or retry. The current batch remains atomic across its tenants; sustained progress and fairness for expensive histories require FF-035. No financial settlement or retention setting is changed by this deadline.

@@ -775,6 +775,8 @@ RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
+-- PostgREST hoists this before the RPC statement, bounding the entire batch.
+SET statement_timeout = '40s'
 AS $$
 #variable_conflict use_column
 DECLARE
@@ -1126,4 +1128,5 @@ REVOKE ALL ON FUNCTION public.read_public_advocate_presentation_snapshot(text)
 GRANT EXECUTE ON FUNCTION public.read_public_advocate_presentation_snapshot(text)
   TO service_role;
 
+NOTIFY pgrst, 'reload schema';
 COMMIT;

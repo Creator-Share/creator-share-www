@@ -30,7 +30,7 @@ SELECT extensions.ok(
       AND coalesce(
         array_to_string(function_definition.proconfig, ','),
         ''
-      ) = 'search_path=""'
+      ) = 'search_path="",statement_timeout=40s'
     FROM pg_proc function_definition
     WHERE function_definition.oid =
       'public.refresh_advocate_public_metric_releases(integer,text,text)'::regprocedure

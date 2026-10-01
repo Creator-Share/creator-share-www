@@ -180,6 +180,20 @@ jobs:
           ADVOCATE_POSTGREST_ROLE_HTTP_SOURCE_REVISION: ${{ github.sha }}
         run: yarn test:advocate:postgrest-role-http
 
+      - name: Verify analytics RPC server deadline
+        env:
+          ADVOCATE_RELEASE_DEADLINE_EVIDENCE_PATH: ${{ runner.temp }}/advocate-release-deadline-evidence.json
+          ADVOCATE_RELEASE_DEADLINE_SOURCE_REVISION: ${{ github.sha }}
+        run: node tests/database/advocate-release-deadline-http.mjs
+
+      - name: Upload analytics RPC deadline evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-release-deadline-evidence
+          path: ${{ runner.temp }}/advocate-release-deadline-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Verify PostgREST role claim forced termination cleanup
         run: yarn test:advocate:postgrest-role-http-termination
 
