@@ -644,3 +644,6 @@ The financial boundary now separates immutable Stripe balance facts from sponsor
 ### October 1 release validation repair
 
 The application now bundles the existing Reddit Sans font under its OFL licence rather than fetching Google font CSS during builds. This removes the URL-shape dependency that broke the hosted production build at `e1414fd`. The cash-evidence race fixture explicitly supplies payment account and attribution policy dictionaries omitted by the isolated schema clone. Neither repair changes product scope or financial semantics. Local static and in-process checks pass; native hosted evidence remains pending.
+
+
+PayPal `RESOLVED_WITH_PAYOUT` requires merchant cash evidence before financial reinstatement. The case outcome alone may describe protection for either party. The adapter now quarantines that ambiguity instead of creating a full merchant credit. Positive payout reconciliation remains release work under FF-084 and FF-095.

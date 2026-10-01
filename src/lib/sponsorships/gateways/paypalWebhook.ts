@@ -52,10 +52,11 @@ const SUPPORTED_DISPUTE_EVENT_TYPES = new Set([
   "CUSTOMER.DISPUTE.UPDATED",
   "CUSTOMER.DISPUTE.RESOLVED",
 ])
+// RESOLVED_WITH_PAYOUT can protect either party; it does not prove a merchant credit.
+// Keep it in the existing quarantine path until provider cash evidence resolves it.
 const PAYPAL_SELLER_DISPUTE_OUTCOMES = new Set([
   "RESOLVED_SELLER_FAVOR",
   "RESOLVED_SELLER_FAVOUR",
-  "RESOLVED_WITH_PAYOUT",
   "CANCELED_BY_BUYER",
   "DENIED",
 ])

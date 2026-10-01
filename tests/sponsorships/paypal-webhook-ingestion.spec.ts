@@ -949,6 +949,33 @@ test.describe("PayPal webhook trust boundary", () => {
     expect(buyer.calls.noEffects[0].providerState).toBe("resolved_buyer_favor")
   })
 
+  test("does not infer merchant reinstatement from an ambiguous protection payout", async () => {
+    const raw = rawEvent(
+      "CUSTOMER.DISPUTE.RESOLVED",
+      "customer_dispute",
+      disputeResource({
+        status: "RESOLVED",
+        dispute_outcome: {
+          outcome_code: "RESOLVED_WITH_PAYOUT",
+          amount_refunded: { value: "5.00", currency_code: "USD" },
+        },
+      }),
+    )
+    const { calls, value } = dependencies()
+    await expect(
+      ingestVerifiedPayPalEvent(
+        {
+          event: parsePayPalWebhookEvent(raw),
+          rawPayload: raw,
+          requestContext: requestContext(),
+        },
+        value,
+      ),
+    ).rejects.toMatchObject({ code: "provider-fact-mismatch", retryable: false })
+    expect(calls.adjustments).toHaveLength(0)
+    expect(calls.noEffects).toHaveLength(0)
+  })
+
   test("credits a resolved dispute for both PayPal seller favour spellings", async () => {
     for (const outcome of ["RESOLVED_SELLER_FAVOR", "RESOLVED_SELLER_FAVOUR"]) {
       const raw = rawEvent(

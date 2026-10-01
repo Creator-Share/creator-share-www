@@ -520,3 +520,11 @@ At `e1414fd`, WebKit 36826401650 passed. Publication 36826401579 failed in two i
 The candidate bundles the same unmodified Reddit Sans font, its OFL licence, pinned upstream revision, and SHA-256 digest. Both document roots use one local font configuration with the existing CSS variable, swap behavior, and weight range. An in-process invocation of the installed Next.js local font loader emits the asset and generates fallback metrics without network access; TypeScript and scoped lint pass. Full hosted build and browser evidence remain pending.
 
 The cash harness now explicitly seeds its attribution policy and Stripe account dependencies. An in-process schema fixture with those migration seed rows omitted reproduces the isolated clone's missing dependencies and passes after explicit setup. This proves fixture construction and receipt insertion, not native concurrent execution. No local services were started.
+
+
+## PayPal payout outcome is not merchant cash evidence
+
+Confirmed that `RESOLVED_WITH_PAYOUT` entered the seller-credit path even though PayPal documents protection for either the merchant or customer. Removed that unsupported classification; unresolved payout evidence follows the existing quarantine path. The new regression fails before the correction and all 30 ingestion contracts pass afterward. No provider was contacted and no financial record was changed. FF-095 tracks validation; complete cash reconciliation remains under FF-084.
+
+
+At `e9eaf1c`, publication 36827722464 passed the production build and application job, and WebKit 36827722452 passed. The new cash fixture reached its first service-role call but attempted `extensions.digest` from that restricted role. Compute the event digest in Node and pass the fixture timestamp as an RPC argument, matching application usage without extending database grants. The independent-session race evidence remains pending.
