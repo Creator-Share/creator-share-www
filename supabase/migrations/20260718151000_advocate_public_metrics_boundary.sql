@@ -331,7 +331,8 @@ CREATE OR REPLACE FUNCTION private.calculate_advocate_public_metric_candidate(
 )
 RETURNS TABLE (
   candidate_bucket bigint,
-  metric_unit text
+  metric_unit text,
+  contributions jsonb
 )
 LANGUAGE plpgsql
 STABLE
@@ -403,14 +404,14 @@ BEGIN
             AND attribution.exposure_lag <= interval '30 days'
           )
         )
+    ), contact_totals AS (
+      SELECT sponsor_contact_key,sum(base_amount_usd_cents) AS amount,
+        bool_or(effective_at>=v_prior_cutoff) AS advanced
+      FROM payment_facts GROUP BY sponsor_contact_key
     )
-    SELECT
-      coalesce(sum(fact.base_amount_usd_cents), 0),
-      count(DISTINCT fact.sponsor_contact_key) FILTER (
-        WHERE fact.effective_at >= v_prior_cutoff
-      )
-    INTO v_raw_total, v_support_contacts
-    FROM payment_facts fact;
+    SELECT coalesce(sum(amount),0),count(*) FILTER(WHERE advanced),
+      coalesce(jsonb_object_agg(sponsor_contact_key,jsonb_build_array(amount,1)) FILTER(WHERE amount<>0),'{}'::jsonb)
+    INTO v_raw_total,v_support_contacts,contributions FROM contact_totals;
 
     metric_unit := 'usd_cents';
     v_bucket := (floor(v_raw_total / 10000) * 10000)::bigint;
@@ -499,46 +500,20 @@ BEGIN
         ) AS beneficiary_ordinal
       FROM beneficiary_associations association
       WHERE association.effective_at < target_source_cutoff
+    ), metric_facts AS (
+      SELECT sponsor_contact_key,effective_at FROM ranked_beneficiaries
+      WHERE target_metric_key='children_sponsored' AND beneficiary_ordinal=1
+      UNION ALL
+      SELECT sponsor_contact_key,effective_at FROM qualified_sponsorships
+      WHERE (target_metric_key='direct_sponsorships' AND kind='direct')
+        OR (target_metric_key='post_visit_attributed_sponsorships' AND kind='post_visit_attributed')
+    ), contact_totals AS (
+      SELECT sponsor_contact_key,count(*) AS amount,bool_or(effective_at>=v_prior_cutoff) AS advanced
+      FROM metric_facts GROUP BY sponsor_contact_key
     )
-    SELECT
-      CASE target_metric_key
-        WHEN 'children_sponsored' THEN (
-          SELECT count(*)
-          FROM ranked_beneficiaries beneficiary
-          WHERE beneficiary.beneficiary_ordinal = 1
-        )
-        WHEN 'direct_sponsorships' THEN (
-          SELECT count(*)
-          FROM qualified_sponsorships sponsorship
-          WHERE sponsorship.kind = 'direct'
-        )
-        ELSE (
-          SELECT count(*)
-          FROM qualified_sponsorships sponsorship
-          WHERE sponsorship.kind = 'post_visit_attributed'
-        )
-      END,
-      CASE target_metric_key
-        WHEN 'children_sponsored' THEN (
-          SELECT count(DISTINCT beneficiary.sponsor_contact_key)
-          FROM ranked_beneficiaries beneficiary
-          WHERE beneficiary.beneficiary_ordinal = 1
-            AND beneficiary.effective_at >= v_prior_cutoff
-        )
-        WHEN 'direct_sponsorships' THEN (
-          SELECT count(DISTINCT sponsorship.sponsor_contact_key)
-          FROM qualified_sponsorships sponsorship
-          WHERE sponsorship.kind = 'direct'
-            AND sponsorship.effective_at >= v_prior_cutoff
-        )
-        ELSE (
-          SELECT count(DISTINCT sponsorship.sponsor_contact_key)
-          FROM qualified_sponsorships sponsorship
-          WHERE sponsorship.kind = 'post_visit_attributed'
-            AND sponsorship.effective_at >= v_prior_cutoff
-        )
-      END
-    INTO v_raw_total, v_support_contacts;
+    SELECT coalesce(sum(amount),0),count(*) FILTER(WHERE advanced),
+      coalesce(jsonb_object_agg(sponsor_contact_key,jsonb_build_array(amount,1)),'{}'::jsonb)
+    INTO v_raw_total,v_support_contacts,contributions FROM contact_totals;
 
     metric_unit := 'count';
     v_bucket := (floor(v_raw_total / 5) * 5)::bigint;
@@ -818,6 +793,7 @@ DECLARE
   v_prior_released_bucket bigint;
   v_candidate_bucket bigint;
   v_metric_unit text;
+  v_contributions jsonb;
   v_inserted integer;
   v_processed_advocates integer := 0;
   v_inserted_releases integer := 0;
@@ -935,10 +911,12 @@ BEGIN
 
       SELECT
         candidate.candidate_bucket,
-        candidate.metric_unit
+        candidate.metric_unit,
+        candidate.contributions
       INTO
         v_candidate_bucket,
-        v_metric_unit
+        v_metric_unit,
+        v_contributions
       FROM private.calculate_advocate_public_metric_candidate(
         v_advocate.id,
         v_metric.metric_key,
@@ -969,6 +947,11 @@ BEGIN
       END IF;
 
       IF v_candidate_bucket IS NULL OR v_private_metric_visible IS NOT TRUE THEN
+        v_pending_metrics := v_pending_metrics + 1;
+        CONTINUE;
+      END IF;
+
+      IF NOT private.certify_advocate_public_metric(v_advocate.id,v_source_cutoff,v_contributions) THEN
         v_pending_metrics := v_pending_metrics + 1;
         CONTINUE;
       END IF;

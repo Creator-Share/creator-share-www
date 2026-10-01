@@ -589,8 +589,7 @@ BEGIN
     LEFT JOIN subscription_states subscription_state
       ON subscription_state.sponsorship_intent_id = fact.sponsorship_intent_id
   ),
-  -- These private fingerprints compare actual contributions, not event counts.
-  -- A contact cannot meet the advancement floor by repeating payments.
+  -- Numerical contribution rows group payments by contact, not event count.
   classified_rollups AS (
     SELECT rollup.*,CASE WHEN segment_key='observed_30_365_days' THEN 'observed' ELSE 'official' END AS family
     FROM intent_rollups rollup
@@ -598,14 +597,11 @@ BEGIN
   contact_atoms AS (
     SELECT
       sponsor_contact_key,
-      CASE WHEN grouping(segment_key)=0 AND grouping(charged_currency)=0 THEN segment_key||':'||charged_currency
-        WHEN grouping(segment_key)=0 THEN 'segment:'||segment_key
+      CASE WHEN grouping(segment_key)=0 THEN 'segment:'||segment_key
         WHEN grouping(charged_currency)=0 THEN 'currency:'||charged_currency ELSE 'total' END AS scope,
       family,
       count(*)::numeric AS sponsorships,
       1::numeric AS unique_sponsor_contacts,
-      count(*)::numeric-1 AS repeat_sponsorships,
-      CASE WHEN bool_or(has_verified_sponsor_account) THEN 0 ELSE 1 END AS unverified_sponsor_contacts,
       coalesce(jsonb_agg(DISTINCT sponsor_identity_id ORDER BY sponsor_identity_id)
         FILTER (WHERE has_verified_sponsor_account),'[]'::jsonb) AS verified_sponsor_accounts,
       jsonb_build_array(sum(initial_collected_usd_cents),sum(initial_collected_minor)) AS initial_collected,
@@ -615,24 +611,11 @@ BEGIN
       jsonb_build_array(private.combine_usd_fractions(dispute_debits_usd_fraction),sum(dispute_debits_minor)) AS dispute_debits,
       jsonb_build_array(private.combine_usd_fractions(dispute_credits_usd_fraction),sum(dispute_credits_minor)) AS dispute_credits,
       jsonb_build_array(private.combine_usd_fractions(net_collected_usd_fraction),sum(net_collected_minor)) AS net_collected,
-      -- Net can have a safe cohort after reinstatement while these visible
-      -- operand differences still isolate untouched or unrefunded contacts.
-      jsonb_build_array(private.combine_usd_fractions(private.add_usd_fraction(
-        ARRAY[gross_collected_usd_cents::numeric,1::numeric],
-        ARRAY[-dispute_debits_usd_fraction[1],dispute_debits_usd_fraction[2]])),
-        sum(gross_collected_minor-dispute_debits_minor)) AS gross_less_dispute_debits,
-      jsonb_build_array(private.combine_usd_fractions(private.add_usd_fraction(
-        ARRAY[gross_collected_usd_cents::numeric,1::numeric],
-        ARRAY[-refunds_and_reversals_usd_fraction[1],refunds_and_reversals_usd_fraction[2]])),
-        sum(gross_collected_minor-refunds_and_reversals_minor)) AS gross_less_refunds,
-      jsonb_build_array(private.combine_usd_fractions(private.add_usd_fraction(dispute_debits_usd_fraction,
-        ARRAY[-dispute_credits_usd_fraction[1],dispute_credits_usd_fraction[2]])),
-        sum(dispute_debits_minor-dispute_credits_minor)) AS open_dispute_balance,
       sum(active_monthly_commitment_usd_cents) AS active_monthly_commitment,
       sum(active_annual_commitment_usd_cents) AS active_annual_commitment,
       sum(annualized_commitment_usd_cents) AS annualized_commitment
     FROM classified_rollups
-    GROUP BY family,sponsor_contact_key,GROUPING SETS((segment_key,charged_currency),(segment_key),(charged_currency),())
+    GROUP BY family,sponsor_contact_key,GROUPING SETS((segment_key),(charged_currency),())
   ),
   -- Exact numerical columns for the coordinated arithmetic boundary. Only
   -- reportable scopes belong here; undisclosed intersections stay in the
@@ -688,27 +671,6 @@ BEGIN
   ),
   linear_subjects AS (
     SELECT subject,json_object_agg(measure,scopes) AS measures FROM linear_measures GROUP BY subject
-  ),
-  contact_measure_fingerprints AS (
-    SELECT atom.scope, atom.sponsor_contact_key, atom.family||':'||measure.key AS measure,
-      encode(extensions.digest(measure.value::text,'sha256'),'hex') AS fingerprint
-    FROM contact_atoms atom
-    CROSS JOIN LATERAL jsonb_each(to_jsonb(atom)-'scope'-'family'-'sponsor_contact_key') measure
-    WHERE measure.value NOT IN ('0'::jsonb,'[0,0]'::jsonb,'[[0,1],0]'::jsonb,'[]'::jsonb)
-    UNION ALL
-    SELECT atom.scope,'account:'||identity.value,atom.family||':verified_account_identities',
-      encode(extensions.digest('verified','sha256'),'hex')
-    FROM contact_atoms atom CROSS JOIN LATERAL jsonb_array_elements_text(atom.verified_sponsor_accounts) identity(value)
-  ),
-  -- Convert once at the outer boundary instead of rebuilding nested JSONB maps.
-  scope_fingerprints AS (
-    SELECT measure,scope,json_object_agg(sponsor_contact_key,fingerprint) AS contacts
-    FROM (SELECT DISTINCT measure,scope,sponsor_contact_key,fingerprint FROM contact_measure_fingerprints) contributors
-    GROUP BY measure,scope
-  ),
-  measure_fingerprints AS (
-    SELECT measure,json_object_agg(scope,contacts) AS scopes
-    FROM scope_fingerprints GROUP BY measure
   ),
   expanded_cells AS (
     SELECT 'official'::text AS cell_key, rollup.*
@@ -1162,7 +1124,7 @@ BEGIN
       SELECT payload
       FROM original_currency_payload
     )
-  ), 'contributors', coalesce((SELECT json_object_agg(measure,scopes)::jsonb FROM measure_fingerprints),'{}'::jsonb),
+  ),
     'linear_contributors', coalesce((SELECT json_object_agg(subject,measures)::jsonb FROM linear_subjects),'{}'::jsonb),
     'contact_key_versions', (SELECT coalesce(jsonb_agg(version ORDER BY version),'[]'::jsonb)
       FROM (SELECT DISTINCT split_part(sponsor_contact_key,':',1)||':'||split_part(sponsor_contact_key,':',2) AS version

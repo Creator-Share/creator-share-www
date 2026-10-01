@@ -1629,6 +1629,26 @@ SELECT extensions.throws_ok(
   'even a database insert requires the narrow worker operation context'
 );
 
+-- Public buckets and their numerical history come from the same fixed facts,
+-- including first beneficiary associations for named and blind sponsorships.
+WITH candidates AS (
+  SELECT metric.key,candidate.*
+  FROM public_metric_test_advocates advocate
+  CROSS JOIN (VALUES('children_sponsored'),('gross_raised_usd'),('direct_sponsorships'),
+    ('post_visit_attributed_sponsorships')) metric(key)
+  CROSS JOIN LATERAL private.calculate_advocate_public_metric_candidate(advocate.advocate_id,
+    metric.key::public.advocate_public_metric_key,NULL,NULL,
+    (SELECT value FROM public_metric_test_times WHERE key='source_cutoff')) candidate
+), amounts AS (
+  SELECT candidate.*, (SELECT private.sum_usd_fractions(ARRAY[(value->>0)::numeric,(value->>1)::numeric])
+    FROM jsonb_each(candidate.contributions)) AS exact_total
+  FROM candidates candidate WHERE candidate_bucket IS NOT NULL
+)
+SELECT extensions.ok(count(*)>0 AND bool_and(candidate_bucket=
+  floor(exact_total/CASE WHEN key='gross_raised_usd' THEN 10000 ELSE 5 END)*
+    CASE WHEN key='gross_raised_usd' THEN 10000 ELSE 5 END),
+  'every releasable public bucket reconciles with its exact numerical contact column') FROM amounts;
+
 SELECT * FROM extensions.finish();
 
 ROLLBACK;

@@ -2305,11 +2305,12 @@ CREATE TEMP TABLE repeated_contact_candidate AS SELECT private.build_advocate_an
   (SELECT value FROM analytics_test_ids WHERE key='contact_advocate'),
   (SELECT value FROM analytics_test_times WHERE key='as_of')) AS value;
 SELECT extensions.ok((SELECT count(*)=1 FROM repeated_contact_candidate,
-  LATERAL jsonb_object_keys(value->'contributors'->'official:sponsorships'->'direct:USD') contact),
+  LATERAL jsonb_object_keys(value#>'{linear_contributors,contact,official:sponsorships,total}') contact),
   'five actual sponsorship rows from one contact produce one disclosure contributor');
-SELECT extensions.ok((SELECT NOT (value->'contributors' ? 'official:refunds_and_reversals') FROM repeated_contact_candidate),
+SELECT extensions.ok((SELECT NOT (value#>'{linear_contributors,contact}' ? 'official:refunds_and_reversals_usd_cents') FROM repeated_contact_candidate),
   'zero refund contributions do not manufacture changed-contact support');
-SELECT extensions.ok((SELECT 'official:initial_collected'=ANY(private.analytics_unsafe_measures('{}',value->'contributors'))
+SELECT extensions.ok((SELECT NOT private.analytics_linear_disclosure_certified(private.analytics_integer_contribution_matrix(
+  jsonb_build_array(value#>'{linear_contributors,contact,official:initial_collected_usd_cents,total}')))
   FROM repeated_contact_candidate),'the actual repeated-contact query cannot establish an exact disclosure');
 
 SELECT set_config('request.jwt.claim.role','service_role',true);
@@ -2325,10 +2326,10 @@ SELECT extensions.ok((SELECT value=private.release_advocate_analytics(
     WHERE advocate_id=(SELECT value FROM analytics_test_ids WHERE key='main_advocate')),
   'repeated release requests return the immutable receipt without advancing history');
 SELECT extensions.ok((SELECT release.contribution_digest=encode(extensions.digest(
-    private.analytics_disclosure_baseline(release.advocate_id)::text,'sha256'),'hex')
+    private.analytics_disclosure_basis(release.advocate_id)::text,'sha256'),'hex')
   FROM private.advocate_analytics_releases release
   WHERE release.advocate_id=(SELECT value FROM analytics_test_ids WHERE key='main_advocate')),
-  'the sparse contributor history reconstructs the exact baseline digest committed by the real writer');
+  'the numerical history reconstructs the exact basis digest committed by the real writer');
 SELECT extensions.throws_ok($$UPDATE private.advocate_analytics_releases SET snapshot='{}'$$,
   '42501','Analytics releases are append only','disclosure baselines cannot be reset by updating the ledger');
 SELECT extensions.throws_ok($$DELETE FROM private.advocate_analytics_releases$$,
@@ -2366,16 +2367,17 @@ SELECT set_config('request.jwt.claim.role','service_role',true);
 CREATE TEMP TABLE shared_contact_release AS SELECT private.release_advocate_analytics(
   (SELECT value FROM analytics_test_ids WHERE key='contact_advocate'),
   (date_trunc('week',now() AT TIME ZONE 'UTC')-interval '7 days') AT TIME ZONE 'UTC') AS value;
-SELECT extensions.ok((SELECT value#>>'{official,sponsorships}'='10'
-  AND value#>>'{official,unique_sponsor_contacts}'='5'
-  AND value#>>'{official,verified_sponsor_accounts}'='10'
+SELECT extensions.ok((SELECT value->'official' @>
+  '{"gross_collected_usd_cents":8600,"sponsorships":null,"unique_sponsor_contacts":null,"verified_sponsor_accounts":null}'::jsonb
   FROM shared_contact_release),
-  'a real disclosure can contain more verified accounts than historical contacts');
+  'different financial contributions require withholding otherwise safe contact and account counts');
 
 CREATE TEMP TABLE shared_contact_candidate AS SELECT private.build_advocate_analytics_candidate(
   (SELECT value FROM analytics_test_ids WHERE key='contact_advocate'),
   (SELECT value FROM analytics_test_times WHERE key='as_of')) AS value;
 SELECT extensions.ok((SELECT pg_temp.linear_projection_matches(value)
+  AND value#>>'{snapshot,official,verified_sponsor_accounts}'='10'
+  AND value#>>'{snapshot,official,unique_sponsor_contacts}'='5'
   AND (SELECT count(*)=5 FROM jsonb_each(value#>'{linear_contributors,contact,official:verified_sponsor_accounts,total}'))
   AND (SELECT count(*)=10 FROM jsonb_each(value#>'{linear_contributors,account,official:verified_sponsor_accounts,total}'))
   FROM shared_contact_candidate), 'ten accounts sharing five historical contacts retain both exact subject projections');

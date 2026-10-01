@@ -22,25 +22,26 @@ REVOKE ALL ON private.advocate_analytics_releases FROM PUBLIC,anon,authenticated
 CREATE INDEX advocate_analytics_releases_latest_idx
   ON private.advocate_analytics_releases(advocate_id,source_cutoff DESC);
 
--- Store a contribution only when its last-disclosed value changes. Unchanged
--- historical donors do not get copied into every future weekly release.
-CREATE TABLE private.advocate_analytics_contribution_changes (
+-- Retain independent original numerical columns, not a copy of every contact
+-- in every report. Their span includes all prior disclosures, including public
+-- metrics. An omitted dependent column never discards a historical direction.
+CREATE TABLE private.advocate_analytics_basis_columns (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   release_id uuid NOT NULL,
   advocate_id uuid NOT NULL,
   source_cutoff timestamptz NOT NULL,
-  measure text NOT NULL CHECK (measure ~ '^(official|observed):[a-z_]{1,64}$'),
-  scope text NOT NULL CHECK (length(scope) BETWEEN 1 AND 80),
-  contact_key text NOT NULL CHECK (length(contact_key) BETWEEN 1 AND 160),
-  fingerprint text CHECK (fingerprint ~ '^[0-9a-f]{64}$'),
-  PRIMARY KEY(advocate_id,measure,scope,contact_key,source_cutoff),
+  subject text NOT NULL CHECK (subject IN ('contact','account')),
+  contributions jsonb NOT NULL CHECK (jsonb_typeof(contributions)='object' AND contributions<>'{}'::jsonb),
   FOREIGN KEY(release_id,advocate_id,source_cutoff)
     REFERENCES private.advocate_analytics_releases(id,advocate_id,source_cutoff) ON DELETE RESTRICT
 );
-ALTER TABLE private.advocate_analytics_contribution_changes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE private.advocate_analytics_contribution_changes FORCE ROW LEVEL SECURITY;
-REVOKE ALL ON private.advocate_analytics_contribution_changes FROM PUBLIC,anon,authenticated,service_role;
+CREATE INDEX advocate_analytics_basis_tenant_idx ON private.advocate_analytics_basis_columns(advocate_id,subject,id);
+ALTER TABLE private.advocate_analytics_basis_columns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE private.advocate_analytics_basis_columns FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON private.advocate_analytics_basis_columns FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON SEQUENCE private.advocate_analytics_basis_columns_id_seq FROM PUBLIC,anon,authenticated,service_role;
 
-CREATE FUNCTION private.protect_analytics_contribution_change()
+CREATE FUNCTION private.protect_analytics_basis_column()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
   IF TG_OP<>'INSERT' THEN
@@ -52,65 +53,23 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-REVOKE ALL ON FUNCTION private.protect_analytics_contribution_change() FROM PUBLIC,anon,authenticated,service_role;
-CREATE TRIGGER advocate_analytics_contributions_protect BEFORE INSERT OR UPDATE OR DELETE
-  ON private.advocate_analytics_contribution_changes FOR EACH ROW EXECUTE FUNCTION private.protect_analytics_contribution_change();
-CREATE TRIGGER advocate_analytics_contributions_no_truncate BEFORE TRUNCATE
-  ON private.advocate_analytics_contribution_changes FOR EACH STATEMENT EXECUTE FUNCTION private.prevent_operational_table_truncate();
+REVOKE ALL ON FUNCTION private.protect_analytics_basis_column() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER advocate_analytics_basis_protect BEFORE INSERT OR UPDATE OR DELETE
+  ON private.advocate_analytics_basis_columns FOR EACH ROW EXECUTE FUNCTION private.protect_analytics_basis_column();
+CREATE TRIGGER advocate_analytics_basis_no_truncate BEFORE TRUNCATE
+  ON private.advocate_analytics_basis_columns FOR EACH STATEMENT EXECUTE FUNCTION private.prevent_operational_table_truncate();
 
-CREATE FUNCTION private.analytics_contribution_rows(contributions jsonb)
-RETURNS TABLE(measure text,scope text,contact_key text,fingerprint text)
-LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
-  SELECT measure.key,scope.key,contact.key,contact.value
-  FROM jsonb_each(contributions) measure
-  CROSS JOIN LATERAL jsonb_each(measure.value) scope
-  CROSS JOIN LATERAL jsonb_each_text(scope.value) contact;
-$$;
-REVOKE ALL ON FUNCTION private.analytics_contribution_rows(jsonb) FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER advocate_analytics_basis_audit AFTER INSERT
+  ON private.advocate_analytics_basis_columns FOR EACH ROW EXECUTE FUNCTION audit.capture_row_change('advocate_id','@columns_only');
 
-CREATE FUNCTION private.analytics_disclosure_baseline(target_advocate_id uuid)
+CREATE FUNCTION private.analytics_disclosure_basis(target_advocate_id uuid)
 RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
-  WITH latest AS (
-    SELECT DISTINCT ON(measure,scope,contact_key) measure,scope,contact_key,fingerprint
-    FROM private.advocate_analytics_contribution_changes WHERE advocate_id=target_advocate_id
-    ORDER BY measure,scope,contact_key,source_cutoff DESC
-  ), scopes AS (
-    SELECT measure,scope,json_object_agg(contact_key,fingerprint) AS contacts
-    FROM latest WHERE fingerprint IS NOT NULL GROUP BY measure,scope
-  ), measures AS (
-    SELECT measure,json_object_agg(scope,contacts) AS scopes FROM scopes GROUP BY measure
-  ) SELECT coalesce(json_object_agg(measure,scopes)::jsonb,'{}'::jsonb) FROM measures;
+  SELECT jsonb_build_object(
+    'contact',coalesce(jsonb_agg(contributions ORDER BY id) FILTER(WHERE subject='contact'),'[]'::jsonb),
+    'account',coalesce(jsonb_agg(contributions ORDER BY id) FILTER(WHERE subject='account'),'[]'::jsonb))
+  FROM private.advocate_analytics_basis_columns WHERE advocate_id=target_advocate_id;
 $$;
-REVOKE ALL ON FUNCTION private.analytics_disclosure_baseline(uuid) FROM PUBLIC,anon,authenticated,service_role;
-
--- Each stored transition changes whether a historical contact differs from
--- today's candidate. A prefix sum checks every historical state in one pass;
--- it does not rebuild every old contact map or compare only adjacent releases.
-CREATE FUNCTION private.analytics_historical_unsafe_measures(target_advocate_id uuid,candidate jsonb)
-RETURNS text[] LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
-  WITH current_values AS MATERIALIZED (
-    SELECT * FROM private.analytics_contribution_rows(candidate)
-  ), history AS (
-    SELECT change.*,lag(fingerprint) OVER(PARTITION BY measure,scope,contact_key ORDER BY source_cutoff) AS previous_fingerprint
-    FROM private.advocate_analytics_contribution_changes change WHERE advocate_id=target_advocate_id
-  ), transitions AS (
-    SELECT history.measure,history.scope,source_cutoff,
-      sum((history.fingerprint IS DISTINCT FROM current_values.fingerprint)::int
-        -(previous_fingerprint IS DISTINCT FROM current_values.fingerprint)::int) AS delta
-    FROM history LEFT JOIN current_values USING(measure,scope,contact_key)
-    GROUP BY history.measure,history.scope,source_cutoff
-  ), initial_counts AS (
-    SELECT measure,scope,count(*) AS contacts FROM current_values GROUP BY measure,scope
-  ), historical_counts AS (
-    SELECT transitions.measure,transitions.scope,coalesce(initial_counts.contacts,0)
-      +sum(delta) OVER(PARTITION BY transitions.measure,transitions.scope ORDER BY source_cutoff) AS contacts
-    FROM transitions LEFT JOIN initial_counts USING(measure,scope)
-  ), unsafe AS (
-    SELECT measure FROM historical_counts WHERE contacts BETWEEN 1 AND 4
-    UNION SELECT measure FROM initial_counts WHERE contacts BETWEEN 1 AND 4
-  ) SELECT coalesce(array_agg(DISTINCT measure ORDER BY measure),'{}'::text[]) FROM unsafe;
-$$;
-REVOKE ALL ON FUNCTION private.analytics_historical_unsafe_measures(uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION private.analytics_disclosure_basis(uuid) FROM PUBLIC,anon,authenticated,service_role;
 
 CREATE FUNCTION private.protect_advocate_analytics_release()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
@@ -136,33 +95,6 @@ CREATE TRIGGER advocate_analytics_releases_no_truncate BEFORE TRUNCATE
   ON private.advocate_analytics_releases FOR EACH STATEMENT EXECUTE FUNCTION private.prevent_operational_table_truncate();
 CREATE TRIGGER advocate_analytics_releases_audit AFTER INSERT
   ON private.advocate_analytics_releases FOR EACH ROW EXECUTE FUNCTION audit.capture_row_change('advocate_id','@columns_only');
-
--- Inputs are private fixed-query fingerprints: measure -> scope -> contact ->
--- hash of exact contribution. Zero contributions are absent, not new support.
-CREATE FUNCTION private.analytics_unsafe_measures(previous jsonb,candidate jsonb)
-RETURNS text[] LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
-  -- Expand each map once. Looking up each contact through its parent scope
-  -- repeatedly copies large JSON objects before comparing their fingerprints.
-  WITH previous_values AS (
-    SELECT measure.key AS measure,scope.key AS scope,contact.key AS contact,contact.value AS fingerprint
-    FROM jsonb_each(previous) measure
-    CROSS JOIN LATERAL jsonb_each(measure.value) scope
-    CROSS JOIN LATERAL jsonb_each(scope.value) contact
-  ), candidate_values AS (
-    SELECT measure.key AS measure,scope.key AS scope,contact.key AS contact,contact.value AS fingerprint
-    FROM jsonb_each(candidate) measure
-    CROSS JOIN LATERAL jsonb_each(measure.value) scope
-    CROSS JOIN LATERAL jsonb_each(scope.value) contact
-  ), changed AS (
-    SELECT measure,scope,count(*) AS contacts
-    FROM previous_values previous FULL JOIN candidate_values candidate USING(measure,scope,contact)
-    WHERE previous.fingerprint IS DISTINCT FROM candidate.fingerprint
-    GROUP BY measure,scope
-  )
-  SELECT coalesce(array_agg(DISTINCT measure ORDER BY measure),'{}'::text[])
-  FROM changed WHERE contacts BETWEEN 1 AND 4;
-$$;
-REVOKE ALL ON FUNCTION private.analytics_unsafe_measures(jsonb,jsonb) FROM PUBLIC,anon,authenticated,service_role;
 
 -- Build one integer row from sparse (column, numerator, denominator) entries.
 -- The matrix decoder validates these entries before this internal helper runs.
@@ -230,16 +162,17 @@ REVOKE ALL ON FUNCTION private.analytics_integer_contribution_matrix(jsonb) FROM
 -- integers without rounding. Five disjoint spanning sets ensure any nonzero
 -- linear combination of columns has at least five nonzero contact terms.
 -- Greedy failure is conservative: it does not prove a disclosure is unsafe.
-CREATE FUNCTION private.analytics_linear_disclosure_certified(matrix numeric[])
-RETURNS boolean LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE SET search_path = '' AS $$
+CREATE FUNCTION private.analytics_linear_disclosure_evidence(matrix numeric[])
+RETURNS jsonb LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE SET search_path = '' AS $$
 DECLARE
+  v_columns integer[]:=ARRAY[]::integer[];
   v_contacts integer:=coalesce(array_length(matrix,1),0);
   v_width integer:=coalesce(array_length(matrix,2),0);
   v_used boolean[]; v_basis numeric[]; v_pivots integer[]; v_row numeric[];
   v_set integer; v_contact integer; v_basis_row integer; v_column integer;
   v_pivot integer; v_rank integer; v_full_rank integer; v_common numeric; v_factor numeric;
 BEGIN
-  IF cardinality(matrix)=0 THEN RETURN true; END IF;
+  IF cardinality(matrix)=0 THEN RETURN jsonb_build_object('certified',true,'columns',v_columns); END IF;
   IF array_ndims(matrix)<>2 OR array_lower(matrix,1)<>1 OR array_lower(matrix,2)<>1
     OR EXISTS(SELECT 1 FROM unnest(matrix) entry(value) WHERE value IS NULL
       OR value<>trunc(value) OR value IN ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) THEN
@@ -278,15 +211,105 @@ BEGIN
     END LOOP;
     IF v_set=1 THEN
       v_full_rank:=v_rank;
-      IF v_full_rank=0 THEN RETURN true; END IF;
-      IF v_full_rank>v_contacts/5 THEN RETURN false; END IF;
-    ELSIF v_rank<>v_full_rank THEN RETURN false;
+      SELECT coalesce(array_agg(value ORDER BY value),ARRAY[]::integer[]) INTO v_columns FROM unnest(v_pivots) entry(value);
+      IF v_full_rank=0 THEN RETURN jsonb_build_object('certified',true,'columns',v_columns); END IF;
+      IF v_full_rank>v_contacts/5 THEN RETURN jsonb_build_object('certified',false,'columns',v_columns); END IF;
+    ELSIF v_rank<>v_full_rank THEN RETURN jsonb_build_object('certified',false,'columns',v_columns);
     END IF;
   END LOOP;
+  RETURN jsonb_build_object('certified',true,'columns',v_columns);
+END;
+$$;
+REVOKE ALL ON FUNCTION private.analytics_linear_disclosure_evidence(numeric[]) FROM PUBLIC,anon,authenticated,service_role;
+
+CREATE FUNCTION private.analytics_linear_disclosure_certified(matrix numeric[])
+RETURNS boolean LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE SET search_path = '' AS $$
+  SELECT (private.analytics_linear_disclosure_evidence(matrix)->>'certified')::boolean;
+$$;
+REVOKE ALL ON FUNCTION private.analytics_linear_disclosure_certified(numeric[]) FROM PUBLIC,anon,authenticated,service_role;
+
+-- Return original columns only. Row normalization and elimination are internal
+-- dependence calculations and must never become stored contribution vectors.
+CREATE FUNCTION private.certify_analytics_columns(columns jsonb)
+RETURNS jsonb LANGUAGE plpgsql IMMUTABLE STRICT SET search_path = '' AS $$
+DECLARE evidence jsonb;
+BEGIN
+  evidence:=private.analytics_linear_disclosure_evidence(private.analytics_integer_contribution_matrix(columns));
+  IF evidence->'certified' IS DISTINCT FROM 'true'::jsonb THEN RETURN NULL; END IF;
+  RETURN coalesce((SELECT jsonb_agg(value ORDER BY ordinal)
+    FROM jsonb_array_elements(columns) WITH ORDINALITY entry(value,ordinal)
+    WHERE ordinal IN (SELECT value::integer FROM jsonb_array_elements_text(evidence->'columns') indices(value))),'[]'::jsonb);
+END;
+$$;
+REVOKE ALL ON FUNCTION private.certify_analytics_columns(jsonb) FROM PUBLIC,anon,authenticated,service_role;
+
+CREATE FUNCTION private.append_analytics_basis(target_release_id uuid,basis jsonb)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE receipt private.advocate_analytics_releases%ROWTYPE; prior jsonb; kind text; old_count integer;
+BEGIN
+  PERFORM private.require_advocate_public_metric_service_role();
+  SELECT * INTO STRICT receipt FROM private.advocate_analytics_releases WHERE id=target_release_id;
+  PERFORM pg_advisory_xact_lock(hashtextextended('advocate-analytics-release:'||receipt.advocate_id::text,0));
+  IF EXISTS(SELECT 1 FROM private.advocate_analytics_releases
+    WHERE advocate_id=receipt.advocate_id AND source_cutoff>receipt.source_cutoff) THEN
+    RAISE EXCEPTION 'Analytics history requires the current release' USING ERRCODE='23514';
+  END IF;
+  prior:=private.analytics_disclosure_basis(receipt.advocate_id);
+  FOREACH kind IN ARRAY ARRAY['contact','account'] LOOP
+    old_count:=jsonb_array_length(prior->kind);
+    IF jsonb_typeof(basis->kind) IS DISTINCT FROM 'array' OR jsonb_array_length(basis->kind)<old_count
+      OR EXISTS(SELECT 1 FROM jsonb_array_elements(prior->kind) WITH ORDINALITY entry(value,ordinal)
+        WHERE value IS DISTINCT FROM basis->kind->(ordinal::integer-1)) THEN
+      RAISE EXCEPTION 'Analytics history cannot discard prior columns' USING ERRCODE='23514';
+    END IF;
+    IF private.certify_analytics_columns(basis->kind) IS DISTINCT FROM basis->kind THEN
+      RAISE EXCEPTION 'Analytics history requires an independent certified basis' USING ERRCODE='23514';
+    END IF;
+    PERFORM set_config('app.advocate_analytics_release.operation','coordinated-v1',true);
+    INSERT INTO private.advocate_analytics_basis_columns(release_id,advocate_id,source_cutoff,subject,contributions)
+      SELECT receipt.id,receipt.advocate_id,receipt.source_cutoff,kind,value
+      FROM jsonb_array_elements(basis->kind) WITH ORDINALITY entry(value,ordinal)
+      WHERE ordinal>old_count ORDER BY ordinal;
+  END LOOP;
+END;
+$$;
+REVOKE ALL ON FUNCTION private.append_analytics_basis(uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+
+-- A rounded public value is checked using its stronger, unrounded numerical
+-- column. It joins the same history before the public receipt is inserted.
+CREATE FUNCTION private.certify_advocate_public_metric(target_advocate_id uuid,target_cutoff timestamptz,contributions jsonb)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE receipt_id uuid; basis jsonb; certified jsonb;
+BEGIN
+  PERFORM private.require_advocate_public_metric_service_role();
+  PERFORM pg_advisory_xact_lock(hashtextextended('advocate-analytics-release:'||target_advocate_id::text,0));
+  SELECT id INTO STRICT receipt_id FROM private.advocate_analytics_releases
+    WHERE advocate_id=target_advocate_id AND source_cutoff=target_cutoff;
+  basis:=private.analytics_disclosure_basis(target_advocate_id);
+  certified:=private.certify_analytics_columns(basis->'contact'||jsonb_build_array(contributions));
+  IF certified IS NULL THEN RETURN false; END IF;
+  PERFORM private.append_analytics_basis(receipt_id,jsonb_set(basis,'{contact}',certified));
   RETURN true;
 END;
 $$;
-REVOKE ALL ON FUNCTION private.analytics_linear_disclosure_certified(numeric[]) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION private.certify_advocate_public_metric(uuid,timestamptz,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+
+CREATE FUNCTION private.analytics_disclosed_fields(snapshot jsonb)
+RETURNS TABLE(family text,scope text,field text,amount numeric)
+LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
+  WITH cells AS (
+    SELECT 'official'::text AS family,'total'::text AS scope,snapshot->'official' AS cell
+    UNION ALL SELECT 'observed','total',snapshot->'observed'
+    UNION ALL SELECT CASE WHEN cell->>'key'='observed_30_365_days' THEN 'observed' ELSE 'official' END,
+      'segment:'||(cell->>'key'),cell
+      FROM jsonb_array_elements(CASE WHEN jsonb_typeof(snapshot->'segments')='array' THEN snapshot->'segments' ELSE '[]'::jsonb END) entry(cell)
+    UNION ALL SELECT 'official','currency:'||(cell->>'currency'),cell
+      FROM jsonb_array_elements(CASE WHEN jsonb_typeof(snapshot->'original_currency')='array' THEN snapshot->'original_currency' ELSE '[]'::jsonb END) entry(cell)
+  ) SELECT family,scope,entry.key,(entry.value#>>'{}')::numeric
+    FROM cells CROSS JOIN LATERAL jsonb_each(cell) entry
+    WHERE cell->'suppressed'='false'::jsonb AND jsonb_typeof(entry.value)='number';
+$$;
+REVOKE ALL ON FUNCTION private.analytics_disclosed_fields(jsonb) FROM PUBLIC,anon,authenticated,service_role;
 
 CREATE FUNCTION private.analytics_measure_key(field text)
 RETURNS text LANGUAGE sql IMMUTABLE STRICT SET search_path = '' AS $$
@@ -303,52 +326,53 @@ RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
 $$;
 REVOKE ALL ON FUNCTION private.mask_analytics_cell(jsonb,text,text[]) FROM PUBLIC,anon,authenticated,service_role;
 
-CREATE FUNCTION private.coordinate_analytics_disclosure(candidate jsonb,previous_contributors jsonb,history_withheld text[] DEFAULT ARRAY[]::text[])
+CREATE FUNCTION private.coordinate_analytics_disclosure(candidate jsonb,previous_basis jsonb)
 RETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path = '' AS $$
 DECLARE
   v_snapshot jsonb:=candidate->'snapshot';
-  v_current jsonb:=candidate->'contributors';
-  v_baseline jsonb:=previous_contributors;
-  v_intrinsic text[]:=private.analytics_unsafe_measures(previous_contributors,candidate->'contributors')||history_withheld;
-  v_withheld text[]:=v_intrinsic;
-  v_family text; v_measure text; v_visible boolean; v_operand text; v_required text[];
+  v_basis jsonb:=jsonb_build_object('contact',coalesce(previous_basis->'contact','[]'::jsonb),
+    'account',coalesce(previous_basis->'account','[]'::jsonb));
+  v_trial jsonb; v_columns jsonb; v_certified jsonb; v_column jsonb;
+  v_withheld text[]:=ARRAY[]::text[]; v_family text; v_measure text; v_subject text;
+  v_field record; v_safe boolean; v_sum numeric;
+  v_measures constant text[]:=ARRAY['gross_collected','net_collected','refunds_and_reversals',
+    'initial_collected','renewal_collected','sponsorships','unique_sponsor_contacts','verified_sponsor_accounts',
+    'dispute_debits','dispute_credits','active_monthly_commitment','active_annual_commitment','annualized_commitment'];
 BEGIN
+  IF jsonb_typeof(candidate->'linear_contributors') IS DISTINCT FROM 'object' THEN
+    RAISE EXCEPTION 'Analytics numerical contributions are required' USING ERRCODE='22023';
+  END IF;
+  IF EXISTS(SELECT 1 FROM private.analytics_disclosed_fields(v_snapshot)
+    WHERE NOT (private.analytics_measure_key(field)=ANY(v_measures))) THEN
+    RAISE EXCEPTION 'Analytics disclosure contains an unclassified measure' USING ERRCODE='23514';
+  END IF;
+  -- Fixed product priority, independent of current values or a browser query.
+  -- Every scope and currency of a measure advances together. Counts participate
+  -- in the same contact matrix as money, with a separate stable-account matrix.
   FOREACH v_family IN ARRAY ARRAY['official','observed'] LOOP
-    -- Protect arithmetic that can be reconstructed from separately visible
-    -- operands, including restoration that leaves one outstanding dispute.
-    FOREACH v_measure IN ARRAY ARRAY['gross_collected','net_collected','gross_less_dispute_debits','gross_less_refunds','open_dispute_balance',
-      'annualized_commitment','repeat_sponsorships','unverified_sponsor_contacts'] LOOP
-      IF NOT (v_family||':'||v_measure=ANY(v_intrinsic)) THEN CONTINUE; END IF;
-      FOREACH v_operand IN ARRAY CASE v_measure
-        WHEN 'gross_collected' THEN ARRAY['initial_collected','renewal_collected']
-        WHEN 'net_collected' THEN ARRAY['initial_collected','renewal_collected','refunds_and_reversals','dispute_debits','dispute_credits']
-        WHEN 'gross_less_dispute_debits' THEN ARRAY['initial_collected','renewal_collected','dispute_debits']
-        WHEN 'gross_less_refunds' THEN ARRAY['initial_collected','renewal_collected','refunds_and_reversals']
-        WHEN 'open_dispute_balance' THEN ARRAY['dispute_debits','dispute_credits']
-        WHEN 'annualized_commitment' THEN ARRAY['active_monthly_commitment','active_annual_commitment']
-        WHEN 'repeat_sponsorships' THEN ARRAY['sponsorships','unique_sponsor_contacts']
-        ELSE ARRAY['unique_sponsor_contacts','verified_sponsor_accounts'] END LOOP
-        IF v_current->(v_family||':'||v_operand) IS DISTINCT FROM previous_contributors->(v_family||':'||v_operand) THEN
-          v_withheld:=array_append(v_withheld,v_family||':'||v_operand);
-        END IF;
+    FOREACH v_measure IN ARRAY v_measures LOOP
+      v_trial:=v_basis; v_safe:=true;
+      FOREACH v_subject IN ARRAY ARRAY['contact','account'] LOOP
+        IF v_subject='account' AND v_measure<>'verified_sponsor_accounts' THEN CONTINUE; END IF;
+        v_columns:='[]'::jsonb;
+        FOR v_field IN SELECT * FROM private.analytics_disclosed_fields(v_snapshot)
+          WHERE family=v_family AND private.analytics_measure_key(field)=v_measure ORDER BY scope,field LOOP
+          v_column:=coalesce(candidate#>ARRAY['linear_contributors',v_subject,v_family||':'||v_field.field,v_field.scope],'{}'::jsonb);
+          SELECT private.sum_usd_fractions(ARRAY[(value->>0)::numeric,(value->>1)::numeric])
+            INTO v_sum FROM jsonb_each(v_column);
+          IF v_sum IS DISTINCT FROM v_field.amount THEN
+            RAISE EXCEPTION 'Analytics contributions do not reconcile' USING ERRCODE='23514';
+          END IF;
+          v_columns:=v_columns||jsonb_build_array(v_column);
+        END LOOP;
+        IF v_columns='[]'::jsonb THEN CONTINUE; END IF;
+        v_certified:=private.certify_analytics_columns(v_trial->v_subject||v_columns);
+        IF v_certified IS NULL THEN v_safe:=false; EXIT; END IF;
+        v_trial:=jsonb_set(v_trial,ARRAY[v_subject],v_certified);
       END LOOP;
+      IF v_safe THEN v_basis:=v_trial;
+      ELSE v_withheld:=array_append(v_withheld,v_family||':'||v_measure); END IF;
     END LOOP;
-    IF v_family||':verified_account_identities'=ANY(v_intrinsic) THEN
-      v_withheld:=array_append(v_withheld,v_family||':verified_sponsor_accounts');
-    END IF;
-    IF v_family||':sponsorships'=ANY(v_withheld) OR v_family||':unique_sponsor_contacts'=ANY(v_withheld) THEN
-      v_withheld:=array_append(v_withheld,v_family||':verified_sponsor_accounts');
-    END IF;
-    IF v_family||':initial_collected'=ANY(v_withheld) OR v_family||':renewal_collected'=ANY(v_withheld) THEN
-      v_withheld:=array_append(v_withheld,v_family||':gross_collected');
-    END IF;
-    IF v_withheld && ARRAY[v_family||':gross_collected',v_family||':refunds_and_reversals',
-        v_family||':dispute_debits',v_family||':dispute_credits'] THEN
-      v_withheld:=array_append(v_withheld,v_family||':net_collected');
-    END IF;
-    IF v_family||':active_monthly_commitment'=ANY(v_withheld) OR v_family||':active_annual_commitment'=ANY(v_withheld) THEN
-      v_withheld:=array_append(v_withheld,v_family||':annualized_commitment');
-    END IF;
     v_snapshot:=jsonb_set(v_snapshot,ARRAY[v_family],private.mask_analytics_cell(v_snapshot->v_family,v_family,v_withheld));
   END LOOP;
   IF jsonb_typeof(v_snapshot->'segments')='array' THEN
@@ -360,56 +384,18 @@ BEGIN
     v_snapshot:=jsonb_set(v_snapshot,'{original_currency}',coalesce((SELECT jsonb_agg(private.mask_analytics_cell(cell,'official',v_withheld) ORDER BY ordinal)
       FROM jsonb_array_elements(v_snapshot->'original_currency') WITH ORDINALITY cells(cell,ordinal)),'[]'::jsonb));
   END IF;
-  -- Advance only a measure actually visible in this release. In particular,
-  -- an intervening null must not erase a previously disclosed value's history.
-  FOR v_measure IN SELECT key FROM jsonb_object_keys(v_current||previous_contributors) keys(key) LOOP
-    v_family:=split_part(v_measure,':',1);
-    IF v_measure=ANY(v_withheld) THEN CONTINUE; END IF;
-    v_required:=CASE split_part(v_measure,':',2)
-      WHEN 'open_dispute_balance' THEN ARRAY['dispute_debits','dispute_credits']
-      WHEN 'gross_less_dispute_debits' THEN ARRAY['gross_collected','dispute_debits']
-      WHEN 'gross_less_refunds' THEN ARRAY['gross_collected','refunds_and_reversals']
-      WHEN 'repeat_sponsorships' THEN ARRAY['sponsorships','unique_sponsor_contacts']
-      WHEN 'unverified_sponsor_contacts' THEN ARRAY['unique_sponsor_contacts','verified_sponsor_accounts']
-      WHEN 'verified_account_identities' THEN ARRAY['verified_sponsor_accounts']
-      ELSE ARRAY[split_part(v_measure,':',2)] END;
-    WITH disclosed_cells AS (
-      SELECT v_snapshot->v_family AS cell
-      UNION ALL
-      SELECT cell FROM jsonb_array_elements(CASE WHEN jsonb_typeof(v_snapshot->'segments')='array'
-        THEN v_snapshot->'segments' ELSE '[]'::jsonb END) cells(cell)
-      WHERE (cell->>'key'='observed_30_365_days')=(v_family='observed')
-      UNION ALL
-      SELECT cell FROM jsonb_array_elements(CASE WHEN v_family='official' AND jsonb_typeof(v_snapshot->'original_currency')='array'
-        THEN v_snapshot->'original_currency' ELSE '[]'::jsonb END) cells(cell)
-    ) SELECT EXISTS(
-      SELECT 1 FROM disclosed_cells WHERE cell->'suppressed'='false'::jsonb AND NOT EXISTS(
-        SELECT 1 FROM unnest(v_required) required(measure) WHERE NOT EXISTS(
-          SELECT 1 FROM jsonb_each(cell) field WHERE field.value<>'null'::jsonb
-            AND private.analytics_measure_key(field.key)=required.measure
-        )
-      )
-    ) INTO v_visible;
-    IF v_visible THEN
-      IF v_current ? v_measure THEN
-        v_baseline:=jsonb_set(v_baseline,ARRAY[v_measure],v_current->v_measure);
-      ELSE
-        v_baseline:=v_baseline-v_measure;
-      END IF;
-    END IF;
-  END LOOP;
   v_snapshot:=v_snapshot||jsonb_build_object('schema_version',2,'disclosure',jsonb_build_object(
     'state','released','policy_version','coordinated-v1','cadence','weekly','minimum_changed_contacts',5));
-  RETURN jsonb_build_object('snapshot',v_snapshot,'contributors',v_baseline);
+  RETURN jsonb_build_object('snapshot',v_snapshot,'basis',v_basis);
 END;
 $$;
-REVOKE ALL ON FUNCTION private.coordinate_analytics_disclosure(jsonb,jsonb,text[]) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION private.coordinate_analytics_disclosure(jsonb,jsonb) FROM PUBLIC,anon,authenticated,service_role;
 
 CREATE FUNCTION private.release_advocate_analytics(target_advocate_id uuid,target_cutoff timestamptz)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
   v_prior private.advocate_analytics_releases%ROWTYPE;
-  v_candidate jsonb; v_release jsonb; v_versions jsonb; v_history_withheld text[];
+  v_candidate jsonb; v_release jsonb; v_versions jsonb;
   v_baseline jsonb; v_release_id uuid;
 BEGIN
   PERFORM private.require_advocate_public_metric_service_role();
@@ -436,20 +422,14 @@ BEGIN
       AND v_prior.contact_key_versions IS DISTINCT FROM v_versions) THEN
     RETURN v_prior.snapshot;
   END IF;
-  v_baseline:=private.analytics_disclosure_baseline(target_advocate_id);
-  v_history_withheld:=private.analytics_historical_unsafe_measures(target_advocate_id,v_candidate->'contributors');
-  v_release:=private.coordinate_analytics_disclosure(v_candidate,v_baseline,v_history_withheld);
+  v_baseline:=private.analytics_disclosure_basis(target_advocate_id);
+  v_release:=private.coordinate_analytics_disclosure(v_candidate,v_baseline);
   PERFORM set_config('app.advocate_analytics_release.operation','coordinated-v1',true);
   INSERT INTO private.advocate_analytics_releases(advocate_id,source_cutoff,snapshot,contribution_digest,contact_key_versions)
     VALUES(target_advocate_id,target_cutoff,v_release->'snapshot',
-      encode(extensions.digest((v_release->'contributors')::text,'sha256'),'hex'),v_versions)
+      encode(extensions.digest((v_release->'basis')::text,'sha256'),'hex'),v_versions)
     RETURNING id INTO v_release_id;
-  INSERT INTO private.advocate_analytics_contribution_changes(release_id,advocate_id,source_cutoff,measure,scope,contact_key,fingerprint)
-    SELECT v_release_id,target_advocate_id,target_cutoff,coalesce(current.measure,prior.measure),
-      coalesce(current.scope,prior.scope),coalesce(current.contact_key,prior.contact_key),current.fingerprint
-    FROM private.analytics_contribution_rows(v_release->'contributors') current
-    FULL JOIN private.analytics_contribution_rows(v_baseline) prior USING(measure,scope,contact_key)
-    WHERE current.fingerprint IS DISTINCT FROM prior.fingerprint;
+  PERFORM private.append_analytics_basis(v_release_id,v_release->'basis');
   RETURN v_release->'snapshot';
 END;
 $$;

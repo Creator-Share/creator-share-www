@@ -37,7 +37,7 @@ const readReport = async client => {
 }
 const storedState = async client => (await client.query(`SELECT
   (SELECT count(*)::integer FROM private.advocate_analytics_releases) AS private_releases,
-  (SELECT count(*)::integer FROM private.advocate_analytics_contribution_changes) AS contributions,
+  (SELECT count(*)::integer FROM private.advocate_analytics_basis_columns) AS contributions,
   (SELECT count(*)::integer FROM private.advocate_public_metric_releases) AS public_releases,
   (SELECT count(*)::integer FROM audit.audit_events WHERE request_id='analytics-release-canceled') AS canceled_audit
 `)).rows[0]
@@ -54,7 +54,7 @@ async function releaseInterruption(database) {
         BEGIN
           IF NOT EXISTS(SELECT 1 FROM private.advocate_analytics_releases
             WHERE advocate_id=NEW.advocate_id AND source_cutoff=NEW.source_cutoff)
-            OR NOT EXISTS(SELECT 1 FROM private.advocate_analytics_contribution_changes
+            OR NOT EXISTS(SELECT 1 FROM private.advocate_analytics_basis_columns
               WHERE advocate_id=NEW.advocate_id AND source_cutoff=NEW.source_cutoff) THEN
             RAISE EXCEPTION 'Private release checkpoint was not reached';
           END IF;

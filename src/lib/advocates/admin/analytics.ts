@@ -248,12 +248,8 @@ function parseCell(value: unknown): AdvocateAnalyticsCell | null {
   const annualizedCommitmentUsdCents = value.annualized_commitment_usd_cents
   // Normalized categories and net round independently in the database.
   // Their displayed integers need not satisfy an exact additive identity.
-  const netDependenciesWithheld =
-    grossCollectedUsdCents === null ||
-    renewalCollectedUsdCents === null ||
-    refundsAndReversalsUsdCents === null ||
-    disputeDebitsUsdCents === null ||
-    disputeCreditsUsdCents === null
+  // The database certifies joint numerical disclosure. Null patterns cannot
+  // establish privacy here; validate structure and arithmetic that is visible.
 
   if (
     !isNullableSafeNonnegativeInteger(sponsorships) ||
@@ -271,21 +267,13 @@ function parseCell(value: unknown): AdvocateAnalyticsCell | null {
     !isNullableSafeNonnegativeInteger(annualizedCommitmentUsdCents) ||
     (uniqueSponsorContacts !== null &&
       sponsorships !== null && uniqueSponsorContacts > sponsorships) ||
-    (verifiedSponsorAccounts !== null &&
-      (uniqueSponsorContacts === null || sponsorships === null ||
-        verifiedSponsorAccounts > sponsorships)) ||
+    (verifiedSponsorAccounts !== null && sponsorships !== null &&
+      verifiedSponsorAccounts > sponsorships) ||
     (verifiedSponsorAccounts !== null &&
       verifiedSponsorAccounts > 0 &&
       verifiedSponsorAccounts < 5) ||
-    (verifiedSponsorAccounts !== null &&
-      uniqueSponsorContacts !== null &&
-      uniqueSponsorContacts - verifiedSponsorAccounts > 0 &&
-      uniqueSponsorContacts - verifiedSponsorAccounts < 5) ||
     (uniqueSponsorContacts !== null &&
       uniqueSponsorContacts > 0 && uniqueSponsorContacts < 5) ||
-    (grossCollectedUsdCents === null) !==
-      (initialCollectedUsdCents === null || renewalCollectedUsdCents === null) ||
-    (netCollectedUsdCents === null) !== netDependenciesWithheld ||
     (initialCollectedUsdCents !== null &&
       renewalCollectedUsdCents !== null &&
       grossCollectedUsdCents !== null &&
@@ -295,10 +283,7 @@ function parseCell(value: unknown): AdvocateAnalyticsCell | null {
       activeAnnualCommitmentUsdCents !== null &&
       annualizedCommitmentUsdCents !== null &&
       activeMonthlyCommitmentUsdCents * 12 + activeAnnualCommitmentUsdCents !==
-        annualizedCommitmentUsdCents) ||
-    (annualizedCommitmentUsdCents !== null &&
-      (activeMonthlyCommitmentUsdCents === null ||
-        activeAnnualCommitmentUsdCents === null))
+        annualizedCommitmentUsdCents)
   ) {
     return null
   }
@@ -389,12 +374,7 @@ function parseOriginalCurrency(
     const disputeDebitsMinor = item.dispute_debits_minor
     const disputeCreditsMinor = item.dispute_credits_minor
     const netCollectedMinor = item.net_collected_minor
-    const netDependenciesWithheld =
-      grossCollectedMinor === null ||
-      renewalCollectedMinor === null ||
-      refundsAndReversalsMinor === null ||
-      disputeDebitsMinor === null ||
-      disputeCreditsMinor === null
+
     if (
       typeof currency !== "string" ||
       suppressed !== false ||
@@ -412,9 +392,6 @@ function parseOriginalCurrency(
       !isNullableSafeNonnegativeInteger(disputeDebitsMinor) ||
       !isNullableSafeNonnegativeInteger(disputeCreditsMinor) ||
       !isNullableSafeNonnegativeInteger(netCollectedMinor) ||
-      (grossCollectedMinor === null) !==
-        (initialCollectedMinor === null || renewalCollectedMinor === null) ||
-      (netCollectedMinor === null) !== netDependenciesWithheld ||
       (initialCollectedMinor !== null &&
         renewalCollectedMinor !== null &&
         grossCollectedMinor !== null &&

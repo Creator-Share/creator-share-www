@@ -31,8 +31,7 @@ SELECT extensions.ok(NOT EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated
     OR has_function_privilege(role.name,'private.analytics_integer_contribution_row(numeric[],integer)','EXECUTE')),
   'API roles cannot execute numerical history decoders');
 
--- The certificate is a prerequisite for the replacement policy. The current
--- release coordinator does not use it yet; these are arithmetic contracts.
+-- Exact arithmetic contracts shared by private and public release decisions.
 SELECT extensions.ok(private.analytics_linear_disclosure_certified(ARRAY[]::numeric[])
   AND private.analytics_linear_disclosure_certified(ARRAY[[0,0],[0,0]]::numeric[]),
   'empty and zero contribution matrices have no nonzero arithmetic disclosure');
@@ -91,276 +90,226 @@ SELECT extensions.ok(NOT EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated
   WHERE has_function_privilege(role.name,'private.analytics_linear_disclosure_certified(numeric[])','EXECUTE')),
   'API roles cannot call the internal certificate helper');
 
--- Policy examples use exact USD contributions. Separate integration assertions
--- exercise the production query's contributor fingerprints and authority.
+-- The policy fixture uses exact per-contact values and real report scopes.
 CREATE FUNCTION pg_temp.disclosure_candidate(amounts integer[], refunds integer[] DEFAULT NULL, renewals integer[] DEFAULT NULL,
   debits integer[] DEFAULT NULL, credits integer[] DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql AS $$
-DECLARE cells jsonb; contributors jsonb; total_initial bigint; total_refunds bigint; total_renewals bigint; total_debits bigint; total_credits bigint;
+DECLARE cells jsonb; contributors jsonb;
 BEGIN
-  SELECT sum(amount),sum(coalesce(refunds[position],0)),sum(coalesce(renewals[position],0)),
-      sum(coalesce(debits[position],0)),sum(coalesce(credits[position],0))
-    INTO total_initial,total_refunds,total_renewals,total_debits,total_credits FROM unnest(amounts) WITH ORDINALITY entry(amount,position);
-  cells:=jsonb_build_object('suppressed',false,'sponsorships',cardinality(amounts),
-    'unique_sponsor_contacts',cardinality(amounts),'verified_sponsor_accounts',0,
-    'initial_collected_usd_cents',total_initial,'renewal_collected_usd_cents',total_renewals,
-    'gross_collected_usd_cents',total_initial+total_renewals,'refunds_and_reversals_usd_cents',total_refunds,
-    'dispute_debits_usd_cents',total_debits,'dispute_credits_usd_cents',total_credits,
-    'net_collected_usd_cents',total_initial+total_renewals-total_refunds-total_debits+total_credits,
-    'active_monthly_commitment_usd_cents',0,'active_annual_commitment_usd_cents',0,'annualized_commitment_usd_cents',0);
-  WITH contacts AS (
-    SELECT 'contact-'||position AS contact,metric.key AS measure,
-      encode(extensions.digest(metric.value::text,'sha256'),'hex') AS fingerprint
+  WITH values AS (
+    SELECT position,'contact-'||position AS contact,amount,coalesce(refunds[position],0) AS refund,
+      coalesce(renewals[position],0) AS renewal,coalesce(debits[position],0) AS debit,coalesce(credits[position],0) AS credit
     FROM unnest(amounts) WITH ORDINALITY entry(amount,position)
-    CROSS JOIN LATERAL jsonb_each(jsonb_build_object(
-      'sponsorships',1,'unique_sponsor_contacts',1,'initial_collected',amount,
-      'renewal_collected',coalesce(renewals[position],0),'gross_collected',amount+coalesce(renewals[position],0),
-      'refunds_and_reversals',coalesce(refunds[position],0),
-      'dispute_debits',coalesce(debits[position],0),'dispute_credits',coalesce(credits[position],0),
-      'gross_less_dispute_debits',amount+coalesce(renewals[position],0)-coalesce(debits[position],0),
-      'gross_less_refunds',amount+coalesce(renewals[position],0)-coalesce(refunds[position],0),
-      'net_collected',amount+coalesce(renewals[position],0)-coalesce(refunds[position],0)-coalesce(debits[position],0)+coalesce(credits[position],0))) metric
-    WHERE metric.value<>'0'::jsonb
-  ), measures AS (
-    SELECT measure,jsonb_build_object('direct:USD',jsonb_object_agg(contact,fingerprint)) AS value
-    FROM contacts GROUP BY measure
-  ) SELECT jsonb_object_agg('official:'||measure,value) INTO contributors FROM measures;
+  ), columns AS (
+    SELECT contact,metric.key AS field,metric.value AS amount FROM values
+    CROSS JOIN LATERAL jsonb_each(jsonb_build_object('sponsorships',1,'unique_sponsor_contacts',1,
+      'initial_collected_usd_cents',amount,'renewal_collected_usd_cents',renewal,
+      'gross_collected_usd_cents',amount+renewal,'refunds_and_reversals_usd_cents',refund,
+      'dispute_debits_usd_cents',debit,'dispute_credits_usd_cents',credit,
+      'net_collected_usd_cents',amount+renewal-refund-debit+credit)) metric
+  ), maps AS (
+    SELECT field,sum((amount#>>'{}')::numeric) AS total,
+      coalesce(jsonb_object_agg(contact,jsonb_build_array(amount,1)) FILTER(WHERE amount<>'0'::jsonb),'{}'::jsonb) AS contacts
+    FROM columns GROUP BY field
+  ), scopes AS (
+    SELECT 'official:'||field AS measure,jsonb_build_object('total',contacts,'segment:direct',contacts) AS scopes FROM maps
+    UNION ALL SELECT 'official:'||replace(field,'_usd_cents','_minor'),jsonb_build_object('currency:USD',contacts) FROM maps
+      WHERE field LIKE '%_usd_cents'
+    UNION ALL SELECT 'official:'||field,jsonb_build_object('currency:USD',contacts) FROM maps WHERE field NOT LIKE '%_usd_cents'
+  ), merged AS (
+    SELECT measure,jsonb_object_agg(scope.key,scope.value) AS value FROM scopes
+      CROSS JOIN LATERAL jsonb_each(scopes.scopes) scope GROUP BY measure
+  ) SELECT (SELECT jsonb_object_agg(field,to_jsonb(total)) FROM maps),
+      jsonb_build_object('contact',jsonb_object_agg(measure,value)) INTO cells,contributors FROM merged;
+  cells:=cells||'{"suppressed":false,"verified_sponsor_accounts":0,"active_monthly_commitment_usd_cents":0,"active_annual_commitment_usd_cents":0,"annualized_commitment_usd_cents":0}'::jsonb;
   RETURN jsonb_build_object('snapshot',jsonb_build_object('schema_version',1,'as_of','2026-07-06T00:00:00Z',
     'official',cells,'observed',jsonb_build_object('suppressed',true),
     'segments',jsonb_build_array(cells||'{"key":"direct"}'::jsonb),
-    'original_currency',jsonb_build_array(jsonb_build_object('currency','USD','suppressed',false,
-      'sponsorships',cardinality(amounts),'unique_sponsor_contacts',cardinality(amounts),
-      'initial_collected_minor',total_initial,'renewal_collected_minor',total_renewals,
-      'gross_collected_minor',total_initial+total_renewals,'refunds_and_reversals_minor',total_refunds,
-      'dispute_debits_minor',total_debits,'dispute_credits_minor',total_credits,
-      'net_collected_minor',total_initial+total_renewals-total_refunds-total_debits+total_credits))),
-    'contributors',contributors,'contact_key_versions','["1:1"]'::jsonb);
+    'original_currency',jsonb_build_array((SELECT jsonb_object_agg(replace(key,'_usd_cents','_minor'),value)
+      FROM jsonb_each(cells) WHERE key NOT IN ('verified_sponsor_accounts','active_monthly_commitment_usd_cents',
+        'active_annual_commitment_usd_cents','annualized_commitment_usd_cents'))||'{"currency":"USD"}'::jsonb)),
+    'linear_contributors',contributors,'contact_key_versions','["1:1"]'::jsonb);
 END;
 $$;
 CREATE TEMP TABLE disclosure_cases(name text PRIMARY KEY,result jsonb NOT NULL);
--- Ten contacts were disputed, five restored, and one never disputed. Net has
--- six contributors, but gross minus cumulative debits isolates the eleventh.
-INSERT INTO disclosure_cases SELECT 'dispute_complement',private.coordinate_analytics_disclosure(
-  pg_temp.disclosure_candidate(ARRAY[733]||array_fill(1000,ARRAY[10]),NULL,NULL,
-    ARRAY[0]||array_fill(1000,ARRAY[10]),array_fill(0,ARRAY[6])||array_fill(1000,ARRAY[5])),'{}');
-SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
-  '{"gross_collected_usd_cents":null,"initial_collected_usd_cents":null,"dispute_debits_usd_cents":null,"net_collected_usd_cents":null,"dispute_credits_usd_cents":5000}'::jsonb
-  FROM disclosure_cases WHERE name='dispute_complement'),
-  'gross minus dispute debits cannot reveal a sole untouched contribution after five restorations');
-SELECT extensions.ok((SELECT result->'snapshot'->'original_currency'->0 @>
-  '{"gross_collected_minor":null,"dispute_debits_minor":null,"net_collected_minor":null}'::jsonb
-  AND result->'snapshot'->'segments'->0->'gross_collected_usd_cents'='null'::jsonb
-  FROM disclosure_cases WHERE name='dispute_complement'),
-  'the financial complement is also withheld in currency and segment cells');
-INSERT INTO disclosure_cases SELECT 'safe_dispute_complement',private.coordinate_analytics_disclosure(
-  pg_temp.disclosure_candidate(ARRAY[733]||array_fill(1000,ARRAY[14]),NULL,NULL,
-    ARRAY[0]||array_fill(1000,ARRAY[10])||array_fill(0,ARRAY[4]),
-    array_fill(0,ARRAY[6])||array_fill(1000,ARRAY[5])||array_fill(0,ARRAY[4])),'{}');
-SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
-  '{"gross_collected_usd_cents":14733,"dispute_debits_usd_cents":10000,"net_collected_usd_cents":9733}'::jsonb
-  FROM disclosure_cases WHERE name='safe_dispute_complement'),
-  'five untouched contacts permit the same financial measures to be released');
-INSERT INTO disclosure_cases SELECT 'refund_complement',private.coordinate_analytics_disclosure(
-  pg_temp.disclosure_candidate(array_fill(1000,ARRAY[11]),
-    array_fill(1000,ARRAY[7])||array_fill(0,ARRAY[4]),NULL,
-    array_fill(0,ARRAY[7])||array_fill(1000,ARRAY[4])),'{}');
-SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
-  '{"gross_collected_usd_cents":null,"refunds_and_reversals_usd_cents":null,"net_collected_usd_cents":null}'::jsonb
-  FROM disclosure_cases WHERE name='refund_complement'),
-  'gross minus refunds cannot expose four fully disputed contacts merely because net is zero');
-
-
 INSERT INTO disclosure_cases VALUES('initial',private.coordinate_analytics_disclosure(
   pg_temp.disclosure_candidate(ARRAY[100,100,100,100,100]),'{}'));
 SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
   '{"sponsorships":5,"unique_sponsor_contacts":5,"initial_collected_usd_cents":500,"net_collected_usd_cents":500}'::jsonb
   FROM disclosure_cases WHERE name='initial'),'five contributing contacts can establish the first exact disclosure');
+SELECT extensions.ok((SELECT jsonb_array_length(result#>'{basis,contact}')=1 FROM disclosure_cases WHERE name='initial'),
+  'proportional measures and repeated scopes retain one original history direction');
 INSERT INTO disclosure_cases SELECT 'single_new',private.coordinate_analytics_disclosure(
-  pg_temp.disclosure_candidate(ARRAY[100,100,100,100,100,733]),result->'contributors')
-  FROM disclosure_cases WHERE name='initial';
+  pg_temp.disclosure_candidate(ARRAY[100,100,100,100,100,733]),result->'basis') FROM disclosure_cases WHERE name='initial';
 SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
   '{"sponsorships":null,"unique_sponsor_contacts":null,"initial_collected_usd_cents":null,"gross_collected_usd_cents":null,"net_collected_usd_cents":null}'::jsonb
-  FROM disclosure_cases WHERE name='single_new'),'a sixth contact cannot disclose the isolated 733-cent contribution or count delta');
-SELECT extensions.ok((SELECT result->'snapshot'->'segments'->0->'initial_collected_usd_cents'='null'::jsonb
-  AND result->'snapshot'->'original_currency'->0->'initial_collected_minor'='null'::jsonb
-  FROM disclosure_cases WHERE name='single_new'),'segment and currency surfaces cannot supply the withheld new-contact amount');
-SELECT extensions.ok((SELECT result->'contributors' FROM disclosure_cases WHERE name='single_new')=
-  (SELECT result->'contributors' FROM disclosure_cases WHERE name='initial'),
-  'withholding does not advance or erase the last actual disclosure baseline');
+  FROM disclosure_cases WHERE name='single_new'),'one new contact cannot disclose its payment or count delta');
+SELECT extensions.ok((SELECT result#>'{snapshot,segments,0,initial_collected_usd_cents}'='null'::jsonb
+  AND result#>'{snapshot,original_currency,0,initial_collected_minor}'='null'::jsonb FROM disclosure_cases WHERE name='single_new'),
+  'segments and original currencies cannot supply the withheld amount');
+SELECT extensions.ok((SELECT result->'basis' FROM disclosure_cases WHERE name='single_new')=
+  (SELECT result->'basis' FROM disclosure_cases WHERE name='initial'),'withholding cannot discard or advance historical directions');
 INSERT INTO disclosure_cases SELECT 'five_new',private.coordinate_analytics_disclosure(
-  pg_temp.disclosure_candidate(ARRAY[100,100,100,100,100,733,111,222,333,444]),result->'contributors')
+  pg_temp.disclosure_candidate(array_fill(100,ARRAY[5])||array_fill(733,ARRAY[5])),result->'basis')
   FROM disclosure_cases WHERE name='single_new';
 SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
-  '{"sponsorships":10,"unique_sponsor_contacts":10,"initial_collected_usd_cents":2343,"net_collected_usd_cents":2343}'::jsonb
-  FROM disclosure_cases WHERE name='five_new'),'five changed contacts can advance after an intervening withheld snapshot');
+  '{"sponsorships":10,"unique_sponsor_contacts":10,"gross_collected_usd_cents":4165,"net_collected_usd_cents":4165}'::jsonb
+  FROM disclosure_cases WHERE name='five_new'),'a safe five-contact cohort advances after an intervening withheld report');
 INSERT INTO disclosure_cases VALUES('refund_base',private.coordinate_analytics_disclosure(
-  pg_temp.disclosure_candidate(ARRAY[100,100,100,100,100],ARRAY[10,10,10,10,10]),'{}'));
+  pg_temp.disclosure_candidate(array_fill(100,ARRAY[5]),array_fill(10,ARRAY[5])),'{}'));
 INSERT INTO disclosure_cases SELECT 'single_refund',private.coordinate_analytics_disclosure(
-  pg_temp.disclosure_candidate(ARRAY[100,100,100,100,100],ARRAY[17,10,10,10,10]),result->'contributors')
+  pg_temp.disclosure_candidate(array_fill(100,ARRAY[5]),ARRAY[17,10,10,10,10]),result->'basis')
   FROM disclosure_cases WHERE name='refund_base';
 SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
   '{"refunds_and_reversals_usd_cents":null,"net_collected_usd_cents":null,"gross_collected_usd_cents":500}'::jsonb
-  FROM disclosure_cases WHERE name='single_refund'),'one existing contact refund withholds its amount and net complement without hiding unchanged gross');
+  FROM disclosure_cases WHERE name='single_refund'),'an individual refund is withheld while unchanged gross stays visible');
 INSERT INTO disclosure_cases SELECT 'repeat_refund',private.coordinate_analytics_disclosure(
-  pg_temp.disclosure_candidate(ARRAY[100,100,100,100,100],ARRAY[80,10,10,10,10]),result->'contributors')
+  pg_temp.disclosure_candidate(array_fill(100,ARRAY[5]),ARRAY[80,10,10,10,10]),result->'basis')
   FROM disclosure_cases WHERE name='single_refund';
-SELECT extensions.ok((SELECT result->'snapshot'->'official'->'refunds_and_reversals_usd_cents'='null'::jsonb
-  FROM disclosure_cases WHERE name='repeat_refund'),'repeated refunds by one contact do not satisfy the advancement floor');
+SELECT extensions.ok((SELECT result#>'{snapshot,official,refunds_and_reversals_usd_cents}'='null'::jsonb
+  FROM disclosure_cases WHERE name='repeat_refund'),'repeated adjustments by one contact never manufacture support');
 INSERT INTO disclosure_cases SELECT 'five_refunds',private.coordinate_analytics_disclosure(
-  pg_temp.disclosure_candidate(ARRAY[100,100,100,100,100],ARRAY[17,17,17,17,17]),result->'contributors')
+  pg_temp.disclosure_candidate(array_fill(100,ARRAY[5]),array_fill(17,ARRAY[5])),result->'basis')
   FROM disclosure_cases WHERE name='repeat_refund';
 SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
-  '{"refunds_and_reversals_usd_cents":85,"net_collected_usd_cents":415}'::jsonb
-  FROM disclosure_cases WHERE name='five_refunds'),'five existing contacts can advance refunds and net from their last disclosed baseline');
+  '{"refunds_and_reversals_usd_cents":85,"net_collected_usd_cents":415}'::jsonb FROM disclosure_cases WHERE name='five_refunds'),
+  'five proportional refund updates remain releasable against all historical directions');
 INSERT INTO disclosure_cases SELECT 'single_renewal',private.coordinate_analytics_disclosure(
-  pg_temp.disclosure_candidate(ARRAY[100,100,100,100,100],NULL,ARRAY[7,0,0,0,0]),result->'contributors')
+  pg_temp.disclosure_candidate(array_fill(100,ARRAY[5]),NULL,ARRAY[7,0,0,0,0]),result->'basis')
   FROM disclosure_cases WHERE name='initial';
 SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
   '{"initial_collected_usd_cents":500,"renewal_collected_usd_cents":null,"gross_collected_usd_cents":null,"net_collected_usd_cents":null}'::jsonb
-  FROM disclosure_cases WHERE name='single_renewal'),'one renewal cannot leak through gross or net while unchanged initial funds remain available');
-SELECT extensions.ok(private.analytics_unsafe_measures('{}','{"official:refunds_and_reversals":{"direct:USD":{"one-contact":"many-payments"}}}')=
-  ARRAY['official:refunds_and_reversals'],'advancement counts contact keys rather than event or amount volume');
-SELECT extensions.ok(private.analytics_unsafe_measures('{}','{"official:gross_collected":{"direct:USD":{"a":"1","b":"1","c":"1","d":"1","e":"1"},"post_visit_0_1_day:GBP":{"f":"1"}}}')=
-  ARRAY['official:gross_collected'],'a safe large scope cannot conceal a one-contact changed complement');
-SELECT extensions.ok(private.analytics_unsafe_measures('{"official:net_collected":{"direct:USD":{"a":"1"}}}','{}')=
-  ARRAY['official:net_collected'],'removing a contributor is a change and cannot reset history silently');
+  FROM disclosure_cases WHERE name='single_renewal'),'one renewal cannot leak through gross or net');
+INSERT INTO disclosure_cases SELECT 'second',private.coordinate_analytics_disclosure(
+  pg_temp.disclosure_candidate(array_fill(100,ARRAY[5]),NULL,array_fill(100,ARRAY[5])),result->'basis')
+  FROM disclosure_cases WHERE name='initial';
+INSERT INTO disclosure_cases SELECT 'third',private.coordinate_analytics_disclosure(
+  pg_temp.disclosure_candidate(array_fill(100,ARRAY[5]),NULL,ARRAY[200,200,200,200,207]),result->'basis')
+  FROM disclosure_cases WHERE name='second';
+SELECT extensions.ok((SELECT result#>'{snapshot,official,gross_collected_usd_cents}'='1000'::jsonb FROM disclosure_cases WHERE name='second')
+  AND (SELECT result->'snapshot'->'official' @> '{"gross_collected_usd_cents":null,"net_collected_usd_cents":null,"renewal_collected_usd_cents":null}'::jsonb
+    FROM disclosure_cases WHERE name='third'),'three-release reconstruction is withheld despite five changes in every pair');
+INSERT INTO disclosure_cases VALUES('adjustment_difference',private.coordinate_analytics_disclosure(
+  pg_temp.disclosure_candidate(ARRAY[733]||array_fill(1000,ARRAY[10]),
+    ARRAY[0]||array_fill(500,ARRAY[5])||array_fill(1000,ARRAY[5]),NULL,
+    ARRAY[733]||array_fill(500,ARRAY[5])||array_fill(1000,ARRAY[5]),
+    ARRAY[733]||array_fill(500,ARRAY[5])||array_fill(1000,ARRAY[5])),'{}'));
+SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
+  '{"gross_collected_usd_cents":10733,"net_collected_usd_cents":3233,"refunds_and_reversals_usd_cents":7500,"dispute_debits_usd_cents":null,"dispute_credits_usd_cents":null,"sponsorships":null,"unique_sponsor_contacts":null}'::jsonb
+  FROM disclosure_cases WHERE name='adjustment_difference'),
+  'core funds remain visible while conflicting adjustments and counts cannot reconstruct the lone 733-cent residual');
+INSERT INTO disclosure_cases VALUES('safe_adjustments',private.coordinate_analytics_disclosure(
+  pg_temp.disclosure_candidate(array_fill(733,ARRAY[5])||array_fill(1000,ARRAY[10]),
+    array_fill(0,ARRAY[5])||array_fill(500,ARRAY[5])||array_fill(1000,ARRAY[5]),NULL,
+    array_fill(733,ARRAY[5])||array_fill(500,ARRAY[5])||array_fill(1000,ARRAY[5]),
+    array_fill(733,ARRAY[5])||array_fill(500,ARRAY[5])||array_fill(1000,ARRAY[5])),'{}'));
+SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
+  '{"gross_collected_usd_cents":13665,"net_collected_usd_cents":6165,"refunds_and_reversals_usd_cents":7500,"dispute_debits_usd_cents":11165,"dispute_credits_usd_cents":11165,"sponsorships":15,"unique_sponsor_contacts":15}'::jsonb
+  FROM disclosure_cases WHERE name='safe_adjustments'),'all financial details and counts remain available for five contacts in each independent shape');
+-- Ten stable accounts share five contact keys; both subject matrices must
+-- certify the count, without treating those accounts as ten distinct contacts.
+WITH candidate AS (SELECT pg_temp.disclosure_candidate(array_fill(100,ARRAY[5])) AS value), maps AS (
+  SELECT (SELECT jsonb_object_agg('contact-'||i,'[2,1]'::jsonb) FROM generate_series(1,5) i) AS contacts,
+    (SELECT jsonb_object_agg('account-'||i,'[1,1]'::jsonb) FROM generate_series(1,10) i) AS accounts
+), prepared AS (
+  SELECT jsonb_set(jsonb_set(value,'{snapshot,official,verified_sponsor_accounts}','10'),
+    '{snapshot,segments,0,verified_sponsor_accounts}','10')||jsonb_build_object('linear_contributors',
+      (value->'linear_contributors')||jsonb_build_object('contact',value#>'{linear_contributors,contact}'||
+        jsonb_build_object('official:verified_sponsor_accounts',jsonb_build_object('total',contacts,'segment:direct',contacts)),
+        'account',jsonb_build_object('official:verified_sponsor_accounts',jsonb_build_object('total',accounts,'segment:direct',accounts)))) AS value
+  FROM candidate,maps
+)
+INSERT INTO disclosure_cases SELECT 'shared_accounts',private.coordinate_analytics_disclosure(value,'{}') FROM prepared;
+SELECT extensions.ok((SELECT result#>'{snapshot,official}' @>
+  '{"unique_sponsor_contacts":5,"verified_sponsor_accounts":10,"gross_collected_usd_cents":500}'::jsonb
+  AND jsonb_array_length(result#>'{basis,account}')=1 FROM disclosure_cases WHERE name='shared_accounts'),
+  'ten accounts sharing five contacts can be disclosed with compatible financial values');
+SELECT extensions.throws_ok($$SELECT private.coordinate_analytics_disclosure(
+  jsonb_set(pg_temp.disclosure_candidate(array_fill(100,ARRAY[5])),'{snapshot,official,new_measure}','5'),'{}')$$,
+  '23514','Analytics disclosure contains an unclassified measure','new numerical fields cannot bypass disclosure classification');
+SELECT extensions.throws_ok($$SELECT private.coordinate_analytics_disclosure(
+  jsonb_set(pg_temp.disclosure_candidate(array_fill(100,ARRAY[5])),'{linear_contributors}','{}'),'{}')$$,
+  '23514','Analytics contributions do not reconcile','missing contribution evidence fails closed');
 SELECT extensions.ok(NOT EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role']) role(name)
   WHERE has_table_privilege(role.name,'private.advocate_analytics_releases','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
-    OR has_function_privilege(role.name,'private.release_advocate_analytics(uuid,timestamptz)','EXECUTE')),
-  'API roles cannot read disclosure identities or invoke an arbitrary release cutoff');
-SELECT extensions.ok((SELECT relrowsecurity AND relforcerowsecurity FROM pg_class
-  WHERE oid='private.advocate_analytics_releases'::regclass),'the disclosure ledger forces row security');
--- Historical comparison uses stored transitions, not a copy of every donor
--- in every release. This fixture models five losses followed by four complete
--- restorations and one partial restoration.
+    OR has_table_privilege(role.name,'private.advocate_analytics_basis_columns','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+    OR has_function_privilege(role.name,'private.release_advocate_analytics(uuid,timestamptz)','EXECUTE')
+    OR has_function_privilege(role.name,'private.append_analytics_basis(uuid,jsonb)','EXECUTE')
+    OR has_function_privilege(role.name,'private.certify_advocate_public_metric(uuid,timestamptz,jsonb)','EXECUTE')),
+  'API roles cannot access numerical history or choose release cutoffs');
+SELECT extensions.ok((SELECT bool_and(relrowsecurity AND relforcerowsecurity) FROM pg_class
+  WHERE oid IN ('private.advocate_analytics_releases'::regclass,'private.advocate_analytics_basis_columns'::regclass)),
+  'release and numerical history ledgers force row security');
+
+-- Persist a real certified basis and prove replay, immutable history and public
+-- coordination. Managed-schema fixture writes finish before release operations.
 SET LOCAL session_replication_role = replica;
 INSERT INTO public.advocates(id,slug,display_name) VALUES
   ('97000000-0000-4000-8000-000000000001','disclosure-history-fixture','Disclosure history fixture');
 SET LOCAL session_replication_role = origin;
+SELECT set_config('request.jwt.claim.role','service_role',true);
 SELECT set_config('app.advocate_analytics_release.operation','coordinated-v1',true);
 INSERT INTO private.advocate_analytics_releases(id,advocate_id,source_cutoff,snapshot,contribution_digest,contact_key_versions)
-SELECT ('97000000-0000-4000-8000-00000000000'||stage)::uuid,'97000000-0000-4000-8000-000000000001',
-  (date_trunc('week',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')-(5-stage)*interval '7 days',
-  '{}',repeat('0',64),'["1:1"]' FROM generate_series(1,2) stage ORDER BY stage;
-INSERT INTO private.advocate_analytics_contribution_changes(release_id,advocate_id,source_cutoff,measure,scope,contact_key,fingerprint)
-SELECT release.id,release.advocate_id,release.source_cutoff,'official:net_collected','direct:USD','contact-'||contact,
-  encode(extensions.digest(CASE WHEN release.id='97000000-0000-4000-8000-000000000001' THEN '100' ELSE '90' END,'sha256'),'hex')
-FROM private.advocate_analytics_releases release CROSS JOIN generate_series(1,5) contact
-WHERE release.advocate_id='97000000-0000-4000-8000-000000000001';
-CREATE TEMP TABLE restoration_candidate AS SELECT pg_temp.disclosure_candidate(
-  ARRAY[100,100,100,100,100],ARRAY[0,0,0,0,7]) AS value;
-SELECT extensions.ok((SELECT NOT ('official:net_collected'=ANY(private.analytics_unsafe_measures(
-  private.analytics_disclosure_baseline('97000000-0000-4000-8000-000000000001'),value->'contributors')))
-  FROM restoration_candidate),'the restoration example changes five contacts relative to the latest release');
-SELECT extensions.ok((SELECT 'official:net_collected'=ANY(private.analytics_historical_unsafe_measures(
-  '97000000-0000-4000-8000-000000000001',value->'contributors')) FROM restoration_candidate),
-  'the same restoration is unsafe against the older disclosure because it isolates one remaining seven-cent loss');
-SELECT extensions.ok((SELECT private.coordinate_analytics_disclosure(value,
-  private.analytics_disclosure_baseline('97000000-0000-4000-8000-000000000001'),
-  private.analytics_historical_unsafe_measures('97000000-0000-4000-8000-000000000001',value->'contributors'))
-  ->'snapshot'->'official'->'net_collected_usd_cents'='null'::jsonb FROM restoration_candidate),
-  'nonconsecutive disclosure evidence withholds the reconstructible net result');
-SELECT extensions.throws_ok($$UPDATE private.advocate_analytics_contribution_changes SET fingerprint=NULL$$,
-  '42501','Analytics contributions are append only','historical contribution states cannot be overwritten');
-SELECT extensions.throws_ok($$DELETE FROM private.advocate_analytics_contribution_changes$$,
-  '42501','Analytics contributions are append only','historical contribution states cannot be deleted');
-SELECT extensions.ok(NOT EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role']) role(name)
-  WHERE has_table_privilege(role.name,'private.advocate_analytics_contribution_changes','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')),
-  'API roles cannot access private contributor transitions');
-
-
--- Compare the compact transition algorithm with full historical snapshots.
--- The reference intentionally rebuilds each state and compares contact values
--- directly. It exercises removals, reappearances, unchanged weeks, multiple
--- scopes, and candidates that match an older state instead of the latest one.
-CREATE FUNCTION pg_temp.verify_disclosure_history() RETURNS boolean LANGUAGE plpgsql AS $$
-DECLARE
-  tenant constant uuid:='97000000-0000-4000-8000-000000000099';
-  v_stage integer; candidate_index integer; v_release_id uuid; cutoff timestamptz;
-  current_state jsonb; previous_state jsonb:='{}'; candidate jsonb;
-  expected text[]; actual text[];
+SELECT '97000000-0000-4000-8000-000000000001','97000000-0000-4000-8000-000000000001',
+  (date_trunc('week',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')-interval '7 days',
+  result->'snapshot',encode(extensions.digest((result->'basis')::text,'sha256'),'hex'),'["1:1"]'
+FROM disclosure_cases WHERE name='initial';
+SELECT private.append_analytics_basis('97000000-0000-4000-8000-000000000001',result->'basis')
+FROM disclosure_cases WHERE name='initial';
+SELECT private.append_analytics_basis('97000000-0000-4000-8000-000000000001',result->'basis')
+FROM disclosure_cases WHERE name='initial';
+SELECT extensions.is((SELECT count(*) FROM private.advocate_analytics_basis_columns),1::bigint,
+  'replaying an existing numerical basis inserts no duplicate history');
+SELECT extensions.ok((SELECT private.analytics_disclosure_basis('97000000-0000-4000-8000-000000000001')=result->'basis'
+  FROM disclosure_cases WHERE name='initial'),'stored columns reconstruct the certified history exactly');
+SELECT extensions.ok((SELECT NOT private.certify_advocate_public_metric(advocate_id,source_cutoff,
+  '{"contact-1":[1,1]}'::jsonb) FROM private.advocate_analytics_releases),
+  'a public count cannot add a one-contact direction to private history');
+SELECT extensions.ok((SELECT private.certify_advocate_public_metric(advocate_id,source_cutoff,
+  '{"contact-1":[1,1],"contact-2":[1,1],"contact-3":[1,1],"contact-4":[1,1],"contact-5":[1,1]}'::jsonb)
+  FROM private.advocate_analytics_releases),'a dependent public column shares the same retained basis');
+SELECT extensions.is((SELECT count(*) FROM private.advocate_analytics_basis_columns),1::bigint,
+  'public checks neither copy dependent history nor persist rejected evidence');
+SELECT extensions.ok((SELECT private.certify_advocate_public_metric(advocate_id,source_cutoff,
+  '{"contact-6":[1,1],"contact-7":[1,1],"contact-8":[1,1],"contact-9":[1,1],"contact-10":[1,1]}'::jsonb)
+  FROM private.advocate_analytics_releases), 'five new public contributors add an independently certified historical direction');
+SELECT extensions.is((SELECT count(*) FROM private.advocate_analytics_basis_columns),2::bigint,
+  'an independent public direction persists for later private reports');
+SELECT extensions.ok(private.coordinate_analytics_disclosure(
+  pg_temp.disclosure_candidate(ARRAY[100,100,100,100,100,100,101,100,100,100]),
+  private.analytics_disclosure_basis('97000000-0000-4000-8000-000000000001'))#>'{snapshot,official,gross_collected_usd_cents}'='null'::jsonb,
+  'a later private report cannot reconstruct an individual residual against public history');
+SELECT extensions.throws_ok($$SELECT private.append_analytics_basis('97000000-0000-4000-8000-000000000001','{"contact":[],"account":[]}')$$,
+  '23514','Analytics history cannot discard prior columns','history cannot reset its disclosure budget');
+SELECT extensions.throws_ok($$UPDATE private.advocate_analytics_basis_columns SET contributions='{}'$$,
+  '42501','Analytics contributions are append only','historical contributions cannot be overwritten');
+SELECT extensions.throws_ok($$DELETE FROM private.advocate_analytics_basis_columns$$,
+  '42501','Analytics contributions are append only','historical contributions cannot be deleted');
+-- Independent full-column reference: keep every original vector, then prove
+-- each remains in the compact basis. No release is forgotten after a duplicate,
+-- a dependent update, or a later new direction.
+CREATE FUNCTION pg_temp.verify_numerical_history() RETURNS boolean LANGUAGE plpgsql AS $$
+DECLARE history jsonb:='[]'; complete jsonb:='[]'; column_value jsonb; next_history jsonb; prior_column jsonb; stage integer;
 BEGIN
-  SET LOCAL session_replication_role = replica;
-  INSERT INTO public.advocates(id,slug,display_name)
-    VALUES(tenant,'disclosure-history-reference','Disclosure history reference');
-  SET LOCAL session_replication_role = origin;
-  CREATE TEMP TABLE disclosure_reference_states(stage integer PRIMARY KEY,contributions jsonb NOT NULL);
-  INSERT INTO disclosure_reference_states VALUES(0,'{}');
-  FOR v_stage IN 1..16 LOOP
-    -- Consecutive pairs have identical states, so half the releases have no
-    -- contribution rows. Zero omits a contact and later states can restore it.
-    WITH values AS (
-      SELECT measure,scope,'contact-'||contact AS contact,
-        mod(contact*7+((v_stage+1)/2)*3+scope_index*5+measure_index,11) AS amount
-      FROM (VALUES ('official:net_collected',1),('official:refunds_and_reversals',2),
-        ('observed:sponsorships',3)) measures(measure,measure_index)
-      CROSS JOIN (VALUES ('total',1),('direct:USD',2),('currency:GBP',3)) scopes(scope,scope_index)
-      CROSS JOIN generate_series(1,8) contact
-    ), scopes AS (
-      SELECT measure,scope,jsonb_object_agg(contact,encode(extensions.digest(amount::text,'sha256'),'hex')) AS contacts
-      FROM values WHERE amount>2 GROUP BY measure,scope
-    ), measures AS (
-      SELECT measure,jsonb_object_agg(scope,contacts) AS scopes FROM scopes GROUP BY measure
-    ) SELECT coalesce(jsonb_object_agg(measure,scopes),'{}') INTO current_state FROM measures;
-    cutoff:=(date_trunc('week',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')-(18-v_stage)*interval '7 days';
-    INSERT INTO private.advocate_analytics_releases(advocate_id,source_cutoff,snapshot,contribution_digest,contact_key_versions)
-      VALUES(tenant,cutoff,'{}',encode(extensions.digest(current_state::text,'sha256'),'hex'),'["1:1"]')
-      RETURNING id INTO v_release_id;
-    INSERT INTO private.advocate_analytics_contribution_changes(release_id,advocate_id,source_cutoff,measure,scope,contact_key,fingerprint)
-      SELECT v_release_id,tenant,cutoff,coalesce(current.measure,prior.measure),coalesce(current.scope,prior.scope),
-        coalesce(current.contact_key,prior.contact_key),current.fingerprint
-      FROM private.analytics_contribution_rows(current_state) current
-      FULL JOIN private.analytics_contribution_rows(previous_state) prior USING(measure,scope,contact_key)
-      WHERE current.fingerprint IS DISTINCT FROM prior.fingerprint;
-    IF private.analytics_disclosure_baseline(tenant) IS DISTINCT FROM current_state THEN
-      RAISE EXCEPTION 'Historical baseline differs at stage %',v_stage;
-    END IF;
-    IF v_stage%2=0 AND EXISTS(SELECT 1 FROM private.advocate_analytics_contribution_changes change WHERE change.release_id=v_release_id) THEN
-      RAISE EXCEPTION 'Unchanged history was copied at stage %',v_stage;
-    END IF;
-    INSERT INTO disclosure_reference_states VALUES(v_stage,current_state);
-    previous_state:=current_state;
+  FOR stage IN 1..16 LOOP
+    SELECT jsonb_object_agg('contact-'||i,jsonb_build_array(CASE (i-1)/5
+      WHEN 0 THEN 100+stage*7 WHEN 1 THEN 200+stage*stage ELSE 300+mod(stage,4) END,1))
+      INTO column_value FROM generate_series(1,15) i;
+    complete:=complete||jsonb_build_array(column_value);
+    next_history:=private.certify_analytics_columns(history||jsonb_build_array(column_value));
+    IF next_history IS NULL OR jsonb_array_length(next_history)>3 THEN RETURN false; END IF;
+    IF EXISTS(SELECT 1 FROM jsonb_array_elements(history) WITH ORDINALITY entry(value,ordinal)
+      WHERE value IS DISTINCT FROM next_history->(ordinal::integer-1)) THEN RETURN false; END IF;
+    FOR prior_column IN SELECT value FROM jsonb_array_elements(complete) entry(value) LOOP
+      IF private.certify_analytics_columns(next_history||jsonb_build_array(prior_column)) IS DISTINCT FROM next_history THEN RETURN false; END IF;
+    END LOOP;
+    IF private.analytics_linear_disclosure_certified(private.analytics_integer_contribution_matrix(complete)) IS NOT TRUE THEN RETURN false; END IF;
+    history:=next_history;
   END LOOP;
-  IF NOT EXISTS(SELECT 1 FROM private.advocate_analytics_contribution_changes WHERE advocate_id=tenant AND fingerprint IS NULL) THEN
-    RAISE EXCEPTION 'History fixture did not exercise removals';
-  END IF;
-  FOR candidate_index IN 0..24 LOOP
-    SELECT contributions INTO candidate FROM disclosure_reference_states WHERE stage=candidate_index%17;
-    IF candidate_index>16 THEN
-      -- One changed contact relative to an old state must remain unsafe even
-      -- if several contacts differ from the latest state.
-      candidate:=jsonb_set(candidate,'{official:net_collected,total,contact-1}',to_jsonb(repeat('f',64)),true);
-    END IF;
-    WITH states AS (
-      SELECT stage,measure.key AS measure,scope.key AS scope,contact.key AS contact,contact.value AS fingerprint
-      FROM disclosure_reference_states
-      CROSS JOIN LATERAL jsonb_each(contributions) measure
-      CROSS JOIN LATERAL jsonb_each(measure.value) scope
-      CROSS JOIN LATERAL jsonb_each_text(scope.value) contact
-    ), candidates AS (
-      SELECT stage,measure.key AS measure,scope.key AS scope,contact.key AS contact,contact.value AS fingerprint
-      FROM disclosure_reference_states
-      CROSS JOIN LATERAL jsonb_each(candidate) measure
-      CROSS JOIN LATERAL jsonb_each(measure.value) scope
-      CROSS JOIN LATERAL jsonb_each_text(scope.value) contact
-    ), changed AS (
-      SELECT coalesce(states.stage,candidates.stage) AS stage,coalesce(states.measure,candidates.measure) AS measure,
-        coalesce(states.scope,candidates.scope) AS scope,count(*) AS contacts
-      FROM states FULL JOIN candidates USING(stage,measure,scope,contact)
-      WHERE states.fingerprint IS DISTINCT FROM candidates.fingerprint
-      GROUP BY 1,2,3
-    ) SELECT coalesce(array_agg(DISTINCT measure ORDER BY measure),'{}'::text[]) INTO expected
-      FROM changed WHERE contacts BETWEEN 1 AND 4;
-    actual:=private.analytics_historical_unsafe_measures(tenant,candidate);
-    IF actual IS DISTINCT FROM expected THEN
-      RAISE EXCEPTION 'Historical policy differs for candidate %: actual %, expected %',candidate_index,actual,expected;
-    END IF;
-  END LOOP;
-  RETURN true;
+  RETURN jsonb_array_length(history)=3;
 END;
 $$;
-SELECT extensions.ok(pg_temp.verify_disclosure_history(),
-  'sparse history matches complete-state comparison across 16 releases and 25 candidates, including removals and restorations');
-
+SELECT extensions.ok(pg_temp.verify_numerical_history(),
+  'sixteen full historical vectors retain exactly their original span in three append-only columns');
 SELECT * FROM extensions.finish();
 ROLLBACK;

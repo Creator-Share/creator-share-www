@@ -262,7 +262,7 @@ test.describe("advocate private analytics projection", () => {
     }
   })
 
-  test("retains exact keys while accepting dependency-consistent withheld measures", () => {
+  test("retains exact keys while accepting withheld measures", () => {
     const parsed = analytics.parseAdvocateAnalyticsSnapshot(
       snapshot({
         official: visibleCell({
@@ -310,23 +310,18 @@ test.describe("advocate private analytics projection", () => {
     })
   })
 
-  test("rejects a visible verified account complement below the privacy floor", () => {
+  test("does not mistake account and contact counts for a distinct-person complement", () => {
     expect(
       analytics.parseAdvocateAnalyticsSnapshot(
         snapshot({
           official: visibleCell({ verified_sponsor_accounts: 5 }),
         }),
       ),
-    ).toBeNull()
+    ).not.toBeNull()
   })
 
   test("enforces the sponsor contact floor on every cell", () => {
-    // The complement floor above is asserted, but the floor on
-    // unique_sponsor_contacts itself was not: a mutation lowering it from five
-    // to one left the suite green. A cell built from a single sponsor contact
-    // reidentifies that sponsor's giving to any portal member who can open the
-    // analytics page. verified_sponsor_accounts is null throughout so the
-    // verified-account floors cannot be what rejects these.
+    // The count itself still requires at least five contact keys.
     for (const contacts of [1, 2, 3, 4]) {
       expect(
         analytics.parseAdvocateAnalyticsSnapshot(
@@ -355,89 +350,38 @@ test.describe("advocate private analytics projection", () => {
     ).not.toBeNull()
   })
 
-  test("withholds gross and renewal together in the USD summary", () => {
-    // Initial is always visible and gross is initial plus renewal, so
-    // publishing one of the pair while withholding the other republishes the
-    // suppressed number by subtraction.
-    expect(
-      analytics.parseAdvocateAnalyticsSnapshot(
-        snapshot({
-          official: visibleCell({ gross_collected_usd_cents: null }),
-        }),
-      ),
-    ).toBeNull()
-
-    expect(
-      analytics.parseAdvocateAnalyticsSnapshot(
-        snapshot({
-          official: visibleCell({
-            renewal_collected_usd_cents: null,
-            net_collected_usd_cents: null,
-          }),
-        }),
-      ),
-    ).toBeNull()
+  test("accepts independently certified financial totals and withheld details", () => {
+    const core = visibleCell({
+      sponsorships: null, unique_sponsor_contacts: null, verified_sponsor_accounts: 0,
+      initial_collected_usd_cents: 10_733, renewal_collected_usd_cents: 0,
+      gross_collected_usd_cents: 10_733, refunds_and_reversals_usd_cents: 7_500,
+      dispute_debits_usd_cents: null, dispute_credits_usd_cents: null,
+      net_collected_usd_cents: 3_233,
+    })
+    const parsed = analytics.parseAdvocateAnalyticsSnapshot(snapshot({
+      official: core, segments: null,
+      original_currency: [{
+        currency: "USD", suppressed: false, sponsorships: null, unique_sponsor_contacts: null,
+        initial_collected_minor: 10_733, renewal_collected_minor: 0, gross_collected_minor: 10_733,
+        refunds_and_reversals_minor: 7_500, dispute_debits_minor: null, dispute_credits_minor: null,
+        net_collected_minor: 3_233,
+      }],
+    }))
+    expect(parsed?.official).toMatchObject({ grossCollectedUsdCents: 10_733,
+      netCollectedUsdCents: 3_233, disputeDebitsUsdCents: null, uniqueSponsorContacts: null })
+    expect(parsed?.originalCurrency?.[0]).toMatchObject({ netCollectedMinor: 3_233, disputeCreditsMinor: null })
+    if (!parsed) throw new Error("Expected a certified partial report")
+    const html = renderToStaticMarkup(createElement(AnalyticsDashboard, { advocateName: "Example", snapshot: parsed }))
+    expect(html).toContain("Withheld")
+    expect(html).toContain("32.33")
   })
 
-  test("withholds gross and renewal together in each original currency row", () => {
-    // The same invariant on the per-currency table, which is a separate
-    // validator and was likewise unasserted.
-    //
-    // Each case uses a single currency row deliberately. A two-row fixture is
-    // rejected by a cross-row consistency rule before this invariant is
-    // reached, which made an earlier version of this test pass while the
-    // invariant it named was removable. One row isolates it.
-    const base = snapshot()
-    const row = (base.original_currency as Record<string, unknown>[])[0]
-
-    expect(
-      analytics.parseAdvocateAnalyticsSnapshot({
-        ...base,
-        original_currency: [{ ...row, gross_collected_minor: null }],
-      }),
-    ).toBeNull()
-
-    expect(
-      analytics.parseAdvocateAnalyticsSnapshot({
-        ...base,
-        original_currency: [
-          {
-            ...row,
-            renewal_collected_minor: null,
-            net_collected_minor: null,
-          },
-        ],
-      }),
-    ).toBeNull()
-
-    // The same single row, withheld as a pair, is accepted. Without this the
-    // two assertions above would be satisfied by any rule that rejects a
-    // one-row table.
-    expect(
-      analytics.parseAdvocateAnalyticsSnapshot({
-        ...base,
-        original_currency: [
-          {
-            ...row,
-            renewal_collected_minor: null,
-            gross_collected_minor: null,
-            net_collected_minor: null,
-          },
-        ],
-      }),
-    ).not.toBeNull()
-  })
-
-  test("rejects annualized commitment when either cadence is withheld", () => {
-    for (const invalid of [
+  test("accepts certified projections without requiring both cadence details", () => {
+    for (const cell of [
       visibleCell({ active_monthly_commitment_usd_cents: null }),
       visibleCell({ active_annual_commitment_usd_cents: null }),
     ]) {
-      expect(
-        analytics.parseAdvocateAnalyticsSnapshot(
-          snapshot({ official: invalid }),
-        ),
-      ).toBeNull()
+      expect(analytics.parseAdvocateAnalyticsSnapshot(snapshot({ official: cell }))).not.toBeNull()
     }
   })
 
