@@ -1,6 +1,6 @@
 # MVP deferral options
 
-Status: recommendations only. No scope reduction is approved or implemented. Earlier measurements use `b812f8c`; the private-analytics measurement uses `dbf6ded`. All current capabilities remain required.
+Status: recommendations only. No scope reduction is approved or implemented. Earlier measurements use `b812f8c`; the private-analytics measurement uses `dbf6ded`. All current capabilities remain required. The owner has since approved delayed or withheld coordinated analytics, but has not approved removing any reporting capability. The implementation now checks numerical history within each portal; cross-portal composition and capacity remain unresolved. Deferring the private dashboard reduces the disclosure surface but does not establish that retained public metrics are safe across overlapping portals.
 
 ## Recommended order
 
@@ -20,13 +20,13 @@ The dedicated page, dashboard, and repository/validation module total 1,058 phys
 
 This option removes the current detailed private disclosure surface rather than claiming its privacy defect is repaired. If approved, remove or revoke the snapshot RPC as well as the page, adjust navigation and role capabilities, and test direct access denial. Merely hiding the menu leaves the database surface accessible. Keep attribution decisions and financial history intact so later reporting can use them. The existing delayed and rounded public metrics could remain as the initial reporting capability; no new manual-report service is assumed.
 
-The cost is substantive: advocates lose private conversion timing, currency detail, collected-fund adjustments, and recurring commitment reporting. This is an alternative to resolving the FF-034 privacy/freshness policy for launch, not approval to ship the current leaking snapshot. Payment accounting (FF-072 and FF-084), operational recovery, and external release gates remain necessary. This option and deferring public counters should be considered separately because choosing both removes the existing aggregate reporting experiences.
+The cost is substantive: advocates lose private conversion timing, currency detail, collected-fund adjustments, and recurring commitment reporting. This is an alternative to completing the detailed private surface for launch. The current implementation retains historical numerical disclosure checks; remaining cross-portal and capacity issues must still be resolved for whichever metrics are retained. Payment accounting (FF-072 and FF-084), operational recovery, and external release gates remain necessary. This option and deferring public counters should be considered separately because choosing both removes the existing aggregate reporting experiences.
 
 ## Public impact counters
 
 The dedicated surface includes the public cards, selection editor, portal page and mutation route, and `src/lib/advocates/publicMetrics/` worker stack. Its main migration contains 1,132 lines, but also defines the shared public presentation snapshot, which must remain without the metric fields. Its dedicated database and four application test files total 2,769 lines. Shared permission, audit, presentation, scheduler, and integration assertions also need coordinated changes.
 
-This removes public disclosure releases, delayed metric publication, and their operational recovery burden. It does not remove private analytics or fix FF-034: consecutive private snapshots already reveal isolated contributions, refunds, and renewals. It also does not affect the payment accounting defect FF-072.
+This removes public disclosure releases, delayed metric publication, and their operational recovery burden. It does not remove private analytics or close FF-034. The current numerical-history implementation repairs the reproduced within-portal linear attacks, but cross-portal composition and bounded capacity remain open. It also does not affect the payment accounting defect FF-072.
 
 ## Direct attribution only
 
