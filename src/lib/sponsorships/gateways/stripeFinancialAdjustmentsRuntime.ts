@@ -166,6 +166,7 @@ async function ingestVerifiedAdjustment(
   const { data, error } = await supabase.rpc(
     "ingest_verified_sponsorship_financial_adjustment",
     {
+      ...(input.revalidationOperationId ? { target_revalidation_operation_id: input.revalidationOperationId } : {}),
       target_original_financial_movement_id: input.originalFinancialMovementId,
       target_provider: "STRIPE",
       target_provider_account_scope: input.providerAccountScope,

@@ -5,6 +5,11 @@ import { expect, test } from "@playwright/test"
 
 const userId = "0f000000-0000-4000-8000-000000000002"
 const calls: Array<Record<string, unknown>> = []
+const recoveryCalls: Array<Record<string, unknown>> = []
+let recoveryResult: Record<string, unknown> = { admitted: true, processingStatus: "received", replay: false }
+let recoveryError: Error | null = null
+let recoveryRoute: typeof import("../../src/app/api/internal/payments/gateway-event-recovery/route")
+let RecoveryError: typeof import("../../src/lib/sponsorships/gateways/paymentGatewayRecovery").GatewayRecoveryError
 let rpcError: { code: string; message: string } | null = null
 let rpcData: unknown = { acknowledged: true, resolved: false }
 const loader = Module as unknown as { _load: (name: string, ...args: unknown[]) => unknown }
@@ -16,6 +21,16 @@ let route: typeof import("../../src/app/api/admin/payment-failures/acknowledge/r
 try {
   loader._load = (name, ...args) => {
     if (name === "server-only") return {}
+    if (name === "@/lib/sponsorships/gateways/paymentGatewayEventConfig") return {
+      loadPaymentGatewayEventWorkerSecret: () => "recovery-test-secret-".repeat(3),
+    }
+    if (name === "@/lib/sponsorships/gateways/paymentGatewayRecoveryRuntime") return {
+      recoverPaymentGatewayEventFromEnvironment: async (eventId: string, operationId: string, requestId: string) => {
+        recoveryCalls.push({ eventId, operationId, requestId })
+        if (recoveryError) throw recoveryError
+        return recoveryResult
+      },
+    }
     if (["@/lib/sponsorships/crypto", "@/lib/sponsorships/gateways/paymentGatewayEventRepository",
       "@/app/api/webhooks/stripe/handler"].includes(name)) return {}
     if (name === "@/utils/supabase/server") return {
@@ -38,6 +53,8 @@ try {
     }
     return original.call(Module, name, ...args)
   }
+  recoveryRoute = testRequire("../../src/app/api/internal/payments/gateway-event-recovery/route")
+  RecoveryError = testRequire("../../src/lib/sponsorships/gateways/paymentGatewayRecovery").GatewayRecoveryError
   route = testRequire("../../src/app/api/admin/payment-failures/acknowledge/route")
   runtime = testRequire("../../src/lib/sponsorships/gateways/paymentGatewayEventRuntime")
 } finally {
@@ -51,7 +68,8 @@ function request(body: unknown = input, origin = "https://creatorshare.com") {
     body: JSON.stringify(body),
   })
 }
-test.beforeEach(() => { calls.length = 0; rpcError = null; rpcData = { acknowledged: true, resolved: false } })
+test.beforeEach(() => { recoveryCalls.length = 0; recoveryError = null;
+  recoveryResult = { admitted: true, processingStatus: "received", replay: false }; calls.length = 0; rpcError = null; rpcData = { acknowledged: true, resolved: false } })
 
 test("acknowledgment binds observed failure evidence and a server-issued request identity", async () => {
   const response = await route.POST(request({ ...input, requestId: userId }))
@@ -110,4 +128,67 @@ test("health projection rejects inconsistent counts and strips unexpected privat
   rpcData = healthy
   rpcError = { code: "XX000", message: "private database detail" }
   await expect(runtime.readPaymentFailureHealth()).rejects.toThrow("Payment failure health unavailable")
+})
+
+
+const recoveryInput = { eventId: userId, operationId: "0f000000-0000-4000-8000-000000000003" }
+function recoveryRequest(body: unknown = recoveryInput, authorized = true) {
+  return new Request("https://creatorshare.com/api/internal/payments/gateway-event-recovery", {
+    method: "POST", headers: { authorization: authorized ? "Bearer " + "recovery-test-secret-".repeat(3) : "Bearer wrong",
+      "content-type": "application/json" }, body: JSON.stringify(body),
+  })
+}
+
+test("operator recovery requires the worker credential and strict operation identities", async () => {
+  expect((await recoveryRoute.POST(recoveryRequest(recoveryInput, false))).status).toBe(401)
+  for (const body of [null, [], {}, { ...recoveryInput, operationId: "bad" }, { ...recoveryInput, eventId: "bad" },
+    { ...recoveryInput, payload: "untrusted financial facts" }, { ...recoveryInput, padding: "x".repeat(1024) }]) {
+    expect((await recoveryRoute.POST(recoveryRequest(body))).status).toBe(400)
+  }
+  expect(recoveryCalls).toEqual([])
+  expect("GET" in recoveryRoute).toBe(false)
+})
+
+test("operator recovery preserves retry identity and returns only categorical admission state", async () => {
+  recoveryResult = { ...recoveryResult, providerEvidence: "private provider details" }
+  const initial = await recoveryRoute.POST(recoveryRequest())
+  expect(initial.status).toBe(202)
+  expect(initial.headers.get("cache-control")).toBe("no-store")
+  expect(await initial.json()).toEqual({ ok: true, admitted: true, processingStatus: "received", replay: false,
+    requestId: expect.any(String) })
+  recoveryResult = { admitted: true, processingStatus: "processed", replay: true }
+  expect((await recoveryRoute.POST(recoveryRequest())).status).toBe(200)
+  expect(recoveryCalls).toHaveLength(2)
+  expect(recoveryCalls.every(call => call.eventId === recoveryInput.eventId && call.operationId === recoveryInput.operationId)).toBe(true)
+  expect(recoveryCalls[0].requestId).not.toBe(recoveryCalls[1].requestId)
+})
+
+test("operator recovery errors remain categorical and do not disclose provider details", async () => {
+  for (const [code, status] of [["not_found", 404], ["conflict", 409], ["expired", 422], ["incomplete", 422],
+    ["unsupported", 422], ["outcome_unknown", 503]] as const) {
+    recoveryError = new RecoveryError(code)
+    const result = await recoveryRoute.POST(recoveryRequest())
+    expect(result.status).toBe(status)
+    expect(await result.json()).toEqual({ ok: false, code, requestId: expect.any(String) })
+  }
+  recoveryError = new Error("private provider details")
+  expect(await (await recoveryRoute.POST(recoveryRequest())).text()).not.toContain("private provider")
+})
+
+test("aborted operator bodies stop before execution even when producer cancellation stalls", async () => {
+  const controller = new AbortController()
+  let canceled = false
+  const body = new ReadableStream<Uint8Array>({
+    start(stream) { stream.enqueue(new TextEncoder().encode('{"eventId":')) },
+    cancel() { canceled = true; return new Promise<void>(() => {}) },
+  })
+  const request = new Request("https://creatorshare.com/api/internal/payments/gateway-event-recovery", {
+    method: "POST", headers: { authorization: "Bearer " + "recovery-test-secret-".repeat(3) },
+    body, signal: controller.signal, duplex: "half",
+  } as RequestInit & { duplex: "half" })
+  const pending = recoveryRoute.POST(request)
+  controller.abort()
+  expect((await pending).status).toBe(400)
+  expect(canceled).toBe(true)
+  expect(recoveryCalls).toEqual([])
 })

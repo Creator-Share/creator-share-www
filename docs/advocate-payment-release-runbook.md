@@ -466,3 +466,27 @@ Fresh missing-event cash remains visible in health without failing the worker. A
 Investigate the protected cash and signed-event records through the approved reconciliation process. Do not synthesize an event, change a digest, allocate principal, or reset retries merely to clear the signal. A matching quarantined event removes the missing-event classification but remains unresolved in the ordinary failure inventory. Automated financial recovery and proof of delivery to the configured alert destination remain release work.
 
 Deploy the complete database revision before its application caller: the health function is now defined with the cash tables in `20260720106000_provider_cash_evidence.sql`, and the application requires both new counts. Raw cash and observation tables remain inaccessible to API roles.
+
+
+### Retained financial-adjustment recovery
+
+The internal operator endpoint is `POST /api/internal/payments/gateway-event-recovery`. It uses the existing payment-worker bearer credential, `PAYMENT_GATEWAY_EVENT_WORKER_SECRET`, or its configured `CRON_SECRET` fallback. It is absent from the cron schedule. Use it only after the repaired interpretation has been deployed and provider access is authorized.
+
+Send exactly two JSON fields:
+
+```json
+{
+  "eventId": "<quarantined-event-v4-uuid>",
+  "operationId": "<new-v4-uuid-kept-for-all-retries>"
+}
+```
+
+Keep the operation ID before sending the request. Obtain the event ID through protected failure review. The endpoint reads the retained evidence itself; it accepts no financial facts, provider identifiers, contact material, or replacement payload from the operator.
+
+The request checks a committed interpretation receipt first. A matching receipt returns `200` with categorical processing state, without decrypting evidence or contacting a provider again. A new validated admission returns `202`; the existing gateway worker performs settlement. Admission is not proof of completed settlement. A lost response or `503` must be retried with the same event and operation IDs. A `409` requires reviewing the existing operation or event state rather than inventing another operation identity.
+
+A `422` leaves the event unadmitted when retained material is unavailable, expired, minimized, invalid, unsupported, or still fails financial validation. Do not reset retry counters, alter source evidence, or extend retention to bypass this outcome. This path handles the existing financial-adjustment adapters for Stripe US, Stripe UK, and PayPal. Other event families and no-effect interpretations are rejected. Excess-loss allocation and grouped disputes remain subject to FF-084.
+
+The endpoint limits request bodies to 1,024 bytes and five seconds. Preparation has a 90-second budget checked before writes. Database requests have eight-second transport limits; Stripe recovery reads have ten-second limits with SDK retries disabled; PayPal retains its existing bounded transport. The function requires the documented 120-second hosting allowance. Responses contain only categorical outcome, processing state, replay status and a server-issued request correlation ID.
+
+The request uses original signature-verification evidence rather than claiming a fresh provider signature. It preserves original ciphertext, hashes, timestamps and retention. The database records the operation, interpretation version and derived-fact digest atomically with queue admission. No second recovery queue is required because provider preparation reads and admission retries reuse the existing financial boundaries. Live recovery has not been exercised by this review.

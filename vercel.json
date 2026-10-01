@@ -42,6 +42,9 @@
     },
     "src/app/api/internal/retention/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/internal/payments/gateway-event-recovery/route.ts": {
+      "maxDuration": 120
     }
   },
   "crons": [

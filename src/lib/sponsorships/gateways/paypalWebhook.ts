@@ -235,6 +235,7 @@ export interface VerifiedPayPalQuarantineResult {
 }
 
 export interface VerifiedPayPalFinancialAdjustmentInput {
+  revalidationOperationId?: string
   originalFinancialMovementId: string
   providerAccountScope: "paypal"
   providerEventId: string

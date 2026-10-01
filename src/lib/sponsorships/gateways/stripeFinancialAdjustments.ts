@@ -97,6 +97,7 @@ export interface StripeFinancialMovementLookup {
 }
 
 export interface VerifiedStripeFinancialAdjustmentInput {
+  revalidationOperationId?: string
   originalFinancialMovementId: string
   providerAccountScope: string
   providerEventId: string

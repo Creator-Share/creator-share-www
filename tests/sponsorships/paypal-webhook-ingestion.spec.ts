@@ -53,6 +53,9 @@ const {
 const { decodeRetainedGatewayEvidence } = testRequire(
   "../../src/lib/sponsorships/gateways/retainedGatewayEvidence",
 ) as typeof import("../../src/lib/sponsorships/gateways/retainedGatewayEvidence")
+const { recoverPaymentGatewayEvent } = testRequire(
+  "../../src/lib/sponsorships/gateways/paymentGatewayRecovery",
+) as typeof import("../../src/lib/sponsorships/gateways/paymentGatewayRecovery")
 nodeModule._load = originalModuleLoad
 
 const INTENT_ID = "11111111-1111-4111-8111-111111111111"
@@ -1253,4 +1256,26 @@ test("retained PayPal recovery accepts complete evidence and rejects minimized u
         .toThrow("Retained payment evidence cannot be revalidated")
     }
   }
+})
+
+test("operator PayPal recovery preserves signed evidence and uses only adjustment admission", async () => {
+  const { value, calls } = dependencies()
+  const raw = rawEvent("PAYMENT.CAPTURE.REFUNDED", "refund", { id: REFUND_ID, status: "COMPLETED",
+    amount: { value: "5.00", currency_code: "USD" }, supplementary_data: { related_ids: { capture_id: CAPTURE_ID } } })
+  await quarantineVerifiedPayPalEvent({ event: parsePayPalWebhookEvent(raw), rawPayload: raw,
+    requestContext: requestContext(), error: new PayPalWebhookError("provider-fact-mismatch") }, value)
+  const stored = calls.quarantined[0]
+  value.now = () => new Date(NOW.getTime() + 120_000)
+  const operationId = "99999999-9999-4999-8999-999999999999"
+  await expect(recoverPaymentGatewayEvent(GATEWAY_EVENT_ID, operationId, "recovery-request", {
+    read: async () => ({ state: "quarantined", evidence: { ...stored, provider: "PAYPAL",
+      payloadRetentionExpiresAt: "2026-07-19T10:00:00.000Z",
+      deliveryPayloadSha256: stored.redactedPayload.delivery_payload_sha256 } }),
+    stripe: (): never => { throw new Error("Unexpected Stripe factory") },
+    paypal: () => ({ dependencies: value, apiUrl: "https://api-m.sandbox.paypal.com" }), now: value.now,
+  })).resolves.toEqual({ admitted: true, processingStatus: "received", replay: false })
+  expect(calls.adjustments).toHaveLength(1)
+  expect(calls.adjustments[0]).toMatchObject({ revalidationOperationId: operationId, signatureVerifiedAt: NOW.toISOString() })
+  expect(calls.verificationBodies).toEqual([])
+  expect(calls.ingested).toEqual([])
 })

@@ -40,7 +40,7 @@ const testRequire = createRequire(
     "tests/sponsorships/stripe-financial-adjustments.spec.ts",
   ),
 )
-const { createSponsorshipCrypto, fromSupabaseRpcBytea } = testRequire(
+const { createSponsorshipCrypto, fromSupabaseRpcBytea, toSupabaseRpcBytea } = testRequire(
   "../../src/lib/sponsorships/crypto",
 ) as typeof import("../../src/lib/sponsorships/crypto")
 const {
@@ -55,6 +55,9 @@ const { stripeEventImmutableDigest } = testRequire(
 const { recordVerifiedCashMovement } = testRequire(
   "../../src/lib/sponsorships/gateways/stripeFinancialAdjustmentsRuntime",
 ) as typeof import("../../src/lib/sponsorships/gateways/stripeFinancialAdjustmentsRuntime")
+const { recoverPaymentGatewayEvent } = testRequire(
+  "../../src/lib/sponsorships/gateways/paymentGatewayRecovery",
+) as typeof import("../../src/lib/sponsorships/gateways/paymentGatewayRecovery")
 nodeModule._load = originalModuleLoad
 
 const ORIGINAL_MOVEMENT_ID = "11111111-1111-4111-8111-111111111111"
@@ -1001,5 +1004,100 @@ test("disputes still require both signed references before shared chain resoluti
     expect(calls.paymentIntentIds).toEqual([])
     expect(calls.movementLookups).toEqual([])
     expect(calls.cash).toEqual([])
+  }
+})
+
+function recoveryFixture(refundStatus = "succeeded") {
+  const fixture = dependenciesFor(movement(), { charge: charge(), paymentIntent: paymentIntent() })
+  const stripeEvent = event("refund.created", refund({ status: refundStatus }))
+  const raw = JSON.stringify(stripeEvent)
+  const evidence = {
+    provider: "STRIPE", providerAccountScope: "stripe_us", providerEventId: stripeEvent.id,
+    eventType: stripeEvent.type, verificationMethod: "stripe_webhook_signature",
+    signatureVerifiedAt: NOW.toISOString(), payloadRetentionExpiresAt: "2026-07-19T12:00:00.000Z",
+    payloadCiphertext: fixture.dependencies.crypto.encryptSecretPayload(raw).ciphertextRpcBytea,
+    payloadSha256: toSupabaseRpcBytea(stripeEventImmutableDigest(stripeEvent)),
+    deliveryPayloadSha256: createHash("sha256").update(raw).digest("hex"),
+    redactedPayload: { stripe_signature: requestContext.signatureHeader, webhook_secret_version: "current" },
+  }
+  const state = { snapshot: { state: "quarantined", evidence } as unknown, now: NOW.getTime() + 120_000, factories: 0 }
+  fixture.dependencies.now = () => new Date(state.now)
+  const dependencies = {
+    read: async () => state.snapshot,
+    stripe: () => { state.factories++; return { dependencies: fixture.dependencies, livemode: false } },
+    paypal: (): never => { throw new Error("Unexpected PayPal factory") },
+    now: () => new Date(state.now),
+  }
+  return { ...fixture, evidence, state, recoveryDependencies: dependencies }
+}
+const RECOVERY_OPERATION_ID = "99999999-9999-4999-8999-999999999999"
+
+test("operator recovery reuses financial validation and preserves the original authentication time", async () => {
+  const fixture = recoveryFixture()
+  await expect(recoverPaymentGatewayEvent(GATEWAY_EVENT_ID, RECOVERY_OPERATION_ID, "recovery-request", fixture.recoveryDependencies))
+    .resolves.toEqual({ admitted: true, processingStatus: "received", replay: false })
+  expect(fixture.calls.ingested).toHaveLength(1)
+  expect(fixture.calls.ingested[0]).toMatchObject({ revalidationOperationId: RECOVERY_OPERATION_ID,
+    signatureVerifiedAt: NOW.toISOString(), originalFinancialMovementId: ORIGINAL_MOVEMENT_ID })
+  fixture.state.snapshot = { state: "admitted", processing_status: "processed" }
+  await expect(recoverPaymentGatewayEvent(GATEWAY_EVENT_ID, RECOVERY_OPERATION_ID, "recovery-retry", fixture.recoveryDependencies))
+    .resolves.toEqual({ admitted: true, processingStatus: "processed", replay: true })
+  expect(fixture.state.factories).toBe(1)
+  expect(fixture.calls.ingested).toHaveLength(1)
+})
+
+test("operator recovery rejects incomplete evidence and no-effect transitions before financial admission", async () => {
+  const invalid = recoveryFixture()
+  invalid.evidence.payloadCiphertext = "\\xff"
+  await expect(recoverPaymentGatewayEvent(GATEWAY_EVENT_ID, RECOVERY_OPERATION_ID, "recovery-request", invalid.recoveryDependencies))
+    .rejects.toMatchObject({ code: "invalid" })
+  expect(invalid.calls.chargeIds).toEqual([])
+  expect(invalid.calls.ingested).toEqual([])
+  const pending = recoveryFixture("pending")
+  await expect(recoverPaymentGatewayEvent(GATEWAY_EVENT_ID, RECOVERY_OPERATION_ID, "recovery-request", pending.recoveryDependencies))
+    .rejects.toMatchObject({ code: "unsupported" })
+  expect(pending.calls.noEffectIngested).toEqual([])
+  expect(pending.calls.ingested).toEqual([])
+})
+
+test("operator recovery stops after its preparation budget expires", async () => {
+  const fixture = recoveryFixture()
+  const load = fixture.dependencies.loadOriginalMovement
+  fixture.dependencies.loadOriginalMovement = async input => {
+    const result = await load(input)
+    fixture.state.now += 90_001
+    return result
+  }
+  await expect(recoverPaymentGatewayEvent(GATEWAY_EVENT_ID, RECOVERY_OPERATION_ID, "recovery-request", fixture.recoveryDependencies))
+    .rejects.toMatchObject({ code: "outcome_unknown" })
+  expect(fixture.calls.ingested).toEqual([])
+  expect(fixture.calls.cash).toEqual([])
+})
+
+test("lost recovery admission responses reconcile through the committed receipt without another write", async () => {
+  const fixture = recoveryFixture()
+  const ingest = fixture.dependencies.ingestVerifiedAdjustment
+  fixture.dependencies.ingestVerifiedAdjustment = async input => {
+    await ingest(input)
+    fixture.state.snapshot = { state: "admitted", processing_status: "received" }
+    throw new Error("private provider transport detail")
+  }
+  await expect(recoverPaymentGatewayEvent(GATEWAY_EVENT_ID, RECOVERY_OPERATION_ID, "recovery-request", fixture.recoveryDependencies))
+    .rejects.toMatchObject({ code: "outcome_unknown" })
+  await expect(recoverPaymentGatewayEvent(GATEWAY_EVENT_ID, RECOVERY_OPERATION_ID, "recovery-retry", fixture.recoveryDependencies))
+    .resolves.toMatchObject({ admitted: true, replay: true })
+  expect(fixture.calls.ingested).toHaveLength(1)
+  expect(fixture.state.factories).toBe(1)
+})
+
+
+test("recovery state decoding rejects coercible or unexpected response shapes", async () => {
+  for (const snapshot of [null, [], { state: ["not_found"] }, { state: "admitted", processing_status: "private detail" },
+    { state: "quarantined", evidence: null }]) {
+    const fixture = recoveryFixture()
+    fixture.state.snapshot = snapshot
+    await expect(recoverPaymentGatewayEvent(GATEWAY_EVENT_ID, RECOVERY_OPERATION_ID, "recovery-request", fixture.recoveryDependencies))
+      .rejects.toMatchObject({ code: "outcome_unknown", message: "Payment event recovery could not be confirmed" })
+    expect(fixture.state.factories).toBe(0)
   }
 })

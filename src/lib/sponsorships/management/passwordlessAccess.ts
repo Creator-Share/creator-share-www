@@ -108,6 +108,7 @@ export function buildSponsorManagementMagicLinkCallback(
 export async function readBoundedSponsorManagementBody(
   request: Request,
   maximumBytes: number,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 2) return null
 
@@ -121,5 +122,5 @@ export async function readBoundedSponsorManagementBody(
 
   if (request.body === null) return null
 
-  return readBoundedUtf8Stream(request.body, maximumBytes)
+  return readBoundedUtf8Stream(request.body, maximumBytes, signal)
 }

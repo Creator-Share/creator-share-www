@@ -1797,6 +1797,8 @@ BEGIN
     'provider-fact-mismatch','Verified adjustment requires a corrected interpretation');
   SELECT * INTO source FROM public.payment_gateway_events WHERE id=event_id;
 
+  RETURN NEXT extensions.ok(public.read_payment_gateway_event_recovery(event_id,operation_id)->>'state'='quarantined',
+    provider_name||' recovery read returns only the requested quarantine');
   RETURN NEXT extensions.throws_ok(format('SELECT pg_temp.admit_recovered_adjustment(%L,%L,NULL)',root_id,event_id),
     '23505','Provider adjustment event identifier was replayed with different evidence',provider_name||' ordinary ingestion cannot reopen quarantine');
   RETURN NEXT extensions.throws_ok(format('SELECT pg_temp.admit_recovered_adjustment(%L,%L,%L,1,decode(repeat(''ff'',32),''hex''))',root_id,event_id,operation_id),
@@ -1830,6 +1832,12 @@ BEGIN
   SELECT to_jsonb(applied) INTO result FROM public.apply_sponsorship_financial_adjustment(event_id,lease) applied;
   RETURN NEXT extensions.ok(result->>'application_effect'='refund_applied',
     provider_name||' recovered fractional adjustment settles through the normal financial path');
+  RETURN NEXT extensions.ok(public.read_payment_gateway_event_recovery(event_id,operation_id) @>
+    '{"state":"admitted","processing_status":"processed"}'::jsonb
+    AND NOT public.read_payment_gateway_event_recovery(event_id,operation_id) ? 'evidence',
+    provider_name||' committed recovery lookup returns categorical state without payload material');
+  RETURN NEXT extensions.ok(public.read_payment_gateway_event_recovery(event_id,gen_random_uuid())->>'state'='conflict',
+    provider_name||' another operation cannot read a committed recovery as its own');
   result:=pg_temp.admit_recovered_adjustment(root_id,event_id,operation_id);
   RETURN NEXT extensions.ok(result->>'is_duplicate'='true' AND (result->>'gateway_event_id')::uuid=event_id,
     provider_name||' exact recovery replay returns the original settled event');
@@ -1848,6 +1856,13 @@ SELECT extensions.ok(NOT has_table_privilege('service_role','audit.payment_gatew
   AND NOT has_table_privilege('authenticated','audit.payment_gateway_event_revalidations','SELECT')
   AND NOT has_table_privilege('anon','audit.payment_gateway_event_revalidations','SELECT'),
   'API roles cannot create admission receipts or read private recovery evidence');
+
+SELECT extensions.ok(has_function_privilege('service_role','public.read_payment_gateway_event_recovery(uuid,uuid)','EXECUTE')
+  AND NOT has_function_privilege('authenticated','public.read_payment_gateway_event_recovery(uuid,uuid)','EXECUTE')
+  AND NOT has_function_privilege('anon','public.read_payment_gateway_event_recovery(uuid,uuid)','EXECUTE'),
+  'retained recovery evidence is available only through service authority');
+SELECT extensions.is(public.read_payment_gateway_event_recovery(gen_random_uuid(),gen_random_uuid())->>'state',
+  'not_found','unknown recovery identities disclose no event evidence');
 
 SELECT * FROM extensions.finish();
 

@@ -667,3 +667,5 @@ A server-side recovery decoder validates retained Stripe and PayPal evidence bef
 The provider digest serializer is shared and uses deterministic UTF-16 key order. Locale-sensitive collation previously changed immutable evidence hashes between deployment environments. The change depends on the confirmed undeployed Advocate schema and preserves raw delivery hashes.
 
 Financial-adjustment recovery admission now uses the existing financial validation function with an explicit operation identity. The admission receipt and complete interpretation commit together; original authenticated evidence and retention remain unchanged. Normal worker settlement stays authoritative. Durable recovery orchestration and the new native race evidence remain required.
+
+Retained financial-adjustment recovery uses an explicit internal operator POST and a persistent operation identity. Committed receipt replay precedes payload access; provider preparation uses existing adapters, and the existing gateway worker settles admitted events. The endpoint adds no cron job or recovery queue. Other event families and live provider recovery evidence remain outside this checkpoint.
