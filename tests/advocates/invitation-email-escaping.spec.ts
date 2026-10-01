@@ -93,6 +93,28 @@ function renderInitialOwner(displayName: string) {
 }
 
 test.describe("advocate invitation email markup safety", () => {
+  test("the installed mail packages preserve invitation bodies and delivery identity without SMTP", async () => {
+    const nodemailer = testRequire("nodemailer") as typeof import("nodemailer")
+    const { simpleParser } = testRequire("mailparser") as {
+      simpleParser(source: Buffer): Promise<{ html: string; text: string; messageId: string }>
+    }
+    // Stream transport composes MIME entirely in memory and opens no connection.
+    const transport = nodemailer.createTransport({ streamTransport: true, buffer: true,
+      disableFileAccess: true, disableUrlAccess: true })
+    for (const rendered of [renderDelegate(HOSTILE_NAME), renderInitialOwner(HOSTILE_NAME)]) {
+      const messageId = "<invitation-fixture@creatorshare.com>"
+      const sent = await transport.sendMail({ from: { name: "Creator Share", address: "sender@example.test" },
+        to: "recipient@example.test", subject: rendered.subject,
+        text: rendered.text, html: rendered.html, messageId })
+      expect(Buffer.isBuffer(sent.message)).toBe(true)
+      const parsed = await simpleParser(sent.message as Buffer)
+      const normalize = (value: string) => value.replace(/\r\n/g, "\n").trimEnd()
+      expect(normalize(parsed.html)).toBe(normalize(rendered.html))
+      expect(normalize(parsed.text)).toBe(normalize(rendered.text))
+      expect(parsed.messageId).toBe(messageId)
+    }
+  })
+
   test("the delegate invitation escapes a hostile display name", async () => {
     const rendered = renderDelegate(HOSTILE_NAME)
 
