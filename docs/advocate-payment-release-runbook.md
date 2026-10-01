@@ -204,9 +204,9 @@ GROUP BY provider, provider_account_scope, processing_status;
 
 FF-085 tracks the missing persistent health and audited resolution boundary. Do not reset attempt counters, delete an event, or directly edit its status to force replay. Alert acknowledgment must be distinguishable from financial reconciliation, preserve the original evidence, and never authorize replay by itself. A scheduled monitoring query and delivered alert must be proven in the authorized environment; this SQL snippet is not evidence that monitoring is configured. An always-failing worker flag without a resolution contract is not a complete repair.
 
-#### Proposed durable review contract
+#### Durable review contract
 
-Status: design proposal, not implemented. The owner paging-policy question is pending. The following boundaries apply under either notification policy:
+Status: acknowledgment suppresses repeat failure paging under the October 1 owner approval. The implementation is under validation. Financial recovery remains separate work.
 
 | Operation | Required authority and evidence | Financial effect |
 | --- | --- | --- |
@@ -214,6 +214,8 @@ Status: design proposal, not implemented. The owner paging-policy question is pe
 | Acknowledge | Currently healthy Creator Share super administrator, exact event and observed failure version, server-issued operation identity, approved reason code, immutable review receipt | None; the event remains unresolved |
 | Resolve | Verified disposition tied to immutable provider evidence and committed settlement or a reviewed no-effect decision | Only the existing authenticated ingestion and settlement boundaries may create a movement |
 | Recover | Revalidate retained evidence or freshly authenticated provider facts, preserve provider-account and movement identities, use the original-payment concurrency fence | Replay cannot create a second movement or rewrite prior attribution |
+
+The administrator page `/admin/payment-failures` lists unresolved events in bounded pages, including acknowledged cases. The existing authenticated gateway worker reads persistent aggregate health after every batch and returns 503 for unacknowledged failures, even when the batch is empty. Acknowledged cases remain in `failureHealth.unresolved`; payload availability and expiry counts remain visible independently. Unknown inventory fails closed.
 
 Store review receipts separately from payment-event processing state. An acknowledgment must not change `processing_status`, `requires_operational_review`, attempt counts, leases, financial amounts, or payload retention. Do not overload `ignored` to mean an operator read the alert. Expose separate unresolved and unacknowledged counts; if acknowledgment stops paging, the unresolved count still remains visible. A stale acknowledgment must not cover a later failure or different evidence for the same event.
 

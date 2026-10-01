@@ -219,6 +219,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      - name: Run payment failure review concurrency
+        env:
+          PAYMENT_FAILURE_REVIEW_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/payment-failure-review-concurrency-evidence.json
+        run: yarn test:payments:failure-review-concurrency
+
+      - name: Upload payment failure review concurrency evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: payment-failure-review-concurrency-evidence
+          path: ${{ runner.temp }}/payment-failure-review-concurrency-evidence.json
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Run account offboarding concurrency
         env:
           ACCOUNT_OFFBOARDING_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/account-offboarding-concurrency-evidence.json

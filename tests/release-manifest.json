@@ -19,6 +19,7 @@
         "tests/admin/account-offboarding-route.spec.ts",
         "tests/admin/activity-notification-route.spec.ts",
         "tests/admin/beneficiary-deletion-route.spec.ts",
+        "tests/admin/payment-failure-review.spec.ts",
         "tests/advocates/attribution-identity-auth-routes.spec.ts",
         "tests/advocates/attribution-identity-completion.spec.ts",
         "tests/advocates/attribution-identity-cookie.spec.ts",
@@ -282,6 +283,7 @@
         "supabase/tests/legacy_stripe_webhook_durability.test.sql",
         "supabase/tests/legacy_subscription_ownership_reconciliation.test.sql",
         "supabase/tests/password_recovery_receipt_consumption.test.sql",
+        "supabase/tests/payment_failure_review.test.sql",
         "supabase/tests/paypal_billing_catalog_boundary.test.sql",
         "supabase/tests/paypal_checkout_capture_material.test.sql",
         "supabase/tests/paypal_gateway_success_material.test.sql",
@@ -324,6 +326,7 @@
         "tests/database/advocate-publication-concurrency.mjs",
         "tests/database/beneficiary-deletion-concurrency.mjs",
         "tests/database/email-proof-issuance-concurrency.mjs",
+        "tests/database/payment-failure-review-concurrency.mjs",
         "tests/database/postgrest-role-claim-http-termination.mjs",
         "tests/database/postgrest-role-claim-http.mjs"
       ]

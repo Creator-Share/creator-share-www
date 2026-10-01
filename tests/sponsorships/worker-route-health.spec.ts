@@ -56,6 +56,9 @@ const cancellationHealthy = Object.freeze({
   results: Object.freeze([]),
 })
 
+const failureHealthy = { unresolved: 0, unacknowledged: 0, quarantined: 0, exhausted: 0,
+  expired_final_leases: 0, payloads_expiring_within_seven_days: 0, payloads_unavailable: 0 }
+let failureHealth: object | Error = failureHealthy
 let gatewayResult: object | Error = gatewayHealthy
 let welcomeResult: object | Error = welcomeHealthy
 let cancellationResult: object | Error = cancellationHealthy
@@ -85,6 +88,7 @@ nodeModule._load = function mockedModuleLoad(
   }
   if (request === "@/lib/sponsorships/gateways/paymentGatewayEventRuntime") {
     return {
+      readPaymentFailureHealth: async () => resolveResult(failureHealth),
       runPaymentGatewayEventBatchFromEnvironment: async () =>
         resolveResult(gatewayResult),
     }
@@ -168,6 +172,7 @@ let errorCalls: unknown[][] = []
 const originalConsoleError = console.error
 
 test.beforeEach(() => {
+  failureHealth = failureHealthy
   gatewayResult = gatewayHealthy
   welcomeResult = welcomeHealthy
   cancellationResult = cancellationHealthy
@@ -310,4 +315,27 @@ test("unexpected worker failures emit static attention signals", async () => {
       expect.objectContaining({ code: "worker_execution_failed" }),
     ])
   }
+})
+
+
+test("empty batches page for retained failures until acknowledged without hiding unresolved work", async () => {
+  failureHealth = { ...failureHealthy, unresolved: 2, unacknowledged: 1, quarantined: 1, expired_final_leases: 1 }
+  let response = await gatewayRoute.GET(request("/api/internal/payments/gateway-events"))
+  expect(response.status).toBe(503)
+  expect(await body(response)).toMatchObject({ code: "unacknowledged_payment_failures", claimed: 0,
+    failureHealth: { unresolved: 2, unacknowledged: 1 } })
+  errorCalls = []
+  failureHealth = { ...failureHealth, unacknowledged: 0 }
+  response = await gatewayRoute.GET(request("/api/internal/payments/gateway-events"))
+  expect(response.status).toBe(200)
+  expect(await body(response)).toMatchObject({ failureHealth: { unresolved: 2, unacknowledged: 0 } })
+  expect(errorCalls).toEqual([])
+})
+
+test("unavailable persistent failure inventory cannot look healthy", async () => {
+  failureHealth = new Error("sensitive database failure")
+  const response = await gatewayRoute.GET(request("/api/internal/payments/gateway-events"))
+  expect(response.status).toBe(503)
+  expect(await body(response)).toMatchObject({ code: "worker_execution_failed" })
+  expect(JSON.stringify(errorCalls)).not.toContain("sensitive")
 })

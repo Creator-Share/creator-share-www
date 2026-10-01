@@ -38,7 +38,8 @@
     "canary:supabase-email-proof-supersession:hosted": "node tests/provider/supabase-email-proof-supersession-hosted.mjs",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
-    "test:accounts:offboarding-concurrency": "node tests/database/account-offboarding-concurrency.mjs"
+    "test:accounts:offboarding-concurrency": "node tests/database/account-offboarding-concurrency.mjs",
+    "test:payments:failure-review-concurrency": "node tests/database/payment-failure-review-concurrency.mjs"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.27.0",

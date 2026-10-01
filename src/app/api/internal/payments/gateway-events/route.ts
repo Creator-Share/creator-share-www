@@ -9,7 +9,7 @@ import {
   loadPaymentGatewayEventWorkerConfig,
   loadPaymentGatewayEventWorkerSecret,
 } from "@/lib/sponsorships/gateways/paymentGatewayEventConfig"
-import { runPaymentGatewayEventBatchFromEnvironment } from "@/lib/sponsorships/gateways/paymentGatewayEventRuntime"
+import { readPaymentFailureHealth, runPaymentGatewayEventBatchFromEnvironment } from "@/lib/sponsorships/gateways/paymentGatewayEventRuntime"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -45,12 +45,16 @@ async function runWorker(request: NextRequest) {
       workerId: `payment-gateway-event-worker:${randomUUID()}`,
       context: { requestId, traceId: readRequestForensics(request.headers, process.env).traceId },
     })
-    const requiresAttention =
-      batch.terminalFailed > 0 || batch.settlementUnknown > 0
+    const failureHealth = await readPaymentFailureHealth()
+    const incompleteBatch = batch.terminalFailed > 0 || batch.settlementUnknown > 0
+    const requiresAttention = incompleteBatch || failureHealth.unacknowledged > 0
+    const attentionCode = incompleteBatch ? "worker_batch_incomplete" : "unacknowledged_payment_failures"
     if (requiresAttention) {
       console.error("PAYMENT_GATEWAY_EVENT_WORKER_REQUIRES_ATTENTION", {
         requestId,
-        code: "worker_batch_incomplete",
+        code: attentionCode,
+        unresolved: failureHealth.unresolved,
+        unacknowledged: failureHealth.unacknowledged,
         terminalFailed: batch.terminalFailed,
         settlementUnknown: batch.settlementUnknown,
       })
@@ -58,7 +62,8 @@ async function runWorker(request: NextRequest) {
     return response(
       {
         ok: !requiresAttention,
-        ...(requiresAttention ? { code: "worker_batch_incomplete" } : {}),
+        ...(requiresAttention ? { code: attentionCode } : {}),
+        failureHealth,
         requestId,
         claimed: batch.claimed,
         applied: batch.applied,
