@@ -278,6 +278,7 @@
         "supabase/tests/domain_provisioning_queue.test.sql",
         "supabase/tests/domain_provisioning_settlement_boundary.test.sql",
         "supabase/tests/email_proof_issuance_retention.test.sql",
+        "supabase/tests/exact_normalized_reporting.test.sql",
         "supabase/tests/gateway_event_success_material.test.sql",
         "supabase/tests/global_account_offboarding.test.sql",
         "supabase/tests/legacy_stripe_webhook_durability.test.sql",

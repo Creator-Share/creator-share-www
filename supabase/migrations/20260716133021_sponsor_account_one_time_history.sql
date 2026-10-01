@@ -81,7 +81,10 @@ BEGIN
   ), financial_totals AS MATERIALIZED (
     SELECT
       gross.id AS gross_payment_id,
-      sum(movement.net_base_amount_usd_cents)::bigint
+      private.sum_normalized_usd_cents(
+        gross.base_amount_usd_cents, gross.charged_amount_minor,
+        movement.net_charged_amount_minor
+      )::bigint
         AS net_base_amount_usd_cents,
       sum(movement.net_charged_amount_minor)::bigint
         AS net_charged_amount_minor,

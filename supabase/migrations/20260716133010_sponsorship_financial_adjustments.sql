@@ -1,5 +1,51 @@
 BEGIN;
 
+-- Preserve integer fractions during accumulation, including across payments.
+-- Division appears only as exact integer div(); presentation rounds once.
+CREATE FUNCTION private.accumulate_normalized_usd(
+  state numeric[], original_base_usd_cents bigint,
+  original_charged_minor bigint, signed_charged_minor bigint
+)
+RETURNS numeric[] LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SET search_path = '' AS $$
+DECLARE
+  v_numerator numeric;
+  v_denominator numeric;
+  v_common numeric;
+BEGIN
+  IF original_base_usd_cents IS NULL OR original_charged_minor IS NULL OR signed_charged_minor IS NULL
+    OR original_base_usd_cents <= 0 OR original_charged_minor <= 0 THEN
+    RAISE EXCEPTION 'Original payment amounts must be positive' USING ERRCODE = '22023';
+  END IF;
+  IF signed_charged_minor = 0 THEN RETURN state; END IF;
+  v_numerator := original_base_usd_cents::numeric * signed_charged_minor;
+  v_denominator := original_charged_minor;
+  v_common := gcd(abs(v_numerator), v_denominator);
+  v_numerator := div(v_numerator, v_common);
+  v_denominator := div(v_denominator, v_common);
+  v_common := gcd(state[2], v_denominator);
+  v_numerator := state[1] * div(v_denominator, v_common)
+    + v_numerator * div(state[2], v_common);
+  v_denominator := state[2] * div(v_denominator, v_common);
+  v_common := gcd(abs(v_numerator), v_denominator);
+  RETURN ARRAY[div(v_numerator, v_common), div(v_denominator, v_common)];
+END;
+$$;
+CREATE FUNCTION private.round_normalized_usd(state numeric[])
+RETURNS numeric LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE SET search_path = '' AS $$
+  SELECT sign(state[1]) * div(2 * abs(state[1]) + state[2], 2 * state[2]);
+$$;
+CREATE AGGREGATE private.sum_normalized_usd_cents(bigint,bigint,bigint) (
+  SFUNC = private.accumulate_normalized_usd,
+  STYPE = numeric[],
+  FINALFUNC = private.round_normalized_usd,
+  INITCOND = '{0,1}',
+  PARALLEL = SAFE
+);
+REVOKE ALL ON FUNCTION private.accumulate_normalized_usd(numeric[],bigint,bigint,bigint) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.round_normalized_usd(numeric[]) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.sum_normalized_usd_cents(bigint,bigint,bigint) FROM PUBLIC, anon, authenticated, service_role;
+
+
 ALTER TABLE public.payment_gateway_events
   ADD COLUMN original_financial_movement_id uuid
     REFERENCES public.sponsorship_financial_movements(id) ON DELETE RESTRICT,
