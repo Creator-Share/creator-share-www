@@ -665,3 +665,5 @@ Verified events requiring review now remain `quarantined` without a final financ
 A server-side recovery decoder validates retained Stripe and PayPal evidence before any future provider lookup. It rejects altered, expired, erased, or minimized payloads and preserves the distinction between original signature evidence and a new interpretation. Recovery execution and concurrency remain release work.
 
 The provider digest serializer is shared and uses deterministic UTF-16 key order. Locale-sensitive collation previously changed immutable evidence hashes between deployment environments. The change depends on the confirmed undeployed Advocate schema and preserves raw delivery hashes.
+
+Financial-adjustment recovery admission now uses the existing financial validation function with an explicit operation identity. The admission receipt and complete interpretation commit together; original authenticated evidence and retention remain unchanged. Normal worker settlement stays authoritative. Durable recovery orchestration and the new native race evidence remain required.

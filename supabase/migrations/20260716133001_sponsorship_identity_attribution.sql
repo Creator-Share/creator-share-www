@@ -859,6 +859,84 @@ CREATE TABLE public.payment_gateway_events (
     UNIQUE (provider, provider_account_scope, provider_event_id)
 );
 
+-- Admission is atomic with the first complete interpretation. Original delivery
+-- material stays on the event; receipts contain hashes and categorical evidence.
+CREATE TABLE audit.payment_gateway_event_revalidations (
+  gateway_event_id uuid PRIMARY KEY REFERENCES public.payment_gateway_events(id) ON DELETE RESTRICT,
+  operation_id uuid NOT NULL UNIQUE,
+  interpretation_version text NOT NULL CHECK (interpretation_version = 'financial_adjustment_v2'),
+  source_sha256 bytea NOT NULL CHECK (octet_length(source_sha256)=32),
+  source_object_type text,
+  source_object_id text,
+  source_error_code text NOT NULL,
+  interpretation_sha256 bytea NOT NULL CHECK (octet_length(interpretation_sha256)=32),
+  transaction_id bigint NOT NULL DEFAULT txid_current(),
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+ALTER TABLE audit.payment_gateway_event_revalidations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit.payment_gateway_event_revalidations FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON audit.payment_gateway_event_revalidations FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE FUNCTION private.protect_gateway_event_revalidation_receipt()
+RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  RAISE EXCEPTION 'Gateway event revalidation receipts are immutable' USING ERRCODE='42501';
+END;
+$$;
+REVOKE ALL ON FUNCTION private.protect_gateway_event_revalidation_receipt() FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER gateway_event_revalidations_no_change
+BEFORE UPDATE OR DELETE ON audit.payment_gateway_event_revalidations
+FOR EACH ROW EXECUTE FUNCTION private.protect_gateway_event_revalidation_receipt();
+CREATE TRIGGER gateway_event_revalidations_no_truncate
+BEFORE TRUNCATE ON audit.payment_gateway_event_revalidations
+FOR EACH STATEMENT EXECUTE FUNCTION private.protect_gateway_event_revalidation_receipt();
+
+-- JSON projection allows this guard to precede the later typed-fact columns.
+-- The allowlist distinguishes interpretation from original authenticated bytes.
+CREATE FUNCTION private.gateway_event_interpretation(event public.payment_gateway_events)
+RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
+  SELECT jsonb_object_agg(key,value) FROM jsonb_each(to_jsonb(event))
+  WHERE key = ANY(ARRAY[
+    'sponsorship_intent_id','payment_attempt_id','original_financial_movement_id',
+    'provider_object_type','provider_object_id','fact_payment_status',
+    'fact_server_payment_attempt_id','fact_parent_provider_object_type','fact_parent_provider_object_id',
+    'fact_provider_movement_type','fact_provider_movement_id','fact_provider_customer_id',
+    'fact_provider_subscription_id','fact_base_amount_usd_cents','fact_charged_amount_minor',
+    'fact_charged_currency','fact_conversion_rate','fact_period_start','fact_period_end',
+    'fact_failure_code','fact_lifecycle_state'
+  ]::text[]);
+$$;
+REVOKE ALL ON FUNCTION private.gateway_event_interpretation(public.payment_gateway_events) FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE FUNCTION private.gateway_event_revalidation_permitted(
+  previous public.payment_gateway_events, candidate public.payment_gateway_events
+)
+RETURNS boolean LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT previous.processing_status='quarantined'
+    AND candidate.processing_status='received'
+    AND candidate.last_error IS NULL
+    AND previous.payload_ciphertext IS NOT NULL
+    AND previous.payload_retention_expires_at > statement_timestamp()
+    AND previous.processing_attempt_count=0
+    AND previous.processed_at IS NULL
+    AND (
+      to_jsonb(candidate) - ARRAY(SELECT jsonb_object_keys(private.gateway_event_interpretation(candidate)))
+        - ARRAY['processing_status','last_error','updated_at']::text[]
+    ) = (
+      to_jsonb(previous) - ARRAY(SELECT jsonb_object_keys(private.gateway_event_interpretation(previous)))
+        - ARRAY['processing_status','last_error','updated_at']::text[]
+    )
+    AND EXISTS (
+      SELECT 1 FROM audit.payment_gateway_event_revalidations receipt
+      WHERE receipt.gateway_event_id=previous.id
+        AND receipt.transaction_id=txid_current()
+        AND receipt.source_sha256=previous.payload_sha256
+        AND receipt.interpretation_sha256=extensions.digest(private.gateway_event_interpretation(candidate)::text,'sha256')
+    );
+$$;
+REVOKE ALL ON FUNCTION private.gateway_event_revalidation_permitted(public.payment_gateway_events,public.payment_gateway_events)
+FROM PUBLIC, anon, authenticated, service_role;
+
 CREATE INDEX payment_gateway_events_processing_idx
   ON public.payment_gateway_events (processing_status, available_at, received_at)
   WHERE processing_status IN ('received', 'failed');
@@ -2440,6 +2518,12 @@ BEGIN
       NEW.payload_retention_expires_at := NULL;
       NEW.payload_redacted_at := NULL;
     END IF;
+    NEW.updated_at := v_now;
+    RETURN NEW;
+  END IF;
+
+  IF OLD.processing_status='quarantined' AND NEW.processing_status='received'
+     AND private.gateway_event_revalidation_permitted(OLD,NEW) THEN
     NEW.updated_at := v_now;
     RETURN NEW;
   END IF;

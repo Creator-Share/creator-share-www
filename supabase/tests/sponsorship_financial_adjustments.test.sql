@@ -1460,7 +1460,7 @@ SELECT extensions.ok(
 SELECT extensions.ok(
   NOT has_function_privilege(
     'anon',
-    'public.ingest_verified_sponsorship_financial_adjustment(uuid,public.sponsorship_method,text,text,text,text,text,text,text,bigint,public.payment_currency,numeric,jsonb,bytea,bytea,timestamp with time zone,timestamp with time zone,text,text,text,text,text)',
+    'public.ingest_verified_sponsorship_financial_adjustment(uuid,public.sponsorship_method,text,text,text,text,text,text,text,bigint,public.payment_currency,numeric,jsonb,bytea,bytea,timestamp with time zone,timestamp with time zone,text,text,text,text,text,uuid)',
     'EXECUTE'
   )
   AND NOT has_function_privilege(
@@ -1742,6 +1742,112 @@ SELECT extensions.ok((public.get_payment_failure_health()->>'quarantined')::inte
   'linking the quarantined event does not resolve its financial failure');
 SELECT extensions.is((SELECT count(*) FROM public.sponsorship_financial_movements),
   (SELECT movements FROM before_cash_health),'health and event linkage do not allocate or alter principal');
+
+
+CREATE FUNCTION pg_temp.admit_recovered_adjustment(root_id uuid,event_id uuid,operation_id uuid,
+  amount bigint DEFAULT 1, supplied_digest bytea DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE root public.sponsorship_financial_movements; source public.payment_gateway_events;
+BEGIN
+  SELECT * INTO root FROM public.sponsorship_financial_movements WHERE id=root_id;
+  SELECT * INTO source FROM public.payment_gateway_events WHERE id=event_id;
+  RETURN (SELECT to_jsonb(result) FROM public.ingest_verified_sponsorship_financial_adjustment(
+    target_original_financial_movement_id=>root.id,target_provider=>root.provider,
+    target_provider_account_scope=>root.provider_account_scope,target_provider_event_id=>source.provider_event_id,
+    target_event_type=>source.event_type,
+    target_provider_object_type=>CASE WHEN root.provider='STRIPE' THEN 'refund' ELSE root.provider_movement_type END,
+    target_provider_object_id=>CASE WHEN root.provider='STRIPE' THEN source.provider_object_id ELSE root.provider_movement_id END,
+    target_adjustment_provider_movement_type=>'refund',target_adjustment_provider_movement_id=>
+      coalesce((SELECT source_object_id FROM audit.payment_gateway_event_revalidations WHERE gateway_event_id=event_id),source.provider_object_id),
+    target_charged_amount_minor=>amount,target_charged_currency=>root.charged_currency,target_conversion_rate=>root.conversion_rate,
+    target_redacted_payload=>'{}',target_payload_ciphertext=>decode('ff','hex'),
+    target_payload_sha256=>coalesce(supplied_digest,source.payload_sha256),
+    target_signature_verified_at=>source.signature_verified_at,target_occurred_at=>source.occurred_at,
+    target_verification_method=>source.verification_method,target_revalidation_operation_id=>operation_id) result);
+END;
+$$;
+CREATE FUNCTION pg_temp.fail_revalidation_after_admission() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF current_setting('test.fail_revalidation',true)='on' AND OLD.processing_status='quarantined'
+     AND NEW.processing_status='received' THEN
+    IF NOT EXISTS(SELECT 1 FROM audit.payment_gateway_event_revalidations WHERE gateway_event_id=NEW.id) THEN
+      RAISE EXCEPTION 'Recovery checkpoint was not reached';
+    END IF;
+    RAISE EXCEPTION 'Injected recovery failure';
+  END IF;
+  RETURN NEW;
+END; $$;
+CREATE TRIGGER zz_test_fail_revalidation AFTER UPDATE ON public.payment_gateway_events
+FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_revalidation_after_admission();
+
+CREATE FUNCTION pg_temp.verify_adjustment_recovery(provider_name text)
+RETURNS SETOF text LANGUAGE plpgsql AS $$
+DECLARE root_id uuid; event_id uuid; operation_id uuid:=gen_random_uuid();
+  root public.sponsorship_financial_movements; source public.payment_gateway_events;
+  result jsonb; lease uuid; audit_count bigint;
+BEGIN
+  root_id:=pg_temp.normalization_payment(provider_name,'GBP',3500,1.4);
+  SELECT * INTO root FROM public.sponsorship_financial_movements WHERE id=root_id;
+  SELECT gateway_event_id INTO event_id FROM public.quarantine_verified_payment_gateway_event(
+    root.provider,root.provider_account_scope,'recovery-'||operation_id,
+    CASE WHEN root.provider='STRIPE' THEN 'refund.created' ELSE 'PAYMENT.CAPTURE.REFUNDED' END,
+    'refund','re_recovery_'||replace(operation_id::text,'-',''),'{}',decode('ab','hex'),
+    extensions.digest(operation_id::text,'sha256'),clock_timestamp(),clock_timestamp(),
+    CASE WHEN root.provider='STRIPE' THEN 'stripe_webhook_signature' ELSE 'paypal_webhook_signature_api' END,
+    'provider-fact-mismatch','Verified adjustment requires a corrected interpretation');
+  SELECT * INTO source FROM public.payment_gateway_events WHERE id=event_id;
+
+  RETURN NEXT extensions.throws_ok(format('SELECT pg_temp.admit_recovered_adjustment(%L,%L,NULL)',root_id,event_id),
+    '23505','Provider adjustment event identifier was replayed with different evidence',provider_name||' ordinary ingestion cannot reopen quarantine');
+  RETURN NEXT extensions.throws_ok(format('SELECT pg_temp.admit_recovered_adjustment(%L,%L,%L,1,decode(repeat(''ff'',32),''hex''))',root_id,event_id,operation_id),
+    '23514','Recovery requires unchanged retained verification evidence',provider_name||' changed evidence cannot acquire an interpretation receipt');
+  RETURN NEXT extensions.ok(NOT EXISTS(SELECT 1 FROM audit.payment_gateway_event_revalidations WHERE gateway_event_id=event_id),
+    provider_name||' failed admission leaves no receipt');
+  RETURN NEXT extensions.throws_ok(format('UPDATE public.payment_gateway_events SET processing_status=''received'',last_error=NULL WHERE id=%L',event_id),
+    '23514','Illegal gateway event transition from quarantined to received',provider_name||' receipt-free queue admission is rejected');
+  SELECT count(*) INTO audit_count FROM audit.audit_events;
+  PERFORM set_config('test.fail_revalidation','on',true);
+  RETURN NEXT extensions.throws_ok(format('SELECT pg_temp.admit_recovered_adjustment(%L,%L,%L)',root_id,event_id,operation_id),
+    'P0001','Injected recovery failure',provider_name||' failure after admission aborts recovery');
+  PERFORM set_config('test.fail_revalidation','off',true);
+  RETURN NEXT extensions.ok(NOT EXISTS(SELECT 1 FROM audit.payment_gateway_event_revalidations WHERE gateway_event_id=event_id)
+    AND (SELECT processing_status='quarantined' AND original_financial_movement_id IS NULL
+      FROM public.payment_gateway_events WHERE id=event_id),provider_name||' interrupted admission leaves no receipt or partial interpretation');
+  RETURN NEXT extensions.ok((SELECT count(*)=audit_count FROM audit.audit_events),provider_name||' failed admission leaves no success audit residue');
+  result:=pg_temp.admit_recovered_adjustment(root_id,event_id,operation_id);
+  RETURN NEXT extensions.ok(result->>'processing_status'='received' AND result->>'is_duplicate'='false',
+    provider_name||' complete validated interpretation becomes claimable');
+  RETURN NEXT extensions.ok((SELECT payload_ciphertext=source.payload_ciphertext AND payload_sha256=source.payload_sha256
+    AND redacted_payload=source.redacted_payload AND signature_verified_at=source.signature_verified_at
+    AND occurred_at=source.occurred_at AND received_at=source.received_at
+    AND payload_retention_expires_at=source.payload_retention_expires_at AND processing_attempt_count=0
+    FROM public.payment_gateway_events WHERE id=event_id),provider_name||' recovery preserves original delivery and retention evidence');
+  RETURN NEXT extensions.ok((SELECT source_object_id=source.provider_object_id AND source_sha256=source.payload_sha256
+    AND interpretation_version='financial_adjustment_v2' FROM audit.payment_gateway_event_revalidations WHERE gateway_event_id=event_id),
+    provider_name||' receipt preserves source subject and binds the interpretation version');
+  SELECT processing_lease_token INTO lease FROM public.claim_payment_gateway_events('recovery-test',100)
+    WHERE gateway_event_id=event_id;
+  SELECT to_jsonb(applied) INTO result FROM public.apply_sponsorship_financial_adjustment(event_id,lease) applied;
+  RETURN NEXT extensions.ok(result->>'application_effect'='refund_applied',
+    provider_name||' recovered fractional adjustment settles through the normal financial path');
+  result:=pg_temp.admit_recovered_adjustment(root_id,event_id,operation_id);
+  RETURN NEXT extensions.ok(result->>'is_duplicate'='true' AND (result->>'gateway_event_id')::uuid=event_id,
+    provider_name||' exact recovery replay returns the original settled event');
+  RETURN NEXT extensions.throws_ok(format('SELECT pg_temp.admit_recovered_adjustment(%L,%L,%L)',root_id,event_id,gen_random_uuid()),
+    '23505','Recovery operation conflicts with its committed interpretation',provider_name||' another operation cannot replace the receipt');
+  RETURN NEXT extensions.ok((SELECT count(*)=1 FROM public.payment_gateway_event_applications WHERE gateway_event_id=event_id)
+    AND (SELECT count(*)=1 FROM public.sponsorship_financial_movements WHERE source_gateway_event_id=event_id),
+    provider_name||' recovered event has one application and one financial movement');
+END;
+$$;
+SELECT pg_temp.verify_adjustment_recovery('STRIPE') AS assertion;
+SELECT pg_temp.verify_adjustment_recovery('PAYPAL') AS assertion;
+SELECT extensions.throws_ok('UPDATE audit.payment_gateway_event_revalidations SET interpretation_version=interpretation_version',
+  '42501','Gateway event revalidation receipts are immutable','interpretation receipts cannot be rewritten');
+SELECT extensions.ok(NOT has_table_privilege('service_role','audit.payment_gateway_event_revalidations','INSERT')
+  AND NOT has_table_privilege('authenticated','audit.payment_gateway_event_revalidations','SELECT')
+  AND NOT has_table_privilege('anon','audit.payment_gateway_event_revalidations','SELECT'),
+  'API roles cannot create admission receipts or read private recovery evidence');
 
 SELECT * FROM extensions.finish();
 

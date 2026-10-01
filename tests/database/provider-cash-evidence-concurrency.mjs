@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { configureServiceRoleTransaction, createTransientLocalSupabaseDatabase } from "./support/local-supabase.mjs"
 import { clearConcurrencyGateEvidence, installConcurrencyGateTerminationCleanup, loadConcurrencyGateProvenance, withPgClients, writeConcurrencyGateEvidence } from "./support/concurrency-gate.mjs"
@@ -105,6 +105,71 @@ async function interruption(database, original) {
   })
 }
 
+async function recoveryRace(database, original, scenario, { sameOperation = false, rollbackFirst = false } = {}) {
+  return withPgClients(database, ["recovery-first", "recovery-second", "recovery-observer"], async (first, second, observer) => {
+    const firstOperation = randomUUID()
+    const secondOperation = sameOperation ? firstOperation : randomUUID()
+    await configureServiceRoleTransaction(first)
+    const { rows: [quarantine] } = await first.query(`SELECT gateway_event_id FROM public.quarantine_verified_payment_gateway_event(
+      'STRIPE','stripe_us',$1,'refund.created','refund',$2,'{}',decode('ab','hex'),$3::bytea,
+      clock_timestamp(),clock_timestamp(),'stripe_webhook_signature','provider-fact-mismatch','Recovery concurrency fixture')`,
+      [`evt_recovery_${scenario}`, `re_recovery_${scenario}`, createHash("sha256").update(scenario).digest()])
+    const id = quarantine.gateway_event_id
+    await first.query("COMMIT")
+    const admit = (client, operation) => client.query(`SELECT result.*
+      FROM public.payment_gateway_events source CROSS JOIN LATERAL public.ingest_verified_sponsorship_financial_adjustment(
+        target_original_financial_movement_id=>$1::uuid,target_provider=>'STRIPE',target_provider_account_scope=>'stripe_us',
+        target_provider_event_id=>source.provider_event_id,target_event_type=>source.event_type,
+        target_provider_object_type=>'refund',target_provider_object_id=>source.provider_object_id,
+        target_adjustment_provider_movement_type=>'refund',target_adjustment_provider_movement_id=>source.provider_object_id,
+        target_charged_amount_minor=>1,target_charged_currency=>'USD',target_conversion_rate=>1,
+        target_redacted_payload=>'{}',target_payload_ciphertext=>source.payload_ciphertext,target_payload_sha256=>source.payload_sha256,
+        target_signature_verified_at=>source.signature_verified_at,target_occurred_at=>source.occurred_at,
+        target_verification_method=>source.verification_method,target_revalidation_operation_id=>$3::uuid
+      ) result WHERE source.id=$2::uuid`, [original.id, id, operation])
+    await configureServiceRoleTransaction(first)
+    await configureServiceRoleTransaction(second)
+    assert.equal((await admit(first, firstOperation)).rows[0].is_duplicate, false)
+    const pending = admit(second, secondOperation).then(result => ({ result: result.rows[0] }), error => ({ code: error.code }))
+    const blocked = await waitForClientsBlockedBy(observer, [second], first)
+    assert.equal(blocked.length, 1)
+    const { rows: [uncommitted] } = await observer.query(`SELECT processing_status,
+      original_financial_movement_id IS NULL AS unlinked,
+      (SELECT count(*)::integer FROM audit.payment_gateway_event_revalidations WHERE gateway_event_id=$1::uuid) AS receipts
+      FROM public.payment_gateway_events WHERE id=$1::uuid`, [id])
+    assert.deepEqual(uncommitted, { processing_status: "quarantined", unlinked: true, receipts: 0 })
+    await configureServiceRoleTransaction(observer)
+    const claimed = await observer.query("SELECT gateway_event_id FROM public.claim_payment_gateway_events('recovery-observer',100)")
+    assert.equal(claimed.rows.some(row => row.gateway_event_id === id), false)
+    await observer.query("ROLLBACK")
+    await first.query(rollbackFirst ? "ROLLBACK" : "COMMIT")
+    const result = await pending
+    if (!sameOperation && !rollbackFirst) {
+      assert.equal(result.code, "23505")
+      await second.query("ROLLBACK")
+    } else {
+      assert.equal(result.result.gateway_event_id, id)
+      assert.equal(result.result.is_duplicate, !rollbackFirst)
+      await second.query("COMMIT")
+    }
+    const { rows: [receipt] } = await observer.query(`SELECT operation_id FROM audit.payment_gateway_event_revalidations
+      WHERE gateway_event_id=$1::uuid`, [id])
+    assert.equal(receipt.operation_id, rollbackFirst ? secondOperation : firstOperation)
+    await configureServiceRoleTransaction(first)
+    const { rows } = await first.query("SELECT * FROM public.claim_payment_gateway_events('recovery-settlement',100)")
+    const lease = rows.find(row => row.gateway_event_id === id)
+    assert.ok(lease)
+    await first.query("SELECT * FROM public.apply_sponsorship_financial_adjustment($1::uuid,$2::uuid)", [id, lease.processing_lease_token])
+    await first.query("COMMIT")
+    const { rows: [settled] } = await observer.query(`SELECT
+      (SELECT count(*)::integer FROM public.payment_gateway_event_applications WHERE gateway_event_id=$1::uuid) AS applications,
+      (SELECT count(*)::integer FROM public.sponsorship_financial_movements WHERE source_gateway_event_id=$1::uuid) AS movements`, [id])
+    assert.deepEqual(settled, { applications: 1, movements: 1 })
+    return { scenario: `recovery_${scenario}`, blockedSessions: blocked.length, partialInterpretationVisible: false,
+      claimedBeforeCommit: false, interpretationReceipts: 1, financialApplications: 1, financialMovements: 1 }
+  })
+}
+
 let database
 const evidencePath = process.env.PROVIDER_CASH_CONCURRENCY_EVIDENCE_PATH ?? null
 const removeTerminationCleanup = installConcurrencyGateTerminationCleanup({ gate: "FF-084", getDatabase: () => database })
@@ -140,11 +205,14 @@ try {
     await race(database, original, "conflicting_digest", { otherDigest: true }),
     await race(database, original, "first_writer_rollback", {}, true),
     await interruption(database, original),
+    await recoveryRace(database, original, "identical_operation", { sameOperation: true }),
+    await recoveryRace(database, original, "competing_operations"),
+    await recoveryRace(database, original, "admission_rollback", { rollbackFirst: true }),
   ]
   await database.dispose()
   database = undefined
   await writeConcurrencyGateEvidence({ gate: "FF-084", outputPath: evidencePath, provenance, scenarios })
-  process.stdout.write("Provider cash evidence concurrency passed: 7 observed interleavings\n")
+  process.stdout.write("Provider cash and recovery concurrency passed: 10 observed interleavings\n")
 } finally {
   try { if (database) await database.dispose() } finally { removeTerminationCleanup() }
 }

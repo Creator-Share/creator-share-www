@@ -361,6 +361,8 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
+  IF OLD.processing_status='quarantined' AND NEW.processing_status='received'
+     AND private.gateway_event_revalidation_permitted(OLD,NEW) THEN RETURN NEW; END IF;
   IF TG_OP = 'UPDATE'
      AND NEW.original_financial_movement_id IS DISTINCT FROM
        OLD.original_financial_movement_id THEN
@@ -424,7 +426,8 @@ CREATE OR REPLACE FUNCTION public.ingest_verified_sponsorship_financial_adjustme
   context_request_id text DEFAULT NULL,
   context_trace_id text DEFAULT NULL,
   context_client_ip text DEFAULT NULL,
-  context_user_agent text DEFAULT NULL
+  context_user_agent text DEFAULT NULL,
+  target_revalidation_operation_id uuid DEFAULT NULL
 )
 RETURNS TABLE (
   gateway_event_id uuid,
@@ -444,6 +447,7 @@ DECLARE
   v_original public.sponsorship_financial_movements%ROWTYPE;
   v_event public.payment_gateway_events%ROWTYPE;
   v_kind public.sponsorship_financial_entry_kind;
+  v_candidate public.payment_gateway_events%ROWTYPE;
 BEGIN
   PERFORM private.require_payment_service_role();
 
@@ -579,6 +583,84 @@ BEGIN
     AND gateway_event.provider_account_scope = target_provider_account_scope
     AND gateway_event.provider_event_id = target_provider_event_id
   FOR UPDATE;
+
+  IF target_revalidation_operation_id IS NOT NULL AND NOT FOUND THEN
+    RAISE EXCEPTION 'Recovery requires an existing quarantined provider event' USING ERRCODE='23514';
+  END IF;
+
+  IF FOUND AND target_revalidation_operation_id IS NOT NULL THEN
+    IF v_event.processing_status='quarantined' THEN
+      IF v_event.event_type IS DISTINCT FROM target_event_type
+         OR v_event.payload_sha256 IS DISTINCT FROM target_payload_sha256
+         OR v_event.signature_verified_at IS DISTINCT FROM target_signature_verified_at
+         OR v_event.occurred_at IS DISTINCT FROM target_occurred_at
+         OR v_event.verification_method IS DISTINCT FROM target_verification_method
+         OR v_event.payload_ciphertext IS NULL
+         OR v_event.payload_retention_expires_at <= clock_timestamp()
+         OR EXISTS(SELECT 1 FROM public.payment_gateway_event_applications application
+           WHERE application.gateway_event_id=v_event.id) THEN
+        RAISE EXCEPTION 'Recovery requires unchanged retained verification evidence' USING ERRCODE='23514';
+      END IF;
+
+      v_candidate := v_event;
+      v_candidate.provider_object_type := target_provider_object_type;
+      v_candidate.provider_object_id := target_provider_object_id;
+      v_candidate.sponsorship_intent_id := v_original.sponsorship_intent_id;
+      v_candidate.payment_attempt_id := v_original.payment_attempt_id;
+      v_candidate.original_financial_movement_id := v_original.id;
+      v_candidate.fact_server_payment_attempt_id := v_original.payment_attempt_id;
+      v_candidate.fact_parent_provider_object_type := v_original.provider_movement_type;
+      v_candidate.fact_parent_provider_object_id := v_original.provider_movement_id;
+      v_candidate.fact_provider_movement_type := target_adjustment_provider_movement_type;
+      v_candidate.fact_provider_movement_id := target_adjustment_provider_movement_id;
+      v_candidate.fact_charged_amount_minor := target_charged_amount_minor;
+      v_candidate.fact_charged_currency := target_charged_currency;
+      v_candidate.fact_conversion_rate := target_conversion_rate;
+      v_candidate.processing_status := 'received';
+      v_candidate.last_error := NULL;
+
+      PERFORM private.set_payment_audit_context(
+        'revalidate_sponsorship_financial_adjustment', target_provider,
+        target_provider_account_scope,target_event_type,target_provider_event_id,
+        context_request_id,context_trace_id,context_client_ip,context_user_agent);
+      PERFORM private.link_payment_provider_object(
+        v_original.payment_attempt_id,v_original.sponsorship_intent_id,v_original.provider,
+        v_original.provider_account_scope,target_provider_object_type,target_provider_object_id,'event_subject',NULL);
+
+      INSERT INTO audit.payment_gateway_event_revalidations(
+        gateway_event_id,operation_id,interpretation_version,source_sha256,
+        source_object_type,source_object_id,source_error_code,interpretation_sha256
+      ) VALUES (
+        v_event.id,target_revalidation_operation_id,'financial_adjustment_v2',v_event.payload_sha256,
+        v_event.provider_object_type,v_event.provider_object_id,
+        v_event.redacted_payload->>'quarantine_error_code',
+        extensions.digest(private.gateway_event_interpretation(v_candidate)::text,'sha256')
+      );
+      UPDATE public.payment_gateway_events SET
+        provider_object_type=v_candidate.provider_object_type,provider_object_id=v_candidate.provider_object_id,
+        sponsorship_intent_id=v_candidate.sponsorship_intent_id,payment_attempt_id=v_candidate.payment_attempt_id,
+        original_financial_movement_id=v_candidate.original_financial_movement_id,
+        fact_server_payment_attempt_id=v_candidate.fact_server_payment_attempt_id,
+        fact_parent_provider_object_type=v_candidate.fact_parent_provider_object_type,
+        fact_parent_provider_object_id=v_candidate.fact_parent_provider_object_id,
+        fact_provider_movement_type=v_candidate.fact_provider_movement_type,
+        fact_provider_movement_id=v_candidate.fact_provider_movement_id,
+        fact_charged_amount_minor=v_candidate.fact_charged_amount_minor,
+        fact_charged_currency=v_candidate.fact_charged_currency,fact_conversion_rate=v_candidate.fact_conversion_rate,
+        processing_status='received',last_error=NULL
+      WHERE id=v_event.id RETURNING * INTO v_event;
+
+      RETURN QUERY SELECT v_event.id,v_event.original_financial_movement_id,
+        v_event.payment_attempt_id,v_event.sponsorship_intent_id,v_event.processing_status,v_kind,false;
+      RETURN;
+    ELSIF NOT EXISTS (
+      SELECT 1 FROM audit.payment_gateway_event_revalidations receipt
+      WHERE receipt.gateway_event_id=v_event.id AND receipt.operation_id=target_revalidation_operation_id
+        AND receipt.interpretation_version='financial_adjustment_v2'
+    ) THEN
+      RAISE EXCEPTION 'Recovery operation conflicts with its committed interpretation' USING ERRCODE='23505';
+    END IF;
+  END IF;
 
   IF FOUND THEN
     IF v_event.original_financial_movement_id IS DISTINCT FROM v_original.id
@@ -1336,7 +1418,8 @@ REVOKE ALL ON FUNCTION public.ingest_verified_sponsorship_financial_adjustment(
   text,
   text,
   text,
-  text
+  text,
+  uuid
 ) FROM PUBLIC, anon, authenticated;
 
 REVOKE ALL ON FUNCTION public.apply_sponsorship_financial_adjustment(
@@ -1370,7 +1453,8 @@ GRANT EXECUTE ON FUNCTION public.ingest_verified_sponsorship_financial_adjustmen
   text,
   text,
   text,
-  text
+  text,
+  uuid
 ) TO service_role;
 
 GRANT EXECUTE ON FUNCTION public.apply_sponsorship_financial_adjustment(
@@ -1413,7 +1497,8 @@ COMMENT ON FUNCTION public.ingest_verified_sponsorship_financial_adjustment(
   text,
   text,
   text,
-  text
+  text,
+  uuid
 ) IS
   'Ingests one verified provider financial adjustment against an immutable gross sponsorship movement. Exact replays are idempotent and conflicting replays are rejected.';
 

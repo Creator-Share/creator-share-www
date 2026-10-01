@@ -1463,6 +1463,9 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  IF OLD.processing_status='quarantined' AND NEW.processing_status='received'
+     AND private.gateway_event_revalidation_permitted(OLD,NEW) THEN RETURN NEW; END IF;
+
   IF NEW.provider_object_type IS DISTINCT FROM OLD.provider_object_type
      OR NEW.verification_method IS DISTINCT FROM OLD.verification_method
      OR NEW.fact_payment_status IS DISTINCT FROM OLD.fact_payment_status
