@@ -45,7 +45,7 @@ The owner approved delayed or withheld disclosure on October 1. Persisted releas
 
 ## Gateway quarantine operations
 
-**P2 observability repair, monitoring delivery still pending (FF-075).** Verified gateway quarantines are acknowledged with HTTP 200 and stored as terminal `ignored` events. The ordinary worker excludes them, so its success does not establish an empty quarantine. The new candidate emits a sanitized signal only after a newly committed quarantine; it exposes no financial or provider-object details. Two regressions fail on the old implementation, and all 1,586 selected server-free tests, TypeScript, and lint pass. Hosted validation passed on `b812f8c`; configured alert-delivery evidence remains pending.
+**P2 observability repair, monitoring delivery still pending (FF-075).** Verified gateway quarantines are acknowledged with HTTP 200 and stored as unresolved `quarantined` events without a final application receipt. The ordinary worker excludes them, so its success does not establish an empty quarantine. The new candidate emits a sanitized signal only after a newly committed quarantine; it exposes no financial or provider-object details. Two regressions fail on the old implementation, and all 1,586 selected server-free tests, TypeScript, and lint pass. Hosted validation passed on `b812f8c`; configured alert-delivery evidence remains pending.
 
 Encrypted gateway payloads, including quarantined ones, expire after 90 days. The payment runbook now provides a protected aggregate inventory and requires operator investigation before expiry. The accounting repair still needs an audited reconciliation path; neither log monitoring nor provider redelivery alone is a demonstrated recovery mechanism.
 

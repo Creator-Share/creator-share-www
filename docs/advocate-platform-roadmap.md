@@ -656,3 +656,8 @@ Privacy review also requires gross-minus-dispute-debits and gross-minus-refunds 
 
 
 Operational health must include provider cash committed before gateway ingestion. The service-only health projection counts unmatched cash and alerts after a ten-minute ingestion grace period using account, event identity, and immutable digest. This neither allocates funds nor resolves a quarantined event; complete the documented database deployment before the updated worker caller.
+
+
+### Unresolved provider quarantine
+
+Verified events requiring review now remain `quarantined` without a final financial application receipt. Ordinary workers and no-effect settlement cannot bypass that boundary. This removes the previous terminal-ignore obstacle while preserving duplicate evidence checks, immutable completed applications, and existing retention. Versioned retained-evidence recovery remains required before release.

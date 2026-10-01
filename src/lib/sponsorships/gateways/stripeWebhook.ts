@@ -1194,7 +1194,7 @@ export async function quarantineVerifiedStripeEvent(
 
   if (
     !UUID_PATTERN.test(result.gatewayEventId) ||
-    result.processingStatus !== "ignored" ||
+    result.processingStatus !== "quarantined" ||
     typeof result.isDuplicate !== "boolean"
   ) {
     throw infrastructure()

@@ -327,7 +327,7 @@ function dependencies(
       calls.quarantined.push(input)
       return {
         gatewayEventId: GATEWAY_EVENT_ID,
-        processingStatus: "ignored",
+        processingStatus: "quarantined",
         isDuplicate: false,
       }
     },

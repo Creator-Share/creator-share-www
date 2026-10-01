@@ -118,6 +118,7 @@ DO $$ BEGIN
     'processing',
     'processed',
     'failed',
+    'quarantined',
     'ignored'
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
@@ -844,7 +845,7 @@ CREATE TABLE public.payment_gateway_events (
       )
       OR
       (
-        processing_status = 'failed'
+        processing_status IN ('failed','quarantined')
         AND processed_at IS NULL
         AND nullif(btrim(last_error), '') IS NOT NULL
       )
@@ -2532,6 +2533,9 @@ BEGIN
 
   IF NEW.processing_status IS DISTINCT FROM OLD.processing_status AND NOT (
     (OLD.processing_status IN ('received', 'failed') AND NEW.processing_status = 'processing')
+    OR (OLD.processing_status = 'received' AND NEW.processing_status = 'quarantined'
+      AND NEW.sponsorship_intent_id IS NULL AND NEW.payment_attempt_id IS NULL
+      AND NEW.redacted_payload @> '{"quarantine":true,"requires_operational_review":true}'::jsonb)
     OR (OLD.processing_status = 'processing' AND NEW.processing_status IN ('processed', 'failed', 'ignored'))
   ) THEN
     RAISE EXCEPTION 'Illegal gateway event transition from % to %', OLD.processing_status, NEW.processing_status
@@ -2588,6 +2592,15 @@ BEGIN
       END IF;
       NEW.processed_at := v_now;
       NEW.last_error := NULL;
+      NEW.processing_locked_at := NULL;
+      NEW.processing_locked_by := NULL;
+    ELSIF NEW.processing_status = 'quarantined' THEN
+      IF nullif(btrim(NEW.last_error), '') IS NULL THEN
+        RAISE EXCEPTION 'Quarantined gateway events require a review reason'
+          USING ERRCODE = '23514';
+      END IF;
+      NEW.processed_at := NULL;
+      NEW.ignored_reason := NULL;
       NEW.processing_locked_at := NULL;
       NEW.processing_locked_by := NULL;
     ELSIF NEW.processing_status = 'failed' THEN

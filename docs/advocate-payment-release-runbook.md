@@ -157,7 +157,7 @@ The PayPal webhook endpoint accepts at most 64 KiB and verifies the exact raw ev
 
 Configure an operational alert for `PAYMENT_GATEWAY_EVENT_QUARANTINED` before accepting live payments. Stripe and PayPal emit this signal after a newly committed quarantine, with only provider, request correlation, and a fixed error code. Duplicate deliveries do not repeat it. A log signal is not evidence that an alert reached an operator; retain a staging delivery and acknowledgment canary for the configured monitoring destination.
 
-Quarantined events use processing status `ignored` with `requires_operational_review=true`. The ordinary payment worker does not claim them, so a clean worker batch does not establish that quarantine is empty. Through protected database operational access, review the aggregate backlog and payload deadlines:
+Quarantined events use the unresolved processing status `quarantined` with `requires_operational_review=true` and no final application receipt. The ordinary payment worker does not claim them, so a clean worker batch does not establish that quarantine is empty. Through protected database operational access, review the aggregate backlog and payload deadlines:
 
 ```sql
 SELECT
@@ -171,7 +171,7 @@ SELECT
   ) AS earliest_retained_payload_expiry,
   count(*) FILTER (WHERE payload_ciphertext IS NULL) AS erased_payloads
 FROM public.payment_gateway_events
-WHERE processing_status = 'ignored'
+WHERE processing_status = 'quarantined'
   AND redacted_payload @>
     '{"quarantine":true,"requires_operational_review":true}'::jsonb
 GROUP BY provider, provider_account_scope,

@@ -19,9 +19,9 @@ INSERT INTO public.payment_gateway_events(
 SELECT ('0e300000-0000-4000-8000-'||lpad(i::text,12,'0'))::uuid,'STRIPE','stripe_us','evt_review_'||i,'invoice.paid',
  CASE WHEN i=1 THEN '{"quarantine":true,"requires_operational_review":true,"quarantine_error_code":"provider-fact-mismatch"}'::jsonb ELSE '{}'::jsonb END,
  decode(repeat('ab',32),'hex'),now(),now(),
- CASE WHEN i=1 THEN 'ignored' WHEN i=2 THEN 'failed' ELSE 'processing' END::public.gateway_event_processing_status,
+ CASE WHEN i=1 THEN 'quarantined' WHEN i=2 THEN 'failed' ELSE 'processing' END::public.gateway_event_processing_status,
  CASE WHEN i=1 THEN 0 ELSE 12 END,12,
- CASE WHEN i=1 THEN now() END,CASE WHEN i=1 THEN 'quarantine' END,CASE WHEN i=2 THEN 'provider-unavailable' END,
+ NULL,NULL,CASE WHEN i=1 THEN 'quarantine' WHEN i=2 THEN 'provider-unavailable' END,
  CASE WHEN i=3 THEN now()-interval '11 minutes' WHEN i=4 THEN now() END,
  CASE WHEN i>=3 THEN 'fixture-worker' END,CASE WHEN i>=3 THEN gen_random_uuid() END,'legacy_verified_event'
 FROM generate_series(1,4) i;
@@ -69,7 +69,7 @@ RESET ROLE;
 -- A changed failure must not inherit the old acknowledgment. This fixture edit
 -- models a later verified disposition; the acknowledgment RPC cannot do it.
 SET session_replication_role = replica;
-UPDATE public.payment_gateway_events SET ignored_reason='different-verified-failure' WHERE id='0e300000-0000-4000-8000-000000000001';
+UPDATE public.payment_gateway_events SET last_error='different-verified-failure' WHERE id='0e300000-0000-4000-8000-000000000001';
 SET session_replication_role = origin;
 SET LOCAL ROLE service_role;
 SELECT extensions.ok(public.get_payment_failure_health() @> '{"unresolved":3,"unacknowledged":3}'::jsonb,'changed failure evidence pages again');

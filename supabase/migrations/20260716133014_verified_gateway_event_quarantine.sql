@@ -32,8 +32,7 @@ AS $$
 #variable_conflict use_column
 DECLARE
   v_event public.payment_gateway_events%ROWTYPE;
-  v_lease_token uuid;
-  v_ignored_reason text;
+  v_quarantine_reason text;
   v_redacted_payload jsonb;
 BEGIN
   PERFORM private.require_payment_service_role();
@@ -159,7 +158,7 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  v_ignored_reason := left(
+  v_quarantine_reason := left(
     'quarantine:' || target_error_code || ': ' || target_reason,
     1000
   );
@@ -213,8 +212,8 @@ BEGIN
            - 'paypal_auth_algorithm'
            - 'paypal_verification_response_sha256'
        )
-       OR v_event.processing_status IS DISTINCT FROM 'ignored'
-       OR v_event.ignored_reason IS DISTINCT FROM v_ignored_reason
+       OR v_event.processing_status IS DISTINCT FROM 'quarantined'
+       OR v_event.last_error IS DISTINCT FROM v_quarantine_reason
        OR v_event.sponsorship_intent_id IS NOT NULL
        OR v_event.payment_attempt_id IS NOT NULL
        OR v_event.original_financial_movement_id IS NOT NULL
@@ -234,11 +233,9 @@ BEGIN
        OR v_event.fact_period_end IS NOT NULL
        OR v_event.fact_failure_code IS NOT NULL
        OR v_event.fact_lifecycle_state IS NOT NULL
-       OR NOT EXISTS (
-         SELECT 1
-         FROM public.payment_gateway_event_applications application
+       OR EXISTS (
+         SELECT 1 FROM public.payment_gateway_event_applications application
          WHERE application.gateway_event_id = v_event.id
-           AND application.effect = 'ignored'
        ) THEN
       RAISE EXCEPTION 'Verified provider event identifier conflicts with durable evidence'
         USING ERRCODE = '23505';
@@ -290,23 +287,12 @@ BEGIN
   )
   RETURNING * INTO v_event;
 
-  v_lease_token := gen_random_uuid();
+  -- Unresolved evidence must not consume the event's unique final application
+  -- receipt. It also never enters the ordinary financial worker's claim set.
   UPDATE public.payment_gateway_events
-  SET
-    processing_status = 'processing',
-    processing_locked_by = 'verified-event-quarantine:' || v_lease_token::text,
-    processing_lease_token = v_lease_token
-  WHERE id = v_event.id;
-
-  SELECT *
-  INTO v_event
-  FROM public.ignore_sponsorship_payment_gateway_event(
-    v_event.id,
-    v_lease_token,
-    v_ignored_reason,
-    context_request_id,
-    context_trace_id
-  );
+  SET processing_status='quarantined',last_error=v_quarantine_reason
+  WHERE id=v_event.id
+  RETURNING * INTO v_event;
 
   RETURN QUERY SELECT v_event.id, v_event.processing_status, false;
 END;
@@ -374,6 +360,6 @@ COMMENT ON FUNCTION public.quarantine_verified_payment_gateway_event(
   text,
   text
 ) IS
-  'Durably preserves signed provider evidence that cannot safely enter a money path, records an operational review marker, and idempotently closes it as quarantined.';
+  'Durably preserves signed provider evidence that cannot safely enter a money path, records an operational review marker, and holds it without a final application receipt.';
 
 COMMIT;

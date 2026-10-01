@@ -27,8 +27,7 @@ CREATE TRIGGER payment_failure_acknowledgments_no_truncate BEFORE TRUNCATE
 CREATE FUNCTION private.payment_failure_kind(event public.payment_gateway_events)
 RETURNS text LANGUAGE sql STABLE SET search_path = '' AS $$
   SELECT CASE
-    WHEN event.processing_status = 'ignored' AND event.redacted_payload @>
-      '{"quarantine":true,"requires_operational_review":true}'::jsonb THEN 'quarantined'
+    WHEN event.processing_status = 'quarantined' THEN 'quarantined'
     WHEN event.processing_attempt_count >= event.max_processing_attempts THEN CASE
       WHEN event.processing_status = 'failed' THEN 'exhausted'
       WHEN event.processing_status = 'processing'

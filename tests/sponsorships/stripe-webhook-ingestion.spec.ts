@@ -345,7 +345,7 @@ function dependenciesFor(
         calls.quarantined.push(input)
         return {
           gatewayEventId: GATEWAY_EVENT_ID,
-          processingStatus: "ignored",
+          processingStatus: "quarantined",
           isDuplicate: options.duplicate === true,
         }
       },
@@ -901,7 +901,7 @@ test.describe("verified server intent Stripe webhook ingestion", () => {
 
     expect(quarantined).toMatchObject({
       quarantined: true,
-      processingStatus: "ignored",
+      processingStatus: "quarantined",
       isDuplicate: false,
     })
     expect(calls.quarantined).toHaveLength(1)
@@ -1316,7 +1316,7 @@ test.describe("verified server intent Stripe webhook ingestion", () => {
 
     expect(result).toMatchObject({
       quarantined: true,
-      processingStatus: "ignored",
+      processingStatus: "quarantined",
       isDuplicate: false,
     })
     expect(calls.quarantined).toHaveLength(1)

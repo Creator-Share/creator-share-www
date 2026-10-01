@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(17);
+SELECT plan(21);
 
 SELECT set_config('request.jwt.claim.role', 'service_role', true);
 
@@ -37,8 +37,8 @@ FROM public.quarantine_verified_payment_gateway_event(
 
 SELECT is(
   (SELECT processing_status::text FROM quarantine_result),
-  'ignored',
-  'quarantined evidence is terminally ignored'
+  'quarantined',
+  'verified evidence remains unresolved in the quarantine state'
 );
 
 SELECT is(
@@ -101,8 +101,8 @@ SELECT is(
     FROM public.payment_gateway_event_applications
     WHERE gateway_event_id = (SELECT gateway_event_id FROM quarantine_result)
   ),
-  'ignored',
-  'quarantine records an immutable application disposition'
+  NULL::text,
+  'unresolved quarantine does not consume a final application receipt'
 );
 
 SELECT is(
@@ -357,6 +357,25 @@ SELECT ok(
   ),
   'only the payment service role can quarantine verified provider evidence'
 );
+
+SELECT ok((SELECT processing_attempt_count=0 AND processed_at IS NULL
+  AND processing_lease_token IS NULL AND ignored_reason IS NULL
+  AND last_error LIKE 'quarantine:unsupported-event:%'
+  AND private.payment_failure_kind(event)='quarantined'
+  FROM public.payment_gateway_events event WHERE id=(SELECT gateway_event_id FROM quarantine_result)),
+  'quarantine is visible for review without a financial attempt or completion timestamp');
+SELECT ok(NOT EXISTS(SELECT 1 FROM public.claim_payment_gateway_events('quarantine-test-worker') claimed
+  WHERE claimed.gateway_event_id=(SELECT gateway_event_id FROM quarantine_result)),
+  'ordinary workers cannot claim unresolved quarantine');
+SELECT throws_ok($$UPDATE public.payment_gateway_events SET processing_status='processing',
+  processing_locked_by='quarantine-bypass',processing_lease_token=gen_random_uuid()
+  WHERE id=(SELECT gateway_event_id FROM quarantine_result)$$,
+  '23514','Illegal gateway event transition from quarantined to processing',
+  'quarantine cannot bypass a future revalidation boundary through an ordinary claim');
+SELECT throws_ok($$SELECT public.ignore_sponsorship_payment_gateway_event(
+  (SELECT gateway_event_id FROM quarantine_result),gen_random_uuid(),'do-not-finalize-quarantine')$$,
+  '55P03','Gateway event processing lease is missing or stale',
+  'ordinary no-effect settlement cannot finalize unresolved quarantine');
 
 SELECT * FROM finish();
 

@@ -346,7 +346,7 @@ FROM public.quarantine_verified_payment_gateway_event(
 
 SELECT extensions.is(
   (SELECT processing_status::text FROM refund_updated_quarantine_result),
-  'ignored',
+  'quarantined',
   'an unlinkable refund.updated event can be preserved in durable quarantine'
 );
 
