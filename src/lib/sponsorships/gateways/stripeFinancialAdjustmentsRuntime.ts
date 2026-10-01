@@ -9,6 +9,7 @@ import {
   type StripeFinancialAdjustmentDependencies,
   type StripeFinancialMovementLookup,
   type VerifiedStripeFinancialAdjustmentInput,
+  type VerifiedStripeCashMovementInput,
   type VerifiedStripeFinancialAdjustmentResult,
   type VerifiedStripeNoEffectRefundInput,
   type VerifiedStripeNoEffectRefundResult,
@@ -262,6 +263,31 @@ export async function ingestVerifiedNoEffectRefund(
   }
 }
 
+export async function recordVerifiedCashMovement(
+  supabase: ServiceRoleClient,
+  input: VerifiedStripeCashMovementInput,
+): Promise<string> {
+  const { data, error } = await supabase.rpc("record_verified_stripe_cash_movement", {
+    target_original_movement_id: input.originalFinancialMovementId,
+    target_account_scope: input.providerAccountScope,
+    target_movement_id: input.providerMovementId,
+    target_object_id: input.providerObjectId,
+    target_amount_minor: input.amountMinor,
+    target_fee_minor: input.feeMinor,
+    target_net_minor: input.netMinor,
+    target_currency: input.currency,
+    target_exchange_rate: input.exchangeRate,
+    target_occurred_at: input.occurredAt,
+    target_event_id: input.providerEventId,
+    target_event_digest: input.eventDigest,
+    target_signature_verified_at: input.signatureVerifiedAt,
+    context_request_id: input.requestId,
+  })
+  if (error) evidenceConflict(error)
+  if (typeof data !== "string") throw infrastructure()
+  return data
+}
+
 export function createStripeFinancialAdjustmentDependencies(
   stripe: Stripe,
   supabase: ServiceRoleClient,
@@ -275,6 +301,8 @@ export function createStripeFinancialAdjustmentDependencies(
       ingestVerifiedAdjustment(supabase, input),
     ingestVerifiedNoEffectRefund: (input) =>
       ingestVerifiedNoEffectRefund(supabase, input),
+    recordVerifiedCashMovement: (input) =>
+      recordVerifiedCashMovement(supabase, input),
     now: () => new Date(),
   }
 }

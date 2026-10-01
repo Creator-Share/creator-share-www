@@ -11,6 +11,7 @@ import type {
   StripeFinancialAdjustmentDependencies,
   StripeFinancialMovementLookup,
   VerifiedStripeFinancialAdjustmentInput,
+  VerifiedStripeCashMovementInput,
   VerifiedStripeFinancialAdjustmentResult,
   VerifiedStripeNoEffectRefundInput,
   VerifiedStripeNoEffectRefundResult,
@@ -51,6 +52,9 @@ const {
 const { stripeEventImmutableDigest } = testRequire(
   "../../src/lib/sponsorships/gateways/stripeWebhook",
 ) as typeof import("../../src/lib/sponsorships/gateways/stripeWebhook")
+const { recordVerifiedCashMovement } = testRequire(
+  "../../src/lib/sponsorships/gateways/stripeFinancialAdjustmentsRuntime",
+) as typeof import("../../src/lib/sponsorships/gateways/stripeFinancialAdjustmentsRuntime")
 nodeModule._load = originalModuleLoad
 
 const ORIGINAL_MOVEMENT_ID = "11111111-1111-4111-8111-111111111111"
@@ -172,6 +176,7 @@ function balanceTransaction(
     currency: "usd",
     created: EVENT_CREATED - 5,
     fee: 0,
+    exchange_rate: null,
     net: amount,
     reporting_category: "dispute",
     status: "available",
@@ -214,6 +219,7 @@ interface DependencyCalls {
   paymentIntentIds: string[]
   movementLookups: StripeFinancialMovementLookup[]
   ingested: VerifiedStripeFinancialAdjustmentInput[]
+  cash: VerifiedStripeCashMovementInput[]
   noEffectIngested: VerifiedStripeNoEffectRefundInput[]
 }
 
@@ -237,6 +243,7 @@ function dependenciesFor(
     movementLookups: [],
     ingested: [],
     noEffectIngested: [],
+    cash: [],
   }
   const seenNoEffectEvents = new Set<string>()
   const crypto = createSponsorshipCrypto(
@@ -247,6 +254,10 @@ function dependenciesFor(
     calls,
     dependencies: {
       crypto,
+      async recordVerifiedCashMovement(input) {
+        calls.cash.push(input)
+        return GATEWAY_EVENT_ID
+      },
       async retrieveCharge(id) {
         calls.chargeIds.push(id)
         if (!options.charge) throw new Error("Unexpected Charge lookup")
@@ -325,6 +336,7 @@ test.describe("verified Stripe sponsorship financial adjustments", () => {
       movementLookups: [],
       ingested: [],
       noEffectIngested: [],
+      cash: [],
     })
   })
 
@@ -726,6 +738,7 @@ test.describe("verified Stripe sponsorship financial adjustments", () => {
               balanceTransaction(DISPUTE_DEBIT_TRANSACTION_ID, -500, {
                 currency: "eur",
                 amount: -400,
+                net: -400,
                 exchange_rate: 0.8,
               }),
             ],
@@ -879,5 +892,99 @@ test.describe("verified Stripe sponsorship financial adjustments", () => {
     await expect(
       ingestFixture(event("refund.created", refund()), "{}", dependencies),
     ).rejects.toMatchObject({ code: "infrastructure", retryable: true })
+  })
+})
+
+
+test("retains excess and ambiguous dispute cash before allocation rejection", async () => {
+  for (const fixture of [
+    { amount: 500, cash: balanceTransaction("txn_fee_only", 0, { fee: 25, net: -25 }), code: "provider-fact-mismatch" },
+    { amount: 1300, cash: balanceTransaction("txn_excess", -1300, { fee: 25, net: -1325 }), code: "boundary-mismatch" },
+    { amount: 500, cash: balanceTransaction("txn_ambiguous", -1, { currency: "eur", exchange_rate: 0.1 }), code: "provider-fact-mismatch" },
+    { amount: 500, cash: balanceTransaction("txn_settlement_currency", -500, { currency: "jpy", exchange_rate: 150 }), code: "provider-fact-mismatch" },
+  ]) {
+    const { dependencies, calls } = dependenciesFor(movement(), { charge: charge() })
+    await expect(ingestFixture(event("charge.dispute.funds_withdrawn", dispute({
+      amount: fixture.amount, balance_transactions: [fixture.cash],
+    })), "{}", dependencies)).rejects.toMatchObject({ code: fixture.code, retryable: false })
+    expect(calls.cash).toHaveLength(1)
+    expect(calls.cash[0]).toMatchObject({
+      originalFinancialMovementId: ORIGINAL_MOVEMENT_ID,
+      amountMinor: fixture.cash.amount,
+      feeMinor: fixture.cash.fee,
+      netMinor: fixture.cash.net,
+      currency: fixture.cash.currency.toUpperCase(),
+      exchangeRate: fixture.cash.exchange_rate,
+    })
+    expect(calls.ingested).toEqual([])
+  }
+})
+
+test("rejects contradictory cash and crossed payment chains before cash persistence", async () => {
+  for (const overrides of [{ net: -499 }, { fee: 0.5 }, { exchange_rate: -1 }, { created: 0 }]) {
+    const { dependencies, calls } = dependenciesFor(movement(), { charge: charge() })
+    await expect(ingestFixture(event("charge.dispute.funds_withdrawn", dispute({
+      balance_transactions: [balanceTransaction("txn_invalid", -500, overrides)],
+    })), "{}", dependencies)).rejects.toMatchObject({ code: "provider-fact-mismatch" })
+    expect(calls.cash).toEqual([])
+  }
+  const { dependencies, calls } = dependenciesFor(movement(), {
+    charge: charge({ payment_intent: OTHER_PAYMENT_INTENT_ID }),
+  })
+  await expect(ingestFixture(event("charge.dispute.funds_withdrawn", dispute({
+    balance_transactions: [balanceTransaction("txn_crossed", -500)],
+  })), "{}", dependencies)).rejects.toMatchObject({ code: "provider-fact-mismatch" })
+  expect(calls.cash).toEqual([])
+})
+
+test("requires a durable cash receipt before proceeding with principal ingestion", async () => {
+  for (const failedReceipt of ["invalid", new Error("private transport detail")]) {
+    const { dependencies, calls } = dependenciesFor(movement(), { charge: charge() })
+    dependencies.recordVerifiedCashMovement = async () => {
+      if (failedReceipt instanceof Error) throw failedReceipt
+      return failedReceipt
+    }
+    await expect(ingestFixture(event("charge.dispute.funds_withdrawn", dispute({
+      balance_transactions: [balanceTransaction("txn_receipt", -500)],
+    })), "{}", dependencies)).rejects.toMatchObject({ code: "infrastructure", retryable: true })
+    expect(calls.ingested).toEqual([])
+  }
+})
+
+
+test("cash persistence runtime forwards exact signed facts and classifies conflicts", async () => {
+  const { dependencies, calls } = dependenciesFor(movement(), {
+    charge: charge(), adjustmentKind: "sponsorship_dispute_debit",
+  })
+  await ingestFixture(event("charge.dispute.funds_withdrawn", dispute({
+    balance_transactions: [balanceTransaction("txn_runtime", -500, { fee: 25, net: -525 })],
+  })), "{}", dependencies)
+  const input = calls.cash[0]
+  const rpcCalls: unknown[] = []
+  const client = {
+    async rpc(name: string, args: unknown) {
+      rpcCalls.push({ name, args })
+      return { data: GATEWAY_EVENT_ID, error: null }
+    },
+  } as unknown as Parameters<typeof recordVerifiedCashMovement>[0]
+  await expect(recordVerifiedCashMovement(client, input)).resolves.toBe(GATEWAY_EVENT_ID)
+  expect(rpcCalls).toEqual([{
+    name: "record_verified_stripe_cash_movement",
+    args: {
+      target_original_movement_id: ORIGINAL_MOVEMENT_ID,
+      target_account_scope: "stripe_us", target_movement_id: "txn_runtime",
+      target_object_id: DISPUTE_ID, target_amount_minor: -500,
+      target_fee_minor: 25, target_net_minor: -525, target_currency: "USD",
+      target_exchange_rate: null, target_occurred_at: input.occurredAt,
+      target_event_id: input.providerEventId, target_event_digest: input.eventDigest,
+      target_signature_verified_at: input.signatureVerifiedAt,
+      context_request_id: requestContext.requestId,
+    },
+  }])
+  const conflictingClient = {
+    async rpc() { return { data: null, error: { code: "23505" } } },
+  } as unknown as Parameters<typeof recordVerifiedCashMovement>[0]
+  await expect(recordVerifiedCashMovement(conflictingClient, input)).rejects.toMatchObject({
+    code: "boundary-mismatch", httpStatus: 409, retryable: false,
   })
 })

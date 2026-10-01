@@ -156,6 +156,23 @@ export interface VerifiedStripeNoEffectRefundResult {
   isDuplicate: boolean
 }
 
+export interface VerifiedStripeCashMovementInput {
+  originalFinancialMovementId: string
+  providerAccountScope: string
+  providerMovementId: string
+  providerObjectId: string
+  amountMinor: number
+  feeMinor: number
+  netMinor: number
+  currency: string
+  exchangeRate: number | null
+  occurredAt: string
+  providerEventId: string
+  eventDigest: SupabaseRpcBytea
+  signatureVerifiedAt: string
+  requestId: string
+}
+
 export interface StripeFinancialAdjustmentDependencies {
   crypto: SponsorshipCrypto
   retrieveCharge(id: string): Promise<Stripe.Charge>
@@ -169,6 +186,9 @@ export interface StripeFinancialAdjustmentDependencies {
   ingestVerifiedNoEffectRefund(
     input: VerifiedStripeNoEffectRefundInput,
   ): Promise<VerifiedStripeNoEffectRefundResult>
+  recordVerifiedCashMovement(
+    input: VerifiedStripeCashMovementInput,
+  ): Promise<string>
   now(): Date
 }
 
@@ -629,9 +649,7 @@ function refundFacts(event: Stripe.Event):
 function disputeBalanceTransaction(
   eventType: string,
   dispute: Stripe.Dispute,
-  disputeAmount: number,
-  disputeCurrency: SupportedCurrency,
-): { id: string; amount: number } {
+): Stripe.BalanceTransaction {
   if (
     !Array.isArray(dispute.balance_transactions) ||
     dispute.balance_transactions.length < 1 ||
@@ -642,44 +660,39 @@ function disputeBalanceTransaction(
 
   const expectedSign = eventType === "charge.dispute.funds_withdrawn" ? -1 : 1
   const seenIds = new Set<string>()
-  const matching: Array<{ id: string; amount: number }> = []
+  const matching: Stripe.BalanceTransaction[] = []
 
   for (const transaction of dispute.balance_transactions) {
     const id = requiredProviderId(transaction.id, "txn_")
-    const balanceCurrency = requiredCurrency(transaction.currency)
+    const balanceCurrency = transaction.currency
     if (
       transaction.object !== "balance_transaction" ||
       seenIds.has(id) ||
       !Number.isSafeInteger(transaction.amount) ||
-      transaction.amount === 0
+      (transaction.amount === 0 && transaction.net === 0) ||
+      typeof balanceCurrency !== "string" ||
+      !/^[a-z]{3}$/.test(balanceCurrency) ||
+      !Number.isSafeInteger(transaction.fee) ||
+      !Number.isSafeInteger(transaction.net) ||
+      BigInt(transaction.amount) - BigInt(transaction.fee) !==
+        BigInt(transaction.net) ||
+      (transaction.exchange_rate !== null &&
+        (typeof transaction.exchange_rate !== "number" ||
+          !Number.isFinite(transaction.exchange_rate) ||
+          transaction.exchange_rate <= 0 ||
+          transaction.exchange_rate >= 10_000_000_000))
     ) {
       reject("provider-fact-mismatch")
     }
     seenIds.add(id)
 
-    if (Math.sign(transaction.amount) === expectedSign) {
-      const balanceAmount = Math.abs(transaction.amount)
-      matching.push({
-        id,
-        amount:
-          balanceCurrency === disputeCurrency
-            ? balanceAmount
-            : exactSourceAmountFromBalanceTransaction(
-                balanceAmount,
-                transaction.exchange_rate,
-                disputeAmount,
-              ),
-      })
+    if (Math.sign(transaction.amount || transaction.net) === expectedSign) {
+      requiredTimestamp(transaction.created)
+      matching.push(transaction)
     }
   }
 
-  if (
-    matching.length !== 1 ||
-    matching[0].amount < 1 ||
-    matching[0].amount > disputeAmount
-  ) {
-    reject("provider-fact-mismatch")
-  }
+  if (matching.length !== 1) reject("provider-fact-mismatch")
   return matching[0]
 }
 
@@ -729,6 +742,7 @@ function exactSourceAmountFromBalanceTransaction(
 function disputeFacts(event: Stripe.Event): {
   dispute: Stripe.Dispute
   facts: AdjustmentFacts
+  cash: Stripe.BalanceTransaction
 } {
   const dispute = event.data.object as Stripe.Dispute
   if (dispute.object !== "dispute") reject("provider-fact-mismatch")
@@ -738,17 +752,16 @@ function disputeFacts(event: Stripe.Event): {
   const balanceTransaction = disputeBalanceTransaction(
     event.type,
     dispute,
-    disputeAmount,
-    chargedCurrency,
   )
   return {
     dispute,
+    cash: balanceTransaction,
     facts: {
       providerObjectType: "dispute",
       providerObjectId: disputeId,
       adjustmentProviderMovementType: "dispute",
       adjustmentProviderMovementId: disputeId,
-      chargedAmountMinor: balanceTransaction.amount,
+      chargedAmountMinor: disputeAmount,
       chargedCurrency,
       evidenceBalanceTransactionId: balanceTransaction.id,
     },
@@ -792,6 +805,7 @@ export async function ingestStripeFinancialAdjustment(
 
   let facts: AdjustmentFacts
   let chain: ProviderPaymentChain
+  let cash: Stripe.BalanceTransaction | null = null
   if (REFUND_EVENT_TYPES.has(input.event.type)) {
     const refund = refundFacts(input.event)
     if (refund.status === "not-succeeded") {
@@ -852,9 +866,10 @@ export async function ingestStripeFinancialAdjustment(
   } else {
     const dispute = disputeFacts(input.event)
     facts = dispute.facts
+    cash = dispute.cash
     chain = await disputeChain(
       dispute.dispute,
-      facts.chargedAmountMinor,
+      1,
       facts.chargedCurrency,
       dependencies,
     )
@@ -873,18 +888,54 @@ export async function ingestStripeFinancialAdjustment(
     throw infrastructure()
   }
   validateOriginalMovement(original, lookup, chain, occurredAt)
-  if (
-    facts.chargedCurrency !== original.chargedCurrency ||
-    facts.chargedAmountMinor > original.chargedAmountMinor
-  ) {
+  if (facts.chargedCurrency !== original.chargedCurrency) {
+    reject("boundary-mismatch")
+  }
+  const payload = encryptedPayload(
+    input.rawPayload, input.event, dependencies.crypto,
+  )
+  if (cash) {
+    // Preserve cash before attempting principal allocation. An excess or
+    // ambiguous conversion must not erase authenticated provider money.
+    let receipt: string
+    try {
+      receipt = await dependencies.recordVerifiedCashMovement({
+        originalFinancialMovementId: original.id,
+        providerAccountScope: expectedScope,
+        providerMovementId: cash.id,
+        providerObjectId: facts.providerObjectId,
+        amountMinor: cash.amount,
+        feeMinor: cash.fee,
+        netMinor: cash.net,
+        currency: cash.currency.toUpperCase(),
+        exchangeRate: cash.exchange_rate,
+        occurredAt: requiredTimestamp(cash.created),
+        providerEventId,
+        eventDigest: payload.immutableSha256,
+        signatureVerifiedAt: verifiedAt,
+        requestId: input.requestContext.requestId,
+      })
+    } catch (error) {
+      if (error instanceof StripeFinancialAdjustmentError) throw error
+      throw infrastructure()
+    }
+    if (!matchesCanonicalUuid(receipt, receipt)) throw infrastructure()
+    requiredCurrency(cash.currency)
+    const disputeAmount = facts.chargedAmountMinor
+    const balanceAmount = Math.abs(cash.amount)
+    facts.chargedAmountMinor = cash.currency.toUpperCase() === facts.chargedCurrency
+      ? balanceAmount
+      : exactSourceAmountFromBalanceTransaction(
+          balanceAmount, cash.exchange_rate, disputeAmount,
+        )
+    if (facts.chargedAmountMinor < 1 || facts.chargedAmountMinor > disputeAmount) {
+      reject("provider-fact-mismatch")
+    }
+  }
+  if (facts.chargedAmountMinor > original.chargedAmountMinor) {
     reject("boundary-mismatch")
   }
 
-  const payload = encryptedPayload(
-    input.rawPayload,
-    input.event,
-    dependencies.crypto,
-  )
   const eventType = input.event
     .type as VerifiedStripeFinancialAdjustmentInput["eventType"]
   const { evidenceBalanceTransactionId, ...databaseFacts } = facts

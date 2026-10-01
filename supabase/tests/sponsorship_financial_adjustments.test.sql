@@ -1621,6 +1621,87 @@ SELECT checked.assertion FROM (VALUES ('STRIPE'),('PAYPAL')) provider(name)
 CROSS JOIN (VALUES ('USD'::public.payment_currency,2500::bigint,1::numeric),('AUD',3500,1.4),('GBP',1850,0.74),('EUR',2150,0.86)) quote(currency,charged,rate)
 CROSS JOIN LATERAL pg_temp.verify_fractional_adjustments(provider.name,quote.currency,quote.charged,quote.rate) checked(assertion);
 
+-- Preserve independently authenticated cash even when principal is insufficient.
+CREATE TEMP TABLE cash_evidence_fixture AS SELECT pg_temp.normalization_payment('STRIPE','USD',2500,1) AS root_id;
+CREATE FUNCTION pg_temp.record_cash(
+  event_key text DEFAULT 'evt_cash_fixture', movement_key text DEFAULT 'txn_cash_fixture',
+  amount bigint DEFAULT -2600, fee bigint DEFAULT 50, net bigint DEFAULT -2650,
+  account_scope text DEFAULT 'stripe_us', digest_text text DEFAULT 'cash-fixture'
+) RETURNS uuid LANGUAGE sql AS $$
+  SELECT public.record_verified_stripe_cash_movement(
+    (SELECT root_id FROM cash_evidence_fixture),account_scope,movement_key,'dp_cash_fixture',
+    amount,fee,net,'EUR',0.86,(SELECT occurred_at FROM public.sponsorship_financial_movements
+      WHERE id=(SELECT root_id FROM cash_evidence_fixture))+interval '1 second',
+    event_key,extensions.digest(digest_text,'sha256'),clock_timestamp(),'cash-evidence-test');
+$$;
+SELECT extensions.ok(NOT EXISTS (
+  SELECT 1 FROM (VALUES ('anon'),('authenticated'),('service_role')) runtime(role_name)
+  CROSS JOIN (VALUES ('private.provider_cash_movements'),('private.provider_cash_evidence')) protected(table_name)
+  WHERE has_table_privilege(runtime.role_name,protected.table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')),
+  'cash and signed observation evidence are inaccessible through raw API roles');
+SELECT extensions.ok((SELECT bool_and(relrowsecurity AND relforcerowsecurity) FROM pg_class
+  WHERE oid IN ('private.provider_cash_movements'::regclass,'private.provider_cash_evidence'::regclass)),
+  'both cash evidence tables force row security');
+SELECT extensions.ok(has_function_privilege('service_role',
+  'public.record_verified_stripe_cash_movement(uuid,text,text,text,bigint,bigint,bigint,text,numeric,timestamptz,text,bytea,timestamptz,text)','EXECUTE')
+  AND NOT has_function_privilege('authenticated',
+  'public.record_verified_stripe_cash_movement(uuid,text,text,text,bigint,bigint,bigint,text,numeric,timestamptz,text,bytea,timestamptz,text)','EXECUTE'),
+  'only the service API can record verified provider cash');
+CREATE TEMP TABLE cash_receipt AS SELECT pg_temp.record_cash() AS id;
+SELECT extensions.ok((SELECT amount_minor=-2600 AND fee_minor=50 AND net_minor=-2650 AND currency='EUR'
+    AND exchange_rate=0.86 FROM private.provider_cash_movements WHERE id=(SELECT id FROM cash_receipt)),
+  'cash evidence preserves excess gross, separate fees, net and settlement currency without inverse conversion');
+SELECT extensions.ok((SELECT id=pg_temp.record_cash() FROM cash_receipt)
+  AND (SELECT count(*)=1 FROM private.provider_cash_evidence),'exact event replay returns one immutable receipt');
+SELECT extensions.ok((SELECT id=pg_temp.record_cash('evt_cash_second_delivery') FROM cash_receipt),
+  'another authenticated event can corroborate the same cash movement');
+SELECT extensions.ok((SELECT count(*)=1 FROM private.provider_cash_movements)
+  AND (SELECT count(*)=2 FROM private.provider_cash_evidence),
+  'cash is deduplicated while every distinct event keeps its own immutable proof');
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash(amount=>-2601,net=>-2651)$$,
+  '23505','Provider cash evidence conflicts with its immutable identity','changed cash facts cannot reuse a movement');
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash(digest_text=>'changed-event')$$,
+  '23505','Provider cash event identity conflicts with its immutable evidence','a known event cannot change its signed digest');
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash(movement_key=>'txn_competing_cash')$$,
+  '23505','Provider cash event identity conflicts with its immutable evidence','an event cannot bind another cash movement');
+SELECT extensions.ok((SELECT count(*)=1 FROM private.provider_cash_movements),
+  'event conflicts roll back newly inserted cash facts');
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash(event_key=>'evt_bad_net',movement_key=>'txn_bad_net',net=>-2600)$$,
+  '23514',NULL,'cash net must reconcile exactly to gross less fees');
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash(account_scope=>'stripe_uk')$$,
+  '23514','Provider cash evidence requires a materialized matching original payment','cash cannot cross regional account authority');
+SELECT set_config('request.jwt.claim.role','authenticated',true);
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash()$$,
+  '42501',NULL,'the cash recorder rechecks the service claim');
+SELECT set_config('request.jwt.claim.role','service_role',true);
+SELECT extensions.ok((SELECT count(*)=1 AND sum(net_charged_amount_minor)=2500
+  FROM public.sponsorship_financial_movements WHERE id=(SELECT root_id FROM cash_evidence_fixture)
+    OR original_financial_movement_id=(SELECT root_id FROM cash_evidence_fixture)),
+  'recording provider cash alone neither allocates principal nor changes sponsor history');
+SELECT pg_temp.record_cash('evt_cash_credit','txn_cash_credit',2600,-50,2650);
+SELECT extensions.ok((SELECT count(*)=2 AND sum(amount_minor)=0 AND sum(fee_minor)=0 AND sum(net_minor)=0
+  FROM private.provider_cash_movements),
+  'a reinstatement preserves returned fees and exactly restores cash without allocating principal');
+SELECT pg_temp.record_cash('evt_cash_fee','txn_cash_fee',0,25,-25);
+SELECT extensions.ok((SELECT amount_minor=0 AND fee_minor=25 AND net_minor=-25
+  FROM private.provider_cash_movements WHERE provider_movement_id='txn_cash_fee'),
+  'fee-only provider cash does not require inventing a principal movement');
+SELECT extensions.throws_ok(command,'42501','Provider cash evidence is immutable',label)
+FROM (VALUES
+  ('UPDATE private.provider_cash_movements SET fee_minor=0','cash facts cannot be updated'),
+  ('DELETE FROM private.provider_cash_movements','cash facts cannot be deleted'),
+  ('TRUNCATE private.provider_cash_movements CASCADE','cash facts cannot be truncated'),
+  ('UPDATE private.provider_cash_evidence SET request_id=''changed''','event observations cannot be updated'),
+  ('DELETE FROM private.provider_cash_evidence','event observations cannot be deleted'),
+  ('TRUNCATE private.provider_cash_evidence','event observations cannot be truncated')
+) mutation(command,label);
+
+SELECT extensions.ok((SELECT count(*)=7 AND bool_and(before_data IS NULL AND after_data IS NULL
+    AND system_actor='sponsorship_payment_service' AND tool='record_verified_stripe_cash_movement')
+  FROM audit.audit_events WHERE schema_name='private'
+    AND table_name IN ('provider_cash_movements','provider_cash_evidence')),
+  'cash audit records successful writes without copying amounts or retaining failed contenders');
+
 SELECT * FROM extensions.finish();
 
 ROLLBACK;

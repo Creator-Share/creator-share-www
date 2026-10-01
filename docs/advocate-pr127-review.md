@@ -498,3 +498,13 @@ WebKit workflow 36821474619 passed at `baa2af2`, validating recovery route prepa
 ## Verified accounts and historical contacts
 
 The release writer can report ten verified accounts across five historical contact keys, but the application parser rejected that valid snapshot. Historical email keys do not have a one-to-one relationship with stable account identities. The parser now bounds account count by sponsorship count, retaining the existing suppression checks. A real SQL release reproduces the valid combination; parser contracts accept it and reject eleven accounts for ten sponsorships. Hosted validation remains pending.
+
+
+## Provider cash evidence
+
+Added a private immutable cash record and signed-event observation boundary for Stripe disputes. The adapter validates the original payment chain and preserves exact provider cash before attempting principal conversion. It can retain a 1,300-cent debit plus a 25-cent fee against a 1,250-cent charge without pretending the charge contained that extra principal. Conflicting facts fail atomically; no sponsor report or settlement changes merely because cash was recorded. Excess allocation, grouped disputes, PayPal, monitoring, and retained-event recovery remain unfinished. This is the first part of the approved financial-loss repair, not closure of FF-084.
+
+Publication 36822388667 and WebKit 36822388726 passed at `c18d72a`, validating the analytics materialization optimization. The subsequent account-count correction and this cash evidence candidate have separate hosted validation.
+
+
+Publication 36823367317 and WebKit 36823367600 passed at `d1f14d2`, validating the account-count correction. The provider cash candidate passes 51 mock webhook and signature contracts, TypeScript, lint, and the in-process financial adjustment suite with immutable cash and sanitized audit assertions. Its hosted run remains pending.

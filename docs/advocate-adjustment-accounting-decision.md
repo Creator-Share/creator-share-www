@@ -132,3 +132,12 @@ The analytics parser previously required displayed USD components to add exactly
 ## Hosted fixture correction
 
 The first hosted database run for `510a661` failed in the two new fixture helpers. Supabase accepted the suite's existing `SET LOCAL session_replication_role` statements but denied the helpers' `set_config` calls for that parameter. Both helpers now use the existing statement form. The in-process engine did not reproduce this managed-role distinction. Production permissions remain unchanged; fixture setup still restores trigger execution before settlement and before the analytics read. Hosted validation must be rerun.
+
+
+## Durable provider cash evidence foundation
+
+Verified Stripe dispute processing now records balance transaction identity, exact signed gross amount, fee, net amount, settlement currency, optional provider exchange rate, occurrence time, and the matching original payment before attempting principal allocation. A separate immutable observation binds each provider event and its digest to that cash record. Both tables force row security and deny raw API access; one service-only function validates the materialized regional payment chain and rejects conflicting movement or event identities. Exact retries return the same cash identity, while distinct events can corroborate it without duplicating money.
+
+This order preserves cash when a larger dispute or ambiguous inverse conversion still reaches the existing reconciliation quarantine. Cash recording alone does not mutate sponsorship principal, sponsor history, attribution, gateway settlement, or acknowledgment. It does not close FF-084: automatic excess-loss allocation, grouped-dispute reconciliation, PayPal parity, durable unallocated-cash monitoring, and retained-event recovery remain required. The encrypted payload retention rule is unchanged; the cash facts contain no sponsor contact material and persist independently.
+
+In-process tests cover excess cash, separate fees and net, exact replay, distinct observations, conflicting event and movement identities, wrong regional authority, append-only enforcement, and denied API access. Mock adapter tests prove that cash survives ambiguous and unsupported settlement-currency allocation, and that persistence failure prevents principal ingestion. Hosted validation remains pending for this candidate.
