@@ -44,6 +44,10 @@ The owner approved delayed or withheld disclosure on October 1. Persisted releas
 
 **Remaining P1 boundary: reports across portals.** The replacement coordinator independently releases gross 500 and 600 for two portals with the same five contacts, where one contact has an additional 100-cent renewal in the second portal. Their difference isolates that contact's variation even though each portal passes its own numerical certificate. One user can hold memberships in both portals. Combining their histories withholds the conflicting total. The policy-level reproduction does not identify the contact or exercise two-portal payment ingestion. A shared cross-portal history is recommended; the owner has been asked to approve the resulting coupling of reporting availability. The current implementation remains tenant scoped.
 
+## PayPal dispute cash assumptions
+
+**P1, FF-097:** the adapter infers full debits and credits from dispute case status. PayPal documents no-hold cases whose balance stays unchanged until a buyer victory, contradicting that mapping. A temporary mock-only production-adapter probe submits 500-cent adjustments at creation and seller victory but none at buyer victory, without cash evidence. The [accounting decision](./advocate-adjustment-accounting-decision.md#paypal-case-status-does-not-establish-merchant-cash-ff-097) records the provider sources, reproduction boundary and required repair. This remains unresolved and is independent of the excess-loss display decision.
+
 ## Gateway quarantine operations
 
 **P2 observability repair, monitoring delivery still pending (FF-075).** Verified gateway quarantines are acknowledged with HTTP 200 and stored as unresolved `quarantined` events without a final application receipt. The ordinary worker excludes them, so its success does not establish an empty quarantine. The new candidate emits a sanitized signal only after a newly committed quarantine; it exposes no financial or provider-object details. Two regressions fail on the old implementation, and all 1,586 selected server-free tests, TypeScript, and lint pass. Hosted validation passed on `b812f8c`; configured alert-delivery evidence remains pending.
@@ -70,7 +74,7 @@ A production-query fixture at `46d4a83` releases 10,733 cents gross and 10,000 c
 
 ## Cash receipt interruption gap
 
-The previous health query inspected gateway events only. A cash receipt committed before event ingestion could therefore remain outside the reported backlog after a crash. The candidate adds distinct unmatched-cash counts, exact account/event/digest correlation, and a ten-minute stale-ingestion alert. It does not infer a settlement or change acknowledgment semantics. The new SQL and worker regressions pass; hosted validation is pending.
+The previous health query inspected gateway events only. A cash receipt committed before event ingestion could therefore remain outside the reported backlog after a crash. The candidate adds distinct unmatched-cash counts, exact account/event/digest correlation, and a ten-minute stale-ingestion alert. It does not infer a settlement or change acknowledgment semantics. The SQL and worker regressions pass; publication 36833374389 and WebKit 36833374399 passed at 42fbe55. This proves the repository health boundary, not live alert delivery.
 
 ## Release evidence still missing
 

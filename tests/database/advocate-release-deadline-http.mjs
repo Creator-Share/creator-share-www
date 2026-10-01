@@ -5,7 +5,8 @@ import { discoverLocalSupabaseHttp, createBoundedLocalSupabaseFetch, loadLocalSu
 import { withPgClients, clearConcurrencyGateEvidence, writeConcurrencyGateEvidence } from "./support/concurrency-gate.mjs"
 
 // Hosted gate over an already running, verified loopback stack. No services,
-// schema fixtures, users, domains, provider objects, or financial facts created.
+// users, domains, provider objects, or financial facts created. The test temporarily
+// lengthens this RPC's competing lock timeout and restores its exact configuration.
 const evidencePath = process.env.ADVOCATE_RELEASE_DEADLINE_EVIDENCE_PATH ?? null
 const controller = new AbortController()
 const onInterrupt = () => { process.exitCode = 130; controller.abort() }
@@ -43,8 +44,14 @@ try {
       WHERE oid='public.refresh_advocate_public_metric_releases(integer,text,text)'::regprocedure`)
     assert.ok(configuration.proconfig.includes("statement_timeout=40s"))
     const before = await storedState()
+    assert.equal(configuration.proconfig.some(value => value.startsWith("lock_timeout=")), false)
     let pending
+    let lockTimeoutChanged = false
     try {
+      // The hosted stack cancels lock waits after eight seconds. Isolate the
+      // statement deadline without changing its value or the production body.
+      await observer.query("ALTER FUNCTION public.refresh_advocate_public_metric_releases(integer,text,text) SET lock_timeout = '50s'")
+      lockTimeoutChanged = true
       await barrier.query("BEGIN; LOCK TABLE public.advocates IN ACCESS EXCLUSIVE MODE")
       const started = Date.now()
       pending = request(`${stack.apiOrigin}/rest/v1/rpc/refresh_advocate_public_metric_releases`, {
@@ -73,16 +80,26 @@ try {
       assert.deepEqual(await storedState(), before)
       return { scenario: "postgrest_hoists_release_deadline", statementTimeoutMilliseconds: 40_000,
         httpTimeoutMilliseconds: 45_000, elapsedMilliseconds: elapsed, sqlstate: "57014",
-        serverBlockingObserved: true, historyUnchanged: true }
+        serverBlockingObserved: true, historyUnchanged: true,
+        competingLockTimeoutMilliseconds: 50_000, functionConfigurationRestored: true }
     } finally {
-      httpController.abort()
-      // Cancel only release requests still blocked by this gate's own lock.
-      // Release the lock only after the HTTP operation has joined.
-      await observer.query(`SELECT pg_cancel_backend(pid) FROM pg_stat_activity
-        WHERE $1=ANY(pg_blocking_pids(pid)) AND state='active'
-          AND query LIKE '%refresh_advocate_public_metric_releases%'`, [barrier.processID])
-      if (pending) await pending
-      await barrier.query("ROLLBACK")
+      try {
+        httpController.abort()
+        // Cancel only release requests still blocked by this gate's own lock.
+        // Release the lock only after the HTTP operation has joined.
+        await observer.query(`SELECT pg_cancel_backend(pid) FROM pg_stat_activity
+          WHERE $1=ANY(pg_blocking_pids(pid)) AND state='active'
+            AND query LIKE '%refresh_advocate_public_metric_releases%'`, [barrier.processID])
+        if (pending) await pending
+        await barrier.query("ROLLBACK")
+      } finally {
+        if (lockTimeoutChanged) {
+          await observer.query("ALTER FUNCTION public.refresh_advocate_public_metric_releases(integer,text,text) RESET lock_timeout")
+          const { rows: [restored] } = await observer.query(`SELECT proconfig FROM pg_proc
+            WHERE oid='public.refresh_advocate_public_metric_releases(integer,text,text)'::regprocedure`)
+          assert.deepEqual(restored.proconfig, configuration.proconfig)
+        }
+      }
     }
   })
   controller.signal.throwIfAborted()
