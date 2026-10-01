@@ -1,10 +1,10 @@
 # Private analytics disclosure decision
 
-Status: approved for implementation, October 1, 2026. The owner accepts delayed or withheld updates for low-volume advocates while preserving every metric. Implementation and acceptance evidence remain pending.
+Status: approved for implementation, October 1, 2026. The owner accepts delayed or withheld updates for low-volume advocates while preserving every metric. Persisted disclosure and historical comparison are implemented. A confirmed cross-measure subtraction defect still blocks release; see the final section.
 
 ## Confirmed disclosure
 
-`public.get_advocate_analytics_snapshot` recomputes exact cumulative amounts through the preceding UTC day. Its suppression rules consider contacts inside each snapshot and complements inside the same response. They retain no previously disclosed private snapshot and do not check the number of contacts contributing to the difference between releases.
+At the review baseline, `public.get_advocate_analytics_snapshot` recomputed exact cumulative amounts through the preceding UTC day. Its suppression rules consider contacts inside each snapshot and complements inside the same response. They retain no previously disclosed private snapshot and do not check the number of contacts contributing to the difference between releases.
 
 An isolated reproduction executed the current function against the existing analytics test fixture with five distinct historical contacts, each contributing 100 USD cents, and one additional contact contributing 733 cents during the next reporting day. All six sponsorships were direct, one-time USD payments. The function returned:
 
@@ -105,3 +105,24 @@ The candidate fingerprints gross minus dispute debits and gross minus refunds at
 Four policy assertions cover the unsafe dispute case, currency/segment coordination, a safe five-contact complement, and the zero-net refund case. The first regression fails with the preceding coordinator. The actual candidate builder and release writer reproduce the original disclosure, withhold the repaired cases, and still release the safe fifteen-contact case with five untouched contacts. Existing reader, public-release, and historical-oracle suites pass in-process. Hosted validation remains pending; these controls do not establish protection against every algebraic reconstruction or arbitrary auxiliary information.
 
 The two controls increase the 5,000-contact first-release fixture to 120,120 stored contribution changes and 8,133 milliseconds in PGlite, compared with 80,072 changes and 5,768 milliseconds immediately before them. This is an explicit privacy cost, not native capacity evidence. Before these controls, later unchanged releases at three- and five-week advances took 4,163 and 3,543 milliseconds and added no contribution rows. Changing-history and multi-tenant throughput still require measurement.
+
+
+## Open cross-measure disclosure at 42fbe55
+
+The hosted publication and WebKit gates pass at this revision, but a subsequent execution of the production candidate builder and release writer exposes another one-contact residual. All amounts below are USD cents. Each contact has one initial payment. Dispute debit precedes reinstatement, which precedes refund; all events fall before the release cutoff.
+
+| Contacts | Initial per contact | Dispute debit per contact | Dispute credit per contact | Refund per contact | Final net per contact |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 733 | 733 | 733 | 0 | 733 |
+| 5 | 1,000 | 500 | 500 | 500 | 500 |
+| 5 | 1,000 | 1,000 | 1,000 | 1,000 | 0 |
+
+The released official cell is unsuppressed and contains eleven sponsorships and contacts, gross 10,733, refunds 7,500, debits 8,233, credits 8,233, and net 3,233. Debits minus refunds and credits minus refunds both equal 733. Ten contacts cancel exactly in each subtraction, leaving only the first contact. Gross minus debits has five contributors; gross minus refunds and net have six; open dispute balance is zero. Thus every currently implemented guard can pass while this residual remains visible.
+
+The reproduction uses the existing public-metric SQL fixture, real migrations, actual candidate and release functions, and normal triggers during disclosure in PGlite. Fixture construction bypasses ingestion and uses minimal managed-schema substitutes. No hosted database or provider was contacted. This establishes a query defect, not an end-to-end payment incident, native capacity, or identification of the contact.
+
+An exact integer enumeration of coefficients from minus one through one over initial, renewal, refunds, debits, and credits also finds these subtractions. Zero renewal and equal debit/credit columns create redundant coefficient vectors, so they are not counted as separate incidents. The enumeration is a bounded adversarial check, not a proof covering arbitrary coefficients, additional scopes, public rounding, or release histories.
+
+The next implementation must define and test its supported arithmetic closure before adding more hidden fingerprints. Comparing each measure against all prior releases protects pairwise changes for that measure; it does not prove protection against combinations of measures or three or more releases. Merely copying the current per-contact history for more expressions also increases storage and computation, as the previous benchmark demonstrates.
+
+Preserve every metric and the approved withheld state. Evaluate a systematic rule against safe cohorts as well as attacks, measure its historical storage and runtime, and coordinate public and private disclosure. Do not promote FF-034 to complete based only on individual five-contact counts, a longer delay, or the existing green workflows. Contact expiry is unchanged and outside this follow-on investigation.
