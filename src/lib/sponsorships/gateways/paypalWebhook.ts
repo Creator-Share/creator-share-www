@@ -1,5 +1,7 @@
 import "server-only"
 
+import { canonicalGatewayJson } from "./canonicalGatewayJson"
+
 import { roundMinorUnitsAtRate } from "@/utils/decimalMoney"
 
 import type {
@@ -698,41 +700,14 @@ export async function verifyPayPalWebhookSignature(
   }
 }
 
-function canonicalJson(value: unknown): string | undefined {
-  if (value === null) return "null"
-  if (typeof value === "string" || typeof value === "boolean") {
-    return JSON.stringify(value)
-  }
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) reject("invalid-payload")
-    return JSON.stringify(value)
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => canonicalJson(item) ?? "null").join(",")}]`
-  }
-  if (isRecord(value)) {
-    const entries = Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .flatMap(([key, item]) => {
-        const encoded = canonicalJson(item)
-        return encoded === undefined
-          ? []
-          : [`${JSON.stringify(key)}:${encoded}`]
-      })
-    return `{${entries.join(",")}}`
-  }
-  if (value === undefined) return undefined
-  reject("invalid-payload")
-}
-
 export function paypalEventImmutableDigest(event: PayPalWebhookEvent): Buffer {
-  const canonical = canonicalJson({
+  const canonical = canonicalGatewayJson({
     create_time: event.createTime,
     event_type: event.eventType,
     id: event.id,
     resource: event.resource,
     resource_type: event.resourceType,
-  })
+  }, () => reject("invalid-payload"))
   if (!canonical) reject("invalid-payload")
   return sha256Digest(Buffer.from(canonical, "utf8"))
 }
@@ -774,7 +749,7 @@ function encryptedPayload(
 
 function minimizedUnsupportedEvidence(event: PayPalWebhookEvent): string {
   const identity = quarantineIdentity(event)
-  const canonical = canonicalJson({
+  const canonical = canonicalGatewayJson({
     evidence_version: "paypal_unsupported_v1",
     provider: "PAYPAL",
     provider_event_id: event.id,
@@ -783,7 +758,7 @@ function minimizedUnsupportedEvidence(event: PayPalWebhookEvent): string {
     provider_object_type: identity.providerObjectType,
     provider_object_id: identity.providerObjectId,
     immutable_event_sha256: paypalEventImmutableDigest(event).toString("hex"),
-  })
+  }, () => reject("invalid-payload"))
   if (!canonical) reject("invalid-payload")
   return canonical
 }

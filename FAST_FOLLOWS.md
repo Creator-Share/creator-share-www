@@ -117,6 +117,8 @@ FF-029 now has one canonical 99-test offline provider contract covering the host
 
 | FF-095 | completed | P1 | PayPal protection payout incorrectly treated as merchant reinstatement | The adapter classified RESOLVED_WITH_PAYOUT as a seller win and submitted a full dispute credit. PayPal defines that outcome as protection paid to the merchant or customer, so it does not identify a merchant cash return. A regression fails on the former adapter and passes after removing that outcome from the credit allowlist. Ambiguous outcomes follow the existing verified-event quarantine path without a financial mutation. Publication 36828769720 and WebKit 36828769708 passed at 55de9ea. Positive cash reconciliation remains part of FF-084. |
 
+| FF-096 | in_progress | P2 | Provider event digests depend on process locale | Both webhook adapters sorted canonical JSON keys with localeCompare. The exact previous serializer produced three different hashes for the same Unicode-key fixture under English, Turkish and Swedish process locales. One shared UTF-16 key serializer replaces both copies and yields the same hash in all three environments. Sixty provider tests, TypeScript and lint pass; hosted confirmation remains pending. This changes the undeployed Advocate digest contract. Retained-event recovery remains FF-072. |
+
 ## Entry requirements
 
 Every new entry must include:

@@ -6,6 +6,8 @@ import { resolve } from "node:path"
 import { expect, test } from "@playwright/test"
 import type Stripe from "stripe"
 
+import { canonicalGatewayJson } from "../../src/lib/sponsorships/gateways/canonicalGatewayJson"
+
 import type {
   StripeNoEffectRefundStatus,
   VerifiedStripeNoEffectRefundInput,
@@ -1568,5 +1570,15 @@ test("retained Stripe evidence binds plaintext, immutable event and regional acc
       decryptSecretPayload: () => invalidPlaintext,
     }, NOW)).toThrow("Retained payment evidence cannot be revalidated")
     expect(invalidPlaintext.every(byte => byte === 0)).toBe(true)
+  }
+})
+
+
+test("provider evidence serialization has a fixed Unicode order and preserves JSON omission rules", () => {
+  const invalid = () => { throw new Error("invalid evidence") }
+  const input = { "ä": 4, a: [undefined, { i: 2, I: 3 }], Z: 1, omitted: undefined }
+  expect(canonicalGatewayJson(input, invalid)).toBe('{"Z":1,"a":[null,{"I":3,"i":2}],"ä":4}')
+  for (const value of [NaN, Infinity, -Infinity, 1n, () => null, Symbol("private")]) {
+    expect(() => canonicalGatewayJson({ value }, invalid)).toThrow("invalid evidence")
   }
 })

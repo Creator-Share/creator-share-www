@@ -1,5 +1,7 @@
 import "server-only"
 
+import { canonicalGatewayJson } from "./canonicalGatewayJson"
+
 import type Stripe from "stripe"
 
 import type {
@@ -1020,40 +1022,13 @@ function occurredAt(event: Stripe.Event): string {
   return new Date(event.created * 1000).toISOString()
 }
 
-function canonicalJson(value: unknown): string | undefined {
-  if (value === null) return "null"
-  if (typeof value === "string" || typeof value === "boolean") {
-    return JSON.stringify(value)
-  }
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) reject("invalid-payload")
-    return JSON.stringify(value)
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => canonicalJson(item) ?? "null").join(",")}]`
-  }
-  if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .flatMap(([key, item]) => {
-        const encoded = canonicalJson(item)
-        return encoded === undefined
-          ? []
-          : [`${JSON.stringify(key)}:${encoded}`]
-      })
-    return `{${entries.join(",")}}`
-  }
-  if (value === undefined) return undefined
-  reject("invalid-payload")
-}
-
 /**
  * Digests immutable Event fields rather than delivery counters, so a genuine
  * Stripe redelivery can match the first stored evidence without weakening the
  * typed financial comparisons in the database.
  */
 export function stripeEventImmutableDigest(event: Stripe.Event): Buffer {
-  const canonical = canonicalJson({
+  const canonical = canonicalGatewayJson({
     account: event.account ?? null,
     api_version: event.api_version,
     created: event.created,
@@ -1062,7 +1037,7 @@ export function stripeEventImmutableDigest(event: Stripe.Event): Buffer {
     livemode: event.livemode,
     object: event.object,
     type: event.type,
-  })
+  }, () => reject("invalid-payload"))
   if (!canonical) reject("invalid-payload")
   return sha256Digest(Buffer.from(canonical, "utf8"))
 }
