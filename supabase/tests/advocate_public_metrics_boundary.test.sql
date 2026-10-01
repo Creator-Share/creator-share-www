@@ -1271,8 +1271,8 @@ SELECT extensions.ok(
       AND jsonb_typeof(payload -> 'inserted_releases') = 'number'
       AND jsonb_typeof(payload -> 'pending_metrics') = 'number'
       AND (payload ->> 'processed_advocates')::integer = 2
-      AND (payload ->> 'inserted_releases')::integer = 3
-      AND (payload ->> 'pending_metrics')::integer = 5
+      AND (payload ->> 'inserted_releases')::integer = 1
+      AND (payload ->> 'pending_metrics')::integer = 7
       AND payload ->> 'policy_version' = 'public-v1'
       AND payload ->> 'source_cutoff' ~
         '^[0-9]{4}-[0-9]{2}-[0-9]{2}T00:00:00Z$'
@@ -1283,7 +1283,7 @@ SELECT extensions.ok(
     FROM public_metric_test_results
     WHERE invocation = 1
   ),
-  'the first batch advances two delta gated metrics, creates one initial release, and leaves five candidates pending'
+  'the coordinated batch advances safe gross funds while withholding private count changes and leaves seven candidates pending'
 );
 
 SELECT extensions.ok(
@@ -1326,24 +1326,11 @@ SELECT extensions.is(
     ) release
   ),
   jsonb_build_object(
-    'children_sponsored', jsonb_build_object(
-      'value', 10,
-      'unit', 'count'
-    ),
-    'gross_raised_usd', jsonb_build_object(
-      'value', 20000,
-      'unit', 'usd_cents'
-    ),
-    'direct_sponsorships', jsonb_build_object(
-      'value', 5,
-      'unit', 'count'
-    ),
-    'post_visit_attributed_sponsorships', jsonb_build_object(
-      'value', 5,
-      'unit', 'count'
-    )
+    'children_sponsored', jsonb_build_object('value',5,'unit','count'),
+    'gross_raised_usd', jsonb_build_object('value',20000,'unit','usd_cents'),
+    'direct_sponsorships', jsonb_build_object('value',5,'unit','count')
   ),
-  'each metric independently releases the expected lower bound from official eligible facts'
+  'safe gross funds advance while withheld counts retain their prior public lower bounds'
 );
 
 SELECT extensions.is(
@@ -1376,30 +1363,14 @@ SELECT extensions.ok(
 );
 
 SELECT extensions.ok(
-  (
-    SELECT jsonb_array_length(snapshot -> 'metricSelections') = 3
-      AND NOT EXISTS (
-        SELECT 1
-        FROM jsonb_array_elements(snapshot -> 'metricSelections') metric
-        WHERE metric ->> 'key' =
-          'post_visit_attributed_sponsorships'
-      )
-    FROM (
-      SELECT public.read_public_advocate_presentation_snapshot(
-        'publicmetricsfull.creatorshare.com'
-      ) AS snapshot
-    ) public_snapshot
-  )
-  AND EXISTS (
-    SELECT 1
-    FROM private.advocate_public_metric_releases release
-    WHERE release.advocate_id =
-      '97000000-0000-4000-8000-000000000001'
-      AND release.metric_key =
-        'post_visit_attributed_sponsorships'
-      AND release.released_bucket = 5
-  ),
-  'the worker calculates an unselected safe metric without exposing it publicly'
+  (SELECT snapshot#>'{official,sponsorships}'='null'::jsonb
+    AND snapshot#>'{official,gross_collected_usd_cents}'='20200'::jsonb
+    AND source_cutoff=(SELECT value FROM public_metric_test_times WHERE key='source_cutoff')
+   FROM private.advocate_analytics_releases WHERE advocate_id='97000000-0000-4000-8000-000000000001')
+  AND NOT EXISTS(SELECT 1 FROM private.advocate_public_metric_releases
+    WHERE advocate_id='97000000-0000-4000-8000-000000000001'
+      AND metric_key='post_visit_attributed_sponsorships'),
+  'the shared cutoff persists the private report and does not advance a public count that bypasses its suppression'
 );
 
 INSERT INTO public.advocate_public_metric_selections (
@@ -1419,17 +1390,17 @@ SELECT extensions.ok(
     FROM private.advocate_public_metric_releases
     WHERE advocate_id =
       '97000000-0000-4000-8000-000000000001'
-  ) = 6
+  ) = 4
   AND (
-    SELECT snapshot #>> '{metricSelections,3,value}' = '5'
-      AND snapshot #>> '{metricSelections,3,status}' = 'published'
+    SELECT snapshot #> '{metricSelections,3,value}' = 'null'::jsonb
+      AND snapshot #>> '{metricSelections,3,status}' = 'pending'
     FROM (
       SELECT public.read_public_advocate_presentation_snapshot(
         'publicmetricsfull.creatorshare.com'
       ) AS snapshot
     ) public_snapshot
   ),
-  'later selection reveals the prior release without calculating or changing it'
+  'later selection cannot bypass a coordinated disclosure decision or create a release'
 );
 
 INSERT INTO public_metric_test_results (invocation, payload)
@@ -1453,7 +1424,7 @@ SELECT extensions.ok(
   AND (
     SELECT count(*)
     FROM private.advocate_public_metric_releases
-  ) = 6,
+  ) = 4,
   'repeating the same weekly batch is idempotent and cannot advance an unchanged bucket cursor'
 );
 
@@ -1471,13 +1442,12 @@ SELECT extensions.is(
       'key', 'children_sponsored',
       'display_order', 0,
       'status', 'published',
-      'value', '10',
+      'value', '5',
       'unit', 'count',
       'qualifier', 'at_least',
       'as_of', (
-        SELECT payload ->> 'source_cutoff'
-        FROM public_metric_test_results
-        WHERE invocation = 1
+        SELECT to_char(cutoff.value AT TIME ZONE 'UTC'-interval '21 days','YYYY-MM-DD"T"HH24:MI:SS"Z"')
+        FROM public_metric_test_times cutoff WHERE cutoff.key='source_cutoff'
       )
     ),
     jsonb_build_object(
@@ -1511,19 +1481,10 @@ SELECT extensions.is(
     ),
     jsonb_build_object(
       'key', 'post_visit_attributed_sponsorships',
-      'display_order', 3,
-      'status', 'published',
-      'value', '5',
-      'unit', 'count',
-      'qualifier', 'at_least',
-      'as_of', (
-        SELECT payload ->> 'source_cutoff'
-        FROM public_metric_test_results
-        WHERE invocation = 1
-      )
+      'display_order',3,'status','pending','value',NULL,'unit',NULL,'qualifier',NULL,'as_of',NULL
     )
   ),
-  'the public snapshot returns only ordered published lower bounds with RFC3339 cutoffs'
+  'the public snapshot preserves older count cutoffs, advances safe gross funds, and keeps withheld updates pending'
 );
 
 SELECT extensions.is(

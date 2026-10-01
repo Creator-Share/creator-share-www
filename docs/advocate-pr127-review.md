@@ -473,3 +473,6 @@ The database job in publication workflow 36812441437 passed on `0fa45b4`, includ
 
 
 Publication workflow 36813345232 and WebKit workflow 36813345244 passed on `01f182c`, validating the corrected email-proof assertion. Publication workflow 36814277093 and WebKit workflow 36814277087 then passed on `1e78380`, validating the private calculation boundary. The later disclosure ledger candidate remains pending hosted evidence and reader/worker integration; it does not yet close FF-034.
+
+
+Publication workflow 36817413976 and WebKit workflow 36817413985 passed on `74510d8`, validating the internal disclosure history checkpoint. The next candidate connects the permission-checked reader, existing scheduled worker, public advancement gate, parser, and dashboard. In-process reader, public metric, and attribution settlement tests pass, along with seventeen application contracts. Hosted integration validation, concurrency, reconstruction review, and performance remain open; this is not closure of FF-034.

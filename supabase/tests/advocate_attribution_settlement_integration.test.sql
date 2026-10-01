@@ -1450,6 +1450,19 @@ WHERE fact.financial_movement_id = movement.id
 
 SET LOCAL session_replication_role = origin;
 
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
+INSERT INTO attribution_settlement_snapshots (key, payload)
+SELECT
+  'release',
+  public.refresh_advocate_public_metric_releases(
+    100,
+    'attribution-settlement-public-metric-release',
+    'attribution-settlement-public-metric-trace'
+  );
+
+
 SELECT set_config(
   'request.jwt.claim.sub',
   '96000000-0000-4000-8000-000000000201',
@@ -1513,17 +1526,6 @@ SELECT extensions.ok(
   'private analytics separates direct and zero to one day post visit outcomes'
 );
 
-SELECT set_config('request.jwt.claim.sub', '', true);
-SELECT set_config('request.jwt.claim.role', 'service_role', true);
-
-INSERT INTO attribution_settlement_snapshots (key, payload)
-SELECT
-  'release',
-  public.refresh_advocate_public_metric_releases(
-    100,
-    'attribution-settlement-public-metric-release',
-    'attribution-settlement-public-metric-trace'
-  );
 
 SELECT extensions.is(
   (

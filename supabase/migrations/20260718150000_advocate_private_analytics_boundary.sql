@@ -1109,46 +1109,4 @@ $$;
 REVOKE ALL ON FUNCTION private.build_advocate_analytics_candidate(uuid,timestamptz)
   FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE OR REPLACE FUNCTION public.get_advocate_analytics_snapshot(target_advocate_id uuid)
-RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
-DECLARE v_actor_user_id uuid := auth.uid();
-BEGIN
-  IF target_advocate_id IS NULL OR v_actor_user_id IS NULL THEN
-    RAISE EXCEPTION 'Analytics access is unavailable'
-      USING ERRCODE = '42501';
-  END IF;
-
-  PERFORM 1
-  FROM auth.users account
-  WHERE account.id = v_actor_user_id
-    AND account.email IS NOT NULL
-    AND account.email_confirmed_at IS NOT NULL
-    AND account.deleted_at IS NULL
-    AND account.is_anonymous IS NOT TRUE
-    AND (account.banned_until IS NULL OR account.banned_until <= now());
-
-  IF NOT FOUND
-     OR NOT private.has_advocate_permission(
-       target_advocate_id,
-       'portal.analytics.view'
-     ) THEN
-    RAISE EXCEPTION 'Analytics access is unavailable'
-      USING ERRCODE = '42501';
-  END IF;
-
-  RETURN private.build_advocate_analytics_candidate(
-    target_advocate_id,
-    date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
-  )->'snapshot';
-END;
-$$;
-
-COMMENT ON FUNCTION public.get_advocate_analytics_snapshot(uuid) IS
-  'Returns one fixed, complete-day advocate analytics snapshot with whole-cell, whole-family, per-measure, and complementary arithmetic suppression. Official direct and thirty-day attributed outcomes remain separate from one-year observed association. No arbitrary query dimensions or raw identity, visitor, attribution, intent, provider, or event values are exposed.';
-
-REVOKE ALL ON FUNCTION public.get_advocate_analytics_snapshot(uuid)
-  FROM PUBLIC, anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.get_advocate_analytics_snapshot(uuid)
-  TO authenticated;
-
 COMMIT;

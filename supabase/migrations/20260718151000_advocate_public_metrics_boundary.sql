@@ -823,6 +823,8 @@ DECLARE
   v_inserted_releases integer := 0;
   v_pending_metrics integer := 0;
   v_active_advocates integer;
+  v_private_snapshot jsonb;
+  v_private_metric_visible boolean;
 BEGIN
   PERFORM private.require_advocate_public_metric_service_role();
 
@@ -902,6 +904,7 @@ BEGIN
     LIMIT batch_limit
   LOOP
     v_processed_advocates := v_processed_advocates + 1;
+    v_private_snapshot:=private.release_advocate_analytics(v_advocate.id,v_source_cutoff);
 
     FOR v_metric IN
       SELECT metric.metric_key::public.advocate_public_metric_key
@@ -944,7 +947,28 @@ BEGIN
         v_source_cutoff
       ) candidate;
 
-      IF v_candidate_bucket IS NULL THEN
+      -- Public buckets must not advance against a withheld or stale private
+      -- release. Both surfaces use the same frozen cutoff, regardless of the
+      -- advocate's public metric selections.
+      v_private_metric_visible:=false;
+      IF (v_private_snapshot->>'as_of')::timestamptz=v_source_cutoff THEN
+        CASE v_metric.metric_key
+          WHEN 'gross_raised_usd' THEN
+            v_private_metric_visible:=jsonb_typeof(v_private_snapshot#>'{official,gross_collected_usd_cents}')='number';
+          WHEN 'children_sponsored' THEN
+            v_private_metric_visible:=jsonb_typeof(v_private_snapshot#>'{official,sponsorships}')='number';
+          ELSE
+            SELECT count(*)=CASE WHEN v_metric.metric_key='direct_sponsorships' THEN 1 ELSE 3 END
+              AND bool_and(jsonb_typeof(segment->'sponsorships')='number')
+            INTO v_private_metric_visible
+            FROM jsonb_array_elements(CASE WHEN jsonb_typeof(v_private_snapshot->'segments')='array'
+              THEN v_private_snapshot->'segments' ELSE '[]'::jsonb END) segment
+            WHERE CASE WHEN v_metric.metric_key='direct_sponsorships' THEN segment->>'key'='direct'
+              ELSE segment->>'key' IN ('post_visit_0_1_day','post_visit_1_7_days','post_visit_7_30_days') END;
+        END CASE;
+      END IF;
+
+      IF v_candidate_bucket IS NULL OR v_private_metric_visible IS NOT TRUE THEN
         v_pending_metrics := v_pending_metrics + 1;
         CONTINUE;
       END IF;

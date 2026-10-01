@@ -286,10 +286,10 @@ function SegmentRow({ segment }: { segment: AdvocateAnalyticsSegment }) {
         {SEGMENT_LABELS[segment.key]}
       </th>
       <td className="px-3 py-4 text-right tabular-nums">
-        {segment.sponsorships.toLocaleString("en-US")}
+        <CountValue value={segment.sponsorships} />
       </td>
       <td className="px-3 py-4 text-right tabular-nums">
-        {segment.uniqueSponsorContacts.toLocaleString("en-US")}
+        <CountValue value={segment.uniqueSponsorContacts} />
       </td>
       <td className="px-3 py-4 text-right tabular-nums">
         <MoneyValue value={segment.grossCollectedUsdCents} />
@@ -393,13 +393,13 @@ function CurrencyRow({ cell }: { cell: AdvocateAnalyticsOriginalCurrency }) {
         {cell.currency}
       </th>
       <td className="px-3 py-4 text-right tabular-nums">
-        {cell.sponsorships.toLocaleString("en-US")}
+        <CountValue value={cell.sponsorships} />
       </td>
       <td className="px-3 py-4 text-right tabular-nums">
-        {cell.uniqueSponsorContacts.toLocaleString("en-US")}
+        <CountValue value={cell.uniqueSponsorContacts} />
       </td>
       <td className="px-3 py-4 text-right tabular-nums">
-        {formatAnalyticsMinorAmount(cell.initialCollectedMinor, cell.currency)}
+        <MoneyValue value={cell.initialCollectedMinor} currency={cell.currency} />
       </td>
       <td className="px-3 py-4 text-right tabular-nums">
         <MoneyValue
@@ -448,8 +448,15 @@ export function AnalyticsDashboard({
           counts.
         </p>
         <p className="mt-3 text-sm text-gray-500">
-          Data cutoff: {formatAnalyticsAsOf(snapshot.asOf)} at 12:00 AM UTC.
-          Activity on or after this cutoff is not included.
+          {snapshot.asOf === null ? (
+            "The first report is pending."
+          ) : (
+            <>
+              Data cutoff: {formatAnalyticsAsOf(snapshot.asOf)} at 12:00 AM UTC.
+              Activity on or after this cutoff is not included.
+            </>
+          )}
+          {" "}Reports use a shared weekly cutoff at least seven days in the past.
         </p>
       </section>
 
@@ -495,10 +502,11 @@ export function AnalyticsDashboard({
             along with related breakdowns that could reveal them by subtraction.
           </li>
           <li>
-            A value marked Withheld has fewer than {minimum} contributing
-            sponsor contacts, or is hidden because arithmetic could reveal a
-            smaller contributing group. Other values in the same summary may
-            remain available.
+            A value marked Withheld has too few contributing contacts, too few
+            contacts contributing to a change, or could reveal a smaller group
+            when compared with another value or an earlier report. Updates may
+            remain withheld across several reporting periods. Other values in
+            the same summary may remain available.
           </li>
           <li>
             Canceled sponsorships retain collected history. Monthly and annual

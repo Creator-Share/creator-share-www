@@ -2,8 +2,12 @@ import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import Module from "node:module"
 import { resolve } from "node:path"
+import { runInNewContext } from "node:vm"
 
 import { expect, test } from "@playwright/test"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
+import ts from "typescript"
 
 import {
   formatAnalyticsAsOf,
@@ -36,6 +40,15 @@ const analytics = testRequire(
 ) as AnalyticsModule
 nodeModule._load = originalModuleLoad
 
+// Playwright rewrites JSX to its component-test representation. Compile this
+// server component with the production React JSX runtime for actual SSR.
+const dashboardSource = readFileSync(resolve(process.cwd(), "src/components/advocates/admin/AnalyticsDashboard.tsx"), "utf8")
+const dashboardModule = { exports: {} }
+runInNewContext(ts.transpileModule(dashboardSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+}).outputText, { module: dashboardModule, exports: dashboardModule.exports, require: testRequire })
+const { AnalyticsDashboard } = dashboardModule.exports as typeof import("../../src/components/advocates/admin/AnalyticsDashboard")
+
 const ADVOCATE_ID = "11111111-1111-4111-8111-111111111111"
 
 function visibleCell(overrides: Record<string, unknown> = {}) {
@@ -60,8 +73,9 @@ function visibleCell(overrides: Record<string, unknown> = {}) {
 
 function snapshot(overrides: Record<string, unknown> = {}) {
   return {
-    schema_version: 1,
-    as_of: "2026-07-18T00:00:00+00:00",
+    schema_version: 2,
+    disclosure: { state: "released", policy_version: "coordinated-v1", cadence: "weekly", minimum_changed_contacts: 5 },
+    as_of: "2026-07-13T00:00:00+00:00",
     methodology: {
       minimum_sponsor_contacts_per_cell: 5,
       official_window_days: 30,
@@ -108,12 +122,57 @@ function snapshot(overrides: Record<string, unknown> = {}) {
 }
 
 test.describe("advocate private analytics projection", () => {
+  test("renders a fixed pending report and rejects financial data in that state", () => {
+    const pending = snapshot({
+      as_of: null,
+      disclosure: { state: "pending", policy_version: "coordinated-v1", cadence: "weekly", minimum_changed_contacts: 5 },
+      official: { suppressed: true }, observed: { suppressed: true },
+      segments: null, original_currency: null,
+    })
+    const parsed = analytics.parseAdvocateAnalyticsSnapshot(pending)
+    expect(parsed).toMatchObject({ asOf: null, disclosure: { state: "pending" } })
+    if (!parsed) throw new Error("Expected the pending snapshot")
+    const html = renderToStaticMarkup(createElement(AnalyticsDashboard, { advocateName: "Example", snapshot: parsed }))
+    expect(html).toContain("The first report is pending")
+    expect(html).not.toContain("Data cutoff:")
+    expect(analytics.parseAdvocateAnalyticsSnapshot({ ...pending, official: visibleCell() })).toBeNull()
+    expect(analytics.parseAdvocateAnalyticsSnapshot({ ...pending, as_of: "2026-07-13T00:00:00Z" })).toBeNull()
+    for (const disclosure of [undefined, { ...pending.disclosure, state: ["released"] },
+      { ...pending.disclosure, minimum_changed_contacts: 1 }, { ...pending.disclosure, policy_version: "unknown" }]) {
+      expect(analytics.parseAdvocateAnalyticsSnapshot({ ...pending, disclosure })).toBeNull()
+    }
+  })
+
+  test("renders withheld count and initial-fund updates across every financial surface", () => {
+    const withheld = { sponsorships: null, unique_sponsor_contacts: null,
+      verified_sponsor_accounts: null, initial_collected_usd_cents: null,
+      gross_collected_usd_cents: null, net_collected_usd_cents: null }
+    const source = snapshot({
+      official: visibleCell(withheld),
+      segments: analytics.ADVOCATE_ANALYTICS_SEGMENT_KEYS.map((key) => ({
+        key, ...visibleCell(key === "observed_30_365_days" ? {} : withheld),
+      })),
+      original_currency: (snapshot().original_currency as Record<string, unknown>[]).map((row) => ({ ...row,
+        sponsorships: null, unique_sponsor_contacts: null, initial_collected_minor: null,
+        gross_collected_minor: null, net_collected_minor: null })),
+    })
+    const parsed = analytics.parseAdvocateAnalyticsSnapshot(source)
+    expect(parsed?.official).toMatchObject({ sponsorships: null, initialCollectedUsdCents: null })
+    if (!parsed) throw new Error("Expected the withheld snapshot")
+    const html = renderToStaticMarkup(createElement(AnalyticsDashboard, { advocateName: "Example", snapshot: parsed }))
+    expect(html).toContain("Withheld for privacy")
+    expect(html).toContain("July 13, 2026")
+    expect(html).toContain("an earlier report")
+    expect(html).not.toContain("NaN")
+    expect(analytics.parseAdvocateAnalyticsSnapshot({ ...source, as_of: "2026-07-14T00:00:00Z" })).toBeNull()
+  })
+
   test("parses and freezes only the exact privacy safe snapshot", () => {
     const parsed = analytics.parseAdvocateAnalyticsSnapshot(snapshot())
 
     expect(parsed).toMatchObject({
-      schemaVersion: 1,
-      asOf: "2026-07-18T00:00:00+00:00",
+      schemaVersion: 2,
+      asOf: "2026-07-13T00:00:00+00:00",
       methodology: {
         minimumSponsorContactsPerCell: 5,
         officialWindowDays: 30,
@@ -404,10 +463,8 @@ test.describe("advocate private analytics projection", () => {
   })
 
   test("rejects suppressed value smuggling, extra fields, and unsafe arithmetic", () => {
-    const {
-      dispute_credits_usd_cents: _missingDisputeCredit,
-      ...missingVisibleKey
-    } = visibleCell()
+    const missingVisibleKey: Record<string, unknown> = visibleCell()
+    delete missingVisibleKey.dispute_credits_usd_cents
     const invalid = [
       snapshot({ sponsor_email: "must-not-cross@example.com" }),
       snapshot({ official: { suppressed: true, sponsorships: 4 } }),
@@ -442,7 +499,7 @@ test.describe("advocate private analytics projection", () => {
         }),
       }),
       snapshot({ as_of: "not-a-timestamp" }),
-      snapshot({ schema_version: 2 }),
+      snapshot({ schema_version: 1 }),
       snapshot({
         methodology: {
           minimum_sponsor_contacts_per_cell: 4,
@@ -460,7 +517,8 @@ test.describe("advocate private analytics projection", () => {
 
   test("rejects malformed, sparse, unordered, or identity-bearing currency cells", () => {
     const base = snapshot().original_currency as Record<string, unknown>[]
-    const { net_collected_minor: _missingNet, ...missingCurrencyKey } = base[0]
+    const missingCurrencyKey = { ...base[0] }
+    delete missingCurrencyKey.net_collected_minor
     for (const invalid of [
       [{ ...base[0], unique_sponsor_contacts: 4 }],
       [{ ...base[0], currency: "CAD" }],
@@ -510,7 +568,7 @@ test.describe("advocate analytics repository", () => {
     } as never)
 
     await expect(repository.load(ADVOCATE_ID)).resolves.toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
     })
     expect(calls).toEqual([
       {
@@ -552,8 +610,8 @@ test.describe("advocate analytics administrative UI contract", () => {
   test("formats integer minor units without floating point display", () => {
     expect(formatAnalyticsMinorAmount(1_234_567, "USD")).toBe("$12,345.67 USD")
     expect(formatAnalyticsMinorAmount(5, "GBP")).toBe("£0.05 GBP")
-    expect(formatAnalyticsAsOf("2026-07-18T00:00:00+00:00")).toBe(
-      "July 18, 2026",
+    expect(formatAnalyticsAsOf("2026-07-13T00:00:00+00:00")).toBe(
+      "July 13, 2026",
     )
   })
 
@@ -595,7 +653,7 @@ test.describe("advocate analytics administrative UI contract", () => {
     expect(dashboardSource).toContain("Active monthly commitment")
     expect(dashboardSource).toContain("Active annual commitment")
     expect(dashboardSource).toContain("Annualized commitment projection")
-    expect(dashboardSource).toContain("arithmetic could reveal")
+    expect(dashboardSource).toContain("an earlier report")
     expect(dashboardSource).toContain("commitments reflect the stated cutoff")
     expect(dashboardSource.match(/role="region"/g)).toHaveLength(2)
     expect(dashboardSource.match(/tabIndex=\{0\}/g)).toHaveLength(2)

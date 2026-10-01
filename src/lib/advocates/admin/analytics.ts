@@ -31,10 +31,10 @@ export interface SuppressedAdvocateAnalyticsCell {
 
 export interface VisibleAdvocateAnalyticsCell {
   suppressed: false
-  sponsorships: number
-  uniqueSponsorContacts: number
+  sponsorships: number | null
+  uniqueSponsorContacts: number | null
   verifiedSponsorAccounts: number | null
-  initialCollectedUsdCents: number
+  initialCollectedUsdCents: number | null
   renewalCollectedUsdCents: number | null
   grossCollectedUsdCents: number | null
   refundsAndReversalsUsdCents: number | null
@@ -56,9 +56,9 @@ export interface AdvocateAnalyticsSegment extends VisibleAdvocateAnalyticsCell {
 export interface AdvocateAnalyticsOriginalCurrency {
   suppressed: false
   currency: AdvocateAnalyticsCurrency
-  sponsorships: number
-  uniqueSponsorContacts: number
-  initialCollectedMinor: number
+  sponsorships: number | null
+  uniqueSponsorContacts: number | null
+  initialCollectedMinor: number | null
   renewalCollectedMinor: number | null
   grossCollectedMinor: number | null
   refundsAndReversalsMinor: number | null
@@ -68,8 +68,13 @@ export interface AdvocateAnalyticsOriginalCurrency {
 }
 
 export interface AdvocateAnalyticsSnapshot {
-  schemaVersion: 1
-  asOf: string
+  schemaVersion: 2
+  asOf: string | null
+  disclosure: {
+    state: "pending" | "released"
+    cadence: "weekly"
+    minimumChangedContacts: 5
+  }
   methodology: {
     minimumSponsorContactsPerCell: 5
     officialWindowDays: 30
@@ -84,6 +89,9 @@ export interface AdvocateAnalyticsSnapshot {
 }
 
 const SEGMENT_NULLABLE_FIELDS = Object.freeze([
+  "sponsorships",
+  "uniqueSponsorContacts",
+  "initialCollectedUsdCents",
   "verifiedSponsorAccounts",
   "renewalCollectedUsdCents",
   "grossCollectedUsdCents",
@@ -97,6 +105,9 @@ const SEGMENT_NULLABLE_FIELDS = Object.freeze([
 ] satisfies readonly (keyof AdvocateAnalyticsSegment)[])
 
 const CURRENCY_NULLABLE_FIELDS = Object.freeze([
+  "sponsorships",
+  "uniqueSponsorContacts",
+  "initialCollectedMinor",
   "renewalCollectedMinor",
   "grossCollectedMinor",
   "refundsAndReversalsMinor",
@@ -123,6 +134,7 @@ export class AdvocateAnalyticsRepositoryError extends Error {
 
 const SNAPSHOT_KEYS = Object.freeze([
   "as_of",
+  "disclosure",
   "methodology",
   "observed",
   "official",
@@ -235,16 +247,17 @@ function parseCell(value: unknown): AdvocateAnalyticsCell | null {
   // Normalized categories and net round independently in the database.
   // Their displayed integers need not satisfy an exact additive identity.
   const netDependenciesWithheld =
+    grossCollectedUsdCents === null ||
     renewalCollectedUsdCents === null ||
     refundsAndReversalsUsdCents === null ||
     disputeDebitsUsdCents === null ||
     disputeCreditsUsdCents === null
 
   if (
-    !isSafeNonnegativeInteger(sponsorships) ||
-    !isSafeNonnegativeInteger(uniqueSponsorContacts) ||
+    !isNullableSafeNonnegativeInteger(sponsorships) ||
+    !isNullableSafeNonnegativeInteger(uniqueSponsorContacts) ||
     !isNullableSafeNonnegativeInteger(verifiedSponsorAccounts) ||
-    !isSafeNonnegativeInteger(initialCollectedUsdCents) ||
+    !isNullableSafeNonnegativeInteger(initialCollectedUsdCents) ||
     !isNullableSafeNonnegativeInteger(renewalCollectedUsdCents) ||
     !isNullableSafeNonnegativeInteger(grossCollectedUsdCents) ||
     !isNullableSafeNonnegativeInteger(refundsAndReversalsUsdCents) ||
@@ -254,19 +267,25 @@ function parseCell(value: unknown): AdvocateAnalyticsCell | null {
     !isNullableSafeNonnegativeInteger(activeMonthlyCommitmentUsdCents) ||
     !isNullableSafeNonnegativeInteger(activeAnnualCommitmentUsdCents) ||
     !isNullableSafeNonnegativeInteger(annualizedCommitmentUsdCents) ||
-    uniqueSponsorContacts > sponsorships ||
+    (uniqueSponsorContacts !== null &&
+      sponsorships !== null && uniqueSponsorContacts > sponsorships) ||
     (verifiedSponsorAccounts !== null &&
-      verifiedSponsorAccounts > uniqueSponsorContacts) ||
+      (uniqueSponsorContacts === null || sponsorships === null ||
+        verifiedSponsorAccounts > uniqueSponsorContacts)) ||
     (verifiedSponsorAccounts !== null &&
       verifiedSponsorAccounts > 0 &&
       verifiedSponsorAccounts < 5) ||
     (verifiedSponsorAccounts !== null &&
+      uniqueSponsorContacts !== null &&
       uniqueSponsorContacts - verifiedSponsorAccounts > 0 &&
       uniqueSponsorContacts - verifiedSponsorAccounts < 5) ||
-    (uniqueSponsorContacts > 0 && uniqueSponsorContacts < 5) ||
-    (grossCollectedUsdCents === null) !== (renewalCollectedUsdCents === null) ||
+    (uniqueSponsorContacts !== null &&
+      uniqueSponsorContacts > 0 && uniqueSponsorContacts < 5) ||
+    (grossCollectedUsdCents === null) !==
+      (initialCollectedUsdCents === null || renewalCollectedUsdCents === null) ||
     (netCollectedUsdCents === null) !== netDependenciesWithheld ||
-    (renewalCollectedUsdCents !== null &&
+    (initialCollectedUsdCents !== null &&
+      renewalCollectedUsdCents !== null &&
       grossCollectedUsdCents !== null &&
       initialCollectedUsdCents + renewalCollectedUsdCents !==
         grossCollectedUsdCents) ||
@@ -333,7 +352,11 @@ function parseSegments(
       }),
     )
   }
-  if (!hasConsistentNullMasks(segments, SEGMENT_NULLABLE_FIELDS)) {
+  // Official and observed outcomes are separate disclosure families.
+  if (!hasConsistentNullMasks(
+    segments.filter((segment) => segment.key !== "observed_30_365_days"),
+    SEGMENT_NULLABLE_FIELDS,
+  )) {
     return undefined
   }
   return Object.freeze(segments)
@@ -365,6 +388,7 @@ function parseOriginalCurrency(
     const disputeCreditsMinor = item.dispute_credits_minor
     const netCollectedMinor = item.net_collected_minor
     const netDependenciesWithheld =
+      grossCollectedMinor === null ||
       renewalCollectedMinor === null ||
       refundsAndReversalsMinor === null ||
       disputeDebitsMinor === null ||
@@ -374,20 +398,23 @@ function parseOriginalCurrency(
       suppressed !== false ||
       !CURRENCY_SET.has(currency) ||
       (previousCurrency !== null && currency <= previousCurrency) ||
-      !isSafeNonnegativeInteger(sponsorships) ||
-      !isSafeNonnegativeInteger(uniqueSponsorContacts) ||
-      uniqueSponsorContacts > sponsorships ||
-      uniqueSponsorContacts < 5 ||
-      !isSafeNonnegativeInteger(initialCollectedMinor) ||
+      !isNullableSafeNonnegativeInteger(sponsorships) ||
+      !isNullableSafeNonnegativeInteger(uniqueSponsorContacts) ||
+      (uniqueSponsorContacts !== null &&
+      sponsorships !== null && uniqueSponsorContacts > sponsorships) ||
+      (uniqueSponsorContacts !== null && uniqueSponsorContacts < 5) ||
+      !isNullableSafeNonnegativeInteger(initialCollectedMinor) ||
       !isNullableSafeNonnegativeInteger(renewalCollectedMinor) ||
       !isNullableSafeNonnegativeInteger(grossCollectedMinor) ||
       !isNullableSafeNonnegativeInteger(refundsAndReversalsMinor) ||
       !isNullableSafeNonnegativeInteger(disputeDebitsMinor) ||
       !isNullableSafeNonnegativeInteger(disputeCreditsMinor) ||
       !isNullableSafeNonnegativeInteger(netCollectedMinor) ||
-      (grossCollectedMinor === null) !== (renewalCollectedMinor === null) ||
+      (grossCollectedMinor === null) !==
+        (initialCollectedMinor === null || renewalCollectedMinor === null) ||
       (netCollectedMinor === null) !== netDependenciesWithheld ||
-      (renewalCollectedMinor !== null &&
+      (initialCollectedMinor !== null &&
+        renewalCollectedMinor !== null &&
         grossCollectedMinor !== null &&
         initialCollectedMinor + renewalCollectedMinor !==
           grossCollectedMinor) ||
@@ -432,11 +459,18 @@ export function parseAdvocateAnalyticsSnapshot(
 ): AdvocateAnalyticsSnapshot | null {
   if (!isRecord(value) || !hasExactKeys(value, SNAPSHOT_KEYS)) return null
   if (
-    value.schema_version !== 1 ||
-    typeof value.as_of !== "string" ||
-    value.as_of.length > 64 ||
-    !UTC_MIDNIGHT_PATTERN.test(value.as_of) ||
-    !Number.isFinite(Date.parse(value.as_of)) ||
+    value.schema_version !== 2 ||
+    !isRecord(value.disclosure) ||
+    !hasExactKeys(value.disclosure, ["state", "policy_version", "cadence", "minimum_changed_contacts"]) ||
+    (value.disclosure.state !== "pending" && value.disclosure.state !== "released") ||
+    value.disclosure.policy_version !== "coordinated-v1" ||
+    value.disclosure.cadence !== "weekly" ||
+    value.disclosure.minimum_changed_contacts !== 5 ||
+    (value.disclosure.state === "pending"
+      ? value.as_of !== null
+      : (typeof value.as_of !== "string" || value.as_of.length > 64 ||
+        !UTC_MIDNIGHT_PATTERN.test(value.as_of) ||
+        !Number.isFinite(Date.parse(value.as_of)) || new Date(value.as_of).getUTCDay() !== 1)) ||
     !isRecord(value.methodology) ||
     !hasExactKeys(value.methodology, METHODOLOGY_KEYS) ||
     value.methodology.minimum_sponsor_contacts_per_cell !== 5 ||
@@ -456,14 +490,21 @@ export function parseAdvocateAnalyticsSnapshot(
     official === null ||
     observed === null ||
     segments === undefined ||
-    originalCurrency === undefined
+    originalCurrency === undefined ||
+    (value.disclosure.state === "pending" && (!official.suppressed || !observed.suppressed ||
+      segments !== null || originalCurrency !== null))
   ) {
     return null
   }
 
   return Object.freeze({
-    schemaVersion: 1,
-    asOf: value.as_of,
+    schemaVersion: 2,
+    asOf: value.as_of as string | null,
+    disclosure: Object.freeze({
+      state: value.disclosure.state as "pending" | "released",
+      cadence: "weekly",
+      minimumChangedContacts: 5,
+    }),
     methodology: Object.freeze({
       minimumSponsorContactsPerCell: 5,
       officialWindowDays: 30,

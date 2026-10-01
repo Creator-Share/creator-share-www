@@ -324,4 +324,59 @@ END;
 $$;
 REVOKE ALL ON FUNCTION private.release_advocate_analytics(uuid,timestamptz) FROM PUBLIC,anon,authenticated,service_role;
 
+CREATE OR REPLACE FUNCTION public.get_advocate_analytics_snapshot(target_advocate_id uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
+DECLARE
+  v_actor_user_id uuid := auth.uid();
+  v_snapshot jsonb;
+BEGIN
+  IF target_advocate_id IS NULL OR v_actor_user_id IS NULL THEN
+    RAISE EXCEPTION 'Analytics access is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  PERFORM 1
+  FROM auth.users account
+  WHERE account.id = v_actor_user_id
+    AND account.email IS NOT NULL
+    AND account.email_confirmed_at IS NOT NULL
+    AND account.deleted_at IS NULL
+    AND account.is_anonymous IS NOT TRUE
+    AND (account.banned_until IS NULL OR account.banned_until <= now());
+
+  IF NOT FOUND
+     OR NOT private.has_advocate_permission(
+       target_advocate_id,
+       'portal.analytics.view'
+     ) THEN
+    RAISE EXCEPTION 'Analytics access is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  SELECT release.snapshot INTO v_snapshot
+  FROM private.advocate_analytics_releases release
+  WHERE release.advocate_id=target_advocate_id
+  ORDER BY release.source_cutoff DESC LIMIT 1;
+
+  RETURN coalesce(v_snapshot,jsonb_build_object(
+    'schema_version',2,'as_of',NULL,
+    'disclosure',jsonb_build_object('state','pending','policy_version','coordinated-v1',
+      'cadence','weekly','minimum_changed_contacts',5),
+    'methodology',jsonb_build_object('minimum_sponsor_contacts_per_cell',5,
+      'official_window_days',30,'observed_window_days',365,
+      'renewals_increase_funds_not_counts',true,'measure_suppression_enabled',true),
+    'official',jsonb_build_object('suppressed',true),
+    'observed',jsonb_build_object('suppressed',true),'segments',NULL,'original_currency',NULL
+  ));
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_advocate_analytics_snapshot(uuid) IS
+  'Returns the latest immutable coordinated analytics release after current account and tenant permission checks. Reads cannot recalculate financial values or advance disclosure history. Before the first release only a fixed pending response is returned';
+
+REVOKE ALL ON FUNCTION public.get_advocate_analytics_snapshot(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_advocate_analytics_snapshot(uuid)
+  TO authenticated;
+
 COMMIT;

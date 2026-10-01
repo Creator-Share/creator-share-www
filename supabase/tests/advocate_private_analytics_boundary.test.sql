@@ -1492,6 +1492,12 @@ UPDATE auth.users
 SET banned_until = NULL
 WHERE id = '96000000-0000-4000-8000-000000000102'::uuid;
 
+SELECT extensions.ok(public.get_advocate_analytics_snapshot(
+  (SELECT value FROM analytics_test_ids WHERE key='main_advocate')) @>
+  '{"schema_version":2,"as_of":null,"disclosure":{"state":"pending"},"official":{"suppressed":true},"observed":{"suppressed":true},"segments":null,"original_currency":null}'::jsonb
+  AND NOT EXISTS(SELECT 1 FROM private.advocate_analytics_releases),
+  'an authorized read before the first release returns pending without calculating or recording a disclosure');
+
 CREATE TEMP TABLE analytics_snapshots (
   key text PRIMARY KEY,
   payload jsonb NOT NULL
@@ -1500,9 +1506,10 @@ CREATE TEMP TABLE analytics_snapshots (
 INSERT INTO analytics_snapshots (key, payload)
 SELECT
   'main',
-  public.get_advocate_analytics_snapshot(
-    (SELECT value FROM analytics_test_ids WHERE key = 'main_advocate')
-  );
+  private.build_advocate_analytics_candidate(
+    (SELECT value FROM analytics_test_ids WHERE key = 'main_advocate'),
+    (SELECT value FROM analytics_test_times WHERE key='as_of')
+  )->'snapshot';
 
 SELECT set_config(
   'request.jwt.claim.sub',
@@ -1513,9 +1520,10 @@ SELECT set_config(
 INSERT INTO analytics_snapshots (key, payload)
 SELECT
   'suppress',
-  public.get_advocate_analytics_snapshot(
-    (SELECT value FROM analytics_test_ids WHERE key = 'suppress_advocate')
-  );
+  private.build_advocate_analytics_candidate(
+    (SELECT value FROM analytics_test_ids WHERE key = 'suppress_advocate'),
+    (SELECT value FROM analytics_test_times WHERE key='as_of')
+  )->'snapshot';
 
 SELECT set_config(
   'request.jwt.claim.sub',
@@ -1526,9 +1534,10 @@ SELECT set_config(
 INSERT INTO analytics_snapshots (key, payload)
 SELECT
   'contact',
-  public.get_advocate_analytics_snapshot(
-    (SELECT value FROM analytics_test_ids WHERE key = 'contact_advocate')
-  );
+  private.build_advocate_analytics_candidate(
+    (SELECT value FROM analytics_test_ids WHERE key = 'contact_advocate'),
+    (SELECT value FROM analytics_test_times WHERE key='as_of')
+  )->'snapshot';
 
 SELECT extensions.is(
   (
@@ -2232,7 +2241,8 @@ BEGIN
     SET LOCAL session_replication_role = origin;
     PERFORM set_config('request.jwt.claim.role','authenticated',true);
     PERFORM set_config('request.jwt.claim.sub','96000000-0000-4000-8000-000000000105',true);
-    result:=public.get_advocate_analytics_snapshot((SELECT value FROM analytics_test_ids WHERE key='contact_advocate'));
+    result:=private.build_advocate_analytics_candidate((SELECT value FROM analytics_test_ids WHERE key='contact_advocate'),
+      (SELECT value FROM analytics_test_times WHERE key='as_of'))->'snapshot';
     RAISE EXCEPTION 'Restore fractional fixture' USING ERRCODE='P9001';
   EXCEPTION WHEN SQLSTATE 'P9001' THEN RETURN result;
   END;
@@ -2278,6 +2288,16 @@ SELECT extensions.throws_ok($$UPDATE private.advocate_analytics_releases SET sna
   '42501','Analytics releases are append only','disclosure baselines cannot be reset by updating the ledger');
 SELECT extensions.throws_ok($$DELETE FROM private.advocate_analytics_releases$$,
   '42501','Analytics releases are append only','disclosure history cannot be deleted for a fresh privacy budget');
+
+SELECT set_config('request.jwt.claim.role','authenticated',true);
+SELECT set_config('request.jwt.claim.sub','96000000-0000-4000-8000-000000000102',true);
+SELECT extensions.ok((SELECT public.get_advocate_analytics_snapshot(
+  (SELECT value FROM analytics_test_ids WHERE key='main_advocate'))=value FROM disclosure_release_result),
+  'the authorized reader returns the immutable released snapshot');
+UPDATE auth.users SET banned_until=now()+interval '1 day' WHERE id='96000000-0000-4000-8000-000000000102';
+SELECT extensions.throws_ok($$SELECT public.get_advocate_analytics_snapshot(
+  (SELECT value FROM analytics_test_ids WHERE key='main_advocate'))$$,
+  '42501','Analytics access is unavailable','a persisted report does not bypass current account revocation');
 
 SELECT * FROM extensions.finish();
 
