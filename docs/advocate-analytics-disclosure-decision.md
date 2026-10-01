@@ -52,6 +52,17 @@ This repair must not invent formally private guarantees from a cohort heuristic.
 
 ## Internal cutoff boundary
 
-Snapshot calculation now has a private builder with an explicit complete UTC-day cutoff. Anonymous, authenticated, and service API roles cannot execute it. The public reader keeps its original one-argument contract and rechecks the current account and tenant permission before requesting today's cutoff. Existing metric calculations and suppression behavior are unchanged.
+Snapshot calculation now has a private candidate builder with an explicit complete UTC-day cutoff. Anonymous, authenticated, and service API roles cannot execute it. The public reader keeps its original one-argument contract and rechecks the current account and tenant permission before requesting today's cutoff. Existing metric calculations and suppression behavior are unchanged.
 
 This separation is preparation for persisted releases: a future release worker can calculate and compare fixed snapshots without giving delegates arbitrary historical queries or copying the financial query. It does not itself fix longitudinal disclosure. Durable release history, contributor-change checks, coordination with public metrics, delayed-state presentation, and adversarial multi-release tests remain required.
+
+
+## Disclosure ledger candidate
+
+The current candidate records exact per-contact contribution fingerprints for totals, segments, currencies, and their intersections. Repeated payments by one contact remain one contributor. Private release receipts are append only; a separate append-only log stores only changed contributor fingerprints. Reconstructing a baseline therefore does not require copying every historical contact into every weekly receipt. Both tables force row security and deny API-role access. Audit rows record the release operation without copying contributor material.
+
+The gate checks all prior disclosed states, including nonconsecutive releases. Its transition-count calculation catches a five-contact loss followed by five restorations that leaves only one contact's seven-cent loss when compared with an earlier release. Withheld fields retain their last disclosed baseline. Dependency checks cover net funds, gross funds, remaining disputes, recurring commitment projections, and count complements. Contact-key version changes stop advancement pending an explicit continuity migration.
+
+The concrete policy tests cover the original 733-cent new-contact disclosure, existing-contact refunds and renewals, repeated single-contact activity, advancement after five contacts change, cross-surface masking, immutable history, and nonconsecutive restoration. The production query also proves that five sponsorship rows from one contact remain one contributor. The real release writer passes replay, append-only, and reconstructed-baseline digest checks in-process. A separate full-snapshot reference agrees with the sparse history algorithm across 16 releases and 25 candidate states, including omitted contributions, restorations, and unchanged weeks. These checks use PostgreSQL with managed-schema stubs; hosted validation remains required.
+
+This candidate is not yet connected to the reader or scheduled publication. The working cadence assumption is a shared weekly cutoff with the existing public seven-day embargo; the owner has been asked whether daily private reporting is preferred. Public/private coordination, reader and UI cutover, concurrency evidence, broader reconstruction review, and performance measurements remain unfinished. This is a defined cohort policy, not a claim of differential privacy or protection against arbitrary auxiliary information.

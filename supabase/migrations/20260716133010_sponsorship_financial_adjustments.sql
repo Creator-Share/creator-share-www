@@ -48,6 +48,10 @@ CREATE AGGREGATE private.sum_normalized_usd_cents(bigint,bigint,bigint) (
 CREATE AGGREGATE private.normalized_usd_fraction(bigint,bigint,bigint) (
   SFUNC = private.accumulate_normalized_usd, STYPE = numeric[], INITCOND = '{0,1}', PARALLEL = SAFE
 );
+CREATE AGGREGATE private.combine_usd_fractions(numeric[]) (
+  SFUNC = private.add_usd_fraction, STYPE = numeric[], INITCOND = '{0,1}', PARALLEL = SAFE
+);
+REVOKE ALL ON FUNCTION private.combine_usd_fractions(numeric[]) FROM PUBLIC, anon, authenticated, service_role;
 CREATE AGGREGATE private.sum_usd_fractions(numeric[]) (
   SFUNC = private.add_usd_fraction, STYPE = numeric[], INITCOND = '{0,1}',
   FINALFUNC = private.round_normalized_usd, PARALLEL = SAFE

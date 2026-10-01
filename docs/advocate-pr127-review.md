@@ -470,3 +470,6 @@ The test now accepts only a completed join or an expired join accompanied by exp
 
 
 The database job in publication workflow 36812441437 passed on `0fa45b4`, including the full pgTAP suite, HTTP checks, and required concurrency harnesses. This validates the adjustment normalization and reporting changes after the fixture correction. The aggregate workflow failed because of the email-proof test assertion described above; the corrected test still requires a fresh hosted application run.
+
+
+Publication workflow 36813345232 and WebKit workflow 36813345244 passed on `01f182c`, validating the corrected email-proof assertion. Publication workflow 36814277093 and WebKit workflow 36814277087 then passed on `1e78380`, validating the private calculation boundary. The later disclosure ledger candidate remains pending hosted evidence and reader/worker integration; it does not yet close FF-034.

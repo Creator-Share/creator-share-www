@@ -7,12 +7,12 @@ SELECT extensions.no_plan();
 SELECT extensions.ok(NOT EXISTS (
   SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role']) caller(role_name)
   WHERE has_function_privilege(caller.role_name,
-    'private.build_advocate_analytics_snapshot(uuid,timestamptz)','EXECUTE')
+    'private.build_advocate_analytics_candidate(uuid,timestamptz)','EXECUTE')
 ), 'arbitrary analytics cutoffs are unavailable to every API role');
-SELECT extensions.throws_ok($$SELECT private.build_advocate_analytics_snapshot(
+SELECT extensions.throws_ok($$SELECT private.build_advocate_analytics_candidate(
   '96000000-0000-4000-8000-000000000001','2026-07-18T00:00:01Z')$$,
   '22023','Analytics cutoff is invalid','internal analytics rejects a partial-day cutoff');
-SELECT extensions.throws_ok($$SELECT private.build_advocate_analytics_snapshot(
+SELECT extensions.throws_ok($$SELECT private.build_advocate_analytics_candidate(
   '96000000-0000-4000-8000-000000000001',
   (date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')+interval '1 day')$$,
   '22023','Analytics cutoff is invalid','internal analytics rejects a future cutoff');
@@ -2244,6 +2244,40 @@ SELECT extensions.ok((SELECT value->'official' @> '{"refunds_and_reversals_usd_c
 SELECT extensions.ok(pg_temp.fractional_analytics_report(true)->'official' @>
   '{"refunds_and_reversals_usd_cents":4,"dispute_debits_usd_cents":4,"net_collected_usd_cents":493}'::jsonb,
   'independently rounded loss categories do not overwrite the exact aggregate net');
+
+-- The production candidate groups repeated payments under their contact key.
+CREATE TEMP TABLE repeated_contact_candidate AS SELECT private.build_advocate_analytics_candidate(
+  (SELECT value FROM analytics_test_ids WHERE key='contact_advocate'),
+  (SELECT value FROM analytics_test_times WHERE key='as_of')) AS value;
+SELECT extensions.ok((SELECT count(*)=1 FROM repeated_contact_candidate,
+  LATERAL jsonb_object_keys(value->'contributors'->'official:sponsorships'->'direct:USD') contact),
+  'five actual sponsorship rows from one contact produce one disclosure contributor');
+SELECT extensions.ok((SELECT NOT (value->'contributors' ? 'official:refunds_and_reversals') FROM repeated_contact_candidate),
+  'zero refund contributions do not manufacture changed-contact support');
+SELECT extensions.ok((SELECT 'official:initial_collected'=ANY(private.analytics_unsafe_measures('{}',value->'contributors'))
+  FROM repeated_contact_candidate),'the actual repeated-contact query cannot establish an exact disclosure');
+
+SELECT set_config('request.jwt.claim.role','service_role',true);
+CREATE TEMP TABLE disclosure_release_result AS SELECT private.release_advocate_analytics(
+  (SELECT value FROM analytics_test_ids WHERE key='main_advocate'),
+  (date_trunc('week',now() AT TIME ZONE 'UTC')-interval '7 days') AT TIME ZONE 'UTC') AS value;
+SELECT extensions.ok((SELECT value->>'schema_version'='2' AND value->'disclosure'->>'state'='released'
+  FROM disclosure_release_result),'the real release writer persists a versioned snapshot from the production query');
+SELECT extensions.ok((SELECT value=private.release_advocate_analytics(
+  (SELECT value FROM analytics_test_ids WHERE key='main_advocate'),
+  (date_trunc('week',now() AT TIME ZONE 'UTC')-interval '7 days') AT TIME ZONE 'UTC')
+  FROM disclosure_release_result) AND (SELECT count(*)=1 FROM private.advocate_analytics_releases
+    WHERE advocate_id=(SELECT value FROM analytics_test_ids WHERE key='main_advocate')),
+  'repeated release requests return the immutable receipt without advancing history');
+SELECT extensions.ok((SELECT release.contribution_digest=encode(extensions.digest(
+    private.analytics_disclosure_baseline(release.advocate_id)::text,'sha256'),'hex')
+  FROM private.advocate_analytics_releases release
+  WHERE release.advocate_id=(SELECT value FROM analytics_test_ids WHERE key='main_advocate')),
+  'the sparse contributor history reconstructs the exact baseline digest committed by the real writer');
+SELECT extensions.throws_ok($$UPDATE private.advocate_analytics_releases SET snapshot='{}'$$,
+  '42501','Analytics releases are append only','disclosure baselines cannot be reset by updating the ledger');
+SELECT extensions.throws_ok($$DELETE FROM private.advocate_analytics_releases$$,
+  '42501','Analytics releases are append only','disclosure history cannot be deleted for a fresh privacy budget');
 
 SELECT * FROM extensions.finish();
 
