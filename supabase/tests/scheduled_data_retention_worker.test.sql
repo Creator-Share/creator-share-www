@@ -846,9 +846,9 @@ VALUES (
   'sponsor-welcome-v1',
   '{}'::jsonb,
   decode('040506', 'hex'),
-  '2026-09-29 00:00:00+00',
-  '2026-07-01 00:00:00+00',
-  '2026-07-01 00:00:00+00'
+  clock_timestamp() + interval '5 days',
+  clock_timestamp() - interval '2 days',
+  clock_timestamp() - interval '2 days'
 );
 
 SET LOCAL session_replication_role = origin;
