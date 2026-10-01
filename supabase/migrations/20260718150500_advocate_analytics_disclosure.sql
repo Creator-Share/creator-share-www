@@ -156,6 +156,59 @@ END;
 $$;
 REVOKE ALL ON FUNCTION private.analytics_integer_contribution_matrix(jsonb) FROM PUBLIC,anon,authenticated,service_role;
 
+-- Fast sufficient proof for independent columns. A nonzero minor modulo the
+-- prime 2^31-1 is nonzero over the integers, so five disjoint full-rank row
+-- sets also span over the rationals. Failure is inconclusive: the caller keeps
+-- the exact arithmetic fallback, including columns divisible by this prime.
+-- The caller validates finite integer entries and canonical dimensions first.
+-- All residues are below 2^31-1; their products fit signed bigint exactly.
+CREATE FUNCTION private.analytics_modular_full_rank_certified(matrix numeric[])
+RETURNS boolean LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE SET search_path='' AS $$
+DECLARE
+  prime constant bigint:=2147483647;
+  width integer:=array_length(matrix,2); contacts integer:=array_length(matrix,1);
+  used boolean[]:=array_fill(false,ARRAY[array_length(matrix,1)]);
+  basis bigint[]; pivots integer[]; row_values bigint[];
+  pass integer; contact integer; rank integer; basis_row integer; col integer; pivot integer;
+  factor bigint; inverse bigint; power_value bigint; exponent bigint;
+BEGIN
+  IF contacts<5*width THEN RETURN false; END IF;
+  FOR pass IN 1..5 LOOP
+    basis:=ARRAY[]::bigint[]; pivots:=ARRAY[]::integer[]; rank:=0;
+    FOR contact IN 1..contacts LOOP
+      IF used[contact] THEN CONTINUE; END IF;
+      row_values:=ARRAY[]::bigint[];
+      FOR col IN 1..width LOOP
+        row_values[col]:=(mod(matrix[contact][col],prime)::bigint+prime)%prime;
+      END LOOP;
+      FOR basis_row IN 1..rank LOOP
+        factor:=row_values[pivots[basis_row]];
+        IF factor=0 THEN CONTINUE; END IF;
+        FOR col IN 1..width LOOP
+          row_values[col]:=((row_values[col]-factor*basis[basis_row][col])%prime+prime)%prime;
+        END LOOP;
+      END LOOP;
+      pivot:=0;
+      FOR col IN 1..width LOOP
+        IF row_values[col]<>0 THEN pivot:=col; EXIT; END IF;
+      END LOOP;
+      IF pivot=0 THEN CONTINUE; END IF;
+      inverse:=1; power_value:=row_values[pivot]; exponent:=prime-2;
+      WHILE exponent>0 LOOP
+        IF exponent%2=1 THEN inverse:=(inverse*power_value)%prime; END IF;
+        power_value:=(power_value*power_value)%prime; exponent:=exponent/2;
+      END LOOP;
+      FOR col IN 1..width LOOP row_values[col]:=(row_values[col]*inverse)%prime; END LOOP;
+      rank:=rank+1; basis:=basis||ARRAY[row_values]; pivots:=pivots||pivot; used[contact]:=true;
+      IF rank=width THEN EXIT; END IF;
+    END LOOP;
+    IF rank<>width THEN RETURN false; END IF;
+  END LOOP;
+  RETURN true;
+END;
+$$;
+REVOKE ALL ON FUNCTION private.analytics_modular_full_rank_certified(numeric[]) FROM PUBLIC,anon,authenticated,service_role;
+
 -- A sufficient arithmetic certificate, not a complete privacy policy. The
 -- caller must supply one row per distinct contact and every disclosed column,
 -- including relevant historical columns. Scale each row's exact fractions to
@@ -177,6 +230,10 @@ BEGIN
     OR EXISTS(SELECT 1 FROM unnest(matrix) entry(value) WHERE value IS NULL
       OR value<>trunc(value) OR value IN ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) THEN
     RAISE EXCEPTION 'Disclosure matrix requires finite integers and canonical dimensions' USING ERRCODE='22023';
+  END IF;
+  IF v_width>=16 AND private.analytics_modular_full_rank_certified(matrix) THEN
+    SELECT array_agg(i ORDER BY i) INTO v_columns FROM generate_series(1,v_width) i;
+    RETURN jsonb_build_object('certified',true,'columns',v_columns);
   END IF;
   v_used:=array_fill(false,ARRAY[v_contacts]);
   FOR v_set IN 1..5 LOOP

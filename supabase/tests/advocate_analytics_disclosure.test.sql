@@ -235,11 +235,37 @@ SELECT extensions.ok(NOT EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated
     OR has_table_privilege(role.name,'private.advocate_analytics_basis_columns','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
     OR has_function_privilege(role.name,'private.release_advocate_analytics(uuid,timestamptz)','EXECUTE')
     OR has_function_privilege(role.name,'private.append_analytics_basis(uuid,jsonb)','EXECUTE')
+    OR has_function_privilege(role.name,'private.analytics_modular_full_rank_certified(numeric[])','EXECUTE')
     OR has_function_privilege(role.name,'private.certify_advocate_public_metric(uuid,timestamptz,jsonb)','EXECUTE')),
   'API roles cannot access numerical history or choose release cutoffs');
 SELECT extensions.ok((SELECT bool_and(relrowsecurity AND relforcerowsecurity) FROM pg_class
   WHERE oid IN ('private.advocate_analytics_releases'::regclass,'private.advocate_analytics_basis_columns'::regclass)),
   'release and numerical history ledgers force row security');
+
+-- Five copies of an invertible triangular matrix have five disjoint bases.
+-- Losing one copy of one row leaves a rational direction with four subjects.
+CREATE FUNCTION pg_temp.dense_disclosure_matrix(copies integer, multiplier numeric DEFAULT 1, shorten boolean DEFAULT false)
+RETURNS numeric[] LANGUAGE sql AS $$
+  SELECT array_agg(values ORDER BY subject) FROM (
+    SELECT subject,array_agg((CASE WHEN col<(subject-1)%16+1 THEN 0
+      WHEN col=(subject-1)%16+1 THEN 7 ELSE (subject-1)%16-col*31 END)::numeric*multiplier ORDER BY col) AS values
+    FROM generate_series(1,copies*16-CASE WHEN shorten THEN 1 ELSE 0 END) subject
+    CROSS JOIN generate_series(1,16) col GROUP BY subject
+  ) rows;
+$$;
+SELECT extensions.ok(private.analytics_modular_full_rank_certified(pg_temp.dense_disclosure_matrix(5)),
+  'five modular full-rank sets certify independent integer columns');
+SELECT extensions.ok(NOT private.analytics_linear_disclosure_certified(pg_temp.dense_disclosure_matrix(5,1,true)),
+  'a direction supported by only four subjects cannot pass the accelerated certificate');
+SELECT extensions.ok(NOT private.analytics_modular_full_rank_certified(pg_temp.dense_disclosure_matrix(5,2147483647)),
+  'prime-divisible columns make the modular proof inconclusive');
+SELECT extensions.ok(private.analytics_linear_disclosure_certified(pg_temp.dense_disclosure_matrix(5,2147483647)),
+  'the exact fallback still certifies prime-divisible columns');
+SELECT extensions.ok(private.analytics_linear_disclosure_certified(pg_temp.dense_disclosure_matrix(5,-1e80::numeric)),
+  'negative coefficients and integer values beyond bigint remain exact');
+SELECT extensions.is(private.analytics_linear_disclosure_evidence(pg_temp.dense_disclosure_matrix(5))->'columns',
+  '[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]'::jsonb,
+  'the fast proof retains every original independent column in order');
 
 -- Persist a real certified basis and prove replay, immutable history and public
 -- coordination. Managed-schema fixture writes finish before release operations.
