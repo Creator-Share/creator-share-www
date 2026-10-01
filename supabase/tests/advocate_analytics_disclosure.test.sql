@@ -242,6 +242,19 @@ SELECT extensions.ok((SELECT bool_and(relrowsecurity AND relforcerowsecurity) FR
   WHERE oid IN ('private.advocate_analytics_releases'::regclass,'private.advocate_analytics_basis_columns'::regclass)),
   'release and numerical history ledgers force row security');
 
+SELECT extensions.is(private.certify_analytics_columns(
+  '[{"a":[1.0,1],"b":[1,1],"c":[1,1],"d":[1,1],"e":[1,1]},
+    {"f":[2,1],"g":[2,1],"h":[2,1],"i":[2,1],"j":[2,1]},
+    {"e":[1,1],"d":[1,1],"c":[1,1],"b":[1,1],"a":[1,1]}]'::jsonb)::text,
+  '[{"a":[1.0,1],"b":[1,1],"c":[1,1],"d":[1,1],"e":[1,1]},
+    {"f":[2,1],"g":[2,1],"h":[2,1],"i":[2,1],"j":[2,1]}]'::jsonb::text,
+  'duplicate directions retain the first original representation and column order');
+SELECT extensions.is(private.certify_analytics_columns('[{},{}]'::jsonb),'[]'::jsonb,
+  'duplicate zero columns do not manufacture a historical direction');
+SELECT extensions.throws_ok($$SELECT private.certify_analytics_columns('[{"a":[1,0]},{"a":[1,0]}]')$$,
+  '22023','Disclosure fractions require integer amounts and positive denominators',
+  'duplicate removal never bypasses contribution validation');
+
 -- Five copies of an invertible triangular matrix have five disjoint bases.
 -- Losing one copy of one row leaves a rational direction with four subjects.
 CREATE FUNCTION pg_temp.dense_disclosure_matrix(copies integer, multiplier numeric DEFAULT 1, shorten boolean DEFAULT false)

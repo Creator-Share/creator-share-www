@@ -291,6 +291,13 @@ CREATE FUNCTION private.certify_analytics_columns(columns jsonb)
 RETURNS jsonb LANGUAGE plpgsql IMMUTABLE STRICT SET search_path = '' AS $$
 DECLARE evidence jsonb;
 BEGIN
+  -- Equal columns carry the same disclosure direction. Preserve the first
+  -- original value so repeated scopes do not force the dependent fallback.
+  IF jsonb_typeof(columns)='array' THEN
+    SELECT coalesce(jsonb_agg(columns->(first_ordinal::integer-1) ORDER BY first_ordinal),'[]'::jsonb)
+      INTO columns FROM (SELECT min(ordinal) AS first_ordinal
+        FROM jsonb_array_elements(columns) WITH ORDINALITY entry(value,ordinal) GROUP BY value) distinct_columns;
+  END IF;
   evidence:=private.analytics_linear_disclosure_evidence(private.analytics_integer_contribution_matrix(columns));
   IF evidence->'certified' IS DISTINCT FROM 'true'::jsonb THEN RETURN NULL; END IF;
   RETURN coalesce((SELECT jsonb_agg(value ORDER BY ordinal)

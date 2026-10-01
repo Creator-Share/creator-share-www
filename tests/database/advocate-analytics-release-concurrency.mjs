@@ -140,7 +140,7 @@ async function observeDenseHistory(database) {
   return withPgClients(database, ["capacity"], async client => {
     await client.query("SET statement_timeout='15s'")
     const observations = []
-    for (const width of [64, 128, 256]) {
+    for (const [width, repeatColumn] of [[64, false], [128, false], [256, false], [128, true]]) {
       let seed = 907
       const next = () => {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
@@ -152,6 +152,7 @@ async function observeDenseHistory(database) {
           String(subject).padStart(5, "0"), [rows[subject % width][column], 1],
         ]),
       ))
+      if (repeatColumn) columns.push(columns[0])
       const started = performance.now()
       let outcome
       try {
@@ -165,7 +166,7 @@ async function observeDenseHistory(database) {
         if (error.code !== "57014") throw error
         outcome = "query_canceled"
       }
-      observations.push({ columns: width, subjects: 5 * width, outcome,
+      observations.push({ columns: columns.length, independentColumns: width, subjects: 5 * width, outcome,
         milliseconds: Math.round(performance.now() - started), statementTimeoutMilliseconds: 15_000 })
     }
     return { scenario: "synthetic_dense_history_capacity", observations }
