@@ -846,9 +846,10 @@ VALUES (
   'sponsor-welcome-v1',
   '{}'::jsonb,
   decode('040506', 'hex'),
-  clock_timestamp() + interval '5 days',
-  clock_timestamp() - interval '2 days',
-  clock_timestamp() - interval '2 days'
+  -- Use one transaction clock: the retention constraint requires exactly 90 days.
+  now() + interval '88 days',
+  now() - interval '2 days',
+  now() - interval '2 days'
 );
 
 SET LOCAL session_replication_role = origin;
