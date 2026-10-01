@@ -232,6 +232,8 @@ function parseCell(value: unknown): AdvocateAnalyticsCell | null {
   const activeAnnualCommitmentUsdCents =
     value.active_annual_commitment_usd_cents
   const annualizedCommitmentUsdCents = value.annualized_commitment_usd_cents
+  // Normalized categories and net round independently in the database.
+  // Their displayed integers need not satisfy an exact additive identity.
   const netDependenciesWithheld =
     renewalCollectedUsdCents === null ||
     refundsAndReversalsUsdCents === null ||
@@ -268,16 +270,6 @@ function parseCell(value: unknown): AdvocateAnalyticsCell | null {
       grossCollectedUsdCents !== null &&
       initialCollectedUsdCents + renewalCollectedUsdCents !==
         grossCollectedUsdCents) ||
-    (grossCollectedUsdCents !== null &&
-      refundsAndReversalsUsdCents !== null &&
-      disputeDebitsUsdCents !== null &&
-      disputeCreditsUsdCents !== null &&
-      netCollectedUsdCents !== null &&
-      grossCollectedUsdCents -
-        refundsAndReversalsUsdCents -
-        disputeDebitsUsdCents +
-        disputeCreditsUsdCents !==
-        netCollectedUsdCents) ||
     (activeMonthlyCommitmentUsdCents !== null &&
       activeAnnualCommitmentUsdCents !== null &&
       annualizedCommitmentUsdCents !== null &&

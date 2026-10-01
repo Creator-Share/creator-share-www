@@ -382,6 +382,27 @@ test.describe("advocate private analytics projection", () => {
     }
   })
 
+  test("accepts independently rounded USD components and net", () => {
+    // Two exact 5/7-cent losses each display as one cent, while their total
+    // loss displays as one cent. The database computes the net before rounding.
+    const parsed = analytics.parseAdvocateAnalyticsSnapshot(
+      snapshot({
+        official: visibleCell({
+          refunds_and_reversals_usd_cents: 1,
+          dispute_debits_usd_cents: 1,
+          dispute_credits_usd_cents: 0,
+          net_collected_usd_cents: 14_999,
+        }),
+      }),
+    )
+    expect(parsed?.official).toMatchObject({
+      refundsAndReversalsUsdCents: 1,
+      disputeDebitsUsdCents: 1,
+      disputeCreditsUsdCents: 0,
+      netCollectedUsdCents: 14_999,
+    })
+  })
+
   test("rejects suppressed value smuggling, extra fields, and unsafe arithmetic", () => {
     const {
       dispute_credits_usd_cents: _missingDisputeCredit,
@@ -409,7 +430,6 @@ test.describe("advocate private analytics projection", () => {
       snapshot({
         official: visibleCell({ gross_collected_usd_cents: 15_001 }),
       }),
-      snapshot({ official: visibleCell({ net_collected_usd_cents: 13_751 }) }),
       snapshot({
         official: visibleCell({
           annualized_commitment_usd_cents: 16_801,

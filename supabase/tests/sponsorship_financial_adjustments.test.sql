@@ -1535,7 +1535,7 @@ BEGIN
     SELECT value FROM adjustment_test_context WHERE key=lower(provider_name)||'_gross_movement');
   patch := jsonb_build_object('sponsorship_intent_id',intent_id,'payment_attempt_id',attempt_id,
     'base_amount_usd_cents',2500,'charged_amount_minor',charged,'charged_currency',currency,'conversion_rate',rate);
-  PERFORM set_config('session_replication_role','replica',true);
+  SET LOCAL session_replication_role = replica;
   PERFORM pg_temp.clone_normalization_row('public.sponsorship_intents',
     (SELECT to_jsonb(t) FROM public.sponsorship_intents t WHERE id=original.sponsorship_intent_id),
     patch || jsonb_build_object('id',intent_id,'idempotency_key','normalization-'||intent_id));
@@ -1559,7 +1559,7 @@ BEGIN
   PERFORM pg_temp.clone_normalization_row('public.payment_gateway_event_applications',
     (SELECT to_jsonb(t) FROM public.payment_gateway_event_applications t WHERE gateway_event_id=original.source_gateway_event_id),
     jsonb_build_object('id',gen_random_uuid(),'gateway_event_id',event_id,'financial_movement_id',movement_id));
-  PERFORM set_config('session_replication_role','origin',true);
+  SET LOCAL session_replication_role = origin;
   RETURN movement_id;
 END;
 $$;

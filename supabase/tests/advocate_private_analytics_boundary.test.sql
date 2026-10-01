@@ -2194,11 +2194,11 @@ ALTER TABLE public.sponsorship_attributions
 
 -- Return a real report over a temporary fractional fixture, then roll the
 -- fixture changes back before emitting assertions.
-CREATE FUNCTION pg_temp.fractional_analytics_report() RETURNS jsonb LANGUAGE plpgsql AS $$
+CREATE FUNCTION pg_temp.fractional_analytics_report(include_disputes boolean DEFAULT false) RETURNS jsonb LANGUAGE plpgsql AS $$
 DECLARE result jsonb;
 BEGIN
   BEGIN
-    PERFORM set_config('session_replication_role','replica',true);
+    SET LOCAL session_replication_role = replica;
     UPDATE public.sponsorship_intents intent SET charged_currency='AUD',charged_amount_minor=140,conversion_rate=1.4,
       contact_email_hmac=extensions.digest(fixture.label,'sha256')
     FROM analytics_fixture_intents fixture WHERE fixture.label LIKE 'contact_repeat_%' AND intent.id=fixture.intent_id;
@@ -2210,10 +2210,13 @@ BEGIN
       sponsor_identity_id,provider,provider_account_scope,provider_movement_type,provider_movement_id,entry_kind,payment_mode,
       base_amount_usd_cents,charged_amount_minor,charged_currency,conversion_rate,occurred_at,recorded_at,original_financial_movement_id)
     SELECT gen_random_uuid(),fixture.payment_attempt_id,fixture.intent_id,fixture.identity_id,'STRIPE','stripe_us',
-      'refund','fractional-analytics-'||fixture.label,'sponsorship_refund',fixture.payment_mode,NULL,1,'AUD',1.4,
+      adjustment.kind,'fractional-analytics-'||adjustment.kind||fixture.label,adjustment.entry_kind,fixture.payment_mode,NULL,1,'AUD',1.4,
       fixture.payment_occurred_at+interval '1 day',fixture.payment_occurred_at+interval '1 day',fixture.initial_movement_id
-    FROM analytics_fixture_intents fixture WHERE fixture.label LIKE 'contact_repeat_%';
-    PERFORM set_config('session_replication_role','origin',true);
+    FROM analytics_fixture_intents fixture
+    CROSS JOIN (VALUES ('refund','sponsorship_refund'::public.sponsorship_financial_entry_kind),
+      ('dispute','sponsorship_dispute_debit'::public.sponsorship_financial_entry_kind)) adjustment(kind,entry_kind)
+    WHERE fixture.label LIKE 'contact_repeat_%' AND (adjustment.kind='refund' OR include_disputes);
+    SET LOCAL session_replication_role = origin;
     PERFORM set_config('request.jwt.claim.role','authenticated',true);
     PERFORM set_config('request.jwt.claim.sub','96000000-0000-4000-8000-000000000105',true);
     result:=public.get_advocate_analytics_snapshot((SELECT value FROM analytics_test_ids WHERE key='contact_advocate'));
@@ -2225,6 +2228,9 @@ $$;
 CREATE TEMP TABLE fractional_analytics_report AS SELECT pg_temp.fractional_analytics_report() AS value;
 SELECT extensions.ok((SELECT value->'official' @> '{"refunds_and_reversals_usd_cents":4,"net_collected_usd_cents":496}'::jsonb
   FROM fractional_analytics_report), 'private totals combine five fractional refunds before rounding instead of rounding each sponsorship');
+SELECT extensions.ok(pg_temp.fractional_analytics_report(true)->'official' @>
+  '{"refunds_and_reversals_usd_cents":4,"dispute_debits_usd_cents":4,"net_collected_usd_cents":493}'::jsonb,
+  'independently rounded loss categories do not overwrite the exact aggregate net');
 
 SELECT * FROM extensions.finish();
 

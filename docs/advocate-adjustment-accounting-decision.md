@@ -4,7 +4,7 @@ Status: approved for implementation, October 1, 2026. The owner approved fractio
 
 ## Confirmed defect
 
-The active adjustment code rejects a two-cent AUD refund on a payment of 3,500 AUD cents with an original normalized value of 2,500 USD cents and a rate of 1.4. No whole USD-cent amount converts back to exactly two AUD cents. Both provider adapters and database ingestion/settlement require this impossible equality for some legitimate adjustments.
+The implementation reviewed before the October 1 repair rejected a two-cent AUD refund on a payment of 3,500 AUD cents with an original normalized value of 2,500 USD cents and a rate of 1.4. No whole USD-cent amount converts back to exactly two AUD cents. Both provider adapters and database ingestion/settlement required this impossible equality for some legitimate adjustments. The implementation checkpoint below removes that requirement; recovery remains unfinished.
 
 The provider can already have completed the refund. The application classifies the failure as permanent, retains a quarantined event, and acknowledges delivery. The financial ledger then omits the adjustment. Repair must include recovery of those retained events and cannot rely on the provider retrying an acknowledged delivery.
 
@@ -54,7 +54,7 @@ A PostgreSQL `numeric` quotient is not itself an exact rational representation. 
 
 This uses the ratio of the actual original amounts, including original charge rounding. It is a proposed accounting convention, not a claim that dividing by the quoted conversion rate gives the same result. Cross-payment aggregation and whole-cent presentation still need explicit rounding rules. Independently rounded category displays can differ from a rounded net total; the reporting contract must explain or reconcile that residual. Existing positive whole-cent ledger constraints and consumers would still need coordinated changes.
 
-A standalone BigInt model examined 11,534 positive adjustment amounts, including full refunds, across five original-amount pairs, and 50,000 amount combinations for the ordering dispute debit, refund, then matching dispute credit. Exact numerator sums reconciled in every case. These are mathematical model checks, not production adapter, database, concurrency, event-order permutation, or provider evidence. No accounting behavior has changed. The owner approved this direction on October 1, 2026.
+A standalone BigInt model examined 11,534 positive adjustment amounts, including full refunds, across five original-amount pairs, and 50,000 amount combinations for the ordering dispute debit, refund, then matching dispute credit. Exact numerator sums reconciled in every case. These are mathematical model checks, not production adapter, database, concurrency, event-order permutation, or provider evidence. The model itself changed no accounting behavior. The owner approved this direction on October 1, 2026; implementation evidence appears below.
 
 ## Arrival-order model extension
 
@@ -103,7 +103,7 @@ The implementation now has a private integer-fraction aggregate. It multiplies o
 
 In-process migration replay and fourteen SQL assertions passed, including 60,000 dispute/refund amount and arrival-order combinations, complete reversal through 3,500 one-unit refunds, large opposing amounts, and a cross-payment total just below half a cent. The existing nineteen one-time history assertions also passed in the same PostgreSQL engine with minimal managed-schema stubs. These are arithmetic and query checks; they do not establish provider ingestion or hosted release readiness.
 
-The remaining implementation must remove adjustment round-trip validation from both adapters and ingestion, make exact original amounts authoritative through settlement, replace sums of independently rounded adjustments in private analytics, and distinguish excess or unallocated provider cash loss from attributed principal. The current dispute representation also keys movements by dispute ID and kind, while the Stripe adapter permits at most two balance transactions and exactly one matching direction. Multiple partial credits and distinct cash movements require their own provider movement identity; an acknowledgment does not fix that accounting boundary.
+At this foundation checkpoint, adapter, ingestion, settlement, and private analytics changes were still pending. The implementation checkpoint below covers those changes. Excess or unallocated provider cash losses and retained-event recovery remain unfinished.
 
 
 ## Adjustment normalization implementation, October 1
@@ -114,4 +114,21 @@ Private analytics preserves fractions through sponsorship rollups and rounds eac
 
 The undeployed schema and application RPC signature change together. There is no deployed Advocate data to backfill, and this change is not a rolling upgrade procedure for an already deployed adjustment schema. Provider identity checks, immutable original-payment linkage, settlement locking, duplicate detection, and original-currency limits remain in place.
 
-Local evidence includes 44 mock provider adapter tests, the existing history and refund-update assertions, sixteen exact aggregate assertions, and settlement regressions across both providers and all four supported currencies. The SQL checks use an in-process PostgreSQL engine with managed-schema stubs; hosted validation remains necessary. Excess or unallocated provider losses, multiple dispute cash movements, retained-event recovery, and longitudinal disclosure remain release work. This checkpoint does not close FF-072 or FF-084.
+Local evidence includes 44 mock provider adapter tests, the existing history and refund-update assertions, sixteen exact aggregate assertions, and settlement regressions across both providers and all four supported currencies. The SQL checks use an in-process PostgreSQL engine with managed-schema stubs; hosted validation remains necessary. Excess or unallocated provider losses, retained-event recovery, and longitudinal disclosure remain release work. This checkpoint does not close FF-072 or FF-084.
+
+
+## Stripe balance transaction contract correction
+
+Stripe documents zero, one, or two balance transactions on a dispute. The existing two-item bound is consistent with that contract and is not evidence of a defect. Do not broaden it merely to accommodate hypothetical repeated withdrawals or credits. Partial reinstatement and duplicate-event checks remain necessary, but any claim that Stripe emits several same-direction cash movements requires separate provider evidence. [Stripe dispute object](https://docs.stripe.com/api/disputes/object)
+
+The balance transaction has its own identity, currency, gross amount, fees, and net balance effect. The accounting repair must preserve those facts separately from original-payment attribution, especially when inverse conversion cannot recover a unique original-currency amount. A provider cash loss must not disappear because principal allocation is ambiguous. [Stripe balance transaction object](https://docs.stripe.com/api/balance_transactions/object)
+
+
+## Rounded reporting consumer
+
+The analytics parser previously required displayed USD components to add exactly to displayed net funds. That check is invalid under independently rounded exact totals. It is removed; types, safe integer ranges, suppression dependencies, and exact original-currency checks remain. Fifteen analytics application tests pass. A database regression combines five tiny refunds and five tiny dispute debits: both displayed loss categories are four cents, but the exact combined loss rounds to seven cents and the net is 493 cents from a 500-cent gross. The UI must preserve the database result instead of recomputing net from rounded categories.
+
+
+## Hosted fixture correction
+
+The first hosted database run for `510a661` failed in the two new fixture helpers. Supabase accepted the suite's existing `SET LOCAL session_replication_role` statements but denied the helpers' `set_config` calls for that parameter. Both helpers now use the existing statement form. The in-process engine did not reproduce this managed-role distinction. Production permissions remain unchanged; fixture setup still restores trigger execution before settlement and before the analytics read. Hosted validation must be rerun.
