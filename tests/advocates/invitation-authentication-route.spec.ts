@@ -488,7 +488,9 @@ test("requires matching fresh otp claims for a consumed-proof retry", async () =
     error: { code: "otp_expired" },
   }
   writeAuthCookie = false
-  const nowEpochSeconds = Math.floor(Date.now() / 1_000)
+  const originalNow = Date.now
+  const nowMilliseconds = originalNow()
+  const nowEpochSeconds = Math.floor(nowMilliseconds / 1_000)
   const invalidClaims = [
     {
       sub: "33333333-3333-4333-8333-333333333333",
@@ -527,14 +529,21 @@ test("requires matching fresh otp claims for a consumed-proof retry", async () =
     },
   ]
 
-  for (const claims of invalidClaims) {
-    currentClaimsResult = { data: { claims }, error: null }
-    const response = await POST(request())
-    expect(response.status).toBe(410)
-    expect(await json(response)).toEqual({
-      ok: false,
-      code: "invalid_or_expired",
-    })
+  // A live clock can turn +61 seconds into the allowed +60-second skew
+  // during this loop. Keep the actual route's boundary fixed, then restore it.
+  Date.now = () => nowMilliseconds
+  try {
+    for (const [index, claims] of invalidClaims.entries()) {
+      currentClaimsResult = { data: { claims }, error: null }
+      const response = await POST(request())
+      expect(response.status, `Invalid claims case ${index}`).toBe(410)
+      expect(await json(response)).toEqual({
+        ok: false,
+        code: "invalid_or_expired",
+      })
+    }
+  } finally {
+    Date.now = originalNow
   }
 })
 

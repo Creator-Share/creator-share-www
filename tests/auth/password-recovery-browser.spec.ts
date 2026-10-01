@@ -8,6 +8,21 @@ const ACCEPTED_PASSWORD_CHANGE_BODY = JSON.stringify({
   message: "Password reset successful! User has been logged out.",
 })
 
+// Compile every recovery destination before a browser holds form state. With
+// Webpack, first-use route compilation can trigger a development-only full
+// reload that interrupts the navigation this suite is meant to observe.
+test.beforeAll(async ({ request }) => {
+  for (const path of [
+    "/forgot-password",
+    "/forgot-password/verify",
+    "/forgot-password/reset",
+    "/login",
+  ]) {
+    const response = await request.get(path)
+    expect(response.status(), `Recovery route ${path} must be ready`).toBe(200)
+  }
+})
+
 async function seedPrivacySentinels(page: Page) {
   await page.evaluate(() => {
     localStorage.setItem("recovery-test-local-sentinel", "local-ok")
