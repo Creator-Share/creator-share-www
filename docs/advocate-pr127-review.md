@@ -460,3 +460,13 @@ The whole-cent preimage requirement is removed from Stripe, PayPal, SQL ingestio
 Forty-four mock adapter tests, TypeScript, and lint pass. In-process PostgreSQL checks pass the financial-adjustment suite with forty additional provider/currency assertions, existing one-time history, refund-update and public-metric assertions, sixteen exact aggregate assertions, and the private analytics suite with its new cross-sponsorship rounding case. These checks use managed-schema stubs, not a running Supabase service. Hosted validation is pending for this candidate.
 
 The preceding `fa6f522` head passed publication workflow 36809158006 and WebKit workflow 36809157943. Those results establish only the preceding exact aggregate foundation. Excess provider losses, retained-event reconciliation, and coordinated longitudinal analytics disclosure remain open. No merge or local service start is authorized.
+
+
+## Email-proof join assertion correction
+
+At `0fa45b4`, the hosted application job failed an existing email-proof harness assertion. The recorded interruption exhausted its 250-millisecond join budget before the sibling persisted its cleanup journal entry. Cleanup retained recovery state, but the assertion incorrectly required cleanup to start after persistence even on that retained-state path.
+
+The test now accepts only a completed join or an expired join accompanied by explicit recovery retention, no journal completion, a surviving journal, and the late user's persisted identity. A controllable sibling promise exercises both early release and a late provider mutation held until after the runner returns; no timeout increase substitutes for the ordering proof. The separate never-settling sibling test remains. All 99 provider contract tests, TypeScript, and lint pass locally without provider calls or local service startup. A controlled mutation that disabled recovery retention failed with a closed journal and a missing late identity; the production runner was restored byte-for-byte. Production runner behavior and budgets are unchanged.
+
+
+The database job in publication workflow 36812441437 passed on `0fa45b4`, including the full pgTAP suite, HTTP checks, and required concurrency harnesses. This validates the adjustment normalization and reporting changes after the fixture correction. The aggregate workflow failed because of the email-proof test assertion described above; the corrected test still requires a fresh hosted application run.

@@ -2724,179 +2724,200 @@ test("joins a late hosted Auth mutation or retains machine ownership", async () 
   }
 })
 
-test("joins every concurrent issuance sibling before cleanup can close recovery state", async () => {
-  const stateRoot = await mkdtemp(
-    resolve(tmpdir(), "ff029-hosted-concurrent-sibling-"),
-  )
-  const sourceRevision = "7".repeat(40)
-  const email =
-    "creator-share-ff029-77777777777777777777777777777777@example.com"
-  const userId = "bb93cfec-7673-42cf-98e6-080b77cf035d"
-  const journal = await runner.createHostedCleanupJournal({
-    stateRoot,
-    sourceRevision,
-  })
-  await journal.trackEmail(email)
-
-  let targetPrepared = false
-  let providerCreatedAt = 0
-  let siblingRecordedAt = 0
-  let siblingTrackError: unknown = null
-  let cleanupStartedAt = 0
-  let cleanupCompletedAt = 0
-  /**
-   * Why an interrupted sibling stopped being waited for. This assertion fails
-   * roughly once per hundred runs and only on CI, which no local campaign has
-   * reproduced, so the failure has to carry its own explanation.
-   */
-  const joinRecords: Ff029JoinRecord[] = []
-  let cleanupSnapshot: { trackedUserIds: readonly string[] } | null = null
-  let settledAt = 0
-  let markSiblingStarted!: () => void
-  const siblingStarted = new Promise<void>((resolvePromise) => {
-    markSiblingStarted = resolvePromise
-  })
-  let markSiblingDone!: () => void
-  const siblingDone = new Promise<void>((resolvePromise) => {
-    markSiblingDone = resolvePromise
-  })
-  const run = core
-    .runSupabaseEmailProofSupersessionCanary(
-      {
-        async initialize() {
-          return { authVersion: "v2.188.1" }
-        },
-        async prepareScenario(definition: {
-          flows: string[]
-          issuanceMode: string
-        }) {
-          if (definition.issuanceMode !== "concurrent" || targetPrepared) {
-            throw new Error("skip_non_target_scenario")
-          }
-          targetPrepared = true
-          return { flows: definition.flows }
-        },
-        async issueProof(
-          context: { flows: string[] },
-          flow: string,
-          _lifecycle: { signal: AbortSignal },
-          dispatchBarrier: { wait(): Promise<void> },
-        ) {
-          await dispatchBarrier.wait()
-          if (flow === context.flows[0]) {
-            throw retainedOwnershipError(
-              "ff029_concurrent_issuance_retained_fixture",
-            )
-          }
-          markSiblingStarted()
-          await new Promise((resolvePromise) => setTimeout(resolvePromise, 150))
-          providerCreatedAt = Date.now()
-          try {
-            await journal.trackUserId(userId)
-            siblingRecordedAt = Date.now()
-          } catch (error) {
-            siblingTrackError = error
-            throw error
-          } finally {
-            markSiblingDone()
-          }
-          return { opaque: flow }
-        },
-        async consumeProof() {
-          return "accepted"
-        },
-        async cleanup(options: { retainRecoveryState?: boolean }) {
-          cleanupStartedAt = Date.now()
-          cleanupSnapshot = await journal.snapshot()
-          if (options.retainRecoveryState !== true) {
-            await journal.complete()
-            cleanupCompletedAt = Date.now()
-          }
-        },
-      },
-      {
-        operationTimeoutMilliseconds: 500,
-        totalBudgetMilliseconds: 1_500,
-        cleanupBudgetMilliseconds: 300,
-        cleanupAbortJoinMilliseconds: 250,
-        recordOperationJoin: (record: Ff029JoinRecord) => {
-          joinRecords.push(record)
-        },
-        provenance: hostedProvenance(sourceRevision),
-      },
+test("joins concurrent issuance or retains recovery state until a late sibling is recorded", async () => {
+  for (const settleAfterRun of [false, true]) {
+    const stateRoot = await mkdtemp(
+      resolve(tmpdir(), "ff029-hosted-concurrent-sibling-"),
     )
-    .then(
-      () => ({ status: "resolved" as const, error: null }),
-      (error: unknown) => ({ status: "rejected" as const, error }),
-    )
-    .finally(() => {
-      settledAt = Date.now()
+    const sourceRevision = "7".repeat(40)
+    const email =
+      "creator-share-ff029-77777777777777777777777777777777@example.com"
+    const userId = "bb93cfec-7673-42cf-98e6-080b77cf035d"
+    const journal = await runner.createHostedCleanupJournal({
+      stateRoot,
+      sourceRevision,
     })
+    await journal.trackEmail(email)
 
-  try {
-    await siblingStarted
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 75))
-    const journalPresentBeforeSibling = await access(journal.path).then(
-      () => true,
-      () => false,
-    )
-    const cleanupCompletedBeforeSibling = cleanupCompletedAt !== 0
-    await Promise.race([
-      siblingDone,
-      new Promise((_, rejectPromise) =>
-        setTimeout(
-          () => rejectPromise(new Error("late_sibling_did_not_settle")),
-          1_000,
-        ),
-      ),
-    ])
-    const outcome = await run
-    const finalJournalPresent = await access(journal.path).then(
-      () => true,
-      () => false,
-    )
-    const finalTrackedUserIds = finalJournalPresent
-      ? (await journal.snapshot()).trackedUserIds
-      : ((
-          cleanupSnapshot as {
-            trackedUserIds: readonly string[]
-          } | null
-        )?.trackedUserIds ?? [])
-
-    expect.soft(journalPresentBeforeSibling).toBe(true)
-    expect.soft(cleanupCompletedBeforeSibling).toBe(false)
-    expect.soft(siblingTrackError).toBeNull()
-    expect.soft(siblingRecordedAt).toBeGreaterThanOrEqual(providerCreatedAt)
-    expect.soft(settledAt).toBeGreaterThanOrEqual(providerCreatedAt)
-    // An empty diagnostic would mean the recorder was never wired, which would
-    // leave a rare failure just as unexplained as before. Fail loudly instead.
-    expect(
-      joinRecords.length,
-      "the join recorder must be wired or the diagnostic below is empty",
-    ).toBeGreaterThan(0)
-    expect
-      .soft(
-        cleanupStartedAt === 0 || cleanupStartedAt >= siblingRecordedAt,
-        `cleanup must not close recovery state before the sibling was recorded. ${JSON.stringify(
-          {
-            cleanupStartedAt,
-            siblingRecordedAt,
-            inversionMilliseconds: siblingRecordedAt - cleanupStartedAt,
-            joinRecords,
+    let targetPrepared = false
+    let providerCreatedAt = 0
+    let siblingRecordedAt = 0
+    let siblingTrackError: unknown = null
+    let cleanupStartedAt = 0
+    let cleanupCompletedAt = 0
+    let cleanupRetainedRecoveryState = false
+    // Filesystem persistence may outlast the bounded join on a busy runner.
+    // Both a completed join and retained recovery are valid; silent closure is not.
+    const joinRecords: Ff029JoinRecord[] = []
+    let cleanupSnapshot: { trackedUserIds: readonly string[] } | null = null
+    let settledAt = 0
+    let markSiblingStarted!: () => void
+    const siblingStarted = new Promise<void>((resolvePromise) => {
+      markSiblingStarted = resolvePromise
+    })
+    let markSiblingDone!: () => void
+    const siblingDone = new Promise<void>((resolvePromise) => {
+      markSiblingDone = resolvePromise
+    })
+    let releaseSibling!: () => void
+    const siblingReleased = new Promise<void>((resolvePromise) => {
+      releaseSibling = resolvePromise
+    })
+    const run = core
+      .runSupabaseEmailProofSupersessionCanary(
+        {
+          async initialize() {
+            return { authVersion: "v2.188.1" }
           },
-        )}`,
+          async prepareScenario(definition: {
+            flows: string[]
+            issuanceMode: string
+          }) {
+            if (definition.issuanceMode !== "concurrent" || targetPrepared) {
+              throw new Error("skip_non_target_scenario")
+            }
+            targetPrepared = true
+            return { flows: definition.flows }
+          },
+          async issueProof(
+            context: { flows: string[] },
+            flow: string,
+            _lifecycle: { signal: AbortSignal },
+            dispatchBarrier: { wait(): Promise<void> },
+          ) {
+            await dispatchBarrier.wait()
+            if (flow === context.flows[0]) {
+              throw retainedOwnershipError(
+                "ff029_concurrent_issuance_retained_fixture",
+              )
+            }
+            markSiblingStarted()
+            await siblingReleased
+            providerCreatedAt = Date.now()
+            try {
+              await journal.trackUserId(userId)
+              siblingRecordedAt = Date.now()
+            } catch (error) {
+              siblingTrackError = error
+              throw error
+            } finally {
+              markSiblingDone()
+            }
+            return { opaque: flow }
+          },
+          async consumeProof() {
+            return "accepted"
+          },
+          async cleanup(options: { retainRecoveryState?: boolean }) {
+            cleanupStartedAt = Date.now()
+            cleanupRetainedRecoveryState = options.retainRecoveryState === true
+            cleanupSnapshot = await journal.snapshot()
+            if (options.retainRecoveryState !== true) {
+              await journal.complete()
+              cleanupCompletedAt = Date.now()
+            }
+          },
+        },
+        {
+          operationTimeoutMilliseconds: 500,
+          totalBudgetMilliseconds: 1_500,
+          cleanupBudgetMilliseconds: 300,
+          cleanupAbortJoinMilliseconds: 250,
+          recordOperationJoin: (record: Ff029JoinRecord) => {
+            joinRecords.push(record)
+          },
+          provenance: hostedProvenance(sourceRevision),
+        },
       )
-      .toBe(true)
-    expect.soft(finalTrackedUserIds).toContain(userId)
-    expect(outcome.status).toBe("rejected")
-    expect(
-      (outcome.error as { ff029RetainExclusiveOwnership?: boolean })
-        .ff029RetainExclusiveOwnership,
-    ).toBe(true)
-  } finally {
-    await run
-    await siblingDone
-    await rm(stateRoot, { recursive: true, force: true })
+      .then(
+        () => ({ status: "resolved" as const, error: null }),
+        (error: unknown) => ({ status: "rejected" as const, error }),
+      )
+      .finally(() => {
+        settledAt = Date.now()
+      })
+
+    try {
+      await siblingStarted
+      const journalPresentBeforeSibling = await access(journal.path).then(
+        () => true,
+        () => false,
+      )
+      const cleanupCompletedBeforeSibling = cleanupCompletedAt !== 0
+      if (settleAfterRun) await run
+      releaseSibling()
+      await Promise.race([
+        siblingDone,
+        new Promise((_, rejectPromise) =>
+          setTimeout(
+            () => rejectPromise(new Error("late_sibling_did_not_settle")),
+            1_000,
+          ),
+        ),
+      ])
+      const outcome = await run
+      const finalJournalPresent = await access(journal.path).then(
+        () => true,
+        () => false,
+      )
+      const finalTrackedUserIds = finalJournalPresent
+        ? (await journal.snapshot()).trackedUserIds
+        : ((
+            cleanupSnapshot as {
+              trackedUserIds: readonly string[]
+            } | null
+          )?.trackedUserIds ?? [])
+
+      expect.soft(journalPresentBeforeSibling).toBe(true)
+      expect.soft(cleanupCompletedBeforeSibling).toBe(false)
+      expect.soft(siblingTrackError).toBeNull()
+      expect.soft(siblingRecordedAt).toBeGreaterThanOrEqual(providerCreatedAt)
+      // An empty diagnostic would mean the recorder was never wired, which would
+      // leave a rare failure just as unexplained as before. Fail loudly instead.
+      expect(
+        joinRecords.length,
+        "the join recorder must be wired or the diagnostic below is empty",
+      ).toBeGreaterThan(0)
+      expect
+        .soft(
+          cleanupStartedAt === 0 ||
+            cleanupStartedAt >= siblingRecordedAt ||
+            (joinRecords.some((record) => !record.joinedWithinBudget) &&
+              cleanupRetainedRecoveryState &&
+              cleanupCompletedAt === 0 &&
+              finalJournalPresent),
+          `cleanup must join the sibling or retain its recovery state. ${JSON.stringify(
+            {
+              cleanupStartedAt,
+              cleanupCompletedAt,
+              cleanupRetainedRecoveryState,
+              settledAt,
+              siblingRecordedAt,
+              inversionMilliseconds: siblingRecordedAt - cleanupStartedAt,
+              joinRecords,
+            },
+          )}`,
+        )
+        .toBe(true)
+      if (settleAfterRun) {
+        expect(joinRecords.some((record) => !record.joinedWithinBudget)).toBe(true)
+        expect(cleanupRetainedRecoveryState).toBe(true)
+        expect(cleanupCompletedAt).toBe(0)
+        expect(finalJournalPresent).toBe(true)
+        expect(settledAt).toBeLessThanOrEqual(providerCreatedAt)
+      }
+      expect.soft(finalTrackedUserIds).toContain(userId)
+      expect(outcome.status).toBe("rejected")
+      expect(
+        (outcome.error as { ff029RetainExclusiveOwnership?: boolean })
+          .ff029RetainExclusiveOwnership,
+      ).toBe(true)
+    } finally {
+      releaseSibling()
+      await run
+      await siblingDone
+      await rm(stateRoot, { recursive: true, force: true })
+    }
   }
 })
 
