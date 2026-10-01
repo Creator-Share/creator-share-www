@@ -7,7 +7,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "postbuild": "node scripts/verify-advocate-build.mjs",
     "audit:stripe-payment-methods": "node scripts/audit-stripe-payment-methods.mjs",
@@ -39,7 +39,8 @@
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:accounts:offboarding-concurrency": "node tests/database/account-offboarding-concurrency.mjs",
-    "test:payments:failure-review-concurrency": "node tests/database/payment-failure-review-concurrency.mjs"
+    "test:payments:failure-review-concurrency": "node tests/database/payment-failure-review-concurrency.mjs",
+    "test:advocate:analytics-release-concurrency": "node tests/database/advocate-analytics-release-concurrency.mjs"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.27.0",

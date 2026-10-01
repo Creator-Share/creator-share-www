@@ -219,6 +219,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      - name: Run analytics release concurrency
+        env:
+          ADVOCATE_ANALYTICS_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/advocate-analytics-release-concurrency-evidence.json
+        run: yarn test:advocate:analytics-release-concurrency
+
+      - name: Upload analytics release concurrency evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: advocate-analytics-release-concurrency-evidence
+          path: ${{ runner.temp }}/advocate-analytics-release-concurrency-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Run payment failure review concurrency
         env:
           PAYMENT_FAILURE_REVIEW_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/payment-failure-review-concurrency-evidence.json

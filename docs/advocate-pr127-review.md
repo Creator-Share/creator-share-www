@@ -476,3 +476,8 @@ Publication workflow 36813345232 and WebKit workflow 36813345244 passed on `01f1
 
 
 Publication workflow 36817413976 and WebKit workflow 36817413985 passed on `74510d8`, validating the internal disclosure history checkpoint. The next candidate connects the permission-checked reader, existing scheduled worker, public advancement gate, parser, and dashboard. In-process reader, public metric, and attribution settlement tests pass, along with seventeen application contracts. Hosted integration validation, concurrency, reconstruction review, and performance remain open; this is not closure of FF-034.
+
+
+Publication workflow 36818952499 passed on `8cc6e01`. The corresponding WebKit run 36818952445 failed before tests because Turbopack rejected the generated Reddit Sans import query. The candidate removes only the development Turbopack flag, retaining the existing Webpack path used by the successful production build, fonts, test scope, and startup budget. FF-091 remains pending hosted confirmation.
+
+The coordinated analytics concurrency harness is now a required database lane entrypoint. It targets an interruption after private writes and before public publication, overlapping workers, invisible uncommitted data, clean retry and replay, and post-commit account revocation. Its fixture commits successfully and the authenticated reader returns pending in the in-process check. Those results do not prove actual cross-session behavior; the hosted run remains required. No local service was started.

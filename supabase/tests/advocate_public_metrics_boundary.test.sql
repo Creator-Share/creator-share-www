@@ -1232,6 +1232,8 @@ SELECT extensions.is(
   'the capacity guard writes no partial release rows'
 );
 
+-- End shared analytics release fixture.
+
 CREATE TEMP TABLE public_metric_test_results (
   invocation integer PRIMARY KEY,
   payload jsonb NOT NULL
