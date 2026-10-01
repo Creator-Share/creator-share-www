@@ -14,6 +14,7 @@ interface DeleteDialogProps {
   onClose: () => void
   onConfirm: () => Promise<void>
   itemCount: number
+  accountOffboarding?: boolean
 }
 
 const DeleteDialog: React.FC<DeleteDialogProps> = ({
@@ -21,6 +22,7 @@ const DeleteDialog: React.FC<DeleteDialogProps> = ({
   onClose,
   onConfirm,
   itemCount,
+  accountOffboarding = false,
 }) => {
   const [isLoading, setIsLoading] = useState(false)
 
@@ -34,16 +36,17 @@ const DeleteDialog: React.FC<DeleteDialogProps> = ({
   }
 
   return (
-    <DialogRoot open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <DialogRoot open={isOpen} onOpenChange={({ open }) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <Text className="text-xl font-semibold">Confirm Deletion</Text>
+          <Text className="text-xl font-semibold">{accountOffboarding ? "Disable account access" : "Confirm Deletion"}</Text>
           <DialogCloseTrigger onClick={onClose} />
         </DialogHeader>
         <DialogBody>
           <Text>
-            Are you sure you want to delete {itemCount} selected children? This
-            action cannot be undone.
+            {accountOffboarding
+              ? `Disable platform access for ${itemCount} selected accounts? Sponsorships, billing, profiles, and financial history will be retained. Transfer any active Advocate ownership first.`
+              : `Are you sure you want to delete ${itemCount} selected children? This action cannot be undone.`}
           </Text>
           <Flex gap={3} mt={4}>
             <Button 
@@ -58,7 +61,7 @@ const DeleteDialog: React.FC<DeleteDialogProps> = ({
               className="bg-red-500 text-white p-4"
               disabled={isLoading}
             >
-              {isLoading ? "Deleting..." : "Delete"}
+              {isLoading ? "Working..." : accountOffboarding ? "Disable access" : "Delete"}
             </Button>
           </Flex>
         </DialogBody>

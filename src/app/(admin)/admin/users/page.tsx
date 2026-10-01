@@ -23,11 +23,10 @@ const UserManagement = () => {
     selectedUsers,
     fetchUsers,
     fetchRoles,
-    deleteUser,
     assignMultipleRoles,
     setSelectedUsers,
     clearError,
-    bulkDeleteUsers,
+    disableAccounts,
   } = useUserManagementStore()
 
   const [isInviteDrawerOpen, setIsInviteDrawerOpen] = useState(false)
@@ -148,7 +147,7 @@ const UserManagement = () => {
     if (selectedUsers.size === 0) {
       toaster.create({
         title: "No Selection",
-        description: "No users selected for deletion.",
+        description: "No accounts selected.",
         duration: 5000,
       })
       return
@@ -163,37 +162,22 @@ const UserManagement = () => {
 
   const confirmDelete = async () => {
     try {
-      const userIds = usersToDelete.map((user) => user.user_id).filter(Boolean)
-
-      // Try bulk delete first (fastest)
-      try {
-        await bulkDeleteUsers(userIds)
-      } catch (bulkError) {
-        console.warn(
-          "Bulk delete failed, falling back to parallel individual deletes:",
-          bulkError
-        )
-
-        // Fallback to parallel individual deletes (still much faster than sequential)
-        const deletePromises = usersToDelete.map((user) =>
-          deleteUser(user.user_id)
-        )
-        await Promise.all(deletePromises)
-      }
+      const userIds = [...new Set(usersToDelete.map(user => user.user_id).filter(Boolean))]
+      await disableAccounts(userIds)
 
       setSelectedUsers(new Set())
       setUsersToDelete([])
       setIsDeleteDialogOpen(false)
       toaster.create({
         title: "Success",
-        description: `Successfully deleted ${userIds.length} users.`,
+        description: `Disabled access for ${userIds.length} accounts.`,
         duration: 5000,
       })
     } catch (error) {
-      console.error("Bulk delete error:", error)
+      console.error("Account offboarding failed:", error)
       toaster.create({
         title: "Error",
-        description: `Failed to delete users: ${
+        description: `Failed to disable account access: ${
           error instanceof Error ? error.message : "Unknown error"
         }`,
         duration: 5000,
@@ -276,6 +260,7 @@ const UserManagement = () => {
                 <Menu.Content>
                   <Menu.Item
                     value="edit"
+                    disabled={userGroup.user?.disabled}
                     onClick={() => handleEditRole(userGroup)}
                     className="flex items-center gap-2 text-blue-600 hover:bg-blue-50"
                   >
@@ -296,9 +281,11 @@ const UserManagement = () => {
                   </Menu.Item>
                   <Menu.Item
                     value="delete"
+                    disabled={userGroup.user?.disabled}
                     onClick={() => {
                       if (userGroup.user?.id) {
-                        deleteUser(userGroup.user.id)
+                        setUsersToDelete(users.filter(user => user.user_id === userGroup.user?.id))
+                        setIsDeleteDialogOpen(true)
                       }
                     }}
                     className="flex items-center gap-2 text-red-600 hover:bg-red-50"
@@ -316,7 +303,7 @@ const UserManagement = () => {
                         d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                       />
                     </svg>
-                    Delete
+                    Disable access
                   </Menu.Item>
                 </Menu.Content>
               </Menu.Positioner>
@@ -373,6 +360,7 @@ const UserManagement = () => {
             </Box>
           </Box>
 
+          {userGroup.user?.disabled && <Text fontSize="sm" color="red.600">Access disabled</Text>}
           <Text fontSize="sm" color="gray.600">
             <strong>Joined:</strong> {formatDate(userGroup.created_at)}
           </Text>
@@ -416,7 +404,7 @@ const UserManagement = () => {
       bulkActions={
         selectedUsers.size > 0 ? (
           <BulkActionButton
-            label="Delete"
+            label="Disable access"
             count={selectedUsers.size}
             action={handleBulkDelete}
             className="border-[2px] border-transparent rounded-md w-full md:w-auto h-[40px] px-6 bg-[#ff0000] text-white hover:bg-[#ff0000] hover:text-white justify-center"
@@ -508,7 +496,8 @@ const UserManagement = () => {
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={confirmDelete}
-        itemCount={usersToDelete.length}
+        itemCount={new Set(usersToDelete.map(user => user.user_id)).size}
+        accountOffboarding
       />
 
       {/* Edit Role Dialog */}

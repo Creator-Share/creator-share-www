@@ -159,6 +159,7 @@ export interface ExpenseWithAssignment extends Expense {
 
 // Manage Users Types
 export interface User {
+  disabled?: boolean
   id: string
   first_name: string | null
   last_name: string | null
@@ -203,10 +204,9 @@ export interface UserManagementActions {
   inviteUser: (invitation: UserInvitation) => Promise<boolean>
   assignRole: (userId: string, roleId: string) => Promise<boolean>
   removeRole: (userId: string, roleId: string) => Promise<boolean>
-  deleteUser: (userId: string) => Promise<boolean>
   updateUserRole: (userId: string, roleId: string) => Promise<boolean>
   assignMultipleRoles: (userId: string, roleIds: string[]) => Promise<boolean>
-  bulkDeleteUsers: (userIds: string[]) => Promise<boolean>
+  disableAccounts: (userIds: string[]) => Promise<boolean>
   setSelectedUsers: (userIds: Set<string>) => void
   clearError: () => void
 }

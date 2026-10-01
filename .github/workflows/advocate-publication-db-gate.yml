@@ -219,6 +219,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      - name: Run account offboarding concurrency
+        env:
+          ACCOUNT_OFFBOARDING_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/account-offboarding-concurrency-evidence.json
+        run: yarn test:accounts:offboarding-concurrency
+
+      - name: Upload account offboarding concurrency evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-offboarding-concurrency-evidence
+          path: ${{ runner.temp }}/account-offboarding-concurrency-evidence.json
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Run beneficiary deletion concurrency harness
         env:
           BENEFICIARY_DELETION_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/beneficiary-deletion-concurrency-evidence.json

@@ -16,6 +16,7 @@
         "PW_NO_WEBSERVER": "1"
       },
       "files": [
+        "tests/admin/account-offboarding-route.spec.ts",
         "tests/admin/activity-notification-route.spec.ts",
         "tests/admin/beneficiary-deletion-route.spec.ts",
         "tests/advocates/attribution-identity-auth-routes.spec.ts",
@@ -277,6 +278,7 @@
         "supabase/tests/domain_provisioning_settlement_boundary.test.sql",
         "supabase/tests/email_proof_issuance_retention.test.sql",
         "supabase/tests/gateway_event_success_material.test.sql",
+        "supabase/tests/global_account_offboarding.test.sql",
         "supabase/tests/legacy_stripe_webhook_durability.test.sql",
         "supabase/tests/legacy_subscription_ownership_reconciliation.test.sql",
         "supabase/tests/password_recovery_receipt_consumption.test.sql",
@@ -315,6 +317,7 @@
       "required": true,
       "runner": "node",
       "files": [
+        "tests/database/account-offboarding-concurrency.mjs",
         "tests/database/advocate-branding-authority-concurrency.mjs",
         "tests/database/advocate-branding-authority-termination.mjs",
         "tests/database/advocate-initial-owner-concurrency.mjs",

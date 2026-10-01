@@ -25,6 +25,15 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })
     }
 
+    const { data: disabledIds, error: accessError } = await supabase.rpc(
+      "get_creator_share_disabled_accounts",
+      { target_user_ids: (allUsers ?? []).map(user => user.id) },
+    )
+    if (accessError || !Array.isArray(disabledIds) || disabledIds.some(id => typeof id !== "string")) {
+      return NextResponse.json({ error: "Unable to confirm account access status" }, { status: 503 })
+    }
+    const disabled = new Set(disabledIds)
+
     // Fetch all role assignments
     const { data: roleAssignments, error: rolesError } = await supabase
       .from("role_assignments")
@@ -53,7 +62,7 @@ export async function GET() {
         return {
           user_id: user.id,
           created_at: user.created_at,
-          user: user,
+          user: { ...user, disabled: disabled.has(user.id) },
           role: null
         }
       }
@@ -62,12 +71,12 @@ export async function GET() {
       return userRoleAssignments.map(assignment => ({
         user_id: user.id,
         created_at: assignment.created_at,
-        user: user,
+        user: { ...user, disabled: disabled.has(user.id) },
         role: assignment.role
       }))
     }).flat() || []
 
-    return NextResponse.json(usersWithRoles)
+    return NextResponse.json(usersWithRoles, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
     console.error("Unexpected error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
