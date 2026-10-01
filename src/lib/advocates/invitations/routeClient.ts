@@ -4,7 +4,11 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextRequest, NextResponse } from "next/server"
 
 import { assertAdvocateStagingSupabaseBoundary } from "@/lib/advocates/stagingDeploymentBoundary"
-import { secureSupabaseAuthCookieOptions } from "@/utils/supabase/authCookieSecurity"
+import {
+  secureSupabaseAuthCookieOptions,
+  supabaseAuthCookieConfiguration,
+  parseSupabaseAuthCookies,
+} from "@/utils/supabase/authCookieSecurity"
 
 type ResponseCookie = {
   name: string
@@ -32,10 +36,14 @@ export function createAdvocateInvitationRouteClient(
 
   const pendingCookies: ResponseCookie[] = []
   const client = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookieOptions: supabaseAuthCookieConfiguration(supabaseUrl),
     auth: { flowType: "implicit" },
     cookies: {
       getAll() {
-        return request.cookies.getAll()
+        return parseSupabaseAuthCookies(
+            request.headers.get("cookie"),
+            supabaseAuthCookieConfiguration(supabaseUrl).name,
+          )
       },
       setAll(cookiesToSet: ResponseCookie[]) {
         pendingCookies.push(...cookiesToSet)

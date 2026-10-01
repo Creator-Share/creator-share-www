@@ -1,5 +1,7 @@
 import "server-only"
 
+import { supabaseAuthCookieConfiguration } from "@/utils/supabase/authCookieSecurity"
+
 import type { CookieOptions, CookieOptionsWithName } from "@supabase/ssr"
 import type { NextResponse } from "next/server"
 
@@ -539,27 +541,31 @@ export function appendDefaultSupabaseAuthCookieClearHeaders(options: {
   ) {
     throw new Error("supabase_cookie_configuration_invalid")
   }
-  const authCookieName = defaultSupabaseAuthCookieName(options.supabaseUrl)
-  const names = matchingAuthCookieNames({
-    rawCookieHeader: options.rawCookieHeader,
-    authCookieName,
-  })
-  if (names === null) throw new Error("supabase_cookie_write_invalid")
+  const legacyName = defaultSupabaseAuthCookieName(options.supabaseUrl)
+  const currentName = supabaseAuthCookieConfiguration(options.supabaseUrl).name
+  for (const authCookieName of [legacyName, currentName]) {
+    const names = matchingAuthCookieNames({
+      rawCookieHeader: options.rawCookieHeader,
+      authCookieName,
+    })
+    if (names === null) throw new Error("supabase_cookie_write_invalid")
 
-  const parentDomain =
-    secure && canonical.hostname === "creatorshare.com"
-      ? ".creatorshare.com"
-      : null
-  for (const name of names) {
-    options.response.headers.append(
-      "Set-Cookie",
-      cookieClearHeader({ name, secure }),
-    )
-    if (parentDomain !== null) {
+    // Parent-domain cleanup is legacy-only: __Host- cookies forbid Domain.
+    const parentDomain =
+      authCookieName === legacyName && secure && canonical.hostname === "creatorshare.com"
+        ? ".creatorshare.com"
+        : null
+    for (const name of names) {
       options.response.headers.append(
         "Set-Cookie",
-        cookieClearHeader({ name, secure, domain: parentDomain }),
+        cookieClearHeader({ name, secure: secure || name.startsWith("__Host-") }),
       )
+      if (parentDomain !== null) {
+        options.response.headers.append(
+          "Set-Cookie",
+          cookieClearHeader({ name, secure, domain: parentDomain }),
+        )
+      }
     }
   }
 }

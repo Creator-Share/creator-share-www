@@ -4,6 +4,20 @@ import { resolve } from "node:path"
 
 import { expect, test } from "@playwright/test"
 import { NextRequest } from "next/server"
+import { supabaseAuthCookieConfiguration } from "../../src/utils/supabase/authCookieSecurity"
+
+const previousSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const previousBaseUrl = process.env.NEXT_PUBLIC_BASE_URL
+test.beforeEach(() => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.supabase.co"
+  process.env.NEXT_PUBLIC_BASE_URL = "https://creatorshare.com"
+})
+test.afterEach(() => {
+  if (previousSupabaseUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL
+  else process.env.NEXT_PUBLIC_SUPABASE_URL = previousSupabaseUrl
+  if (previousBaseUrl === undefined) delete process.env.NEXT_PUBLIC_BASE_URL
+  else process.env.NEXT_PUBLIC_BASE_URL = previousBaseUrl
+})
 
 type NodeModuleLoader = (
   request: string,
@@ -24,6 +38,7 @@ type CookieAdapter = {
 }
 
 test("forwards refreshed Supabase and visitor cookies to the same request", async () => {
+  const authCookieName = supabaseAuthCookieConfiguration(process.env.NEXT_PUBLIC_SUPABASE_URL!).name
   let cookiesSeenBeforeRefresh: Array<{ name: string; value: string }> = []
   const nodeModule = Module as unknown as { _load: NodeModuleLoader }
   const originalModuleLoad = nodeModule._load
@@ -47,7 +62,7 @@ test("forwards refreshed Supabase and visitor cookies to the same request", asyn
                 cookiesSeenBeforeRefresh = options.cookies.getAll()
                 options.cookies.setAll([
                   {
-                    name: "sb-test-auth-token",
+                    name: authCookieName,
                     value: "refreshed-session",
                     options: { httpOnly: true, path: "/" },
                   },
@@ -79,7 +94,7 @@ test("forwards refreshed Supabase and visitor cookies to the same request", asyn
 
   const request = new NextRequest("https://creatorshare.com/", {
     headers: {
-      cookie: "existing=value",
+      cookie: `existing=value; ${authCookieName}=old-session; sb-project-auth-token=legacy-session`,
       host: "creatorshare.com",
       "x-middleware-request-attacker": "spoofed",
     },
@@ -90,15 +105,12 @@ test("forwards refreshed Supabase and visitor cookies to the same request", asyn
     response.headers as Headers & { getSetCookie(): string[] }
   ).getSetCookie()
 
-  expect(cookiesSeenBeforeRefresh).toEqual(
-    expect.arrayContaining([
-      { name: "existing", value: "value" },
-      expect.objectContaining({ name: "cs_sponsorship_visitor_v1" }),
-    ]),
-  )
+  expect(cookiesSeenBeforeRefresh).toEqual([
+    { name: authCookieName, value: "old-session" },
+  ])
   expect(forwardedCookie).toContain("existing=value")
   expect(forwardedCookie).toContain("cs_sponsorship_visitor_v1=v2.")
-  expect(forwardedCookie).toContain("sb-test-auth-token=refreshed-session")
+  expect(forwardedCookie).toContain(`${authCookieName}=refreshed-session`)
   expect(setCookies).toHaveLength(3)
   expect(setCookies).toEqual(
     expect.arrayContaining([
@@ -108,12 +120,12 @@ test("forwards refreshed Supabase and visitor cookies to the same request", asyn
       expect.stringMatching(
         /cs_sponsorship_visitor_v1=v2\.[^;]+;(?!.*Domain=)/,
       ),
-      expect.stringContaining("sb-test-auth-token=refreshed-session"),
+      expect.stringContaining(`${authCookieName}=refreshed-session`),
     ]),
   )
   expect(
     setCookies.find((cookie) =>
-      cookie.startsWith("sb-test-auth-token=refreshed-session"),
+      cookie.startsWith(`${authCookieName}=refreshed-session`),
     ),
   ).toMatch(/; Secure/i)
   expect(

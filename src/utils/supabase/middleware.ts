@@ -19,7 +19,11 @@ import {
   type SponsorshipVisitorCookieEnvironment,
 } from "@/lib/sponsorships/visitorCookieToken"
 import { assertAdvocateStagingSupabaseBoundary } from "@/lib/advocates/stagingDeploymentBoundary"
-import { secureSupabaseAuthCookieOptions } from "@/utils/supabase/authCookieSecurity"
+import {
+  secureSupabaseAuthCookieOptions,
+  supabaseAuthCookieConfiguration,
+  parseSupabaseAuthCookies,
+} from "@/utils/supabase/authCookieSecurity"
 
 type ResponseCookieMutation = {
   name: string
@@ -277,9 +281,15 @@ export async function updateSession(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: supabaseAuthCookieConfiguration(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      ),
       cookies: {
         getAll() {
-          return request.cookies.getAll()
+          return parseSupabaseAuthCookies(
+            request.headers.get("cookie"),
+            supabaseAuthCookieConfiguration(process.env.NEXT_PUBLIC_SUPABASE_URL!).name,
+          )
         },
         setAll(
           cookiesToSet: {

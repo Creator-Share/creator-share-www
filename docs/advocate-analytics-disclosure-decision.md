@@ -1,6 +1,6 @@
 # Private analytics disclosure decision
 
-Status: proposed, owner decision pending. No reporting behavior has changed.
+Status: approved for implementation, October 1, 2026. The owner accepts delayed or withheld updates for low-volume advocates while preserving every metric. Implementation and acceptance evidence remain pending.
 
 ## Confirmed disclosure
 
@@ -36,7 +36,7 @@ A one-day delay shifts when disclosure occurs. A five-contact cumulative cohort 
 
 Preserve every metric but release private updates only when coordinated disclosure rules allow the change. The design needs a durable record of disclosed values, a shared cutoff across related totals and segments, and sufficient distinct contributors to each newly visible measure. Refund, dispute, renewal, and commitment changes need their own contributor analysis; a new-sponsorship threshold alone does not protect them. Original-currency tables and public impact releases must be reviewed together with private totals so one surface cannot reveal a suppressed difference from another.
 
-This necessarily changes freshness for low-volume advocates. Exact daily cumulative amounts and a guarantee against isolating a single changed contribution cannot both be promised in the demonstrated case. The pending owner question asks whether to batch updates for privacy or explicitly accept the narrower disclosure guarantee. Neither choice has been implemented or treated as approved.
+This necessarily changes freshness for low-volume advocates. Exact daily cumulative amounts and a guarantee against isolating a single changed contribution cannot both be promised in the demonstrated case. The owner approved coordinated delayed disclosure on October 1, 2026. The implementation must preserve every metric and identify delayed or withheld updates explicitly.
 
 ## Required acceptance evidence
 

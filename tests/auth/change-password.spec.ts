@@ -855,6 +855,14 @@ test("acknowledges success only after update and signout, then clears identity",
   expect(authCookies[0]).toContain("SameSite=lax")
   expect(authCookies[0]).not.toContain("Domain=")
 
+  const currentAuthCookies = responseCookies.filter((header) =>
+    header.startsWith("__Host-cs-recovery-project-auth-v2="),
+  )
+  expect(currentAuthCookies).toHaveLength(1)
+  expect(currentAuthCookies[0]).toContain("Max-Age=0")
+  expect(currentAuthCookies[0]).toContain("Secure")
+  expect(currentAuthCookies[0]).not.toContain("Domain=")
+
   const defaultAuthCookies = responseCookies.filter((header) =>
     header.startsWith(`${DEFAULT_SUPABASE_AUTH_COOKIE}=`),
   )

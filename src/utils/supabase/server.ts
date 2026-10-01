@@ -1,8 +1,12 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { assertAdvocateStagingSupabaseBoundary } from "@/lib/advocates/stagingDeploymentBoundary"
-import { secureSupabaseAuthCookieOptions } from "@/utils/supabase/authCookieSecurity"
+import {
+  secureSupabaseAuthCookieOptions,
+  supabaseAuthCookieConfiguration,
+  parseSupabaseAuthCookies,
+} from "@/utils/supabase/authCookieSecurity"
 
 const MIN_SERVICE_ROLE_REQUEST_TIMEOUT_MILLISECONDS = 1_000
 const MAX_SERVICE_ROLE_REQUEST_TIMEOUT_MILLISECONDS = 45_000
@@ -18,6 +22,7 @@ export async function createClient(options: SupabaseClientOptions = {}) {
     requireServiceRole: false,
   })
   const cookieStore = await cookies()
+  const requestHeaders = await headers()
   const global =
     options.requestTimeoutMilliseconds === undefined
       ? undefined
@@ -31,9 +36,15 @@ export async function createClient(options: SupabaseClientOptions = {}) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: supabaseAuthCookieConfiguration(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      ),
       cookies: {
         getAll() {
-          return cookieStore.getAll()
+          return parseSupabaseAuthCookies(
+            requestHeaders.get("cookie"),
+            supabaseAuthCookieConfiguration(process.env.NEXT_PUBLIC_SUPABASE_URL!).name,
+          )
         },
         setAll(
           cookiesToSet: {

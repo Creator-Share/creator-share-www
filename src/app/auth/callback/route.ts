@@ -11,7 +11,11 @@ import {
   getSponsorClaimCanonicalOrigin,
   isValidSupabaseAuthCode,
 } from "@/lib/sponsorships/accountClaim"
-import { secureSupabaseAuthCookieOptions } from "@/utils/supabase/authCookieSecurity"
+import {
+  secureSupabaseAuthCookieOptions,
+  supabaseAuthCookieConfiguration,
+  parseSupabaseAuthCookies,
+} from "@/utils/supabase/authCookieSecurity"
 
 export const runtime = "nodejs"
 
@@ -68,9 +72,13 @@ export async function GET(request: NextRequest) {
       requireServiceRole: false,
     })
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookieOptions: supabaseAuthCookieConfiguration(supabaseUrl),
       cookies: {
         getAll() {
-          return request.cookies.getAll()
+          return parseSupabaseAuthCookies(
+            request.headers.get("cookie"),
+            supabaseAuthCookieConfiguration(supabaseUrl).name,
+          )
         },
         setAll(cookiesToSet: ResponseCookie[]) {
           cookiesToSet.forEach(({ name, value, options }) =>

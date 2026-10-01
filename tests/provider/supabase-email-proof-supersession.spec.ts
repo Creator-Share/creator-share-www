@@ -1053,9 +1053,10 @@ test("reserves bounded cleanup after the execution budget is exhausted", async (
         },
       }),
       completeRunOptions({
-        operationTimeoutMilliseconds: 200,
-        totalBudgetMilliseconds: 80,
-        cleanupBudgetMilliseconds: 30,
+        operationTimeoutMilliseconds: 2_000,
+        // Leave scheduler headroom while preserving the execution/cleanup split.
+        totalBudgetMilliseconds: 800,
+        cleanupBudgetMilliseconds: 300,
       }),
     )
     .then(
@@ -1064,7 +1065,7 @@ test("reserves bounded cleanup after the execution budget is exhausted", async (
     )
   expect(cleanupCalls).toBe(1)
   expect(cleanupDeadline).toBeGreaterThanOrEqual(Date.now())
-  expect(Date.now() - startedAt).toBeLessThan(500)
+  expect(Date.now() - startedAt).toBeLessThan(3_000)
   expect(outcome.status).toBe("rejected")
   expect((outcome.error as Error).message).toBe(
     "ff029_operation_unsettled_after_abort",

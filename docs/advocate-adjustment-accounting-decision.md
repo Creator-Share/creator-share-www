@@ -1,6 +1,6 @@
 # Partial foreign-currency adjustment decision
 
-Status: proposed, September 17, 2026. The owner accounting-policy question is pending. No refund allocation change is approved or implemented by this document. FF-072 remains a release blocker.
+Status: approved for implementation, October 1, 2026. The owner approved fractional internal normalization from immutable original amounts, rounding at reporting boundaries, and separate recording of provider losses beyond attributed principal. FF-072 and FF-084 remain release blockers until the coordinated implementation and recovery checks pass.
 
 ## Confirmed defect
 
@@ -54,7 +54,7 @@ A PostgreSQL `numeric` quotient is not itself an exact rational representation. 
 
 This uses the ratio of the actual original amounts, including original charge rounding. It is a proposed accounting convention, not a claim that dividing by the quoted conversion rate gives the same result. Cross-payment aggregation and whole-cent presentation still need explicit rounding rules. Independently rounded category displays can differ from a rounded net total; the reporting contract must explain or reconcile that residual. Existing positive whole-cent ledger constraints and consumers would still need coordinated changes.
 
-A standalone BigInt model examined 11,534 positive adjustment amounts, including full refunds, across five original-amount pairs, and 50,000 amount combinations for the ordering dispute debit, refund, then matching dispute credit. Exact numerator sums reconciled in every case. These are mathematical model checks, not production adapter, database, concurrency, event-order permutation, or provider evidence. No accounting behavior has changed. This proposal remains subject to the owner accounting decision.
+A standalone BigInt model examined 11,534 positive adjustment amounts, including full refunds, across five original-amount pairs, and 50,000 amount combinations for the ordering dispute debit, refund, then matching dispute credit. Exact numerator sums reconciled in every case. These are mathematical model checks, not production adapter, database, concurrency, event-order permutation, or provider evidence. No accounting behavior has changed. The owner approved this direction on October 1, 2026.
 
 ## Arrival-order model extension
 
@@ -62,7 +62,7 @@ A second standalone BigInt model examined all six arrival permutations of one di
 
 Exact rational sums preserved the final provider net and restored the dispute numerator to zero in every scenario. The simple cumulative whole-cent model left a nonzero dispute category balance in 19,960 scenarios: 9,980 with debit/refund/credit arrival and 9,980 with credit/debit/refund arrival followed by deferred credit settlement. This demonstrates dependence on settlement ordering, not an estimated frequency of production failures. The model assumes sufficient bounded principal and one original payment. It does not resolve excess or grouped disputes in FF-084.
 
-These are model properties, not assertions about current database retry scheduling, idempotency, concurrent settlement, or provider delivery. The existing hosted recovery regression remains separate evidence for the implemented out-of-order event boundary. The accounting recommendation must still be implemented and tested across adapters, ingestion, settlement, reporting, and retained-quarantine recovery after approval.
+These are model properties, not assertions about current database retry scheduling, idempotency, concurrent settlement, or provider delivery. The existing hosted recovery regression remains separate evidence for the implemented out-of-order event boundary. The accounting recommendation must still be implemented and tested across adapters, ingestion, settlement, reporting, and retained-quarantine recovery under the approved policy.
 
 ## Implementation boundaries to change together
 
@@ -95,4 +95,4 @@ A temporary server-free probe reused the current Stripe adapter fixtures with a 
 
 The repair must distinguish sponsor principal and attribution from actual provider cash movements. An authenticated loss must remain recorded even when principal attribution is exhausted. A dispute covering several recurring charges also needs explicit allocation or an unallocated reconciliation state; attributing the entire loss to one intent can misstate cohort reports. Preserve exact event identity, provider-account binding, original charge evidence, and bounded reinstatement authority. Do not merely remove amount checks or silently clamp the loss to zero.
 
-The existing owner accounting decision must cover these semantics before implementation. Add excess disputes, full-charge disputes after partial refunds, disputes spanning recurring charges, and their reinstatements to acceptance evidence. This finding is separate from the whole-cent representability defect in FF-072.
+The October 1 owner approval includes preserving excess provider losses separately from principal attribution. Add excess disputes, full-charge disputes after partial refunds, disputes spanning recurring charges, and their reinstatements to acceptance evidence. This finding is separate from the whole-cent representability defect in FF-072.

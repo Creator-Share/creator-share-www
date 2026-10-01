@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto"
 
+import { supabaseAuthCookieConfiguration, parseSupabaseAuthCookies } from "@/utils/supabase/authCookieSecurity"
+
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -163,12 +165,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookieOptions: supabaseAuthCookieConfiguration(supabaseUrl),
       auth: {
         flowType: "implicit",
       },
       cookies: {
         getAll() {
-          return request.cookies.getAll()
+          return parseSupabaseAuthCookies(
+            request.headers.get("cookie"),
+            supabaseAuthCookieConfiguration(supabaseUrl).name,
+          )
         },
         setAll(cookiesToSet: ResponseCookie[]) {
           cookiesToSet.forEach(({ name, value, options }) =>

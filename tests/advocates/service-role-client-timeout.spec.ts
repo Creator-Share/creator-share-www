@@ -4,6 +4,19 @@ import { resolve } from "node:path"
 
 import { expect, test } from "@playwright/test"
 
+const previousSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const previousBaseUrl = process.env.NEXT_PUBLIC_BASE_URL
+test.beforeEach(() => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.supabase.co"
+  process.env.NEXT_PUBLIC_BASE_URL = "https://creatorshare.com"
+})
+test.afterEach(() => {
+  if (previousSupabaseUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL
+  else process.env.NEXT_PUBLIC_SUPABASE_URL = previousSupabaseUrl
+  if (previousBaseUrl === undefined) delete process.env.NEXT_PUBLIC_BASE_URL
+  else process.env.NEXT_PUBLIC_BASE_URL = previousBaseUrl
+})
+
 type ServerModule = typeof import("../../src/utils/supabase/server")
 type NodeModuleLoader = (
   request: string,
@@ -38,7 +51,7 @@ nodeModule._load = function mockedModuleLoad(
     }
   }
   if (request === "next/headers") {
-    return { async cookies() {} }
+    return { async cookies() {}, async headers() { return new Headers() } }
   }
   return originalModuleLoad.call(this, request, parent, isMain)
 }
