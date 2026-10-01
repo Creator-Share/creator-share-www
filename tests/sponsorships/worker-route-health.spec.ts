@@ -57,7 +57,8 @@ const cancellationHealthy = Object.freeze({
 })
 
 const failureHealthy = { unresolved: 0, unacknowledged: 0, quarantined: 0, exhausted: 0,
-  expired_final_leases: 0, payloads_expiring_within_seven_days: 0, payloads_unavailable: 0 }
+  expired_final_leases: 0, payloads_expiring_within_seven_days: 0, payloads_unavailable: 0,
+  cash_without_gateway_event: 0, stale_cash_without_gateway_event: 0 }
 let failureHealth: object | Error = failureHealthy
 let gatewayResult: object | Error = gatewayHealthy
 let welcomeResult: object | Error = welcomeHealthy
@@ -201,6 +202,22 @@ test("healthy scheduled worker batches remain clean 200 responses", async () => 
     expect(await body(response)).toMatchObject({ ok: true })
   }
   expect(errorCalls).toEqual([])
+})
+
+test("preserved cash without an event alerts after the ingestion grace period", async () => {
+  for (const stale of [0, 1]) {
+    errorCalls = []
+    failureHealth = { ...failureHealthy, cash_without_gateway_event: 1, stale_cash_without_gateway_event: stale }
+    const response = await gatewayRoute.GET(request("/api/internal/payments/gateway-events"))
+    expect(response.status).toBe(stale ? 503 : 200)
+    const result = await body(response)
+    expect(result.failureHealth).toEqual(failureHealth)
+    expect(result.code).toBe(stale ? "provider_cash_missing_gateway_event" : undefined)
+    expect(errorCalls).toEqual(stale ? [[
+      "PAYMENT_GATEWAY_EVENT_WORKER_REQUIRES_ATTENTION",
+      expect.objectContaining({ code: "provider_cash_missing_gateway_event", unresolved: 0, staleCashWithoutGatewayEvent: 1 }),
+    ]] : [])
+  }
 })
 
 test("gateway terminal and uncertain settlements fail the invocation visibly", async () => {

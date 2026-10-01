@@ -37,17 +37,21 @@ export interface PaymentFailureHealth {
   expired_final_leases: number
   payloads_expiring_within_seven_days: number
   payloads_unavailable: number
+  cash_without_gateway_event: number
+  stale_cash_without_gateway_event: number
 }
 
 export async function readPaymentFailureHealth(): Promise<PaymentFailureHealth> {
   const { data, error } = await createServiceRoleClient({ requestTimeoutMilliseconds: 15_000 })
     .rpc("get_payment_failure_health")
   const keys = ["unresolved", "unacknowledged", "quarantined", "exhausted",
-    "expired_final_leases", "payloads_expiring_within_seven_days", "payloads_unavailable"] as const
+    "expired_final_leases", "payloads_expiring_within_seven_days", "payloads_unavailable",
+    "cash_without_gateway_event", "stale_cash_without_gateway_event"] as const
   if (error || !data || typeof data !== "object" || Array.isArray(data) ||
       keys.some(key => !Number.isSafeInteger(data[key]) || data[key] < 0) ||
       data.unresolved !== data.quarantined + data.exhausted + data.expired_final_leases ||
       data.unacknowledged > data.unresolved ||
+      data.stale_cash_without_gateway_event > data.cash_without_gateway_event ||
       data.payloads_expiring_within_seven_days + data.payloads_unavailable > data.unresolved) {
     throw new Error("Payment failure health unavailable")
   }

@@ -53,31 +53,6 @@ RETURNS text LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
 $$;
 REVOKE ALL ON FUNCTION private.payment_failure_version(public.payment_gateway_events) FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE FUNCTION public.get_payment_failure_health()
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
-DECLARE v_result jsonb;
-BEGIN
-  PERFORM private.require_payment_service_role();
-  SELECT jsonb_build_object(
-    'unresolved', count(*),
-    'unacknowledged', count(*) FILTER (WHERE receipt.gateway_event_id IS NULL),
-    'quarantined', count(*) FILTER (WHERE private.payment_failure_kind(event) = 'quarantined'),
-    'exhausted', count(*) FILTER (WHERE private.payment_failure_kind(event) = 'exhausted'),
-    'expired_final_leases', count(*) FILTER (WHERE private.payment_failure_kind(event) = 'expired_final_lease'),
-    'payloads_expiring_within_seven_days', count(*) FILTER (WHERE event.payload_ciphertext IS NOT NULL
-      AND event.payload_retention_expires_at <= statement_timestamp() + interval '7 days'),
-    'payloads_unavailable', count(*) FILTER (WHERE event.payload_ciphertext IS NULL)
-  ) INTO v_result
-  FROM public.payment_gateway_events event
-  LEFT JOIN audit.payment_failure_acknowledgments receipt ON receipt.gateway_event_id = event.id
-    AND receipt.failure_version = private.payment_failure_version(event)
-  WHERE private.payment_failure_kind(event) IS NOT NULL;
-  RETURN v_result;
-END;
-$$;
-REVOKE ALL ON FUNCTION public.get_payment_failure_health() FROM PUBLIC, anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.get_payment_failure_health() TO service_role;
-
 -- UUID keyset pages remain bounded and include acknowledged unresolved cases.
 CREATE FUNCTION public.list_payment_failures(after_event_id uuid DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' SET lock_timeout = '5s' AS $$

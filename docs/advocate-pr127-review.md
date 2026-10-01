@@ -542,3 +542,10 @@ A full-release performance probe identified repeated nested JSON lookups in disc
 Publication 36830276958 and WebKit 36830276968 passed at `46d4a83`, validating the flattened disclosure comparison. A subsequent adversarial probe found that gross minus cumulative dispute debits could expose a single untouched 733-cent contribution despite a six-contact net after five dispute restorations. A zero-net case also exposed four unrefunded contacts through gross minus refunds.
 
 The candidate adds both hidden complement fingerprints and coordinates their operands through the existing history policy. Four SQL policy assertions pass; the new dispute regression fails on the preceding coordinator. Actual production-query probes with normal triggers during disclosure confirm unsafe withholding and continued release with five untouched contacts. Reader, public metrics, and history-oracle checks pass in-process. The additional controls add storage and computation, recorded in the analytics decision. Native hosted validation and broader reconstruction review remain open.
+
+
+## Preserved cash outside the event queue
+
+Publication 36831955640 and WebKit 36831955701 passed at `3d16802`, including the two financial-complement privacy guards. The next fault probe committed a real service-role cash receipt without its event, then observed zero failures from the old health RPC.
+
+The candidate counts unmatched cash separately and reports stale missing-event cash after ten minutes, without changing money or retry state. Correlation requires account, event identity, and immutable digest; an index supports lookup by cash movement. The health function moved to the cash migration so it is defined once after both dependencies exist. All 101 financial SQL assertions, 14 focused application contracts, TypeScript, and lint pass in-process or without servers. Hosted validation remains pending. Financial allocation, recovery, and actual alert-delivery evidence remain open.

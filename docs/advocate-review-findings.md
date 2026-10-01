@@ -2,7 +2,7 @@
 
 Status: review in progress, October 1, 2026. The PR is not ready to ship. Excess-loss allocation, retained-event recovery, broader analytics disclosure review, and external release evidence remain incomplete. The owner has approved the five implementation decisions below. No merge into `dev` or branch-protection change is authorized.
 
-The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. Both complete hosted workflows passed at `55de9ea`: publication 36828769720 and WebKit 36828769708. This covers the exact normalization, coordinated analytics, offboarding, cookie, acknowledgment, font, and PayPal classification changes, plus all seven new cash-evidence concurrency scenarios. The cash artifact records server-observed blocking, rollback without partial cash or audit evidence, safe replay, and no principal mutation. These are repository checks, not production activation evidence. Existing local checkouts were left intact and local services remain stopped.
+The authoritative review baseline is PR 127 at `03806587621477ef8c86b946e59431b053f5a9d5`. Both complete hosted workflows passed at `3d16802`: publication 36831955640 and WebKit 36831955701. This covers the exact normalization, coordinated analytics, offboarding, cookie, acknowledgment, font, and PayPal classification changes, plus all seven cash-evidence concurrency scenarios and the additional financial-complement privacy guards. The cash artifact records server-observed blocking, rollback without partial cash or audit evidence, safe replay, and no principal mutation. These are repository checks, not production activation evidence. Existing local checkouts were left intact and local services remain stopped.
 
 ## Repaired defects and unnecessary complexity
 
@@ -61,7 +61,11 @@ A separate application cleanup removes 456 net lines of uncalled helpers, obsole
 
 ## Additional coordinated-disclosure finding
 
-A production-query fixture at `46d4a83` releases 10,733 cents gross and 10,000 cents disputed across eleven contacts. Five dispute restorations keep the reported net at a safe six-contact cohort, but subtracting gross minus debits reveals the sole untouched contact's 733 cents. A second case exposes four unrefunded contacts despite zero net. The candidate now fingerprints and coordinates both complements through the existing history boundary. In-process before/after, safe-cohort, policy, reader, and public-release evidence passes; hosted validation remains pending. FF-034 stays open for broader reconstruction and capacity review.
+A production-query fixture at `46d4a83` releases 10,733 cents gross and 10,000 cents disputed across eleven contacts. Five dispute restorations keep the reported net at a safe six-contact cohort, but subtracting gross minus debits reveals the sole untouched contact's 733 cents. A second case exposes four unrefunded contacts despite zero net. The candidate now fingerprints and coordinates both complements through the existing history boundary. In-process before/after, safe-cohort, policy, reader, and public-release evidence passes; both hosted workflows passed at 3d16802. FF-034 stays open for broader reconstruction and capacity review.
+
+## Cash receipt interruption gap
+
+The previous health query inspected gateway events only. A cash receipt committed before event ingestion could therefore remain outside the reported backlog after a crash. The candidate adds distinct unmatched-cash counts, exact account/event/digest correlation, and a ten-minute stale-ingestion alert. It does not infer a settlement or change acknowledgment semantics. The new SQL and worker regressions pass; hosted validation is pending.
 
 ## Release evidence still missing
 

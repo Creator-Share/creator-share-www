@@ -1704,6 +1704,45 @@ SELECT extensions.ok((SELECT count(*)=7 AND bool_and(before_data IS NULL AND aft
     AND table_name IN ('provider_cash_movements','provider_cash_evidence')),
   'cash audit records successful writes without copying amounts or retaining failed contenders');
 
+-- A crash after the cash RPC and before event ingestion must remain observable.
+SELECT extensions.ok(public.get_payment_failure_health() @>
+  '{"cash_without_gateway_event":3,"stale_cash_without_gateway_event":0}'::jsonb,
+  'cash without gateway events is counted once per movement during the ingestion grace period');
+SET LOCAL session_replication_role = replica;
+UPDATE private.provider_cash_movements SET recorded_at=clock_timestamp()-interval '11 minutes'
+  WHERE id=(SELECT id FROM cash_receipt);
+SET LOCAL session_replication_role = origin;
+SELECT extensions.ok(public.get_payment_failure_health() @>
+  '{"cash_without_gateway_event":3,"stale_cash_without_gateway_event":1}'::jsonb,
+  'cash whose event never arrives becomes a persistent health failure');
+CREATE TEMP TABLE before_cash_health AS SELECT count(*) AS movements FROM public.sponsorship_financial_movements;
+CREATE FUNCTION pg_temp.cash_health_event(account_scope text,event_key text,digest_text text)
+RETURNS void LANGUAGE plpgsql AS $$ BEGIN
+  PERFORM public.quarantine_verified_payment_gateway_event(
+    'STRIPE',account_scope,event_key,'charge.dispute.funds_withdrawn','dispute','dp_cash_fixture',
+    '{}',decode(repeat('aa',64),'hex'),extensions.digest(digest_text,'sha256'),
+    clock_timestamp(),clock_timestamp(),'stripe_webhook_signature','provider-fact-mismatch',
+    'Verified cash requires reconciliation','cash-health-test');
+END; $$;
+SAVEPOINT mismatched_cash_event;
+SELECT pg_temp.cash_health_event('stripe_uk','evt_cash_fixture','cash-fixture');
+SELECT extensions.ok(public.get_payment_failure_health()->>'stale_cash_without_gateway_event'='1',
+  'the same event identity in another provider account does not hide missing cash ingestion');
+ROLLBACK TO SAVEPOINT mismatched_cash_event;
+SELECT pg_temp.cash_health_event('stripe_us','evt_cash_fixture','different-body');
+SELECT extensions.ok(public.get_payment_failure_health()->>'stale_cash_without_gateway_event'='1',
+  'an event with different immutable evidence cannot hide missing cash ingestion');
+ROLLBACK TO SAVEPOINT mismatched_cash_event;
+SELECT pg_temp.cash_health_event('stripe_us','evt_cash_second_delivery','cash-fixture');
+SELECT extensions.ok(public.get_payment_failure_health() @>
+  '{"cash_without_gateway_event":2,"stale_cash_without_gateway_event":0}'::jsonb,
+  'a matching corroborating event links the cash without counting observations as separate money');
+SELECT extensions.ok((public.get_payment_failure_health()->>'quarantined')::integer>0
+  AND (public.get_payment_failure_health()->>'unacknowledged')::integer>0,
+  'linking the quarantined event does not resolve its financial failure');
+SELECT extensions.is((SELECT count(*) FROM public.sponsorship_financial_movements),
+  (SELECT movements FROM before_cash_health),'health and event linkage do not allocate or alter principal');
+
 SELECT * FROM extensions.finish();
 
 ROLLBACK;

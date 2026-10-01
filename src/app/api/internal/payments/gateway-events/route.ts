@@ -47,14 +47,17 @@ async function runWorker(request: NextRequest) {
     })
     const failureHealth = await readPaymentFailureHealth()
     const incompleteBatch = batch.terminalFailed > 0 || batch.settlementUnknown > 0
-    const requiresAttention = incompleteBatch || failureHealth.unacknowledged > 0
-    const attentionCode = incompleteBatch ? "worker_batch_incomplete" : "unacknowledged_payment_failures"
+    const missingCashEvent = failureHealth.stale_cash_without_gateway_event > 0
+    const requiresAttention = incompleteBatch || missingCashEvent || failureHealth.unacknowledged > 0
+    const attentionCode = incompleteBatch ? "worker_batch_incomplete"
+      : missingCashEvent ? "provider_cash_missing_gateway_event" : "unacknowledged_payment_failures"
     if (requiresAttention) {
       console.error("PAYMENT_GATEWAY_EVENT_WORKER_REQUIRES_ATTENTION", {
         requestId,
         code: attentionCode,
         unresolved: failureHealth.unresolved,
         unacknowledged: failureHealth.unacknowledged,
+        staleCashWithoutGatewayEvent: failureHealth.stale_cash_without_gateway_event,
         terminalFailed: batch.terminalFailed,
         settlementUnknown: batch.settlementUnknown,
       })

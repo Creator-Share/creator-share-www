@@ -155,3 +155,8 @@ The owner has been asked whether advocate net funds should stay nonnegative with
 The adapter treated `RESOLVED_WITH_PAYOUT` as a seller win and submitted a credit for the full disputed amount. The [PayPal Disputes API schema](https://developer.paypal.com/api/customer-disputes/v1/schema.json) defines this outcome as protection provided to the merchant or customer. That case status does not identify who received funds or prove reinstatement to the merchant.
 
 A regression using this outcome fails against the former adapter and passes after removing it from the seller-credit allowlist. The existing verified-event quarantine path retains the unresolved event without inventing a credit or treating it as financially resolved. Seller-favour outcomes retain their current path. Reconciliation must establish merchant cash evidence before crediting a protection payout; this repair does not establish PayPal cash parity or settle the broader dispute/refund overlap question.
+
+
+## Cash ingestion interruption monitoring
+
+A verified cash receipt can commit before the gateway event. The prior event-only health query returned zero unresolved failures for that state. The candidate now counts unmatched cash by provider account, event identity, and immutable digest, and alerts after a ten-minute ingestion grace period. Tests cover multiple observations for one cash movement, mismatched account and digest, and transition into the existing unresolved quarantine inventory. Health and linkage do not allocate principal or claim financial recovery. The payment release runbook specifies the alert and deployment order.

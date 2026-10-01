@@ -455,3 +455,14 @@ Retain the following with the release record:
 ### Provider cash concurrency
 
 The publication workflow runs `yarn test:payments:cash-evidence-concurrency` against its isolated PostgreSQL stack. The FF-084 artifact must prove seven observed interleavings covering duplicate delivery, corroborating events, conflicting movement and event evidence, rollback, and interruption before event-observation insertion. Failed or canceled contenders must leave no cash, observation, or audit residue; no case may mutate principal. Evidence is published only after transient database disposal. This gate does not establish excess-loss allocation, provider-network behavior, or recovery of retained quarantines.
+
+
+## Provider cash committed before gateway ingestion
+
+The cash receipt commits before gateway ingestion or quarantine. If the request dies between them, the event queue alone cannot report that cash. The service-only health RPC therefore includes `cash_without_gateway_event` and `stale_cash_without_gateway_event`. These count cash movements, not corroborating deliveries. A match requires a retained observation with the same provider account, event identity, and immutable payload digest. Payload erasure does not remove that digest.
+
+Fresh missing-event cash remains visible in health without failing the worker. After ten minutes, matching the existing final-lease review interval, the worker returns 503 with `provider_cash_missing_gateway_event` and logs only aggregate counts and its request ID. This is an ingestion grace period, not a retention rule. `unresolved` continues to count event failures; zero there does not override a positive stale-cash count. Event acknowledgment does not suppress this separate missing-event condition.
+
+Investigate the protected cash and signed-event records through the approved reconciliation process. Do not synthesize an event, change a digest, allocate principal, or reset retries merely to clear the signal. A matching quarantined event removes the missing-event classification but remains unresolved in the ordinary failure inventory. Automated financial recovery and proof of delivery to the configured alert destination remain release work.
+
+Deploy the complete database revision before its application caller: the health function is now defined with the cash tables in `20260720106000_provider_cash_evidence.sql`, and the application requires both new counts. Raw cash and observation tables remain inaccessible to API roles.

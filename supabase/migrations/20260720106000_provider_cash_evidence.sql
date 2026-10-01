@@ -28,6 +28,8 @@ CREATE TABLE private.provider_cash_evidence (
   recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (provider_account_scope,source_event_id)
 );
+CREATE INDEX provider_cash_evidence_movement_idx
+  ON private.provider_cash_evidence(cash_movement_id,provider_account_scope,source_event_id);
 ALTER TABLE private.provider_cash_evidence ENABLE ROW LEVEL SECURITY;
 ALTER TABLE private.provider_cash_evidence FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON private.provider_cash_evidence FROM PUBLIC,anon,authenticated,service_role;
@@ -116,5 +118,48 @@ $$;
 REVOKE ALL ON FUNCTION public.record_verified_stripe_cash_movement(uuid,text,text,text,bigint,bigint,bigint,text,numeric,timestamptz,text,bytea,timestamptz,text) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.record_verified_stripe_cash_movement(uuid,text,text,text,bigint,bigint,bigint,text,numeric,timestamptz,text,bytea,timestamptz,text) TO service_role;
 COMMENT ON TABLE private.provider_cash_movements IS 'Immutable verified provider balance facts, independent of sponsorship allocation and payload retention. No sponsor contact material.';
+
+-- Health depends on both the review receipts and the provider cash evidence.
+CREATE FUNCTION public.get_payment_failure_health()
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_result jsonb;
+BEGIN
+  PERFORM private.require_payment_service_role();
+  SELECT jsonb_build_object(
+    'unresolved', count(*),
+    'unacknowledged', count(*) FILTER (WHERE receipt.gateway_event_id IS NULL),
+    'quarantined', count(*) FILTER (WHERE private.payment_failure_kind(event) = 'quarantined'),
+    'exhausted', count(*) FILTER (WHERE private.payment_failure_kind(event) = 'exhausted'),
+    'expired_final_leases', count(*) FILTER (WHERE private.payment_failure_kind(event) = 'expired_final_lease'),
+    'payloads_expiring_within_seven_days', count(*) FILTER (WHERE event.payload_ciphertext IS NOT NULL
+      AND event.payload_retention_expires_at <= statement_timestamp() + interval '7 days'),
+    'payloads_unavailable', count(*) FILTER (WHERE event.payload_ciphertext IS NULL)
+  ) INTO v_result
+  FROM public.payment_gateway_events event
+  LEFT JOIN audit.payment_failure_acknowledgments receipt ON receipt.gateway_event_id = event.id
+    AND receipt.failure_version = private.payment_failure_version(event)
+  WHERE private.payment_failure_kind(event) IS NOT NULL;
+  -- A receipt can commit before gateway ingestion. Count cash once even when
+  -- several signed events corroborate it; require the same immutable digest.
+  SELECT v_result || jsonb_build_object(
+    'cash_without_gateway_event',count(*),
+    'stale_cash_without_gateway_event',count(*) FILTER (
+      WHERE cash.recorded_at <= statement_timestamp()-interval '10 minutes')
+  ) INTO v_result
+  FROM private.provider_cash_movements cash
+  WHERE NOT EXISTS (
+    SELECT 1 FROM private.provider_cash_evidence evidence
+    JOIN public.payment_gateway_events event
+      ON event.provider=cash.provider
+      AND event.provider_account_scope=evidence.provider_account_scope
+      AND event.provider_event_id=evidence.source_event_id
+      AND event.payload_sha256=evidence.source_event_digest
+    WHERE evidence.cash_movement_id=cash.id
+  );
+  RETURN v_result;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_payment_failure_health() FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_payment_failure_health() TO service_role;
 
 COMMIT;

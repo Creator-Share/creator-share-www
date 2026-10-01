@@ -96,11 +96,13 @@ test("ambiguous or financially resolved responses are never reported as acknowle
 
 test("health projection rejects inconsistent counts and strips unexpected private fields", async () => {
   const healthy = { unresolved: 3, unacknowledged: 2, quarantined: 1, exhausted: 1,
-    expired_final_leases: 1, payloads_expiring_within_seven_days: 0, payloads_unavailable: 1 }
+    expired_final_leases: 1, payloads_expiring_within_seven_days: 0, payloads_unavailable: 1,
+    cash_without_gateway_event: 0, stale_cash_without_gateway_event: 0 }
   rpcData = { ...healthy, provider_event_id: "private-event" }
   expect(await runtime.readPaymentFailureHealth()).toEqual(healthy)
   for (const data of [null, [], {}, { ...healthy, unresolved: "3" }, { ...healthy, unacknowledged: 4 },
-    { ...healthy, exhausted: -1 }, { ...healthy, quarantined: 2 }, { ...healthy, payloads_unavailable: 4 },
+    { ...healthy, stale_cash_without_gateway_event: 1 },
+    { ...healthy, cash_without_gateway_event: undefined }, { ...healthy, exhausted: -1 }, { ...healthy, quarantined: 2 }, { ...healthy, payloads_unavailable: 4 },
     { ...healthy, unresolved: Number.MAX_SAFE_INTEGER + 1 }]) {
     rpcData = data
     await expect(runtime.readPaymentFailureHealth()).rejects.toThrow("Payment failure health unavailable")

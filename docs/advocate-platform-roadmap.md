@@ -653,3 +653,6 @@ The coordinated analytics implementation now compares flattened contributor rows
 
 
 Privacy review also requires gross-minus-dispute-debits and gross-minus-refunds complements to meet the contact threshold. A safe net cohort or zero net alone does not prove these visible operand differences safe. The candidate coordinates their withholding and historical baselines without removing approved metrics. The analytics decision records adversarial examples, tests, and the additional storage cost; broader privacy and capacity evidence remain release work.
+
+
+Operational health must include provider cash committed before gateway ingestion. The service-only health projection counts unmatched cash and alerts after a ten-minute ingestion grace period using account, event identity, and immutable digest. This neither allocates funds nor resolves a quarantined event; complete the documented database deployment before the updated worker caller.
