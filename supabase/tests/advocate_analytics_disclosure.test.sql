@@ -2,6 +2,66 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SELECT extensions.no_plan();
 
+-- The certificate is a prerequisite for the replacement policy. The current
+-- release coordinator does not use it yet; these are arithmetic contracts.
+SELECT extensions.ok(private.analytics_linear_disclosure_certified(ARRAY[]::numeric[])
+  AND private.analytics_linear_disclosure_certified(ARRAY[[0,0],[0,0]]::numeric[]),
+  'empty and zero contribution matrices have no nonzero arithmetic disclosure');
+SELECT extensions.ok(private.analytics_linear_disclosure_certified(ARRAY[[1],[2],[3],[4],[5]]::numeric[])
+  AND NOT private.analytics_linear_disclosure_certified(ARRAY[[1],[2],[3],[4]]::numeric[]),
+  'nonzero single-measure support needs five distinct input rows');
+SELECT extensions.ok(private.analytics_linear_disclosure_certified(
+  ARRAY[[100,200],[100,200],[100,200],[100,200],[100,200]]::numeric[])
+  AND NOT private.analytics_linear_disclosure_certified(
+  ARRAY[[100,200,300],[100,200,300],[100,200,300],[100,200,300],[100,200,307]]::numeric[]),
+  'dependent history is safe but the three-release seven-cent residual has no certificate');
+SELECT extensions.ok(NOT private.analytics_linear_disclosure_certified(
+  ARRAY[[733,0,733,733],[1000,500,500,500],[1000,500,500,500],[1000,500,500,500],
+    [1000,500,500,500],[1000,500,500,500],[1000,1000,1000,1000],[1000,1000,1000,1000],
+    [1000,1000,1000,1000],[1000,1000,1000,1000],[1000,1000,1000,1000]]::numeric[]),
+  'all financial measures fail the certificate for the dispute-minus-refund residual');
+SELECT extensions.ok(private.analytics_linear_disclosure_certified(
+  ARRAY[[733,0,733],[1000,500,500],[1000,500,500],[1000,500,500],[1000,500,500],
+    [1000,500,500],[1000,1000,0],[1000,1000,0],[1000,1000,0],[1000,1000,0],[1000,1000,0]]::numeric[]),
+  'gross refunds and net alone retain five disjoint spanning sets in the same fixture');
+SELECT extensions.ok(NOT private.analytics_linear_disclosure_certified(
+  ARRAY[[733,0,733,1],[1000,500,500,1],[1000,500,500,1],[1000,500,500,1],[1000,500,500,1],
+    [1000,500,500,1],[1000,1000,0,1],[1000,1000,0,1],[1000,1000,0,1],[1000,1000,0,1],[1000,1000,0,1]]::numeric[]),
+  'a contact count must be considered together with otherwise certified financial columns');
+SELECT extensions.ok(private.analytics_linear_disclosure_certified((
+  SELECT array_agg(ARRAY[gross,refund,gross-refund,1]::numeric[] ORDER BY ordinal,gross,refund)
+  FROM (VALUES(733,0),(1000,500),(1000,1000)) shape(gross,refund) CROSS JOIN generate_series(1,5) ordinal
+)), 'five contacts in each financial shape permit the same amounts and counts together');
+SELECT extensions.ok(private.analytics_linear_disclosure_certified(
+  ARRAY[[7,3],[7,3],[7,3],[7,3],[7,3]]::numeric[])
+  AND NOT private.analytics_linear_disclosure_certified(ARRAY[[7,3],[7,3],[7,3],[7,3],[7,4]]::numeric[]),
+  'exactly scaled fractional directions preserve cancellation and a lone residual');
+SELECT extensions.ok(private.analytics_linear_disclosure_certified(NULL::numeric[]) IS NULL,
+  'missing matrix input never produces a positive certificate');
+SELECT extensions.ok(private.analytics_linear_disclosure_certified(
+  ARRAY[[0,1],[1,0],[0,2],[2,0],[0,3],[3,0],[0,4],[4,0],[0,5],[5,0]]::numeric[]),
+  'pivot columns need not arrive in ascending order');
+SELECT extensions.ok(private.analytics_linear_disclosure_certified(
+  ARRAY[[10000000000000000000000001,-1],[0,1],[20000000000000000000000002,-2],[0,2],
+    [30000000000000000000000003,-3],[0,3],[40000000000000000000000004,-4],[0,4],
+    [50000000000000000000000005,-5],[0,5]]::numeric[]),
+  'large integer elimination retains exact independent directions without floating point');
+SELECT extensions.throws_ok($$SELECT private.analytics_linear_disclosure_certified(ARRAY[1,2]::numeric[])$$,
+  '22023','Disclosure matrix requires finite integers and canonical dimensions','one-dimensional matrices are rejected');
+SELECT extensions.throws_ok($$SELECT private.analytics_linear_disclosure_certified('[0:1][1:1]={{1},{2}}'::numeric[])$$,
+  '22023','Disclosure matrix requires finite integers and canonical dimensions','noncanonical array bounds are rejected');
+SELECT extensions.throws_ok($$SELECT private.analytics_linear_disclosure_certified(ARRAY[[0.5]]::numeric[])$$,
+  '22023','Disclosure matrix requires finite integers and canonical dimensions','fractional inputs must be scaled exactly before certification');
+SELECT extensions.throws_ok($$SELECT private.analytics_linear_disclosure_certified(ARRAY[[NULL]]::numeric[])$$,
+  '22023','Disclosure matrix requires finite integers and canonical dimensions','missing contributions are not silently treated as zero');
+SELECT extensions.throws_ok($$SELECT private.analytics_linear_disclosure_certified(ARRAY[['NaN'::numeric]])$$,
+  '22023','Disclosure matrix requires finite integers and canonical dimensions','nonfinite contributions are rejected');
+SELECT extensions.throws_ok($$SELECT private.analytics_linear_disclosure_certified(ARRAY[['Infinity'::numeric],['-Infinity'::numeric]])$$,
+  '22023','Disclosure matrix requires finite integers and canonical dimensions','infinite contributions are rejected');
+SELECT extensions.ok(NOT EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role']) role(name)
+  WHERE has_function_privilege(role.name,'private.analytics_linear_disclosure_certified(numeric[])','EXECUTE')),
+  'API roles cannot call the internal certificate helper');
+
 -- Policy examples use exact USD contributions. Separate integration assertions
 -- exercise the production query's contributor fingerprints and authority.
 CREATE FUNCTION pg_temp.disclosure_candidate(amounts integer[], refunds integer[] DEFAULT NULL, renewals integer[] DEFAULT NULL,

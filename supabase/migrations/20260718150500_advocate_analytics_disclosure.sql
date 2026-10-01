@@ -164,6 +164,70 @@ RETURNS text[] LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
 $$;
 REVOKE ALL ON FUNCTION private.analytics_unsafe_measures(jsonb,jsonb) FROM PUBLIC,anon,authenticated,service_role;
 
+-- A sufficient arithmetic certificate, not a complete privacy policy. The
+-- caller must supply one row per distinct contact and every disclosed column,
+-- including relevant historical columns. Scale each row's exact fractions to
+-- integers without rounding. Five disjoint spanning sets ensure any nonzero
+-- linear combination of columns has at least five nonzero contact terms.
+-- Greedy failure is conservative: it does not prove a disclosure is unsafe.
+CREATE FUNCTION private.analytics_linear_disclosure_certified(matrix numeric[])
+RETURNS boolean LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE SET search_path = '' AS $$
+DECLARE
+  v_contacts integer:=coalesce(array_length(matrix,1),0);
+  v_width integer:=coalesce(array_length(matrix,2),0);
+  v_used boolean[]; v_basis numeric[]; v_pivots integer[]; v_row numeric[];
+  v_set integer; v_contact integer; v_basis_row integer; v_column integer;
+  v_pivot integer; v_rank integer; v_full_rank integer; v_common numeric; v_factor numeric;
+BEGIN
+  IF cardinality(matrix)=0 THEN RETURN true; END IF;
+  IF array_ndims(matrix)<>2 OR array_lower(matrix,1)<>1 OR array_lower(matrix,2)<>1
+    OR EXISTS(SELECT 1 FROM unnest(matrix) entry(value) WHERE value IS NULL
+      OR value<>trunc(value) OR value IN ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) THEN
+    RAISE EXCEPTION 'Disclosure matrix requires finite integers and canonical dimensions' USING ERRCODE='22023';
+  END IF;
+  v_used:=array_fill(false,ARRAY[v_contacts]);
+  FOR v_set IN 1..5 LOOP
+    v_basis:=ARRAY[]::numeric[]; v_pivots:=ARRAY[]::integer[]; v_rank:=0;
+    FOR v_contact IN 1..v_contacts LOOP
+      IF v_used[v_contact] THEN CONTINUE; END IF;
+      v_row:=ARRAY[]::numeric[];
+      FOR v_column IN 1..v_width LOOP v_row[v_column]:=matrix[v_contact][v_column]; END LOOP;
+      -- Integer elimination preserves exact dependence. Reduce by the row GCD
+      -- after each pivot to limit growth without approximate numeric division.
+      FOR v_basis_row IN 1..v_rank LOOP
+        v_pivot:=v_pivots[v_basis_row]; v_factor:=v_row[v_pivot];
+        IF v_factor=0 THEN CONTINUE; END IF;
+        FOR v_column IN 1..v_width LOOP
+          v_row[v_column]:=v_row[v_column]*v_basis[v_basis_row][v_pivot]
+            -v_factor*v_basis[v_basis_row][v_column];
+        END LOOP;
+        v_common:=0;
+        FOREACH v_factor IN ARRAY v_row LOOP v_common:=gcd(v_common,abs(v_factor)); END LOOP;
+        IF v_common>1 THEN
+          FOR v_column IN 1..v_width LOOP v_row[v_column]:=div(v_row[v_column],v_common); END LOOP;
+        END IF;
+      END LOOP;
+      v_pivot:=0;
+      FOR v_column IN 1..v_width LOOP
+        IF v_row[v_column]<>0 THEN v_pivot:=v_column; EXIT; END IF;
+      END LOOP;
+      IF v_pivot=0 THEN CONTINUE; END IF;
+      v_rank:=v_rank+1; v_basis:=v_basis||ARRAY[v_row]; v_pivots:=v_pivots||v_pivot;
+      v_used[v_contact]:=true;
+      IF v_rank=v_width OR (v_set>1 AND v_rank=v_full_rank) THEN EXIT; END IF;
+    END LOOP;
+    IF v_set=1 THEN
+      v_full_rank:=v_rank;
+      IF v_full_rank=0 THEN RETURN true; END IF;
+      IF v_full_rank>v_contacts/5 THEN RETURN false; END IF;
+    ELSIF v_rank<>v_full_rank THEN RETURN false;
+    END IF;
+  END LOOP;
+  RETURN true;
+END;
+$$;
+REVOKE ALL ON FUNCTION private.analytics_linear_disclosure_certified(numeric[]) FROM PUBLIC,anon,authenticated,service_role;
+
 CREATE FUNCTION private.analytics_measure_key(field text)
 RETURNS text LANGUAGE sql IMMUTABLE STRICT SET search_path = '' AS $$
   SELECT regexp_replace(field,'(_usd_cents|_minor)$','');
