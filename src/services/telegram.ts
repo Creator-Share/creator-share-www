@@ -17,17 +17,18 @@ import {
 } from "@/utils/supabase/media"
 import { createServiceRoleClient } from "@/utils/supabase/server"
 import { getBeneficiaryTypeLabel } from "@/config/beneficiaryTypes"
+import { isAdvocateStagingEnvironmentEnabled } from "@/lib/advocates/host"
 
 // Single Responsibility Principle (SRP) - Telegram service only handles Telegram operations
 export class TelegramBotService implements TelegramNotificationService {
-  private readonly botToken: string;
-  private readonly defaultChatId?: string;
-  private readonly apiUrl: string;
+  private readonly botToken: string
+  private readonly defaultChatId?: string
+  private readonly apiUrl: string
 
   constructor(config: TelegramConfig) {
-    this.botToken = config.botToken;
-    this.defaultChatId = config.defaultChatId;
-    this.apiUrl = `https://api.telegram.org/bot${this.botToken}`;
+    this.botToken = config.botToken
+    this.defaultChatId = config.defaultChatId
+    this.apiUrl = `https://api.telegram.org/bot${this.botToken}`
   }
 
   /**
@@ -38,53 +39,58 @@ export class TelegramBotService implements TelegramNotificationService {
    */
   async sendMessage(message: string, chatId?: string): Promise<boolean> {
     try {
-      const targetChatId = chatId || this.defaultChatId;
-      
+      const targetChatId = chatId || this.defaultChatId
+
       if (!targetChatId) {
-        console.error('Telegram: No chat ID provided and no default chat ID configured');
-        return false;
+        console.error(
+          "Telegram: No chat ID provided and no default chat ID configured",
+        )
+        return false
       }
 
       if (!message || message.trim().length === 0) {
-        console.error('Telegram: Empty message provided');
-        return false;
+        console.error("Telegram: Empty message provided")
+        return false
       }
 
-      const telegramMessage: { text: string; parse_mode?: 'HTML' | 'Markdown'; disable_web_page_preview?: boolean } = {
+      const telegramMessage: {
+        text: string
+        parse_mode?: "HTML" | "Markdown"
+        disable_web_page_preview?: boolean
+      } = {
         text: message,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true
-      };
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }
 
       const response = await fetch(`${this.apiUrl}/sendMessage`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           chat_id: targetChatId,
-          ...telegramMessage
-        })
-      });
+          ...telegramMessage,
+        }),
+      })
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Telegram API error:', {
+        const errorData = await response.json()
+        console.error("Telegram API error:", {
           status: response.status,
           statusText: response.statusText,
-          error: errorData
-        });
-        return false;
+          error: errorData,
+        })
+        return false
       }
 
-
-      return true;
+      return true
     } catch (error) {
-      console.error('Telegram sendMessage error:', {
+      console.error("Telegram sendMessage error:", {
         error: error instanceof Error ? error.message : error,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      return false;
+        stack: error instanceof Error ? error.stack : undefined,
+      })
+      return false
     }
   }
 
@@ -95,51 +101,57 @@ export class TelegramBotService implements TelegramNotificationService {
    * @param chatId - Optional chat ID
    * @returns Promise<boolean> - Success status
    */
-  async sendPhoto(photoUrl: string, caption?: string, chatId?: string): Promise<boolean> {
+  async sendPhoto(
+    photoUrl: string,
+    caption?: string,
+    chatId?: string,
+  ): Promise<boolean> {
     try {
-      const targetChatId = chatId || this.defaultChatId;
-      
+      const targetChatId = chatId || this.defaultChatId
+
       if (!targetChatId) {
-        console.error('Telegram: No chat ID provided and no default chat ID configured');
-        return false;
+        console.error(
+          "Telegram: No chat ID provided and no default chat ID configured",
+        )
+        return false
       }
 
       if (!photoUrl || photoUrl.trim().length === 0) {
-        console.error('Telegram: Empty photo URL provided');
-        return false;
+        console.error("Telegram: Empty photo URL provided")
+        return false
       }
 
       const response = await fetch(`${this.apiUrl}/sendPhoto`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           chat_id: targetChatId,
           photo: photoUrl,
           caption: caption,
-          parse_mode: 'HTML',
-          disable_web_page_preview: true
-        })
-      });
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+        }),
+      })
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Telegram API photo error:', {
+        const errorData = await response.json()
+        console.error("Telegram API photo error:", {
           status: response.status,
           statusText: response.statusText,
-          error: errorData
-        });
-        return false;
+          error: errorData,
+        })
+        return false
       }
 
-      return true;
+      return true
     } catch (error) {
-      console.error('Telegram sendPhoto error:', {
+      console.error("Telegram sendPhoto error:", {
         error: error instanceof Error ? error.message : error,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      return false;
+        stack: error instanceof Error ? error.stack : undefined,
+      })
+      return false
     }
   }
 
@@ -148,25 +160,28 @@ export class TelegramBotService implements TelegramNotificationService {
    * @param beneficiaryData - The beneficiary data
    * @param chatId - Optional chat ID
    */
-  async sendChildCreatedNotification(beneficiaryData: Beneficiaries, chatId?: string): Promise<boolean> {
+  async sendChildCreatedNotification(
+    beneficiaryData: Beneficiaries,
+    chatId?: string,
+  ): Promise<boolean> {
     try {
       // First, try to get the child's image
-      const imageUrl = await this.getBeneficiaryImage(beneficiaryData.id);
-      
+      const imageUrl = await this.getBeneficiaryImage(beneficiaryData.id)
+
       if (imageUrl) {
         // Send photo with caption
-        const caption = this.formatChildCreatedMessage(beneficiaryData);
-        return await this.sendPhoto(imageUrl, caption, chatId);
+        const caption = this.formatChildCreatedMessage(beneficiaryData)
+        return await this.sendPhoto(imageUrl, caption, chatId)
       } else {
         // Fallback to text message if no image
-        const message = this.formatChildCreatedMessage(beneficiaryData);
-        return await this.sendMessage(message, chatId);
+        const message = this.formatChildCreatedMessage(beneficiaryData)
+        return await this.sendMessage(message, chatId)
       }
     } catch (error) {
-      console.error('Error in sendChildCreatedNotification:', error);
+      console.error("Error in sendChildCreatedNotification:", error)
       // Fallback to text message on error
-      const message = this.formatChildCreatedMessage(beneficiaryData);
-      return await this.sendMessage(message, chatId);
+      const message = this.formatChildCreatedMessage(beneficiaryData)
+      return await this.sendMessage(message, chatId)
     }
   }
 
@@ -177,20 +192,20 @@ export class TelegramBotService implements TelegramNotificationService {
    */
   async sendSponsorshipNotification(
     sponsorshipData: SponsorshipNotificationData,
-    chatId?: string
+    chatId?: string,
   ): Promise<boolean> {
     try {
-      const message = this.formatSponsorshipMessage(sponsorshipData);
-      return await this.sendMessage(message, chatId);
+      const message = this.formatSponsorshipMessage(sponsorshipData)
+      return await this.sendMessage(message, chatId)
     } catch (error) {
-      console.error('Error sending sponsorship notification:', {
+      console.error("Error sending sponsorship notification:", {
         error: error instanceof Error ? error.message : error,
         sponsorshipData: {
           ...sponsorshipData,
-          sponsorEmail: '[REDACTED]' // Don't log sensitive email data
-        }
-      });
-      return false;
+          sponsorEmail: "[REDACTED]", // Don't log sensitive email data
+        },
+      })
+      return false
     }
   }
 
@@ -199,7 +214,9 @@ export class TelegramBotService implements TelegramNotificationService {
    * @param beneficiaryId - The beneficiary ID
    * @returns Promise<string | null> - Image URL or null if not found
    */
-  private async getBeneficiaryImage(beneficiaryId: string): Promise<string | null> {
+  private async getBeneficiaryImage(
+    beneficiaryId: string,
+  ): Promise<string | null> {
     try {
       const supabase = createServiceRoleClient()
       const { data: mediaData, error } = await supabase
@@ -211,12 +228,15 @@ export class TelegramBotService implements TelegramNotificationService {
         .limit(10)
 
       if (error) {
-        console.warn(`Failed to fetch images for beneficiary ${beneficiaryId}:`, error)
-        return null;
+        console.warn(
+          `Failed to fetch images for beneficiary ${beneficiaryId}:`,
+          error,
+        )
+        return null
       }
 
       if (!mediaData || mediaData.length === 0) {
-        return null;
+        return null
       }
 
       const existingMedia = await filterExistingMediaRows(
@@ -227,8 +247,11 @@ export class TelegramBotService implements TelegramNotificationService {
 
       return getExternalTelegramImageUrl(existingMedia[0])
     } catch (error) {
-      console.error(`Error fetching image for beneficiary ${beneficiaryId}:`, error);
-      return null;
+      console.error(
+        `Error fetching image for beneficiary ${beneficiaryId}:`,
+        error,
+      )
+      return null
     }
   }
 
@@ -245,8 +268,8 @@ export class TelegramBotService implements TelegramNotificationService {
       country,
       location_str,
       budget_goal,
-      introduction
-    } = beneficiaryData;
+      introduction,
+    } = beneficiaryData
 
     return `
 🎉 <b>New Child Added!</b>
@@ -254,21 +277,23 @@ export class TelegramBotService implements TelegramNotificationService {
 👤 <b>Name:</b> ${name}
 🔗 <b>Username:</b> @${username}
 👶 <b>Gender:</b> ${gender}
-📅 <b>Age:</b> ${age || 'Not specified'}
-🌍 <b>Country:</b> ${country || 'Not specified'}
-📍 <b>Location:</b> ${location_str || 'Not specified'}
-💰 <b>Goal:</b> $${budget_goal ? (budget_goal / 100).toFixed(2) : 'Not specified'}
-📝 <b>Introduction:</b> ${introduction || 'No introduction provided'}
+📅 <b>Age:</b> ${age || "Not specified"}
+🌍 <b>Country:</b> ${country || "Not specified"}
+📍 <b>Location:</b> ${location_str || "Not specified"}
+💰 <b>Goal:</b> $${budget_goal ? (budget_goal / 100).toFixed(2) : "Not specified"}
+📝 <b>Introduction:</b> ${introduction || "No introduction provided"}
 
 #NewChild #Beneficiary #CreatorShare
-    `.trim();
+    `.trim()
   }
 
   /**
    * Format the sponsorship received message
    * @param sponsorshipData - The sponsorship data
    */
-  private formatSponsorshipMessage(sponsorshipData: SponsorshipNotificationData): string {
+  private formatSponsorshipMessage(
+    sponsorshipData: SponsorshipNotificationData,
+  ): string {
     const {
       beneficiaryName,
       amount,
@@ -278,14 +303,21 @@ export class TelegramBotService implements TelegramNotificationService {
       sponsorEmail,
       paymentMethod,
       beneficiaryType,
-    } = sponsorshipData;
+    } = sponsorshipData
 
     const amountFormatted = chargedCurrency
       ? formatMoney(amount, chargedCurrency)
-      : `$${(amount / 100).toFixed(2)}`;
-    const intervalText = interval === 'month' ? 'Monthly' : interval === 'one_time' ? 'One-time' : 'Yearly';
-    const sponsorDisplayName = sponsorName || sponsorEmail?.split('@')[0] || 'Anonymous';
-    const beneficiaryTypeLabel = getBeneficiaryTypeLabel(beneficiaryType) || 'Not specified';
+      : `$${(amount / 100).toFixed(2)}`
+    const intervalText =
+      interval === "month"
+        ? "Monthly"
+        : interval === "one_time"
+          ? "One-time"
+          : "Yearly"
+    const sponsorDisplayName =
+      sponsorName || sponsorEmail?.split("@")[0] || "Anonymous"
+    const beneficiaryTypeLabel =
+      getBeneficiaryTypeLabel(beneficiaryType) || "Not specified"
 
     return `
 🎉 <b>New Sponsorship Received!</b>
@@ -293,50 +325,59 @@ export class TelegramBotService implements TelegramNotificationService {
 👤 <b>Beneficiary:</b> ${beneficiaryName}
 🏷️ <b>Beneficiary Type:</b> ${beneficiaryTypeLabel}
 💰 <b>Amount:</b> ${amountFormatted}
-🔄 <b>Type:</b> ${intervalText}${interval === 'month' || interval === 'year' ? ' Recurring' : ''}
+🔄 <b>Type:</b> ${intervalText}${interval === "month" || interval === "year" ? " Recurring" : ""}
 💳 <b>Payment Method:</b> ${paymentMethod}
 👨‍💼 <b>Sponsor:</b> ${sponsorDisplayName}
-📧 <b>Email:</b> ${sponsorEmail || 'Not provided'}
+📧 <b>Email:</b> ${sponsorEmail || "Not provided"}
 
 #NewSponsorship #CreatorShare #ThankYou
-  `.trim();
+  `.trim()
   }
 }
 
 // Dependency Inversion Principle (DIP) - Factory function for easy testing and configuration
 export function createTelegramService(): TelegramNotificationService {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  
+  if (isAdvocateStagingEnvironmentEnabled(process.env)) {
+    throw new Error("Telegram notifications are unavailable")
+  }
+  const botToken = process.env.TELEGRAM_BOT_TOKEN
+
   if (!botToken) {
-    throw new Error('TELEGRAM_BOT_TOKEN environment variable is required');
+    throw new Error("TELEGRAM_BOT_TOKEN environment variable is required")
   }
 
   return new TelegramBotService({
     botToken,
-    defaultChatId: process.env.TELEGRAM_CHAT_ID
-  });
+    defaultChatId: process.env.TELEGRAM_CHAT_ID,
+  })
 }
 
 // Utility function for sending child creation notifications
-export async function notifyChildCreated(beneficiaryData: Beneficiaries): Promise<void> {
+export async function notifyChildCreated(
+  beneficiaryData: Beneficiaries,
+): Promise<void> {
   try {
     // Validate required environment variables
     if (!process.env.TELEGRAM_BOT_TOKEN) {
-      console.warn('TELEGRAM_BOT_TOKEN not configured - skipping notification');
-      return;
+      console.warn("TELEGRAM_BOT_TOKEN not configured - skipping notification")
+      return
     }
 
-    const telegramService = createTelegramService();
-    const success = await telegramService.sendChildCreatedNotification(beneficiaryData);
-    
+    const telegramService = createTelegramService()
+    const success =
+      await telegramService.sendChildCreatedNotification(beneficiaryData)
+
     if (!success) {
-      console.warn('Telegram notification failed for child:', beneficiaryData.id);
+      console.warn(
+        "Telegram notification failed for child:",
+        beneficiaryData.id,
+      )
     }
   } catch (error) {
-    console.error('Failed to send Telegram notification:', {
+    console.error("Failed to send Telegram notification:", {
       childId: beneficiaryData?.id,
-      error: error instanceof Error ? error.message : error
-    });
+      error: error instanceof Error ? error.message : error,
+    })
     // Don't throw - notification failure shouldn't break the main flow
   }
 }
@@ -344,23 +385,28 @@ export async function notifyChildCreated(beneficiaryData: Beneficiaries): Promis
 /**
  * Add utility function for sponsorship notifications
  */
-export async function notifySponsorshipReceived(sponsorshipData: SponsorshipNotificationData): Promise<void> {
+export async function notifySponsorshipReceived(
+  sponsorshipData: SponsorshipNotificationData,
+): Promise<void> {
   try {
     if (!process.env.TELEGRAM_BOT_TOKEN) {
-      console.warn('TELEGRAM_BOT_TOKEN not configured - skipping sponsorship notification');
-      return;
+      console.warn(
+        "TELEGRAM_BOT_TOKEN not configured - skipping sponsorship notification",
+      )
+      return
     }
 
-    const telegramService = createTelegramService();
-    const success = await telegramService.sendSponsorshipNotification(sponsorshipData);
-    
+    const telegramService = createTelegramService()
+    const success =
+      await telegramService.sendSponsorshipNotification(sponsorshipData)
+
     if (!success) {
-      console.warn('Telegram sponsorship notification failed');
+      console.warn("Telegram sponsorship notification failed")
     }
   } catch (error) {
-    console.error('Failed to send Telegram sponsorship notification:', {
-      error: error instanceof Error ? error.message : error
-    });
+    console.error("Failed to send Telegram sponsorship notification:", {
+      error: error instanceof Error ? error.message : error,
+    })
     // Don't throw - notification failure shouldn't break the main flow
   }
 }

@@ -1,3 +1,4 @@
+import { requireDiagnosticAdmin } from "@/utils/auth/requireDiagnosticAdmin"
 import { NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
 import { Beneficiaries, BeneficiaryType, Status } from "@/types/admin.types"
@@ -5,6 +6,9 @@ import { notifyChildCreated } from "@/services/telegram"
 import { calculateAge } from "@/utils/ageCalculator"
 
 export async function POST(req: Request) {
+  const denied = await requireDiagnosticAdmin(req)
+  if (denied) return denied
+
   const supabase = await createClient()
   
   try {
@@ -118,7 +122,10 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = await requireDiagnosticAdmin(req)
+  if (denied) return denied
+
   return NextResponse.json({
     message: "Test Child Creation API",
     description: "Create a test child to verify Telegram bot integration",

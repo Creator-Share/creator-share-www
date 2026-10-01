@@ -1,67 +1,144 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/utils/supabase/server"
+
+import { issueRegistrationEmailProof } from "@/lib/auth/supabaseEmailProofIssuer"
+import {
+  getSponsorClaimCanonicalOrigin,
+  SPONSOR_ACCOUNT_EMAIL_CONFIRMATION_PATH,
+} from "@/lib/sponsorships/accountClaim"
+import {
+  isTrustedCheckoutJsonRequest,
+  resolveTrustedPrimaryRequestOrigin,
+} from "@/lib/sponsorships/checkout/requestSecurity"
+import {
+  normalizeAuthenticatedSponsorEmail,
+  readBoundedSponsorManagementBody,
+} from "@/lib/sponsorships/management/passwordlessAccess"
+import {
+  createSponsorPasswordlessDeliverySignals,
+  reserveSponsorPasswordlessDelivery,
+  sponsorPasswordlessDeliveryContext,
+} from "@/lib/sponsorships/management/passwordlessRateLimit"
+import { CREATOR_SHARE_ACCOUNT_ONBOARDING_PATH } from "@/lib/sponsorships/management/sponsorEmailConfirmation"
+import { validatePassword } from "@/utils/passwordValidation"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+const MAXIMUM_REGISTRATION_BODY_BYTES = 8_192
+const MAXIMUM_REGISTRATION_NAME_CHARACTERS = 100
+const MAXIMUM_REGISTRATION_PASSWORD_CHARACTERS = 256
+const RESPONSE_HEADERS = {
+  "Cache-Control": "no-store, max-age=0",
+  Pragma: "no-cache",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+} as const
+
+function response(body: Record<string, string>, status: number) {
+  return NextResponse.json(body, { status, headers: RESPONSE_HEADERS })
+}
+
+function checkEmailResponse() {
+  return response({ status: "check-email" }, 202)
+}
+
+function normalizeRegistrationName(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const normalized = value.trim().replace(/\s+/g, " ")
+  return normalized.length >= 1 &&
+    normalized.length <= MAXIMUM_REGISTRATION_NAME_CHARACTERS &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(normalized)
+    ? normalized
+    : null
+}
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
-  const body = await request.json()
-  const { email, password, first_name, last_name } = body
+  let canonicalOrigin: string
+  try {
+    canonicalOrigin = getSponsorClaimCanonicalOrigin()
+  } catch {
+    return response({ error: "unavailable" }, 503)
+  }
 
-  if (!email || !password || !first_name || !last_name) {
-    return NextResponse.json(
-      { error: "Email, password, first name, and last name are required" },
-      { status: 400 },
-    )
+  const requestOrigin = resolveTrustedPrimaryRequestOrigin({
+    rawHost: request.headers.get("host"),
+  })
+  if (
+    requestOrigin !== canonicalOrigin ||
+    !isTrustedCheckoutJsonRequest(request.headers, canonicalOrigin)
+  ) {
+    return response({ error: "invalid-request" }, 400)
+  }
+
+  const serialized = await readBoundedSponsorManagementBody(
+    request,
+    MAXIMUM_REGISTRATION_BODY_BYTES,
+  )
+  let body: unknown
+  try {
+    body = serialized === null ? null : JSON.parse(serialized)
+  } catch {
+    body = null
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return response({ error: "invalid-request" }, 400)
+  }
+
+  const candidate = body as Record<string, unknown>
+  const bodyKeys = Object.keys(candidate).sort()
+  const email = normalizeAuthenticatedSponsorEmail(candidate.email)
+  const firstName = normalizeRegistrationName(candidate.first_name)
+  const lastName = normalizeRegistrationName(candidate.last_name)
+  const password = candidate.password
+  if (
+    bodyKeys.length !== 4 ||
+    bodyKeys[0] !== "email" ||
+    bodyKeys[1] !== "first_name" ||
+    bodyKeys[2] !== "last_name" ||
+    bodyKeys[3] !== "password" ||
+    email === null ||
+    firstName === null ||
+    lastName === null ||
+    typeof password !== "string" ||
+    password.length > MAXIMUM_REGISTRATION_PASSWORD_CHARACTERS ||
+    !validatePassword(password).isValid
+  ) {
+    return response({ error: "invalid-request" }, 400)
   }
 
   try {
-    const { data: existingUser } = await supabase
-      .from("users")
-      .select("email")
-      .eq("email", email)
-      .single()
+    const context = sponsorPasswordlessDeliveryContext(request)
+    const signals = createSponsorPasswordlessDeliverySignals({
+      email,
+      headers: request.headers,
+    })
+    const allowed = await reserveSponsorPasswordlessDelivery({
+      flow: "registration",
+      signals,
+      context,
+    })
+    if (!allowed) return checkEmailResponse()
 
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "An account with this email already exists" },
-        { status: 400 },
-      )
-    }
-
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp(
-      {
-        email,
-        password,
-        options: {
-          data: {
-            first_name,
-            last_name,
-          },
-          emailRedirectTo: `http://localhost:3000/app/main/onboarding`,
-        },
-      },
+    const confirmationUrl = new URL(
+      SPONSOR_ACCOUNT_EMAIL_CONFIRMATION_PATH,
+      canonicalOrigin,
+    )
+    confirmationUrl.searchParams.set(
+      "next",
+      CREATOR_SHARE_ACCOUNT_ONBOARDING_PATH,
     )
 
-    if (signUpError) {
-      return NextResponse.json({ error: signUpError.message }, { status: 400 })
-    }
-
-    if (signUpData.user?.identities?.length === 0) {
-      return NextResponse.json(
-        { error: "An account with this email already exists" },
-        { status: 400 },
-      )
-    }
-
-    return NextResponse.json(
-      {
-        message:
-          "Registration successful! Please check your email for confirmation.",
-      },
-      { status: 201 },
-    )
-  } catch (err: unknown) {
-    const errorMessage =
-      err instanceof Error ? err.message : "Unexpected error occurred"
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+    await issueRegistrationEmailProof({
+      recipientEmail: email,
+      redirectTo: confirmationUrl.toString(),
+      context,
+      password,
+      firstName,
+      lastName,
+    })
+  } catch {
+    // Quota, gate, account, and provider state stays private to the server.
   }
+
+  return checkEmailResponse()
 }

@@ -14,6 +14,7 @@ type Geography = {
 
 export interface BeneficiaryMetadata {
   birth_date_is_estimate?: boolean
+  birth_date_precision?: "day" | "month" | "year"
   [key: string]: unknown
 }
 
@@ -35,7 +36,8 @@ export interface Beneficiaries {
   introduction: string
   active_subscriptions: number
   metadata: BeneficiaryMetadata
-  beneficiary_type: BeneficiaryType
+  /** Database reads may retain bounded uppercase legacy values or null. */
+  beneficiary_type: BeneficiaryType | string | null
   image_url?: string
   sort_weight?: number
   created_at?: string
@@ -45,7 +47,7 @@ export interface BeneficiaryMedia {
   id: string
   parent_id: string
   extension: string
-  type: "IMAGE" | "VIDEO"
+  type: "IMAGE" | "VIDEO" | "DOCUMENT"
   weight: number | null
   created_at: string | null
 }
@@ -110,10 +112,7 @@ export type RoleAssignmentResponse = RoleAssignment[]
 
 export interface AuthState {
   user: User | null
-  registrationEmail: string | null
   logout: () => Promise<void>
-  setRegistrationEmail: (email: string) => void
-  clearRegistrationEmail: () => void
   fetchUser: () => Promise<void>
 }
 
@@ -129,4 +128,4 @@ export interface FilterState {
 }
 
 // Export Telegram types
-export * from './telegram.types'
+export * from "./telegram.types"

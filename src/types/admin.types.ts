@@ -1,5 +1,9 @@
 import type { Status } from "@/config/beneficiaryStatuses"
 import type { Database } from "@/lib/types/db.types"
+import type {
+  SubscriptionPartnershipProject,
+  SubscriptionSubjectKind,
+} from "@/lib/sponsorships/subscriptionPresentation"
 
 // Re-export so consumers importing from "@/types/admin.types" continue to work
 export type { Status }
@@ -58,7 +62,8 @@ export interface Beneficiaries {
   introduction: string
   active_subscriptions: number
   metadata: BeneficiaryMetadata
-  beneficiary_type: BeneficiaryType
+  /** Database reads may retain bounded uppercase legacy values or null. */
+  beneficiary_type: BeneficiaryType | string | null
   image_url?: string
   created_at?: string
   sort_weight?: number
@@ -98,7 +103,7 @@ export interface BeneficiaryMedia {
   id: string
   parent_id: string
   extension: string
-  type: "IMAGE" | "VIDEO"
+  type: "IMAGE" | "VIDEO" | "DOCUMENT"
   weight: number | null
   created_at: string | null
 }
@@ -155,6 +160,7 @@ export interface ExpenseWithAssignment extends Expense {
 
 // Manage Users Types
 export interface User {
+  disabled?: boolean
   id: string
   first_name: string | null
   last_name: string | null
@@ -182,7 +188,7 @@ export interface UserRole {
 export interface UserInvitation {
   email: string
   role_ids: string[]
-  invited_by: string
+  reason?: string
 }
 
 export interface UserManagementState {
@@ -199,10 +205,9 @@ export interface UserManagementActions {
   inviteUser: (invitation: UserInvitation) => Promise<boolean>
   assignRole: (userId: string, roleId: string) => Promise<boolean>
   removeRole: (userId: string, roleId: string) => Promise<boolean>
-  deleteUser: (userId: string) => Promise<boolean>
   updateUserRole: (userId: string, roleId: string) => Promise<boolean>
   assignMultipleRoles: (userId: string, roleIds: string[]) => Promise<boolean>
-  bulkDeleteUsers: (userIds: string[]) => Promise<boolean>
+  disableAccounts: (userIds: string[]) => Promise<boolean>
   setSelectedUsers: (userIds: Set<string>) => void
   clearError: () => void
 }
@@ -262,6 +267,8 @@ export interface RawSubscription {
   user_id: string
   sponsorship_method: "STRIPE" | "PAYPAL" | null
   payment_region: Database["public"]["Enums"]["stripe_region"]
+  subject_kind?: SubscriptionSubjectKind | null
+  partnership_project?: SubscriptionPartnershipProject | null
   beneficiaries?: {
     id: string
     name: string

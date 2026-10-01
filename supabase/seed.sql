@@ -16,5 +16,4 @@ INSERT INTO "public"."roles" ("id", "created_at", "name", "description", "displa
 
 INSERT INTO "public"."role_assignments" ("id", "created_at", "organization_id", "advocate_id", "user_id", "role_id") VALUES
 	('eca40c84-e87f-409f-b85b-21bbbe76b54c', '2025-01-27 10:32:22.758454+00', NULL, NULL, '3de44111-9900-4f04-815d-aeb42828229a', '7363a1c9-5336-4a6d-a1df-16136313d385'),
-	('3a88aa77-6d71-40a0-8bd1-377e065597c2', '2025-02-11 02:48:15.421523+00', NULL, NULL, 'b332fed7-f82f-4b34-9465-1a26dbc464e2', '7363a1c9-5336-4a6d-a1df-16136313d385'),
-	('68fee2e7-e503-4bd9-9a83-8ad6bbf58d5e', '2025-02-13 06:05:01.788936+00', NULL, NULL, '3de44111-9900-4f04-815d-aeb42828229a', '7363a1c9-5336-4a6d-a1df-16136313d385');
+	('3a88aa77-6d71-40a0-8bd1-377e065597c2', '2025-02-11 02:48:15.421523+00', NULL, NULL, 'b332fed7-f82f-4b34-9465-1a26dbc464e2', '7363a1c9-5336-4a6d-a1df-16136313d385');

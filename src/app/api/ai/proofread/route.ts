@@ -1,30 +1,42 @@
 import { NextRequest, NextResponse } from "next/server"
 import { proofreadText } from "@/utils/ai/llm"
 import { isLLMConfigured } from "@/utils/ai/config"
+import { isTrustedCreatorShareAdvocateControlRequest } from "@/lib/advocates/creatorShareAdmin/routeSecurity"
+import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { createClient } from "@/utils/supabase/server"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 export async function POST(req: NextRequest) {
-  // Early check for configuration
   if (!isLLMConfigured()) {
     return NextResponse.json(
       { error: "AI proofreading is not configured on this server." },
-      { status: 503 }
+      { status: 503 },
     )
+  }
+  if (!isTrustedCreatorShareAdvocateControlRequest(req)) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 })
   }
 
   try {
+    const supabase = await createClient()
+    const auth = await requireSuperAdmin(supabase)
+    if (!auth.ok) return auth.response
+
     const { text, type, instructions } = await req.json()
 
     if (!text || typeof text !== "string") {
       return NextResponse.json(
         { error: "Text is required and must be a string" },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
     if (text.length > 10000) {
       return NextResponse.json(
         { error: "Text is too long. Maximum 10,000 characters allowed." },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -32,7 +44,7 @@ export async function POST(req: NextRequest) {
     if (type && !["biography", "activity"].includes(type)) {
       return NextResponse.json(
         { error: "Type must be 'biography' or 'activity'" },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -40,28 +52,32 @@ export async function POST(req: NextRequest) {
     if (instructions && typeof instructions !== "string") {
       return NextResponse.json(
         { error: "Instructions must be a string" },
-        { status: 400 }
+        { status: 400 },
+      )
+    }
+
+    if (instructions && instructions.length > 2_000) {
+      return NextResponse.json(
+        { error: "Instructions are too long." },
+        { status: 400 },
       )
     }
 
     const result = await proofreadText(text, type || "biography", instructions)
 
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: result.error }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
-      proofreadText: result.proofreadText
+      proofreadText: result.proofreadText,
     })
   } catch (error) {
     console.error("Proofread API error:", error)
     return NextResponse.json(
       { error: "An unexpected error occurred" },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

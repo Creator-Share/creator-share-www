@@ -3,7 +3,6 @@ import { Box, Flex, Text, Image } from "@chakra-ui/react"
 import { FaCalendar } from "react-icons/fa"
 import { FaLocationDot } from "react-icons/fa6"
 import { calculateAge } from "@/utils/ageCalculator"
-import { formatDate } from "@/utils/dateFormatter"
 import { Beneficiaries, BeneficiaryMedia } from "@/types"
 import { useState, useEffect } from "react"
 import { getImageSrc } from "@/utils/supabase/media"
@@ -52,15 +51,19 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
     fetchImages()
   }, [beneficiary.id])
 
-  const age = beneficiary.birth_date 
+  const age = beneficiary.birth_date
     ? calculateAge(new Date(beneficiary.birth_date).toISOString())
     : null
-  const formattedBirthDate = beneficiary.birth_date
-    ? formatDate(new Date(beneficiary.birth_date).toISOString())
-    : null
-  const birthDateIsEstimate = Boolean(
-    (beneficiary.metadata as { birth_date_is_estimate?: boolean } | undefined)
-      ?.birth_date_is_estimate
+  const birthDateMetadata = beneficiary.metadata as
+    | {
+        birth_date_is_estimate?: boolean
+        birth_date_precision?: "day" | "month" | "year"
+      }
+    | undefined
+  const ageIsEstimate = Boolean(
+    birthDateMetadata?.birth_date_is_estimate ||
+      (birthDateMetadata?.birth_date_precision &&
+        birthDateMetadata.birth_date_precision !== "day"),
   )
 
   const getStatusText = (status: string) => {
@@ -139,13 +142,11 @@ const BeneficiaryDetailsCard: React.FC<BeneficiaryDetailsProps> = ({
           {beneficiary.name}
         </Text>
         <Flex align="center" gap={3} mb={4}>
-          {formattedBirthDate && (
+          {age !== null && (
             <>
               <FaCalendar />
               <Text fontSize="sm" color="gray.500">
-                {formattedBirthDate}
-                {age !== null &&
-                  ` | ${age} years old${birthDateIsEstimate ? " (estimated)" : ""}`}
+                {age} years old{ageIsEstimate ? " (estimated)" : ""}
               </Text>
             </>
           )}

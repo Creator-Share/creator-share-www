@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 
 // DELETE /api/admin/activities/delete
 export async function DELETE(req: NextRequest) {
@@ -11,7 +11,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   const supabase = await createClient()
-  const auth = await requireSuperAdmin(supabase)
+  const auth = await requireSuperAdminRequest(supabase, req)
   if (!auth.ok) return auth.response
 
   const { data, error } = await supabase

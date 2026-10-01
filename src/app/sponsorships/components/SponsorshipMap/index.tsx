@@ -7,8 +7,13 @@ import MarkerClusterGroup from "react-leaflet-markercluster"
 import L, { LatLngBounds } from "leaflet"
 import "leaflet/dist/leaflet.css"
 import { BeneficiaryMapProps } from "@/types/propTypes"
+import { resolveMapTileProvider } from "@/lib/maps/tileProvider"
 
 const ANIMATION_DURATION = 1
+const MAP_TILE_PROVIDER = resolveMapTileProvider("basic-v2", {
+  NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
+  NEXT_PUBLIC_MAPTILER_KEY: process.env.NEXT_PUBLIC_MAPTILER_KEY,
+})
 
 const createCustomIcon = () =>
   L.divIcon({
@@ -553,10 +558,9 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
         }
       })
       const tileLayer = L.tileLayer(
-        `https://api.maptiler.com/maps/basic-v2/{z}/{x}/{y}.png?key=Wm5rwQ7T3kAi2Z07eCBa&lang=en`,
+        MAP_TILE_PROVIDER.url,
         {
-          attribution:
-            '&copy; <a href="https://www.maptiler.com/">MapTiler</a>',
+          attribution: MAP_TILE_PROVIDER.attribution,
         },
       )
       tileLayer.addTo(map)
@@ -593,8 +597,8 @@ const BeneficiaryMap: React.FC<ExtendedBeneficiaryMapProps> = ({
         preferCanvas={false}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
-          url={`https://api.maptiler.com/maps/basic-v2/{z}/{x}/{y}.png?key=Wm5rwQ7T3kAi2Z07eCBa&lang=en`}
+          attribution={MAP_TILE_PROVIDER.attribution}
+          url={MAP_TILE_PROVIDER.url}
         />
         <MapEventHandler onBoundsChange={onBoundsChange} />
         <FitBounds beneficiaryData={beneficiaryData} />

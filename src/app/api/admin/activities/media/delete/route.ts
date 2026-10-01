@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/utils/supabase/server"
-import { requireSuperAdmin } from "@/utils/auth/requireSuperAdmin"
+import { requireSuperAdminRequest } from "@/utils/auth/requireSuperAdminRequest"
 import { MediaRow, getDirectMediaUrl, getStorageKey } from "@/utils/supabase/media"
 import { STORAGE_BUCKET } from "@/utils/supabase/buckets"
 
@@ -38,7 +38,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   const supabase = await createClient()
-  const auth = await requireSuperAdmin(supabase)
+  const auth = await requireSuperAdminRequest(supabase, req)
   if (!auth.ok) return auth.response
 
   // ── Fetch only the columns needed to find and delete the record ───────────

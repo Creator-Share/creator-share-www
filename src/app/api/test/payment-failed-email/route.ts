@@ -1,9 +1,13 @@
+import { requireDiagnosticAdmin } from "@/utils/auth/requireDiagnosticAdmin"
 import { NextResponse } from "next/server"
 import { sendPaymentFailedEmail } from "@/utils/email"
 
 export const runtime = "nodejs"
 
 export async function GET(req: Request) {
+  const denied = await requireDiagnosticAdmin(req)
+  if (denied) return denied
+
   try {
     const { searchParams } = new URL(req.url)
     const email = searchParams.get("email") || "your-email@example.com"

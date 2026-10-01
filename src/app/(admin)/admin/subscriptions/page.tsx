@@ -12,6 +12,11 @@ import { LogoLoader } from "@/components/common/LogoLoader"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { RawSubscription } from "@/types/admin.types"
 import { formatMoney } from "@/utils/currency"
+import { presentSubscriptionSubject } from "@/lib/sponsorships/subscriptionPresentation"
+import {
+  parseSubscriptionCancellationClientResult,
+  subscriptionCancellationNotice,
+} from "@/lib/sponsorships/cancellation/subscriptionCancellationClient"
 
 const AdminSubscriptionsPage = () => {
   const [subscriptions, setSubscriptions] = useState<AdminSubscription[]>([])
@@ -24,14 +29,24 @@ const AdminSubscriptionsPage = () => {
       sub.charged_amount && sub.charged_currency
         ? formatMoney(sub.charged_amount, sub.charged_currency)
         : null
+    const subject = presentSubscriptionSubject({
+      subjectKind: sub.subject_kind,
+      partnershipProject: sub.partnership_project,
+      beneficiaryId: sub.beneficiary_id,
+    })
     return {
       ...sub,
       child_name:
-        sub.beneficiaries?.name ||
-        (sub.beneficiary_id
-          ? `Beneficiary ID: ${sub.beneficiary_id}`
-          : "Unknown Beneficiary"),
-      child_username: sub.beneficiaries?.username || "unknown",
+        subject.subjectKind === "partnership"
+          ? subject.title
+          : sub.beneficiaries?.name ||
+            (sub.beneficiary_id
+              ? `Beneficiary ID: ${sub.beneficiary_id}`
+              : subject.title),
+      child_username:
+        subject.subjectKind === "partnership"
+          ? ""
+          : sub.beneficiaries?.username || "unknown",
       user_email: `User ID: ${sub.user_id}`,
       formatted_amount:
         chargedAmount && sub.charged_currency !== "USD"
@@ -155,26 +170,45 @@ const AdminSubscriptionsPage = () => {
   }, [supabase])
 
   const handleCancelSubscription = async (subscriptionId: string) => {
-    if (!confirm("Are you sure you want to cancel this subscription? This action cannot be undone.")) {
+    if (!confirm("Submit this cancellation request? Once provider processing begins, the request cannot be withdrawn.")) {
+      return
+    }
+
+    const enteredReason = window.prompt(
+      "Enter a specific internal reason for this cancellation. Do not include email addresses, phone numbers, or payment provider references.",
+    )
+    if (enteredReason === null) return
+
+    const reason = enteredReason.replace(/\s+/g, " ").trim()
+    if (reason.length < 10 || reason.length > 500) {
+      toaster.create({
+        title: "Cancellation reason required",
+        description: "Enter a specific reason between 10 and 500 characters.",
+        type: "error",
+        duration: 5000,
+      })
       return
     }
 
     try {
-      const response = await fetch("/api/stripe/cancel-subscription", {
+      const response = await fetch("/api/sponsorships/subscriptions/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscriptionId }),
+        body: JSON.stringify({ subscriptionId, reason }),
       })
+      const body = (await response.json().catch(() => null)) as unknown
+      const result = parseSubscriptionCancellationClientResult(body)
 
-      if (!response.ok) {
+      if (!result) {
         throw new Error("Failed to cancel subscription")
       }
 
+      const notice = subscriptionCancellationNotice(result.status)
       toaster.create({
-        title: "Success",
-        description: "Subscription cancelled successfully",
-        type: "success",
-        duration: 3000,
+        title: notice.title,
+        description: notice.description,
+        type: notice.kind,
+        duration: 6000,
       })
 
       // Real-time will automatically update the table

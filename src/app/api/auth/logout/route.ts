@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
+import { advocateAttributionIdentityCookieClearHeaders } from "@/lib/advocates/attributionIdentityCookie"
 import { createClient } from "@/utils/supabase/server"
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient()
 
   try {
@@ -11,7 +12,17 @@ export async function POST() {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    return NextResponse.json({ message: "Logout successful" }, { status: 200 })
+    const response = NextResponse.json(
+      { message: "Logout successful" },
+      { status: 200 },
+    )
+    for (const header of advocateAttributionIdentityCookieClearHeaders(
+      request.headers.get("host"),
+      new URL(request.url).protocol === "https:",
+    )) {
+      response.headers.append("Set-Cookie", header)
+    }
+    return response
   } catch (err: unknown) {
     const errorMessage =
       err instanceof Error ? err.message : "Unexpected error occurred"

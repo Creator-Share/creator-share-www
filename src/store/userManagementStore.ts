@@ -56,7 +56,8 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
         throw new Error(errorData.error || "Failed to invite user")
       }
 
-      await get().fetchUsers()
+      // A successful response means the request was accepted. Provider delivery
+      // or role assignment may still require manual review.
       set({ loading: false })
       return true
     } catch (error) {
@@ -114,29 +115,7 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
     }
   },
 
-  deleteUser: async (userId: string) => {
-    set({ loading: true, error: null })
-    try {
-      const response = await fetch(`/api/admin/users/${userId}`, {
-        method: "DELETE",
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to delete user")
-      }
-
-      await get().fetchUsers()
-      set({ loading: false })
-      return true
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error"
-      set({ error: errorMessage, loading: false })
-      return false
-    }
-  },
-
-  bulkDeleteUsers: async (userIds: string[]) => {
+  disableAccounts: async (userIds: string[]) => {
     set({ loading: true, error: null })
     try {
       const response = await fetch('/api/admin/users/bulk-delete', {
@@ -149,7 +128,12 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to delete users')
+        throw new Error(errorData.error || 'Failed to disable account access')
+      }
+
+      const result = await response.json()
+      if (result?.success !== true || result.disabled_count !== new Set(userIds.map(id => id.toLowerCase())).size) {
+        throw new Error("Unable to confirm account disablement")
       }
 
       // Refresh the users list
@@ -218,4 +202,4 @@ export const useUserManagementStore = create<UserManagementStore>((set, get) => 
   clearError: () => {
     set({ error: null })
   },
-})) 
+}))

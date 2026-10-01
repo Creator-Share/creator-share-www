@@ -2,56 +2,75 @@ import { test, expect } from "@playwright/test"
 
 test.describe("Homepage Tests", () => {
   test("homepage loads successfully", async ({ page }) => {
-    await page.goto("http://localhost:3000")
+    const response = await page.goto("http://localhost:3000", {
+      waitUntil: "domcontentloaded",
+    })
 
-    // Wait for page to load
-    await page.waitForLoadState("networkidle")
-
-    // Check that the page loaded (no 404/500)
+    expect(response?.status()).toBe(200)
     expect(page.url()).toBe("http://localhost:3000/")
+    await expect(
+      page.getByRole("heading", { name: /One child at a time/i }),
+    ).toBeVisible()
   })
 
-  test("CompactHero section is visible", async ({ page }) => {
-    await page.goto("http://localhost:3000")
-    await page.waitForLoadState("networkidle")
+  test("home hero is visible", async ({ page }) => {
+    const response = await page.goto("http://localhost:3000", {
+      waitUntil: "domcontentloaded",
+    })
 
-    // Check for hero text
-    await expect(page.getByText(/Be the Reason Someone/i)).toBeVisible()
-    await expect(page.getByText(/Smiles/i)).toBeVisible()
+    expect(response?.status()).toBe(200)
+    await expect(
+      page.getByRole("heading", { name: /One child at a time/i }),
+    ).toBeVisible()
+    await expect(page.getByText(/thousands of lives/i)).toBeVisible()
   })
 
   test("SponsorshipFilters component renders", async ({ page }) => {
-    await page.goto("http://localhost:3000")
-    await page.waitForLoadState("networkidle")
+    const response = await page.goto("http://localhost:3000", {
+      waitUntil: "domcontentloaded",
+    })
 
-    // Check for filter elements
-    await expect(page.getByText(/Select Gender/i)).toBeVisible()
-    // Status dropdown shows selected values by default
-    await expect(page.getByText(/New, Partially Funded/i)).toBeVisible()
-    await expect(page.getByText(/Age Range/i)).toBeVisible()
+    expect(response?.status()).toBe(200)
     await expect(
-      page.getByRole("button", { name: /Show All Children/i })
+      page.getByRole("combobox").filter({ hasText: "All Genders" }),
+    ).toBeVisible()
+    await expect(page.getByText(/Age:\s*0.*14\s*yrs/i)).toBeVisible()
+    await expect(page.getByPlaceholder("Search")).toBeVisible()
+
+    await expect(
+      page.locator(
+        '[data-scope="select"][data-part="root"]#select\\:sponsorship-beneficiary-type-filter',
+      ),
+    ).toBeVisible()
+    await expect(
+      page.locator(
+        '[data-scope="select"][data-part="root"]#select\\:sponsorship-gender-filter',
+      ),
+    ).toBeVisible()
+    await expect(
+      page.locator(
+        '[data-scope="slider"][data-part="root"]#slider\\:sponsorship-age-range-filter',
+      ),
     ).toBeVisible()
   })
 
   test("beneficiary listings load", async ({ page }) => {
-    await page.goto("http://localhost:3000")
-
-    // Wait for API call to complete
-    await page.waitForResponse(
+    const beneficiaryResponse = page.waitForResponse(
       (response) =>
         response.url().includes("/api/beneficiaries/get") &&
-        response.status() === 200
+        response.request().method() === "GET",
     )
+    const documentResponse = await page.goto("http://localhost:3000", {
+      waitUntil: "domcontentloaded",
+    })
 
-    // Wait a bit for rendering
-    await page.waitForTimeout(1000)
+    expect(documentResponse?.status()).toBe(200)
+    expect((await beneficiaryResponse).status()).toBe(200)
 
-    // Check that listings container exists
-    const listingsContainer = page
-      .locator(".border.bg-white.rounded-2xl")
-      .last()
-    await expect(listingsContainer).toBeVisible()
+    const catalogResult = page
+      .getByText("No matches", { exact: true })
+      .or(page.locator(".rounded-\\[20px\\].bg-white").first())
+    await expect(catalogResult).toBeVisible()
   })
 
   test("no console errors on page load", async ({ page }) => {
@@ -63,12 +82,20 @@ test.describe("Homepage Tests", () => {
       }
     })
 
-    await page.goto("http://localhost:3000")
-    await page.waitForLoadState("networkidle")
+    const beneficiaryResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/beneficiaries/get"),
+    )
+    const documentResponse = await page.goto("http://localhost:3000", {
+      waitUntil: "domcontentloaded",
+    })
+    expect(documentResponse?.status()).toBe(200)
+    expect((await beneficiaryResponse).status()).toBe(200)
+    await expect(
+      page.getByRole("heading", { name: /One child at a time/i }),
+    ).toBeVisible()
 
-    // Filter out known non-critical errors
     const criticalErrors = consoleErrors.filter(
-      (error) => !error.includes("Download the React DevTools")
+      (error) => !error.includes("Download the React DevTools"),
     )
 
     expect(criticalErrors).toHaveLength(0)

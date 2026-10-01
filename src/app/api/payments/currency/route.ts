@@ -16,12 +16,22 @@ export async function GET(req: Request) {
     ? getDefaultCurrencyForCountry(country)
     : DEFAULT_SUPPORTED_CURRENCY
 
-  return NextResponse.json({
-    country: country || null,
-    currency,
-    currencies: SUPPORTED_CURRENCIES,
-    rates: Object.fromEntries(
-      SUPPORTED_CURRENCIES.map((item) => [item, getUsdConversionRate(item)]),
-    ),
-  })
+  return NextResponse.json(
+    {
+      country: country || null,
+      currency,
+      currencies: SUPPORTED_CURRENCIES,
+      rates: Object.fromEntries(
+        SUPPORTED_CURRENCIES.map((item) => [item, getUsdConversionRate(item)]),
+      ),
+    },
+    {
+      headers: {
+        "Cache-Control": "private, no-store, max-age=0",
+        Pragma: "no-cache",
+        Vary: "Host, X-Vercel-IP-Country, CF-IPCountry, X-Country-Code",
+        "X-Content-Type-Options": "nosniff",
+      },
+    },
+  )
 }

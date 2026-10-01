@@ -1,0 +1,127 @@
+import { randomUUID } from "node:crypto"
+
+import { NextResponse } from "next/server"
+
+import {
+  createAdvocatePortalAccessRepository,
+  findAdvocatePortalAccessBySlug,
+} from "@/lib/advocates/admin/access"
+import {
+  AdvocatePublicMetricsDatabaseError,
+  classifyAdvocatePublicMetricsUpdateFailure,
+  parseAdvocatePublicMetricsUpdateInput,
+  readBoundedAdvocatePublicMetricsBody,
+  replaceAdvocatePublicMetrics,
+} from "@/lib/advocates/admin/publicMetrics"
+import {
+  isTrustedCheckoutJsonRequest,
+  resolveTrustedPrimaryRequestOrigin,
+} from "@/lib/sponsorships/checkout/requestSecurity"
+import { createClient, createServiceRoleClient } from "@/utils/supabase/server"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+function response(body: Record<string, unknown>, status: number): NextResponse {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "private, no-store, max-age=0",
+      Pragma: "no-cache",
+      "X-Content-Type-Options": "nosniff",
+    },
+  })
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ slug: string }> },
+): Promise<NextResponse> {
+  const requestId = randomUUID()
+  const traceId = randomUUID()
+  const expectedOrigin = resolveTrustedPrimaryRequestOrigin({
+    rawHost: request.headers.get("host"),
+  })
+  if (
+    expectedOrigin === null ||
+    !isTrustedCheckoutJsonRequest(request.headers, expectedOrigin)
+  ) {
+    return response({ ok: false, code: "invalid_request", requestId }, 400)
+  }
+
+  const client = await createClient()
+  const {
+    data: { user },
+  } = await client.auth.getUser()
+  if (!user) {
+    return response({ ok: false, code: "unauthorized", requestId }, 401)
+  }
+
+  const { slug } = await params
+  let portal
+  try {
+    const portals =
+      await createAdvocatePortalAccessRepository(client).listForCurrentUser()
+    portal = findAdvocatePortalAccessBySlug(portals, slug)
+  } catch {
+    console.error("ADVOCATE_PORTAL_PUBLIC_METRICS_FAILED", {
+      requestId,
+      code: "access_unavailable",
+    })
+    return response(
+      { ok: false, code: "public_metrics_update_failed", requestId },
+      500,
+    )
+  }
+  if (portal === null) {
+    return response({ ok: false, code: "portal_not_found", requestId }, 404)
+  }
+  if (!portal.permissions.includes("portal.public_metrics.update")) {
+    return response({ ok: false, code: "forbidden", requestId }, 403)
+  }
+
+  const rawBody = await readBoundedAdvocatePublicMetricsBody(request)
+  const input =
+    rawBody === null ? null : parseAdvocatePublicMetricsUpdateInput(rawBody)
+  if (input === null) {
+    return response({ ok: false, code: "invalid_request", requestId }, 400)
+  }
+
+  try {
+    const advocateVersion = await replaceAdvocatePublicMetrics(
+      createServiceRoleClient(),
+      {
+        advocateId: portal.advocateId,
+        actorUserId: user.id,
+        input,
+        requestId,
+        traceId,
+        sessionId: null,
+      },
+    )
+    return response({ ok: true, requestId, advocateVersion }, 200)
+  } catch (error) {
+    const postgresCode =
+      error instanceof AdvocatePublicMetricsDatabaseError
+        ? error.postgresCode
+        : undefined
+    const postgresMessage =
+      error instanceof AdvocatePublicMetricsDatabaseError
+        ? error.postgresMessage
+        : undefined
+    const failure = classifyAdvocatePublicMetricsUpdateFailure(
+      postgresCode,
+      postgresMessage,
+    )
+    if (failure.status === 500) {
+      console.error("ADVOCATE_PORTAL_PUBLIC_METRICS_FAILED", {
+        requestId,
+        code: failure.code,
+      })
+    }
+    return response(
+      { ok: false, code: failure.code, requestId },
+      failure.status,
+    )
+  }
+}

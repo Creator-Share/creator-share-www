@@ -1,0 +1,1869 @@
+BEGIN;
+
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+
+SELECT extensions.no_plan();
+
+-- Superuser fixture and unit calls use the shared private payment core.
+-- Public caller authority and recovery contracts are exercised through v2.
+
+CREATE TEMP TABLE adjustment_test_context (
+  key text PRIMARY KEY,
+  value uuid NOT NULL
+) ON COMMIT DROP;
+
+CREATE TEMP TABLE adjustment_test_times (
+  key text PRIMARY KEY,
+  value timestamptz NOT NULL
+) ON COMMIT DROP;
+
+CREATE TEMP TABLE adjustment_test_leases (
+  key text PRIMARY KEY,
+  gateway_event_id uuid NOT NULL,
+  processing_lease_token uuid NOT NULL
+) ON COMMIT DROP;
+
+CREATE TEMP TABLE adjustment_test_attribution_snapshot (
+  sponsorship_intent_id uuid PRIMARY KEY,
+  evidence jsonb NOT NULL
+) ON COMMIT DROP;
+
+UPDATE public.payment_provider_accounts
+SET environment = 'live'
+WHERE (provider = 'STRIPE' AND scope = 'stripe_us')
+   OR (provider = 'PAYPAL' AND scope = 'paypal');
+
+WITH inserted AS (
+  INSERT INTO public.beneficiaries (
+    name,
+    username,
+    budget_goal,
+    status
+  )
+  VALUES (
+    'Financial Adjustment Beneficiary',
+    'financial-adjustment-beneficiary',
+    -1,
+    'New'
+  )
+  RETURNING id
+)
+INSERT INTO adjustment_test_context
+SELECT 'beneficiary', id FROM inserted;
+
+WITH inserted AS (
+  INSERT INTO public.sponsor_identities DEFAULT VALUES
+  RETURNING id
+)
+INSERT INTO adjustment_test_context
+SELECT 'identity', id FROM inserted;
+
+INSERT INTO public.sponsor_identifiers (
+  sponsor_identity_id,
+  kind,
+  issuer_scope,
+  identifier_digest,
+  normalization_version,
+  hmac_key_version,
+  confidence
+)
+SELECT
+  value,
+  'email',
+  'creator_share',
+  decode(repeat('d1', 32), 'hex'),
+  1,
+  1,
+  'provider_asserted'
+FROM adjustment_test_context
+WHERE key = 'identity';
+
+WITH inserted AS (
+  INSERT INTO public.sponsorship_intents (
+    idempotency_key,
+    source,
+    source_host,
+    sponsor_identity_id,
+    contact_email_hmac,
+    contact_email_normalization_version,
+    contact_email_hmac_key_version,
+    subject_kind,
+    beneficiary_id,
+    payment_mode,
+    base_amount_usd_cents,
+    charged_amount_minor,
+    charged_currency,
+    conversion_rate,
+    currency_quote_at,
+    currency_rate_source
+  )
+  SELECT
+    'financial-adjustment-stripe-intent-0001',
+    'primary_site',
+    'creatorshare.com',
+    identity.value,
+    decode(repeat('d1', 32), 'hex'),
+    1,
+    1,
+    'standard',
+    beneficiary.value,
+    'one_time',
+    10000,
+    10000,
+    'USD',
+    1,
+    clock_timestamp(),
+    'financial-adjustment-test'
+  FROM adjustment_test_context identity
+  CROSS JOIN adjustment_test_context beneficiary
+  WHERE identity.key = 'identity'
+    AND beneficiary.key = 'beneficiary'
+  RETURNING id
+)
+INSERT INTO adjustment_test_context
+SELECT 'stripe_intent', id FROM inserted;
+
+INSERT INTO adjustment_test_context
+SELECT 'stripe_quote', payment_quote_id
+FROM private.issue_sponsorship_payment_quote_core_v1(
+  target_sponsorship_intent_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'stripe_intent'
+  ),
+  target_provider => 'STRIPE',
+  target_provider_account_scope => 'stripe_us',
+  target_quote_idempotency_key => 'financial-adjustment-stripe-quote-0001'
+);
+
+INSERT INTO adjustment_test_context
+SELECT 'stripe_attempt', payment_attempt_id
+FROM private.begin_sponsorship_payment_core_v1(
+  target_sponsorship_intent_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'stripe_intent'
+  ),
+  target_payment_quote_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'stripe_quote'
+  ),
+  target_provider => 'STRIPE',
+  target_provider_account_scope => 'stripe_us',
+  target_provider_idempotency_key => 'financial-adjustment-stripe-attempt-0001',
+  target_checkout_receipt_digest => decode(repeat('d2', 32), 'hex')
+);
+
+SELECT count(*)
+FROM private.attach_sponsorship_payment_provider_object_core_v1(
+  target_payment_attempt_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'stripe_attempt'
+  ),
+  target_provider_object_type => 'checkout_session',
+  target_provider_object_id => 'cs_test_financial_adjustment_0001'
+);
+
+INSERT INTO adjustment_test_times
+VALUES ('stripe_gross', clock_timestamp());
+
+INSERT INTO adjustment_test_context
+SELECT 'stripe_gross_event', gateway_event_id
+FROM public.ingest_verified_payment_gateway_event(
+  target_payment_attempt_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'stripe_attempt'
+  ),
+  target_provider => 'STRIPE',
+  target_provider_account_scope => 'stripe_us',
+  target_provider_event_id => 'evt_financial_adjustment_gross_0001',
+  target_event_type => 'checkout.session.completed',
+  target_provider_object_type => 'checkout_session',
+  target_provider_object_id => 'cs_test_financial_adjustment_0001',
+  target_redacted_payload => '{"payment_status":"paid"}'::jsonb,
+  target_payload_ciphertext => decode('d3', 'hex'),
+  target_payload_sha256 => decode(repeat('d3', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'stripe_gross'
+  ),
+  target_occurred_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'stripe_gross'
+  ),
+  target_verification_method => 'stripe_webhook_signature',
+  target_fact_payment_status => 'paid',
+  target_fact_server_payment_attempt_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'stripe_attempt'
+  ),
+  target_fact_provider_movement_type => 'payment_intent',
+  target_fact_provider_movement_id => 'pi_financial_adjustment_gross_0001',
+  target_fact_base_amount_usd_cents => 10000,
+  target_fact_charged_amount_minor => 10000,
+  target_fact_charged_currency => 'USD',
+  target_fact_conversion_rate => 1
+);
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'stripe_gross',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT value FROM adjustment_test_context WHERE key = 'stripe_gross_event'
+);
+
+CREATE TEMP TABLE adjustment_stripe_gross_result ON COMMIT DROP AS
+SELECT *
+FROM public.apply_sponsorship_payment_success(
+  target_gateway_event_id => (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'stripe_gross'
+  ),
+  target_processing_lease_token => (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'stripe_gross'
+  ),
+  target_claim_token_digest => decode(repeat('d4', 32), 'hex'),
+  target_recipient_email_ciphertext => decode('d4', 'hex'),
+  target_email_encryption_key_version => 1::smallint,
+  target_secret_payload_ciphertext => decode('d5', 'hex')
+);
+
+INSERT INTO adjustment_test_context
+SELECT 'stripe_gross_movement', financial_movement_id
+FROM adjustment_stripe_gross_result;
+
+-- End shared provider cash fixture.
+
+INSERT INTO adjustment_test_attribution_snapshot
+SELECT
+  attribution.sponsorship_intent_id,
+  to_jsonb(attribution)
+FROM public.sponsorship_attributions attribution
+WHERE attribution.sponsorship_intent_id = (
+  SELECT value FROM adjustment_test_context WHERE key = 'stripe_intent'
+);
+
+INSERT INTO public.sponsorship_refund_requirements (
+  financial_movement_id,
+  source_gateway_event_id,
+  payment_attempt_id,
+  sponsorship_intent_id,
+  beneficiary_id,
+  provider,
+  provider_account_scope,
+  reason,
+  operational_alert
+)
+SELECT
+  movement.id,
+  movement.source_gateway_event_id,
+  movement.payment_attempt_id,
+  movement.sponsorship_intent_id,
+  intent.beneficiary_id,
+  movement.provider,
+  movement.provider_account_scope,
+  'Test fixture requiring a complete provider refund',
+  jsonb_build_object(
+    'severity', 'critical',
+    'operation', 'refund_required',
+    'fixture', true
+  )
+FROM public.sponsorship_financial_movements movement
+JOIN public.sponsorship_intents intent
+  ON intent.id = movement.sponsorship_intent_id
+WHERE movement.id = (
+  SELECT value
+  FROM adjustment_test_context
+  WHERE key = 'stripe_gross_movement'
+);
+
+WITH inserted AS (
+  INSERT INTO public.sponsorship_intents (
+    idempotency_key,
+    source,
+    source_host,
+    sponsor_identity_id,
+    contact_email_hmac,
+    contact_email_normalization_version,
+    contact_email_hmac_key_version,
+    subject_kind,
+    beneficiary_id,
+    payment_mode,
+    base_amount_usd_cents,
+    charged_amount_minor,
+    charged_currency,
+    conversion_rate,
+    currency_quote_at,
+    currency_rate_source
+  )
+  SELECT
+    'financial-adjustment-paypal-intent-0001',
+    'primary_site',
+    'creatorshare.com',
+    identity.value,
+    decode(repeat('d1', 32), 'hex'),
+    1,
+    1,
+    'standard',
+    beneficiary.value,
+    'one_time',
+    5000,
+    5000,
+    'USD',
+    1,
+    clock_timestamp(),
+    'financial-adjustment-test'
+  FROM adjustment_test_context identity
+  CROSS JOIN adjustment_test_context beneficiary
+  WHERE identity.key = 'identity'
+    AND beneficiary.key = 'beneficiary'
+  RETURNING id
+)
+INSERT INTO adjustment_test_context
+SELECT 'paypal_intent', id FROM inserted;
+
+INSERT INTO adjustment_test_context
+SELECT 'paypal_quote', payment_quote_id
+FROM private.issue_sponsorship_payment_quote_core_v1(
+  target_sponsorship_intent_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'paypal_intent'
+  ),
+  target_provider => 'PAYPAL',
+  target_provider_account_scope => 'paypal',
+  target_quote_idempotency_key => 'financial-adjustment-paypal-quote-0001'
+);
+
+INSERT INTO adjustment_test_context
+SELECT 'paypal_attempt', payment_attempt_id
+FROM private.begin_sponsorship_payment_core_v1(
+  target_sponsorship_intent_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'paypal_intent'
+  ),
+  target_payment_quote_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'paypal_quote'
+  ),
+  target_provider => 'PAYPAL',
+  target_provider_account_scope => 'paypal',
+  target_provider_idempotency_key => 'financial-adjustment-paypal-attempt-0001',
+  target_checkout_receipt_digest => decode(repeat('d6', 32), 'hex')
+);
+
+SELECT count(*)
+FROM private.attach_sponsorship_payment_provider_object_core_v1(
+  target_payment_attempt_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'paypal_attempt'
+  ),
+  target_provider_object_type => 'order',
+  target_provider_object_id => 'ORDER-FINANCIAL-ADJUSTMENT-0001'
+);
+
+INSERT INTO adjustment_test_times
+VALUES ('paypal_gross', clock_timestamp());
+
+INSERT INTO adjustment_test_context
+SELECT 'paypal_gross_event', gateway_event_id
+FROM public.ingest_verified_payment_gateway_event(
+  target_payment_attempt_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'paypal_attempt'
+  ),
+  target_provider => 'PAYPAL',
+  target_provider_account_scope => 'paypal',
+  target_provider_event_id => 'WH-FINANCIAL-ADJUSTMENT-GROSS-0001',
+  target_event_type => 'PAYMENT.CAPTURE.COMPLETED',
+  target_provider_object_type => 'capture',
+  target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
+  target_redacted_payload => '{"status":"COMPLETED"}'::jsonb,
+  target_payload_ciphertext => decode('d7', 'hex'),
+  target_payload_sha256 => decode(repeat('d7', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'paypal_gross'
+  ),
+  target_occurred_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'paypal_gross'
+  ),
+  target_verification_method => 'paypal_webhook_signature_api',
+  target_fact_payment_status => 'completed',
+  target_fact_server_payment_attempt_id => (
+    SELECT value FROM adjustment_test_context WHERE key = 'paypal_attempt'
+  ),
+  target_fact_parent_provider_object_type => 'order',
+  target_fact_parent_provider_object_id => 'ORDER-FINANCIAL-ADJUSTMENT-0001',
+  target_fact_provider_movement_type => 'capture',
+  target_fact_provider_movement_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
+  target_fact_base_amount_usd_cents => 5000,
+  target_fact_charged_amount_minor => 5000,
+  target_fact_charged_currency => 'USD',
+  target_fact_conversion_rate => 1
+);
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'paypal_gross',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT value FROM adjustment_test_context WHERE key = 'paypal_gross_event'
+);
+
+CREATE TEMP TABLE adjustment_paypal_gross_result ON COMMIT DROP AS
+SELECT *
+FROM public.apply_sponsorship_payment_success(
+  target_gateway_event_id => (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_gross'
+  ),
+  target_processing_lease_token => (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_gross'
+  )
+);
+
+INSERT INTO adjustment_test_context
+SELECT 'paypal_gross_movement', financial_movement_id
+FROM adjustment_paypal_gross_result;
+
+INSERT INTO adjustment_test_times
+VALUES ('partial_refund', clock_timestamp());
+
+CREATE TEMP TABLE adjustment_partial_refund_ingest ON COMMIT DROP AS
+SELECT *
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'stripe_gross_movement'
+  ),
+  target_provider => 'STRIPE',
+  target_provider_account_scope => 'stripe_us',
+  target_provider_event_id => 'evt_financial_adjustment_partial_refund_0001',
+  target_event_type => 'refund.created',
+  target_provider_object_type => 'refund',
+  target_provider_object_id => 're_financial_adjustment_partial_0001',
+  target_adjustment_provider_movement_type => 'refund',
+  target_adjustment_provider_movement_id => 're_financial_adjustment_partial_0001',
+  target_charged_amount_minor => 2000,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"status":"succeeded"}'::jsonb,
+  target_payload_ciphertext => decode('d8', 'hex'),
+  target_payload_sha256 => decode(repeat('d8', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'partial_refund'
+  ),
+  target_occurred_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'partial_refund'
+  ),
+  target_verification_method => 'stripe_webhook_signature'
+);
+
+INSERT INTO adjustment_test_context
+SELECT 'partial_refund_event', gateway_event_id
+FROM adjustment_partial_refund_ingest;
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'partial_refund',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT value FROM adjustment_test_context WHERE key = 'partial_refund_event'
+);
+
+CREATE TEMP TABLE adjustment_partial_refund_result ON COMMIT DROP AS
+SELECT *
+FROM public.apply_sponsorship_financial_adjustment(
+  target_gateway_event_id => (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'partial_refund'
+  ),
+  target_processing_lease_token => (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'partial_refund'
+  )
+);
+
+SELECT extensions.is(
+  (SELECT application_effect::text FROM adjustment_partial_refund_result),
+  'refund_applied',
+  'a verified partial Stripe refund appends one refund effect'
+);
+
+SELECT extensions.is(
+  (SELECT net_base_amount_usd_cents FROM adjustment_partial_refund_result),
+  8000::bigint,
+  'a partial refund reduces normalized net USD without rewriting gross evidence'
+);
+
+SELECT extensions.ok(
+  (
+    SELECT
+      movement.base_amount_usd_cents IS NULL
+      AND movement.charged_amount_minor = 2000
+      AND movement.net_charged_amount_minor = -2000
+      AND movement.original_financial_movement_id = (
+        SELECT value
+        FROM adjustment_test_context
+        WHERE key = 'stripe_gross_movement'
+      )
+    FROM public.sponsorship_financial_movements movement
+    WHERE movement.id = (
+      SELECT financial_movement_id
+      FROM adjustment_partial_refund_result
+    )
+  ),
+  'adjustment movement retains positive provider evidence and a signed canonical offset'
+);
+
+SELECT extensions.ok(
+  (
+    SELECT
+      ledger.credit IS NULL
+      AND ledger.charged_amount = 2000
+      AND ledger.base_amount_usd_cents IS NULL
+    FROM public.transaction_ledger ledger
+    WHERE ledger.id = (
+      SELECT transaction_ledger_id
+      FROM adjustment_partial_refund_result
+    )
+  ),
+  'adjustment ledger retains exact provider evidence without a rounded USD posting'
+);
+
+CREATE TEMP TABLE adjustment_partial_refund_replay ON COMMIT DROP AS
+SELECT *
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'stripe_gross_movement'
+  ),
+  target_provider => 'STRIPE',
+  target_provider_account_scope => 'stripe_us',
+  target_provider_event_id => 'evt_financial_adjustment_partial_refund_0001',
+  target_event_type => 'refund.created',
+  target_provider_object_type => 'refund',
+  target_provider_object_id => 're_financial_adjustment_partial_0001',
+  target_adjustment_provider_movement_type => 'refund',
+  target_adjustment_provider_movement_id => 're_financial_adjustment_partial_0001',
+  target_charged_amount_minor => 2000,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"status":"succeeded"}'::jsonb,
+  target_payload_ciphertext => decode('d8', 'hex'),
+  target_payload_sha256 => decode(repeat('d8', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'partial_refund'
+  ),
+  target_occurred_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'partial_refund'
+  ),
+  target_verification_method => 'stripe_webhook_signature'
+);
+
+SELECT extensions.ok(
+  (
+    SELECT
+      replay.is_duplicate
+      AND replay.gateway_event_id = original.gateway_event_id
+    FROM adjustment_partial_refund_replay replay
+    CROSS JOIN adjustment_partial_refund_ingest original
+  ),
+  'an exact provider event replay resolves to the original immutable event'
+);
+
+SELECT extensions.is(
+  (
+    SELECT count(*)
+    FROM public.sponsorship_financial_movements movement
+    WHERE movement.original_financial_movement_id = (
+      SELECT value
+      FROM adjustment_test_context
+      WHERE key = 'stripe_gross_movement'
+    )
+  ),
+  1::bigint,
+  'an exact event replay cannot append another financial movement'
+);
+
+INSERT INTO adjustment_test_times
+VALUES ('duplicate_movement', clock_timestamp());
+
+INSERT INTO adjustment_test_context
+SELECT 'duplicate_movement_event', gateway_event_id
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'stripe_gross_movement'
+  ),
+  target_provider => 'STRIPE',
+  target_provider_account_scope => 'stripe_us',
+  target_provider_event_id => 'evt_financial_adjustment_duplicate_movement_0001',
+  target_event_type => 'refund.created',
+  target_provider_object_type => 'refund',
+  target_provider_object_id => 're_financial_adjustment_partial_0001',
+  target_adjustment_provider_movement_type => 'refund',
+  target_adjustment_provider_movement_id => 're_financial_adjustment_partial_0001',
+  target_charged_amount_minor => 2000,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"duplicate_delivery":true}'::jsonb,
+  target_payload_ciphertext => decode('d9', 'hex'),
+  target_payload_sha256 => decode(repeat('d9', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'duplicate_movement'
+  ),
+  target_occurred_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'duplicate_movement'
+  ),
+  target_verification_method => 'provider_api_response'
+);
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'duplicate_movement',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT value
+  FROM adjustment_test_context
+  WHERE key = 'duplicate_movement_event'
+);
+
+CREATE TEMP TABLE adjustment_duplicate_movement_result ON COMMIT DROP AS
+SELECT *
+FROM public.apply_sponsorship_financial_adjustment(
+  target_gateway_event_id => (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'duplicate_movement'
+  ),
+  target_processing_lease_token => (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'duplicate_movement'
+  )
+);
+
+SELECT extensions.is(
+  (
+    SELECT application_effect::text
+    FROM adjustment_duplicate_movement_result
+  ),
+  'duplicate_movement',
+  'a new event for an existing provider movement is classified without double counting'
+);
+
+SELECT extensions.is(
+  (
+    SELECT net_base_amount_usd_cents
+    FROM adjustment_duplicate_movement_result
+  ),
+  8000::bigint,
+  'duplicate provider movement delivery leaves aggregate net unchanged'
+);
+
+INSERT INTO adjustment_test_times
+VALUES ('over_refund', clock_timestamp());
+
+INSERT INTO adjustment_test_context
+SELECT 'over_refund_event', gateway_event_id
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'stripe_gross_movement'
+  ),
+  target_provider => 'STRIPE',
+  target_provider_account_scope => 'stripe_us',
+  target_provider_event_id => 'evt_financial_adjustment_over_refund_0001',
+  target_event_type => 'refund.created',
+  target_provider_object_type => 'refund',
+  target_provider_object_id => 're_financial_adjustment_over_0001',
+  target_adjustment_provider_movement_type => 'refund',
+  target_adjustment_provider_movement_id => 're_financial_adjustment_over_0001',
+  target_charged_amount_minor => 9000,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"status":"succeeded"}'::jsonb,
+  target_payload_ciphertext => decode('da', 'hex'),
+  target_payload_sha256 => decode(repeat('da', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'over_refund'
+  ),
+  target_occurred_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'over_refund'
+  ),
+  target_verification_method => 'stripe_webhook_signature'
+);
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'over_refund',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT value FROM adjustment_test_context WHERE key = 'over_refund_event'
+);
+
+SELECT extensions.throws_ok(
+  format(
+    'SELECT * FROM public.apply_sponsorship_financial_adjustment(%L::uuid, %L::uuid)',
+    (
+      SELECT gateway_event_id::text
+      FROM adjustment_test_leases
+      WHERE key = 'over_refund'
+    ),
+    (
+      SELECT processing_lease_token::text
+      FROM adjustment_test_leases
+      WHERE key = 'over_refund'
+    )
+  ),
+  '23514',
+  'Financial adjustment would move aggregate net outside the original gross payment',
+  'aggregate offsets cannot reduce normalized or charged net below zero'
+);
+
+SELECT extensions.throws_ok(
+  format(
+    'SELECT * FROM public.apply_sponsorship_financial_adjustment(%L::uuid, %L::uuid)',
+    (
+      SELECT gateway_event_id::text
+      FROM adjustment_test_leases
+      WHERE key = 'over_refund'
+    ),
+    gen_random_uuid()::text
+  ),
+  '55P03',
+  'Financial adjustment processing lease is missing or stale',
+  'a stale or forged worker lease cannot settle a financial adjustment'
+);
+
+INSERT INTO adjustment_test_times
+VALUES ('unmatched_dispute_credit', clock_timestamp());
+
+INSERT INTO adjustment_test_context
+SELECT 'unmatched_dispute_credit_event', gateway_event_id
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'stripe_gross_movement'
+  ),
+  target_provider => 'STRIPE',
+  target_provider_account_scope => 'stripe_us',
+  target_provider_event_id => 'evt_financial_adjustment_unmatched_credit_0001',
+  target_event_type => 'charge.dispute.funds_reinstated',
+  target_provider_object_type => 'dispute',
+  target_provider_object_id => 'dp_financial_adjustment_0001',
+  target_adjustment_provider_movement_type => 'dispute',
+  target_adjustment_provider_movement_id => 'dp_financial_adjustment_0001',
+  target_charged_amount_minor => 1000,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"status":"won"}'::jsonb,
+  target_payload_ciphertext => decode('e1', 'hex'),
+  target_payload_sha256 => decode(repeat('e1', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value
+    FROM adjustment_test_times
+    WHERE key = 'unmatched_dispute_credit'
+  ),
+  target_occurred_at => (
+    SELECT value
+    FROM adjustment_test_times
+    WHERE key = 'unmatched_dispute_credit'
+  ),
+  target_verification_method => 'stripe_webhook_signature'
+);
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'unmatched_dispute_credit',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT value
+  FROM adjustment_test_context
+  WHERE key = 'unmatched_dispute_credit_event'
+);
+
+SELECT extensions.throws_ok(
+  format(
+    'SELECT * FROM public.apply_sponsorship_financial_adjustment(%L::uuid, %L::uuid)',
+    (
+      SELECT gateway_event_id::text
+      FROM adjustment_test_leases
+      WHERE key = 'unmatched_dispute_credit'
+    ),
+    (
+      SELECT processing_lease_token::text
+      FROM adjustment_test_leases
+      WHERE key = 'unmatched_dispute_credit'
+    )
+  ),
+  '23514',
+  'Dispute reinstatement exceeds the verified outstanding dispute debit',
+  'dispute reinstatement cannot manufacture net value without its matching debit'
+);
+
+-- The worker persists a retry after an out-of-order credit fails settlement.
+SELECT extensions.ok(
+  (
+    SELECT processing_status = 'failed' AND processing_lease_token IS NULL
+    FROM public.retry_sponsorship_payment_gateway_event(
+      (SELECT gateway_event_id FROM adjustment_test_leases
+       WHERE key = 'unmatched_dispute_credit'),
+      (SELECT processing_lease_token FROM adjustment_test_leases
+       WHERE key = 'unmatched_dispute_credit'),
+      'adjustment_dependency_pending',
+      interval '1 hour'
+    )
+  ),
+  'an early dispute credit remains durably retryable and releases its lease'
+);
+
+-- Provider occurrence order is debit then credit; delivery order is reversed.
+INSERT INTO adjustment_test_times
+SELECT
+  'dispute_debit',
+  original.occurred_at + (credit.value - original.occurred_at) / 2
+FROM adjustment_test_times credit
+JOIN public.sponsorship_financial_movements original
+  ON original.id = (
+    SELECT value FROM adjustment_test_context WHERE key = 'stripe_gross_movement'
+  )
+WHERE credit.key = 'unmatched_dispute_credit';
+
+INSERT INTO adjustment_test_context
+SELECT 'dispute_debit_event', gateway_event_id
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'stripe_gross_movement'
+  ),
+  target_provider => 'STRIPE',
+  target_provider_account_scope => 'stripe_us',
+  target_provider_event_id => 'evt_financial_adjustment_dispute_debit_0001',
+  target_event_type => 'charge.dispute.funds_withdrawn',
+  target_provider_object_type => 'dispute',
+  target_provider_object_id => 'dp_financial_adjustment_0001',
+  target_adjustment_provider_movement_type => 'dispute',
+  target_adjustment_provider_movement_id => 'dp_financial_adjustment_0001',
+  target_charged_amount_minor => 1000,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"status":"lost"}'::jsonb,
+  target_payload_ciphertext => decode('db', 'hex'),
+  target_payload_sha256 => decode(repeat('db', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'dispute_debit'
+  ),
+  target_occurred_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'dispute_debit'
+  ),
+  target_verification_method => 'stripe_webhook_signature'
+);
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'dispute_debit',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT value FROM adjustment_test_context WHERE key = 'dispute_debit_event'
+);
+
+CREATE TEMP TABLE adjustment_dispute_debit_result ON COMMIT DROP AS
+SELECT *
+FROM public.apply_sponsorship_financial_adjustment(
+  target_gateway_event_id => (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'dispute_debit'
+  ),
+  target_processing_lease_token => (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'dispute_debit'
+  )
+);
+
+SELECT extensions.ok(
+  (
+    SELECT
+      application_effect = 'dispute_debit_applied'
+      AND net_base_amount_usd_cents = 7000
+      AND net_charged_amount_minor = 7000
+    FROM adjustment_dispute_debit_result
+  ),
+  'Stripe dispute withdrawal appends a bounded negative dispute movement'
+);
+
+-- Advance only the retry schedule in this superuser fixture. The lifecycle
+-- trigger correctly forbids application callers from editing it directly.
+-- Restore triggers before exercising claim, stale-lease rejection, and settlement.
+SET LOCAL session_replication_role = replica;
+UPDATE public.payment_gateway_events
+SET available_at = clock_timestamp() - interval '1 second'
+WHERE id = (
+  SELECT value FROM adjustment_test_context
+  WHERE key = 'unmatched_dispute_credit_event'
+);
+SET LOCAL session_replication_role = origin;
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'dispute_credit',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT value FROM adjustment_test_context WHERE key = 'unmatched_dispute_credit_event'
+);
+
+SELECT extensions.ok(
+  (
+    SELECT recovered.processing_lease_token <> original.processing_lease_token
+    FROM adjustment_test_leases recovered
+    JOIN adjustment_test_leases original
+      ON original.gateway_event_id = recovered.gateway_event_id
+    WHERE recovered.key = 'dispute_credit'
+      AND original.key = 'unmatched_dispute_credit'
+  ),
+  'the same early credit is reclaimed with a fresh processing lease'
+);
+
+SELECT extensions.throws_ok(
+  format(
+    'SELECT * FROM public.apply_sponsorship_financial_adjustment(%L::uuid, %L::uuid)',
+    (SELECT gateway_event_id FROM adjustment_test_leases
+     WHERE key = 'unmatched_dispute_credit'),
+    (SELECT processing_lease_token FROM adjustment_test_leases
+     WHERE key = 'unmatched_dispute_credit')
+  ),
+  '55P03',
+  'Financial adjustment processing lease is missing or stale',
+  'the original worker cannot settle a reclaimed dispute credit'
+);
+
+CREATE TEMP TABLE adjustment_dispute_credit_result ON COMMIT DROP AS
+SELECT *
+FROM public.apply_sponsorship_financial_adjustment(
+  target_gateway_event_id => (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'dispute_credit'
+  ),
+  target_processing_lease_token => (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'dispute_credit'
+  )
+);
+
+SELECT extensions.ok(
+  (
+    SELECT
+      application_effect = 'dispute_credit_applied'
+      AND net_base_amount_usd_cents = 8000
+      AND net_charged_amount_minor = 8000
+    FROM adjustment_dispute_credit_result
+  ),
+  'the retried early dispute credit restores the net after its matching debit arrives'
+);
+
+SELECT extensions.is(
+  (
+    SELECT count(*)
+    FROM public.sponsorship_financial_movements movement
+    WHERE movement.provider = 'STRIPE'
+      AND movement.provider_account_scope = 'stripe_us'
+      AND movement.provider_movement_type = 'dispute'
+      AND movement.provider_movement_id = 'dp_financial_adjustment_0001'
+  ),
+  2::bigint,
+  'one provider dispute can carry one debit and one distinct reinstatement movement'
+);
+
+INSERT INTO adjustment_test_times
+VALUES ('full_refund', clock_timestamp());
+
+INSERT INTO adjustment_test_context
+SELECT 'full_refund_event', gateway_event_id
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'stripe_gross_movement'
+  ),
+  target_provider => 'STRIPE',
+  target_provider_account_scope => 'stripe_us',
+  target_provider_event_id => 'evt_financial_adjustment_full_refund_0001',
+  target_event_type => 'refund.created',
+  target_provider_object_type => 'refund',
+  target_provider_object_id => 're_financial_adjustment_full_0001',
+  target_adjustment_provider_movement_type => 'refund',
+  target_adjustment_provider_movement_id => 're_financial_adjustment_full_0001',
+  target_charged_amount_minor => 8000,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"status":"succeeded"}'::jsonb,
+  target_payload_ciphertext => decode('dd', 'hex'),
+  target_payload_sha256 => decode(repeat('dd', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'full_refund'
+  ),
+  target_occurred_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'full_refund'
+  ),
+  target_verification_method => 'stripe_webhook_signature'
+);
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'full_refund',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT value FROM adjustment_test_context WHERE key = 'full_refund_event'
+);
+
+CREATE TEMP TABLE adjustment_full_refund_result ON COMMIT DROP AS
+SELECT *
+FROM public.apply_sponsorship_financial_adjustment(
+  target_gateway_event_id => (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'full_refund'
+  ),
+  target_processing_lease_token => (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'full_refund'
+  )
+);
+
+SELECT extensions.ok(
+  (
+    SELECT
+      application_effect = 'refund_applied'
+      AND net_base_amount_usd_cents = 0
+      AND net_charged_amount_minor = 0
+      AND refund_requirement_resolution_id IS NOT NULL
+    FROM adjustment_full_refund_result
+  ),
+  'a full verified refund reaches zero net and appends refund resolution evidence'
+);
+
+SELECT extensions.ok(
+  (
+    SELECT
+      requirement.status = 'pending'
+      AND resolution.final_net_base_amount_usd_cents = 0
+      AND resolution.final_net_charged_amount_minor = 0
+    FROM public.sponsorship_refund_requirements requirement
+    JOIN public.sponsorship_refund_requirement_resolutions resolution
+      ON resolution.refund_requirement_id = requirement.id
+    WHERE requirement.financial_movement_id = (
+      SELECT value
+      FROM adjustment_test_context
+      WHERE key = 'stripe_gross_movement'
+    )
+  ),
+  'append-only refund requirement remains unchanged beside immutable resolution evidence'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    SELECT *
+    FROM public.ingest_verified_sponsorship_financial_adjustment(
+      target_original_financial_movement_id => (
+        SELECT value
+        FROM adjustment_test_context
+        WHERE key = 'paypal_gross_movement'
+      ),
+      target_provider => 'PAYPAL',
+      target_provider_account_scope => 'paypal',
+      target_provider_event_id => 'WH-FINANCIAL-ADJUSTMENT-BAD-MAPPING-0001',
+      target_event_type => 'PAYMENT.CAPTURE.REFUNDED',
+      target_provider_object_type => 'sale',
+      target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
+      target_adjustment_provider_movement_type => 'refund',
+      target_adjustment_provider_movement_id => 'REFUND-BAD-MAPPING-0001',
+      target_charged_amount_minor => 5000,
+      target_charged_currency => 'USD',
+      target_conversion_rate => 1,
+      target_redacted_payload => '{}'::jsonb,
+      target_payload_ciphertext => decode('e2', 'hex'),
+      target_payload_sha256 => decode(repeat('e2', 32), 'hex'),
+      target_signature_verified_at => clock_timestamp(),
+      target_occurred_at => clock_timestamp(),
+      target_verification_method => 'paypal_webhook_signature_api'
+    )
+  $$,
+  '22023',
+  'Unsupported financial adjustment event and object mapping',
+  'PayPal capture and sale event subjects cannot be cross-wired'
+);
+
+INSERT INTO adjustment_test_times
+VALUES ('paypal_dispute_debit', clock_timestamp());
+
+CREATE TEMP TABLE adjustment_paypal_dispute_debit_ingest ON COMMIT DROP AS
+SELECT ingested.*
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'paypal_gross_movement'
+  ),
+  target_provider => 'PAYPAL',
+  target_provider_account_scope => 'paypal',
+  target_provider_event_id => 'WH-PAYPAL-DISPUTE-DEBIT-0001',
+  target_event_type => 'CUSTOMER.DISPUTE.CREATED',
+  target_provider_object_type => 'capture',
+  target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
+  target_adjustment_provider_movement_type => 'dispute',
+  target_adjustment_provider_movement_id => 'PP-D-123456789',
+  target_charged_amount_minor => 1200,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"status":"UNDER_REVIEW"}'::jsonb,
+  target_payload_ciphertext => decode('e7', 'hex'),
+  target_payload_sha256 => decode(repeat('e7', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value
+    FROM adjustment_test_times
+    WHERE key = 'paypal_dispute_debit'
+  ),
+  target_occurred_at => (
+    SELECT value
+    FROM adjustment_test_times
+    WHERE key = 'paypal_dispute_debit'
+  ),
+  target_verification_method => 'paypal_webhook_signature_api'
+) ingested;
+
+SELECT extensions.ok(
+  (
+    SELECT adjustment_kind = 'sponsorship_dispute_debit'
+      AND NOT is_duplicate
+    FROM adjustment_paypal_dispute_debit_ingest
+  )
+  AND (
+    SELECT is_duplicate
+    FROM public.ingest_verified_sponsorship_financial_adjustment(
+      target_original_financial_movement_id => (
+        SELECT value
+        FROM adjustment_test_context
+        WHERE key = 'paypal_gross_movement'
+      ),
+      target_provider => 'PAYPAL',
+      target_provider_account_scope => 'paypal',
+      target_provider_event_id => 'WH-PAYPAL-DISPUTE-DEBIT-0001',
+      target_event_type => 'CUSTOMER.DISPUTE.CREATED',
+      target_provider_object_type => 'capture',
+      target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
+      target_adjustment_provider_movement_type => 'dispute',
+      target_adjustment_provider_movement_id => 'PP-D-123456789',
+      target_charged_amount_minor => 1200,
+      target_charged_currency => 'USD',
+      target_conversion_rate => 1,
+      target_redacted_payload => '{"status":"UNDER_REVIEW"}'::jsonb,
+      target_payload_ciphertext => decode('e7', 'hex'),
+      target_payload_sha256 => decode(repeat('e7', 32), 'hex'),
+      target_signature_verified_at => clock_timestamp(),
+      target_occurred_at => (
+        SELECT value
+        FROM adjustment_test_times
+        WHERE key = 'paypal_dispute_debit'
+      ),
+      target_verification_method => 'paypal_webhook_signature_api'
+    )
+  ),
+  'partial PayPal dispute debit ingestion is idempotent on one original capture'
+);
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'paypal_dispute_debit',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT gateway_event_id
+  FROM adjustment_paypal_dispute_debit_ingest
+);
+
+CREATE TEMP TABLE adjustment_paypal_dispute_debit_result ON COMMIT DROP AS
+SELECT applied.*
+FROM public.apply_sponsorship_financial_adjustment(
+  (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_dispute_debit'
+  ),
+  (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_dispute_debit'
+  )
+) applied;
+
+SELECT extensions.ok(
+  (
+    SELECT application_effect = 'dispute_debit_applied'
+      AND net_base_amount_usd_cents = 3800
+      AND net_charged_amount_minor = 3800
+    FROM adjustment_paypal_dispute_debit_result
+  ),
+  'a partial PayPal dispute creates one bounded negative movement'
+);
+
+INSERT INTO adjustment_test_times
+VALUES ('paypal_dispute_credit', clock_timestamp());
+
+CREATE TEMP TABLE adjustment_paypal_dispute_credit_ingest ON COMMIT DROP AS
+SELECT ingested.*
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'paypal_gross_movement'
+  ),
+  target_provider => 'PAYPAL',
+  target_provider_account_scope => 'paypal',
+  target_provider_event_id => 'WH-PAYPAL-DISPUTE-CREDIT-0001',
+  target_event_type => 'CUSTOMER.DISPUTE.RESOLVED',
+  target_provider_object_type => 'capture',
+  target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
+  target_adjustment_provider_movement_type => 'dispute',
+  target_adjustment_provider_movement_id => 'PP-D-123456789',
+  target_charged_amount_minor => 1200,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"outcome":"RESOLVED_SELLER_FAVOUR"}'::jsonb,
+  target_payload_ciphertext => decode('e8', 'hex'),
+  target_payload_sha256 => decode(repeat('e8', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value
+    FROM adjustment_test_times
+    WHERE key = 'paypal_dispute_credit'
+  ),
+  target_occurred_at => (
+    SELECT value
+    FROM adjustment_test_times
+    WHERE key = 'paypal_dispute_credit'
+  ),
+  target_verification_method => 'paypal_webhook_signature_api'
+) ingested;
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'paypal_dispute_credit',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT gateway_event_id
+  FROM adjustment_paypal_dispute_credit_ingest
+);
+
+CREATE TEMP TABLE adjustment_paypal_dispute_credit_result ON COMMIT DROP AS
+SELECT applied.*
+FROM public.apply_sponsorship_financial_adjustment(
+  (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_dispute_credit'
+  ),
+  (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_dispute_credit'
+  )
+) applied;
+
+SELECT extensions.ok(
+  (
+    SELECT application_effect = 'dispute_credit_applied'
+      AND net_base_amount_usd_cents = 5000
+      AND net_charged_amount_minor = 5000
+    FROM adjustment_paypal_dispute_credit_result
+  )
+  AND (
+    SELECT count(*) = 2
+    FROM public.sponsorship_financial_movements movement
+    WHERE movement.original_financial_movement_id = (
+      SELECT value
+      FROM adjustment_test_context
+      WHERE key = 'paypal_gross_movement'
+    )
+      AND movement.provider = 'PAYPAL'
+      AND movement.provider_movement_type = 'dispute'
+      AND movement.provider_movement_id = 'PP-D-123456789'
+      AND movement.entry_kind IN (
+        'sponsorship_dispute_debit',
+        'sponsorship_dispute_credit'
+      )
+  ),
+  'a seller-favor PayPal resolution credits only the outstanding dispute debit'
+);
+
+INSERT INTO adjustment_test_times
+VALUES ('paypal_reversal', clock_timestamp());
+
+INSERT INTO adjustment_test_context
+SELECT 'paypal_reversal_event', gateway_event_id
+FROM public.ingest_verified_sponsorship_financial_adjustment(
+  target_original_financial_movement_id => (
+    SELECT value
+    FROM adjustment_test_context
+    WHERE key = 'paypal_gross_movement'
+  ),
+  target_provider => 'PAYPAL',
+  target_provider_account_scope => 'paypal',
+  target_provider_event_id => 'WH-FINANCIAL-ADJUSTMENT-REVERSAL-0001',
+  target_event_type => 'PAYMENT.CAPTURE.REVERSED',
+  target_provider_object_type => 'capture',
+  target_provider_object_id => 'CAPTURE-FINANCIAL-ADJUSTMENT-0001',
+  target_adjustment_provider_movement_type => 'reversal',
+  target_adjustment_provider_movement_id => 'REVERSAL-FINANCIAL-ADJUSTMENT-0001',
+  target_charged_amount_minor => 5000,
+  target_charged_currency => 'USD',
+  target_conversion_rate => 1,
+  target_redacted_payload => '{"status":"REVERSED"}'::jsonb,
+  target_payload_ciphertext => decode('de', 'hex'),
+  target_payload_sha256 => decode(repeat('de', 32), 'hex'),
+  target_signature_verified_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'paypal_reversal'
+  ),
+  target_occurred_at => (
+    SELECT value FROM adjustment_test_times WHERE key = 'paypal_reversal'
+  ),
+  target_verification_method => 'paypal_webhook_signature_api'
+);
+
+INSERT INTO adjustment_test_leases
+SELECT
+  'paypal_reversal',
+  gateway_event_id,
+  processing_lease_token
+FROM public.claim_payment_gateway_events(
+  'financial-adjustment-test-worker',
+  20
+)
+WHERE gateway_event_id = (
+  SELECT value
+  FROM adjustment_test_context
+  WHERE key = 'paypal_reversal_event'
+);
+
+CREATE TEMP TABLE adjustment_paypal_reversal_result ON COMMIT DROP AS
+SELECT *
+FROM public.apply_sponsorship_financial_adjustment(
+  target_gateway_event_id => (
+    SELECT gateway_event_id
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_reversal'
+  ),
+  target_processing_lease_token => (
+    SELECT processing_lease_token
+    FROM adjustment_test_leases
+    WHERE key = 'paypal_reversal'
+  )
+);
+
+SELECT extensions.ok(
+  (
+    SELECT
+      application_effect = 'reversal_applied'
+      AND net_base_amount_usd_cents = 0
+      AND net_charged_amount_minor = 0
+    FROM adjustment_paypal_reversal_result
+  ),
+  'a verified PayPal capture reversal appends one complete offset'
+);
+
+SELECT extensions.is(
+  (
+    SELECT private.sum_normalized_usd_cents(
+      original.base_amount_usd_cents, original.charged_amount_minor,
+      movement.net_charged_amount_minor
+    )::bigint
+    FROM public.sponsorship_financial_movements movement
+    JOIN public.sponsorship_financial_movements original
+      ON original.id = movement.original_financial_movement_id
+    WHERE movement.id = (
+      SELECT financial_movement_id
+      FROM adjustment_paypal_reversal_result
+    )
+  ),
+  (-5000)::bigint,
+  'PayPal reversal has a signed negative canonical value'
+);
+
+SELECT extensions.ok(
+  NOT EXISTS (
+    SELECT 1
+    FROM adjustment_test_attribution_snapshot snapshot
+    JOIN public.sponsorship_attributions attribution
+      ON attribution.sponsorship_intent_id = snapshot.sponsorship_intent_id
+    WHERE to_jsonb(attribution) IS DISTINCT FROM snapshot.evidence
+  ),
+  'refunds, disputes, and reversals never rewrite final sponsorship attribution'
+);
+
+SELECT extensions.ok(
+  NOT has_function_privilege(
+    'anon',
+    'public.ingest_verified_sponsorship_financial_adjustment(uuid,public.sponsorship_method,text,text,text,text,text,text,text,bigint,public.payment_currency,numeric,jsonb,bytea,bytea,timestamp with time zone,timestamp with time zone,text,text,text,text,text,uuid)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated',
+    'public.apply_sponsorship_financial_adjustment(uuid,uuid,text,text,text,text)',
+    'EXECUTE'
+  ),
+  'browser callers cannot invoke financial adjustment ingestion or settlement'
+);
+
+SELECT extensions.ok(
+  NOT has_table_privilege(
+    'anon',
+    'public.sponsorship_financial_movements',
+    'SELECT'
+  )
+  AND NOT has_table_privilege(
+    'authenticated',
+    'public.sponsorship_refund_requirement_resolutions',
+    'SELECT'
+  ),
+  'browser roles cannot read financial movements or refund resolution evidence'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    UPDATE public.sponsorship_financial_movements
+    SET base_amount_usd_cents = base_amount_usd_cents + 1
+    WHERE id = (
+      SELECT financial_movement_id
+      FROM adjustment_partial_refund_result
+    )
+  $$,
+  '42501',
+  'Payment transaction evidence is append only',
+  'financial adjustments remain immutable after application'
+);
+
+SELECT extensions.throws_ok(
+  $$
+    UPDATE public.sponsorship_refund_requirement_resolutions
+    SET final_net_base_amount_usd_cents = 1
+    WHERE id = (
+      SELECT refund_requirement_resolution_id
+      FROM adjustment_full_refund_result
+    )
+  $$,
+  '42501',
+  'Payment transaction evidence is append only',
+  'refund requirement resolution evidence is append only'
+);
+
+-- Synthetic original-payment fixtures reuse the existing provider chains. Only
+-- fixture creation bypasses triggers; ingestion, claim, and settlement do not.
+CREATE FUNCTION pg_temp.clone_normalization_row(target_table regclass, source_value jsonb, changes jsonb)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE columns text;
+BEGIN
+  SELECT string_agg(quote_ident(attname),',' ORDER BY attnum) INTO columns
+  FROM pg_attribute WHERE attrelid=target_table AND attnum>0 AND NOT attisdropped AND attgenerated='';
+  EXECUTE format('INSERT INTO %s (%s) SELECT %s FROM jsonb_populate_record(NULL::%s,$1)',target_table,columns,columns,target_table)
+    USING source_value || changes;
+END;
+$$;
+CREATE FUNCTION pg_temp.normalization_payment(provider_name text, currency public.payment_currency, charged bigint, rate numeric)
+RETURNS uuid LANGUAGE plpgsql AS $$
+DECLARE
+  original public.sponsorship_financial_movements;
+  intent_id uuid := gen_random_uuid(); attempt_id uuid := gen_random_uuid();
+  event_id uuid := gen_random_uuid(); movement_id uuid := gen_random_uuid();
+  patch jsonb;
+BEGIN
+  SELECT * INTO original FROM public.sponsorship_financial_movements WHERE id=(
+    SELECT value FROM adjustment_test_context WHERE key=lower(provider_name)||'_gross_movement');
+  patch := jsonb_build_object('sponsorship_intent_id',intent_id,'payment_attempt_id',attempt_id,
+    'base_amount_usd_cents',2500,'charged_amount_minor',charged,'charged_currency',currency,'conversion_rate',rate);
+  SET LOCAL session_replication_role = replica;
+  PERFORM pg_temp.clone_normalization_row('public.sponsorship_intents',
+    (SELECT to_jsonb(t) FROM public.sponsorship_intents t WHERE id=original.sponsorship_intent_id),
+    patch || jsonb_build_object('id',intent_id,'idempotency_key','normalization-'||intent_id));
+  PERFORM pg_temp.clone_normalization_row('public.sponsorship_payment_attempts',
+    (SELECT to_jsonb(t) FROM public.sponsorship_payment_attempts t WHERE id=original.payment_attempt_id),
+    patch || jsonb_build_object('id',attempt_id,'provider_idempotency_key','normalization-'||attempt_id,
+      'provider_object_id','normalization-'||attempt_id,
+      'checkout_receipt_digest',extensions.digest(attempt_id::text,'sha256')));
+  PERFORM pg_temp.clone_normalization_row('public.sponsorship_attributions',
+    (SELECT to_jsonb(t) FROM public.sponsorship_attributions t WHERE sponsorship_intent_id=original.sponsorship_intent_id),
+    jsonb_build_object('sponsorship_intent_id',intent_id));
+  PERFORM pg_temp.clone_normalization_row('public.payment_gateway_events',
+    (SELECT to_jsonb(t) FROM public.payment_gateway_events t WHERE id=original.source_gateway_event_id),
+    patch || jsonb_build_object('id',event_id,'provider_event_id','normalization-'||event_id,
+      'provider_object_id','normalization-'||attempt_id,
+      'fact_provider_movement_id','normalization-'||movement_id,
+      'fact_server_payment_attempt_id',attempt_id,'fact_base_amount_usd_cents',2500,
+      'fact_charged_amount_minor',charged,'fact_charged_currency',currency,'fact_conversion_rate',rate));
+  PERFORM pg_temp.clone_normalization_row('public.sponsorship_financial_movements',to_jsonb(original),
+    patch || jsonb_build_object('id',movement_id,'source_gateway_event_id',event_id,'provider_movement_id','normalization-'||movement_id));
+  PERFORM pg_temp.clone_normalization_row('public.payment_gateway_event_applications',
+    (SELECT to_jsonb(t) FROM public.payment_gateway_event_applications t WHERE gateway_event_id=original.source_gateway_event_id),
+    jsonb_build_object('id',gen_random_uuid(),'gateway_event_id',event_id,'financial_movement_id',movement_id));
+  SET LOCAL session_replication_role = origin;
+  RETURN movement_id;
+END;
+$$;
+CREATE FUNCTION pg_temp.normalization_adjustment(root_id uuid, adjustment_kind text, amount bigint, movement_key text DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE root public.sponsorship_financial_movements; operation_id uuid:=gen_random_uuid();
+  event_id uuid; lease uuid; result jsonb; event_kind text; movement_type text;
+BEGIN
+  SELECT * INTO root FROM public.sponsorship_financial_movements WHERE id=root_id;
+  movement_type := CASE WHEN adjustment_kind='refund' THEN 'refund' ELSE 'dispute' END;
+  movement_key := coalesce(movement_key,'re_normalization_'||replace(operation_id::text,'-',''));
+  event_kind := CASE WHEN root.provider='STRIPE' THEN CASE adjustment_kind
+    WHEN 'refund' THEN 'refund.created' WHEN 'debit' THEN 'charge.dispute.funds_withdrawn' ELSE 'charge.dispute.funds_reinstated' END
+    ELSE CASE adjustment_kind WHEN 'refund' THEN 'PAYMENT.CAPTURE.REFUNDED' WHEN 'debit' THEN 'CUSTOMER.DISPUTE.CREATED' ELSE 'CUSTOMER.DISPUTE.RESOLVED' END END;
+  SELECT gateway_event_id INTO event_id FROM public.ingest_verified_sponsorship_financial_adjustment(
+    target_original_financial_movement_id=>root.id,target_provider=>root.provider,
+    target_provider_account_scope=>root.provider_account_scope,target_provider_event_id=>'normalization-'||operation_id,
+    target_event_type=>event_kind,target_provider_object_type=>CASE WHEN root.provider='STRIPE' THEN movement_type ELSE root.provider_movement_type END,
+    target_provider_object_id=>CASE WHEN root.provider='STRIPE' THEN movement_key ELSE root.provider_movement_id END,
+    target_adjustment_provider_movement_type=>movement_type,target_adjustment_provider_movement_id=>movement_key,
+    target_charged_amount_minor=>amount,target_charged_currency=>root.charged_currency,target_conversion_rate=>root.conversion_rate,
+    target_redacted_payload=>'{}',target_payload_ciphertext=>decode('ab','hex'),target_payload_sha256=>extensions.digest(operation_id::text,'sha256'),
+    target_signature_verified_at=>clock_timestamp(),target_occurred_at=>clock_timestamp(),
+    target_verification_method=>CASE WHEN root.provider='STRIPE' THEN 'stripe_webhook_signature' ELSE 'paypal_webhook_signature_api' END);
+  SELECT processing_lease_token INTO lease FROM public.claim_payment_gateway_events('normalization-test',100)
+    WHERE gateway_event_id=event_id;
+  SELECT to_jsonb(applied) INTO result FROM public.apply_sponsorship_financial_adjustment(event_id,lease) applied;
+  RETURN result;
+END;
+$$;
+CREATE FUNCTION pg_temp.verify_fractional_adjustments(provider_name text,currency public.payment_currency,charged bigint,rate numeric)
+RETURNS SETOF text LANGUAGE plpgsql AS $$
+DECLARE root_id uuid; result jsonb; dispute_key text; label text:=provider_name||' '||currency;
+BEGIN
+  root_id:=pg_temp.normalization_payment(provider_name,currency,charged,rate);
+  result:=pg_temp.normalization_adjustment(root_id,'refund',2);
+  RETURN NEXT extensions.ok((result->>'net_charged_amount_minor')::bigint=charged-2,
+    label||' accepts a two-unit provider refund without a rounded USD preimage');
+  RETURN NEXT extensions.ok((result->>'net_base_amount_usd_cents')::bigint=private.round_normalized_usd(ARRAY[2500::numeric*(charged-2),charged::numeric]),
+    label||' reports the exact-ratio remaining value');
+  result:=pg_temp.normalization_adjustment(root_id,'refund',charged-2);
+  RETURN NEXT extensions.ok(result @> '{"net_base_amount_usd_cents":0,"net_charged_amount_minor":0}'::jsonb,
+    label||' split refunds completely reverse both original amounts');
+  root_id:=pg_temp.normalization_payment(provider_name,currency,charged,rate);
+  dispute_key:='dp_normalization_'||replace(root_id::text,'-','');
+  PERFORM pg_temp.normalization_adjustment(root_id,'debit',1,dispute_key);
+  PERFORM pg_temp.normalization_adjustment(root_id,'refund',1);
+  result:=pg_temp.normalization_adjustment(root_id,'credit',1,dispute_key);
+  RETURN NEXT extensions.ok((SELECT private.sum_normalized_usd_cents(2500,charged,net_charged_amount_minor)=0
+    FROM public.sponsorship_financial_movements WHERE original_financial_movement_id=root_id
+      AND entry_kind IN ('sponsorship_dispute_debit','sponsorship_dispute_credit')),
+    label||' interleaved refund leaves no restored-dispute residual');
+  RETURN NEXT extensions.ok((result->>'net_base_amount_usd_cents')::bigint=private.round_normalized_usd(ARRAY[2500::numeric*(charged-1),charged::numeric]),
+    label||' restored dispute preserves the exact refund net');
+END;
+$$;
+SELECT set_config('request.jwt.claim.role','service_role',true);
+SELECT checked.assertion FROM (VALUES ('STRIPE'),('PAYPAL')) provider(name)
+CROSS JOIN (VALUES ('USD'::public.payment_currency,2500::bigint,1::numeric),('AUD',3500,1.4),('GBP',1850,0.74),('EUR',2150,0.86)) quote(currency,charged,rate)
+CROSS JOIN LATERAL pg_temp.verify_fractional_adjustments(provider.name,quote.currency,quote.charged,quote.rate) checked(assertion);
+
+-- Preserve independently authenticated cash even when principal is insufficient.
+CREATE TEMP TABLE cash_evidence_fixture AS SELECT pg_temp.normalization_payment('STRIPE','USD',2500,1) AS root_id;
+CREATE FUNCTION pg_temp.record_cash(
+  event_key text DEFAULT 'evt_cash_fixture', movement_key text DEFAULT 'txn_cash_fixture',
+  amount bigint DEFAULT -2600, fee bigint DEFAULT 50, net bigint DEFAULT -2650,
+  account_scope text DEFAULT 'stripe_us', digest_text text DEFAULT 'cash-fixture'
+) RETURNS uuid LANGUAGE sql AS $$
+  SELECT public.record_verified_stripe_cash_movement(
+    (SELECT root_id FROM cash_evidence_fixture),account_scope,movement_key,'dp_cash_fixture',
+    amount,fee,net,'EUR',0.86,(SELECT occurred_at FROM public.sponsorship_financial_movements
+      WHERE id=(SELECT root_id FROM cash_evidence_fixture))+interval '1 second',
+    event_key,extensions.digest(digest_text,'sha256'),clock_timestamp(),'cash-evidence-test');
+$$;
+SELECT extensions.ok(NOT EXISTS (
+  SELECT 1 FROM (VALUES ('anon'),('authenticated'),('service_role')) runtime(role_name)
+  CROSS JOIN (VALUES ('private.provider_cash_movements'),('private.provider_cash_evidence')) protected(table_name)
+  WHERE has_table_privilege(runtime.role_name,protected.table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')),
+  'cash and signed observation evidence are inaccessible through raw API roles');
+SELECT extensions.ok((SELECT bool_and(relrowsecurity AND relforcerowsecurity) FROM pg_class
+  WHERE oid IN ('private.provider_cash_movements'::regclass,'private.provider_cash_evidence'::regclass)),
+  'both cash evidence tables force row security');
+SELECT extensions.ok(has_function_privilege('service_role',
+  'public.record_verified_stripe_cash_movement(uuid,text,text,text,bigint,bigint,bigint,text,numeric,timestamptz,text,bytea,timestamptz,text)','EXECUTE')
+  AND NOT has_function_privilege('authenticated',
+  'public.record_verified_stripe_cash_movement(uuid,text,text,text,bigint,bigint,bigint,text,numeric,timestamptz,text,bytea,timestamptz,text)','EXECUTE'),
+  'only the service API can record verified provider cash');
+CREATE TEMP TABLE cash_receipt AS SELECT pg_temp.record_cash() AS id;
+SELECT extensions.ok((SELECT amount_minor=-2600 AND fee_minor=50 AND net_minor=-2650 AND currency='EUR'
+    AND exchange_rate=0.86 FROM private.provider_cash_movements WHERE id=(SELECT id FROM cash_receipt)),
+  'cash evidence preserves excess gross, separate fees, net and settlement currency without inverse conversion');
+SELECT extensions.ok((SELECT id=pg_temp.record_cash() FROM cash_receipt)
+  AND (SELECT count(*)=1 FROM private.provider_cash_evidence),'exact event replay returns one immutable receipt');
+SELECT extensions.ok((SELECT id=pg_temp.record_cash('evt_cash_second_delivery') FROM cash_receipt),
+  'another authenticated event can corroborate the same cash movement');
+SELECT extensions.ok((SELECT count(*)=1 FROM private.provider_cash_movements)
+  AND (SELECT count(*)=2 FROM private.provider_cash_evidence),
+  'cash is deduplicated while every distinct event keeps its own immutable proof');
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash(amount=>-2601,net=>-2651)$$,
+  '23505','Provider cash evidence conflicts with its immutable identity','changed cash facts cannot reuse a movement');
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash(digest_text=>'changed-event')$$,
+  '23505','Provider cash event identity conflicts with its immutable evidence','a known event cannot change its signed digest');
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash(movement_key=>'txn_competing_cash')$$,
+  '23505','Provider cash event identity conflicts with its immutable evidence','an event cannot bind another cash movement');
+SELECT extensions.ok((SELECT count(*)=1 FROM private.provider_cash_movements),
+  'event conflicts roll back newly inserted cash facts');
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash(event_key=>'evt_bad_net',movement_key=>'txn_bad_net',net=>-2600)$$,
+  '23514',NULL,'cash net must reconcile exactly to gross less fees');
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash(account_scope=>'stripe_uk')$$,
+  '23514','Provider cash evidence requires a materialized matching original payment','cash cannot cross regional account authority');
+SELECT set_config('request.jwt.claim.role','authenticated',true);
+SELECT extensions.throws_ok($$SELECT pg_temp.record_cash()$$,
+  '42501',NULL,'the cash recorder rechecks the service claim');
+SELECT set_config('request.jwt.claim.role','service_role',true);
+SELECT extensions.ok((SELECT count(*)=1 AND sum(net_charged_amount_minor)=2500
+  FROM public.sponsorship_financial_movements WHERE id=(SELECT root_id FROM cash_evidence_fixture)
+    OR original_financial_movement_id=(SELECT root_id FROM cash_evidence_fixture)),
+  'recording provider cash alone neither allocates principal nor changes sponsor history');
+SELECT pg_temp.record_cash('evt_cash_credit','txn_cash_credit',2600,-50,2650);
+SELECT extensions.ok((SELECT count(*)=2 AND sum(amount_minor)=0 AND sum(fee_minor)=0 AND sum(net_minor)=0
+  FROM private.provider_cash_movements),
+  'a reinstatement preserves returned fees and exactly restores cash without allocating principal');
+SELECT pg_temp.record_cash('evt_cash_fee','txn_cash_fee',0,25,-25);
+SELECT extensions.ok((SELECT amount_minor=0 AND fee_minor=25 AND net_minor=-25
+  FROM private.provider_cash_movements WHERE provider_movement_id='txn_cash_fee'),
+  'fee-only provider cash does not require inventing a principal movement');
+SELECT extensions.throws_ok(command,'42501','Provider cash evidence is immutable',label)
+FROM (VALUES
+  ('UPDATE private.provider_cash_movements SET fee_minor=0','cash facts cannot be updated'),
+  ('DELETE FROM private.provider_cash_movements','cash facts cannot be deleted'),
+  ('TRUNCATE private.provider_cash_movements CASCADE','cash facts cannot be truncated'),
+  ('UPDATE private.provider_cash_evidence SET request_id=''changed''','event observations cannot be updated'),
+  ('DELETE FROM private.provider_cash_evidence','event observations cannot be deleted'),
+  ('TRUNCATE private.provider_cash_evidence','event observations cannot be truncated')
+) mutation(command,label);
+
+SELECT extensions.ok((SELECT count(*)=7 AND bool_and(before_data IS NULL AND after_data IS NULL
+    AND system_actor='sponsorship_payment_service' AND tool='record_verified_stripe_cash_movement')
+  FROM audit.audit_events WHERE schema_name='private'
+    AND table_name IN ('provider_cash_movements','provider_cash_evidence')),
+  'cash audit records successful writes without copying amounts or retaining failed contenders');
+
+-- A crash after the cash RPC and before event ingestion must remain observable.
+SELECT extensions.ok(public.get_payment_failure_health() @>
+  '{"cash_without_gateway_event":3,"stale_cash_without_gateway_event":0}'::jsonb,
+  'cash without gateway events is counted once per movement during the ingestion grace period');
+SET LOCAL session_replication_role = replica;
+UPDATE private.provider_cash_movements SET recorded_at=clock_timestamp()-interval '11 minutes'
+  WHERE id=(SELECT id FROM cash_receipt);
+SET LOCAL session_replication_role = origin;
+SELECT extensions.ok(public.get_payment_failure_health() @>
+  '{"cash_without_gateway_event":3,"stale_cash_without_gateway_event":1}'::jsonb,
+  'cash whose event never arrives becomes a persistent health failure');
+CREATE TEMP TABLE before_cash_health AS SELECT count(*) AS movements FROM public.sponsorship_financial_movements;
+CREATE FUNCTION pg_temp.cash_health_event(account_scope text,event_key text,digest_text text)
+RETURNS void LANGUAGE plpgsql AS $$ BEGIN
+  PERFORM public.quarantine_verified_payment_gateway_event(
+    'STRIPE',account_scope,event_key,'charge.dispute.funds_withdrawn','dispute','dp_cash_fixture',
+    '{}',decode(repeat('aa',64),'hex'),extensions.digest(digest_text,'sha256'),
+    clock_timestamp(),clock_timestamp(),'stripe_webhook_signature','provider-fact-mismatch',
+    'Verified cash requires reconciliation','cash-health-test');
+END; $$;
+SAVEPOINT mismatched_cash_event;
+SELECT pg_temp.cash_health_event('stripe_uk','evt_cash_fixture','cash-fixture');
+SELECT extensions.ok(public.get_payment_failure_health()->>'stale_cash_without_gateway_event'='1',
+  'the same event identity in another provider account does not hide missing cash ingestion');
+ROLLBACK TO SAVEPOINT mismatched_cash_event;
+SELECT pg_temp.cash_health_event('stripe_us','evt_cash_fixture','different-body');
+SELECT extensions.ok(public.get_payment_failure_health()->>'stale_cash_without_gateway_event'='1',
+  'an event with different immutable evidence cannot hide missing cash ingestion');
+ROLLBACK TO SAVEPOINT mismatched_cash_event;
+SELECT pg_temp.cash_health_event('stripe_us','evt_cash_second_delivery','cash-fixture');
+SELECT extensions.ok(public.get_payment_failure_health() @>
+  '{"cash_without_gateway_event":2,"stale_cash_without_gateway_event":0}'::jsonb,
+  'a matching corroborating event links the cash without counting observations as separate money');
+SELECT extensions.ok((public.get_payment_failure_health()->>'quarantined')::integer>0
+  AND (public.get_payment_failure_health()->>'unacknowledged')::integer>0,
+  'linking the quarantined event does not resolve its financial failure');
+SELECT extensions.is((SELECT count(*) FROM public.sponsorship_financial_movements),
+  (SELECT movements FROM before_cash_health),'health and event linkage do not allocate or alter principal');
+
+
+CREATE FUNCTION pg_temp.admit_recovered_adjustment(root_id uuid,event_id uuid,operation_id uuid,
+  amount bigint DEFAULT 1, supplied_digest bytea DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE root public.sponsorship_financial_movements; source public.payment_gateway_events;
+BEGIN
+  SELECT * INTO root FROM public.sponsorship_financial_movements WHERE id=root_id;
+  SELECT * INTO source FROM public.payment_gateway_events WHERE id=event_id;
+  RETURN (SELECT to_jsonb(result) FROM public.ingest_verified_sponsorship_financial_adjustment(
+    target_original_financial_movement_id=>root.id,target_provider=>root.provider,
+    target_provider_account_scope=>root.provider_account_scope,target_provider_event_id=>source.provider_event_id,
+    target_event_type=>source.event_type,
+    target_provider_object_type=>CASE WHEN root.provider='STRIPE' THEN 'refund' ELSE root.provider_movement_type END,
+    target_provider_object_id=>CASE WHEN root.provider='STRIPE' THEN source.provider_object_id ELSE root.provider_movement_id END,
+    target_adjustment_provider_movement_type=>'refund',target_adjustment_provider_movement_id=>
+      coalesce((SELECT source_object_id FROM audit.payment_gateway_event_revalidations WHERE gateway_event_id=event_id),source.provider_object_id),
+    target_charged_amount_minor=>amount,target_charged_currency=>root.charged_currency,target_conversion_rate=>root.conversion_rate,
+    target_redacted_payload=>'{}',target_payload_ciphertext=>decode('ff','hex'),
+    target_payload_sha256=>coalesce(supplied_digest,source.payload_sha256),
+    target_signature_verified_at=>source.signature_verified_at,target_occurred_at=>source.occurred_at,
+    target_verification_method=>source.verification_method,target_revalidation_operation_id=>operation_id) result);
+END;
+$$;
+CREATE FUNCTION pg_temp.fail_revalidation_after_admission() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF current_setting('test.fail_revalidation',true)='on' AND OLD.processing_status='quarantined'
+     AND NEW.processing_status='received' THEN
+    IF NOT EXISTS(SELECT 1 FROM audit.payment_gateway_event_revalidations WHERE gateway_event_id=NEW.id) THEN
+      RAISE EXCEPTION 'Recovery checkpoint was not reached';
+    END IF;
+    RAISE EXCEPTION 'Injected recovery failure';
+  END IF;
+  RETURN NEW;
+END; $$;
+CREATE TRIGGER zz_test_fail_revalidation AFTER UPDATE ON public.payment_gateway_events
+FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_revalidation_after_admission();
+
+CREATE FUNCTION pg_temp.verify_adjustment_recovery(provider_name text)
+RETURNS SETOF text LANGUAGE plpgsql AS $$
+DECLARE root_id uuid; event_id uuid; operation_id uuid:=gen_random_uuid();
+  root public.sponsorship_financial_movements; source public.payment_gateway_events;
+  result jsonb; lease uuid; audit_count bigint;
+BEGIN
+  root_id:=pg_temp.normalization_payment(provider_name,'GBP',3500,1.4);
+  SELECT * INTO root FROM public.sponsorship_financial_movements WHERE id=root_id;
+  SELECT gateway_event_id INTO event_id FROM public.quarantine_verified_payment_gateway_event(
+    root.provider,root.provider_account_scope,'recovery-'||operation_id,
+    CASE WHEN root.provider='STRIPE' THEN 'refund.created' ELSE 'PAYMENT.CAPTURE.REFUNDED' END,
+    'refund','re_recovery_'||replace(operation_id::text,'-',''),'{}',decode('ab','hex'),
+    extensions.digest(operation_id::text,'sha256'),clock_timestamp(),clock_timestamp(),
+    CASE WHEN root.provider='STRIPE' THEN 'stripe_webhook_signature' ELSE 'paypal_webhook_signature_api' END,
+    'provider-fact-mismatch','Verified adjustment requires a corrected interpretation');
+  SELECT * INTO source FROM public.payment_gateway_events WHERE id=event_id;
+
+  RETURN NEXT extensions.ok(public.read_payment_gateway_event_recovery(event_id,operation_id)->>'state'='quarantined',
+    provider_name||' recovery read returns only the requested quarantine');
+  RETURN NEXT extensions.throws_ok(format('SELECT pg_temp.admit_recovered_adjustment(%L,%L,NULL)',root_id,event_id),
+    '23505','Provider adjustment event identifier was replayed with different evidence',provider_name||' ordinary ingestion cannot reopen quarantine');
+  RETURN NEXT extensions.throws_ok(format('SELECT pg_temp.admit_recovered_adjustment(%L,%L,%L,1,decode(repeat(''ff'',32),''hex''))',root_id,event_id,operation_id),
+    '23514','Recovery requires unchanged retained verification evidence',provider_name||' changed evidence cannot acquire an interpretation receipt');
+  RETURN NEXT extensions.ok(NOT EXISTS(SELECT 1 FROM audit.payment_gateway_event_revalidations WHERE gateway_event_id=event_id),
+    provider_name||' failed admission leaves no receipt');
+  RETURN NEXT extensions.throws_ok(format('UPDATE public.payment_gateway_events SET processing_status=''received'',last_error=NULL WHERE id=%L',event_id),
+    '23514','Illegal gateway event transition from quarantined to received',provider_name||' receipt-free queue admission is rejected');
+  SELECT count(*) INTO audit_count FROM audit.audit_events;
+  PERFORM set_config('test.fail_revalidation','on',true);
+  RETURN NEXT extensions.throws_ok(format('SELECT pg_temp.admit_recovered_adjustment(%L,%L,%L)',root_id,event_id,operation_id),
+    'P0001','Injected recovery failure',provider_name||' failure after admission aborts recovery');
+  PERFORM set_config('test.fail_revalidation','off',true);
+  RETURN NEXT extensions.ok(NOT EXISTS(SELECT 1 FROM audit.payment_gateway_event_revalidations WHERE gateway_event_id=event_id)
+    AND (SELECT processing_status='quarantined' AND original_financial_movement_id IS NULL
+      FROM public.payment_gateway_events WHERE id=event_id),provider_name||' interrupted admission leaves no receipt or partial interpretation');
+  RETURN NEXT extensions.ok((SELECT count(*)=audit_count FROM audit.audit_events),provider_name||' failed admission leaves no success audit residue');
+  result:=pg_temp.admit_recovered_adjustment(root_id,event_id,operation_id);
+  RETURN NEXT extensions.ok(result->>'processing_status'='received' AND result->>'is_duplicate'='false',
+    provider_name||' complete validated interpretation becomes claimable');
+  RETURN NEXT extensions.ok((SELECT payload_ciphertext=source.payload_ciphertext AND payload_sha256=source.payload_sha256
+    AND redacted_payload=source.redacted_payload AND signature_verified_at=source.signature_verified_at
+    AND occurred_at=source.occurred_at AND received_at=source.received_at
+    AND payload_retention_expires_at=source.payload_retention_expires_at AND processing_attempt_count=0
+    FROM public.payment_gateway_events WHERE id=event_id),provider_name||' recovery preserves original delivery and retention evidence');
+  RETURN NEXT extensions.ok((SELECT source_object_id=source.provider_object_id AND source_sha256=source.payload_sha256
+    AND interpretation_version='financial_adjustment_v2' FROM audit.payment_gateway_event_revalidations WHERE gateway_event_id=event_id),
+    provider_name||' receipt preserves source subject and binds the interpretation version');
+  SELECT processing_lease_token INTO lease FROM public.claim_payment_gateway_events('recovery-test',100)
+    WHERE gateway_event_id=event_id;
+  SELECT to_jsonb(applied) INTO result FROM public.apply_sponsorship_financial_adjustment(event_id,lease) applied;
+  RETURN NEXT extensions.ok(result->>'application_effect'='refund_applied',
+    provider_name||' recovered fractional adjustment settles through the normal financial path');
+  RETURN NEXT extensions.ok(public.read_payment_gateway_event_recovery(event_id,operation_id) @>
+    '{"state":"admitted","processing_status":"processed"}'::jsonb
+    AND NOT public.read_payment_gateway_event_recovery(event_id,operation_id) ? 'evidence',
+    provider_name||' committed recovery lookup returns categorical state without payload material');
+  RETURN NEXT extensions.ok(public.read_payment_gateway_event_recovery(event_id,gen_random_uuid())->>'state'='conflict',
+    provider_name||' another operation cannot read a committed recovery as its own');
+  result:=pg_temp.admit_recovered_adjustment(root_id,event_id,operation_id);
+  RETURN NEXT extensions.ok(result->>'is_duplicate'='true' AND (result->>'gateway_event_id')::uuid=event_id,
+    provider_name||' exact recovery replay returns the original settled event');
+  RETURN NEXT extensions.throws_ok(format('SELECT pg_temp.admit_recovered_adjustment(%L,%L,%L)',root_id,event_id,gen_random_uuid()),
+    '23505','Recovery operation conflicts with its committed interpretation',provider_name||' another operation cannot replace the receipt');
+  RETURN NEXT extensions.ok((SELECT count(*)=1 FROM public.payment_gateway_event_applications WHERE gateway_event_id=event_id)
+    AND (SELECT count(*)=1 FROM public.sponsorship_financial_movements WHERE source_gateway_event_id=event_id),
+    provider_name||' recovered event has one application and one financial movement');
+END;
+$$;
+SELECT pg_temp.verify_adjustment_recovery('STRIPE') AS assertion;
+SELECT pg_temp.verify_adjustment_recovery('PAYPAL') AS assertion;
+SELECT extensions.throws_ok('UPDATE audit.payment_gateway_event_revalidations SET interpretation_version=interpretation_version',
+  '42501','Gateway event revalidation receipts are immutable','interpretation receipts cannot be rewritten');
+SELECT extensions.ok(NOT has_table_privilege('service_role','audit.payment_gateway_event_revalidations','INSERT')
+  AND NOT has_table_privilege('authenticated','audit.payment_gateway_event_revalidations','SELECT')
+  AND NOT has_table_privilege('anon','audit.payment_gateway_event_revalidations','SELECT'),
+  'API roles cannot create admission receipts or read private recovery evidence');
+
+SELECT extensions.ok(has_function_privilege('service_role','public.read_payment_gateway_event_recovery(uuid,uuid)','EXECUTE')
+  AND NOT has_function_privilege('authenticated','public.read_payment_gateway_event_recovery(uuid,uuid)','EXECUTE')
+  AND NOT has_function_privilege('anon','public.read_payment_gateway_event_recovery(uuid,uuid)','EXECUTE'),
+  'retained recovery evidence is available only through service authority');
+SELECT extensions.is(public.read_payment_gateway_event_recovery(gen_random_uuid(),gen_random_uuid())->>'state',
+  'not_found','unknown recovery identities disclose no event evidence');
+
+SELECT * FROM extensions.finish();
+
+ROLLBACK;
