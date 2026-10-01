@@ -141,3 +141,10 @@ Verified Stripe dispute processing now records balance transaction identity, exa
 This order preserves cash when a larger dispute or ambiguous inverse conversion still reaches the existing reconciliation quarantine. Cash recording alone does not mutate sponsorship principal, sponsor history, attribution, gateway settlement, or acknowledgment. It does not close FF-084: automatic excess-loss allocation, grouped-dispute reconciliation, PayPal parity, durable unallocated-cash monitoring, and retained-event recovery remain required. The encrypted payload retention rule is unchanged; the cash facts contain no sponsor contact material and persist independently.
 
 In-process tests cover excess cash, separate fees and net, exact replay, distinct observations, conflicting event and movement identities, wrong regional authority, append-only enforcement, and denied API access. Mock adapter tests prove that cash survives ambiguous and unsupported settlement-currency allocation, and that persistence failure prevents principal ingestion. Hosted validation remains pending for this candidate.
+
+
+## Cash concurrency evidence and reporting clarification
+
+The required publication workflow now includes a seven-scenario provider cash race harness: identical delivery, distinct corroborating events, conflicting cash, conflicting event binding, conflicting digest, first-writer rollback, and cancellation between cash insertion and event observation followed by retry. Each ordering requires PostgreSQL-observed blocking and checks private cash, observation, audit, and principal state. Its shared real-payment fixture commits in-process; actual concurrency evidence remains pending hosted PostgreSQL execution.
+
+The owner has been asked whether advocate net funds should stay nonnegative with excess losses confined to Creator Share reconciliation, or permit negative advocate net funds while also reporting excess separately. The prior approval establishes separate loss preservation, but does not explicitly settle that display choice. Principal arithmetic is unchanged pending clarification.

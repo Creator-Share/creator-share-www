@@ -508,3 +508,6 @@ Publication 36822388667 and WebKit 36822388726 passed at `c18d72a`, validating t
 
 
 Publication 36823367317 and WebKit 36823367600 passed at `d1f14d2`, validating the account-count correction. The provider cash candidate passes 51 mock webhook and signature contracts, TypeScript, lint, and the in-process financial adjustment suite with immutable cash and sanitized audit assertions. Its hosted run remains pending.
+
+
+The provider cash foundation passed publication 36824970426 and WebKit 36824970413 at `e5fd05c`. The follow-on adds seven required PostgreSQL concurrency scenarios and reuses one provider charge and PaymentIntent validator for refunds and disputes, removing the duplicated dispute-chain implementation. Disputes still require both signed references; a regression checks that neither provider nor database work occurs when either reference is missing. The new concurrency gate awaits its own hosted run.

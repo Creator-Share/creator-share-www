@@ -231,6 +231,8 @@ INSERT INTO adjustment_test_context
 SELECT 'stripe_gross_movement', financial_movement_id
 FROM adjustment_stripe_gross_result;
 
+-- End shared provider cash fixture.
+
 INSERT INTO adjustment_test_attribution_snapshot
 SELECT
   attribution.sponsorship_intent_id,

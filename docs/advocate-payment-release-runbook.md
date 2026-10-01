@@ -450,3 +450,8 @@ Retain the following with the release record:
 - PostgREST role boundary evidence for both service key formats, a real authenticated user, anonymous and ordinary-user deny controls, and the exact downstream validation reached by every authorized canary.
 - Advocate audit disclosure evidence for exact business event mapping, near match exclusion, append only enforcement, no historical backfill, tenant cursor isolation, fixed page size, permission personas, actor label fallback, and browser payload redaction.
 - Rollback owner and incident contact.
+
+
+### Provider cash concurrency
+
+The publication workflow runs `yarn test:payments:cash-evidence-concurrency` against its isolated PostgreSQL stack. The FF-084 artifact must prove seven observed interleavings covering duplicate delivery, corroborating events, conflicting movement and event evidence, rollback, and interruption before event-observation insertion. Failed or canceled contenders must leave no cash, observation, or audit residue; no case may mutate principal. Evidence is published only after transient database disposal. This gate does not establish excess-loss allocation, provider-network behavior, or recovery of retained quarantines.

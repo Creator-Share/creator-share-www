@@ -428,14 +428,14 @@ function chargeChain(
   }
 }
 
-async function refundChain(
-  refund: Stripe.Refund,
+async function adjustmentPaymentChain(
+  adjustment: Pick<Stripe.Refund, "charge" | "payment_intent">,
   amount: number,
   currency: SupportedCurrency,
   dependencies: StripeFinancialAdjustmentDependencies,
 ): Promise<ProviderPaymentChain> {
-  const chargeReference = objectReference(refund.charge, "ch_")
-  const paymentIntentReference = objectReference(refund.payment_intent, "pi_")
+  const chargeReference = objectReference(adjustment.charge, "ch_")
+  const paymentIntentReference = objectReference(adjustment.payment_intent, "pi_")
 
   if (chargeReference) {
     const charge =
@@ -483,51 +483,6 @@ async function refundChain(
     amount,
     currency,
   )
-}
-
-async function disputeChain(
-  dispute: Stripe.Dispute,
-  amount: number,
-  currency: SupportedCurrency,
-  dependencies: StripeFinancialAdjustmentDependencies,
-): Promise<ProviderPaymentChain> {
-  const chargeReference = objectReference(dispute.charge, "ch_")
-  const paymentIntentReference = objectReference(dispute.payment_intent, "pi_")
-  if (!chargeReference || !paymentIntentReference) {
-    reject("provider-fact-mismatch")
-  }
-
-  const charge =
-    chargeReference.object ??
-    (await withProviderLookup(() =>
-      dependencies.retrieveCharge(chargeReference.id),
-    ))
-  const chain = chargeChain(
-    charge,
-    chargeReference.id,
-    paymentIntentReference.id,
-    amount,
-    currency,
-  )
-
-  if (paymentIntentReference.object) {
-    const signedPaymentIntentChain = paymentIntentChain(
-      paymentIntentReference.object,
-      paymentIntentReference.id,
-      amount,
-      currency,
-    )
-    if (
-      signedPaymentIntentChain.providerMovementType !==
-        chain.providerMovementType ||
-      signedPaymentIntentChain.providerMovementId !==
-        chain.providerMovementId ||
-      signedPaymentIntentChain.grossAmountMinor !== chain.grossAmountMinor
-    ) {
-      reject("provider-fact-mismatch")
-    }
-  }
-  return chain
 }
 
 function roundPositiveRational(numerator: bigint, denominator: bigint): bigint {
@@ -857,7 +812,7 @@ export async function ingestStripeFinancialAdjustment(
       }
     }
     facts = refund.facts
-    chain = await refundChain(
+    chain = await adjustmentPaymentChain(
       refund.refund,
       facts.chargedAmountMinor,
       facts.chargedCurrency,
@@ -867,7 +822,10 @@ export async function ingestStripeFinancialAdjustment(
     const dispute = disputeFacts(input.event)
     facts = dispute.facts
     cash = dispute.cash
-    chain = await disputeChain(
+    if (!dispute.dispute.charge || !dispute.dispute.payment_intent) {
+      reject("provider-fact-mismatch")
+    }
+    chain = await adjustmentPaymentChain(
       dispute.dispute,
       1,
       facts.chargedCurrency,

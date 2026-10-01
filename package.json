@@ -39,6 +39,7 @@
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:accounts:offboarding-concurrency": "node tests/database/account-offboarding-concurrency.mjs",
+    "test:payments:cash-evidence-concurrency": "node tests/database/provider-cash-evidence-concurrency.mjs",
     "test:payments:failure-review-concurrency": "node tests/database/payment-failure-review-concurrency.mjs",
     "test:advocate:analytics-release-concurrency": "node tests/database/advocate-analytics-release-concurrency.mjs"
   },

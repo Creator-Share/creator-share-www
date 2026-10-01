@@ -988,3 +988,18 @@ test("cash persistence runtime forwards exact signed facts and classifies confli
     code: "boundary-mismatch", httpStatus: 409, retryable: false,
   })
 })
+
+
+test("disputes still require both signed references before shared chain resolution", async () => {
+  for (const missingReference of [{ charge: null }, { payment_intent: null }]) {
+    const { dependencies, calls } = dependenciesFor(movement(), { charge: charge() })
+    await expect(ingestFixture(event("charge.dispute.funds_withdrawn", dispute({
+      ...missingReference,
+      balance_transactions: [balanceTransaction("txn_missing_reference", -500)],
+    })), "{}", dependencies)).rejects.toMatchObject({ code: "provider-fact-mismatch" })
+    expect(calls.chargeIds).toEqual([])
+    expect(calls.paymentIntentIds).toEqual([])
+    expect(calls.movementLookups).toEqual([])
+    expect(calls.cash).toEqual([])
+  }
+})

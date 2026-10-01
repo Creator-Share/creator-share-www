@@ -331,7 +331,8 @@
         "tests/database/email-proof-issuance-concurrency.mjs",
         "tests/database/payment-failure-review-concurrency.mjs",
         "tests/database/postgrest-role-claim-http-termination.mjs",
-        "tests/database/postgrest-role-claim-http.mjs"
+        "tests/database/postgrest-role-claim-http.mjs",
+        "tests/database/provider-cash-evidence-concurrency.mjs"
       ]
     },
     "provider-canary": {
