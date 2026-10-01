@@ -269,42 +269,21 @@ CREATE INDEX payment_gateway_event_applications_subscription_lifecycle_idx
   )
   WHERE effect = 'subscription_lifecycle';
 
-CREATE OR REPLACE FUNCTION public.get_advocate_analytics_snapshot(
-  target_advocate_id uuid
+-- Only private release machinery may choose a historical cutoff. The public
+-- reader retains its fixed signature and current membership checks.
+CREATE FUNCTION private.build_advocate_analytics_snapshot(
+  target_advocate_id uuid,
+  target_as_of timestamptz
 )
-RETURNS jsonb
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
-  v_actor_user_id uuid := auth.uid();
-  v_as_of timestamp with time zone :=
-    date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';
+  v_as_of timestamptz := target_as_of;
   v_result jsonb;
 BEGIN
-  IF target_advocate_id IS NULL OR v_actor_user_id IS NULL THEN
-    RAISE EXCEPTION 'Analytics access is unavailable'
-      USING ERRCODE = '42501';
-  END IF;
-
-  PERFORM 1
-  FROM auth.users account
-  WHERE account.id = v_actor_user_id
-    AND account.email IS NOT NULL
-    AND account.email_confirmed_at IS NOT NULL
-    AND account.deleted_at IS NULL
-    AND account.is_anonymous IS NOT TRUE
-    AND (account.banned_until IS NULL OR account.banned_until <= now());
-
-  IF NOT FOUND
-     OR NOT private.has_advocate_permission(
-       target_advocate_id,
-       'portal.analytics.view'
-     ) THEN
-    RAISE EXCEPTION 'Analytics access is unavailable'
-      USING ERRCODE = '42501';
+  IF target_advocate_id IS NULL OR v_as_of IS NULL OR NOT isfinite(v_as_of)
+    OR v_as_of IS DISTINCT FROM (date_trunc('day', v_as_of AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
+    OR v_as_of > now() THEN
+    RAISE EXCEPTION 'Analytics cutoff is invalid' USING ERRCODE = '22023';
   END IF;
 
   WITH intent_facts AS (
@@ -1066,6 +1045,43 @@ BEGIN
   INTO v_result;
 
   RETURN v_result;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION private.build_advocate_analytics_snapshot(uuid,timestamptz)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.get_advocate_analytics_snapshot(target_advocate_id uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_actor_user_id uuid := auth.uid();
+BEGIN
+  IF target_advocate_id IS NULL OR v_actor_user_id IS NULL THEN
+    RAISE EXCEPTION 'Analytics access is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  PERFORM 1
+  FROM auth.users account
+  WHERE account.id = v_actor_user_id
+    AND account.email IS NOT NULL
+    AND account.email_confirmed_at IS NOT NULL
+    AND account.deleted_at IS NULL
+    AND account.is_anonymous IS NOT TRUE
+    AND (account.banned_until IS NULL OR account.banned_until <= now());
+
+  IF NOT FOUND
+     OR NOT private.has_advocate_permission(
+       target_advocate_id,
+       'portal.analytics.view'
+     ) THEN
+    RAISE EXCEPTION 'Analytics access is unavailable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN private.build_advocate_analytics_snapshot(
+    target_advocate_id,
+    date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+  );
 END;
 $$;
 

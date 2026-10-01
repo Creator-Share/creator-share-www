@@ -4,6 +4,19 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT extensions.no_plan();
 
+SELECT extensions.ok(NOT EXISTS (
+  SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role']) caller(role_name)
+  WHERE has_function_privilege(caller.role_name,
+    'private.build_advocate_analytics_snapshot(uuid,timestamptz)','EXECUTE')
+), 'arbitrary analytics cutoffs are unavailable to every API role');
+SELECT extensions.throws_ok($$SELECT private.build_advocate_analytics_snapshot(
+  '96000000-0000-4000-8000-000000000001','2026-07-18T00:00:01Z')$$,
+  '22023','Analytics cutoff is invalid','internal analytics rejects a partial-day cutoff');
+SELECT extensions.throws_ok($$SELECT private.build_advocate_analytics_snapshot(
+  '96000000-0000-4000-8000-000000000001',
+  (date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')+interval '1 day')$$,
+  '22023','Analytics cutoff is invalid','internal analytics rejects a future cutoff');
+
 SELECT extensions.ok(
   (
     SELECT function_definition.prosecdef

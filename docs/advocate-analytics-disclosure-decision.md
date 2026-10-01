@@ -48,3 +48,10 @@ This necessarily changes freshness for low-volume advocates. Exact daily cumulat
 - Every existing metric remains available, with explicit delayed or withheld states where required.
 
 This repair must not invent formally private guarantees from a cohort heuristic. The final policy must state which reconstruction attacks it addresses and what auxiliary-information risks remain.
+
+
+## Internal cutoff boundary
+
+Snapshot calculation now has a private builder with an explicit complete UTC-day cutoff. Anonymous, authenticated, and service API roles cannot execute it. The public reader keeps its original one-argument contract and rechecks the current account and tenant permission before requesting today's cutoff. Existing metric calculations and suppression behavior are unchanged.
+
+This separation is preparation for persisted releases: a future release worker can calculate and compare fixed snapshots without giving delegates arbitrary historical queries or copying the financial query. It does not itself fix longitudinal disclosure. Durable release history, contributor-change checks, coordination with public metrics, delayed-state presentation, and adversarial multi-release tests remain required.
