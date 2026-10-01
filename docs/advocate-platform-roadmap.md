@@ -661,3 +661,5 @@ Operational health must include provider cash committed before gateway ingestion
 ### Unresolved provider quarantine
 
 Verified events requiring review now remain `quarantined` without a final financial application receipt. Ordinary workers and no-effect settlement cannot bypass that boundary. This removes the previous terminal-ignore obstacle while preserving duplicate evidence checks, immutable completed applications, and existing retention. Versioned retained-evidence recovery remains required before release.
+
+A server-side recovery decoder validates retained Stripe and PayPal evidence before any future provider lookup. It rejects altered, expired, erased, or minimized payloads and preserves the distinction between original signature evidence and a new interpretation. Recovery execution and concurrency remain release work.

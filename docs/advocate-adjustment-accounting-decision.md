@@ -91,6 +91,8 @@ The previous implementation called `ignore_sponsorship_payment_gateway_event`, c
 
 This repairs the state model, not recovery itself. Recovery still needs to revalidate retained authenticated evidence, record an interpretation revision and outcome separately, and enter the normal financial application path only after complete validation. Duplicate delivery, concurrent recovery, prior application, unavailable payload, current provider-account binding, and failed interpretation remain required cases. No retention deadline is extended and no live provider execution is authorized.
 
+The recovery decoder now checks authenticated ciphertext, exact delivery bytes, immutable event digest, event identity, verification method, configured regional scope, Stripe mode, and the existing payload expiry. It rejects erased or incomplete evidence and returns sanitized errors. PayPal unsupported-event quarantine deliberately retains minimized evidence, so those records cannot reconstruct a webhook from storage. This helper makes no provider call and grants no settlement authority. A durable interpretation operation and its integration with normal ingestion are still unfinished.
+
 ## Disputes can exceed the original principal (FF-084)
 
 The accounting model has another independent constraint: it assumes every adjustment belongs wholly to one payment and that payment's aggregate net remains between zero and its original gross. Stripe documents larger disputes caused by currency changes, disputes that combine recurring charges, and full-charge disputes after partial refunds. These are supported provider outcomes, not necessarily forged amounts. [Stripe dispute lifecycle](https://support.stripe.com/embedded-connect/questions/how-disputes-work?locale=en-GB)

@@ -45,7 +45,7 @@ const testRequire = createRequire(
 const { buildHostedStripeSessionParams } = testRequire(
   "../../src/lib/sponsorships/checkout/stripeCheckout",
 ) as typeof import("../../src/lib/sponsorships/checkout/stripeCheckout")
-const { createSponsorshipCrypto, fromSupabaseRpcBytea } = testRequire(
+const { createSponsorshipCrypto, fromSupabaseRpcBytea, toSupabaseRpcBytea } = testRequire(
   "../../src/lib/sponsorships/crypto",
 ) as typeof import("../../src/lib/sponsorships/crypto")
 const {
@@ -71,6 +71,9 @@ const { captureVerifiedLegacyStripeEvent, isRetainedLegacyStripeEvent } =
   testRequire(
     "../../src/lib/sponsorships/gateways/legacyStripeWebhook",
   ) as typeof import("../../src/lib/sponsorships/gateways/legacyStripeWebhook")
+const { decodeRetainedGatewayEvidence } = testRequire(
+  "../../src/lib/sponsorships/gateways/retainedGatewayEvidence",
+) as typeof import("../../src/lib/sponsorships/gateways/retainedGatewayEvidence")
 nodeModule._load = originalModuleLoad
 
 const INTENT_ID = "11111111-1111-4111-8111-111111111111"
@@ -1512,5 +1515,58 @@ test("signals only newly committed Stripe quarantines without provider material"
     }
   } finally {
     console.error = originalError
+  }
+})
+
+test("retained Stripe evidence binds plaintext, immutable event and regional account before recovery", async () => {
+  const stripeEvent = event("checkout.session.completed", checkoutSession(stripeMetadata("one_time", 1200)))
+  const rawPayload = JSON.stringify(stripeEvent)
+  const { dependencies, calls } = dependenciesFor(boundary())
+  await quarantineVerifiedStripeEvent({ event: stripeEvent, region: "us", rawPayload,
+    requestContext, error: new ServerIntentStripeWebhookError("provider-fact-mismatch") }, dependencies)
+  const stored = calls.quarantined[0]
+  const evidence = { ...stored, provider: "STRIPE" as const,
+    payloadRetentionExpiresAt: "2026-07-19T10:00:00.000Z",
+    deliveryPayloadSha256: stored.redactedPayload.delivery_payload_sha256 as string }
+  const account = { providerAccountScope: "stripe_us" as const, stripeLivemode: stripeEvent.livemode }
+  let plaintext: Buffer | undefined
+  const crypto = { decryptSecretPayload(ciphertext: Uint8Array) {
+    plaintext = dependencies.crypto.decryptSecretPayload(ciphertext)
+    return plaintext
+  } }
+  expect(decodeRetainedGatewayEvidence(evidence, account, crypto, NOW)).toMatchObject({
+    provider: "STRIPE", event: stripeEvent, rawPayload,
+  })
+  expect(plaintext?.every(byte => byte === 0)).toBe(true)
+  for (const change of [
+    { providerEventId: "evt_other" }, { eventType: "invoice.paid" },
+    { providerAccountScope: "stripe_uk" }, { verificationMethod: "paypal_webhook_signature_api" },
+    { deliveryPayloadSha256: "0".repeat(64) },
+    { payloadSha256: toSupabaseRpcBytea(Buffer.alloc(32)) },
+    { signatureVerifiedAt: "invalid" },
+  ]) {
+    expect(() => decodeRetainedGatewayEvidence({ ...evidence, ...change }, account, crypto, NOW))
+      .toThrow("Retained payment evidence cannot be revalidated")
+  }
+  expect(() => decodeRetainedGatewayEvidence(evidence, { ...account, stripeLivemode: !account.stripeLivemode }, crypto, NOW))
+    .toThrow("Retained payment evidence cannot be revalidated")
+  expect(() => decodeRetainedGatewayEvidence({ ...evidence, payloadRetentionExpiresAt: NOW.toISOString() }, account, crypto, NOW))
+    .toThrow(expect.objectContaining({ code: "expired" }))
+  expect(() => decodeRetainedGatewayEvidence({ ...evidence, payloadCiphertext: null }, account, crypto, NOW))
+    .toThrow(expect.objectContaining({ code: "unavailable" }))
+  expect(() => decodeRetainedGatewayEvidence(evidence, account, { decryptSecretPayload() {
+    throw new Error("private.provider@example.com")
+  } }, NOW)).toThrow("Retained payment evidence cannot be revalidated")
+  expect(plaintext?.every(byte => byte === 0)).toBe(true)
+  const alteredRaw = JSON.stringify({ ...stripeEvent, data: { object: { id: "cs_changed", amount_total: 1 } } })
+  expect(() => decodeRetainedGatewayEvidence({ ...evidence,
+    payloadCiphertext: dependencies.crypto.encryptSecretPayload(alteredRaw).ciphertextRpcBytea,
+    deliveryPayloadSha256: createHash("sha256").update(alteredRaw).digest("hex"),
+  }, account, crypto, NOW)).toThrow("Retained payment evidence cannot be revalidated")
+  for (const invalidPlaintext of [Buffer.from([0xff]), Buffer.alloc(64 * 1024 + 1, 32)]) {
+    expect(() => decodeRetainedGatewayEvidence(evidence, account, {
+      decryptSecretPayload: () => invalidPlaintext,
+    }, NOW)).toThrow("Retained payment evidence cannot be revalidated")
+    expect(invalidPlaintext.every(byte => byte === 0)).toBe(true)
   }
 })

@@ -50,6 +50,9 @@ const {
 } = testRequire(
   "../../src/lib/sponsorships/gateways/paypalWebhook",
 ) as typeof import("../../src/lib/sponsorships/gateways/paypalWebhook")
+const { decodeRetainedGatewayEvidence } = testRequire(
+  "../../src/lib/sponsorships/gateways/retainedGatewayEvidence",
+) as typeof import("../../src/lib/sponsorships/gateways/retainedGatewayEvidence")
 nodeModule._load = originalModuleLoad
 
 const INTENT_ID = "11111111-1111-4111-8111-111111111111"
@@ -1222,5 +1225,32 @@ test("signals only newly committed PayPal quarantines without provider material"
     }
   } finally {
     console.error = originalError
+  }
+})
+
+test("retained PayPal recovery accepts complete evidence and rejects minimized unsupported records", async () => {
+  const { value, calls } = dependencies()
+  for (const unsupported of [false, true]) {
+    const rawPayload = unsupported
+      ? rawEvent("CATALOG.PRODUCT.UPDATED", "product", { id: "PROD-123", description: "private provider text" })
+      : rawEvent("PAYMENT.CAPTURE.COMPLETED", "capture", captureResource())
+    const event = parsePayPalWebhookEvent(rawPayload)
+    await quarantineVerifiedPayPalEvent({ event, rawPayload, requestContext: requestContext(),
+      error: new PayPalWebhookError(unsupported ? "unsupported-event" : "provider-fact-mismatch") }, value)
+    const stored = calls.quarantined.at(-1)!
+    const evidence = { ...stored, provider: "PAYPAL" as const,
+      payloadRetentionExpiresAt: "2026-07-19T10:00:00.000Z",
+      deliveryPayloadSha256: stored.redactedPayload.delivery_payload_sha256 as string }
+    const account = { providerAccountScope: "paypal" as const }
+    if (unsupported) {
+      expect(() => decodeRetainedGatewayEvidence(evidence, account, value.crypto, NOW))
+        .toThrow(expect.objectContaining({ code: "incomplete" }))
+    } else {
+      expect(decodeRetainedGatewayEvidence(evidence, account, value.crypto, NOW)).toMatchObject({
+        provider: "PAYPAL", event, rawPayload,
+      })
+      expect(() => decodeRetainedGatewayEvidence({ ...evidence, providerEventId: "WH-OTHER" }, account, value.crypto, NOW))
+        .toThrow("Retained payment evidence cannot be revalidated")
+    }
   }
 })
