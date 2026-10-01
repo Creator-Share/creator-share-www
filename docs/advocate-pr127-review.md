@@ -528,3 +528,10 @@ Confirmed that `RESOLVED_WITH_PAYOUT` entered the seller-credit path even though
 
 
 At `e9eaf1c`, publication 36827722464 passed the production build and application job, and WebKit 36827722452 passed. The new cash fixture reached its first service-role call but attempted `extensions.digest` from that restricted role. Compute the event digest in Node and pass the fixture timestamp as an RPC argument, matching application usage without extending database grants. The independent-session race evidence remains pending.
+
+
+## Cash race evidence and disclosure comparison cost
+
+Publication 36828769720 and WebKit 36828769708 passed at `55de9ea`. The downloaded FF-084 artifact contains seven server-observed interleavings: duplicate and corroborating deliveries, conflicting cash facts, event binding, digest conflict, first-writer rollback, and cancellation between cash and observation insertion. It records no partial evidence, losing audit residue, or principal mutation. The cancellation case succeeds on retry. This validates cash preservation, not the outstanding allocation or reconciliation work.
+
+A full-release performance probe identified repeated nested JSON lookups in disclosure comparison. Expanding both contributor maps once and joining their rows preserves all observed decisions while reducing the 5,000-contact first release from 19,385 to 5,768 milliseconds in PGlite. The complete release equals the reference, 500 deterministic comparison pairs match, and the existing history oracle passes. The candidate awaits hosted validation; the analytics decision document records measurement limits.

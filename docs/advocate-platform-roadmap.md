@@ -647,3 +647,6 @@ The application now bundles the existing Reddit Sans font under its OFL licence 
 
 
 PayPal `RESOLVED_WITH_PAYOUT` requires merchant cash evidence before financial reinstatement. The case outcome alone may describe protection for either party. The adapter now quarantines that ambiguity instead of creating a full merchant credit. Positive payout reconciliation remains release work under FF-084 and FF-095.
+
+
+The coordinated analytics implementation now compares flattened contributor rows instead of repeatedly traversing nested JSON for each contact. The disclosure policy is unchanged. Full-release and reference-equivalence probes pass in-process; native hosted validation and long-history capacity evidence remain required.

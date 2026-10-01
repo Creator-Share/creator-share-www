@@ -141,19 +141,22 @@ CREATE TRIGGER advocate_analytics_releases_audit AFTER INSERT
 -- hash of exact contribution. Zero contributions are absent, not new support.
 CREATE FUNCTION private.analytics_unsafe_measures(previous jsonb,candidate jsonb)
 RETURNS text[] LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
-  WITH measures AS (
-    SELECT jsonb_object_keys(previous) AS measure UNION SELECT jsonb_object_keys(candidate)
-  ), scopes AS (
-    SELECT measure,scope FROM measures CROSS JOIN LATERAL (
-      SELECT jsonb_object_keys(coalesce(previous->measure,'{}')) AS scope
-      UNION SELECT jsonb_object_keys(coalesce(candidate->measure,'{}'))
-    ) scope_keys
+  -- Expand each map once. Looking up each contact through its parent scope
+  -- repeatedly copies large JSON objects before comparing their fingerprints.
+  WITH previous_values AS (
+    SELECT measure.key AS measure,scope.key AS scope,contact.key AS contact,contact.value AS fingerprint
+    FROM jsonb_each(previous) measure
+    CROSS JOIN LATERAL jsonb_each(measure.value) scope
+    CROSS JOIN LATERAL jsonb_each(scope.value) contact
+  ), candidate_values AS (
+    SELECT measure.key AS measure,scope.key AS scope,contact.key AS contact,contact.value AS fingerprint
+    FROM jsonb_each(candidate) measure
+    CROSS JOIN LATERAL jsonb_each(measure.value) scope
+    CROSS JOIN LATERAL jsonb_each(scope.value) contact
   ), changed AS (
-    SELECT measure,scope,count(*) AS contacts FROM scopes CROSS JOIN LATERAL (
-      SELECT jsonb_object_keys(coalesce(previous->measure->scope,'{}')) AS contact
-      UNION SELECT jsonb_object_keys(coalesce(candidate->measure->scope,'{}'))
-    ) contact_keys
-    WHERE previous->measure->scope->contact IS DISTINCT FROM candidate->measure->scope->contact
+    SELECT measure,scope,count(*) AS contacts
+    FROM previous_values previous FULL JOIN candidate_values candidate USING(measure,scope,contact)
+    WHERE previous.fingerprint IS DISTINCT FROM candidate.fingerprint
     GROUP BY measure,scope
   )
   SELECT coalesce(array_agg(DISTINCT measure ORDER BY measure),'{}'::text[])

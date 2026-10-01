@@ -83,3 +83,12 @@ At 5,000 synthetic direct contacts, contributor material grew to 19,626,520 byte
 
 
 The contributor and historical baseline builders now use JSON for intermediate maps and convert to JSONB only at their outer boundary. On the same analyzed 5,000-contact fixture, three candidate calculations took 1,905 to 1,972 milliseconds. The entire candidate, including every fingerprint and key version, compared equal to the preceding implementation; contributor size and row count were unchanged. The policy history oracle, private reader, public metrics, and attribution settlement probes pass in-process. This removes repeated nested JSONB conversion without changing disclosure semantics. Full release insertion, long-history comparison, and native hosted throughput remain separate capacity work.
+
+
+## Full release profiling
+
+A subsequent in-process PGlite probe measures the complete first private release, including disclosure and contribution insertion. At 5,000 synthetic direct contacts plus the existing fixture cohorts, it took 19,385 milliseconds and inserted 80,072 contribution changes. Exact replay took 1 millisecond. Profiling isolates 13,171 milliseconds in `analytics_unsafe_measures`: nested JSON lookups repeatedly traverse the contact's containing scope.
+
+The candidate expands each map once and compares rows with a full join, preserving JSON value types and missing-key semantics. In the same fixture, comparison took 328 milliseconds, coordination took 532 milliseconds, and the full first release took 5,768 milliseconds with the same 80,072 changes. The complete snapshot and retained contributor maps match the old function. Five hundred deterministic map pairs, including JSON nulls, differing value types, and missing keys, produce identical withheld-measure sets. The existing policy suite and sparse-history oracle across 16 releases and 25 candidates pass.
+
+These are synthetic WASM timings, not native PostgreSQL throughput or a capacity guarantee. Hosted correctness validation, long-history measurements, and multi-tenant worker capacity remain required.
