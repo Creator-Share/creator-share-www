@@ -117,7 +117,13 @@ try {
   assert.equal(parts.length, 2)
   const fixture = parts[0].replace("SELECT extensions.no_plan();", "")
     .replace("BEGIN;", `BEGIN; SELECT set_config('request.jwt.claims','{"role":"service_role"}',true);`)
-  await database.executeSupabaseAdminSql(`${fixture}\nCOMMIT;`)
+  // The transient clone copies schema and role dictionaries, not payment policy/account rows.
+  const paymentDictionaries = `
+    INSERT INTO public.sponsorship_attribution_policies(version,effective_at)
+      VALUES ('2026-07-16-v1','2026-07-16 00:00:00+00');
+    INSERT INTO public.payment_provider_accounts(provider,scope,stripe_region,environment)
+      VALUES ('STRIPE','stripe_us','us','configured');`
+  await database.executeSupabaseAdminSql(`${paymentDictionaries}\n${fixture}\nCOMMIT;`)
   const rootId = await withPgClients(database, ["cash-fixture"], async client => {
     const { rows } = await client.query(`SELECT id FROM public.sponsorship_financial_movements
       WHERE provider='STRIPE' AND provider_account_scope='stripe_us'

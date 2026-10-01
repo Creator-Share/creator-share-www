@@ -113,6 +113,8 @@ FF-029 now has one canonical 99-test offline provider contract covering the host
 
 | FF-093 | completed | P2 | Verified accounts incorrectly bounded by contact count | The production SQL release can contain ten distinct verified accounts sharing five historical email contact keys. The application parser rejected that valid report because it bounded accounts by contacts. Bound accounts by sponsorships instead, retain existing suppression checks, and exercise the actual release writer plus valid and impossible parser cases. In-process SQL evidence passes. Publication 36823367317 and WebKit 36823367600 passed at d1f14d2. |
 
+| FF-094 | in progress | P2 | Production build depends on generated Google font URLs | Publication job 110252951996 at e1414fd failed in the Next.js Google font loader when its extension matcher returned null. Bundle the unmodified Reddit Sans variable font and OFL licence from a pinned Google Fonts revision, sharing one local font configuration between the root layout and global not-found page. Local font emission, fallback metrics, TypeScript, and lint pass. Hosted production build and browser validation remain pending. |
+
 ## Entry requirements
 
 Every new entry must include:

@@ -511,3 +511,12 @@ Publication 36823367317 and WebKit 36823367600 passed at `d1f14d2`, validating t
 
 
 The provider cash foundation passed publication 36824970426 and WebKit 36824970413 at `e5fd05c`. The follow-on adds seven required PostgreSQL concurrency scenarios and reuses one provider charge and PaymentIntent validator for refunds and disputes, removing the duplicated dispute-chain implementation. Disputes still require both signed references; a regression checks that neither provider nor database work occurs when either reference is missing. The new concurrency gate awaits its own hosted run.
+
+
+## Deterministic font builds and cash fixture dependencies
+
+At `e1414fd`, WebKit 36826401650 passed. Publication 36826401579 failed in two independent places: the production Google font loader assumed the remote font URL ended in a file extension, and the new cash concurrency fixture assumed the schema-only clone contained attribution policy and payment account rows. The complete pgTAP suite and preceding database gates passed, but no cash race assertion ran.
+
+The candidate bundles the same unmodified Reddit Sans font, its OFL licence, pinned upstream revision, and SHA-256 digest. Both document roots use one local font configuration with the existing CSS variable, swap behavior, and weight range. An in-process invocation of the installed Next.js local font loader emits the asset and generates fallback metrics without network access; TypeScript and scoped lint pass. Full hosted build and browser evidence remain pending.
+
+The cash harness now explicitly seeds its attribution policy and Stripe account dependencies. An in-process schema fixture with those migration seed rows omitted reproduces the isolated clone's missing dependencies and passes after explicit setup. This proves fixture construction and receipt insertion, not native concurrent execution. No local services were started.

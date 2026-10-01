@@ -639,3 +639,8 @@ Any change to attribution windows, guest checkout, payment presentation, public 
 ### Provider cash evidence review checkpoint
 
 The financial boundary now separates immutable Stripe balance facts from sponsorship allocation. Verified cash is recorded after regional original-payment validation and before principal conversion. This preserves excess and ambiguous-currency losses without changing attributed funds. The release remains blocked on complete allocation, grouped-dispute reconciliation, PayPal parity, unallocated cash monitoring, retained-event recovery, and their hosted evidence. No production activation or local service start is authorized.
+
+
+### October 1 release validation repair
+
+The application now bundles the existing Reddit Sans font under its OFL licence rather than fetching Google font CSS during builds. This removes the URL-shape dependency that broke the hosted production build at `e1414fd`. The cash-evidence race fixture explicitly supplies payment account and attribution policy dictionaries omitted by the isolated schema clone. Neither repair changes product scope or financial semantics. Local static and in-process checks pass; native hosted evidence remains pending.

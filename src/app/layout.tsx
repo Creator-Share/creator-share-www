@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { headers } from "next/headers"
-import { Reddit_Sans } from "next/font/google"
+import { redditSans } from "@/app/fonts"
 import { Providers } from "@/components/Providers"
 import "@/styles/globals.css"
 import { PageWrapper } from "@/components/PageWrapper"
@@ -19,12 +19,6 @@ import {
   TENANT_PAYMENT_SHELL,
 } from "@/lib/advocates/tenantRoutePolicy"
 
-const redditSans = Reddit_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-reddit-sans",
-  display: "swap",
-})
 const ENABLE_VERCEL_ANALYTICS =
   !isAdvocateStagingEnvironmentEnabled(process.env)
 
