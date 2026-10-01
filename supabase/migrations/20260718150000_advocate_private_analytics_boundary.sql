@@ -635,13 +635,14 @@ BEGIN
       encode(extensions.digest('verified','sha256'),'hex')
     FROM contact_atoms atom CROSS JOIN LATERAL jsonb_array_elements_text(atom.verified_sponsor_accounts) identity(value)
   ),
+  -- Convert once at the outer boundary instead of rebuilding nested JSONB maps.
   scope_fingerprints AS (
-    SELECT measure,scope,jsonb_object_agg(sponsor_contact_key,fingerprint) AS contacts
+    SELECT measure,scope,json_object_agg(sponsor_contact_key,fingerprint) AS contacts
     FROM (SELECT DISTINCT measure,scope,sponsor_contact_key,fingerprint FROM contact_measure_fingerprints) contributors
     GROUP BY measure,scope
   ),
   measure_fingerprints AS (
-    SELECT measure,jsonb_object_agg(scope,contacts) AS scopes
+    SELECT measure,json_object_agg(scope,contacts) AS scopes
     FROM scope_fingerprints GROUP BY measure
   ),
   expanded_cells AS (
@@ -1096,7 +1097,7 @@ BEGIN
       SELECT payload
       FROM original_currency_payload
     )
-  ), 'contributors', coalesce((SELECT jsonb_object_agg(measure,scopes) FROM measure_fingerprints),'{}'::jsonb),
+  ), 'contributors', coalesce((SELECT json_object_agg(measure,scopes)::jsonb FROM measure_fingerprints),'{}'::jsonb),
     'contact_key_versions', (SELECT coalesce(jsonb_agg(version ORDER BY version),'[]'::jsonb)
       FROM (SELECT DISTINCT split_part(sponsor_contact_key,':',1)||':'||split_part(sponsor_contact_key,':',2) AS version
         FROM intent_rollups) versions))

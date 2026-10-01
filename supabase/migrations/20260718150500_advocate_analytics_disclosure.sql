@@ -75,11 +75,11 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
     FROM private.advocate_analytics_contribution_changes WHERE advocate_id=target_advocate_id
     ORDER BY measure,scope,contact_key,source_cutoff DESC
   ), scopes AS (
-    SELECT measure,scope,jsonb_object_agg(contact_key,fingerprint) AS contacts
+    SELECT measure,scope,json_object_agg(contact_key,fingerprint) AS contacts
     FROM latest WHERE fingerprint IS NOT NULL GROUP BY measure,scope
   ), measures AS (
-    SELECT measure,jsonb_object_agg(scope,contacts) AS scopes FROM scopes GROUP BY measure
-  ) SELECT coalesce(jsonb_object_agg(measure,scopes),'{}'::jsonb) FROM measures;
+    SELECT measure,json_object_agg(scope,contacts) AS scopes FROM scopes GROUP BY measure
+  ) SELECT coalesce(json_object_agg(measure,scopes)::jsonb,'{}'::jsonb) FROM measures;
 $$;
 REVOKE ALL ON FUNCTION private.analytics_disclosure_baseline(uuid) FROM PUBLIC,anon,authenticated,service_role;
 

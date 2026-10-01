@@ -486,3 +486,10 @@ The coordinated analytics concurrency harness is now a required database lane en
 At `ddd661d`, database job 110233824338 passed, including the four analytics concurrency scenarios and their sanitized artifact. The application job failed one invitation assertion out of 1,738 executed tests: its +61-second proof entered the allowed +60-second clock-skew window during a live-clock loop. A controlled one-second advance reproduces the failure at case 3. The test now freezes and restores Date.now; production policy is unchanged and all 13 focused contracts pass.
 
 WebKit started successfully under Webpack and passed 27 checks. Two password-recovery navigations were interrupted by development Fast Refresh when destination routes compiled. The candidate requests the four recovery destinations before opening browser form state. This changes setup ordering, not assertions, retries, product navigation, or authentication. Hosted validation remains pending for these two test repairs.
+
+
+## Analytics contributor materialization
+
+Replacing nested JSONB aggregation with intermediate JSON and one final JSONB conversion reduces the analyzed 5,000-contact candidate calculation from 17.56 to 20.493 seconds to 1.905 to 1.972 seconds in the same PGlite fixture. The entire candidate compares equal. Four in-process policy, reader, public metric, and settlement probes pass. These measurements do not establish native PostgreSQL latency or full worker capacity; contribution history and release insertion still require measurement.
+
+WebKit workflow 36821474619 passed at `baa2af2`, validating recovery route preparation. Its publication application job also passed, including the repaired invitation clock test; the aggregate publication workflow was still finishing when this checkpoint was prepared. No local services were started.
