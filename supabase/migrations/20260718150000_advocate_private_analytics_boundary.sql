@@ -615,6 +615,16 @@ BEGIN
       jsonb_build_array(private.combine_usd_fractions(dispute_debits_usd_fraction),sum(dispute_debits_minor)) AS dispute_debits,
       jsonb_build_array(private.combine_usd_fractions(dispute_credits_usd_fraction),sum(dispute_credits_minor)) AS dispute_credits,
       jsonb_build_array(private.combine_usd_fractions(net_collected_usd_fraction),sum(net_collected_minor)) AS net_collected,
+      -- Net can have a safe cohort after reinstatement while these visible
+      -- operand differences still isolate untouched or unrefunded contacts.
+      jsonb_build_array(private.combine_usd_fractions(private.add_usd_fraction(
+        ARRAY[gross_collected_usd_cents::numeric,1::numeric],
+        ARRAY[-dispute_debits_usd_fraction[1],dispute_debits_usd_fraction[2]])),
+        sum(gross_collected_minor-dispute_debits_minor)) AS gross_less_dispute_debits,
+      jsonb_build_array(private.combine_usd_fractions(private.add_usd_fraction(
+        ARRAY[gross_collected_usd_cents::numeric,1::numeric],
+        ARRAY[-refunds_and_reversals_usd_fraction[1],refunds_and_reversals_usd_fraction[2]])),
+        sum(gross_collected_minor-refunds_and_reversals_minor)) AS gross_less_refunds,
       jsonb_build_array(private.combine_usd_fractions(private.add_usd_fraction(dispute_debits_usd_fraction,
         ARRAY[-dispute_credits_usd_fraction[1],dispute_credits_usd_fraction[2]])),
         sum(dispute_debits_minor-dispute_credits_minor)) AS open_dispute_balance,

@@ -192,12 +192,14 @@ BEGIN
   FOREACH v_family IN ARRAY ARRAY['official','observed'] LOOP
     -- Protect arithmetic that can be reconstructed from separately visible
     -- operands, including restoration that leaves one outstanding dispute.
-    FOREACH v_measure IN ARRAY ARRAY['gross_collected','net_collected','open_dispute_balance',
+    FOREACH v_measure IN ARRAY ARRAY['gross_collected','net_collected','gross_less_dispute_debits','gross_less_refunds','open_dispute_balance',
       'annualized_commitment','repeat_sponsorships','unverified_sponsor_contacts'] LOOP
       IF NOT (v_family||':'||v_measure=ANY(v_intrinsic)) THEN CONTINUE; END IF;
       FOREACH v_operand IN ARRAY CASE v_measure
         WHEN 'gross_collected' THEN ARRAY['initial_collected','renewal_collected']
         WHEN 'net_collected' THEN ARRAY['initial_collected','renewal_collected','refunds_and_reversals','dispute_debits','dispute_credits']
+        WHEN 'gross_less_dispute_debits' THEN ARRAY['initial_collected','renewal_collected','dispute_debits']
+        WHEN 'gross_less_refunds' THEN ARRAY['initial_collected','renewal_collected','refunds_and_reversals']
         WHEN 'open_dispute_balance' THEN ARRAY['dispute_debits','dispute_credits']
         WHEN 'annualized_commitment' THEN ARRAY['active_monthly_commitment','active_annual_commitment']
         WHEN 'repeat_sponsorships' THEN ARRAY['sponsorships','unique_sponsor_contacts']
@@ -241,6 +243,8 @@ BEGIN
     IF v_measure=ANY(v_withheld) THEN CONTINUE; END IF;
     v_required:=CASE split_part(v_measure,':',2)
       WHEN 'open_dispute_balance' THEN ARRAY['dispute_debits','dispute_credits']
+      WHEN 'gross_less_dispute_debits' THEN ARRAY['gross_collected','dispute_debits']
+      WHEN 'gross_less_refunds' THEN ARRAY['gross_collected','refunds_and_reversals']
       WHEN 'repeat_sponsorships' THEN ARRAY['sponsorships','unique_sponsor_contacts']
       WHEN 'unverified_sponsor_contacts' THEN ARRAY['unique_sponsor_contacts','verified_sponsor_accounts']
       WHEN 'verified_account_identities' THEN ARRAY['verified_sponsor_accounts']

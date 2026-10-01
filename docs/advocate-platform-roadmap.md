@@ -650,3 +650,6 @@ PayPal `RESOLVED_WITH_PAYOUT` requires merchant cash evidence before financial r
 
 
 The coordinated analytics implementation now compares flattened contributor rows instead of repeatedly traversing nested JSON for each contact. The disclosure policy is unchanged. Full-release and reference-equivalence probes pass in-process; native hosted validation and long-history capacity evidence remain required.
+
+
+Privacy review also requires gross-minus-dispute-debits and gross-minus-refunds complements to meet the contact threshold. A safe net cohort or zero net alone does not prove these visible operand differences safe. The candidate coordinates their withholding and historical baselines without removing approved metrics. The analytics decision records adversarial examples, tests, and the additional storage cost; broader privacy and capacity evidence remain release work.

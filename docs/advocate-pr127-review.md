@@ -535,3 +535,10 @@ At `e9eaf1c`, publication 36827722464 passed the production build and applicatio
 Publication 36828769720 and WebKit 36828769708 passed at `55de9ea`. The downloaded FF-084 artifact contains seven server-observed interleavings: duplicate and corroborating deliveries, conflicting cash facts, event binding, digest conflict, first-writer rollback, and cancellation between cash and observation insertion. It records no partial evidence, losing audit residue, or principal mutation. The cancellation case succeeds on retry. This validates cash preservation, not the outstanding allocation or reconciliation work.
 
 A full-release performance probe identified repeated nested JSON lookups in disclosure comparison. Expanding both contributor maps once and joining their rows preserves all observed decisions while reducing the 5,000-contact first release from 19,385 to 5,768 milliseconds in PGlite. The complete release equals the reference, 500 deterministic comparison pairs match, and the existing history oracle passes. The candidate awaits hosted validation; the analytics decision document records measurement limits.
+
+
+## Restored-dispute and refunded-cohort complements
+
+Publication 36830276958 and WebKit 36830276968 passed at `46d4a83`, validating the flattened disclosure comparison. A subsequent adversarial probe found that gross minus cumulative dispute debits could expose a single untouched 733-cent contribution despite a six-contact net after five dispute restorations. A zero-net case also exposed four unrefunded contacts through gross minus refunds.
+
+The candidate adds both hidden complement fingerprints and coordinates their operands through the existing history policy. Four SQL policy assertions pass; the new dispute regression fails on the preceding coordinator. Actual production-query probes with normal triggers during disclosure confirm unsafe withholding and continued release with five untouched contacts. Reader, public metrics, and history-oracle checks pass in-process. The additional controls add storage and computation, recorded in the analytics decision. Native hosted validation and broader reconstruction review remain open.

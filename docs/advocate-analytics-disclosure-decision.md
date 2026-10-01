@@ -92,3 +92,16 @@ A subsequent in-process PGlite probe measures the complete first private release
 The candidate expands each map once and compares rows with a full join, preserving JSON value types and missing-key semantics. In the same fixture, comparison took 328 milliseconds, coordination took 532 milliseconds, and the full first release took 5,768 milliseconds with the same 80,072 changes. The complete snapshot and retained contributor maps match the old function. Five hundred deterministic map pairs, including JSON nulls, differing value types, and missing keys, produce identical withheld-measure sets. The existing policy suite and sparse-history oracle across 16 releases and 25 candidates pass.
 
 These are synthetic WASM timings, not native PostgreSQL throughput or a capacity guarantee. Hosted correctness validation, long-history measurements, and multi-tenant worker capacity remain required.
+
+
+## Financial complements after dispute restoration
+
+A further synthetic production-query probe found a same-response disclosure despite safe individual measure cohorts. Eleven contacts contributed 10,733 USD cents. Ten contributions were fully disputed for 10,000 cents; five were restored for 5,000 cents. Gross, debits, credits, and the six-contact net were all visible. Gross minus debits revealed the sole never-disputed contact's exact 733-cent contribution. No identity or contact information was disclosed, but the one-contact monetary complement violated the intended threshold.
+
+A second shape has eleven contacts, seven fully refunded and four fully disputed. Net is zero, yet visible gross minus refunds exposes the four-contact residual. Net suppression alone does not protect either complement.
+
+The candidate fingerprints gross minus dispute debits and gross minus refunds at the existing contact, family, segment, currency, and intersection boundaries. It applies the same historical comparison and coordinated operand withholding, including derived gross and net. Hidden complement baselines advance only when their required visible operands are disclosed. No metric is removed or replaced by an approximate value.
+
+Four policy assertions cover the unsafe dispute case, currency/segment coordination, a safe five-contact complement, and the zero-net refund case. The first regression fails with the preceding coordinator. The actual candidate builder and release writer reproduce the original disclosure, withhold the repaired cases, and still release the safe fifteen-contact case with five untouched contacts. Existing reader, public-release, and historical-oracle suites pass in-process. Hosted validation remains pending; these controls do not establish protection against every algebraic reconstruction or arbitrary auxiliary information.
+
+The two controls increase the 5,000-contact first-release fixture to 120,120 stored contribution changes and 8,133 milliseconds in PGlite, compared with 80,072 changes and 5,768 milliseconds immediately before them. This is an explicit privacy cost, not native capacity evidence. Before these controls, later unchanged releases at three- and five-week advances took 4,163 and 3,543 milliseconds and added no contribution rows. Changing-history and multi-tenant throughput still require measurement.

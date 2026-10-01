@@ -4,18 +4,20 @@ SELECT extensions.no_plan();
 
 -- Policy examples use exact USD contributions. Separate integration assertions
 -- exercise the production query's contributor fingerprints and authority.
-CREATE FUNCTION pg_temp.disclosure_candidate(amounts integer[], refunds integer[] DEFAULT NULL, renewals integer[] DEFAULT NULL)
+CREATE FUNCTION pg_temp.disclosure_candidate(amounts integer[], refunds integer[] DEFAULT NULL, renewals integer[] DEFAULT NULL,
+  debits integer[] DEFAULT NULL, credits integer[] DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql AS $$
-DECLARE cells jsonb; contributors jsonb; total_initial bigint; total_refunds bigint; total_renewals bigint;
+DECLARE cells jsonb; contributors jsonb; total_initial bigint; total_refunds bigint; total_renewals bigint; total_debits bigint; total_credits bigint;
 BEGIN
-  SELECT sum(amount),sum(coalesce(refunds[position],0)),sum(coalesce(renewals[position],0))
-    INTO total_initial,total_refunds,total_renewals FROM unnest(amounts) WITH ORDINALITY entry(amount,position);
+  SELECT sum(amount),sum(coalesce(refunds[position],0)),sum(coalesce(renewals[position],0)),
+      sum(coalesce(debits[position],0)),sum(coalesce(credits[position],0))
+    INTO total_initial,total_refunds,total_renewals,total_debits,total_credits FROM unnest(amounts) WITH ORDINALITY entry(amount,position);
   cells:=jsonb_build_object('suppressed',false,'sponsorships',cardinality(amounts),
     'unique_sponsor_contacts',cardinality(amounts),'verified_sponsor_accounts',0,
     'initial_collected_usd_cents',total_initial,'renewal_collected_usd_cents',total_renewals,
     'gross_collected_usd_cents',total_initial+total_renewals,'refunds_and_reversals_usd_cents',total_refunds,
-    'dispute_debits_usd_cents',0,'dispute_credits_usd_cents',0,
-    'net_collected_usd_cents',total_initial+total_renewals-total_refunds,
+    'dispute_debits_usd_cents',total_debits,'dispute_credits_usd_cents',total_credits,
+    'net_collected_usd_cents',total_initial+total_renewals-total_refunds-total_debits+total_credits,
     'active_monthly_commitment_usd_cents',0,'active_annual_commitment_usd_cents',0,'annualized_commitment_usd_cents',0);
   WITH contacts AS (
     SELECT 'contact-'||position AS contact,metric.key AS measure,
@@ -25,7 +27,10 @@ BEGIN
       'sponsorships',1,'unique_sponsor_contacts',1,'initial_collected',amount,
       'renewal_collected',coalesce(renewals[position],0),'gross_collected',amount+coalesce(renewals[position],0),
       'refunds_and_reversals',coalesce(refunds[position],0),
-      'net_collected',amount+coalesce(renewals[position],0)-coalesce(refunds[position],0))) metric
+      'dispute_debits',coalesce(debits[position],0),'dispute_credits',coalesce(credits[position],0),
+      'gross_less_dispute_debits',amount+coalesce(renewals[position],0)-coalesce(debits[position],0),
+      'gross_less_refunds',amount+coalesce(renewals[position],0)-coalesce(refunds[position],0),
+      'net_collected',amount+coalesce(renewals[position],0)-coalesce(refunds[position],0)-coalesce(debits[position],0)+coalesce(credits[position],0))) metric
     WHERE metric.value<>'0'::jsonb
   ), measures AS (
     SELECT measure,jsonb_build_object('direct:USD',jsonb_object_agg(contact,fingerprint)) AS value
@@ -38,11 +43,44 @@ BEGIN
       'sponsorships',cardinality(amounts),'unique_sponsor_contacts',cardinality(amounts),
       'initial_collected_minor',total_initial,'renewal_collected_minor',total_renewals,
       'gross_collected_minor',total_initial+total_renewals,'refunds_and_reversals_minor',total_refunds,
-      'dispute_debits_minor',0,'dispute_credits_minor',0,'net_collected_minor',total_initial+total_renewals-total_refunds))),
+      'dispute_debits_minor',total_debits,'dispute_credits_minor',total_credits,
+      'net_collected_minor',total_initial+total_renewals-total_refunds-total_debits+total_credits))),
     'contributors',contributors,'contact_key_versions','["1:1"]'::jsonb);
 END;
 $$;
 CREATE TEMP TABLE disclosure_cases(name text PRIMARY KEY,result jsonb NOT NULL);
+-- Ten contacts were disputed, five restored, and one never disputed. Net has
+-- six contributors, but gross minus cumulative debits isolates the eleventh.
+INSERT INTO disclosure_cases SELECT 'dispute_complement',private.coordinate_analytics_disclosure(
+  pg_temp.disclosure_candidate(ARRAY[733]||array_fill(1000,ARRAY[10]),NULL,NULL,
+    ARRAY[0]||array_fill(1000,ARRAY[10]),array_fill(0,ARRAY[6])||array_fill(1000,ARRAY[5])),'{}');
+SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
+  '{"gross_collected_usd_cents":null,"initial_collected_usd_cents":null,"dispute_debits_usd_cents":null,"net_collected_usd_cents":null,"dispute_credits_usd_cents":5000}'::jsonb
+  FROM disclosure_cases WHERE name='dispute_complement'),
+  'gross minus dispute debits cannot reveal a sole untouched contribution after five restorations');
+SELECT extensions.ok((SELECT result->'snapshot'->'original_currency'->0 @>
+  '{"gross_collected_minor":null,"dispute_debits_minor":null,"net_collected_minor":null}'::jsonb
+  AND result->'snapshot'->'segments'->0->'gross_collected_usd_cents'='null'::jsonb
+  FROM disclosure_cases WHERE name='dispute_complement'),
+  'the financial complement is also withheld in currency and segment cells');
+INSERT INTO disclosure_cases SELECT 'safe_dispute_complement',private.coordinate_analytics_disclosure(
+  pg_temp.disclosure_candidate(ARRAY[733]||array_fill(1000,ARRAY[14]),NULL,NULL,
+    ARRAY[0]||array_fill(1000,ARRAY[10])||array_fill(0,ARRAY[4]),
+    array_fill(0,ARRAY[6])||array_fill(1000,ARRAY[5])||array_fill(0,ARRAY[4])),'{}');
+SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
+  '{"gross_collected_usd_cents":14733,"dispute_debits_usd_cents":10000,"net_collected_usd_cents":9733}'::jsonb
+  FROM disclosure_cases WHERE name='safe_dispute_complement'),
+  'five untouched contacts permit the same financial measures to be released');
+INSERT INTO disclosure_cases SELECT 'refund_complement',private.coordinate_analytics_disclosure(
+  pg_temp.disclosure_candidate(array_fill(1000,ARRAY[11]),
+    array_fill(1000,ARRAY[7])||array_fill(0,ARRAY[4]),NULL,
+    array_fill(0,ARRAY[7])||array_fill(1000,ARRAY[4])),'{}');
+SELECT extensions.ok((SELECT result->'snapshot'->'official' @>
+  '{"gross_collected_usd_cents":null,"refunds_and_reversals_usd_cents":null,"net_collected_usd_cents":null}'::jsonb
+  FROM disclosure_cases WHERE name='refund_complement'),
+  'gross minus refunds cannot expose four fully disputed contacts merely because net is zero');
+
+
 INSERT INTO disclosure_cases VALUES('initial',private.coordinate_analytics_disclosure(
   pg_temp.disclosure_candidate(ARRAY[100,100,100,100,100]),'{}'));
 SELECT extensions.ok((SELECT result->'snapshot'->'official' @>

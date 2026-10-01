@@ -59,6 +59,10 @@ A refreshed inventory found seven repeated function groups. Two retention vocabu
 
 A separate application cleanup removes 456 net lines of uncalled helpers, obsolete PayPal metadata encoding, an unused email template, and unimported media/icon modules. Repository caller inspection, all 1,584 selected server-free tests, TypeScript, lint, and hosted application/database/WebKit validation pass. Generated database types and active legacy payment-return handlers remain intact.
 
+## Additional coordinated-disclosure finding
+
+A production-query fixture at `46d4a83` releases 10,733 cents gross and 10,000 cents disputed across eleven contacts. Five dispute restorations keep the reported net at a safe six-contact cohort, but subtracting gross minus debits reveals the sole untouched contact's 733 cents. A second case exposes four unrefunded contacts despite zero net. The candidate now fingerprints and coordinates both complements through the existing history boundary. In-process before/after, safe-cohort, policy, reader, and public-release evidence passes; hosted validation remains pending. FF-034 stays open for broader reconstruction and capacity review.
+
 ## Release evidence still missing
 
 | Gate | Why green repository checks are insufficient | Required next evidence |
