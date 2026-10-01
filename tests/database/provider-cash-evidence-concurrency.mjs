@@ -116,17 +116,23 @@ async function recoveryRace(database, original, scenario, { sameOperation = fals
       [`evt_recovery_${scenario}`, `re_recovery_${scenario}`, createHash("sha256").update(scenario).digest()])
     const id = quarantine.gateway_event_id
     await first.query("COMMIT")
-    const admit = (client, operation) => client.query(`SELECT result.*
-      FROM public.payment_gateway_events source CROSS JOIN LATERAL public.ingest_verified_sponsorship_financial_adjustment(
+    // Service callers cannot SELECT the event table. The fixture observer supplies
+    // original evidence as RPC arguments, preserving PostgreSQL timestamp precision.
+    const { rows: [source] } = await observer.query(`SELECT provider_event_id,event_type,provider_object_id,
+      payload_ciphertext,payload_sha256,verification_method,
+      to_jsonb(event)->>'signature_verified_at' AS verified_at,to_jsonb(event)->>'occurred_at' AS occurred_at
+      FROM public.payment_gateway_events event WHERE id=$1::uuid`, [id])
+    const admit = (client, operation) => client.query(`SELECT * FROM public.ingest_verified_sponsorship_financial_adjustment(
         target_original_financial_movement_id=>$1::uuid,target_provider=>'STRIPE',target_provider_account_scope=>'stripe_us',
-        target_provider_event_id=>source.provider_event_id,target_event_type=>source.event_type,
-        target_provider_object_type=>'refund',target_provider_object_id=>source.provider_object_id,
-        target_adjustment_provider_movement_type=>'refund',target_adjustment_provider_movement_id=>source.provider_object_id,
+        target_provider_event_id=>$2,target_event_type=>$3,
+        target_provider_object_type=>'refund',target_provider_object_id=>$4,
+        target_adjustment_provider_movement_type=>'refund',target_adjustment_provider_movement_id=>$4,
         target_charged_amount_minor=>1,target_charged_currency=>'USD',target_conversion_rate=>1,
-        target_redacted_payload=>'{}',target_payload_ciphertext=>source.payload_ciphertext,target_payload_sha256=>source.payload_sha256,
-        target_signature_verified_at=>source.signature_verified_at,target_occurred_at=>source.occurred_at,
-        target_verification_method=>source.verification_method,target_revalidation_operation_id=>$3::uuid
-      ) result WHERE source.id=$2::uuid`, [original.id, id, operation])
+        target_redacted_payload=>'{}',target_payload_ciphertext=>$5::bytea,target_payload_sha256=>$6::bytea,
+        target_signature_verified_at=>$7::timestamptz,target_occurred_at=>$8::timestamptz,
+        target_verification_method=>$9,target_revalidation_operation_id=>$10::uuid
+      )`, [original.id, source.provider_event_id, source.event_type, source.provider_object_id,
+        source.payload_ciphertext, source.payload_sha256, source.verified_at, source.occurred_at, source.verification_method, operation])
     await configureServiceRoleTransaction(first)
     await configureServiceRoleTransaction(second)
     assert.equal((await admit(first, firstOperation)).rows[0].is_duplicate, false)
