@@ -1,6 +1,6 @@
 # Private analytics disclosure decision
 
-Status: replacement implementation under validation, October 1, 2026. The owner approved delayed or withheld updates while preserving every metric. FF-034 remains a P1 release gate pending native integration, concurrency, broader reconstruction review, and capacity evidence. Contact expiry is unchanged and outside this investigation.
+Status: tenant-scoped replacement validated, cross-portal policy and capacity unfinished, October 1, 2026. The owner approved delayed or withheld updates while preserving every metric. FF-034 remains a P1 release gate because cross-portal composition, broader reconstruction review, and capacity bounds remain unfinished. Contact expiry is unchanged and outside this investigation.
 
 ## Approved behavior
 
@@ -37,7 +37,7 @@ Public metric candidates now supply their own exact contact columns, including t
 
 ## Current evidence
 
-Both complete hosted workflows passed the arithmetic foundation and candidate projection at `792c17c`: [publication 36841503410](https://github.com/Creator-Share/creator-share-www/actions/runs/36841503410) and [WebKit 36841503427](https://github.com/Creator-Share/creator-share-www/actions/runs/36841503427). Those results precede the replacement coordinator and numerical ledger. Native validation of the replacement remains pending.
+Both complete hosted workflows passed the replacement at `ca4f71f`: [publication 36846429788](https://github.com/Creator-Share/creator-share-www/actions/runs/36846429788) and [WebKit 36846429848](https://github.com/Creator-Share/creator-share-www/actions/runs/36846429848). The native database job passed the full pgTAP suite and the adapted analytics concurrency harness, including worker exclusion, cancellation rollback, stable retry/replay, and account-ban enforcement. This validates the tenant-scoped implementation; it does not repair the cross-portal gap below or establish production capacity.
 
 In-process checks of the replacement establish:
 
@@ -49,8 +49,14 @@ In-process checks of the replacement establish:
 
 The 5,000-contact first-release probe completes in 4.87 seconds and stores two basis columns. The preceding fingerprint implementation with numerical projection took 9.04 seconds and stored 120,120 changes. Both replays took one millisecond. These are individual synthetic PGlite observations, not controlled throughput comparisons or hosted latency guarantees. Dense changing history, multi-tenant execution, and native capacity remain unmeasured.
 
+## Cross-portal composition finding
+
+A policy probe against the replacement coordinator confirms a remaining gap in its tenant-scoped history. Five contacts each contribute 100 cents to portal A, which releases gross 500. The same five each contribute 100 to portal B, where one contact also renews for 100. Portal B independently releases gross 600 while withholding its initial, renewal, and count details. Comparing gross 600 with gross 500 isolates that contact's 100-cent difference across portals. The schema permits one user to hold memberships in both portals; this example does not identify the contact by itself.
+
+Passing portal A's basis into portal B's coordinator withholds portal B's gross and net and preserves compatible values. The probe uses exact policy fixtures, not a two-portal payment-ingestion or authorization run. A shared cross-portal history is the recommendation presented to the owner. It would couple reporting availability across advocates and require global concurrency, identity-version continuity, and capacity validation. The choice remains pending; this cross-portal property is not protected by the current tenant-scoped implementation.
+
 ## Remaining limits and acceptance
 
 The certificate concerns linear support in complete, correct numerical columns. It does not establish differential privacy, protection against arbitrary auxiliary information, or protection against every nonlinear inference. Rounded public disclosures are conservatively modeled by their stronger raw contributions. Cross-tenant overlapping populations, nonlinear inference, and complete privacy and availability behavior still require review. The implemented ledger is tenant scoped.
 
-Acceptance requires native authority and concurrency checks, no canceled private/public/audit residue, both known reconstructions withheld, preservation of every metric and safe-report availability, complete scope and history coverage, and bounded native execution. Operational dimension and execution bounds must fail closed without discarding earlier disclosures. FF-034 cannot close merely because the fixed examples or existing workflows pass.
+The tenant-scoped implementation has native authority and concurrency evidence, including no canceled private/public/audit residue. Acceptance still requires resolution of cross-portal composition, broader reconstruction and availability review, complete scope and history coverage, and bounded native execution. A shared-history implementation will require renewed concurrency and identity-version continuity checks. Operational dimension and execution bounds must fail closed without discarding earlier disclosures. FF-034 cannot close merely because the fixed examples or existing workflows pass.
