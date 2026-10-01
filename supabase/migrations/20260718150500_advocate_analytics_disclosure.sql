@@ -164,6 +164,66 @@ RETURNS text[] LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
 $$;
 REVOKE ALL ON FUNCTION private.analytics_unsafe_measures(jsonb,jsonb) FROM PUBLIC,anon,authenticated,service_role;
 
+-- Build one integer row from sparse (column, numerator, denominator) entries.
+-- The matrix decoder validates these entries before this internal helper runs.
+CREATE FUNCTION private.analytics_integer_contribution_row(entries numeric[],width integer)
+RETURNS numeric[] LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE SET search_path = '' AS $$
+DECLARE v_row numeric[]:=array_fill(0::numeric,ARRAY[width]); v_scale numeric:=1; v_common numeric:=0;
+  v_index integer; v_value numeric;
+BEGIN
+  FOR v_index IN 1..array_length(entries,1) LOOP
+    v_scale:=div(v_scale,gcd(v_scale,entries[v_index][3]))*entries[v_index][3];
+  END LOOP;
+  FOR v_index IN 1..array_length(entries,1) LOOP
+    v_row[entries[v_index][1]::integer]:=entries[v_index][2]*div(v_scale,entries[v_index][3]);
+  END LOOP;
+  FOREACH v_value IN ARRAY v_row LOOP v_common:=gcd(v_common,abs(v_value)); END LOOP;
+  IF v_common>1 THEN
+    FOR v_index IN 1..width LOOP v_row[v_index]:=div(v_row[v_index],v_common); END LOOP;
+  END IF;
+  RETURN v_row;
+END;
+$$;
+REVOKE ALL ON FUNCTION private.analytics_integer_contribution_row(numeric[],integer) FROM PUBLIC,anon,authenticated,service_role;
+
+-- Input columns map stable subject keys to exact integer fractions. Expand
+-- each map once, then aggregate complete rows; repeated nested lookups and
+-- repeated whole-matrix concatenation would copy large histories quadratically.
+CREATE FUNCTION private.analytics_integer_contribution_matrix(columns jsonb)
+RETURNS numeric[] LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE SET search_path = '' AS $$
+DECLARE v_matrix numeric[];
+BEGIN
+  IF jsonb_typeof(columns) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'Disclosure columns must be an array' USING ERRCODE='22023';
+  END IF;
+  IF EXISTS(SELECT 1 FROM jsonb_array_elements(columns) entry(value) WHERE jsonb_typeof(value)<>'object') THEN
+    RAISE EXCEPTION 'Disclosure columns require subject maps' USING ERRCODE='22023';
+  END IF;
+  IF EXISTS(SELECT 1 FROM jsonb_array_elements(columns) entry(value) CROSS JOIN LATERAL jsonb_each(entry.value) fraction
+    WHERE fraction.key='' OR NOT CASE WHEN jsonb_typeof(fraction.value)='array' THEN
+      jsonb_array_length(fraction.value)=2 AND jsonb_typeof(fraction.value->0)='number'
+        AND jsonb_typeof(fraction.value->1)='number' ELSE false END) THEN
+    RAISE EXCEPTION 'Disclosure contributions require numeric fractions' USING ERRCODE='22023';
+  END IF;
+  IF EXISTS(SELECT 1 FROM jsonb_array_elements(columns) entry(value) CROSS JOIN LATERAL jsonb_each(entry.value) fraction
+    WHERE (fraction.value->>0)::numeric<>trunc((fraction.value->>0)::numeric)
+      OR (fraction.value->>1)::numeric<>trunc((fraction.value->>1)::numeric) OR (fraction.value->>1)::numeric<=0) THEN
+    RAISE EXCEPTION 'Disclosure fractions require integer amounts and positive denominators' USING ERRCODE='22023';
+  END IF;
+  WITH rows AS (
+    SELECT fraction.key AS subject_key,
+      array_agg(ARRAY[entry.ordinal::numeric,(fraction.value->>0)::numeric,(fraction.value->>1)::numeric]
+        ORDER BY entry.ordinal) AS entries
+    FROM jsonb_array_elements(columns) WITH ORDINALITY entry(value,ordinal)
+    CROSS JOIN LATERAL jsonb_each(entry.value) fraction
+    WHERE (fraction.value->>0)::numeric<>0 GROUP BY fraction.key
+  ) SELECT coalesce(array_agg(private.analytics_integer_contribution_row(entries,jsonb_array_length(columns))
+      ORDER BY subject_key COLLATE "C"),ARRAY[]::numeric[]) INTO v_matrix FROM rows;
+  RETURN v_matrix;
+END;
+$$;
+REVOKE ALL ON FUNCTION private.analytics_integer_contribution_matrix(jsonb) FROM PUBLIC,anon,authenticated,service_role;
+
 -- A sufficient arithmetic certificate, not a complete privacy policy. The
 -- caller must supply one row per distinct contact and every disclosed column,
 -- including relevant historical columns. Scale each row's exact fractions to

@@ -2,6 +2,35 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SELECT extensions.no_plan();
 
+SELECT extensions.is(private.analytics_integer_contribution_matrix(
+  '[{"b":[1,7],"a":[1,3]},{"a":[1,7],"b":[1,3]}]'::jsonb),
+  ARRAY[[7,3],[3,7]]::numeric[], 'fractional columns become exact canonical subject rows without rounding');
+SELECT extensions.is(private.analytics_integer_contribution_matrix(
+  '[{"b":[0,1],"a":[2,3]},{"c":[-2,7],"a":[4,6]},{}]'::jsonb),
+  ARRAY[[1,1,0],[0,-1,0]]::numeric[], 'zero terms do not add support and missing columns remain exact zero');
+SELECT extensions.ok(private.analytics_linear_disclosure_certified(private.analytics_integer_contribution_matrix(
+  '[{"a":[1,3],"b":[1,3],"c":[1,3],"d":[1,3],"e":[1,3]},
+    {"a":[1,7],"b":[1,7],"c":[1,7],"d":[1,7],"e":[1,7]}]'::jsonb)),
+  'the decoder and certificate preserve an exactly proportional five-contact fractional cohort');
+SELECT extensions.ok(NOT private.analytics_linear_disclosure_certified(private.analytics_integer_contribution_matrix(
+  '[{"a":[90071992547409920,1],"b":[90071992547409920,1],"c":[90071992547409920,1],"d":[90071992547409920,1],"e":[90071992547409920,1],"f":[90071992547409920,1]},
+    {"a":[90071992547409921,1],"b":[90071992547409921,1],"c":[90071992547409921,1],"d":[90071992547409921,1],"e":[90071992547409921,1],"f":[90071992547409922,1]}]'::jsonb)),
+  'adjacent integers beyond floating-point precision cannot erase a lone arithmetic direction');
+SELECT extensions.throws_ok($$SELECT private.analytics_integer_contribution_matrix('{}')$$,
+  '22023','Disclosure columns must be an array','non-array column input is rejected');
+SELECT extensions.throws_ok($$SELECT private.analytics_integer_contribution_matrix('[[]]')$$,
+  '22023','Disclosure columns require subject maps','non-map column input is rejected');
+SELECT extensions.throws_ok($$SELECT private.analytics_integer_contribution_matrix('[{"a":[1,"7"]}]')$$,
+  '22023','Disclosure contributions require numeric fractions','string coefficients are rejected');
+SELECT extensions.throws_ok($$SELECT private.analytics_integer_contribution_matrix('[{"a":[1,0]}]')$$,
+  '22023','Disclosure fractions require integer amounts and positive denominators','zero denominators are rejected');
+SELECT extensions.throws_ok($$SELECT private.analytics_integer_contribution_matrix('[{"a":[0.5,1]}]')$$,
+  '22023','Disclosure fractions require integer amounts and positive denominators','approximate decimal coefficients are rejected');
+SELECT extensions.ok(NOT EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role']) role(name)
+  WHERE has_function_privilege(role.name,'private.analytics_integer_contribution_matrix(jsonb)','EXECUTE')
+    OR has_function_privilege(role.name,'private.analytics_integer_contribution_row(numeric[],integer)','EXECUTE')),
+  'API roles cannot execute numerical history decoders');
+
 -- The certificate is a prerequisite for the replacement policy. The current
 -- release coordinator does not use it yet; these are arithmetic contracts.
 SELECT extensions.ok(private.analytics_linear_disclosure_certified(ARRAY[]::numeric[])

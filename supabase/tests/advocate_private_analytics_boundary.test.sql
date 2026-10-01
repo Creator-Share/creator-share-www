@@ -2214,9 +2214,37 @@ SELECT extensions.is(
 ALTER TABLE public.sponsorship_attributions
   ALTER COLUMN analytics_eligible SET NOT NULL;
 
+-- Reconcile every visible number with the exact internal column. Account
+-- counts must agree under both contact bookkeeping and distinct account rows.
+CREATE FUNCTION pg_temp.linear_projection_matches(candidate jsonb) RETURNS boolean LANGUAGE sql AS $$
+  WITH cells AS (
+    SELECT 'official'::text AS family,'total'::text AS scope,candidate#>'{snapshot,official}' AS cell
+    UNION ALL SELECT 'observed','total',candidate#>'{snapshot,observed}'
+    UNION ALL SELECT CASE WHEN cell->>'key'='observed_30_365_days' THEN 'observed' ELSE 'official' END,
+      'segment:'||(cell->>'key'),cell FROM jsonb_array_elements(CASE WHEN jsonb_typeof(candidate#>'{snapshot,segments}')='array'
+        THEN candidate#>'{snapshot,segments}' ELSE '[]'::jsonb END) entry(cell)
+    UNION ALL SELECT 'official','currency:'||(cell->>'currency'),cell
+      FROM jsonb_array_elements(CASE WHEN jsonb_typeof(candidate#>'{snapshot,original_currency}')='array'
+        THEN candidate#>'{snapshot,original_currency}' ELSE '[]'::jsonb END) entry(cell)
+  ), fields AS (
+    SELECT family,scope,field.key,field.value FROM cells CROSS JOIN LATERAL jsonb_each(cell) field
+    WHERE cell->'suppressed'='false'::jsonb AND jsonb_typeof(field.value)='number'
+  ) SELECT NOT EXISTS(
+    SELECT 1 FROM fields CROSS JOIN (VALUES('contact'),('account')) subject(name)
+    WHERE (subject.name='contact' OR fields.key='verified_sponsor_accounts') AND
+      (SELECT private.sum_usd_fractions(ARRAY[(value->>0)::numeric,(value->>1)::numeric])
+       FROM jsonb_each(coalesce(candidate#>ARRAY['linear_contributors',subject.name,family||':'||fields.key,scope],'{}'::jsonb)))
+      IS DISTINCT FROM (fields.value#>>'{}')::numeric
+  );
+$$;
+SELECT extensions.ok(pg_temp.linear_projection_matches(private.build_advocate_analytics_candidate(
+  (SELECT value FROM analytics_test_ids WHERE key='main_advocate'),
+  (SELECT value FROM analytics_test_times WHERE key='as_of'))),
+  'exact numerical columns reconcile all visible mixed-currency totals segments and account counts');
+
 -- Return a real report over a temporary fractional fixture, then roll the
 -- fixture changes back before emitting assertions.
-CREATE FUNCTION pg_temp.fractional_analytics_report(include_disputes boolean DEFAULT false) RETURNS jsonb LANGUAGE plpgsql AS $$
+CREATE FUNCTION pg_temp.fractional_analytics_report(include_disputes boolean DEFAULT false, include_contributions boolean DEFAULT false) RETURNS jsonb LANGUAGE plpgsql AS $$
 DECLARE result jsonb;
 BEGIN
   BEGIN
@@ -2242,7 +2270,8 @@ BEGIN
     PERFORM set_config('request.jwt.claim.role','authenticated',true);
     PERFORM set_config('request.jwt.claim.sub','96000000-0000-4000-8000-000000000105',true);
     result:=private.build_advocate_analytics_candidate((SELECT value FROM analytics_test_ids WHERE key='contact_advocate'),
-      (SELECT value FROM analytics_test_times WHERE key='as_of'))->'snapshot';
+      (SELECT value FROM analytics_test_times WHERE key='as_of'));
+    IF NOT include_contributions THEN result:=result->'snapshot'; END IF;
     RAISE EXCEPTION 'Restore fractional fixture' USING ERRCODE='P9001';
   EXCEPTION WHEN SQLSTATE 'P9001' THEN RETURN result;
   END;
@@ -2254,6 +2283,22 @@ SELECT extensions.ok((SELECT value->'official' @> '{"refunds_and_reversals_usd_c
 SELECT extensions.ok(pg_temp.fractional_analytics_report(true)->'official' @>
   '{"refunds_and_reversals_usd_cents":4,"dispute_debits_usd_cents":4,"net_collected_usd_cents":493}'::jsonb,
   'independently rounded loss categories do not overwrite the exact aggregate net');
+
+CREATE TEMP TABLE fractional_linear_candidate AS SELECT pg_temp.fractional_analytics_report(true,true) AS value;
+SELECT extensions.ok((SELECT pg_temp.linear_projection_matches(value) FROM fractional_linear_candidate),
+  'fractional contribution columns reconcile after aggregate rounding in both currencies');
+SELECT extensions.ok((SELECT count(*)=5 AND bool_and(contribution.value='[5,7]'::jsonb)
+  FROM fractional_linear_candidate CROSS JOIN LATERAL jsonb_each(value#>
+    '{linear_contributors,contact,official:refunds_and_reversals_usd_cents,total}') contribution),
+  'one AUD-cent refunds retain five exact five-sevenths USD-cent contributions');
+SELECT extensions.ok((SELECT NOT EXISTS(
+  SELECT 1 FROM jsonb_each(value->'linear_contributors') subject CROSS JOIN LATERAL jsonb_each(subject.value) measure
+    CROSS JOIN LATERAL jsonb_each(measure.value) scope CROSS JOIN LATERAL jsonb_each(scope.value) contribution
+  WHERE jsonb_typeof(contribution.value)<>'array' OR jsonb_array_length(contribution.value)<>2
+    OR (contribution.value->>0)::numeric=0 OR (contribution.value->>1)::numeric<=0
+    OR gcd(abs((contribution.value->>0)::numeric),(contribution.value->>1)::numeric)<>1
+    OR NOT (scope.key='total' OR scope.key LIKE 'segment:%' OR scope.key LIKE 'currency:%')
+) FROM fractional_linear_candidate),'numerical columns contain reduced nonzero fractions and only reportable scopes');
 
 -- The production candidate groups repeated payments under their contact key.
 CREATE TEMP TABLE repeated_contact_candidate AS SELECT private.build_advocate_analytics_candidate(
@@ -2326,6 +2371,29 @@ SELECT extensions.ok((SELECT value#>>'{official,sponsorships}'='10'
   AND value#>>'{official,verified_sponsor_accounts}'='10'
   FROM shared_contact_release),
   'a real disclosure can contain more verified accounts than historical contacts');
+
+CREATE TEMP TABLE shared_contact_candidate AS SELECT private.build_advocate_analytics_candidate(
+  (SELECT value FROM analytics_test_ids WHERE key='contact_advocate'),
+  (SELECT value FROM analytics_test_times WHERE key='as_of')) AS value;
+SELECT extensions.ok((SELECT pg_temp.linear_projection_matches(value)
+  AND (SELECT count(*)=5 FROM jsonb_each(value#>'{linear_contributors,contact,official:verified_sponsor_accounts,total}'))
+  AND (SELECT count(*)=10 FROM jsonb_each(value#>'{linear_contributors,account,official:verified_sponsor_accounts,total}'))
+  FROM shared_contact_candidate), 'ten accounts sharing five historical contacts retain both exact subject projections');
+
+-- Fixture-only historical linkage: one stable account now spans two contacts.
+SET LOCAL session_replication_role = replica;
+UPDATE public.sponsorship_intents SET sponsor_identity_id=(SELECT identity_id FROM analytics_fixture_intents WHERE label='main_direct_2')
+WHERE id=(SELECT intent_id FROM analytics_fixture_intents WHERE label='main_direct_6');
+UPDATE public.sponsorship_financial_movements SET sponsor_identity_id=(SELECT identity_id FROM analytics_fixture_intents WHERE label='main_direct_2')
+WHERE sponsorship_intent_id=(SELECT intent_id FROM analytics_fixture_intents WHERE label='main_direct_6');
+SET LOCAL session_replication_role = origin;
+CREATE TEMP TABLE shared_account_candidate AS SELECT private.build_advocate_analytics_candidate(
+  (SELECT value FROM analytics_test_ids WHERE key='contact_advocate'),
+  (SELECT value FROM analytics_test_times WHERE key='as_of')) AS value;
+SELECT extensions.ok((SELECT value#>>'{snapshot,official,verified_sponsor_accounts}'='9'
+  AND pg_temp.linear_projection_matches(value)
+  AND (SELECT count(*)=9 FROM jsonb_each(value#>'{linear_contributors,account,official:verified_sponsor_accounts,total}'))
+  FROM shared_account_candidate), 'an account spanning historical contacts is counted once without rounding or invented support');
 
 SELECT * FROM extensions.finish();
 

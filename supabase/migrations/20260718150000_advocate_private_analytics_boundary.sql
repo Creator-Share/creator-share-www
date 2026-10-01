@@ -634,6 +634,61 @@ BEGIN
     FROM classified_rollups
     GROUP BY family,sponsor_contact_key,GROUPING SETS((segment_key,charged_currency),(segment_key),(charged_currency),())
   ),
+  -- Exact numerical columns for the coordinated arithmetic boundary. Only
+  -- reportable scopes belong here; undisclosed intersections stay in the
+  -- existing cohort checks. These values never enter the public snapshot.
+  linear_contact_values AS (
+    SELECT 'contact'::text AS subject,atom.family||':'||metric.key||unit.suffix AS measure,
+      atom.scope,atom.sponsor_contact_key AS subject_key,
+      CASE WHEN jsonb_typeof(metric.value->unit.position)='array' THEN metric.value->unit.position
+        ELSE jsonb_build_array(metric.value->unit.position,1) END AS fraction
+    FROM contact_atoms atom
+    CROSS JOIN LATERAL jsonb_each(to_jsonb(atom)) metric
+    CROSS JOIN (VALUES('_usd_cents'::text,0),('_minor'::text,1)) unit(suffix,position)
+    WHERE metric.key IN ('initial_collected','renewal_collected','gross_collected',
+      'refunds_and_reversals','dispute_debits','dispute_credits','net_collected')
+      AND ((unit.position=0 AND (atom.scope='total' OR atom.scope LIKE 'segment:%'))
+        OR (unit.position=1 AND atom.family='official' AND atom.scope LIKE 'currency:%'))
+    UNION ALL
+    SELECT 'contact',atom.family||':'||metric.key||CASE WHEN metric.key IN
+      ('sponsorships','unique_sponsor_contacts') THEN '' ELSE '_usd_cents' END,
+      atom.scope,atom.sponsor_contact_key,jsonb_build_array(metric.value,1)
+    FROM contact_atoms atom CROSS JOIN LATERAL jsonb_each(to_jsonb(atom)) metric
+    WHERE (metric.key IN ('sponsorships','unique_sponsor_contacts') AND
+        (atom.scope='total' OR atom.scope LIKE 'segment:%' OR (atom.family='official' AND atom.scope LIKE 'currency:%')))
+      OR (metric.key IN ('active_monthly_commitment','active_annual_commitment','annualized_commitment')
+        AND (atom.scope='total' OR atom.scope LIKE 'segment:%'))
+  ),
+  linear_account_contacts AS (
+    -- Count each stable account once even when its historical payments used
+    -- several contact keys. The canonical contact is arithmetic bookkeeping,
+    -- never account ownership. Preserve a separate account-subject vector so
+    -- the release policy must also certify distinct-account support.
+    SELECT atom.family,atom.scope,identity.value AS account_key,min(atom.sponsor_contact_key) AS contact_key
+    FROM contact_atoms atom CROSS JOIN LATERAL jsonb_array_elements_text(atom.verified_sponsor_accounts) identity(value)
+    WHERE atom.scope='total' OR atom.scope LIKE 'segment:%'
+    GROUP BY atom.family,atom.scope,identity.value
+  ),
+  linear_values AS (
+    SELECT * FROM linear_contact_values
+    UNION ALL
+    SELECT 'account',family||':verified_sponsor_accounts',scope,account_key,'[1,1]'::jsonb
+    FROM linear_account_contacts
+    UNION ALL
+    SELECT 'contact',family||':verified_sponsor_accounts',scope,contact_key,jsonb_build_array(count(*),1)
+    FROM linear_account_contacts GROUP BY family,scope,contact_key
+  ),
+  linear_scopes AS (
+    SELECT subject,measure,scope,json_object_agg(subject_key,fraction) AS contributions
+    FROM linear_values WHERE (fraction->>0)::numeric<>0 GROUP BY subject,measure,scope
+  ),
+  linear_measures AS (
+    SELECT subject,measure,json_object_agg(scope,contributions) AS scopes
+    FROM linear_scopes GROUP BY subject,measure
+  ),
+  linear_subjects AS (
+    SELECT subject,json_object_agg(measure,scopes) AS measures FROM linear_measures GROUP BY subject
+  ),
   contact_measure_fingerprints AS (
     SELECT atom.scope, atom.sponsor_contact_key, atom.family||':'||measure.key AS measure,
       encode(extensions.digest(measure.value::text,'sha256'),'hex') AS fingerprint
@@ -1108,6 +1163,7 @@ BEGIN
       FROM original_currency_payload
     )
   ), 'contributors', coalesce((SELECT json_object_agg(measure,scopes)::jsonb FROM measure_fingerprints),'{}'::jsonb),
+    'linear_contributors', coalesce((SELECT json_object_agg(subject,measures)::jsonb FROM linear_subjects),'{}'::jsonb),
     'contact_key_versions', (SELECT coalesce(jsonb_agg(version ORDER BY version),'[]'::jsonb)
       FROM (SELECT DISTINCT split_part(sponsor_contact_key,':',1)||':'||split_part(sponsor_contact_key,':',2) AS version
         FROM intent_rollups) versions))
